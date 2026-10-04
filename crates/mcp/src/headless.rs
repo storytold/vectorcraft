@@ -201,7 +201,7 @@ impl Headless {
         let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
         vectorcraft_render::raster_size(r, scale)?;
         let img = self.renderer.render_region(&doc, r, scale, true);
-        let png = img.to_png();
+        let png = img.to_png()?;
         match s(p, "path") {
             Some(path) => {
                 std::fs::write(path, &png).map_err(|e| format!("write {path}: {e}"))?;

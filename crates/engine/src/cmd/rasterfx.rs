@@ -105,7 +105,8 @@ fn flatten_node(src: &Document, out: &mut Document, n: &Node, scale: f64) -> Opt
         vector = Some(v);
     }
     let key = format!("raster-effect-{}", n.id.0);
-    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(img.to_png()) });
+    let png = img.to_png().ok()?;
+    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let mut image = Node::new(out.alloc_id(), NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None }));
     image.name = Some("Raster effect".into());

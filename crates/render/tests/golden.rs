@@ -496,7 +496,7 @@ fn png_encoding_roundtrips_pixels() {
     b.rect(Rect::new(10.0, 10.0, 60.0, 60.0), Color::rgb(0.2, 0.4, 0.6), |n| n.opacity = 0.5);
     let d = b.build();
     let r = vectorcraft_render::Renderer::new().render_region(&d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, false);
-    let decoded = Image::from_png(&r.to_png()).unwrap();
+    let decoded = Image::from_png(&r.to_png().unwrap()).unwrap();
     assert_eq!(decoded, Image::from_rendered(&r));
 }
 

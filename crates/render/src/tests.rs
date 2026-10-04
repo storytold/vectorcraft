@@ -188,8 +188,17 @@ fn region_export_png() {
     d.insert(Some(l), 0, n).unwrap();
     let r = Renderer::new().render_region(&d, d.artboards[0].rect, 2.0, true);
     assert_eq!((r.width, r.height), (200, 200));
-    let png = r.to_png();
+    let png = r.to_png().unwrap();
     assert_eq!(&png[1..4], b"PNG");
+}
+
+#[test]
+fn encoders_report_a_bad_pixel_buffer_instead_of_panicking() {
+    // A buffer that doesn't match width × height used to panic in `to_png` ("size").
+    let r = Rendered { width: 4, height: 4, pixels: vec![0; 8] };
+    assert!(r.to_png().is_err());
+    assert!(r.to_jpeg(90).is_err());
+    assert!(r.to_webp().is_err());
 }
 
 #[test]

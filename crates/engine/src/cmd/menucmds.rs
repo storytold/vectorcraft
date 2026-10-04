@@ -394,7 +394,7 @@ fn render_png(doc: &vectorcraft_doc::Document, region: Rect, scale: f64, white: 
     }
     let mut r = vectorcraft_render::Renderer::new();
     let img = r.render_region(doc, region, scale, white);
-    Ok((img.to_png(), img.width, img.height))
+    Ok((img.to_png().map_err(EngineError::Other)?, img.width, img.height))
 }
 
 fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {

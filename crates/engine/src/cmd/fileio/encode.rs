@@ -130,6 +130,7 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
                 "webp" => img.to_webp(),
                 _ => img.to_jpeg(o.quality.unwrap_or(90)),
             }
+            .map_err(EngineError::Other)?
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),
     })

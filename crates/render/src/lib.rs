@@ -5,6 +5,7 @@
 //! (multiple fills/strokes, opacity, blend modes, stroke alignment, dashes), clip groups,
 //! gradients, images and text (via `vectorcraft-text` glyph outlines).
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod brush_fx;
 mod fx;
@@ -117,15 +118,27 @@ impl Rendered {
         }
         out
     }
+    /// The encoders assert on a short buffer, so check it first.
+    fn check_size(&self, what: &str) -> Result<(), String> {
+        let want = u64::from(self.width) * u64::from(self.height) * 4;
+        if self.pixels.len() as u64 == want {
+            Ok(())
+        } else {
+            Err(format!("{what} export: {}×{} pixel buffer has the wrong size", self.width, self.height))
+        }
+    }
     /// Encode as PNG.
-    pub fn to_png(&self) -> Vec<u8> {
+    pub fn to_png(&self) -> Result<Vec<u8>, String> {
+        self.check_size("PNG")?;
         let mut buf = Vec::new();
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight()).expect("size");
-        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).expect("png encode");
-        buf
+        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight())
+            .ok_or_else(|| format!("PNG export: {}×{} pixel buffer has the wrong size", self.width, self.height))?;
+        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG export: {e}"))?;
+        Ok(buf)
     }
     /// Encode as JPEG (flattened on white) at `quality` 1..=100.
-    pub fn to_jpeg(&self, quality: u8) -> Vec<u8> {
+    pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {
+        self.check_size("JPEG")?;
         let rgba = self.to_straight();
         let rgb: Vec<u8> = rgba
             .chunks_exact(4)
@@ -137,15 +150,18 @@ impl Rendered {
             .collect();
         let mut buf = Vec::new();
         let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
-        let _ = image::ImageEncoder::write_image(enc, &rgb, self.width, self.height, image::ExtendedColorType::Rgb8);
-        buf
+        image::ImageEncoder::write_image(enc, &rgb, self.width, self.height, image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("JPEG export: {e}"))?;
+        Ok(buf)
     }
     /// Encode as lossless WebP.
-    pub fn to_webp(&self) -> Vec<u8> {
+    pub fn to_webp(&self) -> Result<Vec<u8>, String> {
+        self.check_size("WebP")?;
         let mut buf = Vec::new();
         let enc = image::codecs::webp::WebPEncoder::new_lossless(&mut buf);
-        let _ = image::ImageEncoder::write_image(enc, &self.to_straight(), self.width, self.height, image::ExtendedColorType::Rgba8);
-        buf
+        image::ImageEncoder::write_image(enc, &self.to_straight(), self.width, self.height, image::ExtendedColorType::Rgba8)
+            .map_err(|e| format!("WebP export: {e}"))?;
+        Ok(buf)
     }
     /// Straight-alpha RGBA at (x, y).
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {

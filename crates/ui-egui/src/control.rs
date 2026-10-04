@@ -289,7 +289,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 return err(e);
             }
             let img = app.canvas.renderer.render_region(&doc, r, scale, true);
-            let png = img.to_png();
+            let png = match img.to_png() {
+                Ok(png) => png,
+                Err(e) => return err(e),
+            };
             match s("path") {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => wrap(w(path, &png).map(|_| json!({"path": path, "width": img.width, "height": img.height}))),
@@ -320,7 +323,10 @@ pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path:
     };
     let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
     let img = vectorcraft_render::Rendered { width: w as u32, height: h as u32, pixels: rgba };
-    let png = img.to_png();
+    let png = match img.to_png() {
+        Ok(png) => png,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
     match app.services.write.as_mut() {
         Some(wr) => match wr(path, &png) {
             Ok(()) => json!({"ok": true, "result": {"path": path, "width": w, "height": h}}),
