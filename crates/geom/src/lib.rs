@@ -6,6 +6,7 @@
 //!
 //! Coordinates are document points (1/72 in), y pointing down.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod hit;
 pub mod path;

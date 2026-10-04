@@ -163,10 +163,10 @@ mod tests {
         let style = CharStyle { fill: spot, stroke: k, stroke_width: 1.0, ..CharStyle::default() };
         let mut t = Node::new(NodeId(2), NodeKind::Text(Box::new(TextObject::point(Point::ZERO, "Hi", style))));
         OverprintBlack::default().apply(&mut t, &["Ink".to_string()]);
-        let NodeKind::Text(tx) = &t.kind else { unreachable!() };
+        let NodeKind::Text(tx) = &t.kind else { panic!("not text") };
         assert!(!tx.runs[0].style.overprint_fill && tx.runs[0].style.overprint_stroke);
         OverprintBlack { spot: true, ..Default::default() }.apply(&mut t, &["Ink".to_string()]);
-        let NodeKind::Text(tx) = &t.kind else { unreachable!() };
+        let NodeKind::Text(tx) = &t.kind else { panic!("not text") };
         assert!(tx.runs[0].style.overprint_fill);
     }
 

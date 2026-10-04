@@ -87,8 +87,7 @@ impl Gradient {
                 return (a.color.lerp(&b.color, v), a.opacity + (b.opacity - a.opacity) * v);
             }
         }
-        let l = stops.last().unwrap();
-        (l.color, l.opacity)
+        stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity))
     }
     /// Stops expanded so that midpoints are represented as explicit stops (for renderers without midpoints).
     pub fn expanded_stops(&self) -> Vec<(f32, Color, f32)> {

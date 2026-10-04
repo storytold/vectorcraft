@@ -121,8 +121,7 @@ impl WidthProfile {
                 return (w[0].1 + (w[1].1 - w[0].1) * u, w[0].2 + (w[1].2 - w[0].2) * u);
             }
         }
-        let l = p.last().unwrap();
-        (l.1, l.2)
+        p.last().map_or((1.0, 1.0), |l| (l.1, l.2))
     }
     /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
     pub const PRESETS: [ProfilePreset; 4] = [
@@ -145,13 +144,13 @@ impl WidthProfile {
     }
     /// The lens profile (thin ends, full width in the middle).
     pub fn lens() -> Self {
-        Self::preset("lens").expect("built-in")
+        Self::preset("lens").unwrap_or_else(|| Self { points: vec![] })
     }
     pub fn taper_end() -> Self {
-        Self::preset("taperEnd").expect("built-in")
+        Self::preset("taperEnd").unwrap_or_else(|| Self { points: vec![] })
     }
     pub fn taper_start() -> Self {
-        Self::preset("taperStart").expect("built-in")
+        Self::preset("taperStart").unwrap_or_else(|| Self { points: vec![] })
     }
 }
 
@@ -684,6 +683,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn named_width_profiles_are_built_in() {
+        // `lens()` and friends fall back to uniform only if a preset id is mistyped.
+        for p in [WidthProfile::lens(), WidthProfile::taper_end(), WidthProfile::taper_start()] {
+            assert!(p.preset_id().is_some(), "{p:?}");
+        }
+    }
+
+    #[test]
     fn hidden_attributes_show_again() {
         let mut a = Appearance::default_art();
         assert!(!a.has_hidden() && !a.show_all());
@@ -715,7 +722,7 @@ mod tests {
         a.rebase_gradients(Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 300.0, 100.0));
         let start = |p: Paint| match p {
             Paint::Gradient(g) => g.geom.unwrap().start,
-            _ => unreachable!(),
+            _ => panic!("not a gradient"),
         };
         // The fill's start stays on the left edge; the stroke's on its inflated box's (−5 → 95).
         assert_eq!((start(a.fill_paint()), start(a.stroke_paint())), (Point::new(100.0, 0.0), Point::new(95.0, 0.0)));

@@ -465,8 +465,10 @@ impl Spine {
             return None;
         }
         let mut cum = vec![0.0];
+        let mut total = 0.0;
         for w in pts.windows(2) {
-            cum.push(cum.last().unwrap() + w[0].distance(w[1]));
+            total += w[0].distance(w[1]);
+            cum.push(total);
         }
         Some(Self { pts, cum })
     }
@@ -660,7 +662,9 @@ pub fn map_nonlinear(path: &PathData, max_piece: f64, f: impl Fn(Point) -> Point
                 let k = ((poly_len(&c) / max_piece).ceil() as usize).clamp(1, 64);
                 for j in 0..k {
                     let sub = c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64));
-                    res.last_mut().unwrap().h_out = f(sub.p1);
+                    if let Some(last) = res.last_mut() {
+                        last.h_out = f(sub.p1);
+                    }
                     if j + 1 < k {
                         res.push(Anchor { p: f(sub.p3), h_in: f(sub.p2), h_out: f(sub.p3), kind: Default::default() });
                     } else {
@@ -703,10 +707,11 @@ fn resample(poly: &[Point], m: usize) -> Vec<Point> {
         return vec![poly[0]; m];
     }
     let mut cum = vec![0.0];
+    let mut total = 0.0;
     for w in poly.windows(2) {
-        cum.push(cum.last().unwrap() + w[0].distance(w[1]));
+        total += w[0].distance(w[1]);
+        cum.push(total);
     }
-    let total = *cum.last().unwrap();
     let mut out = Vec::with_capacity(m);
     let mut i = 0;
     for k in 0..m {
@@ -747,7 +752,7 @@ impl Coons {
         let r = path.bounds()?;
         let tol = (r.width() + r.height()).max(1e-6) / 2000.0;
         let mut poly = flatten_subpath(sp, tol);
-        if poly.len() > 1 && poly[0].distance(*poly.last().unwrap()) < 1e-9 {
+        if poly.len() > 1 && poly.first().zip(poly.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-9) {
             poly.pop();
         }
         if poly.len() < 3 {

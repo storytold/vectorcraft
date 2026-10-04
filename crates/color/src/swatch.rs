@@ -23,8 +23,13 @@ pub struct SwatchGroup {
     pub swatches: Vec<Swatch>,
 }
 
-fn solid(name: &str, hex: &str) -> Swatch {
-    Swatch { name: name.into(), paint: Paint::solid(Color::from_hex(hex).unwrap()), global: false, spot: false }
+/// A built-in hex literal (all of them parse; black is only a fallback).
+fn hex(s: &str) -> Color {
+    Color::from_hex(s).unwrap_or(Color::BLACK)
+}
+
+fn solid(name: &str, s: &str) -> Swatch {
+    Swatch { name: name.into(), paint: Paint::solid(hex(s)), global: false, spot: false }
 }
 
 /// The default swatches of a document in colour `model`: [`base_swatches`] with their RGB colours
@@ -102,8 +107,8 @@ fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
         paint: Paint::Gradient(Box::new(crate::GradientPaint::new(Gradient {
             kind,
             stops: vec![
-                GradientStop { offset: 0.0, color: Color::from_hex(a).unwrap(), opacity: 1.0, midpoint: 0.5 },
-                GradientStop { offset: 1.0, color: Color::from_hex(b).unwrap(), opacity: 1.0, midpoint: 0.5 },
+                GradientStop { offset: 0.0, color: hex(a), opacity: 1.0, midpoint: 0.5 },
+                GradientStop { offset: 1.0, color: hex(b), opacity: 1.0, midpoint: 0.5 },
             ],
         }))),
         global: false,

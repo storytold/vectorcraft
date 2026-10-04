@@ -326,7 +326,7 @@ mod tests {
         for h in Harmony::ALL {
             assert!(h.apply(base).iter().all(|c| matches!(c, Color::Cmyk { .. })), "{}", h.label());
         }
-        let Color::Cmyk { c, m, y, .. } = Harmony::Complementary.apply(base)[1] else { unreachable!() };
+        let Color::Cmyk { c, m, y, .. } = Harmony::Complementary.apply(base)[1] else { panic!("complement should stay CMYK") };
         assert!(c > m && c > y, "the complement of red is a cyan: {c} {m} {y}");
         let g = Guide::new(Color::gray(0.4), Harmony::Triad, &GuideOptions::default());
         assert!(g.grid.iter().flatten().all(|c| matches!(c, Color::Gray { .. })));

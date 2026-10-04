@@ -809,7 +809,7 @@ mod tests {
         let fresh = || Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(grad(), grad(), 2.0));
         let geoms = |n: &Node| match (n.appearance.fill_paint(), n.appearance.stroke_paint()) {
             (Paint::Gradient(f), Paint::Gradient(s)) => (f.geom, s.geom),
-            _ => unreachable!(),
+            _ => panic!("expected gradient fill and stroke"),
         };
         let mut n = fresh();
         n.transform(Affine::translate((10.0, 5.0)) * Affine::scale(2.0), true);
