@@ -59,7 +59,7 @@ arboard = { version = "3.6", default-features = false }
 webbrowser = "1"
 
 [workspace.lints.rust]
-unsafe_code = "deny"
+unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 dbg_macro = "warn"

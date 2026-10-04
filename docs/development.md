@@ -1,5 +1,9 @@
 # Development
 
+## Never crash
+
+Non-test code never panics: no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, `unimplemented!` or `unsafe`; errors go through `Result` and `?`, and every crash fix comes with a regression test. See the **Never crash** section of [`AGENTS.md`](../AGENTS.md) for the rules.
+
 ## Web build
 
 `apps/vectorcraft-web` runs the same `VectorcraftApp` in the browser through eframe's web runner. The renderer is wgpu: WebGPU where the browser has it, WebGL2 otherwise. It is Rust only; the only JavaScript is the glue wasm-bindgen generates.

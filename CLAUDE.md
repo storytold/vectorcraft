@@ -10,6 +10,16 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 
 `plan/` is gitignored (local only).
 
+## Never crash
+People trust VectorCraft with their artwork, and a crash loses it. A malformed file, a bad command/control/MCP argument, a corrupt preferences file or a full disk must produce an error the user (or agent) can act on, never a panic. **This outranks feature work:** don't ship a feature by adding a panic path, and fix a crash before building on it. Full standard: [`craftrules/standards/never-crash.md`](https://github.com/storytold/craftrules/blob/main/standards/never-crash.md).
+- **No panicking shortcuts in non-test code:** no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`. Return `Result<T, E>` through the crate's error type and propagate with `?`; use `ok_or(..)?`, `let … else`, `if let`, or `unwrap_or*` where a fallback is truly right. Unfinished features return an "unsupported" error. The only exception is a provably infallible literal: `#[allow(clippy::expect_used)]` + `.expect("why")`.
+- **No `unsafe`** (`unsafe_code = "forbid"` workspace-wide).
+- **Input-derived numbers are hostile:** `get()` instead of `[i]`/`[a..b]`, slice strings only at char boundaries, checked/saturating arithmetic for lengths and counts, no divide-by-zero or NaN/negative casts to `usize`, cap allocations sized by input.
+- **Bound recursion** (seen-sets or depth limits: documents can be cyclic or deeply nested). **Don't cascade:** `lock().unwrap_or_else(PoisonError::into_inner)` or an error; thread joins are `Result`s.
+- **Last-resort guard:** a panic hook / `catch_unwind` around command execution and file import/export turns an escaped panic into an error and keeps the document. It's a safety net, not a licence; keep `panic = "unwind"`.
+- **Prove it:** every crash fix comes with a small synthetic regression test that panicked before the fix.
+- Ratchet: a crate with no panic sites carries `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]` in its `lib.rs`/`main.rs`; new crates start with it. `clippy.toml` allows these in tests.
+
 ## Non-negotiables
 - **Clean-room.** Never read, disassemble or copy anything inside the Illustrator bundle (names/listings only). Never copy Adobe icons, artwork, presets or wording beyond feature names. Behaviour comes from public docs and black-box observation of the running app with synthetic documents only (screenshots by window id, stored under `plan/illustrator/screenshots/`, never committed). Never copy GPL/AGPL code (Inkscape, lib2geom…).
 - **Assets: no Adobe iconography or images — ever (absolute rule, from the project owner).**
