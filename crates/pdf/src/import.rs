@@ -252,7 +252,9 @@ impl Builder {
         if self.stack.len() <= 1 {
             return;
         }
-        let f = self.stack.pop().expect("frame");
+        let Some(f) = self.stack.pop() else {
+            return;
+        };
         let node = match f.kind {
             FrameKind::Root => None,
             FrameKind::Skip => {
@@ -386,7 +388,9 @@ fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<Gra
     }
     let mut keep = vec![0usize];
     for i in 1..N {
-        let a = pts[*keep.last().expect("non-empty")];
+        let Some(&a) = keep.last().and_then(|&j| pts.get(j)) else {
+            break;
+        };
         let b = pts[i + 1];
         let u = (pts[i].0 - a.0) / (b.0 - a.0).max(1e-6);
         let off = (0..3).map(|k| (a.1[k] + (b.1[k] - a.1[k]) * u - pts[i].1[k]).abs()).fold(0.0f32, f32::max);
@@ -433,7 +437,7 @@ fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     }
     match image::GrayImage::from_raw(a.width, a.height, a.data.clone()) {
         Some(g) => image::imageops::resize(&g, w, h, image::imageops::FilterType::Triangle).into_raw(),
-        None => vec![255; (w * h) as usize],
+        None => vec![255; (w as usize).saturating_mul(h as usize)],
     }
 }
 
@@ -593,7 +597,7 @@ impl<'a> Device<'a> for Builder {
                 r.with_rgba(
                     |img, alpha| {
                         let (w, h, sf) = (img.width(), img.height(), img.scale_factors());
-                        let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
+                        let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w as usize).saturating_mul(h as usize)]);
                         let rgba: Vec<u8> = match img {
                             ImageData::Rgb(d) => d.data.chunks_exact(3).zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
                             ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),

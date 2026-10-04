@@ -206,7 +206,11 @@ impl Importer {
                 && children.len() == 1
                 && (g.blend_mode() == usvg::BlendMode::Normal || children[0].blend == BlendMode::Normal)
             {
-                let mut c = Arc::unwrap_or_clone(children.into_iter().next().unwrap());
+                // `children.len() == 1` above, so this always yields the one child.
+                let Some(only) = children.into_iter().next() else {
+                    return None;
+                };
+                let mut c = Arc::unwrap_or_clone(only);
                 c.opacity *= g.opacity().get();
                 if g.blend_mode() != usvg::BlendMode::Normal {
                     c.blend = blend(g.blend_mode());

@@ -11,6 +11,7 @@
 //!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
 //!   re-encoded as PNG) and text as glyph outlines.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod export;
 mod import;

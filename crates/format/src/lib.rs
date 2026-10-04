@@ -9,6 +9,7 @@
 //! It is lossless for everything in the document model and preserves unknown fields under
 //! `document.unknown`. Readers must reject files whose `version` is newer than they support.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

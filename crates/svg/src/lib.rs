@@ -32,6 +32,7 @@
 //!   unavailable on wasm), so `<text>` elements are read directly from the XML as live point-type
 //!   [`TextObject`]s (type on a path for a `<textPath>`) and placed on top of their layer.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod export;
 mod import;

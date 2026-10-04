@@ -516,7 +516,7 @@ fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     }
     let r = if let Some(path) = a.get("path") {
         let mut p = json!({"path": path, "mode": a.get("mode").cloned().unwrap_or(json!("onPath")), "text": text});
-        for (k, v) in style.as_object().unwrap() {
+        for (k, v) in style.as_object().into_iter().flatten() {
             p[k.as_str()] = v.clone();
         }
         exec(b, "text.createInPath", p)?
@@ -524,7 +524,7 @@ fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         let x = a.get("x").and_then(Value::as_f64).ok_or("give `x` and `y` (or a `path`)")?;
         let y = a.get("y").and_then(Value::as_f64).ok_or("give `x` and `y` (or a `path`)")?;
         let mut p = json!({"x": x, "y": y, "text": text});
-        for (k, v) in style.as_object().unwrap() {
+        for (k, v) in style.as_object().into_iter().flatten() {
             p[k.as_str()] = v.clone();
         }
         if let Some(c) = a.get("color") {

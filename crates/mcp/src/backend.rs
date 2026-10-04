@@ -59,7 +59,9 @@ impl Remote {
         if self.conn.is_none() {
             self.reconnect()?;
         }
-        let (reader, writer) = self.conn.as_mut().expect("connected");
+        let Some((reader, writer)) = self.conn.as_mut() else {
+            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "not connected to the app"));
+        };
         writer.write_all(line.as_bytes())?;
         writer.write_all(b"\n")?;
         writer.flush()?;
