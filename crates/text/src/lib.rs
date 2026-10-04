@@ -8,6 +8,7 @@
 //!
 //! Frames (`TextKind::Area`) and paths (`TextKind::OnPath`) are interpreted in text space.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod composer;
 pub mod edit;

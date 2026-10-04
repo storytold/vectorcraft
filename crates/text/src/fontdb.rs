@@ -401,6 +401,9 @@ impl FontDb {
 
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular.
+    // The fallback faces are compiled in (`BUNDLED`) and loaded by every constructor, so the last
+    // `expect` cannot fail; returning `Option` would push an impossible case onto every caller.
+    #[allow(clippy::expect_used)]
     pub fn face(&self, family: &str, style: &str) -> Arc<FontFace> {
         if let Some(f) = self.find(family, style) {
             return f;

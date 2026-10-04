@@ -80,7 +80,11 @@ impl Track {
                     corner.push(false);
                     tangents.push(a);
                 }
-                (None, None) => unreachable!(),
+                // A lone open vertex has no direction: any unit tangent will do.
+                (None, None) => {
+                    corner.push(false);
+                    tangents.push(Vec2::new(1.0, 0.0));
+                }
             }
         }
         Some(Track { verts: pts, cum, closed, dirs, tangents, corner })

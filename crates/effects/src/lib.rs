@@ -20,6 +20,7 @@
 //! Everything is deterministic: "random" effects (Roughen, Tweak, Scribble) use a seeded hash
 //! noise (`seed` parameter, default 0).
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod bake;
 mod clip;

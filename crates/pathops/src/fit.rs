@@ -112,8 +112,9 @@ fn bern(t: f64) -> [f64; 4] {
 
 /// Solve the 2x2 normal equations for the handle lengths along the fixed tangents.
 fn generate(pts: &[Point], u: &[f64], t0: Vec2, t1: Vec2) -> CubicBez {
-    let p0 = pts[0];
-    let p3 = *pts.last().unwrap();
+    let (Some(&p0), Some(&p3)) = (pts.first(), pts.last()) else {
+        return CubicBez::new(Point::ZERO, Point::ZERO, Point::ZERO, Point::ZERO);
+    };
     let dir_in = -t1; // handle at the end points backwards
     let (mut c00, mut c01, mut c11, mut x0, mut x1) = (0.0, 0.0, 0.0, 0.0, 0.0);
     for (p, &t) in pts.iter().zip(u) {

@@ -81,12 +81,13 @@ pub(crate) fn sweep(t: &Track, nib: &Nib) -> Vec<SubPath> {
             out.push(p + nib.support(rot(tg, ang)));
         }
     };
+    let (Some(&(ps, ts)), Some(&(pe, te))) = (s.first(), s.last()) else {
+        return vec![];
+    };
     let half = std::f64::consts::FRAC_PI_2;
     let mut poly = left.clone();
-    let (pe, te) = *s.last().unwrap();
     cap(pe, te, half, -half, &mut poly);
     poly.extend(right.iter().rev());
-    let (ps, ts) = s[0];
     cap(ps, ts, -half, -3.0 * half, &mut poly);
     vec![SubPath::polyline(&poly, true)]
 }

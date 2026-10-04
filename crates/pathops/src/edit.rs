@@ -188,8 +188,9 @@ pub fn remove_redundant_points(path: &PathData, tolerance: f64) -> PathData {
                     segs.remove(i1);
                     if sp.closed && i1 == 0 {
                         // The merged segment now starts the loop.
-                        let last = segs.pop().expect("non-empty");
-                        segs.insert(0, last);
+                        if let Some(last) = segs.pop() {
+                            segs.insert(0, last);
+                        }
                     }
                     changed = true;
                     break;
@@ -287,18 +288,22 @@ pub fn join(paths: &[PathData], tolerance: f64) -> PathData {
             }
         }
     }
-    if open.len() == 1 {
-        let mut sp = open.pop().expect("one");
+    if open.len() == 1
+        && let Some(mut sp) = open.pop()
+    {
         let n = sp.anchors.len();
-        if n > 2 && sp.anchors[0].p.distance(sp.anchors[n - 1].p) <= tolerance {
-            let last = sp.anchors.pop().expect("n > 2");
+        if n > 2
+            && sp.anchors[0].p.distance(sp.anchors[n - 1].p) <= tolerance
+            && let Some(last) = sp.anchors.pop()
+        {
             let f = &mut sp.anchors[0];
             *f = Anchor::with_handles(f.p, last.h_in, f.h_out);
         } else {
             let f = &mut sp.anchors[0];
             f.h_in = f.p;
-            let l = sp.anchors.last_mut().expect("n >= 2");
-            l.h_out = l.p;
+            if let Some(l) = sp.anchors.last_mut() {
+                l.h_out = l.p;
+            }
         }
         sp.closed = true;
         closed.push(sp);
@@ -311,9 +316,10 @@ pub fn join(paths: &[PathData], tolerance: f64) -> PathData {
             for j in (i + 1)..open.len() {
                 for ei in [false, true] {
                     for ej in [false, true] {
-                        let pi = if ei { open[i].anchors.last() } else { open[i].anchors.first() }.expect("len>=2").p;
-                        let pj = if ej { open[j].anchors.last() } else { open[j].anchors.first() }.expect("len>=2").p;
-                        let d = pi.distance(pj);
+                        let ai = if ei { open[i].anchors.last() } else { open[i].anchors.first() };
+                        let aj = if ej { open[j].anchors.last() } else { open[j].anchors.first() };
+                        let (Some(ai), Some(aj)) = (ai, aj) else { continue };
+                        let d = ai.p.distance(aj.p);
                         if d < best.0 {
                             best = (d, i, j, ei, ej);
                         }
@@ -332,11 +338,13 @@ pub fn join(paths: &[PathData], tolerance: f64) -> PathData {
         }
         if d <= tolerance {
             let first = b.anchors.remove(0);
-            let l = a.anchors.last_mut().expect("len>=2");
-            *l = Anchor::with_handles(l.p, l.h_in, first.h_out);
+            if let Some(l) = a.anchors.last_mut() {
+                *l = Anchor::with_handles(l.p, l.h_in, first.h_out);
+            }
         } else {
-            let l = a.anchors.last_mut().expect("len>=2");
-            l.h_out = l.p;
+            if let Some(l) = a.anchors.last_mut() {
+                l.h_out = l.p;
+            }
             b.anchors[0].h_in = b.anchors[0].p;
         }
         a.anchors.extend(b.anchors);

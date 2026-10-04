@@ -267,7 +267,7 @@ fn bristle_makes_translucent_strands() {
 #[test]
 fn tints_colorization_uses_stroke_colour() {
     let b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
-    let BrushKind::Art(mut a) = b.kind else { unreachable!() };
+    let BrushKind::Art(mut a) = b.kind else { panic!("not an art brush") };
     a.colorization = Colorization::Tints;
     let b = Brush { name: "t".into(), kind: BrushKind::Art(a) };
     let out = stroke_pieces(&b, &line(0.0, 0.0, 50.0, 0.0), &stroke(1.0));

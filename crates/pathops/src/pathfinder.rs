@@ -58,8 +58,9 @@ pub struct Region {
 
 impl Region {
     /// Front-most covering shape.
+    /// (Regions always have a source; an uncovered one would report the back-most shape.)
     pub fn top(&self) -> usize {
-        *self.sources.last().expect("regions are never uncovered")
+        self.sources.last().copied().unwrap_or(0)
     }
     /// Does the face contain `p`?
     pub fn contains(&self, p: Point) -> bool {
@@ -87,14 +88,17 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
         return Vec::new();
     }
     let front_key = shapes[n - 1].key;
-    if op == PathfinderOp::Unite {
+    let unite = || {
         let v: Vec<(&PathData, FillRule)> = shapes.iter().map(|s| (&s.path, s.rule)).collect();
-        return one(unite_all(&v), front_key);
+        one(unite_all(&v), front_key)
+    };
+    if op == PathfinderOp::Unite {
+        return unite();
     }
     let Some(arr) = arrangement(shapes) else { return Vec::new() };
     let p = &arr.tidy;
     match op {
-        PathfinderOp::Unite => unreachable!(),
+        PathfinderOp::Unite => unite(),
         PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours(|m| m[0] && !m[1..].iter().any(|&b| b)), p), shapes[0].key),
         PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours(|m| m[n - 1] && !m[..n - 1].iter().any(|&b| b)), p), front_key),
         PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours(|m| m.iter().all(|&b| b)), p), front_key),

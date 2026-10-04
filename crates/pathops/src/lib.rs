@@ -5,6 +5,7 @@
 //! Béziers, and the pieces it splits curves into are refitted afterwards so results carry few
 //! anchors. See the crate README for the API overview.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod boolean;
 mod edit;

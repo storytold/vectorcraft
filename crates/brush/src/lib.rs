@@ -9,6 +9,7 @@
 //! [`stroke_pieces`] is the single source of brush geometry: the renderer paints the pieces it
 //! returns (caching them per node) and `object.expandBrush` inserts them as real objects.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod calli;
 mod colorize;
@@ -325,7 +326,14 @@ pub fn unique_name(lib: &[Brush], base: &str) -> String {
     if !lib.iter().any(|b| b.name == base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| !lib.iter().any(|b| &b.name == n)).unwrap()
+    let mut i = 2u64;
+    loop {
+        let n = format!("{base} {i}");
+        if !lib.iter().any(|b| b.name == n) {
+            return n;
+        }
+        i = i.saturating_add(1);
+    }
 }
 
 // ---------- geometry ----------

@@ -21,6 +21,7 @@
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
 //! *overlapping* (stacked: each layer also covers every layer above it, so no hairline gaps).
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod contour;
 mod fit;
@@ -229,7 +230,7 @@ pub fn preset(name: &str) -> Option<TraceParams> {
 
 /// All built-in presets in panel order.
 pub fn presets() -> Vec<(&'static str, TraceParams)> {
-    PRESET_NAMES.iter().map(|n| (*n, preset(n).expect("built-in preset"))).collect()
+    PRESET_NAMES.iter().filter_map(|n| Some((*n, preset(n)?))).collect()
 }
 
 /// One traced shape: an outer contour plus its holes, filled with `color`.
