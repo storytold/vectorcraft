@@ -112,12 +112,12 @@ pub fn has_doc(s: &Session) -> std::result::Result<(), String> {
     s.active().map(|_| ()).ok_or_else(|| "no document open".into())
 }
 pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
-    has_doc(s)?;
-    if s.active().unwrap().selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
+    let st = s.active().ok_or("no document open")?;
+    if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
 pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
-    has_doc(s)?;
-    if s.active().unwrap().selection.len() < 2 { Err("select at least two objects".into()) } else { Ok(()) }
+    let st = s.active().ok_or("no document open")?;
+    if st.selection.len() < 2 { Err("select at least two objects".into()) } else { Ok(()) }
 }
 pub fn can_undo(s: &Session) -> std::result::Result<(), String> {
     s.active().filter(|d| !d.history.undo.is_empty()).map(|_| ()).ok_or_else(|| "nothing to undo".into())

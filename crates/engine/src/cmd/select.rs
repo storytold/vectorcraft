@@ -155,7 +155,7 @@ fn step(s: &mut Session, dir: i64) -> Result<Value> {
     if j < 0 || j >= n as i64 {
         return ok();
     }
-    let id = st.doc.children(par).unwrap()[j as usize].id;
+    let Some(id) = st.doc.children(par).and_then(|c| c.get(j as usize)).map(|n| n.id) else { return ok() };
     s.select(|_, sel| sel.set([id]))?;
     ok()
 }

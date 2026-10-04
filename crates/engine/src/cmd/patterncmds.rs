@@ -212,11 +212,23 @@ fn unique_pattern_name(d: &Document, base: &str) -> String {
     if d.pattern(base).is_none() && d.swatch(base).is_none() {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap()
+    free_name(2, |i| format!("{base} {i}"), |n| d.pattern(n).is_none() && d.swatch(n).is_none())
 }
 
 fn next_pattern_name(d: &Document) -> String {
-    (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap()
+    free_name(1, |i| format!("New Pattern {i}"), |n| d.pattern(n).is_none() && d.swatch(n).is_none())
+}
+
+/// The first `name(i)`, counting from `from`, that `free` accepts.
+fn free_name(from: u64, name: impl Fn(u64) -> String, free: impl Fn(&str) -> bool) -> String {
+    let mut i = from;
+    loop {
+        let n = name(i);
+        if free(&n) {
+            return n;
+        }
+        i = i.saturating_add(1);
+    }
 }
 
 /// Add pattern `def` and its swatch.
@@ -633,7 +645,7 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
         return Err(EngineError::Other("select the art to repeat".into()));
     }
     let id = s.edit(label, |d, sel| {
-        let top = *roots.last().unwrap();
+        let top = *roots.last().ok_or_else(|| EngineError::Other("select the art to repeat".into()))?;
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| d.node(*id).cloned()).map(Arc::new).collect();
         let id = d.alloc_id();

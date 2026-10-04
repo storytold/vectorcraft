@@ -441,7 +441,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn has_image(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    let st = s.active().unwrap();
+    let st = s.active().ok_or("no document open")?;
     if st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_)))) {
         Ok(())
     } else {
@@ -460,7 +460,7 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
-    let NodeKind::Image(im) = &node.kind else { unreachable!() };
+    let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
     let blob = st.doc.images.get(&im.key).filter(|b| !b.bytes.is_empty()).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
     let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
     let cols = p.get("columns").and_then(Value::as_u64).unwrap_or(10).clamp(1, 1000) as u32;
@@ -535,7 +535,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
-    let NodeKind::Image(im) = &node.kind else { unreachable!() };
+    let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     let rect = match p.get("rect").and_then(Value::as_array) {
         Some(a) if a.len() == 4 => {

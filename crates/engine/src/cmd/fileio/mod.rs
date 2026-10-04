@@ -268,7 +268,7 @@ pub fn writable_format(format_param: Option<&str>, path: Option<&str>) -> std::r
     let f = match (format_param, path.map(extension).filter(|e| !e.is_empty())) {
         (Some(f), _) => format(f).ok_or_else(|| format!("unknown format `{f}` (see document.formats)"))?,
         (None, Some(e)) => format(&e).ok_or_else(|| format!("unknown extension `.{e}`: pass `format` (see document.formats)"))?,
-        (None, None) => format("png").expect("png is in FORMATS"),
+        (None, None) => format("png").ok_or("PNG export is not available")?,
     };
     if f.write { Ok(f) } else { Err(format!("{} files can be opened but not written (see document.formats)", f.label)) }
 }

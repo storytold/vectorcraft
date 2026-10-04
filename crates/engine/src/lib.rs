@@ -5,6 +5,7 @@
 //! server all go through [`Session::execute`]. Tools (pointer gestures) are hosted here too and
 //! reduce to commands, so every gesture is journaled and replayable.
 #![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod cmd;
 pub mod inspect;
@@ -775,6 +776,8 @@ mod tests_layerclip;
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;
+#[cfg(test)]
+mod tests_nocrash;
 #[cfg(test)]
 mod tests_opacitymask;
 #[cfg(test)]

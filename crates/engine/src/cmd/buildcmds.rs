@@ -680,7 +680,11 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     let id = s.edit(label, |d, sel| {
         let src = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-        let mut image = if is_trace_group(&src) { (**src.children().unwrap().first().unwrap()).clone() } else { src.clone() };
+        let mut image = if is_trace_group(&src) {
+            src.children().and_then(|c| c.first()).map(|c| (**c).clone()).ok_or(EngineError::NoNode(target))?
+        } else {
+            src.clone()
+        };
         image.visible = true;
         let mut children: Vec<Arc<Node>> = vec![];
         if !expand {

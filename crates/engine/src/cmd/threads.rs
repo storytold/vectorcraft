@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn has_thread_selection(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    let st = s.active().unwrap();
+    let st = s.active().ok_or("no document open")?;
     if st.selection.objects.iter().any(|id| st.doc.text_threads.iter().any(|t| t.contains(id))) {
         Ok(())
     } else {

@@ -250,7 +250,7 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     let first = ids.first().ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
     let current = match &s.doc()?.doc.node(*first).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => t.area.clone(),
-        _ => unreachable!(),
+        _ => return Err(bad(C, "select area type (text in a frame)")),
     };
     let mut v = serde_json::to_value(&current).map_err(|e| EngineError::Other(e.to_string()))?;
     let mut changed = false;

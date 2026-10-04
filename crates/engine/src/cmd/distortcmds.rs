@@ -248,7 +248,11 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let leaves = if roots.is_empty() {
         // Nothing selected: everything the brush sweeps over.
-        let sweep = dab_pts.iter().map(|c| prm.brush_bounds(*c)).reduce(|a, b| a.union(b)).unwrap();
+        let sweep = dab_pts
+            .iter()
+            .map(|c| prm.brush_bounds(*c))
+            .reduce(|a, b| a.union(b))
+            .ok_or_else(|| bad(C, "points must be a non-empty [[x,y]…] list"))?;
         let mut all = vec![];
         doc.walk(|n| {
             if matches!(n.kind, NodeKind::Path { guide: false, .. })

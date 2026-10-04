@@ -495,7 +495,7 @@ fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         for id in &ids {
             d.remove(*id)?;
         }
-        let ch = d.node_mut(cid).unwrap().children_mut().unwrap();
+        let ch = d.node_mut(cid).and_then(Node::children_mut).ok_or(EngineError::NoNode(cid))?;
         for mut p in paths {
             let pn = Arc::make_mut(&mut p);
             pn.appearance = Appearance::default();
@@ -566,7 +566,7 @@ pub(super) fn release_clip(d: &mut Document, id: NodeId) {
 
 fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let top = *ids.last().unwrap();
+    let top = *ids.last().ok_or_else(|| EngineError::Other("select the art and a path on top to use as a clipping mask".into()))?;
     let gid = s.edit("Make Clipping Mask", |d, sel| {
         make_clipping_path(d, top)?;
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;

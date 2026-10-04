@@ -149,7 +149,7 @@ fn editing_a_global_swatch_recolours_linked_art_in_one_step() {
     assert_eq!(fill_of(&s, b), Paint::solid(Color::from_hex("#2a6fb0").unwrap()), "unlinked art keeps its colour");
     let text_fill = |s: &Session| match &doc(s).node(t).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(tx) => tx.runs[0].style.fill.clone(),
-        _ => unreachable!(),
+        _ => panic!("not a text object"),
     };
     assert_eq!(text_fill(&s), linked("#ff0000", "Brand"), "text runs follow the swatch");
     assert_eq!(s.paint.stroke, linked("#ff0000", "Brand"), "so does the default stroke");

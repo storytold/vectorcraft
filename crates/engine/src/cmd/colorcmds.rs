@@ -397,9 +397,9 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
         }
         "gray" => {
             let dgray = g("gray");
-            Box::new(move |c| {
-                let Color::Gray { k } = to_gray(c) else { unreachable!() };
-                Color::gray(cl(k + dgray))
+            Box::new(move |c| match to_gray(c) {
+                Color::Gray { k } => Color::gray(cl(k + dgray)),
+                other => other,
             })
         }
         "global" => {
@@ -474,8 +474,11 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         BlendOrder::Horizontal => ids.sort_by(|a, b| center(a).x.total_cmp(&center(b).x)),
         BlendOrder::Vertical => ids.sort_by(|a, b| center(a).y.total_cmp(&center(b).y)),
     }
-    let first = d.node(ids[0]).and_then(fill_color).unwrap_or_default();
-    let last = d.node(*ids.last().unwrap()).and_then(fill_color).unwrap_or_default();
+    let (Some(&first_id), Some(&last_id)) = (ids.first(), ids.last()) else {
+        return Err(EngineError::Other("Blend colors: select at least three objects with filled colours".into()));
+    };
+    let first = d.node(first_id).and_then(fill_color).unwrap_or_default();
+    let last = d.node(last_id).and_then(fill_color).unwrap_or_default();
     // Ends in one model blend in it; mixed ones give colours in the document's model.
     let model = if first.model() == last.model() { first.model() } else { d.color_mode.model() };
     let n = ids.len();

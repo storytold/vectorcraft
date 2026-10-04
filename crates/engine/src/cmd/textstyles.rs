@@ -142,18 +142,17 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 
 /// `cur` after its style changed from `old` to `new`: attributes still equal to the old style's
 /// value (or not set by it) take the new value; overrides stay.
-fn restyle<T: Serialize + DeserializeOwned>(cur: &T, old: &Map<String, Value>, new: &Map<String, Value>) -> T {
+fn restyle<T: Serialize + DeserializeOwned + Clone>(cur: &T, old: &Map<String, Value>, new: &Map<String, Value>) -> T {
     let mut m = match serde_json::to_value(cur) {
         Ok(Value::Object(m)) => m,
-        _ => return serde_json::from_value(serde_json::to_value(cur).unwrap_or_default()).unwrap_or_else(|_| unreachable!()),
+        _ => return cur.clone(),
     };
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
         }
     }
-    serde_json::from_value(Value::Object(m.clone()))
-        .unwrap_or_else(|_| serde_json::from_value(serde_json::to_value(cur).unwrap_or_default()).expect("round trip"))
+    serde_json::from_value(Value::Object(m)).unwrap_or_else(|_| cur.clone())
 }
 
 /// Every text object id in the document.
@@ -276,7 +275,16 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };
     let name = match str_param(p, "name") {
         Some(n) => n.to_string(),
-        None => (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).expect("free name"),
+        None => {
+            let mut i = 1u64;
+            loop {
+                let n = format!("{base} {i}");
+                if kind.attrs(d, &n).is_none() {
+                    break n;
+                }
+                i = i.saturating_add(1);
+            }
+        }
     };
     if name.trim().is_empty() || kind.attrs(d, &name).is_some() {
         return Err(bad(&c, format!("a style named `{name}` already exists")));
@@ -384,10 +392,14 @@ fn duplicate(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "duplicate")?.to_string();
     let d = &s.doc()?.doc;
     let attrs = kind.attrs(d, &name).ok_or_else(|| bad(&kind.cmd("duplicate"), format!("no style `{name}`")))?;
-    let copy = (1..)
-        .map(|i| if i == 1 { format!("{name} copy") } else { format!("{name} copy {i}") })
-        .find(|n| kind.attrs(d, n).is_none())
-        .expect("free name");
+    let mut i = 1u64;
+    let copy = loop {
+        let n = if i == 1 { format!("{name} copy") } else { format!("{name} copy {i}") };
+        if kind.attrs(d, &n).is_none() {
+            break n;
+        }
+        i = i.saturating_add(1);
+    };
     new(s, &json!({ "name": copy, "attrs": attrs }), kind)
 }
 
