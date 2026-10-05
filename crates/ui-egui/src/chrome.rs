@@ -397,7 +397,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
 }
 
-/// Contextual hint for the active tool: segments of (text, bold).
+/// Contextual hint for the active tool: segments of (text, bold). Keys are written as shortcuts are
+/// (`Cmd`, `Alt`); [`platform_keys`] names them for this platform.
 fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
     match tool {
         "selection" => &[
@@ -405,7 +406,7 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" the object to select  |  ", false),
             ("Shift+Click", true),
             (" to select multiple objects  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" the object to duplicate", false),
         ],
         "directSelection" => &[
@@ -447,7 +448,7 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to draw  |  ", false),
             ("Shift+Drag", true),
             (" to constrain proportions  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" from center  |  ", false),
             ("Click", true),
             (" for exact size", false),
@@ -457,14 +458,14 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to set the reference point  |  ", false),
             ("Drag", true),
             (" to transform  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" for exact values", false),
         ],
         "hand" => &[("Drag", true), (" to pan the view", false)],
         "zoom" => &[
             ("Click", true),
             (" to zoom in  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" to zoom out  |  ", false),
             ("Drag", true),
             (" to zoom into an area", false),
@@ -497,11 +498,20 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let mut job = egui::text::LayoutJob::default();
                 for (txt, bold) in hint_for(app.session.tool_id()) {
                     let font = if *bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
-                    job.append(txt, 0.0, egui::TextFormat { font_id: font, color: if *bold { t.text_strong } else { t.text }, ..Default::default() });
+                    job.append(
+                        &platform_keys(txt),
+                        0.0,
+                        egui::TextFormat { font_id: font, color: if *bold { t.text_strong } else { t.text }, ..Default::default() },
+                    );
                 }
                 ui.label(job);
             });
         });
+}
+
+/// Modifier keys as this platform's keyboard names them: Option on macOS, Ctrl elsewhere.
+fn platform_keys(s: &str) -> String {
+    if cfg!(target_os = "macos") { s.replace("Alt+", "Option+") } else { s.replace("Cmd+", "Ctrl+") }
 }
 
 #[cfg(test)]
@@ -520,5 +530,21 @@ mod tests {
         assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
         s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
         assert!(title(&s).ends_with("(RGB/Preview)"));
+    }
+
+    #[test]
+    fn hints_name_this_platforms_modifier_keys() {
+        for tool in ["selection", "rectangle", "rotate", "zoom", "eyedropper", "paintbrush"] {
+            let hint: String = super::hint_for(tool).iter().map(|(t, _)| super::platform_keys(t)).collect();
+            if cfg!(target_os = "macos") {
+                assert!(!hint.contains("Alt+") && !hint.contains("Ctrl+"), "{tool}: {hint}");
+            } else {
+                assert!(!hint.contains("Option") && !hint.contains("Cmd"), "{tool}: {hint}");
+            }
+        }
+        if !cfg!(target_os = "macos") {
+            let hint: String = super::hint_for("selection").iter().map(|(t, _)| super::platform_keys(t)).collect();
+            assert!(hint.contains("Alt+Drag"), "{hint}");
+        }
     }
 }
