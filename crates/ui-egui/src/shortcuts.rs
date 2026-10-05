@@ -62,6 +62,15 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
             v.push((sc, "window.panel", json!({ "panel": panel })));
         }
     }
+    // `+` is Shift+= on US keyboards, its own key on many others and on the numpad: a shortcut on
+    // `=` (Zoom In's Cmd+=) answers to `+` too, as long as nothing is bound to `+` itself.
+    let plus: Vec<_> = v
+        .iter()
+        .filter(|(sc, ..)| sc.logical_key == Key::Equals)
+        .map(|(sc, id, p)| (KeyboardShortcut::new(sc.modifiers, Key::Plus), *id, p.clone()))
+        .filter(|(sc, ..)| !v.iter().any(|(o, ..)| o.logical_key == Key::Plus && o.modifiers == sc.modifiers))
+        .collect();
+    v.extend(plus);
     // Most specific (most modifiers) first so Cmd+Shift+Z isn't eaten by Cmd+Z.
     v.sort_by_key(|(sc, ..)| {
         std::cmp::Reverse(sc.modifiers.shift as u8 + sc.modifiers.alt as u8 + sc.modifiers.command as u8 + sc.modifiers.ctrl as u8)
@@ -323,6 +332,27 @@ mod tests {
         assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(_)), "`.` applies the last gradient");
         frame(&mut app, vec![egui::Event::Text(",".into())]);
         assert_eq!(fill(&app).color().unwrap().to_hex(), "#336699", "`,` applies the last colour");
+    }
+
+    #[test]
+    fn zoom_in_answers_to_the_plus_key() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.view_mut().unwrap().zoom = 1.0;
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let zoom = |app: &VectorcraftApp| app.view().unwrap().zoom;
+        frame(&mut app, vec![key(Key::Equals, Modifiers::COMMAND)]);
+        let after_equals = zoom(&app);
+        assert!(after_equals > 1.0, "Cmd+= zooms in");
+        // The numpad's + and the + key (Shift+= on US layouts) arrive as Key::Plus.
+        frame(&mut app, vec![key(Key::Plus, Modifiers::COMMAND)]);
+        assert!(zoom(&app) > after_equals, "Cmd+(numpad +) zooms in");
+        let after_plus = zoom(&app);
+        frame(&mut app, vec![key(Key::Plus, Modifiers::COMMAND | Modifiers::SHIFT)]);
+        let after_shift_plus = zoom(&app);
+        assert!(after_shift_plus > after_plus, "Cmd+Shift+= (Cmd++) zooms in");
+        frame(&mut app, vec![key(Key::Minus, Modifiers::COMMAND)]);
+        assert!(zoom(&app) < after_shift_plus, "Cmd+- still zooms out");
     }
 
     #[test]
