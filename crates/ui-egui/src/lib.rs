@@ -235,6 +235,12 @@ pub struct VectorcraftApp {
     screenshot_token: u64,
     /// Synthetic input events (from the control channel) injected one step per frame.
     pub synthetic: Vec<egui::Event>,
+    /// Modifiers of a synthetic pointer press, held until its release (like keys held during a drag).
+    synthetic_mods: Option<egui::Modifiers>,
+    /// Modifiers synthetic input last told egui about (None: the real keyboard's).
+    synthetic_mods_applied: Option<egui::Modifiers>,
+    /// The real keyboard's modifiers, to give back after synthetic input.
+    real_mods: egui::Modifiers,
     styled: bool,
     fonts_ready: bool,
     frame: u64,
@@ -307,6 +313,9 @@ impl VectorcraftApp {
             queued_screenshots: vec![],
             screenshot_token: 0,
             synthetic: vec![],
+            synthetic_mods: None,
+            synthetic_mods_applied: None,
+            real_mods: egui::Modifiers::NONE,
             styled: false,
             fonts_ready: false,
             frame: 0,
@@ -654,19 +663,43 @@ impl VectorcraftApp {
 
     /// Inject synthetic events (one press/release step per frame).
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
-        if self.synthetic.is_empty() {
-            return;
+        for e in &raw.events {
+            if let egui::Event::ModifiersChanged(m) = e {
+                self.real_mods = *m;
+            }
         }
         // Pointer events go one per frame so egui sees presses, drags and releases as real input;
         // keyboard sequences go up to the key release.
-        let n = match self.synthetic[0] {
-            egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } => 1,
-            _ => self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1),
+        let n = match self.synthetic.first() {
+            None => 0,
+            Some(egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. }) => 1,
+            Some(_) => {
+                self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1)
+            }
         };
-        if let Some(egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. }) = self.synthetic.first() {
+        let batch: Vec<egui::Event> = self.synthetic.drain(..n).collect();
+        // The events carry their modifiers, but most handlers read the held keys (`i.modifiers`):
+        // hold a key's modifiers for its frame and a press's until its release, then give the real
+        // keyboard's back.
+        let mut want = self.synthetic_mods;
+        for e in &batch {
+            match e {
+                egui::Event::Key { modifiers, .. } => want = Some(*modifiers),
+                egui::Event::PointerButton { pressed, modifiers, .. } => {
+                    self.synthetic_mods = pressed.then_some(*modifiers);
+                    want = Some(*modifiers);
+                }
+                _ => {}
+            }
+        }
+        if want != self.synthetic_mods_applied {
+            raw.events.push(egui::Event::ModifiersChanged(want.unwrap_or(self.real_mods)));
+            self.synthetic_mods_applied = want;
+        }
+        if let Some(egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. }) = batch.first() {
             raw.events.push(egui::Event::PointerMoved(*p));
         }
-        raw.events.extend(self.synthetic.drain(..n));
+        raw.events.extend(batch);
     }
 
     /// Lay out the whole window.

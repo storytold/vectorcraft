@@ -326,6 +326,42 @@ mod tests {
     }
 
     #[test]
+    fn synthetic_input_holds_its_modifiers() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        // What the control channel's `ui.key {key: "ArrowRight", shift: true}` queues.
+        let key = |pressed| egui::Event::Key { key: Key::ArrowRight, physical_key: None, pressed, repeat: false, modifiers: Modifiers::SHIFT };
+        app.synthetic = vec![key(true), key(false)];
+        // One frame through the hook, as eframe runs it; answers whether Shift was held.
+        let ctx = egui::Context::default();
+        let step = |app: &mut VectorcraftApp| {
+            let mut raw = egui::RawInput::default();
+            app.raw_input_hook(&mut raw);
+            let mut shift = false;
+            let mut out = ctx.run_ui(raw, |ui| {
+                shift = ui.input(|i| i.modifiers.shift);
+                handle(app, ui.ctx());
+                app.logic(ui.ctx());
+            });
+            out.textures_delta.clear();
+            shift
+        };
+        assert!(step(&mut app), "Shift is held while the synthetic key is delivered");
+        let x = app.session.execute("document.inspect", &json!({})).unwrap()["selectionBounds"]["x"].as_f64().unwrap();
+        assert_eq!(x, 10.0, "Shift+→ nudges 10 pt, as with the keyboard");
+        assert!(!step(&mut app), "and released after it");
+        // `ui.click` / `ui.drag`: a press holds its modifiers until its release.
+        let at = egui::pos2(500.0, 500.0);
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::SHIFT };
+        app.synthetic =
+            vec![egui::Event::PointerMoved(at), button(true), egui::Event::PointerMoved(at), button(false), egui::Event::PointerMoved(at)];
+        let held: Vec<bool> = (0..6).map(|_| step(&mut app)).collect();
+        assert_eq!(held, [false, true, true, true, false, false]);
+    }
+
+    #[test]
     fn parses() {
         let s = parse("Cmd+Shift+]").unwrap();
         assert_eq!(s.logical_key, Key::CloseBracket);
