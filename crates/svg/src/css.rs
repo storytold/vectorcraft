@@ -73,20 +73,18 @@ pub(crate) fn font_descriptor(st: &CharStyle) -> (u16, bool) {
 
 /// The font of character style `st`: family, size (the vertical scale; writers stretch the
 /// horizontal one), weight and style, lengths written by `len`. `numeric_weight`: the face's
-/// weight as a number (embedded faces are told apart by it), else `bold` for bold styles.
+/// weight as a number (embedded faces are told apart by it), else `bold` for Bold and the number
+/// for the other weights (Semibold 600, Light 300…), so they don't come back Bold or Regular.
 pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String, numeric_weight: bool) -> Props {
     let mut p = Props::new();
     let fam = if st.font_family.contains(|c: char| c.is_whitespace() || c == ',') { format!("'{}'", st.font_family) } else { st.font_family.clone() };
     p.push(("font-family", fam));
     p.push(("font-size", len(st.size * st.v_scale / 100.0)));
-    let fs = st.font_style.to_ascii_lowercase();
     let (weight, italic) = font_descriptor(st);
-    if numeric_weight {
-        if weight != 400 {
-            p.push(("font-weight", weight.to_string()));
-        }
-    } else if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
-        p.push(("font-weight", "bold".into()));
+    match weight {
+        400 => {}
+        700 if !numeric_weight => p.push(("font-weight", "bold".into())),
+        w => p.push(("font-weight", w.to_string())),
     }
     if italic {
         p.push(("font-style", "italic".into()));

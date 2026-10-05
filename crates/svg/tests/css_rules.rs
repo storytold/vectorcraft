@@ -99,6 +99,31 @@ fn ellipses_round_fully_and_options_change_units_and_names() {
 }
 
 #[test]
+fn weights_between_regular_and_bold_keep_their_number() {
+    for (style, want) in [
+        ("Regular", None),
+        ("Light", Some("300")),
+        ("Medium", Some("500")),
+        ("Semibold", Some("600")),
+        ("Bold", Some("bold")),
+        ("Black", Some("900")),
+    ] {
+        let mut d = doc();
+        let st = CharStyle { font_family: "Source Sans 3".into(), font_style: style.into(), size: 18.0, ..CharStyle::default() };
+        let n = text(&mut d, "Weight", st);
+        let id = add(&mut d, n);
+        assert_eq!(prop(&one(&d, id, &CssOptions::default()), "font-weight"), want, "CSS for {style}");
+        // SVG export (fonts not embedded) writes the same weight, so the text doesn't come back
+        // Bold or Regular when the SVG is opened again.
+        let svg = export(&d, &ExportOptions::default());
+        match want {
+            Some(w) => assert!(svg.contains(&format!("font-weight=\"{w}\"")), "SVG for {style}: {svg}"),
+            None => assert!(!svg.contains("font-weight"), "SVG for {style}: {svg}"),
+        }
+    }
+}
+
+#[test]
 fn type_gives_font_properties() {
     let mut d = doc();
     let st = CharStyle {
