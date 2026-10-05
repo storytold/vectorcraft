@@ -106,6 +106,16 @@ impl PasteChord {
     }
 }
 
+/// The paste command for a paste chord held with `m`. egui sends Cmd+V with any other modifiers
+/// as the same paste event, so Paste in Place (Cmd+Shift+V), Paste on All Artboards and Paste
+/// without Formatting are told apart here by the keys held, through their shortcuts.
+fn paste_command(m: Modifiers) -> &'static str {
+    all_shortcuts()
+        .into_iter()
+        .find(|(sc, id, _)| id.starts_with("edit.paste") && sc.logical_key == Key::V && m.matches_exact(sc.modifiers))
+        .map_or("edit.paste", |(_, id, _)| id)
+}
+
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
     let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
@@ -162,13 +172,15 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     // Clipboard keys arrive as events, not key presses (except where the native menu has them).
+    let pasting = textless_paste || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
+    let paste = if pasting { paste_command(ctx.input(|i| i.modifiers)) } else { "edit.paste" };
     let mut clip = vec![];
     ctx.input_mut(|i| {
         i.events.retain(|e| {
             let (id, text) = match e {
                 egui::Event::Copy => ("edit.copy", None),
                 egui::Event::Cut => ("edit.cut", None),
-                egui::Event::Paste(t) => ("edit.paste", Some(t.clone())),
+                egui::Event::Paste(t) => (paste, Some(t.clone())),
                 _ => return true,
             };
             if app.native_shortcuts.contains(id) {
@@ -179,8 +191,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         })
     });
     // Only the system clipboard service reads what isn't text (the native menu has its own Paste).
-    if textless_paste && app.services.system_clipboard.is_some() && !app.native_shortcuts.contains("edit.paste") {
-        clip.push(("edit.paste", None));
+    if textless_paste && app.services.system_clipboard.is_some() && !app.native_shortcuts.contains(paste) {
+        clip.push((paste, None));
     }
     for (id, text) in clip {
         app.clipboard_in = text;
@@ -309,6 +321,30 @@ mod tests {
         // Plain text is not art: nothing is pasted from it (the internal clipboard is reused).
         frame(&mut app, vec![egui::Event::Paste("hello".into())]);
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn shift_and_alt_pastes_are_paste_in_place_and_on_all_artboards() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let copied = frame(&mut app, vec![egui::Event::Copy]).platform_output.commands.iter().find_map(|c| match c {
+            egui::OutputCommand::CopyText(t) => Some(t.clone()),
+            _ => None,
+        });
+        let svg = copied.expect("copy publishes SVG");
+        let last = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone()).unwrap_or_default();
+        // egui sends Cmd+V with any other modifiers as the same paste event: the keys held decide.
+        let paste = |app: &mut VectorcraftApp, m: Modifiers| {
+            frame(app, vec![egui::Event::ModifiersChanged(m), egui::Event::Paste(svg.clone())]);
+        };
+        paste(&mut app, Modifiers::COMMAND | Modifiers::SHIFT);
+        assert_eq!(last(&app), "Paste in Place");
+        paste(&mut app, Modifiers::COMMAND | Modifiers::SHIFT | Modifiers::ALT);
+        assert_eq!(last(&app), "Paste on All Artboards");
+        paste(&mut app, Modifiers::COMMAND);
+        assert_eq!(last(&app), "Paste");
     }
 
     #[test]
