@@ -305,7 +305,9 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     );
     if let Some(id) = chosen {
         app.select_tool(id);
-    } else if resp.response.clicked_elsewhere() {
+    } else if resp.response.clicked_elsewhere() && !ctx.input(|i| i.pointer.interact_pos()).is_some_and(|p| anchor.contains(p)) {
+        // The click that opened it (a right-click or a long press on the tool button) ends on the
+        // button, in the same frame: it isn't a click elsewhere.
         app.ui.flyout = None;
     }
     let _ = theme::semibold;
@@ -341,6 +343,41 @@ mod tests {
         let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, ctx, time, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)]);
         frame(app, ctx, time + 0.1, vec![]);
+    }
+
+    #[test]
+    fn right_clicking_a_tool_group_opens_its_flyout_until_a_click_elsewhere() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        let buttons = frame(&mut app, &ctx, 0.0, vec![]);
+        let right_click = |at: Pos2| {
+            let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+            vec![Event::PointerMoved(at), b(true), b(false)]
+        };
+        // The first button whose slot holds more than one tool (the ones with a corner triangle).
+        let mut t = 1.0;
+        let group = buttons
+            .iter()
+            .find(|b| {
+                frame(&mut app, &ctx, t, right_click(b.center()));
+                t += 1.0;
+                app.ui.flyout.is_some()
+            })
+            .copied()
+            .expect("a right-click on a tool group opens its flyout");
+        // It stays open in the next frames...
+        frame(&mut app, &ctx, t, vec![]);
+        frame(&mut app, &ctx, t + 0.1, vec![]);
+        assert!(app.ui.flyout.is_some(), "the flyout stays open");
+        // ...and a right-click on the same button keeps it.
+        frame(&mut app, &ctx, t + 1.0, right_click(group.center()));
+        assert!(app.ui.flyout.is_some());
+        // A click elsewhere closes it.
+        let away = Pos2::new(390.0, 1190.0);
+        let b = |pressed| Event::PointerButton { pos: away, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, t + 2.0, vec![Event::PointerMoved(away), b(true), b(false)]);
+        assert!(app.ui.flyout.is_none(), "a click elsewhere closes it");
     }
 
     #[test]
