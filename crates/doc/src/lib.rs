@@ -221,14 +221,21 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
             if l.trim().is_empty() {
                 continue;
             }
-            let a = parse_measure(l, default)?;
             return match op {
-                '+' => Some(a + parse_measure(r, default)?),
-                '-' => Some(a - parse_measure(r, default)?),
-                '*' => Some(a * r.trim().parse::<f64>().ok()?),
+                '+' => Some(parse_measure(l, default)? + parse_measure(r, default)?),
+                '-' => Some(parse_measure(l, default)? - parse_measure(r, default)?),
                 _ => {
-                    let d = r.trim().parse::<f64>().ok()?;
-                    if d == 0.0 { None } else { Some(a / d) }
+                    // A unit after the factor or divisor is the whole expression's: "1080/2 px" is
+                    // what a field showing "540 px" holds once its number is retyped.
+                    let (n, unit) = number_and_unit(r)?;
+                    let a = parse_measure(l, unit.unwrap_or(default))?;
+                    if op == '*' {
+                        Some(a * n)
+                    } else if n == 0.0 {
+                        None
+                    } else {
+                        Some(a / n)
+                    }
                 }
             };
         }
@@ -242,22 +249,30 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     {
         return Some(p.trim().parse::<f64>().ok()? * 12.0 + pt.trim().parse::<f64>().unwrap_or(0.0));
     }
+    let (v, unit) = number_and_unit(s)?;
+    Some(unit.unwrap_or(default).to_pt(v))
+}
+
+/// `"2 px"` → `(2, Some(Pixels))`, `"2"` → `(2, None)`; `None` when it isn't a number with an
+/// optional unit suffix.
+fn number_and_unit(s: &str) -> Option<(f64, Option<Unit>)> {
+    let s = s.trim();
     let num_end = s.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).unwrap_or(s.len());
     let v: f64 = s[..num_end].trim().parse().ok()?;
     let unit = match s[num_end..].trim() {
-        "" => default,
-        "pt" => Unit::Points,
-        "px" => Unit::Pixels,
-        "in" | "\"" => Unit::Inches,
-        "mm" => Unit::Millimeters,
-        "cm" => Unit::Centimeters,
-        "m" => Unit::Meters,
-        "ft" | "'" => Unit::Feet,
-        "yd" => Unit::Yards,
-        "pc" => Unit::Picas,
+        "" => None,
+        "pt" => Some(Unit::Points),
+        "px" => Some(Unit::Pixels),
+        "in" | "\"" => Some(Unit::Inches),
+        "mm" => Some(Unit::Millimeters),
+        "cm" => Some(Unit::Centimeters),
+        "m" => Some(Unit::Meters),
+        "ft" | "'" => Some(Unit::Feet),
+        "yd" => Some(Unit::Yards),
+        "pc" => Some(Unit::Picas),
         _ => return None,
     };
-    Some(unit.to_pt(v))
+    Some((v, unit))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1054,6 +1069,13 @@ mod tests {
         assert_eq!(Unit::Points.parse("2p6"), Some(30.0));
         assert_eq!(Unit::Points.parse("10+5"), Some(15.0));
         assert_eq!(Unit::Points.parse("100/4"), Some(25.0));
+        // A unit after the factor or divisor applies to the expression ("540 px" retyped).
+        assert_eq!(Unit::Pixels.parse("1080/2 px"), Some(540.0));
+        assert_eq!(Unit::Points.parse("1/2 in"), Some(36.0));
+        assert_eq!(Unit::Points.parse("2*3 mm").map(|v| (v * 1000.0).round()), Some(17008.0));
+        assert_eq!(Unit::Points.parse("3in*2"), Some(432.0));
+        assert_eq!(Unit::Points.parse("10/0 px"), None);
+        assert_eq!(Unit::Points.parse("10/2 furlongs"), None);
         assert_eq!(Unit::Points.parse("-5"), Some(-5.0));
         assert_eq!(Unit::Points.parse("abc"), None);
         assert_eq!(Unit::Points.format(12.5), "12.5 pt");
