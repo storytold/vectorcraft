@@ -108,13 +108,12 @@ jobs:
           }
           $info = & $cli info smoke\out.vectorcraft | Out-String
           if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli info exited $LASTEXITCODE" }
-          $kinds = ($info | ConvertFrom-Json).kinds
-          $objects = ($kinds.PSObject.Properties | Measure-Object -Property Value -Sum).Sum
-          if ($objects -lt 3) { Write-Output $info; throw "the saved document has $objects objects, expected the rect, the circle and the star" }
+          $paths = ($info | ConvertFrom-Json).kinds.Path
+          if ($paths -ne 3) { Write-Output $info; throw "the saved document has $paths paths, expected the rect, the circle and the star" }
           & $cli convert smoke\out.vectorcraft smoke\round.svg | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli convert exited $LASTEXITCODE" }
           if ((Get-Content -Raw smoke\round.svg) -notmatch '(?i)#20a050') { throw 'the round-tripped SVG lost the new fill' }
-          Write-Output "ok vectorcraft-cli: opened an SVG, added a star, recoloured it, exported SVG/PNG/PDF/.vectorcraft and read it back ($objects objects) on ARM64"
+          Write-Output "ok vectorcraft-cli: opened an SVG, added a star, recoloured it, exported SVG/PNG/PDF/.vectorcraft and read it back on ARM64"
           $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "msiexec /x exited $($p.ExitCode)" }
           if (Test-Path (Join-Path $dir 'vectorcraft.exe')) { throw 'uninstall left vectorcraft.exe behind' }
