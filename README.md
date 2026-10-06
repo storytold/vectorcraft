@@ -138,7 +138,8 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 - **Agent-native.** Every menu item, tool gesture, panel and dialog can be driven over a JSON
   control channel and an **MCP server**, so Claude and other agents can draw, edit and export the
   way a person does.
-- **Everywhere.** One codebase for the desktop apps and the same UI in the browser.
+- **Everywhere.** One codebase for the desktop apps and the same UI in the browser. Windows builds come
+  for x64, x86 and ARM64 (Windows on ARM, no emulation); every ARM64 change is tested on ARM64 hardware in CI.
 
 ## Quick start
 

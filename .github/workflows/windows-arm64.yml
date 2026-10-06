@@ -1,0 +1,136 @@
+# Windows on ARM (#193): package the ARM64 release the way release.yml does (cross-compiled on an
+# x64 runner, unsigned here), then install that MSI on a Windows 11 ARM64 runner and run it, and
+# run the test suite natively on ARM64.
+name: Windows ARM64
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - "**/Cargo.toml"
+      - "**/build.rs"
+      - .github/workflows/windows-arm64.yml
+      - packaging/windows/**
+  schedule:
+    - cron: "17 5 * * 1" # weekly, so drift in the runner images shows up
+  workflow_dispatch:
+
+concurrency:
+  group: windows-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  package:
+    name: package (cross-compiled on x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+          targets: aarch64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: windows-arm64-package
+      - name: Install WiX
+        shell: pwsh
+        run: dotnet tool install --global wix --version 5.0.2
+      - name: Build and package (unsigned)
+        shell: pwsh
+        env:
+          DIST: ${{ github.workspace }}\dist\arm64
+        run: ./packaging/windows/package.ps1 -Arch arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vectorcraft-windows-arm64
+          path: dist/arm64/*
+          if-no-files-found: error
+          retention-days: 7
+
+  install:
+    name: install and run on ARM64
+    needs: package
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vectorcraft-windows-arm64
+          path: dist
+      - name: Install the MSI, check it, run it, uninstall it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandArgumentPassing = 'Standard' # pass the JSON params' quotes through verbatim
+          $msi = (Get-ChildItem dist/*.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 60; throw "msiexec /i exited $($p.ExitCode)" }
+          $dir = Join-Path $env:ProgramFiles 'VectorCraft'
+          foreach ($exe in 'vectorcraft.exe', 'vectorcraft-cli.exe') {
+            $path = Join-Path $dir $exe
+            if (-not (Test-Path $path)) { Get-ChildItem -Recurse $env:ProgramFiles -Filter $exe | Select-Object -First 3; throw "$exe not installed in $dir" }
+            $bytes = [System.IO.File]::ReadAllBytes($path)
+            $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+            if ($machine -ne 0xAA64) { throw "$exe is for machine 0x$('{0:X}' -f $machine), not ARM64" }
+            Write-Output "ok $path (ARM64)"
+          }
+          # The installed CLI runs natively: open a small SVG, edit it through engine commands,
+          # export it to every format, then read the saved document back.
+          $cli = Join-Path $dir 'vectorcraft-cli.exe'
+          & $cli --version
+          if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli --version exited $LASTEXITCODE" }
+          $catalogue = & $cli commands | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli commands exited $LASTEXITCODE" }
+          if ($catalogue -notmatch 'shape\.star') { throw 'the command catalogue has no shape.star' }
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect x="20" y="20" width="120" height="80" fill="#e8573f"/><circle cx="220" cy="120" r="50" fill="#3f8ae8"/></svg>'
+          [System.IO.File]::WriteAllText("$PWD\smoke\hello.svg", $svg)
+          $out = & $cli run --in smoke\hello.svg `
+            --cmd shape.star --params '{"cx":150,"cy":100,"radius1":60,"radius2":25}' `
+            --cmd select.all --cmd paint.setFill --params '{"color":"#20a050"}' `
+            --export smoke\out.vectorcraft --export smoke\out.svg --export smoke\out.png --export smoke\out.pdf 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { Write-Output $out; throw "vectorcraft-cli run exited $LASTEXITCODE" }
+          foreach ($f in 'out.vectorcraft', 'out.svg', 'out.png', 'out.pdf') {
+            $path = Join-Path smoke $f
+            if (-not (Test-Path $path) -or (Get-Item $path).Length -eq 0) { Write-Output $out; throw "$path was not written" }
+          }
+          $info = & $cli info smoke\out.vectorcraft | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli info exited $LASTEXITCODE" }
+          $kinds = ($info | ConvertFrom-Json).kinds
+          $objects = ($kinds.PSObject.Properties | Measure-Object -Property Value -Sum).Sum
+          if ($objects -lt 3) { Write-Output $info; throw "the saved document has $objects objects, expected the rect, the circle and the star" }
+          & $cli convert smoke\out.vectorcraft smoke\round.svg | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "vectorcraft-cli convert exited $LASTEXITCODE" }
+          if ((Get-Content -Raw smoke\round.svg) -notmatch '(?i)#20a050') { throw 'the round-tripped SVG lost the new fill' }
+          Write-Output "ok vectorcraft-cli: opened an SVG, added a star, recoloured it, exported SVG/PNG/PDF/.vectorcraft and read it back ($objects objects) on ARM64"
+          $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec /x exited $($p.ExitCode)" }
+          if (Test-Path (Join-Path $dir 'vectorcraft.exe')) { throw 'uninstall left vectorcraft.exe behind' }
+          Write-Output 'ok uninstalled'
+
+  test:
+    name: test (native ARM64)
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: windows-arm64-test
+      - name: Test
+        run: cargo test --workspace --locked
