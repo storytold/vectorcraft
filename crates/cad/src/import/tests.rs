@@ -397,6 +397,32 @@ fn text_and_multiline_text() {
     assert!((leading - 3.5 * 5.0 / 3.0).abs() < 1e-9, "{leading}");
 }
 
+#[test]
+fn fit_and_aligned_text_reach_their_second_point() {
+    let spanning = |text: &'static str, y: &'static str, justify: &'static str| {
+        [(0, "TEXT"), (10, "10"), (20, y), (40, "5"), (1, text), (72, justify), (11, "90"), (21, y)]
+    };
+    let mut e = spanning("FIT BETWEEN", "40", "5").to_vec();
+    e.extend(spanning("ALIGNED", "10", "3"));
+    e.extend([(0, "TEXT"), (10, "10"), (20, "70"), (40, "5"), (1, "PLAIN")]);
+    let doc = open(&entities(&e), &points()).document;
+    let [fit, aligned, plain] = &leaves(&doc)[..] else { panic!() };
+    let width = |n: &Node| {
+        let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text_of(n));
+        l.lines[0].x1 - l.lines[0].x0
+    };
+    // Both run from x = 10 to x = 90.
+    for n in [fit, aligned] {
+        assert!((width(n) - 80.0).abs() < 1e-6, "{}", width(n));
+    }
+    let (f, a, p) = (text_of(fit).first_style(), text_of(aligned).first_style(), text_of(plain).first_style());
+    // Fit text keeps its height and is stretched; Aligned text keeps its proportions and grows.
+    assert_eq!(f.size, p.size);
+    assert!(f.h_scale > 100.0, "{}", f.h_scale);
+    assert_eq!(a.h_scale, 100.0);
+    assert!(a.size > p.size, "{} vs {}", a.size, p.size);
+}
+
 /// A block "Door" (base point 5, 5) holding `block_art`, and `inserts`.
 fn with_door(block_art: &[(i32, &'static str)], inserts: &[(i32, &'static str)]) -> Vec<u8> {
     let mut blocks = vec![(0, "BLOCK"), (8, "0"), (2, "Door"), (70, "0"), (10, "5"), (20, "5"), (3, "Door")];

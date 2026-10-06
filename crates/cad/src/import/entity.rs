@@ -121,6 +121,17 @@ pub(crate) struct TextItem {
     pub family: Option<String>,
     /// Baseline-to-baseline distance (drawing units), for several lines.
     pub leading: Option<f64>,
+    /// Fit or Aligned text: what it must reach from its start to its second point.
+    pub span: Option<Span>,
+}
+
+/// How Fit and Aligned text reach their second point.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Span {
+    /// Stretched or squeezed to this length (drawing units), keeping its height.
+    Fit(f64),
+    /// Scaled as a whole to this length.
+    Aligned(f64),
 }
 
 /// A block reference: one transform per copy (an array insert makes several), each from the
@@ -608,10 +619,13 @@ fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
     let (h, v) = (g.int_or(72, 0), g.int_or(if attrib { 74 } else { 73 }, 0));
     let (p1, p2) = (g.point(10), g.point_opt(11));
     let mut angle = g.num_or(50, 0.0).to_radians();
+    let mut span = None;
     // Aligned and fit text run from the first point to the second.
     let anchor = match (h, p2) {
         (3 | 5, Some(p)) => {
             angle = (p - p1).atan2();
+            let length = (p - p1).hypot();
+            span = (length <= MAX_COORD).then_some(if h == 5 { Span::Fit(length) } else { Span::Aligned(length) });
             p1
         }
         (0, _) if v == 0 => p1,
@@ -636,6 +650,7 @@ fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
         style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
         family: None,
         leading: None,
+        span,
     })
 }
 
@@ -662,5 +677,15 @@ fn mtext(g: &[Pair<'_>]) -> Option<TextItem> {
     let direction = g.point_opt(11).map(|p| p.to_vec2()).filter(|d| d.hypot() > 1e-12);
     let angle = direction.map_or_else(|| g.num_or(50, 0.0), |d| d.atan2());
     let xf = Affine::translate(g.point(10).to_vec2()) * Affine::rotate(angle) * Affine::translate((0.0, first));
-    Some(TextItem { text: s, height, xf, width: 1.0, justify, style: g.name(7).unwrap_or("STANDARD").to_uppercase(), family, leading: Some(leading) })
+    Some(TextItem {
+        text: s,
+        height,
+        xf,
+        width: 1.0,
+        justify,
+        style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
+        family,
+        leading: Some(leading),
+        span: None,
+    })
 }

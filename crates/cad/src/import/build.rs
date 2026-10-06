@@ -13,7 +13,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, Dash, Document, LAY
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 
 use super::ImportOptions;
-use super::entity::{Alpha, Col, Converter, Geom, InsertItem, Item, Lw, Props, TextItem};
+use super::entity::{Alpha, Col, Converter, Geom, InsertItem, Item, Lw, Props, Span, TextItem};
 use super::reader::{Drawing, LayoutDef};
 use crate::{CAP_HEIGHT, MAX_NEST};
 
@@ -500,6 +500,9 @@ impl<'d, 'a> Build<'d, 'a> {
             ..default
         };
         let mut obj = TextObject::point(Point::ZERO, &t.text, style);
+        if let Some(span) = t.span {
+            reach(&mut obj, span, s);
+        }
         obj.xf = m * Affine::scale(1.0 / s);
         obj.para.justify = t.justify;
         Some(Node::new(self.doc.alloc_id(), NodeKind::Text(Box::new(obj))))
@@ -583,6 +586,26 @@ impl<'d, 'a> Build<'d, 'a> {
 
 fn rgb_color([r, g, b]: [u8; 3]) -> Color {
     Color::rgb8(r, g, b)
+}
+
+/// Make Fit or Aligned text `t` (in points, `s` per drawing unit) reach its second point: its
+/// line measured in its font, Fit text is stretched or squeezed to the length (its horizontal
+/// scale), Aligned text scaled as a whole (its size).
+fn reach(t: &mut TextObject, span: Span, s: f64) {
+    let (Span::Fit(length) | Span::Aligned(length)) = span;
+    let target = length * s;
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let Some(width) = layout.lines.first().map(|l| l.x1 - l.x0) else { return };
+    if !(width > 1e-9 && target > 1e-9 && target.is_finite()) {
+        return;
+    }
+    let k = target / width;
+    for run in &mut t.runs {
+        match span {
+            Span::Fit(_) => run.style.h_scale *= k,
+            Span::Aligned(_) => run.style.size *= k,
+        }
+    }
 }
 
 /// `base`, or `base 2`, `base 3`… when taken.
