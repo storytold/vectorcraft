@@ -143,7 +143,11 @@ impl<L: LibraryFile> Libraries<L> {
         for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
             let Some(lib) = read_file(&path).ok().and_then(|b| L::read_bytes(&b, stem(&file)).ok()) else { continue };
-            let info = LibraryInfo { id: format!("user/{file}"), name: lib.name().to_string(), category: "user" };
+            // Colour books from other apps are listed by their file names, so several editions of
+            // one book (which share a title) can sit side by side, named and ordered by the user.
+            let binary = ["ase", "acb", "aco"].iter().any(|x| file.to_ascii_lowercase().ends_with(&format!(".{x}")));
+            let name = if binary { stem(&file).to_string() } else { lib.name().to_string() };
+            let info = LibraryInfo { id: format!("user/{file}"), name, category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
     }

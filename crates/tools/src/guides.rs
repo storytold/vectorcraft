@@ -36,6 +36,41 @@ impl Kind {
     }
 }
 
+/// The angle guides a line from `from` snaps to (degrees, counter-clockwise on screen).
+const GUIDE_ANGLES: [i32; 8] = [0, 45, 90, 135, 180, 225, 270, 315];
+
+/// `p` moved onto the nearest angle guide through `from` when within `tol` of it, with that angle.
+fn angle_snap(from: Point, p: Point, tol: f64) -> Option<(Point, i32)> {
+    let d = p - from;
+    let len = d.hypot();
+    if len < tol * 3.0 {
+        return None;
+    }
+    GUIDE_ANGLES
+        .iter()
+        .map(|&deg| {
+            // Document y runs down: 90° points up the screen.
+            let a = f64::from(deg).to_radians();
+            let u = Vec2::new(a.cos(), -a.sin());
+            let along = d.dot(u);
+            (deg, from + u * along, (d - u * along).hypot(), along)
+        })
+        .filter(|(_, _, off, along)| *off <= tol && *along > 0.0)
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(deg, q, ..)| (q, deg))
+}
+
+/// A right-angle mark at corner `at` between directions `u` and `v` (any length), `size` long.
+fn right_angle(at: Point, u: Vec2, v: Vec2, size: f64) -> Vec<Overlay> {
+    let (lu, lv) = (u.hypot(), v.hypot());
+    if lu < 1e-12 || lv < 1e-12 || !size.is_finite() {
+        return vec![];
+    }
+    let (u, v) = (u / lu * size, v / lv * size);
+    let (a, b, c) = (at + u, at + u + v, at + v);
+    vec![Overlay::Line { a, b, color: MAGENTA, dashed: false }, Overlay::Line { a: b, b: c, color: MAGENTA, dashed: false }]
+}
+
 /// The filled magenta square marking the point the pointer snapped to.
 fn snap_marker(p: Point) -> Overlay {
     Overlay::Anchor { p, color: MAGENTA, filled: true, size: 6.0 }
@@ -101,17 +136,17 @@ fn roots(f: impl Fn(f64) -> f64) -> Vec<f64> {
 
 impl Segment {
     /// Points of the segment where a line from `from` meets it at a right angle (perpendicular),
-    /// or touches it (tangent; curves only).
-    fn feet(&self, from: Point) -> Vec<(Point, Kind)> {
+    /// or touches it (tangent; curves only), each with the segment's direction there.
+    fn feet(&self, from: Point) -> Vec<(Point, Kind, Vec2)> {
         let c = self.curve;
         let d = c.deriv();
         let at = |t: f64| (c.eval(t), d.eval(t).to_vec2());
-        let mut out: Vec<(Point, Kind)> = roots(|t| {
+        let mut out: Vec<(Point, Kind, Vec2)> = roots(|t| {
             let (p, v) = at(t);
             (p - from).dot(v)
         })
         .into_iter()
-        .map(|t| (c.eval(t), Kind::Perpendicular))
+        .map(|t| (c.eval(t), Kind::Perpendicular, at(t).1))
         .collect();
         if !self.line {
             out.extend(
@@ -120,11 +155,11 @@ impl Segment {
                     (p - from).cross(v)
                 })
                 .into_iter()
-                .map(|t| (c.eval(t), Kind::Tangent)),
+                .map(|t| (c.eval(t), Kind::Tangent, at(t).1)),
             );
         }
         // A foot on the starting point itself is no guide.
-        out.retain(|(p, _)| p.distance(from) > 1e-6);
+        out.retain(|(p, ..)| p.distance(from) > 1e-6);
         out
     }
 }
@@ -223,17 +258,31 @@ impl Targets {
                 .iter()
                 .filter(|s| s.bounds.inflate(tol, tol).intersect(near).area() > 0.0 || s.bounds.inflate(tol, tol).contains(p))
                 .flat_map(|s| s.feet(from))
-                .filter(|(q, _)| q.distance(p) <= tol)
+                .filter(|(q, ..)| q.distance(p) <= tol)
                 .min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)));
-            if let Some((q, k)) = best {
-                return (
-                    q,
-                    vec![
-                        Overlay::Line { a: from, b: q, color: MAGENTA, dashed: true },
-                        Overlay::Label { p: q, text: k.label().into(), color: MAGENTA },
-                        snap_marker(q),
-                    ],
-                );
+            if let Some((q, k, dir)) = best {
+                let mut ov = vec![
+                    Overlay::Line { a: from, b: q, color: MAGENTA, dashed: true },
+                    Overlay::Label { p: q, text: k.label().into(), color: MAGENTA },
+                    snap_marker(q),
+                ];
+                if k == Kind::Perpendicular {
+                    // On the side away from the label (which sits to the right of the point).
+                    let dir = if dir.x > 0.0 || (dir.x == 0.0 && dir.y > 0.0) { -dir } else { dir };
+                    ov.extend(right_angle(q, dir, from - q, tol * 3.5));
+                }
+                return (q, ov);
+            }
+            // Angle guides from the start: the line at 0°, 45°, 90°… snaps onto the guide.
+            if let Some((q, deg)) = angle_snap(from, p, tol) {
+                let d = q - from;
+                let reach = (d.hypot() + tol * 8.0) / d.hypot().max(1e-9);
+                let ov = vec![
+                    Overlay::Line { a: from, b: from + d * reach, color: MAGENTA, dashed: true },
+                    Overlay::Label { p: q, text: format!("{deg}°"), color: MAGENTA },
+                    snap_marker(q),
+                ];
+                return (q, ov);
             }
         }
         let mut out = p;
@@ -358,6 +407,24 @@ mod tests {
         let (p, ov) = t.snap_point_from(Point::new(132.5, 101.0), 4.0, Some(Point::new(130.0, 40.0)));
         assert!((p.x - 130.0).abs() < 1e-6 && (p.y - 100.0).abs() < 1e-6, "{p:?}");
         assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "perpendicular")));
+        assert_eq!(ov.iter().filter(|o| matches!(o, Overlay::Line { dashed: false, .. })).count(), 2, "the right-angle mark at the foot");
+    }
+
+    #[test]
+    fn lines_snap_to_angle_guides_with_a_right_angle_mark() {
+        let t = Targets::default();
+        let from = Point::new(0.0, 0.0);
+        // Nearly straight up (document y down): snaps to 90°.
+        let (p, ov) = t.snap_point_from(Point::new(1.5, -80.0), 4.0, Some(from));
+        assert!(p.x.abs() < 1e-9 && (p.y + 80.0).abs() < 1e-9, "{p:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "90°")));
+        // Near 45°.
+        let (p, ov) = t.snap_point_from(Point::new(50.0, -52.0), 4.0, Some(from));
+        assert!((p.x + p.y).abs() < 1e-9, "{p:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "45°")));
+        // Far from any guide: unchanged.
+        let (p, _) = t.snap_point_from(Point::new(50.0, -20.0), 4.0, Some(from));
+        assert_eq!(p, Point::new(50.0, -20.0));
     }
 
     #[test]
