@@ -33,3 +33,6 @@ log = { workspace = true }
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
 wat = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }

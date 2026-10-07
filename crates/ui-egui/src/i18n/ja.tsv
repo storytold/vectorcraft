@@ -2961,3 +2961,34 @@
 	Saved Selection 25	保存した選択範囲 25
 	Left-to-Right Paragraph Direction	左から右への段落方向
 	Right-to-Left Paragraph Direction	右から左への段落方向
+
+# About › Contributors / Models (credits.rs)
+	About	情報
+	Contributors	コントリビューター
+	Models	モデル
+	Username	ユーザー名
+	Display name	表示名
+	Real name	本名
+	Sort	並べ替え
+	Reverse the order	順序を逆にする
+	Grab bag	まとめて表示
+	Table	表
+	Name (A–Z)	名前 (A–Z)
+	Merged PRs	マージされた PR
+	Commits	コミット
+	Lines added	追加した行数
+	Lines deleted	削除した行数
+	Line delta	行数の増減
+	Binary assets added	追加したバイナリアセット
+	Binary assets removed	削除したバイナリアセット
+	First commit	最初のコミット
+	Last commit	最後のコミット
+	First	最初
+	Last	最後
+	{people} contributors · {commits} commits	コントリビューター {people} 人 · コミット {commits} 件
+	No contributor data was built into this copy.	このビルドには貢献者のデータが含まれていません。
+	No model credits were built into this copy.	このビルドにはモデルのクレジットが含まれていません。
+	Company	企業
+	Version	バージョン
+	% of all commits	全コミットに占める割合
+	Lines +/−	行数 +/−

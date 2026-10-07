@@ -2992,3 +2992,34 @@
 	  — {n} characters from another font	  — {n} 個字符來自其他字體
 	[Normal Character Style]	[正常字元樣式]
 	[Normal Paragraph Style]	[正常段落樣式]
+
+# About › Contributors / Models (credits.rs)
+	About	關於
+	Contributors	貢獻者
+	Models	模型
+	Username	使用者名稱
+	Display name	顯示名稱
+	Real name	真實姓名
+	Sort	排序
+	Reverse the order	反轉順序
+	Grab bag	全部列出
+	Table	表格
+	Name (A–Z)	名稱 (A–Z)
+	Merged PRs	已合併的 PR
+	Commits	提交
+	Lines added	新增行數
+	Lines deleted	刪除行數
+	Line delta	行數增減
+	Binary assets added	新增的二進位資產
+	Binary assets removed	移除的二進位資產
+	First commit	首次提交
+	Last commit	最近一次提交
+	First	首次
+	Last	最近
+	{people} contributors · {commits} commits	{people} 位貢獻者 · {commits} 次提交
+	No contributor data was built into this copy.	此版本未內建貢獻者資料。
+	No model credits were built into this copy.	此版本未內建模型致謝資料。
+	Company	公司
+	Version	版本
+	% of all commits	佔全部提交的比例
+	Lines +/−	行數 +/−

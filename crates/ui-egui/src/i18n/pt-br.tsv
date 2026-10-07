@@ -2580,3 +2580,34 @@
 @plural	{n} star|{n} stars	{n} estrela|{n} estrelas
 @plural	{n} step|{n} steps	{n} passo|{n} passos
 @plural	{n} stroke|{n} strokes	{n} traçado|{n} traçados
+
+# About › Contributors / Models (credits.rs)
+	About	Sobre
+	Contributors	Colaboradores
+	Models	Modelos
+	Username	Nome de usuário
+	Display name	Nome de exibição
+	Real name	Nome real
+	Sort	Ordenar
+	Reverse the order	Inverter a ordem
+	Grab bag	Todos juntos
+	Table	Tabela
+	Name (A–Z)	Nome (A–Z)
+	Merged PRs	PRs mesclados
+	Commits	Commits
+	Lines added	Linhas adicionadas
+	Lines deleted	Linhas removidas
+	Line delta	Saldo de linhas
+	Binary assets added	Arquivos binários adicionados
+	Binary assets removed	Arquivos binários removidos
+	First commit	Primeiro commit
+	Last commit	Último commit
+	First	Primeiro
+	Last	Último
+	{people} contributors · {commits} commits	{people} colaboradores · {commits} commits
+	No contributor data was built into this copy.	Esta cópia foi compilada sem dados de colaboradores.
+	No model credits were built into this copy.	Esta cópia foi compilada sem créditos de modelos.
+	Company	Empresa
+	Version	Versão
+	% of all commits	% de todos os commits
+	Lines +/−	Linhas +/−

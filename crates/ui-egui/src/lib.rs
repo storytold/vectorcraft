@@ -19,6 +19,7 @@ pub mod canvas;
 pub mod chrome;
 pub mod community;
 pub mod control;
+pub mod credits;
 pub mod cursors;
 pub mod dialogs;
 pub mod dock;
