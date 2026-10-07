@@ -79,8 +79,11 @@ pub struct Interaction {
     pub doc: Arc<Document>,
     pub selection: Selection,
     pub preview: Option<(String, Value)>,
-    /// Per-document state restored on cancel (current layer, isolation).
+    /// Per-document state restored on cancel (current layer, highlighted Layers-panel rows,
+    /// isolation): a rolled-back batch must leave none of it behind, or later commands that act on
+    /// it (Collect in New Layer on the highlighted rows) diverge from a journal replay.
     pub active_layer: Option<NodeId>,
+    pub layer_rows: Vec<NodeId>,
     pub isolation: Option<NodeId>,
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
@@ -206,6 +209,7 @@ impl DocState {
             self.doc = it.doc;
             self.selection = it.selection;
             self.active_layer = it.active_layer;
+            self.layer_rows = it.layer_rows;
             self.isolation = it.isolation;
             self.revision += 1;
         }
@@ -1114,6 +1118,7 @@ impl Session {
             selection: st.selection.clone(),
             preview: None,
             active_layer: st.active_layer,
+            layer_rows: st.layer_rows.clone(),
             isolation: st.isolation,
             perspective_again: None,
         });

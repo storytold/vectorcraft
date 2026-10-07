@@ -53,7 +53,7 @@ proptest! {
 
     /// Replaying the journal of a random session into a fresh session reproduces the document.
     #[test]
-        fn journal_replay_reproduces_document(ops in arb_ops(10..40)) {
+    fn journal_replay_reproduces_document(ops in arb_ops(10..40)) {
         let mut s = fixtures::session();
         for op in &ops {
             let _ = op.apply(&mut s);
@@ -119,6 +119,31 @@ fn batch_is_one_undo_step_and_rolls_back_on_error() {
     assert!(!s.in_interaction());
     exec(&mut s, "edit.undo", json!({}));
     assert_eq!(s.doc().unwrap().doc.node_count(), 1);
+}
+
+/// Regression (flaky `journal_replay_reproduces_document`): a batch that rolls back must also
+/// restore the Layers panel's highlighted rows. Its `layer.setCurrent` step used to leave layer 1
+/// highlighted, so the next Collect in New Layer nested it in a new layer — which the replay,
+/// where the failed batch isn't journaled, didn't do.
+#[test]
+fn rolled_back_batch_restores_highlighted_layer_rows() {
+    use vectorcraft_testkit::strategies::Op;
+    let ops = [Op::Batch(vec![Op::LayerCurrent(0), Op::Offset(0.0)]), Op::Collect, Op::Rect(0.0, 0.0, 1.0, 1.0), Op::Rect(0.0, 0.0, 1.0, 1.0)];
+    let mut s = fixtures::session();
+    let rows = s.doc().unwrap().layer_rows.clone();
+    assert!(ops[0].apply(&mut s).is_err(), "the batch's Offset Path has nothing selected");
+    assert_eq!(s.doc().unwrap().layer_rows, rows);
+    assert!(ops[1].apply(&mut s).is_err(), "nothing highlighted or selected to collect");
+    for op in &ops[2..] {
+        op.apply(&mut s).unwrap();
+    }
+    let want = doc_json(&s.doc().unwrap().doc);
+    let mut r = vectorcraft_engine::Session::new();
+    for (id, p) in &s.journal {
+        let _ = r.execute(id, p);
+    }
+    let got = doc_json(&r.doc().unwrap().doc);
+    assert!(got == want, "replay differs: {}", first_diff(&want, &got, "$"));
 }
 
 #[test]
