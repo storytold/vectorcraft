@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  VectorCraft MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
+  Vector W3K2 MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
 
     wix build vectorcraft.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
 
@@ -9,46 +9,46 @@
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-      Name="VectorCraft"
-      Manufacturer="Learning Machines LLC"
+      Name="Vector W3K2"
+      Manufacturer="Print That 204"
       Version="$(var.Version)"
-      UpgradeCode="601C6437-08AE-4645-ADCC-27F036C2EA2F"
+      UpgradeCode="69F97515-36D2-4056-87AA-A4197564296D"
       Scope="perMachine"
       Compressed="yes"
       Language="1033">
-    <SummaryInformation Description="VectorCraft vector illustration app" Manufacturer="Learning Machines LLC" />
+    <SummaryInformation Description="Vector W3K2 vector illustration app" Manufacturer="Print That 204" />
     <!-- Same-version upgrades let successive pre-releases of one X.Y.Z replace each other
          (MSI versions are numeric, so 1.2.3-rc.1 and 1.2.3-rc.2 are both 1.2.3). -->
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-        DowngradeErrorMessage="A newer version of VectorCraft is already installed." />
+        DowngradeErrorMessage="A newer version of Vector W3K2 is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <Icon Id="VectorcraftIcon.ico" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="VectorcraftIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://getartcraft.com/apps/vectorcraft" />
-    <Property Id="ARPURLUPDATEINFO" Value="https://getartcraft.com/apps/vectorcraft" />
-    <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
+    <Property Id="ARPURLINFOABOUT" Value="https://printthat.ca" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/printthat204-bot/vectorcraft" />
+    <Property Id="ARPHELPLINK" Value="https://printthat.ca" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="VectorCraft" />
+      <Directory Id="INSTALLFOLDER" Name="Vector W3K2" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
-    <Feature Id="Main" Title="VectorCraft" Level="1">
+    <Feature Id="Main" Title="Vector W3K2" Level="1">
       <ComponentGroupRef Id="VectorcraftFiles" />
     </Feature>
   </Package>
 
   <Fragment>
     <ComponentGroup Id="VectorcraftFiles" Directory="INSTALLFOLDER">
-      <Component Id="VectorcraftApp" Guid="0E8C6C5E-DE4A-4E1D-9DB0-44E8E38C2103">
-        <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" KeyPath="yes">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="VectorCraft"
-              Description="VectorCraft vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
+      <Component Id="VectorcraftApp" Guid="8332A2F7-E48E-48F3-8807-95AEBBBCDEF3">
+        <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" Name="Vector W3K2.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Vector W3K2"
+              Description="Vector W3K2 vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
               Icon="VectorcraftIcon.ico" IconIndex="0" />
         </File>
 
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\Vector W3K2.exe" Value="[#VectorcraftExe]" Type="string" />
       </Component>
 
       <Component Id="VectorcraftCli">

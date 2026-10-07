@@ -7,13 +7,13 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>VectorCraft</string>
+  <string>Vector W3K2</string>
   <key>CFBundleName</key>
-  <string>VectorCraft</string>
+  <string>Vector W3K2</string>
   <key>CFBundleExecutable</key>
-  <string>VectorCraft</string>
+  <string>VectorW3K2</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.storyteller.vectorcraft</string>
+  <string>ca.printthat.vectorw3k2</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -29,7 +29,7 @@
   <key>VectorCraftBuildCommit</key>
   <string>@BUILD_SHA@</string>
   <key>CFBundleIconFile</key>
-  <string>VectorCraft</string>
+  <string>VectorW3K2</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.graphics-design</string>
   <!-- Must match MACOSX_DEPLOYMENT_TARGET in package.sh. Big Sur is the first release on
@@ -43,7 +43,7 @@
   <key>NSRequiresAquaSystemAppearance</key>
   <false/>
   <key>NSHumanReadableCopyright</key>
-  <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
+  <string>Copyright © Print That 204 and the VectorCraft authors. MIT OR Apache-2.0.</string>
 
   <!-- VectorCraft's own format (.drawcraft is its name from before the rename). -->
   <key>UTExportedTypeDeclarations</key>
@@ -52,14 +52,14 @@
       <key>UTTypeIdentifier</key>
       <string>ai.storyteller.vectorcraft.document</string>
       <key>UTTypeDescription</key>
-      <string>VectorCraft Document</string>
+      <string>Vector W3K2 Document</string>
       <key>UTTypeConformsTo</key>
       <array>
         <string>public.data</string>
         <string>public.image</string>
       </array>
       <key>UTTypeIconFile</key>
-      <string>VectorCraft</string>
+      <string>VectorW3K2</string>
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>

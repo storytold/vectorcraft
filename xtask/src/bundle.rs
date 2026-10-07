@@ -1,4 +1,4 @@
-//! `cargo xtask bundle`: build the release app and wrap it as `dist/VectorCraft.app` (macOS), with the
+//! `cargo xtask bundle`: build the release app and wrap it as `dist/Vector W3K2.app` (macOS), with the
 //! committed app icon `assets/app-icon/vectorcraft.icns` (regenerate it with `packaging/icons.sh`).
 
 use std::path::Path;
@@ -14,15 +14,15 @@ pub fn run(root: &Path) -> Result<(), String> {
         return Err("release build failed".into());
     }
     let target = std::env::var("CARGO_TARGET_DIR").map(std::path::PathBuf::from).unwrap_or_else(|_| root.join("target"));
-    let app = root.join("dist/VectorCraft.app/Contents");
-    let _ = std::fs::remove_dir_all(root.join("dist/VectorCraft.app"));
+    let app = root.join("dist/Vector W3K2.app/Contents");
+    let _ = std::fs::remove_dir_all(root.join("dist/Vector W3K2.app"));
     std::fs::create_dir_all(app.join("MacOS")).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(app.join("Resources")).map_err(|e| e.to_string())?;
-    std::fs::copy(target.join("release/vectorcraft"), app.join("MacOS/VectorCraft")).map_err(|e| format!("copy app: {e}"))?;
+    std::fs::copy(target.join("release/vectorcraft"), app.join("MacOS/VectorW3K2")).map_err(|e| format!("copy app: {e}"))?;
     std::fs::copy(target.join("release/vectorcraft-cli"), app.join("MacOS/vectorcraft-cli")).map_err(|e| format!("copy cli: {e}"))?;
-    std::fs::copy(root.join("assets/app-icon/vectorcraft.icns"), app.join("Resources/VectorCraft.icns")).map_err(|e| format!("copy icon: {e}"))?;
+    std::fs::copy(root.join("assets/app-icon/vectorcraft.icns"), app.join("Resources/VectorW3K2.icns")).map_err(|e| format!("copy icon: {e}"))?;
     std::fs::write(app.join("Info.plist"), info_plist(env!("CARGO_PKG_VERSION"))).map_err(|e| e.to_string())?;
-    println!("built {}", root.join("dist/VectorCraft.app").display());
+    println!("built {}", root.join("dist/Vector W3K2.app").display());
     Ok(())
 }
 
@@ -32,18 +32,18 @@ fn info_plist(version: &str) -> String {
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleName</key><string>VectorCraft</string>
-<key>CFBundleDisplayName</key><string>VectorCraft</string>
-<key>CFBundleIdentifier</key><string>ai.storyteller.vectorcraft</string>
-<key>CFBundleExecutable</key><string>VectorCraft</string>
-<key>CFBundleIconFile</key><string>VectorCraft</string>
+<key>CFBundleName</key><string>Vector W3K2</string>
+<key>CFBundleDisplayName</key><string>Vector W3K2</string>
+<key>CFBundleIdentifier</key><string>ca.printthat.vectorw3k2</string>
+<key>CFBundleExecutable</key><string>VectorW3K2</string>
+<key>CFBundleIconFile</key><string>VectorW3K2</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>{version}</string>
 <key>CFBundleVersion</key><string>{version}</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>CFBundleDocumentTypes</key><array>
- <dict><key>CFBundleTypeName</key><string>VectorCraft Document</string><key>CFBundleTypeExtensions</key><array><string>vectorcraft</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
+ <dict><key>CFBundleTypeName</key><string>Vector W3K2 Document</string><key>CFBundleTypeExtensions</key><array><string>vectorcraft</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
  <dict><key>CFBundleTypeName</key><string>SVG</string><key>CFBundleTypeExtensions</key><array><string>svg</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
  <dict><key>CFBundleTypeName</key><string>PDF Document</string><key>CFBundleTypeExtensions</key><array><string>pdf</string><string>ai</string></array><key>CFBundleTypeRole</key><string>Viewer</string></dict>
 </array>
@@ -91,6 +91,6 @@ mod tests {
     fn dev_bundle_plist_names_types_neutrally() {
         let p = info_plist("1.2.3");
         assert!(p.contains("<key>CFBundleShortVersionString</key><string>1.2.3</string>"));
-        assert!(p.contains("<string>VectorCraft Document</string>") && p.contains("<string>PDF Document</string>"));
+        assert!(p.contains("<string>Vector W3K2 Document</string>") && p.contains("<string>PDF Document</string>"));
     }
 }

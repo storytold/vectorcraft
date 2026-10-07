@@ -1,0 +1,61 @@
+# Vector W3K2 builds for macOS and Windows on GitHub's runners. Run it from the Actions tab (Run
+# workflow), or push a tag like vw3k2-v0.3.1. The DMG (Apple silicon + Intel, universal) and the
+# Windows installer and portable zip come out as downloadable artifacts of the run.
+#
+# The macOS app is ad-hoc signed: on first launch, right-click it and choose Open (or allow it in
+# System Settings > Privacy & Security), since it isn't notarized with an Apple Developer ID.
+name: Vector W3K2 build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["vw3k2-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS universal (DMG)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: vw3k2-macos-universal
+      - name: Build and package (ad-hoc signed)
+        run: packaging/macos/package.sh --arch universal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-w3k2-macos
+          path: dist/release/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 (installer + portable)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: vw3k2-windows-x64
+      - name: Build
+        shell: pwsh
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release --locked -p vectorcraft -p vectorcraft-cli
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+      - name: Installer and portable zip
+        shell: pwsh
+        run: ./packaging/windows/build-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-w3k2-windows-x64
+          path: dist/release/*
+          if-no-files-found: error
