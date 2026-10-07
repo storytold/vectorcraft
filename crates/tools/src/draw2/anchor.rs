@@ -3,7 +3,8 @@
 //! Add: click a segment to insert an anchor without changing the shape (Alt = delete).
 //! Delete: click an anchor to remove it, re-fitting the neighbouring curve (Alt = add).
 //! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; drag a
-//! handle → move it independently; drag a segment → reshape the curve.
+//! handle → move it independently (Shift: at 45° steps round its anchor); drag a segment → reshape
+//! the curve.
 //! Scissors: click a path to split it there.
 
 use serde_json::json;
@@ -134,10 +135,13 @@ impl Tool for AnchorTool {
                         "path.convertAnchor".into(),
                         json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
                     ),
-                    State::Handle { id, si, ai, out, .. } => Action::Preview(
-                        "path.setHandle".into(),
-                        json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": p.x, "y": p.y, "independent": true}),
-                    ),
+                    State::Handle { id, si, ai, out, .. } => {
+                        let h = crate::direct::handle_at(cx, id, si, ai, p, ev.mods.shift);
+                        Action::Preview(
+                            "path.setHandle".into(),
+                            json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": h.x, "y": h.y, "independent": true}),
+                        )
+                    }
                     State::Reshape { id, si, seg, t, start, .. } => Action::Preview(
                         "path.reshapeSegment".into(),
                         json!({"id": id.0, "subpath": si, "segment": seg, "t": t, "dx": p.x - start.x, "dy": p.y - start.y}),

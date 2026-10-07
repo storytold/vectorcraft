@@ -2,7 +2,8 @@
 //!
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
 //! path's anchors on that segment, drag to move selected anchors, drag a direction handle to
-//! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
+//! reshape (Shift keeps it at 45° steps round its anchor, Alt moves it alone), marquee to select
+//! anchors, drag a live rectangle's corner widget to round its corners.
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
 //! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
@@ -184,6 +185,16 @@ fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
     None
 }
 
+/// Where a direction handle of anchor `ai` of subpath `si` of path `id` dragged to `p` goes:
+/// Shift keeps it at a multiple of 45° around its anchor.
+pub(crate) fn handle_at(cx: &ToolContext, id: NodeId, si: usize, ai: usize, p: Point, shift: bool) -> Point {
+    let anchor = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)).map(|a| a.p);
+    match anchor {
+        Some(a) if shift => a + vectorcraft_geom::constrain_angle(p - a, 45.0),
+        _ => p,
+    }
+}
+
 fn anchors_json(v: &[AnchorRef]) -> Value {
     Value::Array(v.iter().map(|(s, a)| json!([s, a])).collect())
 }
@@ -320,6 +331,7 @@ impl Tool for DirectSelectionTool {
                 out
             }
             (PointerKind::Drag, State::Handle { id, si, ai, out }) => {
+                let p = handle_at(cx, id, si, ai, p, ev.mods.shift);
                 vec![Action::Preview(
                     "path.setHandle".into(),
                     json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
@@ -474,6 +486,56 @@ mod tests {
         let b = vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 100.0), key(k2, 200.0)], spec: Default::default() });
         d.insert(Some(l), 1, b).unwrap();
         (d, g, k1)
+    }
+
+    /// A smooth anchor at (350, 150), handles at 300 and 400 across, its anchor selected.
+    fn smooth_doc() -> (vectorcraft_doc::Document, NodeId, Selection) {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(250.0, 250.0), Point::new(350.0, 150.0), Point::new(450.0, 250.0)], false);
+        sp.anchors[1].h_in = Point::new(300.0, 150.0);
+        sp.anchors[1].h_out = Point::new(400.0, 150.0);
+        sp.anchors[1].kind = vectorcraft_geom::AnchorKind::Smooth;
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, PathData::single(sp), vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        s.anchors.insert(id, [(0, 1)].into_iter().collect());
+        (d, id, s)
+    }
+
+    #[test]
+    fn shift_keeps_a_dragged_handle_at_45_degree_steps() {
+        let (d, id, s) = smooth_doc();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let set = |x: f64, y: f64| {
+            Action::Preview(
+                "path.setHandle".into(),
+                json!({"id": id.0, "subpath": 0, "anchor": 1, "which": "out", "x": x, "y": y, "independent": false}),
+            )
+        };
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 150.0)), vec![Action::Begin("Reshape".into())]);
+        // Without Shift the handle follows the pointer; with it, it stays level (10° rounds to 0°)…
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 160.0)), vec![set(450.0, 160.0)]);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 160.0).with_mods(shift));
+        let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+        let (x, y) = (v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap());
+        assert!((x - (350.0 + 100.0_f64.hypot(10.0))).abs() < 1e-9 && (y - 150.0).abs() < 1e-9, "{v}");
+        // …or diagonal (40° rounds to 45°).
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 234.0).with_mods(shift));
+        let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+        let (dx, dy) = (v["x"].as_f64().unwrap() - 350.0, v["y"].as_f64().unwrap() - 150.0);
+        assert!((dx - dy).abs() < 1e-9 && dx > 0.0, "{v}");
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 450.0, 234.0)), vec![Action::Commit]);
+        // The Anchor Point tool's handle drags too.
+        let mut t = crate::create("anchorPoint");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 150.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 160.0).with_mods(shift));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        assert!((v["y"].as_f64().unwrap() - 150.0).abs() < 1e-9 && v["x"].as_f64().unwrap() > 400.0, "{v}");
     }
 
     #[test]
