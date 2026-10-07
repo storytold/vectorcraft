@@ -293,7 +293,8 @@ fn row(
     if resp.double_clicked() {
         ui.data_mut(|d| d.insert_temp(egui::Id::new("layers-rename"), (n.id.0, n.display_name())));
     }
-    // Drag to reorder: drop onto a row moves the dragged node above it (into its parent).
+    // Drag to reorder: drop onto a row moves the dragged node above or below it (into its parent).
+    // A layer's or group's row takes a drop on its middle half into it, on top of its contents.
     let drag_id = egui::Id::new("layers-drag");
     if resp.drag_started() {
         ui.data_mut(|d| d.insert_temp(drag_id, n.id.0));
@@ -303,16 +304,25 @@ fn row(
         && src != n.id.0
         && ui.rect_contains_pointer(r)
     {
-        let above = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| p.y < r.center().y);
-        let y = if above { r.top() } else { r.bottom() };
-        ui.painter().line_segment([egui::pos2(r.left() + 46.0, y), egui::pos2(r.right(), y)], Stroke::new(2.0, t.accent));
+        let src_is_layer = doc.node(vectorcraft_doc::NodeId(src)).is_some_and(|x| x.is_layer());
+        // Layers only go into layers.
+        let container = n.is_layer() || (matches!(n.kind, NodeKind::Group { .. }) && !src_is_layer);
+        let y = ui.input(|i| i.pointer.hover_pos()).map_or(r.center().y, |p| p.y);
+        let into = container && (y - r.center().y).abs() < r.height() / 4.0;
+        let above = y < r.center().y;
+        if into {
+            ui.painter().rect_stroke(r.shrink(1.0), 2.0, Stroke::new(2.0, t.accent), StrokeKind::Inside);
+        } else {
+            let y = if above { r.top() } else { r.bottom() };
+            ui.painter().line_segment([egui::pos2(r.left() + 46.0, y), egui::pos2(r.right(), y)], Stroke::new(2.0, t.accent));
+        }
         if ui.input(|i| i.pointer.any_released()) {
             let (parent, index) = match doc.position(n.id) {
+                _ if into => (Some(n.id), n.children().map_or(0, |c| c.len())),
                 Some((par, idx, _)) => (par, if above { idx + 1 } else { idx }),
                 None => (None, 0),
             };
             // A layer dropped on a non-layer goes into that row's container; top level only for layers.
-            let src_is_layer = doc.node(vectorcraft_doc::NodeId(src)).is_some_and(|x| x.is_layer());
             if parent.is_some() || src_is_layer {
                 actions.push(("node.move".into(), json!({"id": src, "parent": parent.map(|p| p.0), "index": index})));
             }
@@ -582,6 +592,38 @@ mod tests {
         run(&mut app, "select.none", json!({}));
         let layer = app.session.active().unwrap().doc.layers[0].id;
         (app, layer, [NodeId(a), NodeId(b)])
+    }
+
+    /// A row dropped on the middle of a layer's row goes into that layer; on its top or bottom
+    /// quarter it goes above or below it, as before.
+    #[test]
+    fn dropping_a_row_on_the_middle_of_a_layer_moves_it_into_the_layer() {
+        // Rows top down: Layer 2 (empty), Layer 1, its top rectangle, its bottom one.
+        let setup = || {
+            let (mut app, layer1, rects) = two_rects();
+            let layer2 = NodeId(app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+            (app, layer1, layer2, rects)
+        };
+        // Away from the row's buttons: on its name.
+        let name = |c: egui::Pos2, dy: f32| egui::pos2(c.x - 120.0, c.y + dy);
+        let ctx = egui::Context::default();
+        let (mut app, _, layer2, [_, b]) = setup();
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(c.len(), 4);
+        drag(&mut app, &ctx, name(c[2], 0.0), name(c[0], 0.0), false);
+        assert_eq!(app.session.active().unwrap().doc.parent_of(b), Some(layer2), "the rectangle went into the empty layer");
+        // A layer dropped on another's middle becomes its sublayer.
+        let (mut app, layer1, layer2, _) = setup();
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        drag(&mut app, &ctx, name(c[0], 0.0), name(c[1], 0.0), false);
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!((doc.layers.len(), doc.parent_of(layer2)), (1, Some(layer1)));
+        // On its bottom quarter, it goes below it.
+        let (mut app, layer1, layer2, _) = setup();
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        drag(&mut app, &ctx, name(c[0], 0.0), name(c[1], ROW / 2.0 - 3.0), false);
+        let ids: Vec<NodeId> = app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect();
+        assert_eq!(ids, vec![layer2, layer1], "Layer 2 below Layer 1, both top-level");
     }
 
     #[test]
