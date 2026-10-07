@@ -43,9 +43,8 @@ fn info_plist(version: &str) -> String {
 <key>NSHighResolutionCapable</key><true/>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>CFBundleDocumentTypes</key><array>
- <dict><key>CFBundleTypeName</key><string>VectorCraft Document</string><key>CFBundleTypeExtensions</key><array><string>vectorcraft</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
- <dict><key>CFBundleTypeName</key><string>SVG</string><key>CFBundleTypeExtensions</key><array><string>svg</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
- <dict><key>CFBundleTypeName</key><string>PDF Document</string><key>CFBundleTypeExtensions</key><array><string>pdf</string><string>ai</string></array><key>CFBundleTypeRole</key><string>Viewer</string></dict>
+ <dict><key>CFBundleTypeName</key><string>VectorCraft Document</string><key>CFBundleTypeExtensions</key><array><string>vectorcraft</string><string>drawcraft</string></array><key>CFBundleTypeRole</key><string>Editor</string><key>LSHandlerRank</key><string>Owner</string></dict>
+ <dict><key>CFBundleTypeName</key><string>Vector artwork and images</string><key>CFBundleTypeExtensions</key><array><string>svg</string><string>svgz</string><string>pdf</string><string>ai</string><string>ait</string><string>png</string><string>jpg</string><string>jpeg</string><string>gif</string><string>webp</string><string>tif</string><string>tiff</string><string>bmp</string><string>vctemplate</string><string>dxf</string><string>emf</string><string>wmf</string><string>eps</string></array><key>CFBundleTypeRole</key><string>Editor</string><key>LSHandlerRank</key><string>Alternate</string></dict>
 </array>
 </dict></plist>
 "#
@@ -91,6 +90,7 @@ mod tests {
     fn dev_bundle_plist_names_types_neutrally() {
         let p = info_plist("1.2.3");
         assert!(p.contains("<key>CFBundleShortVersionString</key><string>1.2.3</string>"));
-        assert!(p.contains("<string>VectorCraft Document</string>") && p.contains("<string>PDF Document</string>"));
+        assert!(p.contains("<string>VectorCraft Document</string>") && p.contains("<string>Vector artwork and images</string>"));
+        assert!(p.contains("<string>Owner</string>") && p.contains("<string>Alternate</string>"));
     }
 }

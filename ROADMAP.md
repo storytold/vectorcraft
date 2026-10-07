@@ -42,7 +42,7 @@ since 2026-10-01.
 | **Bundled content:** brush, symbol, style and swatch libraries | ~30% | Ours are original and generated in code, and far fewer than Illustrator ships; brush and symbol libraries are still missing |
 | **Performance** | unverified | Multithreaded, off-thread rendering and caches are in place. The last budget run (2026-10-01, loaded machine) measured 290 ms for a 50k-path fit against a 16 ms budget. Re-run `vectorcraft-cli perf` on an idle machine |
 | **Robustness** | good, new | ~2,840 tests, property tests, no panics in shipped code (lints, the `guard` safety net, import fuzzing), Data Recovery. Missing: a corpus of real-world files, Windows/Linux/browser QA |
-| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; hybrid-graphics laptops render on the power-saving GPU by default (#306); Windows/Linux packaging and accessibility are pending |
+| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; macOS registers its readable document types and accepts Finder/Open With events (#295); hybrid-graphics laptops render on the power-saving GPU by default (#306); Windows/Linux packaging and accessibility are pending |
 | **Agent automation** | beyond Illustrator | Every command, gesture and dialog is drivable over MCP, the CLI and the control channel |
 
 ### Where we're lacking (in priority order)
@@ -97,7 +97,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - Hint bar, contextual task bar, 19 dock panels with ≡ menus.
   - The dock's double arrow collapses Properties, Layers and Libraries to icons at the top of the icon column, popping out like the other icon panels, and expands them again (`window.collapseDock`, kept with the preferences and in saved workspaces). The icon column's own arrow (expanding the icon panels into a full column) is not done.
   - Localised UI: menus (in-window and native), panels, dialogs, toolbar and Preferences read from per-language catalogs (`crates/ui-egui/src/i18n`, see `docs/development.md`); Traditional Chinese (Taiwan) ships complete, and Czech and Japanese cover every menu label, with system-locale detection on macOS, Windows and Linux, a VectorCraft ▸ Language menu and a Language preference. Names are never translated (fonts and their styles, layers, artboards, saved presets, user libraries, custom workspaces, recent files, plug-ins).
-  - Native macOS menu bar, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
+  - Native macOS menu bar, Finder/Open With document opening, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.

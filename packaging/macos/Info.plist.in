@@ -45,6 +45,39 @@
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
 
+  <!-- Native documents belong to VectorCraft. Other readable formats stay alternate handlers so
+       installing VectorCraft never takes PDF or image defaults away from Preview and other apps. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>VectorCraft Document</string>
+      <key>LSItemContentTypes</key>
+      <array><string>ai.storyteller.vectorcraft.document</string></array>
+      <key>CFBundleTypeExtensions</key>
+      <array><string>vectorcraft</string><string>drawcraft</string></array>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Vector artwork and images</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>svg</string><string>svgz</string><string>pdf</string><string>ai</string><string>ait</string>
+        <string>png</string><string>jpg</string><string>jpeg</string><string>gif</string><string>webp</string>
+        <string>tif</string><string>tiff</string><string>bmp</string><string>vctemplate</string>
+        <string>dxf</string><string>emf</string><string>wmf</string><string>eps</string>
+      </array>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+  </array>
+
   <!-- VectorCraft's own format (.drawcraft is its name from before the rename). -->
   <key>UTExportedTypeDeclarations</key>
   <array>

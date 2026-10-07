@@ -11,6 +11,8 @@ mod clipboard;
 mod control_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
+#[cfg(target_os = "macos")]
+mod open_documents;
 mod printing;
 mod window;
 
@@ -24,6 +26,11 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         #[cfg(target_os = "macos")]
         {
+            for path in open_documents::take() {
+                if let Err(e) = vectorcraft_ui_egui::io::open_path(&mut self.0, &path) {
+                    eprintln!("vectorcraft: {path}: {e}");
+                }
+            }
             if self.1.is_none() && std::env::var_os("VECTORCRAFT_NO_NATIVE_MENU").is_none() {
                 self.1 = Some(native_menu::NativeMenu::install(&mut self.0));
             }
@@ -268,6 +275,8 @@ const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
 
 fn main() -> eframe::Result {
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+    #[cfg(target_os = "macos")]
+    open_documents::install();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut args = std::env::args().skip(1);
@@ -306,6 +315,8 @@ fn main() -> eframe::Result {
         "VectorCraft",
         options,
         Box::new(move |cc| {
+            #[cfg(target_os = "macos")]
+            open_documents::set_context(cc.egui_ctx.clone());
             let mut app = VectorcraftApp::new(Session::new(), services());
             load_prefs(&mut app, saved);
             // Fit the window to its monitor, or put it back where it was (still hidden).
