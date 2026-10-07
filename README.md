@@ -173,7 +173,7 @@ with its author, source and license in [ASSETS.md](ASSETS.md). Release builds al
 Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md)
 (SIL Open Font License 1.1).
 
-The Vector W3K2 app icon (a cyan V path with its anchors on a black tile) is Print That 204's original
+The Vector W3K2 app icon ("PT": a black P and a cyan T) is Print That 204's original
 artwork; its palette and files are in [`assets/app-icon/`](assets/app-icon/README.md).
 
 The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team; this build does not use them.

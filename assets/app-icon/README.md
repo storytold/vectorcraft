@@ -1,16 +1,17 @@
 # Vector W3K2 app icon
 
-A bold cyan **V** drawn as a vector path, with its three anchor points as white squares, on a black
-rounded tile: the Print That 204 colours (black and Print That cyan) with solid fills only, no gradients
-or effects, per the Print That 204 branding guidelines.
+"PT" for Print That: a bold black **P** and a Print That cyan **T** on a white rounded tile with a thin
+grey edge, following the Print That 204 logo treatment (Print in black, That in cyan; solid colours, no
+gradients or effects).
 
 | Colour | Hex | Used for |
 |---|---|---|
-| Black | `#0b0b0c` | the tile, anchor outlines |
-| Print That cyan | `#00a0e3` | the V |
-| White | `#ffffff` | the anchors |
+| Black | `#0b0b0c` | P |
+| Print That cyan | `#00a0e3` | T |
+| White / grey | `#ffffff` / `#c8c8c8` | the tile and its edge |
 
-**Tile:** `viewBox="0 0 512 512"`, a rounded square with `rx=112`. `vectorcraft.svg` is the master; the
-other files are rendered from it with `vectorcraft-cli convert vectorcraft.svg out.png --scale N`. The
-file names keep the upstream VectorCraft names so the build and packaging scripts find them. Licence: see
-`LICENSE.txt`.
+**Tile:** `viewBox="0 0 512 512"`, a rounded square with `rx=108`. `vectorcraft.svg` is the master, with the
+letters as outlines (set in the bundled bold sans and outlined with `vectorcraft-cli convert --outline-text`);
+the PNG, ICO and ICNS files are rendered from it with `vectorcraft-cli convert vectorcraft.svg out.png
+--scale N`. The file names keep the upstream VectorCraft names so the build and packaging scripts find
+them. Licence: see `LICENSE.txt`.

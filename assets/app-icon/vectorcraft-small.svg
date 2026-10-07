@@ -1,9 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- Vector W3K2 app icon (Print That 204): a bold cyan V drawn as a vector path, its three
-       anchors as white squares, on a black rounded tile. Solid colours only. -->
-  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="#0b0b0c"/>
-  <path d="M 128 136 L 256 384 L 384 136" fill="none" stroke="#00a0e3" stroke-width="64" stroke-linejoin="miter" stroke-linecap="square" stroke-miterlimit="10"/>
-  <rect x="98" y="106" width="60" height="60" fill="#ffffff" stroke="#0b0b0c" stroke-width="10"/>
-  <rect x="354" y="106" width="60" height="60" fill="#ffffff" stroke="#0b0b0c" stroke-width="10"/>
-  <rect x="226" y="354" width="60" height="60" fill="#ffffff" stroke="#0b0b0c" stroke-width="10"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">
+  <title>Vector W3K2</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path d="M112 4 L400 4 C459.647 4 508 52.353 508 112 L508 400 C508 459.647 459.647 508 400 508 L112 508 C52.353 508 4 459.647 4 400 L4 112 C4 52.353 52.353 4 112 4 Z" fill="#ffffff" stroke="#c8c8c8" stroke-width="8"/>
+    <g>
+      <path d="M118.3 356 L118.3 160.4 L185.5 160.4 C199.9 160.4 212.95 162.35 224.65 166.25 C236.35 170.15 245.7 176.7 252.7 185.9 C259.7 195.1 263.2 207.6 263.2 223.4 C263.2 238.6 259.7 251.1 252.7 260.9 C245.7 270.7 236.4 277.95 224.8 282.65 C213.2 287.35 200.5 289.7 186.7 289.7 L162.4 289.7 L162.4 356 Z M162.4 254.6 L184 254.6 C208 254.6 220 244.2 220 223.4 C220 213.2 216.8 206 210.4 201.8 C204 197.6 194.8 195.5 182.8 195.5 L162.4 195.5 Z" fill="#0b0b0c"/>
+      <path d="M323.2 356 L323.2 197.6 L269.5 197.6 L269.5 160.4 L421.3 160.4 L421.3 197.6 L367.6 197.6 L367.6 356 Z" fill="#00a0e3"/>
+    </g>
+  </g>
 </svg>

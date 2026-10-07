@@ -1,8 +1,8 @@
 Vector W3K2 app icon (vectorcraft.svg, vectorcraft-small.svg and every file derived from them in this
 directory: vectorcraft-1024.png, vectorcraft-macos-512.png, vectorcraft.icns, vectorcraft.ico, hicolor/).
 
-Original artwork made for Vector W3K2 by Print That 204 (a cyan V path with three anchor squares on a
-black rounded tile; no third-party material). The file names keep the upstream VectorCraft names so the
+Original artwork made for Vector W3K2 by Print That 204 ("PT": a bold black P and a Print That cyan T
+on a white rounded tile, the letters outlined from the bundled open-source UI font; no third-party artwork). The file names keep the upstream VectorCraft names so the
 build and packaging scripts find them. Licensed like the rest of the project, under either of
 
   * Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
