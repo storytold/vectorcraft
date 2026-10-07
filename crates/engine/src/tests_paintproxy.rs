@@ -273,3 +273,17 @@ fn a_group_shows_its_contents_in_the_proxies() {
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(s.proxy_paints().0, s.paint.fill);
 }
+
+#[test]
+fn recent_colours_remember_the_spot_swatch_they_came_from() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("swatch.new", &json!({"name": "Ink 185", "color": "#e90029", "spot": true})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Ink 185"})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let r = s.execute("paint.recent", &json!({})).unwrap();
+    assert_eq!(r["colors"][0]["hex"], "#00ff00");
+    assert!(r["colors"][0].get("swatch").is_none());
+    assert_eq!((r["colors"][1]["swatch"].as_str(), r["colors"][1]["tint"].as_f64()), (Some("Ink 185"), Some(100.0)));
+    assert_eq!(s.recent_colors.len(), s.recent_links.len());
+}

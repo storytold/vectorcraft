@@ -119,12 +119,20 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Recent Colors",
             [],
             None,
-            "{} → {colors: [{hex, color}] newest first (fed by every paint command and the eyedropper), lastColor: {hex, color}, lastGradient: gradient paint}",
+            "{} → {colors: [{hex, color, swatch?: the global or spot swatch it came from, tint?: %}] newest first (fed by every paint command and the eyedropper), lastColor: {hex, color}, lastGradient: gradient paint}",
             always,
             |s, _| {
                 let c = |c: &Color| json!({"hex": c.to_hex(), "color": c});
+                let recent = s.recent_colors.iter().enumerate().map(|(i, col)| {
+                    let mut v = c(col);
+                    if let Some(Some((name, tint))) = s.recent_links.get(i) {
+                        v["swatch"] = json!(name);
+                        v["tint"] = json!(tint * 100.0);
+                    }
+                    v
+                });
                 Ok(json!({
-                    "colors": s.recent_colors.iter().map(c).collect::<Vec<_>>(),
+                    "colors": recent.collect::<Vec<_>>(),
                     "lastColor": c(&s.last_solid),
                     "lastGradient": s.last_gradient,
                 }))
@@ -185,11 +193,20 @@ impl Session {
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
         match p {
-            Paint::Solid { color, .. } => {
+            Paint::Solid { color, swatch, tint } => {
                 self.last_solid = *color;
-                self.recent_colors.retain(|c| c != color);
+                let link = swatch.clone().map(|n| (n, *tint));
+                // Keep the links beside their colours (older sessions may have fewer).
+                self.recent_links.resize(self.recent_colors.len(), None);
+                let keep: Vec<bool> = self.recent_colors.iter().zip(&self.recent_links).map(|(c, l)| !(c == color && *l == link)).collect();
+                let mut k = keep.iter();
+                self.recent_colors.retain(|_| k.next().copied().unwrap_or(true));
+                let mut k = keep.iter();
+                self.recent_links.retain(|_| k.next().copied().unwrap_or(true));
                 self.recent_colors.insert(0, *color);
+                self.recent_links.insert(0, link);
                 self.recent_colors.truncate(Self::RECENT_MAX);
+                self.recent_links.truncate(Self::RECENT_MAX);
             }
             Paint::Gradient(g) => self.last_gradient = (**g).clone(),
             Paint::None | Paint::Pattern { .. } => {}

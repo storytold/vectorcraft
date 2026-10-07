@@ -339,6 +339,25 @@ pub struct ProxyClicks {
     pub pick: Option<bool>,
 }
 
+/// What a paint is, for tooltips: its global or spot swatch's name (and tint), else its colour's hex,
+/// or the kind of paint.
+pub fn paint_name(p: &Paint) -> String {
+    match p {
+        Paint::None => tl!("None").to_string(),
+        Paint::Solid { swatch: Some(n), tint, .. } if *tint < 0.999 => format!("{n} {}%", (tint * 100.0).round()),
+        Paint::Solid { swatch: Some(n), .. } => n.clone(),
+        Paint::Solid { color, .. } => color.to_hex(),
+        Paint::Gradient(g) => g.swatch.clone().unwrap_or_else(|| tl!("Gradient").to_string()),
+        Paint::Pattern { pattern, .. } => pattern.clone(),
+    }
+}
+
+/// A Fill/Stroke proxy's tooltip: what it paints, then how to use it.
+fn proxy_tip(p: &Paint, mixed: bool, how: &str) -> String {
+    let what = if mixed { "?".to_string() } else { paint_name(p) };
+    format!("{what}\n{how}")
+}
+
 /// The Fill/Stroke proxy pair (two overlapping squares). `mixed` (fill, stroke) draws a "?" square
 /// for a selection whose objects differ.
 pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool, bool), fill_active: bool, size: f32) -> ProxyClicks {
@@ -393,8 +412,8 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
         None
     };
     ProxyClicks {
-        fill: fill_resp.on_hover_text("Fill (X), double-click for the Color Picker").clicked(),
-        stroke: stroke_resp.on_hover_text("Stroke (X), double-click for the Color Picker").clicked(),
+        fill: fill_resp.on_hover_text(proxy_tip(fill, mixed.0, "Fill (X), double-click for the Color Picker")).clicked(),
+        stroke: stroke_resp.on_hover_text(proxy_tip(stroke, mixed.1, "Stroke (X), double-click for the Color Picker")).clicked(),
         swap: swap.on_hover_text("Swap Fill and Stroke (Shift+X)").clicked(),
         default: def.on_hover_text("Default Fill and Stroke (D)").clicked(),
         pick,

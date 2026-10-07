@@ -388,19 +388,32 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;
+    // A colour applied from a global or spot swatch the document still has applies (and reads) as
+    // that swatch: its name on hover, the link kept.
+    let doc = app.session.active().map(|st| st.doc.clone());
     for (i, c) in app.session.recent_colors.iter().enumerate() {
         let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
         if cell.right() > r.right() - 2.0 {
             break;
         }
+        let link = app.session.recent_links.get(i).cloned().flatten().filter(|(n, _)| doc.as_ref().is_some_and(|d| d.swatch(n).is_some()));
         let resp = ui.interact(cell, ui.id().with(("recent", i)), Sense::click());
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
-        if resp.on_hover_text(c.to_hex()).clicked() {
-            chosen = Some(*c);
+        let tip = match &link {
+            Some((n, t)) if *t < 0.999 => format!("{n} {}%", (t * 100.0).round()),
+            Some((n, _)) => n.clone(),
+            None => c.to_hex(),
+        };
+        if resp.on_hover_text(tip).clicked() {
+            chosen = Some(match link {
+                Some((n, t)) if t < 0.999 => json!({"swatch": n, "tint": t * 100.0}),
+                Some((n, _)) => json!({"swatch": n}),
+                None => json!({"color": color_json(c)}),
+            });
         }
     }
-    if let Some(c) = chosen {
-        apply_click(app, ui, json!({"color": color_json(&c)}));
+    if let Some(p) = chosen {
+        apply_click(app, ui, p);
     }
 }
 

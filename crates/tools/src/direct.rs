@@ -1,7 +1,7 @@
 //! Direct Selection (A) and Group Selection tools.
 //!
-//! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
-//! path's anchors on that segment, drag to move selected anchors, drag a direction handle to
+//! Direct Selection: click an anchor to select it (Shift toggles), click a segment (an edge) to
+//! select just that segment's two anchors, click the fill to select the whole path, drag to move selected anchors, drag a direction handle to
 //! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
@@ -116,6 +116,27 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
 }
 
 /// Anchor (or handle) of any selected/visible path under `p`.
+/// The topmost editable path with a segment within `tol` of `p`: (path, subpath, the segment's
+/// two anchors).
+fn hit_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, usize)> {
+    let mut ids = vec![];
+    cx.doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. }) && n.visible {
+            ids.push(n.id)
+        }
+    });
+    // A blend's key objects are picked whole (their anchors still select one by one).
+    let in_blend = |id: NodeId| {
+        cx.doc.ancestry(id).is_some_and(|a| a.iter().any(|x| *x != id && matches!(cx.doc.node(*x).map(|n| &n.kind), Some(NodeKind::Blend { .. }))))
+    };
+    ids.into_iter().rev().filter(|id| cx.doc.is_editable(*id) && !in_blend(*id)).find_map(|id| {
+        let pd = cx.doc.node(id)?.path_data()?;
+        let (si, seg, _, _, d) = pd.nearest(p)?;
+        let n = pd.subpaths.get(si)?.anchors.len();
+        (d <= tol && n >= 2).then_some((id, si, seg, (seg + 1) % n))
+    })
+}
+
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64, selected_only: bool) -> Option<(NodeId, usize, usize)> {
     let ids: Vec<NodeId> = if selected_only {
         cx.selection.objects.clone()
@@ -234,8 +255,22 @@ impl Tool for DirectSelectionTool {
                     }
                     return vec![];
                 }
+                // Clicking an edge selects just that segment (its two anchors), as in the
+                // reference app; dragging then moves only that edge.
+                if let Some((id, si, a0, a1)) = hit_segment(cx, p, tol) {
+                    self.state = State::MoveAnchors { start: p, began: false };
+                    let anchors = json!([[si, a0], [si, a1]]);
+                    let selected = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, a0)) && s.contains(&(si, a1)));
+                    if ev.mods.shift {
+                        return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "toggle"}))];
+                    }
+                    if !selected {
+                        return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "set"}))];
+                    }
+                    return vec![];
+                }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
-                    // Clicking a segment/fill selects the whole leaf path (all anchors).
+                    // Clicking the fill selects the whole leaf path (all anchors).
                     self.state = State::MoveObject { start: p, began: false };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
@@ -433,6 +468,33 @@ mod tests {
         // A click on a step (between the keys) still selects the blend.
         let a = DirectSelectionTool::new(true).pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 304.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
+    }
+
+    #[test]
+    fn clicking_an_edge_selects_just_that_segment_and_the_fill_the_whole_path() {
+        let (d, id) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        // The rectangle runs 100..200: (150, 100) is on its top edge.
+        let a = DirectSelectionTool::new(false).pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 100.5));
+        let [Action::Exec(cmd, v)] = a.as_slice() else { panic!("{a:?}") };
+        assert_eq!(cmd, "select.anchors");
+        assert_eq!((v["id"].as_u64(), v["anchors"].as_array().map(Vec::len), v["mode"].as_str()), (Some(id.0), Some(2), Some("set")));
+        let pts: Vec<(f64, f64)> = v["anchors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| {
+                let (si, ai) = (a[0].as_u64().unwrap() as usize, a[1].as_u64().unwrap() as usize);
+                let q = d.node(id).unwrap().path_data().unwrap().subpaths[si].anchors[ai].p;
+                (q.x, q.y)
+            })
+            .collect();
+        assert!(pts.iter().all(|(_, y)| *y == 100.0), "the two anchors of the top edge: {pts:?}");
+        // Inside, on the fill: the whole path.
+        let a = DirectSelectionTool::new(false).pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
     }
 
     #[test]

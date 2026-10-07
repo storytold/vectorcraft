@@ -691,6 +691,9 @@ pub struct Session {
     /// Recently applied solid colours, newest first (the Recent Colors rows), fed by every paint
     /// command whichever frontend runs it.
     pub recent_colors: Vec<Color>,
+    /// For each of `recent_colors`, the global or spot swatch it was applied from and its tint
+    /// (so a recent spot colour applies as that spot colour again, and shows the swatch's name).
+    pub recent_links: Vec<Option<(String, f32)>>,
     /// A paint applied by a live preview: remembered when the interaction commits.
     pub(crate) pending_paint: Option<Paint>,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
@@ -755,6 +758,7 @@ impl Session {
             last_solid: Color::WHITE,
             last_gradient: GradientPaint::new(Default::default()),
             recent_colors: vec![],
+            recent_links: vec![],
             pending_paint: None,
             swatch_libraries: Default::default(),
             freeform_point: None,
