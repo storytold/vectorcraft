@@ -99,7 +99,8 @@ pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
 }
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
-/// when the user commits (Enter / focus loss). Supports unit suffixes and arithmetic.
+/// when the user commits (Enter / focus loss) or presses Up/Down while focused. Supports unit
+/// suffixes and arithmetic.
 pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
@@ -132,6 +133,13 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         })
         .inner;
     select_all_on_focus(ui, &resp, &buf);
+    if let Some(delta) = numeric_arrow_delta(ui, &resp) {
+        let current = unit.parse(&buf).or(value)?;
+        let next = current + unit.to_pt(delta);
+        buf = unit.format(next);
+        ui.data_mut(|d| d.insert_temp(id, buf));
+        return Some(next);
+    }
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit { unit.parse(&buf) } else { None }
@@ -149,6 +157,31 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
         st.store(ui.ctx(), resp.id);
         ui.ctx().request_repaint();
     }
+}
+
+/// Illustrator-style stepping for focused numeric inputs: one displayed unit, ten with Shift,
+/// and one tenth with Control or Command.
+fn numeric_arrow_delta(ui: &Ui, resp: &Response) -> Option<f64> {
+    if !resp.has_focus() || !ui.is_enabled() {
+        return None;
+    }
+    ui.input(|input| {
+        let direction = if input.key_pressed(egui::Key::ArrowUp) {
+            1.0
+        } else if input.key_pressed(egui::Key::ArrowDown) {
+            -1.0
+        } else {
+            return None;
+        };
+        let scale = if input.modifiers.shift {
+            10.0
+        } else if input.modifiers.ctrl || input.modifiers.command {
+            0.1
+        } else {
+            1.0
+        };
+        Some(direction * scale)
+    })
 }
 
 /// The recessed text box of the panel fields showing `shown`, `rows` lines tall (1: single line),
@@ -228,14 +261,20 @@ pub fn mixed_field(
         .unwrap_or_default();
     let (buf, resp) = recessed_text(ui, id, &shown, width, 1);
     select_all_on_focus(ui, &resp, &buf);
-    if resp.lost_focus() && buf != shown {
+    let parse = |text: &str| {
         // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
         let suffix = suffix.trim();
-        let bare = if suffix.is_empty() { buf.clone() } else { buf.replace(suffix, "") };
+        let bare = if suffix.is_empty() { text.to_string() } else { text.replace(suffix, "") };
         vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
-    } else {
-        None
+    };
+    if let Some(delta) = numeric_arrow_delta(ui, &resp) {
+        let next = parse(&buf).or(value)? + delta;
+        let number = format!("{:.*}", decimals, next);
+        let number = if number.contains('.') { number.trim_end_matches('0').trim_end_matches('.').to_string() } else { number };
+        ui.data_mut(|d| d.insert_temp(id, format!("{number}{suffix}")));
+        return Some(next);
     }
+    if resp.lost_focus() && buf != shown { parse(&buf) } else { None }
 }
 
 /// Draw a paint preview (swatch chip) into `rect`.
@@ -1114,6 +1153,12 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         })
         .inner;
     select_all_on_focus(ui, &resp, &buf);
+    if let Some(delta) = numeric_arrow_delta(ui, &resp) {
+        let current = unit.parse(&buf).or(value).unwrap_or(0.0);
+        let next = current + unit.to_pt(delta);
+        ui.data_mut(|d| d.insert_temp(id, unit.number(next)));
+        return Some(Some(next));
+    }
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();

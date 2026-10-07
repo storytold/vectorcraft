@@ -23,9 +23,15 @@ impl Field {
         Self { ctx, time: 0.0, rect: Cell::new(Rect::NOTHING), id: Cell::new(egui::Id::NULL) }
     }
 
-    fn frame(&mut self, events: Vec<Event>, draw: &dyn Fn(&mut egui::Ui) -> Option<f64>) -> Option<f64> {
+    fn frame(&mut self, mut events: Vec<Event>, draw: &dyn Fn(&mut egui::Ui) -> Option<f64>) -> Option<f64> {
         self.time += 0.05;
         let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 200.0)));
+        if let Some(modifiers) = events.iter().find_map(|event| match event {
+            Event::Key { modifiers, .. } => Some(*modifiers),
+            _ => None,
+        }) {
+            events.insert(0, Event::ModifiersChanged(modifiers));
+        }
         let input = egui::RawInput { events, time: Some(self.time), screen_rect, ..Default::default() };
         let mut got = None;
         let mut out = self.ctx.run_ui(input, |ui| {
@@ -57,6 +63,10 @@ impl Field {
 
 fn enter() -> Event {
     Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }
+}
+
+fn key(key: Key, modifiers: Modifiers) -> Event {
+    Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
 }
 
 #[test]
@@ -124,4 +134,43 @@ fn plain_fields_do_math_with_their_suffix() {
     assert_eq!(f.selection(), Some((0, "10°".chars().count())));
     f.frame(vec![Event::Text("45*2°".into())], &draw);
     assert_eq!(f.frame(vec![enter()], &draw), Some(90.0));
+}
+
+#[test]
+fn arrows_step_length_fields_in_the_displayed_unit() {
+    let mut f = Field::new();
+    let value = Cell::new(Unit::Millimeters.to_pt(10.0));
+    let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(value.get()), Unit::Millimeters, 80.0);
+    f.frame(vec![], &draw);
+    f.frame(f.click(1), &draw);
+    f.frame(vec![], &draw);
+
+    let next = f.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &draw).unwrap();
+    assert!((next - Unit::Millimeters.to_pt(11.0)).abs() < 1e-9);
+    value.set(next);
+
+    let next = f.frame(vec![key(Key::ArrowDown, Modifiers { shift: true, ..Default::default() })], &draw).unwrap();
+    assert!((next - Unit::Millimeters.to_pt(1.0)).abs() < 1e-9);
+    value.set(next);
+
+    let next = f.frame(vec![key(Key::ArrowDown, Modifiers { command: true, ..Default::default() })], &draw).unwrap();
+    assert!((next - Unit::Millimeters.to_pt(0.9)).abs() < 1e-9);
+}
+
+#[test]
+fn arrows_step_plain_and_empty_optional_fields_immediately() {
+    let mut plain = Field::new();
+    let value = Cell::new(20.0);
+    let draw = |ui: &mut egui::Ui| widgets::plain_field(ui, "f", value.get(), "°", 2, 80.0);
+    plain.frame(vec![], &draw);
+    plain.frame(plain.click(1), &draw);
+    plain.frame(vec![], &draw);
+    assert_eq!(plain.frame(vec![key(Key::ArrowUp, Modifiers { ctrl: true, ..Default::default() })], &draw), Some(20.1));
+
+    let mut optional = Field::new();
+    let draw = |ui: &mut egui::Ui| widgets::opt_field(ui, "f", None, Unit::Points, 80.0).flatten();
+    optional.frame(vec![], &draw);
+    optional.frame(optional.click(1), &draw);
+    optional.frame(vec![], &draw);
+    assert_eq!(optional.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &draw), Some(1.0));
 }
