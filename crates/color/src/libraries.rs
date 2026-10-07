@@ -127,6 +127,17 @@ pub fn to_oklab(c: &Color) -> [f64; 3] {
     ]
 }
 
+/// Interpolation of `a` → `b` at `t` in OKLab, a perceptually uniform space (gradients with
+/// perceptual interpolation): mid-tones stay as light and as saturated as the eye expects, where
+/// mixing in RGB goes muddy and dark. The result is an RGB colour clamped to sRGB.
+pub fn mix_perceptual(a: &Color, b: &Color, t: f32) -> Color {
+    let (p, q) = (to_oklab(a), to_oklab(b));
+    let t = f64::from(t);
+    let [r, g, bl] = oklab_to_srgb(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t);
+    let c = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) as f32 } else { 0.0 };
+    Color::rgb(c(r), c(g), c(bl))
+}
+
 /// The 8-bit sRGB colour of OKLCH `(l, c, h°)`, with the chroma lowered until it fits in sRGB.
 fn oklch(l: f64, c: f64, h: f64) -> Color {
     let (sin, cos) = h.to_radians().sin_cos();
@@ -171,7 +182,7 @@ fn group(name: &str, swatches: Vec<Swatch>) -> SwatchGroup {
 /// A gradient swatch through `stops` of (offset, colour, opacity).
 pub(crate) fn gradient(name: &str, kind: GradientKind, stops: &[(f32, Color, f32)]) -> Swatch {
     let stops = stops.iter().map(|&(offset, color, opacity)| GradientStop { opacity, ..GradientStop::new(offset, color) }).collect();
-    Swatch { name: name.into(), paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind, stops }))), global: false, spot: false }
+    Swatch { name: name.into(), paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops)))), global: false, spot: false }
 }
 
 /// `n` steps of OKLCH lightness from `l0` to `l1`, chroma `c(t)` and hue `h(t)` (`t` in 0..=1),

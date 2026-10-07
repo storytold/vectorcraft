@@ -193,6 +193,21 @@ pub fn read(text: &str, name: &str) -> Result<SwatchLibrary, String> {
     Err("not a swatch library (.vcswatches or .gpl)".into())
 }
 
+/// Read any swatch library file: binary ones from other apps (`.ase`, `.acb`, `.aco`, see
+/// [`crate::palette_bin`]) or the text ones [`read`] reads.
+pub fn read_bytes(bytes: &[u8], name: &str) -> Result<SwatchLibrary, String> {
+    if crate::palette_bin::sniff(bytes) {
+        return crate::palette_bin::read(bytes, name);
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| "not a swatch library (.vcswatches, .gpl, .ase, .acb or .aco)".to_string())?;
+    read(text, name)
+}
+
+/// Is `bytes` a library [`read_bytes`] understands?
+pub fn sniff_bytes(bytes: &[u8]) -> bool {
+    crate::palette_bin::sniff(bytes) || std::str::from_utf8(bytes).is_ok_and(sniff)
+}
+
 /// Is `text` a library [`read`] understands?
 pub fn sniff(text: &str) -> bool {
     let t = text.trim_start_matches('\u{feff}').trim_start();
@@ -244,6 +259,7 @@ mod tests {
                 GradientStop { midpoint: 0.4, ..GradientStop::new(0.0, Color::cmyk(0.1, 0.2, 0.3, 0.0)) },
                 GradientStop { opacity: 0.5, ..GradientStop::new(1.0, Color::rgb8(255, 0, 0)) },
             ],
+            ..Gradient::default()
         })));
         SwatchLibrary {
             name: "Brand */ Colours".into(),

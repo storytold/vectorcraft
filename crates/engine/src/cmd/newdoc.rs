@@ -323,6 +323,7 @@ impl DocSettings {
                 rect,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                ..Default::default()
             })
             .collect();
         d

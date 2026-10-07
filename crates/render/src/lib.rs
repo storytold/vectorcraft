@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod brush_fx;
+mod dither;
 pub mod encode;
 mod freeform;
 mod fx;
@@ -492,6 +493,16 @@ impl Renderer {
             ctx.set_paint(peniko::Color::WHITE);
             for ab in &f.doc.artboards {
                 ctx.fill_rect(&ab.rect);
+            }
+        }
+        if !opts.outline && f.doc.artboards.iter().any(|a| a.background.is_some()) {
+            // Artboard background colours, under the art on screen and in export.
+            ctx.set_transform(f.view);
+            for ab in &f.doc.artboards {
+                if let Some(c) = &ab.background {
+                    ctx.set_paint(f.ink.color(c, 1.0));
+                    ctx.fill_rect(&ab.rect);
+                }
             }
         }
         (self.nested, self.backdrop) = (0, None);

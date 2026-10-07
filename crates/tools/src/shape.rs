@@ -112,8 +112,14 @@ impl Tool for ShapeTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
+            // Hovering shows where a click would snap (the guide, its label and a marker).
+            PointerKind::Move if self.start.is_none() => {
+                self.guides = crate::guides::snap_draw(cx, ev.pos, &[]).1;
+                vec![]
+            }
             PointerKind::Down => {
-                let (p, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                let (p, g) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                self.guides = g;
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
@@ -121,7 +127,9 @@ impl Tool for ShapeTool {
             }
             PointerKind::Drag => {
                 let Some(s) = self.start else { return vec![] };
-                let (pos, g) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                // A line snaps tangent or perpendicular to the paths it meets.
+                let from = (self.id == "lineSegment").then_some(s);
+                let (pos, g) = crate::guides::snap_draw_from(cx, ev.pos, &[], from);
                 self.guides = g;
                 let ev = &PointerEvent { pos, ..*ev };
                 self.last = ev.pos;
@@ -199,7 +207,7 @@ impl Tool for ShapeTool {
                 o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
                 o
             }
-            _ => vec![],
+            _ => self.guides.clone(),
         }
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {

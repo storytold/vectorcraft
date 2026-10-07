@@ -18,6 +18,8 @@ pub struct PenTool {
     drawing: bool,
     drag: Option<(Point, bool)>,
     hover: Option<Point>,
+    /// The smart guides of the point under the pointer (where a click would land).
+    hover_guides: Vec<Overlay>,
 }
 
 /// The open path the pen is extending: the single selected open path.
@@ -46,15 +48,22 @@ impl Tool for PenTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let exclude: Vec<vectorcraft_doc::NodeId> = if self.drawing { cx.selection.objects.clone() } else { vec![] };
-        let (mut p, _) = if matches!(ev.kind, PointerKind::Down) { crate::guides::snap_draw(cx, ev.pos, &exclude) } else { (ev.pos, vec![]) };
-        let tol = cx.tol(5.0);
         let active = if self.drawing { active_path(cx) } else { None };
+        // The next anchor snaps tangent or perpendicular to other paths, seen from the last one.
+        let from = active.map(|(_, _, last, _)| last);
+        let (mut p, guides) = if matches!(ev.kind, PointerKind::Down | PointerKind::Move) {
+            crate::guides::snap_draw_from(cx, ev.pos, &exclude, from)
+        } else {
+            (ev.pos, vec![])
+        };
+        let tol = cx.tol(5.0);
         if self.drawing && active.is_none() && ev.kind == PointerKind::Down {
             self.drawing = false;
         }
         match ev.kind {
             PointerKind::Move => {
                 self.hover = Some(p);
+                self.hover_guides = guides;
                 vec![]
             }
             PointerKind::Down => {
@@ -138,10 +147,13 @@ impl Tool for PenTool {
         vec![]
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        if !self.drawing || self.drag.is_some() {
+        if self.drag.is_some() {
             return vec![];
         }
-        let (Some((id, _, last, out)), Some(h)) = (active_path(cx), self.hover) else { return vec![] };
+        if !self.drawing {
+            return self.hover_guides.clone();
+        }
+        let (Some((id, _, last, out)), Some(h)) = (active_path(cx), self.hover) else { return self.hover_guides.clone() };
         let mut bp = BezPath::new();
         bp.move_to(last);
         if out.distance(last) > 1e-9 {
@@ -150,7 +162,9 @@ impl Tool for PenTool {
             bp.line_to(h);
         }
         let c = cx.doc.layer_color(id);
-        vec![Overlay::Path { path: bp, color: c, width: 1.0, dashed: false }]
+        let mut o = vec![Overlay::Path { path: bp, color: c, width: 1.0, dashed: false }];
+        o.extend(self.hover_guides.iter().cloned());
+        o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
         if !self.drawing {

@@ -78,7 +78,7 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>) -> 
         let stops = ts.iter().map(|&t| stop_at(t, (r0 + (r1 - r0) * t) / r1)).collect();
         (GradientKind::Radial, geom, stops)
     };
-    let mut g = GradientPaint::new(Gradient { kind, stops });
+    let mut g = GradientPaint::new(Gradient::new(kind, stops));
     g.geom = Some(geom);
     Some((g, *extend))
 }

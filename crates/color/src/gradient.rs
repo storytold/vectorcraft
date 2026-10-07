@@ -71,23 +71,82 @@ fn half() -> f32 {
     0.5
 }
 
+/// How a gradient mixes the colours between two stops.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GradientInterpolation {
+    /// Straight through display RGB (the classic look).
+    #[default]
+    Linear,
+    /// Through OKLab, a perceptually uniform space: even steps of lightness and no muddy middle.
+    Perceptual,
+}
+
+impl GradientInterpolation {
+    /// Parse a name (`linear`/`standard`/`classic`, `perceptual`; any case).
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "linear" | "standard" | "classic" | "rgb" => Some(Self::Linear),
+            "perceptual" | "oklab" => Some(Self::Perceptual),
+            _ => None,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear",
+            Self::Perceptual => "Perceptual",
+        }
+    }
+    fn is_linear(&self) -> bool {
+        *self == Self::Linear
+    }
+}
+
+/// Stops a perceptual gradient adds between two of its own stops for renderers and file formats
+/// that only interpolate in RGB (enough that the difference is below one 8-bit level).
+pub const PERCEPTUAL_SUBSTEPS: usize = 12;
+
+/// Where a stop of [`Gradient::expanded`] comes from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ExpandedStop {
+    /// One of the gradient's own stops.
+    Own,
+    /// The colour at a stop's midpoint (the midpoint location, 0..1).
+    Midpoint(f32),
+    /// A colour added so an RGB renderer follows perceptual interpolation.
+    Interpolated,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Gradient {
     pub kind: GradientKind,
     pub stops: Vec<GradientStop>,
+    /// How colours mix between stops.
+    #[serde(default, skip_serializing_if = "GradientInterpolation::is_linear")]
+    pub interpolation: GradientInterpolation,
+    /// Dither the gradient on screen and in raster output to hide banding.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dither: bool,
 }
 
 impl Default for Gradient {
     /// Illustrator's default "White, Black" gradient.
     fn default() -> Self {
-        Self { kind: GradientKind::Linear, stops: vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)] }
+        Self::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)])
     }
 }
 
 impl Gradient {
-    /// Colour and opacity at `t` (honours midpoints).
+    /// A gradient of `kind` through `stops`, interpolated linearly, not dithered.
+    pub fn new(kind: GradientKind, stops: Vec<GradientStop>) -> Self {
+        Self { kind, stops, interpolation: GradientInterpolation::Linear, dither: false }
+    }
+    /// Colour and opacity at `t` (honours midpoints and the interpolation).
     pub fn sample(&self, t: f32) -> (Color, f32) {
-        self.sample_with(t, Color::lerp)
+        match self.interpolation {
+            GradientInterpolation::Linear => self.sample_with(t, Color::lerp),
+            GradientInterpolation::Perceptual => self.sample_with(t, crate::libraries::mix_perceptual),
+        }
     }
     /// [`Gradient::sample`] with neighbouring stop colours mixed by `mix` (e.g. in their own colour
     /// model rather than display RGB).
@@ -115,20 +174,37 @@ impl Gradient {
             None => (Color::BLACK, 1.0),
         }
     }
-    /// Stops expanded so that midpoints are represented as explicit stops (for renderers without midpoints).
+    /// Stops expanded so that midpoints (and perceptual interpolation) are represented as
+    /// explicit stops, for renderers that interpolate linearly in RGB between stops.
     pub fn expanded_stops(&self) -> Vec<(f32, Color, f32)> {
         self.expanded().map(|(t, c, o, _)| (t, c, o)).collect()
     }
-    /// [`Self::expanded_stops`], each stop that stands for a midpoint with that midpoint (`None`
-    /// on the gradient's own stops).
-    pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>)> + '_ {
+    /// [`Self::expanded_stops`], each stop with where it comes from (see [`ExpandedStop`]).
+    pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, ExpandedStop)> + '_ {
+        let perceptual = self.interpolation == GradientInterpolation::Perceptual;
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
-            let mid = self.stops.get(i + 1).filter(|_| (s.midpoint - 0.5).abs() > 1e-3).map(|n| {
-                let t = s.offset + (n.offset - s.offset) * s.midpoint;
+            let next = self.stops.get(i + 1);
+            let at = |t: f32, role: ExpandedStop| {
                 let (c, o) = self.sample(t);
-                (t, c, o, Some(s.midpoint))
-            });
-            std::iter::once((s.offset, s.color, s.opacity, None)).chain(mid)
+                (t, c, o, role)
+            };
+            let mid = next.filter(|_| (s.midpoint - 0.5).abs() > 1e-3).map(|n| s.offset + (n.offset - s.offset) * s.midpoint);
+            let mut extra: Vec<(f32, Color, f32, ExpandedStop)> = Vec::new();
+            if let Some(n) = next.filter(|n| perceptual && n.offset - s.offset > 1e-4) {
+                let span = n.offset - s.offset;
+                for k in 1..PERCEPTUAL_SUBSTEPS {
+                    let t = s.offset + span * k as f32 / PERCEPTUAL_SUBSTEPS as f32;
+                    if mid.is_some_and(|m| (m - t).abs() < span / (2.0 * PERCEPTUAL_SUBSTEPS as f32)) {
+                        continue;
+                    }
+                    extra.push(at(t, ExpandedStop::Interpolated));
+                }
+            }
+            if let Some(m) = mid {
+                extra.push(at(m, ExpandedStop::Midpoint(s.midpoint)));
+            }
+            extra.sort_by(|a, b| a.0.total_cmp(&b.0));
+            std::iter::once((s.offset, s.color, s.opacity, ExpandedStop::Own)).chain(extra)
         })
     }
     pub fn reverse(&mut self) {
@@ -164,7 +240,7 @@ impl Gradient {
             );
         }
         stops.push(stop(1.0, to));
-        Gradient { kind: GradientKind::Linear, stops }
+        Gradient { dither: self.dither, ..Gradient::new(GradientKind::Linear, stops) }
     }
 }
 

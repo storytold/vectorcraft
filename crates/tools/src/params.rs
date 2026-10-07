@@ -66,6 +66,12 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
     if let Some(s) = &g.swatch {
         v["swatch"] = json!(s);
     }
+    if g.gradient.interpolation != vectorcraft_color::GradientInterpolation::Linear {
+        v["interpolation"] = json!(g.gradient.interpolation.label().to_lowercase());
+    }
+    if g.gradient.dither {
+        v["dither"] = json!(true);
+    }
     if let Some(f) = &g.freeform {
         v["freeform"] = freeform_json(f);
     }

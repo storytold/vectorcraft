@@ -1,5 +1,5 @@
-//! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Copy; Scale also has Uniform,
-//! Scale Corners and Scale Strokes & Effects).
+//! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Copy; Scale also has Relative
+//! (percentages) or Absolute (a size), Uniform, Scale Corners and Scale Strokes & Effects).
 
 use serde_json::{Value, json};
 
@@ -20,7 +20,36 @@ fn title(kind: &str) -> &'static str {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    form::grid(ui, d, app.session.general_unit());
+    let unit = app.session.general_unit();
+    if d.kind == "scale" {
+        // Relative scales by percentages, Absolute to a size (fields absWidth / absHeight, from the
+        // selection's size when first chosen).
+        let abs = d.bool("absolute");
+        ui.horizontal(|ui| {
+            if crate::widgets::radio(ui, tl!("Relative"), !abs, true) {
+                d.fields.insert("absolute".into(), json!(false));
+            }
+            if crate::widgets::radio(ui, tl!("Absolute"), abs, true) {
+                d.fields.insert("absolute".into(), json!(true));
+                if !d.fields.contains_key("absWidth")
+                    && let Some(st) = app.session.active()
+                    && let Some(b) = st.doc.bounds_of(&st.selection.objects, true)
+                {
+                    d.fields.insert("absWidth".into(), json!(b.width()));
+                    d.fields.insert("absHeight".into(), json!(b.height()));
+                }
+            }
+        });
+        ui.add_space(4.0);
+    }
+    if d.kind == "scale" && d.bool("absolute") {
+        egui::Grid::new("dlg-abs").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
+            form::length_field(ui, d, "absWidth", "Width", unit);
+            form::length_field(ui, d, "absHeight", "Height", unit);
+        });
+    } else {
+        form::grid(ui, d, unit);
+    }
     ui.add_space(6.0);
     if d.kind == "scale" {
         form::check(ui, d, "uniform", tl!("Uniform"));
@@ -78,6 +107,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (id, params) = match d.kind.as_str() {
         "move" => return run_and_close(app, "object.move", json!({"dx": d.f64("dx", 0.0), "dy": d.f64("dy", 0.0), "copy": copy})),
         "rotate" => ("object.rotate", json!({"angle": d.f64("angle", 0.0), "copy": copy})),
+        "scale" if d.bool("absolute") => {
+            let w = d.f64("absWidth", 0.0);
+            // Uniform keeps the proportions: the width decides.
+            let size = if d.bool("uniform") { json!({"width": w}) } else { json!({"width": w, "height": d.f64("absHeight", 0.0)}) };
+            let mut p = size;
+            p["copy"] = json!(copy);
+            ("object.scale", with_scale_options(app, d, p)?)
+        }
         "scale" => {
             let sx = d.f64("sx", 100.0);
             let sy = if d.bool("uniform") { sx } else { d.f64("sy", 100.0) };

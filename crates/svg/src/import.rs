@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use usvg::roxmltree;
-use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientInterpolation, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeKind, PatternDef,
     StrokeLayer, Unit,
@@ -180,8 +180,8 @@ struct Importer {
     slots: TextSlots,
     /// Pattern swatch made for each usvg pattern.
     patterns: HashMap<usize, String>,
-    /// Midpoint stops by gradient id (see [`midpoint_stops`]).
-    midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Midpoint and interpolation stops by gradient id (see [`midpoint_stops`]).
+    midpoints: HashMap<String, Vec<StopMark>>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
     /// Ids of the undisplayed objects shown for usvg ([`prepass`]).
@@ -233,37 +233,61 @@ fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
     name
 }
 
-/// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,
-/// the midpoint it stands for.
-fn midpoint_stops(xml: &roxmltree::Document) -> HashMap<String, Vec<Option<f32>>> {
+/// What our export marked a gradient stop as.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum StopMark {
+    /// A stop of the gradient itself.
+    Own,
+    /// The colour at the previous stop's midpoint (`data-vc-midpoint`, the midpoint location).
+    Midpoint(f32),
+    /// A colour added to approximate perceptual interpolation (`data-vc-interpolated`).
+    Interpolated,
+}
+
+/// The stops our export added for midpoints (`data-vc-midpoint`) and perceptual interpolation
+/// (`data-vc-interpolated`), by gradient id: for each stop, what it stands for.
+fn midpoint_stops(xml: &roxmltree::Document) -> HashMap<String, Vec<StopMark>> {
     xml.descendants()
         .filter(|n| matches!(n.tag_name().name(), "linearGradient" | "radialGradient"))
         .filter_map(|g| {
             let id = g.attribute("id")?;
-            let marks: Vec<Option<f32>> = g
+            let marks: Vec<StopMark> = g
                 .children()
                 .filter(|c| c.tag_name().name() == "stop")
-                .map(|c| c.attribute("data-vc-midpoint").and_then(|v| v.parse().ok()))
+                .map(|c| match (c.attribute("data-vc-midpoint").and_then(|v| v.parse::<f32>().ok()), c.attribute("data-vc-interpolated")) {
+                    (Some(m), _) if m.is_finite() => StopMark::Midpoint(m),
+                    (_, Some(_)) => StopMark::Interpolated,
+                    _ => StopMark::Own,
+                })
                 .collect();
-            marks.iter().any(Option::is_some).then(|| (id.to_string(), marks))
+            marks.iter().any(|m| *m != StopMark::Own).then(|| (id.to_string(), marks))
         })
         .collect()
 }
 
 /// A gradient's stops, with the midpoint stops `marks` names folded back into the midpoints of
-/// the stops before them.
-fn gradient_stops(g: &usvg::BaseGradient, marks: Option<&[Option<f32>]>) -> Vec<GradientStop> {
+/// the stops before them and the interpolation stops dropped. Also whether there were
+/// interpolation stops (the gradient was perceptual).
+fn gradient_stops(g: &usvg::BaseGradient, marks: Option<&[StopMark]>) -> (Vec<GradientStop>, bool) {
     let marks = marks.filter(|m| m.len() == g.stops().len());
     let mut out: Vec<GradientStop> = Vec::with_capacity(g.stops().len());
+    let mut perceptual = false;
     for (i, s) in g.stops().iter().enumerate() {
-        if let (Some(mid), Some(prev)) = (marks.and_then(|m| m.get(i).copied().flatten()), out.last_mut()) {
-            prev.midpoint = mid.clamp(0.0, 1.0);
-            continue;
+        match (marks.and_then(|m| m.get(i).copied()), out.last_mut()) {
+            (Some(StopMark::Midpoint(mid)), Some(prev)) => {
+                prev.midpoint = mid.clamp(0.0, 1.0);
+                continue;
+            }
+            (Some(StopMark::Interpolated), Some(_)) => {
+                perceptual = true;
+                continue;
+            }
+            _ => {}
         }
         let c = s.color();
         out.push(GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) });
     }
-    out
+    (out, perceptual)
 }
 
 /// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
@@ -576,8 +600,8 @@ impl Importer {
         Some(out)
     }
 
-    /// A gradient's stops, midpoints restored.
-    fn stops(&self, g: &usvg::BaseGradient) -> Vec<GradientStop> {
+    /// A gradient's stops, midpoints restored, and whether it was perceptual.
+    fn stops(&self, g: &usvg::BaseGradient) -> (Vec<GradientStop>, bool) {
         gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
     }
 
@@ -899,7 +923,7 @@ impl Importer {
             }
         };
         geom.transform(m * aff(base.transform()), kind);
-        let mut stops = self.stops(base);
+        let (mut stops, perceptual) = self.stops(base);
         let reflect = match base.spread_method() {
             usvg::SpreadMethod::Pad => None,
             usvg::SpreadMethod::Reflect => Some(true),
@@ -915,7 +939,10 @@ impl Importer {
             }
         }
         Paint::Gradient(Box::new(GradientPaint {
-            gradient: Gradient { kind, stops },
+            gradient: Gradient {
+                interpolation: if perceptual { GradientInterpolation::Perceptual } else { GradientInterpolation::Linear },
+                ..Gradient::new(kind, stops)
+            },
             geom: Some(geom),
             angle: geom.angle_deg(),
             swatch: None,

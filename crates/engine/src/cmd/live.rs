@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path} set the options of the selected blends; with no blend selected, the options new blends start with (a tool setting, not an undo step) → {defaults?: true}",
+            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, easing?: linear|easeIn|easeOut|easeInOut (how the steps bunch between keys), strength?: 0..100 % (default 50), colorEasing?: same|linear|easeIn|easeOut|easeInOut (colour acceleration, independent of the spacing; same: follows the steps), colorStrength?: 0..100 %} set the options of the selected blends; with no blend selected, the options new blends start with (a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
@@ -709,10 +709,34 @@ fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
+    let easing = easing_param(p, C, "easing", "strength", cur.easing)?;
+    let color_easing = match str_param(p, "colorEasing") {
+        Some(v) if v.eq_ignore_ascii_case("same") || v.eq_ignore_ascii_case("spacing") => None,
+        Some(_) => Some(easing_param(p, C, "colorEasing", "colorStrength", cur.color_easing.unwrap_or_default())?),
+        None => match (cur.color_easing, p.get("colorStrength")) {
+            (Some(e), Some(_)) => Some(easing_param(p, C, "colorEasing", "colorStrength", e)?),
+            (e, _) => e,
+        },
+    };
     edit_blends(s, "Blend Options", |_, spec| {
         spec.spacing = spacing;
         spec.orientation = orientation;
+        spec.easing = easing;
+        spec.color_easing = color_easing;
     })
+}
+
+/// An easing from the `key` (curve name) and `strength_key` (0..100 %) params, else `cur`'s.
+fn easing_param(p: &Value, c: &str, key: &str, strength_key: &str, cur: live::BlendEasing) -> Result<live::BlendEasing> {
+    let ease = match str_param(p, key) {
+        Some(v) => live::BlendEase::parse(v).ok_or_else(|| bad(c, format!("unknown {key} `{v}` (linear, easeIn, easeOut, easeInOut)")))?,
+        None => cur.ease,
+    };
+    let strength = match p.get(strength_key) {
+        Some(v) => v.as_f64().filter(|s| s.is_finite()).ok_or_else(|| bad(c, format!("{strength_key} must be a number 0..100")))?.clamp(0.0, 100.0),
+        None => cur.strength,
+    };
+    Ok(live::BlendEasing { ease, strength })
 }
 
 /// Spacing and orientation as `object.blend.options` takes them; the step count and distance
@@ -731,6 +755,10 @@ fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(match selected_spec(s) {
         Some((id, spec, keys)) => {
             let mut v = blend_options_json(spec.spacing, spec.orientation);
+            v["easing"] = json!(spec.easing.ease.name());
+            v["strength"] = json!(spec.easing.strength);
+            v["colorEasing"] = json!(spec.color_easing.map_or("same", |e| e.ease.name()));
+            v["colorStrength"] = json!(spec.color_easing.map_or(spec.easing.strength, |e| e.strength));
             v["target"] = json!("blend");
             v["id"] = json!(id.0);
             v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());

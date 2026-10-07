@@ -21,7 +21,7 @@ fn stops(a: Color, b: Color) -> Vec<GradientStop> {
 }
 
 fn gradient(kind: GradientKind, a: Color, b: Color, angle: f64) -> Paint {
-    let mut gp = GradientPaint::new(Gradient { kind, stops: stops(a, b) });
+    let mut gp = GradientPaint::new(Gradient::new(kind, stops(a, b)));
     gp.angle = angle;
     Paint::Gradient(Box::new(gp))
 }

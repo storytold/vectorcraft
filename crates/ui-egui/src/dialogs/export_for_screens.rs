@@ -84,6 +84,19 @@ pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
     }
 }
 
+/// Open the dialog with only artboard `i` checked (the canvas's artboard menu: Export Artboard).
+pub fn open_artboard(app: &mut VectorcraftApp, i: usize) {
+    open(app);
+    let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+    if let Some(d) = app.ui.dialog.as_mut() {
+        let boards: Vec<bool> = (0..n).map(|k| k == i).collect();
+        d.fields.insert("tab".into(), json!("artboards"));
+        d.fields.insert("select".into(), json!(if n == 1 { "all" } else { "range" }));
+        d.fields.insert("range".into(), json!(range_text(&boards)));
+        d.fields.insert("boards".into(), json!(boards));
+    }
+}
+
 /// Open the dialog on the settings the active document last exported with (else one PNG row at
 /// 1x, into the Desktop), every asset checked.
 pub fn open(app: &mut VectorcraftApp) {

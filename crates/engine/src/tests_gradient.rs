@@ -40,6 +40,7 @@ fn three_stops() -> GradientPaint {
             stop(0.4, Color::cmyk(0.1, 0.2, 0.3, 0.4), 0.5, 0.5),
             stop(1.0, Color::gray(0.25), 0.75, 0.5),
         ],
+        ..Gradient::default()
     });
     g.geom = Some(GradientGeom { start: Point::new(10.0, 20.0), end: Point::new(110.0, 70.0), aspect: 0.5, focal: None });
     g.angle = g.geom.unwrap().angle_deg();

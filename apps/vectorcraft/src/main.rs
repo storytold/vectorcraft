@@ -264,7 +264,7 @@ fn main() -> eframe::Result {
     let saved_window = saved.as_ref().and_then(|ui| ui.window);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("VectorCraft")
+            .with_title("Vector W3K2")
             .with_inner_size(window::DEFAULT_SIZE)
             .with_min_inner_size(window::MIN_SIZE)
             .with_drag_and_drop(true)

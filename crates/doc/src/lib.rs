@@ -310,7 +310,7 @@ impl ColorMode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Artboard {
     pub id: u32,
     pub name: String,
@@ -320,6 +320,17 @@ pub struct Artboard {
     pub show_center_mark: bool,
     #[serde(default)]
     pub show_cross_hairs: bool,
+    /// The artboard's own background colour, painted behind its art on screen and in export
+    /// (`None`: the paper, transparent in export).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<vectorcraft_color::Color>,
+    /// Locked: the Artboard tool can't move or resize it, and its art was locked with it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// The objects locking the artboard locked (unlocking it unlocks just these, so art that
+    /// was locked before stays locked).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked_art: Vec<NodeId>,
 }
 
 /// Opacity-mask editing mode: `object`'s mask art lives on the temporary `layer` while editing.
@@ -605,6 +616,7 @@ impl Document {
                 rect: Rect::new(0.0, 0.0, width, height),
                 show_center_mark: false,
                 show_cross_hairs: false,
+                ..Default::default()
             }],
             layers: vec![],
             swatches,

@@ -220,6 +220,11 @@ pub struct CanvasCache {
     pub print_tiling: Option<PrintTilingCache>,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// The artboard under the last right-click on empty canvas: the context menu lists its
+    /// commands (Duplicate, Rename, Lock, Export, Delete).
+    pub context_artboard: Option<usize>,
+    /// The artboard whose name is being edited in place on the canvas, and the text so far.
+    pub renaming_artboard: Option<(usize, String)>,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -344,6 +349,8 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 selection_box: None,
+                context_artboard: None,
+                renaming_artboard: None,
             },
             perf: Perf::default(),
             integrated_titlebar: false,

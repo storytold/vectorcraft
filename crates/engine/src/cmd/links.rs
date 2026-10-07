@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image ids] (default: the selected images; with folder and nothing selected, every missing link), path | folder} link images to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names]}",
+            "{ids?: [image ids] (default: the selected images; with folder and nothing selected, every missing link), path | folder, allInstances?: bool (default true: with path, every other image linked to the same file as one of them is relinked too), sameFolder?: bool (default true: with path, other images whose files are missing are relinked to files of their names in path's folder)} link images to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], alsoRelinked: [ids found in the same folder]}",
             has_doc,
             relink
         ),
@@ -607,8 +607,43 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     // (ids, the file) per file to read.
     let mut files: Vec<(Vec<NodeId>, String)> = vec![];
     let mut not_found = vec![];
+    let mut also: Vec<NodeId> = vec![];
     match (str_param(p, "path"), folder_param) {
-        (Some(path), _) => files.push((ids, absolute_path(path))),
+        (Some(path), _) => {
+            let path = absolute_path(path);
+            let mut ids = ids;
+            // Every instance of the same linked file goes along.
+            if bool_or(p, "allInstances", true) {
+                let paths: Vec<&str> = ids.iter().filter_map(|id| image(id).and_then(|im| im.link.as_ref()).map(|l| l.path.as_str())).collect();
+                let more: Vec<NodeId> = groups(&st.doc, None)
+                    .into_iter()
+                    .filter(|g| paths.contains(&g.link.path.as_str()))
+                    .flat_map(|g| g.ids)
+                    .filter(|id| !ids.contains(id))
+                    .collect();
+                ids.extend(more);
+            }
+            // Other missing files found in the new file's folder are relinked there too.
+            if bool_or(p, "sameFolder", true)
+                && let Some(dir) = Path::new(&path).parent()
+            {
+                let doc_dir = folder(st.path.as_deref());
+                for g in groups(&st.doc, None) {
+                    if g.ids.iter().any(|id| ids.contains(id)) || probe(&g, doc_dir).0 != Status::Missing {
+                        continue;
+                    }
+                    let candidate = absolute_path(&dir.join(g.link.name()).to_string_lossy());
+                    if candidate != path && file_stamp(&candidate).is_some() {
+                        also.extend(g.ids.iter().copied());
+                        match files.iter_mut().find(|(_, p)| *p == candidate) {
+                            Some((v, _)) => v.extend(g.ids),
+                            None => files.push((g.ids, candidate)),
+                        }
+                    }
+                }
+            }
+            files.insert(0, (ids, path));
+        }
         (None, Some(dir)) => {
             for id in ids {
                 let Some(link) = image(&id).and_then(|im| im.link.as_ref()) else { continue };
@@ -634,7 +669,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     not_found.sort();
     not_found.dedup();
-    Ok(json!({ "relinked": relinked, "notFound": not_found }))
+    let mut out = json!({ "relinked": relinked, "notFound": not_found });
+    if !also.is_empty() {
+        out["alsoRelinked"] = json!(ids_json(&also));
+    }
+    Ok(out)
 }
 
 // ---------- the Links panel ----------

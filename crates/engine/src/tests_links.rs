@@ -328,3 +328,35 @@ fn a_placed_document_brings_its_links_with_the_files_pixels() {
     assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(pic.as_str()), "still linked");
     assert!(!doc.images[&im.key].is_proxy(), "the file's pixels, not the preview");
 }
+
+#[test]
+fn relinking_one_file_relinks_its_instances_and_the_missing_files_beside_it() {
+    let dir = Folder::new("samefolder");
+    let (a, b) = (dir.file("a.png"), dir.file("b.png"));
+    write(&a, &png(100, 100, RED));
+    write(&b, &png(100, 100, RED));
+    let mut s = session();
+    let (ia, ib, ia2) = (place(&mut s, &a), place(&mut s, &b), place(&mut s, &a));
+    let doc_path = dir.file("doc.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&a).unwrap();
+    std::fs::remove_file(&b).unwrap();
+    open(&mut s, &doc_path);
+    let (ma, mb) = (dir.file("moved/a.png"), dir.file("moved/b.png"));
+    write(&ma, &png(100, 100, BLUE));
+    write(&mb, &png(100, 100, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [ia.0], "path": ma})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().filter_map(|v| v.as_u64()).collect();
+    relinked.sort();
+    let mut want = vec![ia.0, ib.0, ia2.0];
+    want.sort();
+    assert_eq!(relinked, want, "every instance of a.png, and b.png found beside it: {r}");
+    assert_eq!(r["alsoRelinked"], json!([ib.0]));
+    let same = |a: &str, b: &str| std::path::Path::new(a) == std::path::Path::new(b);
+    assert!(same(&image(&s, ib).link.unwrap().path, &mb));
+    assert!(same(&image(&s, ia2).link.unwrap().path, &ma));
+    // Both off: only the image asked for.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("links.relink", &json!({"ids": [ia.0], "path": ma, "allInstances": false, "sameFolder": false})).unwrap();
+    assert_eq!(r, json!({"relinked": [ia.0], "notFound": []}));
+}

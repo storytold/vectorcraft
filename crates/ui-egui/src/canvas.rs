@@ -173,6 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let mask_view = st.shown_mask();
+    let active_ab = st.active_artboard;
 
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
@@ -280,25 +281,54 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let b = xf.to_screen(old.to_doc(rect.max));
         painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     }
-    // Artboard edges and names.
-    let active_ab = 0;
+    // Artboard edges and names: with several, the active one has a darker, heavier border.
+    let several = doc.artboards.len() > 1;
+    let mut rename_at = None;
     for (i, ab) in doc.artboards.iter().enumerate() {
         let r = xf.rect_to_screen(ab.rect);
-        let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
-        painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
+        let active = i == active_ab;
+        let c = if active { Color32::from_gray(0) } else { Color32::from_gray(120) };
+        let width = match (active, several) {
+            (true, true) => 2.0,
+            (true, false) => 1.0,
+            _ => 0.6,
+        };
+        painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(width, c)));
         // The bleed (Document Setup) as a red outline around the artboard.
         if doc.setup.has_bleed() {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
-        if app.session.tool_id() == "artboard" || doc.artboards.len() > 1 {
-            painter.text(
+        if app.canvas.renaming_artboard.as_ref().is_some_and(|(k, _)| *k == i) {
+            rename_at = Some((i, r.left_top()));
+        } else if app.session.tool_id() == "artboard" || several {
+            let lock = if ab.locked { format!(" ({})", tl!("locked")) } else { String::new() };
+            let label = painter.text(
                 r.left_top() - vec2(0.0, 4.0),
                 egui::Align2::LEFT_BOTTOM,
-                format!("{:02} - {}", i + 1, ab.name),
+                format!("{:02} - {}{lock}", i + 1, ab.name),
                 egui::FontId::proportional(11.0),
-                t.text_dim,
+                if active && several { t.text } else { t.text_dim },
             );
+            // Click the name to make the artboard active, double-click it to rename it in place,
+            // right-click it for the artboard's commands.
+            let hit = ui.interact(label.expand(2.0), ui.id().with(("ab-label", i)), egui::Sense::click());
+            if hit.double_clicked() {
+                app.canvas.renaming_artboard = Some((i, ab.name.clone()));
+            } else if hit.clicked() || hit.secondary_clicked() {
+                let _ = app.run("artboard.setActive", json!({ "index": i }));
+            }
+            if hit.secondary_clicked() {
+                app.canvas.context_artboard = Some(i);
+            }
+            let mut clicked = None;
+            hit.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked));
+            if let Some((id, p)) = clicked {
+                crate::menus::invoke(app, &id, p);
+            }
         }
+    }
+    if let Some((i, at)) = rename_at {
+        rename_artboard(app, ui, i, at);
     }
     if app.ui.view.guides {
         for g in &doc.guides {
@@ -842,18 +872,65 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
 fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
-        && let Some(st) = app.session.active()
-        && let Some(top) = hit_at(app, xf.to_doc(p), xf.zoom).map(|h| h.top_object(st.isolation))
-        && !st.selection.contains(top)
     {
-        // A locked or hidden object can't be selected; the menu is then for the selection as is.
-        let _ = app.run("select.set", json!({ "ids": [top.0] }));
+        let at = xf.to_doc(p);
+        let hit = app.session.active().and_then(|st| hit_at(app, at, xf.zoom).map(|h| h.top_object(st.isolation)));
+        // Empty canvas on an artboard (or its name): the menu offers that artboard's commands.
+        app.canvas.context_artboard = None;
+        if hit.is_none()
+            && let Some(i) = artboard_at(app, at, xf)
+        {
+            app.canvas.context_artboard = Some(i);
+            let _ = app.run("artboard.setActive", json!({ "index": i }));
+        }
+        if let (Some(st), Some(top)) = (app.session.active(), hit)
+            && !st.selection.contains(top)
+        {
+            // A locked or hidden object can't be selected; the menu is then for the selection as is.
+            let _ = app.run("select.set", json!({ "ids": [top.0] }));
+        }
     }
     let mut clicked = None;
     resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked));
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);
     }
+}
+
+/// The in-place name editor of artboard `i` above its top-left corner `at`: Enter or clicking
+/// away renames it (`artboard.setProps`), Escape keeps the old name.
+fn rename_artboard(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, at: egui::Pos2) {
+    let Some((_, mut buf)) = app.canvas.renaming_artboard.clone() else { return };
+    let rect = egui::Rect::from_min_size(at - vec2(0.0, 20.0), vec2(180.0, 18.0));
+    let id = ui.id().with(("ab-rename", i));
+    let te = ui.put(rect, egui::TextEdit::singleline(&mut buf).id(id).font(egui::FontId::proportional(11.0)));
+    if !te.has_focus() && !te.lost_focus() {
+        te.request_focus();
+    }
+    if te.lost_focus() {
+        app.canvas.renaming_artboard = None;
+        let cancelled = ui.input(|k| k.key_pressed(egui::Key::Escape));
+        let old = app.session.active().and_then(|st| st.doc.artboards.get(i).map(|a| a.name.clone()));
+        if !cancelled
+            && !buf.trim().is_empty()
+            && old.as_deref() != Some(buf.trim())
+            && let Err(e) = app.run("artboard.setProps", json!({ "index": i, "name": buf.trim() }))
+        {
+            app.status(e);
+        }
+    } else {
+        app.canvas.renaming_artboard = Some((i, buf));
+    }
+}
+
+/// The artboard at document point `p` (the topmost), or whose name label above it is there.
+fn artboard_at(app: &VectorcraftApp, p: Point, xf: &Xf) -> Option<usize> {
+    let doc = &app.session.active()?.doc;
+    let label = |r: vectorcraft_geom::Rect| {
+        let h = 16.0 / xf.zoom;
+        vectorcraft_geom::Rect::new(r.x0, r.y0 - h, r.x0 + r.width().max(120.0 / xf.zoom), r.y0)
+    };
+    (0..doc.artboards.len()).rev().find(|i| doc.artboards.get(*i).is_some_and(|a| a.rect.contains(p) || label(a.rect).contains(p)))
 }
 
 /// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
@@ -1240,6 +1317,15 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
             Overlay::Handle { p: pt, color } => {
                 p.circle_filled(xf.to_screen(*pt), 2.8, c32(*color));
             }
+            // Smart-guide labels (anchor, path, center, midpoint, tangent…): white on a magenta
+            // pill, so the snap reads clearly over any artwork.
+            Overlay::Label { p: pt, text, color } if *color == vectorcraft_tools::guides::MAGENTA => {
+                let sp = xf.to_screen(*pt) + vec2(9.0, -20.0);
+                let galley = p.layout_no_wrap(crate::panels::label_or_name(text, true).to_string(), egui::FontId::proportional(12.0), Color32::WHITE);
+                let r = egui::Rect::from_min_size(sp, galley.size()).expand2(vec2(5.0, 2.0));
+                p.rect_filled(r, CornerRadius::same(3), c32(*color));
+                p.galley(sp, galley, Color32::WHITE);
+            }
             Overlay::Label { p: pt, text, color } => {
                 let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
                 p.text(
@@ -1287,9 +1373,9 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let inner = rect.shrink2(vec2((rect.width() - 820.0).max(40.0) / 2.0, 60.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
     let ui = &mut child;
-    ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Welcome to Vector W3K2")).font(theme::semibold(26.0)).color(t.text));
     ui.add_space(4.0);
-    ui.label(egui::RichText::new(tl!("Vector illustration — fast, open, scriptable.")).size(14.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!("Offline vector illustration by Print That 204.")).size(14.0).color(t.text_dim));
     ui.add_space(22.0);
     ui.horizontal(|ui| {
         if widgets::primary_button(ui, tl!("New file")).clicked() {
@@ -1315,7 +1401,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         }
     });
     ui.add_space(28.0);
-    ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Links")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
 }

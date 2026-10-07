@@ -309,7 +309,7 @@ fn gradient_stop_opacity_round_trips() {
     let mut d = Document::new(100.0, 100.0);
     let mut stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
     stops[1].opacity = 0.2;
-    let g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     let n = Node::path(
         NodeId(0),
         shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 90.0)),

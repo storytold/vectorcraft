@@ -51,6 +51,89 @@ pub enum BlendSpacing {
     Distance(f64),
 }
 
+/// How a blend distributes its steps (or their colours) between two key objects.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BlendEase {
+    /// Evenly.
+    #[default]
+    Linear,
+    /// Bunched towards the start: slow at first, faster towards the next key.
+    EaseIn,
+    /// Bunched towards the end.
+    EaseOut,
+    /// Bunched towards both keys, spread out in the middle.
+    EaseInOut,
+}
+
+impl BlendEase {
+    /// Parse a name (`linear`, `easeIn`, `easeOut`, `easeInOut`; any case, `-` or `_` allowed).
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().replace(['-', '_', ' '], "").as_str() {
+            "linear" | "none" | "even" => Some(Self::Linear),
+            "easein" | "in" => Some(Self::EaseIn),
+            "easeout" | "out" => Some(Self::EaseOut),
+            "easeinout" | "inout" => Some(Self::EaseInOut),
+            _ => None,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Linear => "linear",
+            Self::EaseIn => "easeIn",
+            Self::EaseOut => "easeOut",
+            Self::EaseInOut => "easeInOut",
+        }
+    }
+}
+
+/// An easing curve with its strength (0..100 %; 0 is linear).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BlendEasing {
+    #[serde(default)]
+    pub ease: BlendEase,
+    #[serde(default = "default_ease_strength")]
+    pub strength: f64,
+}
+
+fn default_ease_strength() -> f64 {
+    50.0
+}
+
+impl Default for BlendEasing {
+    fn default() -> Self {
+        Self { ease: BlendEase::Linear, strength: default_ease_strength() }
+    }
+}
+
+impl BlendEasing {
+    pub fn is_linear(&self) -> bool {
+        self.ease == BlendEase::Linear || self.strength.is_nan() || self.strength <= 0.0
+    }
+    /// Map an even position `t` (0..1) between two keys through the curve. Keeps 0 and 1 and
+    /// the order of the steps.
+    pub fn apply(&self, t: f64) -> f64 {
+        if self.is_linear() || !t.is_finite() {
+            return t;
+        }
+        let t = t.clamp(0.0, 1.0);
+        // Strength 100 % is a cubic curve; less mixes towards linear.
+        let p = 1.0 + 2.0 * (self.strength / 100.0).clamp(0.0, 1.0);
+        match self.ease {
+            BlendEase::Linear => t,
+            BlendEase::EaseIn => t.powf(p),
+            BlendEase::EaseOut => 1.0 - (1.0 - t).powf(p),
+            BlendEase::EaseInOut => {
+                if t < 0.5 {
+                    0.5 * (2.0 * t).powf(p)
+                } else {
+                    1.0 - 0.5 * (2.0 * (1.0 - t)).powf(p)
+                }
+            }
+        }
+    }
+}
+
 /// Blend Options → Orientation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,9 +161,22 @@ pub struct BlendSpec {
     /// on anchor points); `None`: chosen so closed shapes don't twist.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub starts: Vec<Option<u32>>,
+    /// How the steps are spaced between each pair of keys (Ease In / Ease Out).
+    #[serde(default, skip_serializing_if = "BlendEasing::is_linear")]
+    pub easing: BlendEasing,
+    /// How the colours (and the rest of the appearance) change from step to step, independent
+    /// of the spacing (colour acceleration); `None`: they follow the steps.
+    #[serde(default, rename = "colorEasing", skip_serializing_if = "Option::is_none")]
+    pub color_easing: Option<BlendEasing>,
 }
 
 impl BlendSpec {
+    /// The positions (shape, colour) of step `t` (0..1, evenly spaced) between two keys after
+    /// the spacing and colour easings.
+    pub fn eased(&self, t: f64) -> (f64, f64) {
+        let shape = self.easing.apply(t);
+        (shape, self.color_easing.map_or(shape, |e| e.apply(t)))
+    }
     /// The start anchor of key `i` (see [`Self::starts`]).
     pub fn start(&self, i: usize) -> Option<usize> {
         self.starts.get(i).copied().flatten().map(|a| a as usize)

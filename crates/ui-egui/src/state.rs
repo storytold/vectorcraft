@@ -88,6 +88,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("transform", "Transform", "dc-transform-panel"),
     ("align", "Align", "dc-align"),
     ("pathfinder", "Pathfinder", "dc-pathfinder"),
+    ("blend", "Blend", "dc-blend"),
     ("character", "Character", "type"),
     ("paragraph", "Paragraph", "pilcrow"),
     ("glyphs", "Glyphs", "text-cursor-input"),

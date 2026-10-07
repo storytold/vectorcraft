@@ -9,6 +9,7 @@ pub mod appearance;
 pub mod artboards;
 pub mod asset_export;
 pub mod attributes;
+pub mod blend;
 pub mod brushes;
 pub mod character;
 pub mod color;
@@ -73,6 +74,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "graphicStyles" => graphic_styles::show(app, ui),
         "align" => align::show(app, ui),
         "pathfinder" => pathfinder::show(app, ui),
+        "blend" => blend::show(app, ui),
         "transform" => transform::show(app, ui),
         "history" => history::show(app, ui),
         "actions" => actions::show(app, ui),
@@ -118,6 +120,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "graphicStyles" => graphic_styles::menu(app, ui),
         "align" => align::menu(app, ui),
         "pathfinder" => pathfinder::menu(app, ui),
+        "blend" => blend::menu(app, ui),
         "transform" => transform::menu(app, ui),
         "history" => history::menu(app, ui),
         "info" => info::menu(app, ui),

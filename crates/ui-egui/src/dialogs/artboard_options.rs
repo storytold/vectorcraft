@@ -16,5 +16,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             p[k] = json!(d.f64(k, 0.0));
         }
     }
+    // Background: a colour (hex), or empty for none.
+    if d.fields.contains_key("background") && d.str("background").trim().is_empty() {
+        p["background"] = Value::Null;
+    }
     run_and_close(app, "artboard.setProps", p)
 }

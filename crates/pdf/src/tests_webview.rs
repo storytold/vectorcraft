@@ -27,6 +27,7 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
             rect: Rect::new(x, 0.0, x + 100.0, 100.0),
             show_center_mark: false,
             show_cross_hairs: false,
+            ..Default::default()
         });
     }
     let mut png = vec![];

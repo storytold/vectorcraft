@@ -1,4 +1,5 @@
-//! Artboards panel: numbered list with inline rename (double-click), move up / down, new, delete.
+//! Artboards panel: numbered list with inline rename (double-click), a lock per artboard, move
+//! up / down, new, delete. The selected row is the document's active artboard.
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::json;
@@ -8,18 +9,24 @@ use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
-fn selected(ui: &Ui, n: usize) -> usize {
-    pstate::<usize>(ui.ctx(), "ab-sel").min(n.saturating_sub(1))
+/// The active artboard (the selected row).
+fn selected(app: &VectorcraftApp, n: usize) -> usize {
+    app.session.active().map_or(0, |st| st.active_artboard).min(n.saturating_sub(1))
+}
+
+fn set_selected(app: &mut VectorcraftApp, i: usize) {
+    app.run("artboard.setActive", json!({ "index": i })).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
+    let locks: Vec<bool> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.locked).collect()).unwrap_or_default();
     if abs.is_empty() {
         super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;
     }
-    let sel = selected(ui, abs.len());
+    let sel = selected(app, abs.len());
     let editing: Option<usize> = pstate(ui.ctx(), "ab-edit");
     widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
@@ -39,7 +46,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.0),
                     t.text_dim,
                 );
-                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 28.0, r.bottom() - 2.0));
+                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 48.0, r.bottom() - 2.0));
                 if editing == Some(i) {
                     let id = ui.id().with(("ab-name", i));
                     let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
@@ -62,11 +69,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
                 icons::paint(ui, "dc-artboard-options", opt, if oresp.hovered() { t.text_strong } else { t.icon });
                 if oresp.on_hover_text(tl!("Artboard Options: edit with the Artboard tool")).clicked() {
-                    set_pstate(ui.ctx(), "ab-sel", i);
+                    set_selected(app, i);
                     app.select_tool("artboard");
                 }
+                // The lock: locks the artboard and the art on it.
+                let locked = locks.get(i).copied().unwrap_or(false);
+                let lk = egui::Rect::from_center_size(r.right_center() - vec2(34.0, 0.0), vec2(14.0, 14.0));
+                let lresp = ui.interact(lk, ui.id().with(("ab-lock", i)), Sense::click());
+                if locked || lresp.hovered() || resp.hovered() {
+                    let icon = if locked { "lock" } else { "lock-open" };
+                    icons::paint(ui, icon, lk, if locked || lresp.hovered() { t.icon } else { t.text_disabled });
+                }
+                let tip = if locked { tl!("Unlock Artboard") } else { tl!("Lock Artboard") };
+                if lresp.on_hover_text(tip).clicked() {
+                    app.run("artboard.lock", json!({"index": i, "locked": !locked})).ok();
+                }
                 if resp.clicked() {
-                    set_pstate(ui.ctx(), "ab-sel", i);
+                    set_selected(app, i);
                 }
                 if resp.double_clicked() {
                     set_pstate(ui.ctx(), "ab-edit", Some(i));
@@ -81,15 +100,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "dc-arrow-up", tl!("Move Up"), false, sel > 0, 24.0).clicked()
             && app.run("artboard.reorder", json!({"index": sel, "to": sel - 1})).is_ok()
         {
-            set_pstate(ui.ctx(), "ab-sel", sel - 1);
+            set_selected(app, sel - 1);
         }
         if widgets::icon_button_enabled(ui, "dc-arrow-down", tl!("Move Down"), false, sel + 1 < n, 24.0).clicked()
             && app.run("artboard.reorder", json!({"index": sel, "to": sel + 1})).is_ok()
         {
-            set_pstate(ui.ctx(), "ab-sel", sel + 1);
+            set_selected(app, sel + 1);
         }
         if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            set_pstate(ui.ctx(), "ab-sel", n);
+            set_selected(app, n);
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
             app.run("artboard.delete", json!({"index": sel})).ok();
@@ -99,7 +118,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
-    let sel = selected(ui, n);
+    let sel = selected(app, n);
+    let locked = app.session.active().and_then(|d| d.doc.artboards.get(sel)).is_some_and(|a| a.locked);
     if menu_item(ui, tl!("New Artboard"), n > 0, false) {
         app.run("artboard.new", json!({})).ok();
     }
@@ -111,6 +131,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Rename"), n > 0, false) {
         set_pstate(ui.ctx(), "ab-edit", Some(sel));
+    }
+    if menu_item(ui, if locked { tl!("Unlock Artboard") } else { tl!("Lock Artboard") }, n > 0, false) {
+        app.run("artboard.lock", json!({"index": sel, "locked": !locked})).ok();
+    }
+    if menu_item(ui, tl!("Export Artboard…"), n > 0, false) {
+        app.run("artboard.export", json!({"index": sel})).ok();
     }
     menu_item(ui, tl!("Delete Empty Artboards"), false, false);
     ui.separator();

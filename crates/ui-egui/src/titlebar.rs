@@ -273,10 +273,10 @@ mod tests {
                     assert!(!a.shrink(0.5).intersects(b.shrink(0.5)), "{a:?} overlaps {b:?} at {width}");
                 }
             }
-            // Wide windows show the whole group; narrow ones drop Discord and shorten the search.
+            // Wide windows show the whole search box; narrow ones shorten it to an icon.
             let texts: Vec<String> = texts(&out).into_iter().map(|(t, _)| t).collect();
             let has = |s: &str| texts.iter().any(|t| t == s);
-            assert_eq!((has("Discord"), has("Search commands and tools")), (width > 1000.0, width > 1000.0), "{width}: {texts:?}");
+            assert_eq!(has("Search commands and tools"), width > 1000.0, "{width}: {texts:?}");
         }
     }
 

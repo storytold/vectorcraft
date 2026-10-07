@@ -228,7 +228,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
-        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Radial, stops });
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
         g.geom = Some(GradientGeom { start: centre, end: centre + vectorcraft_geom::Vec2::new(radius, 0.0), aspect: 1.0, focal: None });
         Paint::Gradient(Box::new(g))
     };

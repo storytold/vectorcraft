@@ -129,6 +129,7 @@ fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
                 GradientStop::new(0.0, Color::from_hex(a).unwrap_or(Color::WHITE)),
                 GradientStop::new(1.0, Color::from_hex(b).unwrap_or(Color::BLACK)),
             ],
+            ..Gradient::default()
         }))),
         global: false,
         spot: false,

@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use vectorcraft_color::{BlendMode, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, ExpandedStop, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     AppearanceItem, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind, TextObject,
 };
@@ -70,6 +70,11 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         shared_images: HashMap::new(),
     };
     w.assign_name_ids();
+    // The exported artboard's background colour, under the art.
+    if let Some(c) = opts.artboard.and_then(|i| doc.artboards.get(i)).and_then(|a| a.background) {
+        let (bw, bh) = (w.num(rect.width()), w.num(rect.height()));
+        w.line(&format!("<rect width=\"{bw}\" height=\"{bh}\" fill=\"{}\"/>", c.to_hex()));
+    }
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
     let page_group = doc.page_isolate || doc.page_knockout;
     if page_group {
@@ -750,7 +755,12 @@ impl Writer<'_> {
             .expanded()
             .map(|(offset, c, o, mid)| {
                 let op = if o < 1.0 { format!(" stop-opacity=\"{}\"", fmt_num(o as f64, 3)) } else { String::new() };
-                let mid = mid.map(|m| format!(" data-vc-midpoint=\"{}\"", fmt_num(m as f64, 4))).unwrap_or_default();
+                let mid = match mid {
+                    ExpandedStop::Own => String::new(),
+                    ExpandedStop::Midpoint(m) => format!(" data-vc-midpoint=\"{}\"", fmt_num(m as f64, 4)),
+                    // Perceptual interpolation, approximated in RGB; import drops these again.
+                    ExpandedStop::Interpolated => " data-vc-interpolated=\"1\"".into(),
+                };
                 format!("<stop offset=\"{}\" stop-color=\"{}\"{op}{mid}/>", fmt_num(offset as f64, 4), c.to_hex())
             })
             .collect();

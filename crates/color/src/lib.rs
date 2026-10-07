@@ -10,13 +10,14 @@ pub mod freeform;
 pub mod gradient;
 pub mod harmony;
 pub mod libraries;
+pub mod palette_bin;
 pub mod palette_io;
 pub mod recolor;
 pub mod swatch;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};
-pub use gradient::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+pub use gradient::{ExpandedStop, Gradient, GradientGeom, GradientInterpolation, GradientKind, GradientPaint, GradientStop};
 pub use libraries::SwatchLibrary;
 pub use swatch::{Swatch, SwatchGroup, default_swatches};
 

@@ -157,7 +157,7 @@ fn line_and_head_take_the_opacity_once() {
 #[test]
 fn a_gradient_runs_on_into_the_head() {
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
     let d = arrow_doc(Arrowhead::Square, ArrowAlign::Tip, 1.0, |s| s.paint = paint);
     let h = head_of(&d);
     let img = render(&d);

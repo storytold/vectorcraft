@@ -9,8 +9,7 @@
 # back to English. Left in English on purpose (`CZECH_KEEP_AS_IS` in the tests): the product name,
 # language names, OpenType, the built-in workspace names and the bracketed perspective grid preset
 # names.
-	About VectorCraft	O aplikaci VectorCraft
-	Join Our Discord	Připojit se k našemu Discordu
+	About Vector W3K2	O aplikaci Vector W3K2
 	Settings…	Nastavení…
 	Language	Jazyk
 	UI Brightness	Jas rozhraní
@@ -18,7 +17,7 @@
 	Medium Dark	Středně tmavý
 	Medium Light	Středně světlý
 	Light	Světlý
-	Quit VectorCraft	Ukončit VectorCraft
+	Quit Vector W3K2	Ukončit Vector W3K2
 	File	Soubor
 	New…	Nový…
 	New from Template…	Nový ze šablony…
@@ -556,11 +555,9 @@
 	Save Swatch Library…	Uložit knihovnu vzorníku…
 	Symbol Libraries	Knihovny symbolů
 	Help	Nápověda
-	ArtCraft Website	Web ArtCraft
-	VectorCraft on getartcraft.com	VectorCraft na getartcraft.com
-	VectorCraft on GitHub	VectorCraft na GitHubu
+	Vector W3K2 on GitHub	Vector W3K2 na GitHubu
 	Search Commands…	Hledat příkazy…
-	VectorCraft Help…	Nápověda VectorCraft…
+	Vector W3K2 Help…	Nápověda Vector W3K2…
 	Automatic	Automaticky
 	Isolate Selected Group	Izolovat vybranou skupinu
 	Exit Isolation Mode	Ukončit izolovaný režim
@@ -569,3 +566,4 @@
 	Make Compound Path	Vytvořit složenou cestu
 	Release Compound Path	Uvolnit složenou cestu
 	Select All	Vybrat vše
+	Print That 204 Website	Web Print That 204

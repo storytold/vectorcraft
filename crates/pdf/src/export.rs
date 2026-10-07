@@ -86,6 +86,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
             clip: m != r,
             marks: art.as_ref(),
             negative: false,
+            background: artboard_background(doc, i),
         };
         w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
     }
@@ -97,6 +98,17 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
+}
+
+/// Artboard `i`'s background colour as a filled rectangle, if it has one.
+pub(crate) fn artboard_background(doc: &Document, i: usize) -> Option<Node> {
+    let ab = doc.artboards.get(i)?;
+    let fill = Paint::solid(ab.background?);
+    Some(Node::path(
+        vectorcraft_doc::NodeId(0),
+        vectorcraft_geom::shapes::rectangle(ab.rect),
+        vectorcraft_doc::Appearance::basic(fill, Paint::None, 0.0),
+    ))
 }
 
 /// The artboards `opts` exports, in page order, with the boxes of their pages: Marks and Bleeds
@@ -158,6 +170,8 @@ pub(crate) struct Sheet<'a> {
     pub marks: Option<&'a Node>,
     /// Invert the page: paper black, ink clear (a film negative).
     pub negative: bool,
+    /// The artboard's background colour, as a filled rectangle under the art (document space).
+    pub background: Option<Node>,
 }
 
 impl Writer {
@@ -255,6 +269,9 @@ impl Writer {
         } else if cmyk_page_group {
             let all = constant_mask(&mut s, r, 1.0);
             s.push_mask(all);
+        }
+        if let Some(bg) = &sheet.background {
+            ex.node(&mut s, bg, r, true);
         }
         ex.children(&mut s, &doc.layers, r);
         if page_group || cmyk_page_group {

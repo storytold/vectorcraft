@@ -97,7 +97,7 @@ impl Annotator {
     }
     /// An annotator showing `stops` on `geom` (the state a drag started from).
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
-        Self { geom, gradient: Gradient { kind: GradientKind::Linear, stops: stops.to_vec() } }
+        Self { geom, gradient: Gradient::new(GradientKind::Linear, stops.to_vec()) }
     }
     fn radial(&self) -> bool {
         self.gradient.kind == GradientKind::Radial
@@ -602,7 +602,7 @@ mod tests {
     /// The test rectangle (100..200) with a horizontal gradient of `stops` from (100,150) to (200,150).
     fn graded(stops: Vec<GradientStop>) -> (Document, Selection) {
         let (mut d, id) = doc_with_rect();
-        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
         g.geom = Some(GradientGeom { start: Point::new(100.0, 150.0), end: Point::new(200.0, 150.0), aspect: 1.0, focal: None });
         d.node_mut(id).unwrap().appearance.set_fill(Paint::Gradient(Box::new(g)));
         let mut s = Selection::default();

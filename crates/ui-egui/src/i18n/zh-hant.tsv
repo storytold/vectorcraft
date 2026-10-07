@@ -50,7 +50,7 @@
 	A File…	一個檔案…
 	A new preset starting from the selected one	以所選預設集為基礎建立新預設集
 	A saved copy of the selected preset	所選預設集的已儲存拷貝
-	About VectorCraft	關於 VectorCraft
+	About Vector W3K2	關於 Vector W3K2
 	above	以上
 	Absolute Position	絕對位置
 	Abutting	相鄰
@@ -184,8 +184,8 @@
 	Artboard {number}	工作區域 {number}
 	Artboard:	工作區域：
 	Artboards	工作區域
-	ArtCraft Website	ArtCraft 網站
-	ArtCraft website	ArtCraft 網站
+	Print That 204 Website	Print That 204 網站
+	Print That 204 website	Print That 204 網站
 	Artwork Colors	圖稿顏色
 	As Multiple Assets	作為多個資產
 	As Single Asset	作為單一資產
@@ -413,7 +413,6 @@
 	Coming soon — tracked in the parity plan	即將推出 — 已列入功能對等計畫
 	Command Click to Select Objects Behind	Cmd 加按一下可選取後方物件
 	Command Dialog	指令對話框
-	Community	社群
 	Compatibility:	相容性：
 	Compatible Gradient and Gradient Mesh Printing	相容的漸層與漸層網格列印
 	Complement	互補色
@@ -609,7 +608,6 @@
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
 	Discarded {} recovered document(s)	已捨棄 {} 份復原的文件
-	Discord	Discord
 	Discretionary Hyphen	選擇性連字號
 	Discretionary Ligatures	任意連字
 	Display All Blacks Accurately	精確顯示所有黑色
@@ -1166,9 +1164,6 @@
 	Isolate Group	隔離群組
 	Italian	義大利文
 	Join	連接
-	Join Our Discord	加入我們的 Discord
-	Join our Discord	加入我們的 Discord
-	Join the ArtCraft community on Discord (discord.gg/artcraft)	加入 Discord 上的 ArtCraft 社群 (discord.gg/artcraft)
 	Join the lines of each paragraph	合併每個段落的各行
 	Join Tool	連接工具
 	Justification…	對齊設定…
@@ -1267,7 +1262,6 @@
 	Linked	已連結
 	Linked File	連結檔案
 	Linked File Not Found	找不到連結檔案
-	Links	連結
 	Liquify	液化
 	List Graphic Styles	列出繪圖樣式
 	List Keyboard Shortcuts	列出鍵盤快速鍵
@@ -1687,7 +1681,7 @@
 	Paragraph Style Options	段落樣式選項
 	Paragraph Styles	段落樣式
 	Paragraph Symbol	段落符號
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft 的一部分。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
+	Based on VectorCraft by the ArtCraft team and contributors. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	以 ArtCraft 團隊與貢獻者的 VectorCraft 為基礎。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
 	Password	密碼
 	Paste	貼上
 	Paste in Back	貼至後方
@@ -1859,7 +1853,7 @@
 	Quarter Space	四分之一空格
 	Quick Actions	快速動作
 	Quickly start a new file	快速開始新檔案
-	Quit VectorCraft	結束 VectorCraft
+	Quit Vector W3K2	結束 Vector W3K2
 	Radar Graph Tool	雷達圖工具
 	Radial	放射狀
 	Radial Glows	放射狀光暈
@@ -2725,14 +2719,12 @@
 	Vector Effects	向量效果
 	Vector Halftone	向量半色調
 	Vector Halftone…	向量半色調…
-	Vector illustration — fast, open, scriptable.	向量插圖：快速、開放、可用指令碼操控。
-	VectorCraft	VectorCraft
-	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft 上次未正常結束。下列文件有未儲存的變更：
-	VectorCraft Help…	VectorCraft 說明…
-	VectorCraft on getartcraft.com	getartcraft.com 上的 VectorCraft
-	VectorCraft on GitHub	GitHub 上的 VectorCraft
+	Offline vector illustration by Print That 204.	Print That 204 的離線向量插圖軟體。
+	Vector W3K2	Vector W3K2
+	Vector W3K2 didn't quit normally last time. These documents had unsaved changes:	Vector W3K2 上次未正常結束。下列文件有未儲存的變更：
+	Vector W3K2 Help…	Vector W3K2 說明…
+	Vector W3K2 on GitHub	GitHub 上的 Vector W3K2
 	Vectors	向量
-	Version {version} — open-source vector illustration in pure Rust.	版本 {version} — 以純 Rust 打造的開放原始碼向量插畫軟體。
 	Version:	版本：
 	Vertical	垂直
 	Vertical %	垂直 %
@@ -2770,7 +2762,7 @@
 	Web Snap:	網頁靠齊：
 	Weight	寬度
 	Weight:	寬度：
-	Welcome to VectorCraft	歡迎使用 VectorCraft
+	Welcome to Vector W3K2	歡迎使用 Vector W3K2
 	When pasting text	貼上文字時
 	White	白色
 	Widget Position:	Widget 位置：
@@ -2900,3 +2892,29 @@
 	  — {n} characters from another font	  — {n} 個字符來自其他字體
 	[Normal Character Style]	[正常字元樣式]
 	[Normal Paragraph Style]	[正常段落樣式]
+	Interpolation:	內插：
+	Linear	線性
+	Perceptual	感知
+	Dither	遞色
+	locked	已鎖定
+	Unlock Artboard	解除鎖定工作區域
+	Lock Artboard	鎖定工作區域
+	Export Artboard…	匯出工作區域…
+	Rename Artboard	重新命名工作區域
+	Make Artboard Active	設為作用中工作區域
+	Relative	相對
+	Absolute	絕對
+	Snapping	靠齊
+	Smart Guides Preferences…	智慧型參考線偏好設定…
+	Selected blend	選取的漸變
+	New blends	新漸變
+	Distance:	距離：
+	Steps ease:	步驟緩動：
+	Strength:	強度：
+	Color ease:	顏色緩動：
+	Ease In	漸入
+	Ease Out	漸出
+	Ease In and Out	漸入漸出
+	Same as Steps	與步驟相同
+	Version {version} — offline vector illustration by Print That 204.	版本 {version}：Print That 204 的離線向量插圖軟體。
+	Links	連結

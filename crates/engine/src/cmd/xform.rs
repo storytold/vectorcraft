@@ -373,7 +373,11 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let move_art = bool_or(p, "moveArt", false);
     let st = s.doc()?;
-    let rect = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    let ab = st.doc.artboards.get(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    if ab.locked {
+        return Err(EngineError::Other(format!("artboard “{}” is locked", ab.name)));
+    }
+    let rect = ab.rect;
     // Top-level objects (children of layers) lying entirely inside the artboard.
     let mut art = vec![];
     if move_art {

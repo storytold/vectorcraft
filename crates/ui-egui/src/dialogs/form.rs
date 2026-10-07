@@ -126,7 +126,7 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     egui::Grid::new("dlg").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         let keys: Vec<(String, Value)> = d.fields.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for (k, v) in keys {
-            if k == "x" || k == "y" || k == "origin" || k == "index" || v.is_boolean() {
+            if k == "x" || k == "y" || k == "origin" || k == "index" || k.starts_with("abs") || v.is_boolean() {
                 continue;
             }
             if lengths.contains(&k.as_str()) {

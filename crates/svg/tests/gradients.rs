@@ -12,6 +12,7 @@ fn black_to_white() -> GradientPaint {
     GradientPaint::new(Gradient {
         kind: GradientKind::Linear,
         stops: vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)],
+        ..Gradient::default()
     })
 }
 

@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Scale…",
             ["Object", "Transform"],
             None,
-            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale)} (strokes/corners default to the preferences)",
+            "{sx: %, sy?: % (Relative), or width?: pt, height?: pt (Absolute: the selection's new size; one of them alone keeps the proportions), origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale)} (strokes/corners default to the preferences)",
             has_selection,
             scale
         ),
@@ -268,9 +268,34 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
-    let sx = f64_req(p, "sx", "object.scale")? / 100.0;
-    let sy = f64_or(p, "sy", sx * 100.0) / 100.0;
-    if sx == 0.0 || sy == 0.0 {
+    let (width, height) = (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64));
+    let (sx, sy) = if width.is_some() || height.is_some() {
+        // Absolute: scale the selection's bounds to the size asked for.
+        let b = s.doc()?.doc.bounds_of(&ids, true).ok_or_else(|| bad("object.scale", "the selection has no size"))?;
+        let ratio = |to: f64, from: f64| {
+            if from > 1e-9 && to.is_finite() {
+                Ok(to / from)
+            } else {
+                Err(bad("object.scale", "can't scale something with no width or height to a size"))
+            }
+        };
+        match (width, height) {
+            (Some(w), Some(h)) => (ratio(w, b.width())?, ratio(h, b.height())?),
+            (Some(w), None) => {
+                let k = ratio(w, b.width())?;
+                (k, k)
+            }
+            (None, Some(h)) => {
+                let k = ratio(h, b.height())?;
+                (k, k)
+            }
+            (None, None) => (1.0, 1.0),
+        }
+    } else {
+        let sx = f64_req(p, "sx", "object.scale")? / 100.0;
+        (sx, f64_or(p, "sy", sx * 100.0) / 100.0)
+    };
+    if sx == 0.0 || sy == 0.0 || !sx.is_finite() || !sy.is_finite() {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
     apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p)

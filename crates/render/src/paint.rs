@@ -17,6 +17,7 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
             true
         }
         Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds, f.ink),
+        Paint::Gradient(g) if g.gradient.dither => crate::dither::set_dithered_paint(ctx, g, bounds, f.ink),
         Paint::Gradient(g) => {
             let geom = g.resolve(bounds);
             let stops: Vec<ColorStop> = g.gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, f.ink.color(c, *a)))).collect();

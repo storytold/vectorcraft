@@ -692,7 +692,7 @@ impl Interp<'_> {
         } else {
             (GradientKind::Linear, GradientGeom { start: m * Point::new(c(0), c(1)), end: m * Point::new(c(2), c(3)), aspect: 1.0, focal: None })
         };
-        let mut g = GradientPaint::new(Gradient { kind: gk, stops });
+        let mut g = GradientPaint::new(Gradient::new(gk, stops));
         g.geom = Some(geom);
         Ok(Some(g))
     }

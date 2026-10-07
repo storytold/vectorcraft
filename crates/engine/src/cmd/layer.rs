@@ -41,9 +41,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index, name?, x?, y?, width?, height?}",
+            "{index, name?, x?, y?, width?, height?, background?: colour|null (the artboard's own background, painted behind its art on screen and in export; null: none)} (a locked artboard keeps its place and size)",
             has_doc,
             artboard_set
+        ),
+        cmd!(
+            query "artboard.setActive",
+            "Make Artboard Active",
+            [],
+            None,
+            "{index?} make the artboard active (darker border; artboard commands without an index act on it); no index → {index} of the active one",
+            has_doc,
+            artboard_set_active
+        ),
+        cmd!(
+            "artboard.lock",
+            "Lock Artboard",
+            ["Window", "Artboards"],
+            None,
+            "{index?: artboard (default: the active one), locked?: bool (default: toggle)} lock the artboard (the Artboard tool can't move or resize it) and every unlocked object lying on it; unlocking unlocks just the objects locking locked. One undo step → {index, locked, objects: [ids]}",
+            has_doc,
+            artboard_lock
         ),
         cmd!("artboard.fitToArt", "Fit to Artwork Bounds", ["Object", "Artboards"], None, "{index?}", has_doc, artboard_fit_art),
         cmd!("artboard.fitToSelection", "Fit to Selected Art", ["Object", "Artboards"], None, "{index?}", has_selection, artboard_fit_sel),
@@ -294,7 +312,7 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = s.edit("New Artboard", |d, _| {
         let id = d.next_artboard_id();
         let name = str_param(p, "name").map(str::to_string).unwrap_or_else(|| format!("Artboard {}", d.artboards.len() + 1));
-        d.artboards.push(Artboard { id, name, rect: r, show_center_mark: false, show_cross_hairs: false });
+        d.artboards.push(Artboard { id, name, rect: r, show_center_mark: false, show_cross_hairs: false, ..Default::default() });
         Ok(d.artboards.len() - 1)
     })?;
     Ok(json!({ "index": idx }))
@@ -316,16 +334,99 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.setProps";
     let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let background = match p.get("background") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => Some(Some(super::color_value(v).ok_or_else(|| bad(C, format!("background must be a colour or null, not {v}")))?)),
+    };
+    let geometry = ["x", "y", "width", "height"].iter().any(|k| p.get(*k).is_some());
     s.edit("Artboard Options", |d, _| {
         let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-        a.rect = rect_from(p, a.rect);
+        if geometry {
+            if a.locked {
+                return Err(EngineError::Other(format!("artboard “{}” is locked", a.name)));
+            }
+            a.rect = rect_from(p, a.rect);
+        }
         if let Some(n) = str_param(p, "name") {
             a.name = n.to_string();
+        }
+        if let Some(b) = background {
+            a.background = b;
         }
         Ok(())
     })?;
     ok()
+}
+
+/// Top-level objects (children of layers, through sublayers) lying entirely on `rect`, that
+/// `keep` accepts.
+pub(crate) fn art_on(doc: &vectorcraft_doc::Document, rect: Rect, keep: &dyn Fn(&vectorcraft_doc::Node) -> bool) -> Vec<NodeId> {
+    fn collect(n: &vectorcraft_doc::Node, rect: Rect, keep: &dyn Fn(&vectorcraft_doc::Node) -> bool, out: &mut Vec<NodeId>) {
+        for c in n.children().into_iter().flatten() {
+            if c.is_layer() {
+                collect(c, rect, keep, out);
+            } else if keep(c)
+                && let Some(b) = c.geometric_bounds()
+                && rect.contains(vectorcraft_geom::Point::new(b.x0, b.y0))
+                && rect.contains(vectorcraft_geom::Point::new(b.x1, b.y1))
+            {
+                out.push(c.id);
+            }
+        }
+    }
+    let mut out = vec![];
+    for l in &doc.layers {
+        collect(l, rect, keep, &mut out);
+    }
+    out
+}
+
+fn artboard_set_active(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.setActive";
+    let st = s.doc_mut()?;
+    if let Some(v) = p.get("index") {
+        let i = v.as_u64().ok_or_else(|| bad(C, "index must be an artboard number from 0"))? as usize;
+        if i >= st.doc.artboards.len() {
+            return Err(bad(C, format!("no artboard {i}")));
+        }
+        if st.active_artboard != i {
+            st.active_artboard = i;
+            st.revision += 1;
+        }
+    }
+    let n = st.doc.artboards.len();
+    Ok(json!({ "index": st.active_artboard.min(n.saturating_sub(1)) }))
+}
+
+fn artboard_lock(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.lock";
+    let st = s.doc()?;
+    let i = match p.get("index") {
+        Some(v) => v.as_u64().ok_or_else(|| bad(C, "index must be an artboard number from 0"))? as usize,
+        None => st.active_artboard.min(st.doc.artboards.len().saturating_sub(1)),
+    };
+    let ab = st.doc.artboards.get(i).ok_or_else(|| bad(C, format!("no artboard {i}")))?;
+    let locked = p.get("locked").and_then(Value::as_bool).unwrap_or(!ab.locked);
+    let objects = if locked { art_on(&st.doc, ab.rect, &|n| !n.locked) } else { ab.locked_art.clone() };
+    let label = if locked { "Lock Artboard" } else { "Unlock Artboard" };
+    s.edit(label, |d, sel| {
+        for id in &objects {
+            if let Some(n) = d.node_mut(*id) {
+                n.locked = locked;
+            }
+            if locked {
+                sel.remove(*id);
+            }
+        }
+        let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+        a.locked = locked;
+        a.locked_art = if locked { objects.clone() } else { vec![] };
+        Ok(())
+    })?;
+    Ok(json!({ "index": i, "locked": locked, "objects": objects.iter().map(|o| o.0).collect::<Vec<_>>() }))
 }
 
 fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {

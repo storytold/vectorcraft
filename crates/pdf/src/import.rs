@@ -128,6 +128,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             rect: ab,
             show_center_mark: false,
             show_cross_hairs: false,
+            ..Default::default()
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>| {
             let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));

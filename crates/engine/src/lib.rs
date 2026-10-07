@@ -138,6 +138,9 @@ pub struct DocState {
     /// Transform Again after a perspective move or scale (Perspective Selection tool): the
     /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
     pub last_perspective: Option<Value>,
+    /// The active artboard (index into `doc.artboards`): drawn with a darker border, and what
+    /// artboard commands without an index act on (view state: not saved, not undoable).
+    pub active_artboard: usize,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -171,6 +174,7 @@ impl DocState {
             recovery: None,
             print_tiling: false,
             last_perspective: None,
+            active_artboard: 0,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).

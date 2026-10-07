@@ -139,10 +139,8 @@ impl Manifest {
                 return Err(Error::Manifest(format!("invalid parameter name {k:?}")));
             }
             match spec {
-                ParamSpec::Number { min, max, default } => {
-                    if !(min.is_finite() && max.is_finite() && default.is_finite()) || min > max {
-                        return Err(Error::Manifest(format!("parameter `{k}`: bad range")));
-                    }
+                ParamSpec::Number { min, max, default } if !(min.is_finite() && max.is_finite() && default.is_finite()) || min > max => {
+                    return Err(Error::Manifest(format!("parameter `{k}`: bad range")));
                 }
                 ParamSpec::Int { min, max, .. } if min > max => return Err(Error::Manifest(format!("parameter `{k}`: bad range"))),
                 ParamSpec::Choice { options, default } => {

@@ -1,7 +1,7 @@
 //! The Gradient panel and the Gradient tool: in-place gradient edits and the gradient vector.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Gradient, GradientGeom, GradientInterpolation, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{Document, Node, NodeKind, StrokeGradientMode};
 use vectorcraft_geom::{Affine, Point, Rect};
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within)} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), interpolation?: linear|perceptual (perceptual mixes stops in a perceptually uniform space: no muddy or dark middle), dither?: bool (dither on screen and in raster output to hide banding), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within)} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -178,7 +178,8 @@ pub(crate) fn parse_gradient(g: &Value) -> Parsed<GradientPaint> {
     }
     let kind = str_param(g, "kind").map(parse_kind).transpose()?.unwrap_or_default();
     let stops = g.get("stops").map(parse_stops).transpose()?.unwrap_or_else(|| Gradient::default().stops);
-    let mut gp = GradientPaint::new(Gradient { kind, stops });
+    let mut gp = GradientPaint::new(Gradient::new(kind, stops));
+    apply_rendering(&mut gp.gradient, g)?;
     gp.angle = f64_or(g, "angle", 0.0);
     gp.swatch = str_param(g, "swatch").map(str::to_string);
     let geom = GeomEdit::parse(g)?;
@@ -192,6 +193,18 @@ pub(crate) fn parse_gradient(g: &Value) -> Parsed<GradientPaint> {
         gp.freeform = Some(super::freeform::parse_freeform(f)?);
     }
     Ok(gp)
+}
+
+/// The `interpolation` (linear|perceptual) and `dither` (bool) params, where given.
+fn apply_rendering(g: &mut Gradient, p: &Value) -> Parsed<()> {
+    if let Some(v) = p.get("interpolation") {
+        let name = v.as_str().ok_or("`interpolation` must be linear or perceptual")?;
+        g.interpolation = GradientInterpolation::parse(name).ok_or_else(|| format!("unknown interpolation `{name}` (linear, perceptual)"))?;
+    }
+    if let Some(v) = p.get("dither") {
+        g.dither = v.as_bool().ok_or("`dither` must be true or false")?;
+    }
+    Ok(())
 }
 
 /// The `aspect` param (a percentage) as a ratio.
@@ -264,6 +277,7 @@ pub(crate) fn apply_gradient_edit_in(
             switched = true;
         }
     }
+    apply_rendering(&mut gp.gradient, p)?;
     let recolor = p.get("stops").is_some() || bool_or(p, "reverse", false);
     if let Some(stops) = p.get("stops") {
         gp.gradient.stops = parse_stops(stops)?;

@@ -189,7 +189,7 @@ fn fx(id: &str, params: Value) -> Effect {
 
 /// A gradient of `(offset, colour, opacity)` stops.
 fn gradient(kind: GradientKind, stops: &[(f32, &str, f32)]) -> Gradient {
-    Gradient { kind, stops: stops.iter().map(|&(offset, c, opacity)| GradientStop { opacity, ..GradientStop::new(offset, hex(c)) }).collect() }
+    Gradient::new(kind, stops.iter().map(|&(offset, c, opacity)| GradientStop { opacity, ..GradientStop::new(offset, hex(c)) }).collect())
 }
 
 /// A linear gradient fitted to each object's box at `angle` degrees (90: upwards).

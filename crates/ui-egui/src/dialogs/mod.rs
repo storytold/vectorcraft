@@ -23,7 +23,7 @@ pub mod envelope;
 pub mod eps_options;
 pub mod expand;
 mod export_as;
-mod export_for_screens;
+pub(crate) mod export_for_screens;
 pub mod eyedropper;
 pub mod file_info;
 pub mod flatten;
@@ -308,10 +308,31 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
     (spec(&d.kind).confirm)(app, &d)
 }
 
+/// Widest a form dialog grows by default (wider screens don't stretch it).
+const FORM_MAX_WIDTH: f32 = 520.0;
+
+/// Where the open dialog sits: its top-left corner, chosen when it opened (by the pointer, so a
+/// dialog opened from the canvas or a menu appears next to where the user was working; it is kept
+/// inside the window). `None` without a pointer: centred.
+fn dialog_origin(ctx: &egui::Context, kind: &str) -> Option<egui::Pos2> {
+    let key = egui::Id::new("dialog-origin");
+    if let Some((k, p)) = ctx.data(|m| m.get_temp::<(String, Option<egui::Pos2>)>(key))
+        && k == kind
+    {
+        return p;
+    }
+    let screen = ctx.content_rect();
+    // A little below and right of the pointer, so the dialog doesn't cover what was clicked.
+    let at = ctx.input(|i| i.pointer.latest_pos()).filter(|p| screen.contains(*p)).map(|p| p + egui::vec2(16.0, 16.0));
+    ctx.data_mut(|m| m.insert_temp(key, (kind.to_string(), at)));
+    at
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
     let Some(mut d) = app.ui.dialog.clone() else {
         app.ui.dialog_file = None;
+        ctx.data_mut(|m| m.remove::<(String, Option<egui::Pos2>)>(egui::Id::new("dialog-origin")));
         return;
     };
     let spec = spec(&d.kind);
@@ -327,44 +348,49 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
     });
     let heading = (spec.heading)(&d);
-    egui::Window::new(heading.as_str())
+    let window = egui::Window::new(heading.as_str())
         // One window per kind, so a dialog never inherits another dialog's size.
         .id(egui::Id::new(("dialog", d.kind.as_str())))
         .order(egui::Order::Foreground)
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
-        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(MARGIN)))
-        .show(ctx, |ui| {
-            // Never wider than the window (a large UI scale in a small window): the text wraps.
-            let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
-            ui.set_min_width(spec.min_width.min(room));
-            ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
-            ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
-            ui.add_space(12.0);
-            cancel = (spec.body)(app, ui, &mut d);
-            ui.add_space(16.0);
-            // The button row is as wide as the fields above it and as tall as the buttons: a
-            // right-to-left layout would otherwise take all the room left in the window, so the
-            // window could never shrink to its content.
-            let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
-            ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
-                    && widgets::primary_button(ui, label).clicked()
-                {
-                    ok = true;
-                }
-                ui.add_space(8.0);
-                if widgets::secondary_button(ui, if spec.ok.is_some() { "Cancel" } else { "Close" }).clicked() {
-                    cancel = true;
-                }
-                if let Some(label) = spec.discard {
-                    ui.add_space(28.0);
-                    discard = widgets::secondary_button(ui, label).clicked();
-                }
-            });
+        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(MARGIN)));
+    // By the pointer (where it was when the dialog opened), kept on screen; else centred.
+    let window = match dialog_origin(ctx, d.kind.as_str()) {
+        Some(at) => window.default_pos(at).constrain(true),
+        None => window.anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0]),
+    };
+    window.show(ctx, |ui| {
+        // Never wider than the window (a large UI scale in a small window): the text wraps.
+        // Form dialogs stay compact on wide screens instead of stretching across them.
+        let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
+        ui.set_min_width(spec.min_width.min(room));
+        ui.set_max_width(spec.max_width.unwrap_or(FORM_MAX_WIDTH.max(spec.min_width)).min(room));
+        ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
+        ui.add_space(12.0);
+        cancel = (spec.body)(app, ui, &mut d);
+        ui.add_space(16.0);
+        // The button row is as wide as the fields above it and as tall as the buttons: a
+        // right-to-left layout would otherwise take all the room left in the window, so the
+        // window could never shrink to its content.
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
+                && widgets::primary_button(ui, label).clicked()
+            {
+                ok = true;
+            }
+            ui.add_space(8.0);
+            if widgets::secondary_button(ui, if spec.ok.is_some() { "Cancel" } else { "Close" }).clicked() {
+                cancel = true;
+            }
+            if let Some(label) = spec.discard {
+                ui.add_space(28.0);
+                discard = widgets::secondary_button(ui, label).clicked();
+            }
         });
+    });
     if spec.ok.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ok = true;
     }

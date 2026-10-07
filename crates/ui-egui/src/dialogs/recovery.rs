@@ -11,7 +11,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Recover Documents").into(),
     body: |_, ui, d| {
         let t = Tokens::get(ui.ctx());
-        ui.label(egui::RichText::new(tl!("VectorCraft didn't quit normally last time. These documents had unsaved changes:")).color(t.text_dim));
+        ui.label(egui::RichText::new(tl!("Vector W3K2 didn't quit normally last time. These documents had unsaved changes:")).color(t.text_dim));
         ui.add_space(8.0);
         let copies = d.fields.get("copies").and_then(Value::as_array);
         egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {

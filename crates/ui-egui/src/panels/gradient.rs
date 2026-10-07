@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::gradient::{
     MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
-use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientInterpolation, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{NodeId, StrokeGradientMode};
 
 use super::{active_paint, live_run, pstate, set_pstate};
@@ -266,9 +266,31 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ramp(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
     stop_fields(app, ui, &g.gradient, is_grad);
+    rendering_fields(app, ui, &g.gradient, is_grad);
     if !is_grad {
         widgets::dim_label(ui, tl!("Click the ramp or a type button to apply a gradient."));
     }
+}
+
+/// Interpolation (linear or perceptual) and Dither.
+fn rendering_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Interpolation:"));
+        let options = [GradientInterpolation::Linear, GradientInterpolation::Perceptual];
+        let labels = [tl!("Linear"), tl!("Perceptual")];
+        let current = if g.interpolation == GradientInterpolation::Perceptual { labels[1] } else { labels[0] };
+        let chosen = ui.add_enabled_ui(is_grad, |ui| widgets::dropdown(ui, "grad-interp", current, &labels, 96.0)).inner;
+        if let Some(m) = chosen.and_then(|i| options.get(i))
+            && *m != g.interpolation
+        {
+            edit(app, json!({"interpolation": m.label().to_lowercase()}), Live::Released);
+        }
+        ui.add_space(6.0);
+        if widgets::check(ui, tl!("Dither"), g.dither, is_grad) {
+            edit(app, json!({"dither": !g.dither}), Live::Released);
+        }
+    });
 }
 
 /// The freeform points shown: the gradient's own, else (unplaced) as many as it places, coloured

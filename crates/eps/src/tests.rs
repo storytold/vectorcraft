@@ -150,7 +150,7 @@ fn gradient_doc(kind: GradientKind) -> Document {
         GradientStop::new(0.4, Color::rgb(1.0, 1.0, 0.0)),
         GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
     ];
-    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind, stops })));
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops))));
     doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)])
 }
 

@@ -57,6 +57,8 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{lang: auto|<code>} the interface language, persisted as the `interfaceLanguage` preference (`auto` follows the system locale; codes: prefs.list › interfaceLanguage, e.g. en, ja, cs, zh-hant)",
     ),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
+    ("artboard.rename", "Rename Artboard", "", "{index?} edit the artboard's name in place on the canvas (default: the active artboard)"),
+    ("artboard.export", "Export Artboard…", "", "{index?} open Export for Screens with just this artboard checked (default: the active artboard)"),
     (
         "file.save",
         "Save",
@@ -202,9 +204,9 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
-    ("help.about", "About VectorCraft", "", "{}"),
+    ("help.about", "About Vector W3K2", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
-    ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
+    ("app.quit", "Quit Vector W3K2", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",
         "Swatch Options…",
@@ -269,7 +271,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.swatchLibrary.other",
         "Other Library…",
         "",
-        "{path?} (default: pick a file) load a .vcswatches or .gpl library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
+        "{path?} (default: pick a file) load a swatch library (.vcswatches, .gpl, .ase, .acb colour books, .aco), or another document's swatches (engine: swatch.library.load), and open it in the library panel",
     ),
     (
         "ui.saveSwatchLibrary",
@@ -705,6 +707,21 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::open_new_document(app);
             Ok(Value::Null)
         }
+        "artboard.rename" | "artboard.export" => (|| -> Result<Value, String> {
+            let st = app.session.active().ok_or("no document")?;
+            let n = st.doc.artboards.len();
+            let i = match p.get("index") {
+                Some(v) => v.as_u64().map(|i| i as usize).filter(|i| *i < n).ok_or_else(|| format!("no artboard {v}"))?,
+                None => st.active_artboard.min(n.saturating_sub(1)),
+            };
+            let name = st.doc.artboards.get(i).map(|a| a.name.clone()).ok_or("the document has no artboards")?;
+            if id == "artboard.rename" {
+                app.canvas.renaming_artboard = Some((i, name));
+            } else {
+                crate::dialogs::export_for_screens::open_artboard(app, i);
+            }
+            Ok(json!({ "index": i }))
+        })(),
         "app.home" => {
             app.ui.home = Some(home_key(app));
             Ok(Value::Null)
@@ -1528,10 +1545,9 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
     vec![
         (
-            "VectorCraft",
+            "Vector W3K2",
             vec![
-                c("About VectorCraft", "help.about"),
-                c("Join Our Discord", "help.discord"),
+                c("About Vector W3K2", "help.about"),
                 Sep,
                 c("Settings…", "edit.preferences"),
                 sub(
@@ -1544,7 +1560,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
                 Sep,
-                c("Quit VectorCraft", "app.quit"),
+                c("Quit Vector W3K2", "app.quit"),
             ],
         ),
         (
@@ -2104,6 +2120,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Artboards", "artboards"),
                 panel("Asset Export", crate::panels::asset_export::ID),
                 panel("Attributes", "attributes"),
+                panel("Blend", "blend"),
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
@@ -2154,15 +2171,13 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
         (
             "Help",
             vec![
-                c("Join Our Discord", "help.discord"),
-                c("ArtCraft Website", "help.website"),
-                c("VectorCraft on getartcraft.com", "help.appPage"),
-                c("VectorCraft on GitHub", "help.github"),
+                c("Print That 204 Website", "help.website"),
+                c("Vector W3K2 on GitHub", "help.github"),
                 Sep,
                 c("Search Commands…", "help.commandPalette"),
-                todos("VectorCraft Help…", "F1"),
+                todos("Vector W3K2 Help…", "F1"),
                 Sep,
-                c("About VectorCraft", "help.about"),
+                c("About Vector W3K2", "help.about"),
             ],
         ),
     ]
@@ -2208,6 +2223,21 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     let mut v = vec![c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep];
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
+    }
+    if roots.is_empty()
+        && let Some(i) = app.canvas.context_artboard.filter(|i| *i < st.doc.artboards.len())
+    {
+        // Right-clicked on an artboard: its commands first.
+        let ix = json!({ "index": i });
+        let locked = st.doc.artboards.get(i).is_some_and(|a| a.locked);
+        v.extend([
+            cp("Duplicate Artboard", "artboard.duplicate", ix.clone()),
+            cp("Rename Artboard", "artboard.rename", ix.clone()),
+            cp(if locked { "Unlock Artboard" } else { "Lock Artboard" }, "artboard.lock", json!({ "index": i, "locked": !locked })),
+            cp("Export Artboard…", "artboard.export", ix.clone()),
+            cp("Delete Artboard", "artboard.delete", ix),
+            Sep,
+        ]);
     }
     if roots.is_empty() {
         v.extend([
@@ -2539,7 +2569,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         return;
     }
     // Help links: the command returns the URL; a menu click opens it (agents just get the URL).
-    if matches!(id, "help.discord" | "help.website" | "help.appPage" | "help.github") {
+    if matches!(id, "help.website" | "help.github") {
         app.open_link(id);
         return;
     }

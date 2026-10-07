@@ -540,11 +540,17 @@ impl Lerp {
 
     /// The object at `t` (0 = `a`, 1 = `b`), with id 0.
     pub fn at(&self, t: f64) -> Node {
+        self.at_with(t, t)
+    }
+
+    /// The object at `t` between the keys, its appearance (colours, opacity) at `tc` instead.
+    pub fn at_with(&self, t: f64, tc: f64) -> Node {
         let (a, b) = (&self.a, &self.b);
         let base = if t < 0.5 { a } else { b };
         let mut n = match &self.shape {
             Shape::Group { children, clip } => {
-                let mut g = Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at(t))).collect(), clip: *clip });
+                let mut g =
+                    Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at_with(t, tc))).collect(), clip: *clip });
                 g.isolate = base.isolate;
                 g.knockout = base.knockout;
                 g
@@ -554,8 +560,8 @@ impl Lerp {
                 if let (NodeKind::Mesh(m), NodeKind::Mesh(ma), NodeKind::Mesh(mb)) = (&mut n.kind, &a.kind, &b.kind) {
                     for ((p, x), y) in m.points.iter_mut().zip(&ma.points).zip(&mb.points) {
                         p.p = x.p.lerp(y.p, t);
-                        p.color = lerp_color(&x.color, &y.color, t as f32);
-                        p.opacity = lerp_f32(x.opacity, y.opacity, t as f32);
+                        p.color = lerp_color(&x.color, &y.color, tc as f32);
+                        p.opacity = lerp_f32(x.opacity, y.opacity, tc as f32);
                         for h in 0..4 {
                             p.handles[h] = x.handles[h].lerp(y.handles[h], t);
                         }
@@ -617,8 +623,8 @@ impl Lerp {
             }
         };
         n.id = NodeId(0);
-        n.appearance = lerp_appearance(&a.appearance, &b.appearance, t);
-        n.opacity = lerp_f32(a.opacity, b.opacity, t as f32);
+        n.appearance = lerp_appearance(&a.appearance, &b.appearance, tc);
+        n.opacity = lerp_f32(a.opacity, b.opacity, tc as f32);
         n.blend = base.blend;
         n.visible = true;
         n.locked = false;
@@ -1030,8 +1036,8 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         let n = blend_step_count(a, b, spec.spacing, len);
         let lerp = Lerp::new(a, b, (spec.start(i), spec.start(i + 1)));
         for j in 1..=n {
-            let t = j as f64 / (n + 1) as f64;
-            let mut s = lerp.at(t);
+            let (t, tc) = spec.eased(j as f64 / (n + 1) as f64);
+            let mut s = lerp.at_with(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);
             }
@@ -1044,7 +1050,38 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::live::{BlendEase, BlendEasing};
     use vectorcraft_geom::{Rect, shapes};
+
+    #[test]
+    fn easing_bunches_steps_and_colour_eases_on_its_own() {
+        let a = key(0.0);
+        let b = key(100.0);
+        let centres = |spec: &BlendSpec| -> Vec<f64> {
+            blend_expand(&[a.clone(), b.clone()], spec).iter().map(|n| n.geometric_bounds().unwrap().center().x).collect()
+        };
+        let even = BlendSpec { spacing: BlendSpacing::Steps(3), ..Default::default() };
+        let c = centres(&even);
+        assert!((c[1] - c[0] - (c[2] - c[1])).abs() < 1e-6, "linear steps are even: {c:?}");
+        let ease_in = BlendSpec { easing: BlendEasing { ease: BlendEase::EaseIn, strength: 100.0 }, ..even.clone() };
+        let c = centres(&ease_in);
+        assert!(c[2] - c[1] < c[3] - c[2], "ease in bunches the steps at the start: {c:?}");
+        assert_eq!((c[0], c[4]), (centres(&even)[0], centres(&even)[4]), "the keys stay put");
+        let ease_out = BlendSpec { easing: BlendEasing { ease: BlendEase::EaseOut, strength: 100.0 }, ..even.clone() };
+        let c = centres(&ease_out);
+        assert!(c[2] - c[1] > c[3] - c[2], "ease out bunches them at the end: {c:?}");
+        // Colour acceleration: positions stay even, the colour reaches the end colour early.
+        let spec = BlendSpec { color_easing: Some(BlendEasing { ease: BlendEase::EaseOut, strength: 100.0 }), ..even.clone() };
+        let (t, tc) = spec.eased(0.5);
+        assert_eq!(t, 0.5);
+        assert!(tc > 0.8, "{tc}");
+        for e in [BlendEase::Linear, BlendEase::EaseIn, BlendEase::EaseOut, BlendEase::EaseInOut] {
+            let ez = BlendEasing { ease: e, strength: 70.0 };
+            assert_eq!((ez.apply(0.0), ez.apply(1.0)), (0.0, 1.0));
+            assert!((0..10).all(|i| ez.apply(i as f64 / 10.0) <= ez.apply((i + 1) as f64 / 10.0)), "{e:?} keeps the order");
+            assert_eq!(BlendEase::parse(e.name()), Some(e));
+        }
+    }
 
     #[test]
     fn clicked_start_points_pair_up() {

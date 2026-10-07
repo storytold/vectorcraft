@@ -36,14 +36,19 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(2.0);
             let menus_end = if app.native_menu {
                 let full = ui.max_rect();
-                ui.painter().text(full.center(), egui::Align2::CENTER_CENTER, "VectorCraft", egui::FontId::proportional(13.5), t.text);
+                ui.painter().text(
+                    full.center(),
+                    egui::Align2::CENTER_CENTER,
+                    vectorcraft_engine::cmd::help::APP_NAME,
+                    egui::FontId::proportional(13.5),
+                    t.text,
+                );
                 ui.cursor().min.x
             } else {
                 menus::menu_bar(app, ui)
             };
             // The right-side group fills the space after the menus from the right; when it runs
-            // short, Discord goes first (it is also under Help), then the search box becomes an
-            // icon, then the workspace switcher narrows.
+            // short, the search box becomes an icon, then the workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -56,7 +61,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let gap = ui.spacing().item_spacing.x;
             let with_search = ws_w + 8.0 + gap + 200.0;
             let search_full = room >= with_search;
-            let discord = room >= with_search + 10.0 + gap + crate::community::discord_width(ui, false);
             let ws_w = if search_full { ws_w } else { ws_w.min(room - 8.0 - gap - 24.0).max(64.0) };
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
@@ -94,10 +98,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.ui.palette_open = true;
                 app.ui.palette_query.clear();
             }
-            if discord {
-                ui.add_space(10.0);
-                crate::community::discord_button(app, ui, false);
-            }
         });
     });
     if custom {
@@ -106,6 +106,34 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
+/// The Control bar's Snapping button: a popover with the snapping toggles (Smart Guides, Snap to
+/// Point, Snap to Grid, Snap to Pixel) and a link to the Smart Guides preferences.
+fn snapping_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    let v = &app.ui.view;
+    let any = v.smart_guides || v.snap_to_point || v.snap_to_grid || v.snap_to_pixel;
+    let resp = widgets::icon_button(ui, "grid-3x3", tl!("Snapping"), any, 24.0);
+    egui::Popup::menu(&resp).show(|ui| {
+        ui.set_min_width(180.0);
+        ui.label(egui::RichText::new(tl!("Snapping")).font(theme::semibold(12.0)).color(t.text));
+        let v = app.ui.view.clone();
+        for (label, id, on) in [
+            ("Smart Guides", "view.smartGuides", v.smart_guides),
+            ("Snap to Point", "view.snapToPoint", v.snap_to_point),
+            ("Snap to Grid", "view.snapToGrid", v.snap_to_grid),
+            ("Snap to Pixel", "view.snapToPixel", v.snap_to_pixel),
+        ] {
+            if widgets::check(ui, tl!(label), on, true) {
+                app.run(id, json!({})).ok();
+            }
+        }
+        ui.separator();
+        if ui.button(tl!("Smart Guides Preferences…")).clicked() {
+            app.run("edit.preferences", json!({ "category": "Smart Guides" })).ok();
+        }
+    });
+}
+
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     egui::Panel::top("control_bar")
@@ -176,6 +204,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         .on_hover_text(tl!("Graphic Style"));
                     egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
                 }
+                ui.separator();
+                snapping_popover(app, ui);
                 ui.separator();
                 if sel.is_empty() {
                     if widgets::flat_button(ui, tl!("Document Setup"), 112.0).clicked() {

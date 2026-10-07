@@ -326,7 +326,7 @@ fn cs() -> Lang {
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
 const CZECH_KEEP_AS_IS: &[&str] = &[
-    "VectorCraft",
+    "Vector W3K2",
     "OpenType",
     "Essentials",
     "Essentials Classic",

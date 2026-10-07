@@ -58,15 +58,21 @@ impl Tool for ArtboardTool {
         let m = ev.mods;
         match (ev.kind, self.drag) {
             (PointerKind::Down, _) => {
+                let locked = |i: usize| cx.doc.artboards.get(i).is_some_and(|a| a.locked);
                 if let Some(r) = self.active_rect(cx)
+                    && !locked(self.active)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
                     self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, began: false });
                     return vec![];
                 }
-                if let Some(i) = (0..cx.doc.artboards.len()).rev().find(|i| cx.doc.artboards[*i].rect.contains(p)) {
+                if let Some(i) = (0..cx.doc.artboards.len()).rev().find(|i| cx.doc.artboards.get(*i).is_some_and(|a| a.rect.contains(p))) {
                     self.active = i;
-                    self.drag = Some(Drag::Move { index: i, start: p, began: false });
+                    // A locked artboard becomes active but stays where it is.
+                    if !locked(i) {
+                        self.drag = Some(Drag::Move { index: i, start: p, began: false });
+                    }
+                    return vec![Action::Exec("artboard.setActive".into(), json!({ "index": i }))];
                 } else {
                     let (p, _) = crate::guides::snap_draw(cx, p, &[]);
                     self.drag = Some(Drag::Create { start: p, cur: p });
@@ -132,6 +138,7 @@ impl Tool for ArtboardTool {
                     Some(a) => {
                         let mut v = rect_json(self.active, a.rect);
                         v["name"] = json!(a.name);
+                        v["background"] = json!(a.background.map(|c| c.to_hex()).unwrap_or_default());
                         vec![Action::Dialog("artboardOptions".into(), v)]
                     }
                     None => vec![],
