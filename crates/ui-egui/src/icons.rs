@@ -115,8 +115,13 @@ pub fn source(name: &str) -> ImageSource<'static> {
     ImageSource::Bytes { uri: format!("bytes://icon/{name}.svg").into(), bytes: egui::load::Bytes::Static(bytes) }
 }
 
-/// Paint icon `name` into `rect` tinted with `tint`.
+/// Icons drawn in their own colours, whatever the theme: the Selection tool's black arrow and the
+/// Direct Selection tool's white arrow, which are told apart by colour.
+const TWO_TONE: [&str; 2] = ["dc-selection", "dc-direct"];
+
+/// Paint icon `name` into `rect` tinted with `tint` (two-tone icons keep their colours).
 pub fn paint(ui: &Ui, name: &str, rect: Rect, tint: Color32) {
+    let tint = if TWO_TONE.contains(&name) { Color32::WHITE } else { tint };
     egui::Image::new(source(name)).tint(tint).fit_to_exact_size(rect.size()).paint_at(ui, rect);
 }
 
