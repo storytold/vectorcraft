@@ -9,7 +9,7 @@
   "contributors": [
     {
       "login": "echelon",
-      "people_entry": false,
+      "people_entry": true,
       "github_name": null,
       "prs": 15,
       "commits": 119,
