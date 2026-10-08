@@ -59,5 +59,6 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 ## Roadmap
 `ROADMAP.md` (committed) is the shared picture of where VectorCraft stands. It holds status, the honest assessment (by dimension, the gap list, the direction), milestones, the parity table and time-to-parity estimates.
 - When a task lands, update it in the same PR: the milestone row, the parity-table row (score, missing items, hours), "Shipped so far", and the gap list if the gap closed or shrank.
+- Keep PRs from conflicting there (rules in its "How to update this file"): one sentence per line, never rewrap a paragraph, and don't add your change to the "Last updated" line. Fixes that change no score, gap or shipped capability need no entry.
 - Grade by behaviour against the public documentation (`plan/illustrator/` notes), not by whether a menu item exists. Scores are self-assessed, so err low.
 - Keep the README's Status section in step with the ROADMAP headline.
