@@ -24,6 +24,9 @@ pub struct Workspace {
     pub dock: bool,
     pub dock_tab: DockTab,
     pub open_panel: Option<String>,
+    /// Panels dragged out of the dock (none in the built-in workspaces: choosing or resetting one
+    /// puts every panel back in the dock).
+    pub floating_panels: Vec<crate::state::FloatingPanel>,
     pub status_bar: bool,
 }
 
@@ -116,6 +119,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         dock: ui.dock,
         dock_tab: ui.dock_tab,
         open_panel: ui.open_panel.clone(),
+        floating_panels: ui.floating_panels.clone(),
         status_bar: ui.status_bar,
     }
 }
@@ -131,6 +135,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.dock = w.dock;
     ui.dock_tab = w.dock_tab;
     ui.open_panel = w.open_panel.clone();
+    ui.floating_panels = w.floating_panels.clone();
     ui.status_bar = w.status_bar;
     ui.flyout = None;
     ui.workspace = w.name.clone();

@@ -23,6 +23,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod floating;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -63,6 +64,8 @@ mod tests_cut;
 mod tests_distortkeys;
 #[cfg(test)]
 mod tests_docsetup;
+#[cfg(test)]
+mod tests_floating;
 #[cfg(test)]
 mod tests_fonts;
 #[cfg(test)]
@@ -827,6 +830,7 @@ impl VectorcraftApp {
         }
         let t0 = now_ms();
         let t = theme::Tokens::get(&ctx);
+        floating::begin_frame(&ctx);
         if self.ui.screen_mode < 2 {
             chrome::app_bar(self, ui);
             if self.ui.control_bar {
@@ -843,12 +847,14 @@ impl VectorcraftApp {
         if self.ui.dock && self.ui.screen_mode < 3 {
             dock::show(self, ui);
         }
+        floating::toolbar_column(self, ui);
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| {
             if self.ui.screen_mode < 3 {
                 chrome::doc_tabs(self, ui);
             }
             canvas::show(self, ui);
         });
+        floating::show(self, &ctx);
         dock::floating_panel(self, &ctx);
         panels::library_panel::show_window(self, &ctx);
         dialogs::show(self, &ctx);

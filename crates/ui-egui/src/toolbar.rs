@@ -81,7 +81,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let need = all.len() as f32 * PITCH + labels + 190.0;
     let cols = if app.ui.toolbar_double || avail < need { 2 } else { 1 };
     let w = if cols == 2 { 76.0 } else { WIDTH };
-    egui::Panel::left("toolbar")
+    let shown = egui::Panel::left("toolbar")
         .resizable(false)
         .exact_size(w)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border)))
@@ -202,6 +202,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 bottom_controls(app, ui, &t);
             });
         });
+    // Panels dragged out of the dock lock beside it.
+    crate::floating::set_zone(ui.ctx(), crate::floating::Zone::Toolbar, shown.response.rect);
     flyout(app, ui.ctx());
 }
 

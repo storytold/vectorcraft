@@ -168,6 +168,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke"),
+    (
+        "window.panelPlace",
+        "Move Panel",
+        "",
+        "{panel: id, place: free|toolbar|dock, x?, y?} float a panel over the canvas (its top-left corner at x, y), lock it beside the toolbar (stacked by y), or put it back in the dock; dragging a panel's heading does the same",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     ("window.workspace", "Workspace", "", "{name} switch workspace (Essentials, Essentials Classic, Painting, …)"),
     ("window.workspace.reset", "Reset Essentials", "", "{} reset the current workspace"),
@@ -908,6 +914,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "window.panel" => {
             let panel = s("panel").unwrap_or_default();
             match panel.as_str() {
+                // A tab that floats stays where it is (it is already showing).
+                "properties" | "layers" | "libraries" if crate::floating::place(app, panel.as_str()).is_some() => Ok(Value::Null),
                 "properties" => {
                     app.ui.dock_tab = DockTab::Properties;
                     Ok(Value::Null)
@@ -920,6 +928,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                     app.ui.dock_tab = DockTab::Libraries;
                     Ok(Value::Null)
                 }
+                // Toggling a panel that is out of the dock closes it (back to the dock).
+                p if crate::floating::place(app, p).is_some() => crate::floating::run_place(app, &json!({ "panel": p, "place": "dock" })),
                 p if ICON_PANELS.iter().any(|(id, _, _)| *id == p) => {
                     app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
                     app.ui.dock = true;
@@ -928,6 +938,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 other => Err(format!("unknown panel `{other}`")),
             }
         }
+        "window.panelPlace" => crate::floating::run_place(app, p),
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
             Some(b) => {
                 app.ui.brightness = b;
@@ -1181,6 +1192,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
             match panel {
+                _ if crate::floating::place(app, panel).is_some() => true,
                 "properties" => app.ui.dock_tab == DockTab::Properties,
                 "layers" => app.ui.dock_tab == DockTab::Layers,
                 "libraries" => app.ui.dock_tab == DockTab::Libraries,

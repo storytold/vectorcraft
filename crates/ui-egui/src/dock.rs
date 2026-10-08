@@ -5,14 +5,28 @@ use egui::{CornerRadius, Sense, Stroke, Ui, vec2};
 
 use crate::state::{DockTab, ICON_PANEL_GROUPS, ICON_PANELS};
 use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, icons, panels, widgets};
+use crate::{VectorcraftApp, floating, icons, panels, widgets};
 
 const ICON_COL: f32 = 38.0;
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // Main tabbed group.
-    egui::Panel::right("dock")
+    // Tabs dragged out of the dock float (or sit beside the toolbar); the dock shows the rest.
+    let tabs = floating::docked_tabs(app);
+    if let Some(first) = tabs.first()
+        && !tabs.iter().any(|tab| tab.2 == app.ui.dock_tab)
+    {
+        app.ui.dock_tab = first.2;
+    }
+    if !tabs.is_empty() {
+        main_group(app, ui, &tabs, &t);
+    }
+    icon_column(app, ui, &t);
+}
+
+/// The tabbed group (Properties | Layers | Libraries, those still in the dock).
+fn main_group(app: &mut VectorcraftApp, ui: &mut Ui, tabs: &[(&'static str, &'static str, DockTab)], t: &Tokens) {
+    let shown = egui::Panel::right("dock")
         .resizable(true)
         .default_size(300.0)
         .size_range(230.0..=520.0)
@@ -26,12 +40,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.painter().rect_filled(strip, 0.0, t.tab_strip);
             ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
             let mut x = strip.left();
-            for (tab, label) in [(DockTab::Properties, "Properties"), (DockTab::Layers, "Layers"), (DockTab::Libraries, "Libraries")] {
+            for &(id, label, tab) in tabs {
                 let active = app.ui.dock_tab == tab;
                 let galley =
                     ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.5), if active { t.text_strong } else { t.text_dim });
                 let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(galley.size().x + 24.0, strip.height() - 1.0));
-                let resp = ui.interact(r, ui.id().with(("docktab", label)), Sense::click());
+                // Click to show the tab; drag it out to float it (or lock it beside the toolbar).
+                let resp = ui.interact(r, floating::handle_id(id), Sense::click_and_drag());
+                if resp.drag_started() {
+                    let grab = ui.input(|i| i.pointer.press_origin()).map_or(vec2(20.0, 12.0), |p| p - r.min);
+                    floating::start_drag(app, ui.ctx(), id, grab);
+                }
+                let resp = resp.on_hover_text(tl!("Drag out of the dock to move this panel"));
                 if active {
                     ui.painter().rect_filled(r, 0.0, t.panel);
                 }
@@ -56,8 +76,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 DockTab::Libraries => panels::libraries(app, ui),
             });
         });
-    // Collapsed icon-panel strip, left of the expanded panel group (like Illustrator's dock).
-    egui::Panel::right("icon_column")
+    floating::set_zone(ui.ctx(), floating::Zone::Dock, shown.response.rect);
+}
+
+/// Collapsed icon-panel strip, left of the expanded panel group (like Illustrator's dock).
+fn icon_column(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+    let shown = egui::Panel::right("icon_column")
         .resizable(false)
         .exact_size(ICON_COL)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(4, 6)).stroke(Stroke::new(1.5, t.border)))
@@ -72,14 +96,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                     for id in group.iter() {
                         let Some((_, label, icon)) = ICON_PANELS.iter().find(|p| p.0 == *id) else { continue };
-                        let open = app.ui.open_panel.as_deref() == Some(*id);
+                        let open = app.ui.open_panel.as_deref() == Some(*id) || floating::place(app, id).is_some();
                         if widgets::icon_button(ui, icon, label, open, 30.0).clicked() {
-                            app.ui.open_panel = if open { None } else { Some(id.to_string()) };
+                            app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(*id) { None } else { Some(id.to_string()) };
                         }
                     }
                 }
             });
         });
+    floating::set_zone(ui.ctx(), floating::Zone::Dock, shown.response.rect);
 }
 
 /// An icon panel popped out next to the icon column.
@@ -91,7 +116,7 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Pinned by its right edge, 6 points left of the icon column: a panel wider than its 256
     // points grows towards the canvas rather than over the panel icons.
     let right = screen.right() - ICON_COL - 300.0 - 6.0;
-    let mut open = true;
+    let (mut open, mut lock) = (true, false);
     let area = egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP);
     area.fixed_pos(egui::pos2(right, 110.0)).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
@@ -104,13 +129,25 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
             );
             ui.painter().rect_filled(tab, CornerRadius { nw: 4, ne: 0, sw: 0, se: 0 }, t.panel);
             ui.painter().text(tab.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, tl!(label), theme::semibold(12.0), t.text);
+            // Drag the heading to take the panel out of the dock.
+            let grip = ui.interact(strip, floating::handle_id(&id), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::Grab);
+            if grip.drag_started() {
+                let grab = ui.input(|i| i.pointer.press_origin()).map_or(vec2(20.0, 12.0), |p| p - strip.min);
+                floating::start_drag(app, ui.ctx(), &id, grab);
+            }
             let close = egui::Rect::from_center_size(strip.right_center() - vec2(13.0, 0.0), vec2(14.0, 14.0));
             let cr = ui.interact(close, ui.id().with("close-panel"), Sense::click());
             icons::paint(ui, "chevrons-right", close, if cr.hovered() { t.text } else { t.text_dim });
             if cr.clicked() {
                 open = false;
             }
-            let menu_r = egui::Rect::from_center_size(strip.right_center() - vec2(34.0, 0.0), vec2(16.0, 16.0));
+            let lock_r = egui::Rect::from_center_size(strip.right_center() - vec2(33.0, 0.0), vec2(14.0, 14.0));
+            let lr = ui.interact(lock_r, ui.id().with("lock-panel"), Sense::click());
+            icons::paint(ui, "lock-open", lock_r, if lr.hovered() { t.text } else { t.text_dim });
+            if lr.on_hover_text(tl!("Lock to the toolbar")).clicked() {
+                lock = true;
+            }
+            let menu_r = egui::Rect::from_center_size(strip.right_center() - vec2(54.0, 0.0), vec2(16.0, 16.0));
             panels::panel_menu(app, ui, &id, menu_r);
             egui::Frame::NONE.inner_margin(egui::Margin::same(10)).show(ui, |ui| {
                 ui.set_width(236.0);
@@ -120,6 +157,9 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if !open {
         app.ui.open_panel = None;
+    }
+    if lock {
+        let _ = floating::run_place(app, &serde_json::json!({ "panel": id, "place": "toolbar" }));
     }
 }
 
