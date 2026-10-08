@@ -1237,7 +1237,7 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, xf.zoom)
     {
         let color = c32(st.doc.layer_color(w.id));
-        for sp in w.points.map(|q| xf.to_screen(q)) {
+        for sp in w.shown().map(|(_, q)| xf.to_screen(q)) {
             p.circle_filled(sp, 3.0, Color32::WHITE);
             p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
             p.circle_filled(sp, 1.0, color);

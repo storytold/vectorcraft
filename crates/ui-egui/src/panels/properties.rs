@@ -313,12 +313,8 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         match live {
             vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
-                ui.horizontal(|ui| {
-                    dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "radius", Some(radii[0]), units, 80.0) {
-                        app.run("object.setLiveShape", json!({"radius": r})).ok();
-                    }
-                });
+                dim_label(ui, tl!("Corner Radius:"));
+                super::transform::corner_fields(app, ui, "radius", *radii, units);
             }
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
                 ui.horizontal(|ui| {

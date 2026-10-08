@@ -114,20 +114,28 @@ impl LiveShape {
     /// Regenerate the path.
     pub fn to_path(&self) -> PathData {
         match self {
-            LiveShape::Rectangle { w, h, radii, xf } => {
-                let r = Rect::new(0.0, 0.0, *w, *h);
-                let p = if radii.iter().all(|x| (x - radii[0]).abs() < 1e-9) {
-                    shapes::rounded_rectangle(r, radii[0])
-                } else {
-                    // Per-corner radii: generate uniformly then adjust (approximation until M2.5).
-                    shapes::rounded_rectangle(r, radii.iter().cloned().fold(0.0, f64::max))
-                };
-                p.transformed(*xf)
-            }
+            LiveShape::Rectangle { w, h, radii, xf } => shapes::rounded_rectangle_each(Rect::new(0.0, 0.0, *w, *h), *radii).transformed(*xf),
             LiveShape::Ellipse { w, h, xf, .. } => shapes::ellipse(Rect::new(0.0, 0.0, *w, *h)).transformed(*xf),
             LiveShape::Polygon { radius, sides, xf } => shapes::polygon(Point::ZERO, *radius, *sides, 0.0).transformed(*xf),
             LiveShape::Line { a, b } => shapes::line(*a, *b),
         }
+    }
+    /// A live rectangle's corner (0 = top-left … 3 = bottom-left, in its own frame) of each anchor
+    /// of [`Self::to_path`]; `None` for other shapes.
+    pub fn rect_corners(&self) -> Option<Vec<usize>> {
+        match self {
+            LiveShape::Rectangle { w, h, radii, .. } => Some(shapes::rounded_rectangle_corners(Rect::new(0.0, 0.0, *w, *h), *radii)),
+            _ => None,
+        }
+    }
+    /// The corners of a live rectangle that `anchors` (direct-selected anchors of its path) sit
+    /// on, in order; `None` for other shapes or when no anchor is picked.
+    pub fn rect_corners_of(&self, anchors: Option<&std::collections::BTreeSet<(usize, usize)>>) -> Option<Vec<usize>> {
+        let map = self.rect_corners()?;
+        let mut out: Vec<usize> = anchors?.iter().filter(|(si, _)| *si == 0).filter_map(|(_, ai)| map.get(*ai).copied()).collect();
+        out.sort_unstable();
+        out.dedup();
+        (!out.is_empty()).then_some(out)
     }
     pub fn transform(&mut self, a: Affine) {
         match self {

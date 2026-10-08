@@ -70,3 +70,18 @@ fn the_three_workspaces_show_it() {
         assert!(shown, "{name}: no corner radius control on screen");
     }
 }
+
+#[test]
+fn the_control_bar_sets_the_corner_picked_with_the_white_arrow() {
+    let mut app = rect_app();
+    let id = app.session.active().unwrap().selection.objects[0].0;
+    // The first top-right anchor of the rounded rectangle.
+    run(&mut app, "select.anchors", json!({"id": id, "anchors": [[0, 1]], "mode": "set"}));
+    set_radius(&mut app, crate::chrome::control_bar, "12");
+    let st = app.session.active().unwrap();
+    let NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { radii, .. }), .. } = &st.doc.node(st.selection.objects[0]).unwrap().kind
+    else {
+        panic!("not a live rectangle")
+    };
+    assert_eq!(*radii, [7.0, 12.0, 7.0, 7.0]);
+}

@@ -1,6 +1,7 @@
 //! Live Corners: the widgets inside each corner of a selected live rectangle. Dragging one rounds
-//! (or sharpens) all four corners together. The Selection and Direct Selection tools share this,
-//! and the canvas draws the widgets from the same geometry.
+//! (or sharpens) all four corners together; with corner anchors picked by the Direct Selection
+//! tool only those corners show widgets, and a drag rounds just them. The Selection and Direct
+//! Selection tools share this, and the canvas draws the widgets from the same geometry.
 
 use serde_json::json;
 use vectorcraft_doc::{Document, LiveShape, NodeId, NodeKind, Selection};
@@ -27,6 +28,8 @@ pub struct CornerWidgets {
     xf: Affine,
     /// Widget centres in document coordinates, in radii order.
     pub points: [Point; 4],
+    /// The corners with a widget: all four, or those of the direct-selected anchors.
+    pub active: [bool; 4],
 }
 
 impl CornerWidgets {
@@ -36,9 +39,11 @@ impl CornerWidgets {
         if !doc.is_editable(id) {
             return None;
         }
-        let Some(NodeKind::Path { live: Some(LiveShape::Rectangle { w, h, radii, xf }), .. }) = doc.node(id).map(|n| &n.kind) else {
+        let Some(NodeKind::Path { live: Some(live @ LiveShape::Rectangle { w, h, radii, xf }), .. }) = doc.node(id).map(|n| &n.kind) else {
             return None;
         };
+        let picked = live.rect_corners_of(selection.partial(id));
+        let active = std::array::from_fn(|k| picked.as_ref().is_none_or(|c| c.contains(&k)));
         let (w, h, radii, xf) = (*w, *h, *radii, *xf);
         // Screen pixels per shape unit along each side (the shape may be scaled or skewed).
         let c = xf.as_coeffs();
@@ -52,7 +57,7 @@ impl CornerWidgets {
             let iy = radii[k].max(MIN_INSET_PX / py).min(h / 2.0);
             xf * Point::new(fx * w + sx * ix, fy * h + sy * iy)
         });
-        Some(Self { id, w, h, radii, xf, points })
+        Some(Self { id, w, h, radii, xf, points, active })
     }
 
     /// The widgets the active tool can drag (View → Show Corner Widget on).
@@ -63,9 +68,16 @@ impl CornerWidgets {
         Self::of(cx.doc, cx.selection, cx.zoom)
     }
 
-    /// Index of the widget nearest to `p` within `tol` (document units).
+    /// The centres of the widgets shown, with their corner index.
+    pub fn shown(&self) -> impl Iterator<Item = (usize, Point)> + '_ {
+        (0..4).filter(|k| self.active[*k]).map(|k| (k, self.points[k]))
+    }
+
+    /// Index of the shown widget nearest to `p` within `tol` (document units).
     pub fn hit(&self, p: Point, tol: f64) -> Option<usize> {
-        (0..4).filter(|k| self.points[*k].distance(p) <= tol).min_by(|a, b| self.points[*a].distance(p).total_cmp(&self.points[*b].distance(p)))
+        (0..4)
+            .filter(|k| self.active[*k] && self.points[*k].distance(p) <= tol)
+            .min_by(|a, b| self.points[*a].distance(p).total_cmp(&self.points[*b].distance(p)))
     }
 }
 
@@ -74,7 +86,8 @@ pub fn over_widget(cx: &ToolContext, p: Point) -> bool {
     CornerWidgets::for_tool(cx).and_then(|w| w.hit(p, cx.tol(5.0))).is_some()
 }
 
-/// Dragging a corner widget: the radius follows the pointer along the corner's diagonal.
+/// Dragging a corner widget: the radius follows the pointer along the corner's diagonal (the engine
+/// applies it to the picked corners, or all four).
 #[derive(Clone, Copy, Debug)]
 pub struct CornerDrag {
     widgets: CornerWidgets,
@@ -218,6 +231,25 @@ mod tests {
         let mut t = crate::create("selection");
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 110.0)).is_empty());
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 110.0)).is_empty());
+    }
+
+    #[test]
+    fn picked_corner_anchors_keep_only_their_widgets() {
+        let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+        // The Direct Selection tool picked the top-right corner anchor.
+        let mut s = selected(id);
+        s.anchors.insert(id, [(0, 1)].into_iter().collect());
+        let w = CornerWidgets::of(&d, &s, 1.0).unwrap();
+        assert_eq!(w.active, [false, true, false, false]);
+        assert_eq!(w.shown().collect::<Vec<_>>(), [(1, Point::new(190.0, 110.0))]);
+        assert_eq!(w.hit(Point::new(110.0, 110.0), 5.0), None);
+        // Its widget drags (the engine rounds the picked corner only).
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = crate::create("directSelection");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 110.0)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 180.0, 120.0));
+        assert!((radius(&a[1]) - 10.0).abs() < 1e-9);
     }
 
     #[test]

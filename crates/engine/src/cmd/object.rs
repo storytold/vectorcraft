@@ -180,7 +180,15 @@ pub fn specs() -> Vec<CommandSpec> {
             set_bounds
         ),
         cmd!("object.expandShape", "Expand Shape", ["Object", "Shape"], None, "{} convert live shapes to plain paths", has_selection, expand_shape),
-        cmd!("object.setLiveShape", "Live Shape Properties", [], None, "{id?, radius?: pt (all corners), sides?: n}", has_selection, set_live_shape),
+        cmd!(
+            "object.setLiveShape",
+            "Live Shape Properties",
+            [],
+            None,
+            "{id?, radius?: pt, corners?: [0..3] (top-left, top-right, bottom-right, bottom-left; default: the corners of the direct-selected anchors, else all), radii?: [tl, tr, br, bl] pt, sides?: n}",
+            has_selection,
+            set_live_shape
+        ),
     ]
 }
 
@@ -975,13 +983,29 @@ fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
-    s.edit("Live Shape", |d, _| {
+    let radius = p.get("radius").and_then(Value::as_f64).filter(|r| r.is_finite());
+    let radii: Option<Vec<f64>> = p.get("radii").and_then(Value::as_array).map(|v| v.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect());
+    let corners: Option<Vec<usize>> =
+        p.get("corners").and_then(Value::as_array).map(|v| v.iter().filter_map(Value::as_u64).map(|k| k as usize).collect());
+    s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live: Some(live), .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // Direct-selected anchors pick their corners (and are re-selected on the new path).
+            let picked = live.rect_corners_of(sel.partial(*id));
             match live {
-                vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
-                    if let Some(r) = p.get("radius").and_then(Value::as_f64) {
-                        *radii = [r.max(0.0); 4];
+                vectorcraft_doc::LiveShape::Rectangle { radii: rr, .. } => {
+                    if let Some(v) = &radii {
+                        for (k, r) in rr.iter_mut().enumerate() {
+                            *r = v.get(k).copied().filter(|x| x.is_finite()).unwrap_or(*r).max(0.0);
+                        }
+                    }
+                    if let Some(r) = radius {
+                        let only = corners.clone().or_else(|| picked.clone());
+                        for (k, slot) in rr.iter_mut().enumerate() {
+                            if only.as_ref().is_none_or(|c| c.contains(&k)) {
+                                *slot = r.max(0.0);
+                            }
+                        }
                     }
                 }
                 vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
@@ -992,6 +1016,10 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 _ => {}
             }
             *path = live.to_path();
+            if let Some(picked) = picked {
+                let refs = live.rect_corners().unwrap_or_default().into_iter().enumerate().filter(|(_, k)| picked.contains(k)).map(|(i, _)| (0, i));
+                sel.anchors.insert(*id, refs.collect());
+            }
         }
         Ok(())
     })?;

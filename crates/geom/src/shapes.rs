@@ -38,6 +38,68 @@ pub fn rounded_rectangle(r: Rect, radius: f64) -> PathData {
     PathData::single(SubPath::new(anchors, true))
 }
 
+/// Rectangle with its own radius at each corner (top-left, top-right, bottom-right, bottom-left;
+/// each clamped to half the shorter side). A square corner is one anchor, a round one two, in the
+/// layouts of [`rectangle`] and [`rounded_rectangle`]: with equal radii the result is the same.
+pub fn rounded_rectangle_each(r: Rect, radii: [f64; 4]) -> PathData {
+    let anchors = rect_corner_anchors(r, radii).into_iter().map(|(_, a)| a).collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// The corner (0 = top-left … 3 = bottom-left) of each anchor of [`rounded_rectangle_each`].
+pub fn rounded_rectangle_corners(r: Rect, radii: [f64; 4]) -> Vec<usize> {
+    rect_corner_anchors(r, radii).into_iter().map(|(k, _)| k).collect()
+}
+
+fn rect_corner_anchors(r: Rect, radii: [f64; 4]) -> Vec<(usize, Anchor)> {
+    let r = r.abs();
+    let max = r.width().min(r.height()) / 2.0;
+    let (x0, y0, x1, y1) = (r.x0, r.y0, r.x1, r.y1);
+    // Each corner: its point and the unit directions of the edges arriving at and leaving it.
+    let corners = [
+        (Point::new(x0, y0), Vec2::new(0.0, -1.0), Vec2::new(1.0, 0.0)),
+        (Point::new(x1, y0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)),
+        (Point::new(x1, y1), Vec2::new(0.0, 1.0), Vec2::new(-1.0, 0.0)),
+        (Point::new(x0, y1), Vec2::new(-1.0, 0.0), Vec2::new(0.0, -1.0)),
+    ];
+    let rad = |k: usize| {
+        let v = radii.get(k).copied().unwrap_or(0.0);
+        if v.is_finite() { v.max(0.0).min(max) } else { 0.0 }
+    };
+    let corner = |p: Point, kind| Anchor { p, h_in: p, h_out: p, kind };
+    // Each round corner as (entry, exit): the entry's out handle and the exit's in handle bend
+    // along the arc.
+    let parts: Vec<(usize, Vec<Anchor>)> = corners
+        .iter()
+        .enumerate()
+        .map(|(k, &(c, din, dout))| {
+            let rk = rad(k);
+            if rk <= 1e-9 {
+                return (k, vec![corner(c, AnchorKind::Corner)]);
+            }
+            let (a, b) = (c - din * rk, c + dout * rk);
+            let h = rk * KAPPA;
+            let entry = Anchor { p: a, h_in: a, h_out: a + din * h, kind: AnchorKind::Corner };
+            let exit = Anchor { p: b, h_in: b - dout * h, h_out: b, kind: AnchorKind::Corner };
+            (k, vec![entry, exit])
+        })
+        .collect();
+    // Start at the top-left corner's exit (or the corner itself) and end with its entry.
+    let mut out = vec![];
+    let mut tail = vec![];
+    for (k, v) in parts {
+        match (k, v.as_slice()) {
+            (0, [entry, exit]) => {
+                out.push((0, *exit));
+                tail.push((0, *entry));
+            }
+            _ => out.extend(v.into_iter().map(|a| (k, a))),
+        }
+    }
+    out.extend(tail);
+    out
+}
+
 /// Ellipse inscribed in `r` with 4 smooth anchors (left, top, right, bottom).
 pub fn ellipse(r: Rect) -> PathData {
     let r = r.abs();
@@ -193,6 +255,29 @@ mod tests {
         assert!((b.width() - 100.0).abs() < 1e-6 && (b.height() - 60.0).abs() < 1e-6);
         let area = p.subpaths[0].area().abs();
         assert!((area - PI * 50.0 * 30.0).abs() / area < 0.001);
+    }
+
+    #[test]
+    fn each_corner_keeps_the_uniform_layouts() {
+        let r = Rect::new(0.0, 0.0, 20.0, 10.0);
+        assert_eq!(rounded_rectangle_each(r, [3.0; 4]), rounded_rectangle(r, 3.0));
+        assert_eq!(rounded_rectangle_each(r, [0.0; 4]), rectangle(r));
+        assert_eq!(rounded_rectangle_each(r, [100.0; 4]), rounded_rectangle(r, 100.0));
+        assert_eq!(rounded_rectangle_corners(r, [3.0; 4]), [0, 1, 1, 2, 2, 3, 3, 0]);
+    }
+
+    #[test]
+    fn each_corner_rounds_on_its_own() {
+        let r = Rect::new(0.0, 0.0, 20.0, 10.0);
+        // Only the top-right corner round: 5 anchors, two of them on that corner.
+        let p = rounded_rectangle_each(r, [0.0, 4.0, 0.0, f64::NAN]);
+        assert_eq!(p.anchor_count(), 5);
+        assert_eq!(rounded_rectangle_corners(r, [0.0, 4.0, 0.0, 0.0]), [0, 1, 1, 2, 3]);
+        let pts: Vec<(f64, f64)> = p.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+        assert_eq!(pts, [(0.0, 0.0), (16.0, 0.0), (20.0, 4.0), (20.0, 10.0), (0.0, 10.0)]);
+        assert_eq!(p.bounds(), Some(r));
+        // The top-left corner round: its exit first, its entry last.
+        assert_eq!(rounded_rectangle_corners(r, [2.0, 0.0, 0.0, 0.0]), [0, 1, 2, 3, 0]);
     }
 
     #[test]

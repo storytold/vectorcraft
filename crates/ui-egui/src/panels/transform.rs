@@ -102,12 +102,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         match live {
             vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
-                ui.horizontal(|ui| {
-                    widgets::dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "xfp-radius", Some(radii[0]), units, 80.0) {
-                        app.run("object.setLiveShape", json!({"radius": r})).ok();
-                    }
-                });
+                widgets::dim_label(ui, tl!("Corner Radius:"));
+                corner_fields(app, ui, "xfp-radius", *radii, units);
             }
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
                 widgets::subheader(ui, tl!("Polygon Properties:"));
@@ -135,6 +131,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+}
+
+/// A live rectangle's four corner radii (top-left, top-right / bottom-left, bottom-right, as they
+/// sit on the shape) and the link that makes one value set all four (on by default).
+pub fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, salt: &str, radii: [f64; 4], units: vectorcraft_doc::Unit) {
+    let unlinked_key = format!("{salt}-unlinked");
+    let linked = !pstate::<bool>(ui.ctx(), &unlinked_key);
+    ui.horizontal(|ui| {
+        egui::Grid::new((salt, "grid")).num_columns(2).spacing([4.0, 4.0]).show(ui, |ui| {
+            for row in [[0, 1], [3, 2]] {
+                for k in row {
+                    if let Some(r) = widgets::num_field(ui, (salt, k), Some(radii[k]), units, 80.0) {
+                        let mut next = radii;
+                        if linked {
+                            next = [r; 4];
+                        } else {
+                            next[k] = r;
+                        }
+                        app.run("object.setLiveShape", json!({ "radii": next })).ok();
+                    }
+                }
+                ui.end_row();
+            }
+        });
+        if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tl!("Link Radius Values"), linked, 22.0).clicked() {
+            set_pstate(ui.ctx(), &unlinked_key, linked);
+        }
+    });
 }
 
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
