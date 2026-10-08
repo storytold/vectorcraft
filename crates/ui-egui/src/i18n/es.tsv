@@ -2972,3 +2972,34 @@
 # Leading model (Paragraph panel menu, East Asian options).
 	Top-to-Top Leading	Interlineado de superior a superior
 	Bottom-to-Bottom Leading	Interlineado de inferior a inferior
+
+# About › Contributors / Models (credits.rs)
+	About	Acerca de
+	Contributors	Colaboradores
+	Models	Modelos
+	Username	Nombre de usuario
+	Display name	Nombre visible
+	Real name	Nombre real
+	Sort	Ordenar
+	Reverse the order	Invertir el orden
+	Grab bag	Lista libre
+	Table	Tabla
+	Name (A–Z)	Nombre (A–Z)
+	Merged PRs	PR fusionadas
+	Commits	Commits
+	Lines added	Líneas agregadas
+	Lines deleted	Líneas eliminadas
+	Line delta	Diferencia de líneas
+	Binary assets added	Recursos binarios agregados
+	Binary assets removed	Recursos binarios eliminados
+	First commit	Primer commit
+	Last commit	Último commit
+	First	Primero
+	Last	Último
+	{people} contributors · {commits} commits	{people} colaboradores · {commits} commits
+	No contributor data was built into this copy.	Esta copia no incluye datos de colaboradores.
+	No model credits were built into this copy.	Esta copia no incluye créditos de modelos.
+	Company	Empresa
+	Version	Versión
+	% of all commits	% de todos los commits
+	Lines +/−	Líneas +/−

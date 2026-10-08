@@ -572,3 +572,34 @@
 	Collapse Panels to Icons	Sbalit panely na ikony
 	Collapse to Icons	Sbalit na ikony
 	Expand Panels	Rozbalit panely
+
+# About › Contributors / Models (credits.rs)
+	About	O aplikaci
+	Contributors	Přispěvatelé
+	Models	Modely
+	Username	Uživatelské jméno
+	Display name	Zobrazované jméno
+	Real name	Skutečné jméno
+	Sort	Řadit
+	Reverse the order	Obrátit pořadí
+	Grab bag	Volný seznam
+	Table	Tabulka
+	Name (A–Z)	Jméno (A–Z)
+	Merged PRs	Sloučené PR
+	Commits	Commity
+	Lines added	Přidané řádky
+	Lines deleted	Odstraněné řádky
+	Line delta	Rozdíl řádků
+	Binary assets added	Přidané binární soubory
+	Binary assets removed	Odstraněné binární soubory
+	First commit	První commit
+	Last commit	Poslední commit
+	First	První
+	Last	Poslední
+	{people} contributors · {commits} commits	Přispěvatelé: {people} · Commity: {commits}
+	No contributor data was built into this copy.	Tato kopie neobsahuje údaje o přispěvatelích.
+	No model credits were built into this copy.	Tato kopie neobsahuje uvedení modelů.
+	Company	Společnost
+	Version	Verze
+	% of all commits	% všech commitů
+	Lines +/−	Řádky +/−

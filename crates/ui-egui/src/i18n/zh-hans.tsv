@@ -3219,3 +3219,34 @@
 	Saved Selection 23	已保存的选区 23
 	Saved Selection 24	已保存的选区 24
 	Saved Selection 25	已保存的选区 25
+
+# About › Contributors / Models (credits.rs)
+	About	关于
+	Contributors	贡献者
+	Models	模型
+	Username	用户名
+	Display name	显示名称
+	Real name	真实姓名
+	Sort	排序
+	Reverse the order	反转顺序
+	Grab bag	名单
+	Table	表格
+	Name (A–Z)	名称 (A–Z)
+	Merged PRs	已合并的 PR
+	Commits	提交
+	Lines added	新增行数
+	Lines deleted	删除行数
+	Line delta	行数变化
+	Binary assets added	新增二进制资源
+	Binary assets removed	删除二进制资源
+	First commit	首次提交
+	Last commit	最近提交
+	First	首次
+	Last	最近
+	{people} contributors · {commits} commits	{people} 位贡献者 · {commits} 次提交
+	No contributor data was built into this copy.	此版本未包含贡献者数据。
+	No model credits were built into this copy.	此版本未包含模型致谢。
+	Company	公司
+	Version	版本
+	% of all commits	占全部提交的百分比
+	Lines +/−	行数 +/−
