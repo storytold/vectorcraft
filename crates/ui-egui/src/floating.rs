@@ -265,8 +265,9 @@ fn heading(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, w: f32, locked: bool
 }
 
 /// A panel's contents, `max_h` points tall at most (scrolling inside when taller).
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, w: f32, max_h: f32) {
-    egui::Frame::NONE.inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+/// Returns the right edge of what it drew (a panel can be wider than `w`).
+fn body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, w: f32, max_h: f32) -> f32 {
+    let shown = egui::Frame::NONE.inner_margin(egui::Margin::same(10)).show(ui, |ui| {
         let inner = w - 20.0;
         ui.set_width(inner);
         match id {
@@ -280,17 +281,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, w: f32, max_h: f32) {
                 });
             }
             "libraries" => panels::libraries(app, ui),
-            _ => {
+            "properties" => {
                 egui::ScrollArea::vertical().id_salt(("panel-body", id)).max_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
-                    if id == "properties" {
-                        panels::properties::show(app, ui);
-                    } else {
-                        panels::show_icon_panel(app, ui, id);
-                    }
+                    panels::properties::show(app, ui);
                 });
             }
+            // As in the dock's pop-out: the panel takes the room it needs (some are wider).
+            _ => panels::show_icon_panel(app, ui, id),
         }
     });
+    shown.response.rect.right()
 }
 
 fn act(app: &mut VectorcraftApp, id: &str, action: Action, unlocked_at: Pos2) {
@@ -313,7 +313,10 @@ pub fn toolbar_column(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let t = Tokens::get(ui.ctx());
-    let w = ids.iter().map(|id| width(id)).fold(0.0, f32::max);
+    // As wide as the widest panel, including one wider than its usual width (measured last frame).
+    let measured_id = egui::Id::new("panel-column-width");
+    let measured = ui.ctx().data(|d| d.get_temp::<(Vec<String>, f32)>(measured_id)).filter(|m| m.0 == ids).map_or(0.0, |m| m.1);
+    let w = ids.iter().map(|id| width(id)).fold(0.0, f32::max).max(measured.min(520.0));
     let screen_h = ui.ctx().content_rect().height();
     let mut actions = vec![];
     let resp = egui::Panel::left("panel_column")
@@ -322,7 +325,9 @@ pub fn toolbar_column(app: &mut VectorcraftApp, ui: &mut Ui) {
         .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.5, t.border)))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            egui::ScrollArea::vertical().id_salt("panel-column").auto_shrink([false, false]).show(ui, |ui| {
+            let content = egui::ScrollArea::vertical().id_salt("panel-column").auto_shrink([false, false]).show(ui, |ui| {
+                let left = ui.min_rect().left();
+                let mut right = left + w;
                 for (k, id) in ids.iter().enumerate() {
                     if k > 0 {
                         let (r, _) = ui.allocate_exact_size(vec2(w, GAP), Sense::hover());
@@ -331,12 +336,20 @@ pub fn toolbar_column(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let top = ui.cursor().min;
                     let action = heading(app, ui, id, w, true);
                     actions.push((id.clone(), action));
-                    body(app, ui, id, w, (screen_h * 0.6).max(160.0));
+                    right = right.max(body(app, ui, id, w, (screen_h * 0.6).max(160.0)));
                     if let Some(p) = app.ui.floating_panels.iter_mut().find(|p| &p.id == id && p.place == PanelPlace::Toolbar) {
                         p.pos = [top.x, top.y];
                     }
                 }
+                right - left
             });
+            // Room for the scroll bar when the column scrolls.
+            let bar = if content.content_size.y > content.inner_rect.height() { ui.spacing().scroll.bar_width + 4.0 } else { 0.0 };
+            let need = content.inner + bar;
+            ui.ctx().data_mut(|d| d.insert_temp(measured_id, (ids.clone(), need)));
+            if need > w + 0.5 {
+                ui.ctx().request_repaint();
+            }
         });
     let rect = resp.response.rect;
     set_zone(ui.ctx(), Zone::Column, rect);
