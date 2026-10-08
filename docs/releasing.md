@@ -1,7 +1,7 @@
 # Releasing VectorCraft
 
 Every push to the `release` branch runs `.github/workflows/release.yml`. The workflow builds
-installers for macOS, Windows, Linux and FreeBSD, plus the web build, and creates or updates a
+installers for macOS, Windows, Linux (including Flatpak bundles) and FreeBSD, plus the web build, and creates or updates a
 **draft** GitHub Release named `VectorCraft v<version>`. Nobody sees a draft until a maintainer
 publishes it.
 
@@ -34,8 +34,11 @@ Once the draft is published, the workflow refuses to touch that version again: b
 
 **Test runs:** *Actions › Release › Run workflow* runs the whole pipeline by hand. The optional
 `version` input (such as `0.4.0-rc.1`) overrides `Cargo.toml` for that run only; each build job
-applies it with `cargo xtask version set` before building. The jobs run in the `release`
-environment, which only the `release` branch can use, so pick that branch in the dialog.
+applies it with `cargo xtask version set` before building. The signing jobs (macOS, Windows) and
+the draft-release job run in the `release` environment, which only the `release` branch can use, so
+pick that branch for a full run. Run on any other branch, it is a dry run: the Linux, Flatpak,
+FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
+and no draft release is created.
 
 ## What gets built
 
@@ -47,6 +50,8 @@ environment, which only the `release` branch can use, so pick that branch in the
 | Windows on ARM64 | `vectorcraft-<v>-windows-arm64.msi`, `vectorcraft-<v>-windows-arm64-portable.zip` | `windows-latest` (cross-compiled) |
 | Linux x86_64 | `vectorcraft-<v>-linux-x86_64.{AppImage,deb,rpm,tar.gz}` | `ubuntu-22.04` |
 | Linux aarch64 | `vectorcraft-<v>-linux-aarch64.{AppImage,deb,rpm,tar.gz}` | `ubuntu-22.04-arm` |
+| Linux AppImage updates | `vectorcraft-<v>-linux-{x86_64,aarch64}.AppImage.zsync` | with the AppImages |
+| Flatpak x86_64, aarch64 | `vectorcraft-<v>-linux-{x86_64,aarch64}.flatpak` | `ubuntu-24.04`, `ubuntu-24.04-arm` (repackages the Linux tarball) |
 | FreeBSD 14 x86_64 | `vectorcraft-<v>-freebsd-x86_64.tar.gz` | a FreeBSD 14.3 VM on `ubuntu-latest` |
 | Web | `vectorcraft-web-<v>.zip`, a static site (see [`packaging/web/README.md`](../packaging/web/README.md)) | `ubuntu-latest` |
 
@@ -130,9 +135,21 @@ glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+, Fedora 36+ and RHEL 10. Moving t
 image raises that floor, so do it deliberately. After packaging, the job prints the `.deb`'s
 metadata and contents, runs `ldd` on the binary and runs each AppImage with `--version`.
 
-`packaging/linux/flatpak/ai.storyteller.vectorcraft.yml` is a Flatpak manifest ready for a
-Flathub submission (its header says how to build it). The release doesn't build a Flatpak; the
-workflows only check the manifest's id.
+**AppImage updates.** Each AppImage embeds the update information
+`gh-releases-zsync|storytold|vectorcraft|latest|vectorcraft-*-linux-<arch>.AppImage.zsync`
+(appimagetool `-u`), and `package.sh` writes the matching `.zsync` beside it when `zsyncmake` (the
+`zsync` package) is installed. [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate)
+and AppImageLauncher then download only the changed blocks from the newest published,
+non-pre-release release. The job checks both are there.
+
+**Flatpak.** The `flatpak` jobs (x86_64 on `ubuntu-24.04`, aarch64 on `ubuntu-24.04-arm`) take the
+Linux job's tarball and repackage it with `packaging/linux/flatpak-bundle.sh` and
+`packaging/linux/flatpak/ai.storyteller.vectorcraft.bundle.yml` into a single-file bundle
+(`flatpak install --user vectorcraft-<v>-linux-<arch>.flatpak`), then install it and run
+`vectorcraft-cli --version` in the sandbox. No Rust build happens there, so the bundle carries the
+same binaries as the AppImage. `packaging/linux/flatpak/ai.storyteller.vectorcraft.yml` is the
+from-source manifest for a Flathub submission (its header says how to build it); packaging-lint
+keeps the runtime and sandbox permissions of the two manifests identical.
 
 ### FreeBSD
 
@@ -157,8 +174,9 @@ the job fails and asks for a version bump (`cargo xtask version set`).
 
 ## Secrets
 
-All jobs run in the `release` environment, which only the `release` branch can use and which holds
-the signing secrets. Every secret is optional: a missing one produces unsigned artifacts and a
+The jobs that sign (macOS, Windows) and the draft-release job run in the `release` environment,
+which only the `release` branch can use and which holds the signing secrets. The other jobs get no
+secrets. Every secret is optional: a missing one produces unsigned artifacts and a
 warning, never a failed build.
 
 | Secret | Used for |

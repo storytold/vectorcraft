@@ -8,6 +8,7 @@
 #   flatpak run ai.storyteller.vectorcraft
 #
 # For Flathub, replace the `dir` source with a `git` source pinned to a release tag and commit.
+# Release bundles (.flatpak on GitHub Releases) use ai.storyteller.vectorcraft.bundle.yml instead.
 id: ai.storyteller.vectorcraft
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
@@ -16,6 +17,7 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: vectorcraft
 finish-args:
+  # Keep identical to ai.storyteller.vectorcraft.bundle.yml (the release bundle); comments there.
   - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
