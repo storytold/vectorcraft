@@ -75,8 +75,8 @@ jobs:
           $msi = (Get-ChildItem dist/*.msi | Select-Object -First 1).FullName
           $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 60; throw "msiexec /i exited $($p.ExitCode)" }
-          $dir = Join-Path $env:ProgramFiles 'VectorCraft'
-          foreach ($exe in 'vectorcraft.exe', 'vectorcraft-cli.exe') {
+          $dir = Join-Path $env:ProgramFiles 'Vector W3K2'
+          foreach ($exe in 'Vector W3K2.exe', 'vectorcraft-cli.exe') {
             $path = Join-Path $dir $exe
             if (-not (Test-Path $path)) { throw "$exe not installed in $dir" }
             $bytes = [System.IO.File]::ReadAllBytes($path)
@@ -91,5 +91,5 @@ jobs:
           Write-Output "ok vectorcraft-cli --version: $($out.Trim())"
           $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "msiexec /x exited $($p.ExitCode)" }
-          if (Test-Path (Join-Path $dir 'vectorcraft.exe')) { throw 'uninstall left vectorcraft.exe behind' }
+          if (Test-Path (Join-Path $dir 'Vector W3K2.exe')) { throw 'uninstall left Vector W3K2.exe behind' }
           Write-Output 'ok uninstalled'
