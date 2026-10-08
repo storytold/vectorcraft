@@ -71,6 +71,34 @@ pub enum DockTab {
     Libraries,
 }
 
+/// Where a panel taken out of the dock sits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelPlace {
+    /// Floating over the canvas wherever it was dropped.
+    #[default]
+    Free,
+    /// Locked to the toolbar: stacked in a column beside the toolbar (the canvas makes room).
+    Toolbar,
+}
+
+/// A panel dragged out of the dock: a dock tab (`properties`, `layers`, `libraries`) or an icon
+/// panel (`ICON_PANELS`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct FloatingPanel {
+    pub id: String,
+    /// Top-left corner in points (a free panel's place; a locked one's last place in its column).
+    pub pos: [f32; 2],
+    pub place: PanelPlace,
+}
+
+impl Default for FloatingPanel {
+    fn default() -> Self {
+        Self { id: String::new(), pos: [200.0, 120.0], place: PanelPlace::Free }
+    }
+}
+
 /// Panels that live as collapsed icons in the dock (Essentials Classic).
 pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("color", "Color", "palette"),
@@ -217,6 +245,10 @@ pub struct UiState {
     pub dock_tab: DockTab,
     /// Icon panel currently popped out of the collapsed column.
     pub open_panel: Option<String>,
+    /// Panels dragged out of the dock: floating, or locked beside the toolbar (kept between
+    /// sessions; a workspace switch or reset puts them back).
+    #[serde(default)]
+    pub floating_panels: Vec<FloatingPanel>,
     pub control_bar: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -338,6 +370,9 @@ impl UiState {
         self.status.clear();
         self.about = false;
         self.open_panel = None;
+        // Panels that no longer exist (or appear twice, or sit at a non-finite place) go back.
+        let mut seen = std::collections::BTreeSet::new();
+        self.floating_panels.retain(|p| crate::floating::is_panel(&p.id) && p.pos.iter().all(|v| v.is_finite()) && seen.insert(p.id.clone()));
         if self.group_tool.len() != vectorcraft_tools::TOOL_GROUPS.len() {
             self.group_tool = UiState::default().group_tool;
         }
@@ -352,6 +387,7 @@ impl Default for UiState {
             brightness: Brightness::MediumDark,
             dock_tab: DockTab::Properties,
             open_panel: None,
+            floating_panels: vec![],
             control_bar: false,
             toolbar: true,
             toolbar_double: false,
