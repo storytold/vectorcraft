@@ -228,7 +228,9 @@ jobs:
             chmod +x "$appimage"
             APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
             # Update information is embedded, and the .zsync for delta updates sits beside it.
-            APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-updateinformation \
+            # No APPIMAGE_EXTRACT_AND_RUN here: with it the runtime passes --appimage-* flags on
+            # to the app instead of answering them itself.
+            "$appimage" --appimage-updateinformation \
               | grep -F "gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|vectorcraft-*-linux-${{ matrix.arch }}.AppImage.zsync"
             test -s "$appimage.zsync"
           done
