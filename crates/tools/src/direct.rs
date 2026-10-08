@@ -203,10 +203,14 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
 
 /// Anchor of any visible path or area type frame under `p`, topmost first: (id, si, ai, where it is).
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, Point)> {
-    let owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    let mut owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    owners.sort_by_key(|id| !cx.selection.contains(*id));
     owners.into_iter().find_map(|id| {
         let pd = cx.doc.node(id).and_then(editable_path)?;
-        pd.anchors().find(|(_, _, a)| a.p.distance(p) <= tol).map(|(si, ai, a)| (id, si, ai, a.p))
+        pd.anchors()
+            .filter(|(_, _, a)| a.p.distance(p) <= if cx.selection.contains(id) { tol.max(cx.tol(8.0)) } else { tol })
+            .min_by(|(_, _, a), (_, _, b)| a.p.distance(p).total_cmp(&b.p.distance(p)))
+            .map(|(si, ai, a)| (id, si, ai, a.p))
     })
 }
 
@@ -241,6 +245,7 @@ fn handle_anchors(cx: &ToolContext) -> Vec<(NodeId, usize, usize, Anchor)> {
 /// nearer to it than the handle's anchor (a short handle leaves its anchor to be picked): (path,
 /// subpath, anchor, is_out).
 pub(crate) fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, bool)> {
+    let tol = tol.max(cx.tol(10.0));
     let mut best: Option<((NodeId, usize, usize, bool), f64)> = None;
     for (id, si, ai, a) in handle_anchors(cx) {
         for (out, has, h) in [(true, a.has_out(), a.h_out), (false, a.has_in(), a.h_in)] {
@@ -596,7 +601,10 @@ impl Tool for DirectSelectionTool {
             }
         }
     }
-    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        if !self.group && m.alt {
+            return Cursor::HandleIndependent;
+        }
         if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p, true)) {
             return Cursor::CornerRadius;
         }
@@ -786,6 +794,21 @@ mod tests {
     }
 
     #[test]
+    fn enlarged_targets_and_option_cursor_work_at_retina_zoom() {
+        let (d, id) = doc_with_rect();
+        let mut selection = Selection::default();
+        selection.set([id]);
+        let paint = paint();
+        let context = ToolContext { zoom: 4.0, ..cx(&d, &selection, &paint) };
+        let mut tool = DirectSelectionTool::new(false);
+        let action = tool.pointer(&context, &PointerEvent::new(PointerKind::Down, 101.5, 101.0));
+        assert!(matches!(&action[..], [Action::Exec(c, _)] if c == "select.anchors"));
+        let point = Point::new(150.0, 150.0);
+        assert_eq!(tool.cursor(&context, point, Mods { alt: true, ..Default::default() }), Cursor::HandleIndependent);
+        assert_eq!(tool.cursor(&context, point, Mods::default()), Cursor::ArrowHollow);
+    }
+
+    #[test]
     fn click_anchor_selects_it() {
         let (d, id) = doc_with_rect();
         let s = Selection::default();
@@ -912,7 +935,8 @@ mod tests {
         assert!(handle(&ToolContext { handles_multiple: false, ..cx(&d, &second, &p) }, 201.0, 251.0));
         // The tolerance is the preference's, in screen pixels: 3 px is 0.75 pt at 400%.
         let zoomed = ToolContext { zoom: 4.0, ..cx(&d, &whole, &p) };
-        assert!(!handle(&zoomed, 101.0, 251.0));
+        assert!(handle(&zoomed, 101.0, 251.0));
+        assert!(!handle(&zoomed, 103.0, 253.0));
         assert!(handle(&zoomed, 100.5, 250.5));
         assert!(handle(&ToolContext { selection_tolerance: 8.0, ..cx(&d, &whole, &p) }, 106.0, 254.0));
     }

@@ -148,7 +148,7 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
         (
             tl!("Anchors:"),
             &[
-                ("pen-tool-delete", tl!("Remove Anchor Points"), "path.removeAnchors", None),
+                ("pen-tool-delete", tl!("Remove Anchor Points and Reconnect Path"), "path.removeAnchors", None),
                 ("dc-join", tl!("Connect Selected End Points"), "path.join", None),
                 ("scissors", tl!("Cut Path at Selected Anchor Points"), "path.cutAtAnchors", None),
             ],
@@ -171,6 +171,66 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
     if let Some((id, p)) = run {
         crate::menus::invoke(app, id, p);
+    }
+    if controls != AnchorControls::None {
+        ui.horizontal_wrapped(|ui| handle_mode_buttons(app, ui));
+    }
+}
+
+/// Explicit direction-handle coupling, independent of corner conversion.
+/// Icons are original procedural diagrams; no external assets.
+pub fn handle_mode_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use vectorcraft_geom::AnchorKind;
+    let active = app.session.active().and_then(|st| {
+        let mut kinds = st.selection.objects.iter().filter_map(|id| st.doc.node(*id).and_then(|n| n.path_data()).map(|path| (*id, path))).flat_map(
+            |(id, path)| {
+                path.anchors().filter(move |(si, ai, _)| st.selection.partial(id).is_none_or(|set| set.contains(&(*si, *ai)))).map(|(_, _, a)| a.kind)
+            },
+        );
+        let first = kinds.next()?;
+        kinds.all(|k| k == first).then_some(first)
+    });
+    let t = Tokens::get(ui.ctx());
+    let mut run = None;
+    ui.label(tl!("Handles:"));
+    for (mode, kind, title, tip) in [
+        ("independent", AnchorKind::Corner, tl!("Independent"), tl!("Move either handle independently; retain both handles")),
+        ("aligned", AnchorKind::Smooth, tl!("Aligned"), tl!("Keep handles 180° apart, with independent lengths")),
+        ("mirrored", AnchorKind::Symmetric, tl!("Mirrored"), tl!("Keep handles 180° apart and equal in length")),
+    ] {
+        let selected = active == Some(kind);
+        let galley = ui.painter().layout_no_wrap(title.to_owned(), egui::FontId::proportional(13.0), t.text);
+        // Reserve separate icon and text columns, with equal outer padding.
+        let (rect, response) = ui.allocate_exact_size(vec2(24.0 + 28.0 + 10.0 + galley.size().x, 30.0), Sense::click());
+        response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, title));
+        let fill = if selected {
+            ui.visuals().selection.bg_fill
+        } else if response.hovered() {
+            t.hover
+        } else {
+            egui::Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(rect, CornerRadius::same(3), fill);
+        ui.painter().galley(egui::pos2(rect.left() + 50.0, rect.center().y - galley.size().y * 0.5), galley, t.text);
+        let center = rect.left_center() + vec2(26.0, 0.0);
+        let right = center + vec2(11.0, 0.0);
+        let left = center
+            + match kind {
+                AnchorKind::Corner => vec2(-8.0, 7.0),
+                AnchorKind::Smooth => vec2(-6.0, 0.0),
+                AnchorKind::Symmetric => vec2(-11.0, 0.0),
+            };
+        ui.painter().line_segment([left, center], Stroke::new(1.0, t.icon));
+        ui.painter().line_segment([center, right], Stroke::new(1.0, t.icon));
+        ui.painter().circle_filled(left, 2.5, t.icon);
+        ui.painter().circle_filled(right, 2.5, t.icon);
+        ui.painter().rect_filled(egui::Rect::from_center_size(center, vec2(5.0, 5.0)), 0.0, t.icon);
+        if response.on_hover_text(tip).clicked() {
+            run = Some(mode);
+        }
+    }
+    if let Some(mode) = run {
+        app.run("path.handleMode", json!({"mode": mode})).ok();
     }
 }
 

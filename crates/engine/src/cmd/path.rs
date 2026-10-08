@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             set_handle
         ),
         cmd!(
+            "path.handleMode",
+            "Set Direction Handle Mode",
+            ["Object", "Path"],
+            None,
+            "{mode: \"independent\"|\"aligned\"|\"mirrored\"} set selected anchors' handle coupling without retracting handles; fully selected paths apply to every anchor",
+            has_selection,
+            handle_mode
+        ),
+        cmd!(
             "path.setAnchors",
             "Set Anchors",
             [],
@@ -206,6 +215,39 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         a.set_handle(out, pos, independent);
+        Ok(())
+    })?;
+    ok()
+}
+
+fn handle_mode(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "path.handleMode";
+    let kind = match str_param(p, "mode") {
+        Some("independent") => AnchorKind::Corner,
+        Some("aligned") => AnchorKind::Smooth,
+        Some("mirrored") => AnchorKind::Symmetric,
+        _ => return Err(bad(C, "mode must be independent, aligned or mirrored")),
+    };
+    let targets = anchor_targets(s)?;
+    if targets.is_empty() {
+        return Err(bad(C, "select paths or anchor points"));
+    }
+    s.edit("Direction Handle Mode", |d, _| {
+        for (id, refs) in &targets {
+            let path = path_mut(d, *id)?;
+            for &(si, ai) in refs {
+                let Some(a) = path.anchor_mut(si, ai) else { continue };
+                a.kind = kind;
+                if kind != AnchorKind::Corner {
+                    // Preserve the outgoing direction when present, otherwise the incoming one.
+                    if a.has_out() {
+                        a.set_handle(true, a.h_out, false);
+                    } else if a.has_in() {
+                        a.set_handle(false, a.h_in, false);
+                    }
+                }
+            }
+        }
         Ok(())
     })?;
     ok()

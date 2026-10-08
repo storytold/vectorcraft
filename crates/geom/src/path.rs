@@ -24,6 +24,8 @@ pub enum AnchorKind {
     Corner,
     /// Handles stay collinear (dragging one rotates the other).
     Smooth,
+    /// Handles remain opposite and equal in length.
+    Symmetric,
 }
 
 /// One anchor point with absolute handle positions. A handle equal to `p` means "no handle".
@@ -51,6 +53,13 @@ struct AnchorRepr {
     h_out: Option<WirePoint>,
     #[serde(default, skip_serializing_if = "is_corner")]
     kind: AnchorKind,
+    // Older readers ignore this extension and retain aligned geometry.
+    #[serde(default, skip_serializing_if = "is_false")]
+    mirrored: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn is_corner(k: &AnchorKind) -> bool {
@@ -60,14 +69,20 @@ fn is_corner(k: &AnchorKind) -> bool {
 impl From<AnchorRepr> for Anchor {
     fn from(r: AnchorRepr) -> Self {
         let p = r.p.0;
-        Self { p, h_in: r.h_in.map_or(p, |h| h.0), h_out: r.h_out.map_or(p, |h| h.0), kind: r.kind }
+        Self { p, h_in: r.h_in.map_or(p, |h| h.0), h_out: r.h_out.map_or(p, |h| h.0), kind: if r.mirrored { AnchorKind::Symmetric } else { r.kind } }
     }
 }
 
 impl From<Anchor> for AnchorRepr {
     fn from(a: Anchor) -> Self {
         let handle = |h: Point| (h != a.p).then_some(WirePoint(h));
-        Self { p: WirePoint(a.p), h_in: handle(a.h_in), h_out: handle(a.h_out), kind: a.kind }
+        Self {
+            p: WirePoint(a.p),
+            h_in: handle(a.h_in),
+            h_out: handle(a.h_out),
+            kind: if a.kind == AnchorKind::Symmetric { AnchorKind::Smooth } else { a.kind },
+            mirrored: a.kind == AnchorKind::Symmetric,
+        }
     }
 }
 
@@ -149,15 +164,18 @@ impl Anchor {
             self.kind = AnchorKind::Corner;
         }
         let p = self.p;
-        let smooth = self.kind == AnchorKind::Smooth;
+        let symmetric = self.kind == AnchorKind::Symmetric;
+        let smooth = self.kind == AnchorKind::Smooth || symmetric;
         let (moved, other) = if out { (&mut self.h_out, &mut self.h_in) } else { (&mut self.h_in, &mut self.h_out) };
         *moved = pos;
         if smooth {
-            let len = (*other - p).hypot();
+            let len = if symmetric { (pos - p).hypot() } else { (*other - p).hypot() };
             let dir = p - pos;
             let l = dir.hypot();
             if l > 1e-9 {
                 *other = p + dir * (len / l);
+            } else if symmetric {
+                *other = p;
             }
         }
     }
@@ -519,6 +537,29 @@ mod tests {
 
     fn square() -> PathData {
         PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)], true))
+    }
+
+    #[test]
+    fn mirrored_handles_keep_equal_opposite_lengths_and_serialize() {
+        let mut a = Anchor::smooth(Point::new(10.0, 20.0), Point::new(30.0, 20.0));
+        a.kind = AnchorKind::Symmetric;
+        a.set_handle(true, Point::new(40.0, 60.0), false);
+        assert_eq!(a.h_in, Point::new(-20.0, -20.0));
+        let wire = serde_json::to_value(a).unwrap();
+        assert_eq!(wire["kind"], "Smooth", "old readers recognize the stored kind");
+        assert_eq!(wire["mirrored"], true);
+        let mut legacy_wire = wire.clone();
+        legacy_wire.as_object_mut().unwrap().remove("mirrored");
+        let legacy: Anchor = serde_json::from_value(legacy_wire).unwrap();
+        assert_eq!(legacy.kind, AnchorKind::Smooth);
+        assert_eq!((legacy.h_in, legacy.h_out), (a.h_in, a.h_out));
+        let back: Anchor = serde_json::from_value(wire).unwrap();
+        assert_eq!(a, back);
+        a.set_handle(false, a.p, false);
+        assert_eq!(a.h_out, a.p);
+        a.set_handle(true, Point::new(25.0, 30.0), true);
+        assert_eq!(a.kind, AnchorKind::Corner);
+        assert_eq!(a.h_in, a.p);
     }
 
     #[test]

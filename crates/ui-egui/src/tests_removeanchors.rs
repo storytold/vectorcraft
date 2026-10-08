@@ -142,7 +142,7 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     crate::theme::install_fonts(&ctx);
     canvas_frame(&mut app, &ctx, vec![]);
     let texts = canvas_frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, LABEL), "task bar: {texts:?}");
+    assert!(has(&texts, "Remove & Reconnect"), "task bar: {texts:?}");
 
     // Right-click keeps the anchor selection (the object is already selected) and runs the item.
     let p = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 90.0));
@@ -227,4 +227,36 @@ fn a_whole_path_converts_with_the_tools_that_edit_anchors() {
     click_button(&mut app, &ctx, "Convert:", 1);
     let sp = app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
     assert!(sp.anchors.iter().all(|a| a.has_in() && a.has_out()), "every corner made smooth: {sp:?}");
+}
+
+#[test]
+fn floating_bar_exposes_handle_modes_without_the_control_panel() {
+    let mut app = app();
+    let id = rect(&mut app);
+    app.select_tool("directSelection");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut texts = canvas_frame(&mut app, &ctx, vec![]);
+    for _ in 0..3 {
+        texts = canvas_frame(&mut app, &ctx, vec![]);
+    }
+    for label in ["Independent", "Aligned", "Mirrored"] {
+        assert!(texts.iter().any(|(text, _)| text.trim() == label), "{label} visible for a whole selected path");
+    }
+    app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    for _ in 0..3 {
+        texts = canvas_frame(&mut app, &ctx, vec![]);
+    }
+    let modes: Vec<_> =
+        ["Independent", "Aligned", "Mirrored"].into_iter().map(|label| texts.iter().find(|(text, _)| text == label).unwrap().1).collect();
+    let actions: Vec<_> =
+        ["Remove & Reconnect", "Cut Path", "Duplicate"].into_iter().map(|label| texts.iter().find(|(text, _)| text == label).unwrap().1).collect();
+    assert!(modes.iter().all(|r| (r.center().y - modes[0].center().y).abs() < 1.0));
+    assert!(actions.iter().all(|r| (r.center().y - actions[0].center().y).abs() < 1.0));
+    assert!(modes.iter().all(|mode| actions.iter().all(|action| mode.bottom() < action.top())), "modes occupy their own row above path actions");
+    let position = modes[2].center();
+    click_canvas(&mut app, &ctx, position, PointerButton::Primary);
+    let path = app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap();
+    assert_eq!(path.subpaths[0].anchors[1].kind, vectorcraft_geom::AnchorKind::Symmetric);
+    assert_eq!(path.subpaths[0].anchors[0].kind, vectorcraft_geom::AnchorKind::Corner);
 }

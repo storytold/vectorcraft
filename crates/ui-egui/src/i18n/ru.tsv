@@ -3596,3 +3596,15 @@ axis	Both	Оба
 	Off: an editable copy of its art, embedded in this document.	Выкл.: редактируемая копия его рисунка, внедрённая в этот документ.
 	Images: link to the file instead of only embedding it.	Изображения: связывать с файлом вместо простого внедрения.
 	VectorCraft documents: one locked object, updated when the file changes.	Документы VectorCraft: один заблокированный объект, обновляемый при изменении файла.
+
+# Direct Selection direction-handle controls.
+	Handles:	Рычаги:
+	Independent	Независимые
+	Aligned	Выровненные
+	Mirrored	Симметричные
+	Set Direction Handle Mode	Задать режим направляющих рычагов
+	Remove & Reconnect	Удалить и соединить
+	Remove Anchor Points and Reconnect Path	Удалить опорные точки и соединить контур
+	Move either handle independently; retain both handles	Перемещать каждый рычаг независимо; сохранить оба рычага
+	Keep handles 180° apart, with independent lengths	Держать рычаги под углом 180°, с независимой длиной
+	Keep handles 180° apart and equal in length	Держать рычаги под углом 180° и одинаковой длины

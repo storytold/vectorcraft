@@ -46,6 +46,14 @@ since 2026-10-01.
 | **Agent automation** | beyond Illustrator | Every command, gesture and dialog is drivable over MCP, the CLI and the control channel |
 | **Scrubby numeric fields** | beyond Illustrator | As in Photoshop, dragging a numeric field's label (`W:`, `Opacity:`, the Character panel's icons) left or right steps its value live; one undo step per drag, Escape cancels (#400) |
 
+### Direct Selection handle editing (2026-10-08)
+
+- Direct Selection uses larger on-screen targets for anchors (8 px) and shown handles (10 px), independent of visible dot size; selected paths win overlapping anchor picks.
+- The floating task bar, Control bar and Properties anchor controls expose original diagrams with labels and active state for independent, aligned (180°, separate lengths), and mirrored (180°, equal lengths) handles. `path.handleMode` is undoable and reaches agents.
+- Holding Option with Direct Selection shows an original V cursor and retains the existing independent-handle drag behavior.
+- Native documents preserve mirrored coupling as an optional extension to the existing smooth-anchor wire format. Older releases open the same geometry with aligned coupling. SVG/PDF exports preserve the curve geometry, not this editing mode.
+- The floating bar places handle modes above path actions in two rows and labels node removal “Remove & Reconnect”, distinguishing it from Delete, which opens a path.
+
 ### Where we're lacking (in priority order)
 
 Ordered by how much each gap blocks someone from switching. Sizes are one-agent hours from the parity table.

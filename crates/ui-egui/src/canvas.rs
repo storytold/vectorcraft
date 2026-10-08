@@ -436,7 +436,13 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::ResizeNwSe => C::ResizeNwSe,
         Cursor::ResizeNeSw => C::ResizeNeSw,
         Cursor::Rotate => C::Alias,
-        Cursor::Pen | Cursor::PenAdd | Cursor::PenDelete | Cursor::PenClose | Cursor::PenContinue | Cursor::PenConvert => C::Crosshair,
+        Cursor::Pen
+        | Cursor::PenAdd
+        | Cursor::PenDelete
+        | Cursor::PenClose
+        | Cursor::PenContinue
+        | Cursor::PenConvert
+        | Cursor::HandleIndependent => C::Crosshair,
         Cursor::Text => C::Text,
         Cursor::Hand => C::Grab,
         Cursor::HandGrab => C::Grabbing,
@@ -1703,8 +1709,10 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let mut items: Vec<(&str, &str, &str)> = vec![]; // (label, icon, command)
     // Direct-selected anchors take the place of a path's Offset Path and Simplify.
     let anchors = !st.selection.anchors.is_empty();
+    let handle_controls = app.session.tool_id() == "directSelection"
+        && st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. })));
     if anchors {
-        items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors"));
+        items.push((tl!("Remove & Reconnect"), "pen-tool-delete", "path.removeAnchors"));
         items.push((tl!("Cut Path"), "scissors", "path.cutAtAnchors"));
     }
     if n > 1 {
@@ -1723,12 +1731,13 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
     let doc = st.uid;
     let anchor = xf.to_screen(Point::new(b.center().x, b.y1));
-    let est_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
+    let actions_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
+    let est_w = if handle_controls { actions_w.max(490.0) } else { actions_w };
     // Its place under the selection, then where the handle moved it, kept on the canvas (with the
     // bar's size last frame, the estimate before it first shows).
     let under = pos2(anchor.x - est_w / 2.0, anchor.y + 28.0);
     let id = task_bar_id();
-    let size = egui::AreaState::load(ui.ctx(), id).and_then(|s| s.size).unwrap_or(vec2(est_w, 44.0));
+    let size = egui::AreaState::load(ui.ctx(), id).and_then(|s| s.size).unwrap_or(vec2(est_w, if handle_controls { 80.0 } else { 44.0 }));
     let bounds = xf.rect.shrink(8.0);
     let keep_in = |p: Pos2| p.clamp(bounds.min, (bounds.max - size).max(bounds.min));
     let place = &mut app.ui.task_bar_place;
@@ -1760,7 +1769,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    let (g, grip) = ui.allocate_exact_size(vec2(4.0, 28.0), Sense::drag());
+                    let (g, grip) = ui.allocate_exact_size(vec2(4.0, if handle_controls { 64.0 } else { 28.0 }), Sense::drag());
                     let active = grip.hovered() || grip.dragged();
                     ui.painter().rect_filled(g.shrink2(vec2(0.5, 4.0)), CornerRadius::same(2), if active { t.text_dim } else { t.button_border });
                     if grip.dragged() {
@@ -1769,51 +1778,61 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     } else if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
-                    for (label, icon, cmd) in &items {
-                        let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
-                        let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
-                        if resp.hovered() {
-                            ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        if handle_controls {
+                            ui.horizontal(|ui| {
+                                crate::chrome::handle_mode_buttons(app, ui);
+                            });
                         }
-                        ui.painter().rect_stroke(r, CornerRadius::same(3), Stroke::new(1.0, t.button_border), StrokeKind::Inside);
-                        crate::icons::paint(ui, icon, egui::Rect::from_min_size(r.min + vec2(8.0, 7.0), vec2(16.0, 16.0)), t.icon);
-                        ui.painter().galley(pos2(r.left() + 30.0, r.center().y - galley.size().y / 2.0), galley, t.text_strong);
-                        if resp.clicked() {
-                            run = Some((*cmd, json!({})));
-                        }
-                    }
-                    let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
-                    widgets::paint_chip(ui, egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)), &fill);
-                    ui.painter().rect_stroke(
-                        egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)),
-                        0.0,
-                        Stroke::new(1.0, t.button_border),
-                        StrokeKind::Outside,
-                    );
-                    if resp.on_hover_text(tl!("Fill")).clicked() {
-                        app.session.fill_active = true;
-                        app.ui.open_panel = Some("swatches".into());
-                    }
-                    if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
-                        run = Some(("object.lock", json!({})));
-                    }
-                    let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);
-                    egui::Popup::menu(&more).show(|ui| {
-                        ui.set_min_width(170.0);
-                        let bar = [
-                            (tl!("Hide Bar"), "window.taskBar", false),
-                            (tl!("Pin Bar Position"), "window.taskBar.pin", pinned),
-                            (tl!("Reset Bar Position"), "window.taskBar.reset", false),
-                        ];
-                        for (label, cmd, checked) in bar {
-                            if widgets::menu_item(ui, label, true, checked) {
-                                run = Some((cmd, json!({})));
+                        ui.horizontal(|ui| {
+                            for (label, icon, cmd) in &items {
+                                let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
+                                let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+                                if resp.hovered() {
+                                    ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
+                                }
+                                ui.painter().rect_stroke(r, CornerRadius::same(3), Stroke::new(1.0, t.button_border), StrokeKind::Inside);
+                                crate::icons::paint(ui, icon, egui::Rect::from_min_size(r.min + vec2(8.0, 7.0), vec2(16.0, 16.0)), t.icon);
+                                ui.painter().galley(pos2(r.left() + 30.0, r.center().y - galley.size().y / 2.0), galley, t.text_strong);
+                                if resp.clicked() {
+                                    run = Some((*cmd, json!({})));
+                                }
                             }
-                        }
-                        ui.separator();
-                        if widgets::menu_item(ui, tl!("Show Properties Panel"), true, false) {
-                            run = Some(("window.panel", json!({"panel": "properties"})));
-                        }
+                            let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
+                            widgets::paint_chip(ui, egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)), &fill);
+                            ui.painter().rect_stroke(
+                                egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)),
+                                0.0,
+                                Stroke::new(1.0, t.button_border),
+                                StrokeKind::Outside,
+                            );
+                            if resp.on_hover_text(tl!("Fill")).clicked() {
+                                app.session.fill_active = true;
+                                app.ui.open_panel = Some("swatches".into());
+                            }
+                            if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
+                                run = Some(("object.lock", json!({})));
+                            }
+                            let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);
+                            egui::Popup::menu(&more).show(|ui| {
+                                ui.set_min_width(170.0);
+                                let bar = [
+                                    (tl!("Hide Bar"), "window.taskBar", false),
+                                    (tl!("Pin Bar Position"), "window.taskBar.pin", pinned),
+                                    (tl!("Reset Bar Position"), "window.taskBar.reset", false),
+                                ];
+                                for (label, cmd, checked) in bar {
+                                    if widgets::menu_item(ui, label, true, checked) {
+                                        run = Some((cmd, json!({})));
+                                    }
+                                }
+                                ui.separator();
+                                if widgets::menu_item(ui, tl!("Show Properties Panel"), true, false) {
+                                    run = Some(("window.panel", json!({"panel": "properties"})));
+                                }
+                            });
+                        });
                     });
                 });
             });
@@ -2289,6 +2308,8 @@ mod tests {
     #[test]
     fn handle_style_and_handles_of_multiple_anchors() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        // Count canvas handle dots, excluding the task bar's handle-mode diagrams.
+        app.ui.task_bar = false;
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         let id = app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
         app.session.select_tool("directSelection", app.view_info()).unwrap();

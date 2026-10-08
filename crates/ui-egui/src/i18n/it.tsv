@@ -3598,3 +3598,15 @@ axis	Both	Entrambi
 	Off: an editable copy of its art, embedded in this document.	Disattivato: una copia modificabile della sua grafica, incorporata in questo documento.
 	Images: link to the file instead of only embedding it.	Immagini: collega il file invece di incorporarlo soltanto.
 	VectorCraft documents: one locked object, updated when the file changes.	Documenti VectorCraft: un unico oggetto bloccato, aggiornato quando il file cambia.
+
+# Direct Selection direction-handle controls.
+	Handles:	Maniglie:
+	Independent	Indipendenti
+	Aligned	Allineate
+	Mirrored	Speculari
+	Set Direction Handle Mode	Imposta modalità delle maniglie
+	Remove & Reconnect	Rimuovi e ricollega
+	Remove Anchor Points and Reconnect Path	Rimuovi punti di ancoraggio e ricollega il tracciato
+	Move either handle independently; retain both handles	Sposta ogni maniglia indipendentemente; conserva entrambe
+	Keep handles 180° apart, with independent lengths	Mantieni le maniglie a 180°, con lunghezze indipendenti
+	Keep handles 180° apart and equal in length	Mantieni le maniglie a 180° e della stessa lunghezza

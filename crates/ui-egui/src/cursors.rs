@@ -267,6 +267,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenClose => pen(ink, p, "o"),
         Cursor::PenContinue => pen(ink, p, "/"),
         Cursor::PenConvert => pen(ink, p, "^"),
+        Cursor::HandleIndependent => {
+            line(ink, p + vec2(-7.0, -9.0), p);
+            line(ink, p, p + vec2(7.0, -9.0));
+        }
         Cursor::Text => ibeam(ink, p),
         Cursor::AddStop => stop_badge(ink, p, true),
         Cursor::RemoveStop => stop_badge(ink, p, false),
@@ -412,7 +416,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 32] = [
+    const GLYPHS: [Cursor; 33] = [
         Cursor::Arrow,
         Cursor::ArrowHollow,
         Cursor::Move,
@@ -429,6 +433,7 @@ mod tests {
         Cursor::PenClose,
         Cursor::PenContinue,
         Cursor::PenConvert,
+        Cursor::HandleIndependent,
         Cursor::Text,
         Cursor::Eyedropper,
         Cursor::AddStop,

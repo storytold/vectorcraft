@@ -419,6 +419,8 @@ pub enum Cursor {
     /// Over the last anchor of the path being drawn (a click retracts its outgoing handle), or with
     /// Alt held over a selected path's handle or anchor (the Anchor Point tool's gesture).
     PenConvert,
+    /// Option-held Direct Selection: independent direction handle editing, V glyph.
+    HandleIndependent,
     Text,
     Hand,
     HandGrab,

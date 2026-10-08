@@ -3090,3 +3090,15 @@ axis	Both	兩者
 	Off: an editable copy of its art, embedded in this document.	關閉：將其圖稿的可編輯副本內嵌在此文件中。
 	Images: link to the file instead of only embedding it.	影像：連結至檔案，而不只是嵌入。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文件：單一鎖定物件，檔案變更時隨之更新。
+
+# Direct Selection direction-handle controls.
+	Handles:	控制柄：
+	Independent	獨立
+	Aligned	對齊
+	Mirrored	對稱
+	Set Direction Handle Mode	設定方向控制柄模式
+	Remove & Reconnect	移除並重新連接
+	Remove Anchor Points and Reconnect Path	移除錨點並重新連接路徑
+	Move either handle independently; retain both handles	個別移動控制柄；保留兩個控制柄
+	Keep handles 180° apart, with independent lengths	控制柄保持180°，長度可個別調整
+	Keep handles 180° apart and equal in length	控制柄保持180°且長度相等

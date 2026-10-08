@@ -790,3 +790,28 @@ fn pen_with_alt_converts_the_anchors_of_the_path_being_drawn() {
     gesture(&mut s, &[(500.0, 400.0)], none);
     assert_eq!((paths(&s).len(), path(&s, id).subpaths[0].anchors.len()), (1, 5));
 }
+
+#[test]
+fn handle_modes_preserve_independent_handles_and_mirror_selected_anchors_with_undo() {
+    let mut s = session();
+    let made = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 200}, {"x": 200, "y": 100}, {"x": 300, "y": 200}]})).unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let before = path(&s, id).subpaths[0].anchors.clone();
+    let undo = undo_steps(&s);
+    s.execute("path.handleMode", &json!({"mode": "independent"})).unwrap();
+    let independent = path(&s, id).subpaths[0].anchors[1];
+    assert_eq!(independent.h_in, before[1].h_in);
+    assert_eq!(independent.h_out, before[1].h_out);
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(s.execute("path.handleMode", &json!({"mode": "nonsense"})).is_err());
+    s.execute("path.handleMode", &json!({"mode": "mirrored"})).unwrap();
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 1, "which": "out", "x": 250, "y": 130})).unwrap();
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert_eq!(a.h_in, Point::new(150.0, 70.0));
+    assert_eq!(path(&s, id).subpaths[0].anchors[0], before[0]);
+    assert_eq!(path(&s, id).subpaths[0].anchors[2], before[2]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[1].h_out, independent.h_out);
+}

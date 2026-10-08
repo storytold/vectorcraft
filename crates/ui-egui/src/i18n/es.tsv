@@ -3598,3 +3598,15 @@ axis	Both	Ambos
 	Off: an editable copy of its art, embedded in this document.	Desactivado: una copia editable de su ilustración, incrustada en este documento.
 	Images: link to the file instead of only embedding it.	Imágenes: vincular al archivo en lugar de solo incrustarlo.
 	VectorCraft documents: one locked object, updated when the file changes.	Documentos de VectorCraft: un objeto bloqueado que se actualiza cuando cambia el archivo.
+
+# Direct Selection direction-handle controls.
+	Handles:	Manejadores:
+	Independent	Independientes
+	Aligned	Alineados
+	Mirrored	Simétricos
+	Set Direction Handle Mode	Definir modo de manejadores
+	Remove & Reconnect	Quitar y reconectar
+	Remove Anchor Points and Reconnect Path	Quitar puntos de ancla y reconectar el trazado
+	Move either handle independently; retain both handles	Mover cada manejador de forma independiente; conservar ambos
+	Keep handles 180° apart, with independent lengths	Mantener los manejadores a 180°, con longitudes independientes
+	Keep handles 180° apart and equal in length	Mantener los manejadores a 180° y con la misma longitud
