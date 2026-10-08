@@ -204,6 +204,25 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         .on_hover_text(tl!("Graphic Style"));
                     egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
                 }
+                // Live rectangle: the corner radius (the link opens the Transform panel's
+                // Rectangle Properties), so workspaces with the Control bar have it at hand.
+                if let Some(vectorcraft_doc::Node {
+                    kind: NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { radii, .. }), .. },
+                    ..
+                }) = first.as_ref().filter(|_| sel.len() == 1)
+                {
+                    ui.add_space(4.0);
+                    if ui
+                        .link(egui::RichText::new(tl!("Corners:")).size(12.0).color(t.text).underline())
+                        .on_hover_text(tl!("Corner Radius"))
+                        .clicked()
+                    {
+                        app.ui.open_panel = Some("transform".into());
+                    }
+                    if let Some(r) = widgets::num_field(ui, "cb-radius", Some(radii[0]), units, 80.0) {
+                        app.run("object.setLiveShape", json!({"radius": r})).ok();
+                    }
+                }
                 ui.separator();
                 snapping_popover(app, ui);
                 ui.separator();

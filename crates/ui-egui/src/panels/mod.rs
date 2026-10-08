@@ -478,6 +478,8 @@ mod tests_asset_export;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]
+mod tests_corners;
+#[cfg(test)]
 mod tests_css_properties;
 #[cfg(test)]
 mod tests_effectedit;
