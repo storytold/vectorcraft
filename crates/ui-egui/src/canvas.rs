@@ -354,6 +354,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.view.edges {
         hover_highlight(app, &painter, &xf);
         selection_overlay(app, &painter, &xf);
+        direct_feedback(app, &painter, &xf);
         if app.ui.view.text_threads {
             thread_overlay(app, &painter, &xf);
         }
@@ -993,6 +994,68 @@ fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     if let Some(n) = st.doc.node(id) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n), xf, Stroke::new(1.5, color));
+    }
+}
+
+/// One segment of a path (document space).
+fn segment_path(path: &vectorcraft_geom::PathData, si: usize, a0: usize) -> Option<vectorcraft_geom::BezPath> {
+    let sp = path.subpaths.get(si)?;
+    (a0 < sp.segment_count()).then(|| vectorcraft_geom::Shape::to_path(&sp.segment(a0), 0.1))
+}
+
+/// The Direct Selection tool's response to the pointer: the segment under it drawn bolder and the
+/// point under it drawn larger, and the segments it picked pulsing gently in shade (repainting
+/// only while some are picked).
+fn direct_feedback(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    if app.session.tool_id() != "directSelection" {
+        return;
+    }
+    let Some(st) = app.session.active() else { return };
+    // Picked segments: a slow pulse between the layer colour and a lighter shade of it.
+    let mut pulsing = false;
+    let time = p.ctx().input(|i| i.time);
+    let k = (0.5 + 0.5 * (time * std::f64::consts::TAU / 1.4).sin()) as f32;
+    for id in st.selection.segments.keys() {
+        let Some(path) = st.doc.node(*id).and_then(|n| n.path_data()) else { continue };
+        let color = c32(st.doc.layer_color(*id));
+        let shade = color.lerp_to_gamma(Color32::WHITE, 0.45 * k);
+        for (si, a0, _) in st.selection.segments_of(&st.doc, *id) {
+            if let Some(bp) = segment_path(path, si, a0) {
+                stroke_path(p, &bp, xf, Stroke::new(2.5, shade));
+                pulsing = true;
+            }
+        }
+    }
+    if pulsing {
+        p.ctx().request_repaint_after(std::time::Duration::from_millis(33));
+    }
+    // Under the pointer (not while dragging): a point, else a segment.
+    let Some(h) = app.hover_doc else { return };
+    if app.session.tool_busy() {
+        return;
+    }
+    let tol = 4.0 / xf.zoom.max(1e-6);
+    let mut under_point = None;
+    st.doc.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind
+            && n.visible
+            && st.doc.is_editable(n.id)
+            && let Some((_, _, a)) = path.anchors().find(|(_, _, a)| a.p.distance(h) <= tol)
+        {
+            under_point = Some((n.id, a.p));
+        }
+    });
+    if let Some((id, q)) = under_point {
+        let color = c32(st.doc.layer_color(id));
+        let r = egui::Rect::from_center_size(xf.to_screen(q), vec2(8.0, 8.0));
+        p.rect_stroke(r, 0.0, Stroke::new(1.5, color), StrokeKind::Outside);
+        return;
+    }
+    if let Some((id, si, a0, _)) = vectorcraft_tools::direct::segment_at(&st.doc, h, tol)
+        && let Some(path) = st.doc.node(id).and_then(|n| n.path_data())
+        && let Some(bp) = segment_path(path, si, a0)
+    {
+        stroke_path(p, &bp, xf, Stroke::new(2.5, c32(st.doc.layer_color(id))));
     }
 }
 

@@ -202,7 +202,11 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
-    // Direct-selected anchors: delete those anchors instead of whole objects.
+    // Direct-selected segments: delete just those segments; anchors: delete those anchors
+    // instead of whole objects.
+    if ids_param(p, "ids").is_none() && super::path::has_picked_segments(s)? {
+        return super::path::delete_segments(s, p);
+    }
     if ids_param(p, "ids").is_none() && !s.doc()?.selection.anchors.is_empty() {
         return super::path::delete_anchors(s, p);
     }

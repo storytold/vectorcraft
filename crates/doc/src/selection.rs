@@ -1,4 +1,4 @@
-//! Selection state (objects and, for direct selection, individual anchors).
+//! Selection state (objects and, for direct selection, individual anchors and segments).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,6 +9,11 @@ use crate::{Document, NodeId};
 /// (subpath index, anchor index) inside a path.
 pub type AnchorRef = (usize, usize);
 
+/// A segment picked by the Direct Selection tool: (subpath index, index of its first anchor, the
+/// subpath's anchor count when it was picked). It counts only while that count holds and both of
+/// its anchors are selected (see [`Selection::segments_of`]).
+pub type SegmentRef = (usize, usize, usize);
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
@@ -16,6 +21,10 @@ pub struct Selection {
     /// Direct-selected anchors per path. A path in `objects` with no entry here is fully selected.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
+    /// Direct-selected segments per path (clicked, or cut through by a marquee): Delete removes
+    /// these instead of their anchors.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<NodeId>,
@@ -44,6 +53,7 @@ impl Selection {
     pub fn clear(&mut self) {
         self.objects.clear();
         self.anchors.clear();
+        self.segments.clear();
         self.key = None;
         self.target = None;
         self.slices.clear();
@@ -66,6 +76,7 @@ impl Selection {
         self.slices.clear();
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
+        self.segments.remove(&id);
         if self.key == Some(id) {
             self.key = None;
         }
@@ -86,10 +97,31 @@ impl Selection {
     pub fn partial(&self, id: NodeId) -> Option<&BTreeSet<AnchorRef>> {
         self.anchors.get(&id)
     }
+    /// The segments of path `id` still picked: (subpath, first anchor, second anchor), for those
+    /// whose subpath kept its anchor count and whose two anchors are both still selected.
+    pub fn segments_of(&self, doc: &Document, id: NodeId) -> Vec<(usize, usize, usize)> {
+        let (Some(segs), Some(anchors)) = (self.segments.get(&id), self.anchors.get(&id)) else { return vec![] };
+        let Some(path) = doc.node(id).and_then(|n| n.path_data()) else { return vec![] };
+        segs.iter()
+            .filter_map(|&(si, a0, count)| {
+                let sp = path.subpaths.get(si)?;
+                let n = sp.anchors.len();
+                let a1 = if a0 + 1 < n {
+                    a0 + 1
+                } else if sp.closed && a0 + 1 == n {
+                    0
+                } else {
+                    return None;
+                };
+                (n == count && n >= 2 && anchors.contains(&(si, a0)) && anchors.contains(&(si, a1))).then_some((si, a0, a1))
+            })
+            .collect()
+    }
     /// Drop ids that no longer exist or are no longer editable.
     pub fn prune(&mut self, doc: &Document) {
         self.objects.retain(|id| doc.node(*id).is_some());
         self.anchors.retain(|id, _| doc.node(*id).is_some());
+        self.segments.retain(|id, _| doc.node(*id).is_some());
         if self.key.is_some_and(|k| doc.node(k).is_none()) {
             self.key = None;
         }

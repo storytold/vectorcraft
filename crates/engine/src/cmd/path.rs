@@ -464,6 +464,77 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// Has the Direct Selection tool picked segments (still valid) in the selection?
+pub(crate) fn has_picked_segments(s: &Session) -> Result<bool> {
+    let st = s.doc()?;
+    Ok(st.selection.segments.keys().any(|id| !st.selection.segments_of(&st.doc, *id).is_empty()))
+}
+
+/// Delete the picked segments (Edit > Clear with segments picked): a closed path opens there,
+/// an open one splits in two; pieces left with a single anchor go, and so does a path left with
+/// nothing. A live shape becomes a plain path first.
+pub(crate) fn delete_segments(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    type Picked = (NodeId, Vec<(usize, usize, usize)>);
+    let picked: Vec<Picked> =
+        st.selection.segments.keys().map(|id| (*id, st.selection.segments_of(&st.doc, *id))).filter(|(_, v)| !v.is_empty()).collect();
+    s.edit("Clear", |d, selection| {
+        for (id, segs) in &picked {
+            let remove_node = {
+                let path = path_mut(d, *id)?;
+                let mut out = Vec::with_capacity(path.subpaths.len());
+                for (si, sp) in path.subpaths.iter().enumerate() {
+                    let cuts: Vec<usize> = segs.iter().filter(|(s, _, _)| *s == si).map(|(_, a0, _)| *a0).collect();
+                    out.extend(cut_segments(sp, &cuts));
+                }
+                path.subpaths = out;
+                path.subpaths.is_empty()
+            };
+            if remove_node {
+                d.remove(*id)?;
+            }
+            selection.remove(*id);
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+/// `sp` without the segments starting at the anchors in `cuts`, as open pieces of 2+ anchors.
+fn cut_segments(sp: &SubPath, cuts: &[usize]) -> Vec<SubPath> {
+    let n = sp.anchors.len();
+    let mut cuts: Vec<usize> = cuts.iter().copied().filter(|c| *c < n).collect();
+    cuts.sort_unstable();
+    cuts.dedup();
+    if cuts.is_empty() {
+        return vec![sp.clone()];
+    }
+    // Runs of anchor indices between the cuts.
+    let runs: Vec<Vec<usize>> = if sp.closed {
+        (0..cuts.len())
+            .map(|i| {
+                let start = cuts[i] + 1;
+                let end = cuts[(i + 1) % cuts.len()];
+                let len = (end + n - start % n) % n + 1;
+                (0..len).map(|k| (start + k) % n).collect()
+            })
+            .collect()
+    } else {
+        let mut runs = vec![];
+        let mut from = 0;
+        for c in cuts {
+            runs.push((from..=c).collect());
+            from = c + 1;
+        }
+        runs.push((from..n).collect());
+        runs
+    };
+    runs.into_iter()
+        .filter(|r: &Vec<usize>| r.len() >= 2)
+        .map(|r| SubPath::new(r.iter().filter_map(|i| sp.anchors.get(*i).copied()).collect(), false))
+        .collect()
+}
+
 fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.reshape", "missing id"))?;
     let at = Point::new(f64_req(p, "x", "path.reshape")?, f64_req(p, "y", "path.reshape")?);

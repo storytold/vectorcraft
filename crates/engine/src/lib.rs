@@ -1362,6 +1362,8 @@ mod tests_saveoptions;
 #[cfg(test)]
 mod tests_scalestrokes;
 #[cfg(test)]
+mod tests_segdelete;
+#[cfg(test)]
 mod tests_slices;
 #[cfg(test)]
 mod tests_strokegeom;

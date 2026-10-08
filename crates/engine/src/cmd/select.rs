@@ -20,7 +20,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("select.add", "Add to Selection", [], None, "{ids: [id…]}", has_doc, add),
         cmd!("select.toggle", "Toggle Selection", [], None, "{id}", has_doc, toggle),
         cmd!("select.key", "Set Key Object", [], None, "{id?} (none clears)", has_doc, key),
-        cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
+        cmd!(
+            "select.anchors",
+            "Select Anchors",
+            [],
+            None,
+            "{id, anchors: [[subpath, anchor]…], segments?: [[subpath, first anchor]…] (picked segments, which Delete removes), mode: \"set\"|\"add\"|\"toggle\"}",
+            has_doc,
+            anchors
+        ),
         cmd!("select.anchorsMany", "Select Anchors", [], None, "{items: [{id, anchors}], add?: bool}", has_doc, anchors_many),
         cmd!("select.same.fillColor", "Fill Color", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
             s,
@@ -197,8 +205,9 @@ fn parse_refs(v: Option<&Value>) -> Vec<(usize, usize)> {
 fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("select.anchors", "missing id"))?;
     let refs = parse_refs(p.get("anchors"));
+    let segs = parse_refs(p.get("segments"));
     let mode = str_param(p, "mode").unwrap_or("set").to_string();
-    s.select(|_, sel| {
+    s.select(|d, sel| {
         if mode == "set" {
             sel.clear();
         }
@@ -211,26 +220,52 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 e.insert(r);
             }
         }
+        add_segments(d, sel, id, &segs, mode == "toggle");
     })?;
     ok()
 }
 
+/// Pick (or with `toggle`, unpick) `segs` ([subpath, first anchor]) of path `id`, noting each
+/// subpath's anchor count (see [`vectorcraft_doc::SegmentRef`]).
+fn add_segments(d: &Document, sel: &mut vectorcraft_doc::Selection, id: NodeId, segs: &[(usize, usize)], toggle: bool) {
+    let Some(path) = d.node(id).and_then(|n| n.path_data()) else { return };
+    for &(si, a0) in segs {
+        let Some(sp) = path.subpaths.get(si) else { continue };
+        let r = (si, a0, sp.anchors.len());
+        let e = sel.segments.entry(id).or_default();
+        if toggle && e.contains(&r) {
+            e.remove(&r);
+        } else {
+            e.insert(r);
+        }
+    }
+    sel.segments.retain(|_, v| !v.is_empty());
+}
+
 fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
-    let items: Vec<(NodeId, BTreeSet<(usize, usize)>)> = p
+    type Item = (NodeId, BTreeSet<(usize, usize)>, Vec<(usize, usize)>);
+    let items: Vec<Item> = p
         .get("items")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|it| Some((NodeId(it.get("id")?.as_u64()?), parse_refs(it.get("anchors")).into_iter().collect()))).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|it| {
+                    Some((NodeId(it.get("id")?.as_u64()?), parse_refs(it.get("anchors")).into_iter().collect(), parse_refs(it.get("segments"))))
+                })
+                .collect()
+        })
         .unwrap_or_default();
     let add = bool_or(p, "add", false);
     s.select(|d, sel| {
         if !add {
             sel.clear();
         }
-        for (id, refs) in items {
+        for (id, refs, segs) in items {
             let total = d.node(id).and_then(|n| n.path_data()).map(|p| p.anchor_count()).unwrap_or(0);
             sel.add(id);
             if refs.len() < total {
                 sel.anchors.entry(id).or_default().extend(refs);
+                add_segments(d, sel, id, &segs, false);
             } else {
                 sel.anchors.remove(&id);
             }

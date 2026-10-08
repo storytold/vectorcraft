@@ -120,18 +120,24 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
 /// The topmost editable path with a segment within `tol` of `p`: (path, subpath, the segment's
 /// two anchors).
 fn hit_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, usize)> {
+    segment_at(cx.doc, p, tol)
+}
+
+/// The segment the Direct Selection tool would pick at `p` (within `tol`, document units):
+/// (path, subpath, the segment's two anchors). The canvas highlights it under the pointer.
+pub fn segment_at(doc: &vectorcraft_doc::Document, p: Point, tol: f64) -> Option<(NodeId, usize, usize, usize)> {
     let mut ids = vec![];
-    cx.doc.walk(|n| {
+    doc.walk(|n| {
         if matches!(n.kind, NodeKind::Path { .. }) && n.visible {
             ids.push(n.id)
         }
     });
     // A blend's key objects are picked whole (their anchors still select one by one).
     let in_blend = |id: NodeId| {
-        cx.doc.ancestry(id).is_some_and(|a| a.iter().any(|x| *x != id && matches!(cx.doc.node(*x).map(|n| &n.kind), Some(NodeKind::Blend { .. }))))
+        doc.ancestry(id).is_some_and(|a| a.iter().any(|x| *x != id && matches!(doc.node(*x).map(|n| &n.kind), Some(NodeKind::Blend { .. }))))
     };
-    ids.into_iter().rev().filter(|id| cx.doc.is_editable(*id) && !in_blend(*id)).find_map(|id| {
-        let pd = cx.doc.node(id)?.path_data()?;
+    ids.into_iter().rev().filter(|id| doc.is_editable(*id) && !in_blend(*id)).find_map(|id| {
+        let pd = doc.node(id)?.path_data()?;
         let (si, seg, _, _, d) = pd.nearest(p)?;
         let n = pd.subpaths.get(si)?.anchors.len();
         (d <= tol && n >= 2).then_some((id, si, seg, (seg + 1) % n))
@@ -292,12 +298,20 @@ impl Tool for DirectSelectionTool {
                 if let Some((id, si, a0, a1)) = hit_segment(cx, p, tol) {
                     self.state = State::MoveAnchors { start: p, began: false };
                     let anchors = json!([[si, a0], [si, a1]]);
-                    let selected = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, a0)) && s.contains(&(si, a1)));
+                    let segments = json!([[si, a0]]);
+                    let selected = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, a0)) && s.contains(&(si, a1)))
+                        && cx.selection.segments_of(cx.doc, id).contains(&(si, a0, a1));
                     if ev.mods.shift {
-                        return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "toggle"}))];
+                        return vec![Action::Exec(
+                            "select.anchors".into(),
+                            json!({"id": id.0, "anchors": anchors, "segments": segments, "mode": "toggle"}),
+                        )];
                     }
                     if !selected {
-                        return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "set"}))];
+                        return vec![Action::Exec(
+                            "select.anchors".into(),
+                            json!({"id": id.0, "anchors": anchors, "segments": segments, "mode": "set"}),
+                        )];
                     }
                     return vec![];
                 }
@@ -402,29 +416,41 @@ impl Tool for DirectSelectionTool {
                 // Collect the anchors inside the rect for every editable path, and the parts of
                 // shapes it crosses: a segment the marquee cuts through with neither end inside
                 // is picked by its two anchors, so a drag moves just that segment.
-                let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
+                let mut sel: Vec<(NodeId, Vec<AnchorRef>, Vec<AnchorRef>)> = vec![];
                 cx.doc.walk(|n| {
                     if let NodeKind::Path { path, .. } = &n.kind {
-                        let mut v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
+                        let inside: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
+                        let mut v = inside.clone();
+                        let mut segs = vec![];
                         for (si, sp) in path.subpaths.iter().enumerate() {
                             let n = sp.anchors.len();
                             for seg in 0..sp.segment_count() {
                                 let (a0, a1) = (seg, (seg + 1) % n.max(1));
-                                if v.contains(&(si, a0)) || v.contains(&(si, a1)) || !segment_crosses(&sp.segment(seg), r) {
+                                if inside.contains(&(si, a0)) || inside.contains(&(si, a1)) || !segment_crosses(&sp.segment(seg), r) {
                                     continue;
                                 }
                                 v.extend([(si, a0), (si, a1)]);
+                                segs.push((si, a0));
                             }
                         }
                         v.sort_unstable();
                         v.dedup();
                         if !v.is_empty() {
-                            sel.push((n.id, v));
+                            sel.push((n.id, v, segs));
                         }
                     }
                 });
-                sel.retain(|(id, _)| cx.doc.is_editable(*id));
-                let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
+                sel.retain(|(id, _, _)| cx.doc.is_editable(*id));
+                let items: Vec<Value> = sel
+                    .iter()
+                    .map(|(id, v, segs)| {
+                        if segs.is_empty() {
+                            json!({"id": id.0, "anchors": anchors_json(v)})
+                        } else {
+                            json!({"id": id.0, "anchors": anchors_json(v), "segments": anchors_json(segs)})
+                        }
+                    })
+                    .collect();
                 vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "add": add}))]
             }
             _ => vec![],
@@ -578,7 +604,13 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 140.0, 90.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 110.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 110.0));
-        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 0], [0, 1]]}], "add": false}))]);
+        assert_eq!(
+            a,
+            vec![Action::Exec(
+                "select.anchorsMany".into(),
+                json!({"items": [{"id": id.0, "anchors": [[0, 0], [0, 1]], "segments": [[0, 0]]}], "add": false})
+            )]
+        );
         // Around one corner: just that anchor, not the far ends of its two edges.
         let mut t = DirectSelectionTool::new(false);
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 90.0, 90.0));
@@ -618,9 +650,14 @@ mod tests {
             let sp = &path.subpaths[0];
             let mid = vectorcraft_geom::ParamCurve::eval(&sp.segment(0), 0.5);
             let pair = json!([[0, 0], [0, 1 % sp.anchors.len()]]);
+            let first = json!([[0, 0]]);
             let mut t = DirectSelectionTool::new(false);
             let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, mid.x, mid.y));
-            assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": pair, "mode": "set"}))], "{name}: click");
+            assert_eq!(
+                a,
+                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": pair, "segments": first, "mode": "set"}))],
+                "{name}: click"
+            );
             // A small marquee across it, started outside the shape (a press on the fill or the
             // stroke would pick those instead).
             let seg = sp.segment(0);
@@ -636,7 +673,7 @@ mod tests {
             let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, to.x, to.y));
             assert_eq!(
                 a,
-                vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": pair}], "add": false}))],
+                vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": pair, "segments": first}], "add": false}))],
                 "{name}: marquee"
             );
         }
