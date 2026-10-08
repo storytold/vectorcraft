@@ -1,21 +1,74 @@
+<p align="center">
+  <img src="assets/app-icon/hicolor/128x128/apps/ai.storyteller.vectorcraft.png" alt="Vector W3K2 app icon: PT, a black P and a cyan T in an orange frame" width="96">
+</p>
+
 <h1 align="center">Vector W3K2</h1>
 
 <p align="center">
-  <b>Offline vector illustration by Print That 204 — an Illustrator-style editor in pure Rust.</b>
+  <b>Offline vector illustration by Print That 204.</b><br>
+  An Illustrator-style editor in pure Rust for signs, decals, vinyl, print-and-cut and CAD-ready artwork.
 </p>
 
 <p align="center">
-  Vector W3K2 is Print That 204's build of <a href="https://github.com/storytold/vectorcraft">VectorCraft</a>,
-  the open-source, clean-room Rust reimplementation of the Adobe Illustrator workflow by the ArtCraft team
-  and contributors. It runs offline as a portable app on Windows (and on macOS, Linux and the web).
-  Generative AI tools are intentionally left out.
+  <a href="https://printthat.ca"><b>printthat.ca</b></a> ·
+  <a href="#download">Download</a> ·
+  <a href="#whats-new-in-vector-w3k2">What's new</a> ·
+  <a href="#about-print-that-204">About Print That 204</a>
 </p>
 
+## About Print That 204
+
+**Print That 204** is a Canadian 3D-printing and custom manufacturing studio in Winnipeg, Manitoba.
+We make vendor booth signs, custom signs and displays, stickers and decals, printed vinyl, laminated
+graphics, scale-model accessories, prototypes and small-batch custom products, with FDM and resin 3D
+printing, custom CAD, 3D scanning and print-and-cut.
+
+Vector W3K2 is the vector editor we build and use for that work: it runs fully offline, opens and
+writes the files a print shop deals with (PDF, SVG, EPS, DXF, the Illustrator-compatible `.ai` PDF
+part), and handles spot colours and colour books for production.
+
+- Web: [printthat.ca](https://printthat.ca)
+- Email: [printthat204@gmail.com](mailto:printthat204@gmail.com)
+- Winnipeg, Manitoba, Canada
+
+## Download
+
+| Platform | Get it | Notes |
+|---|---|---|
+| Windows 10/11 (x64) | `vector-w3k2-<version>-windows-x64-setup.exe` | Installs for you only (no admin needed) or for all users; Start Menu shortcut, optional desktop shortcut and `.vectorcraft` file association |
+| Windows, portable | `vector-w3k2-<version>-windows-x64-portable.zip` | Unzip anywhere (USB stick too) and run `Vector W3K2.exe`; nothing to install |
+| macOS 11+ (Apple silicon and Intel) | `vector-w3k2-<version>-macos-universal.dmg` | Drag Vector W3K2 to Applications. Not notarized: the first time, right-click the app and choose Open |
+
+The builds come from the [Vector W3K2 build](.github/workflows/vector-w3k2-build.yml) workflow: open the
+repository's **Actions** tab, pick the latest run, and download the files at the bottom. To make new ones,
+push a tag that starts with `vw3k2-v` (for example `vw3k2-v0.3.2`). To build the Windows installer on a
+PC, see [Building](#building).
+
+## What's new in Vector W3K2
+
+On top of [VectorCraft](https://github.com/storytold/vectorcraft), Vector W3K2 adds the non-AI features
+from Illustrator's 2025–2026 releases and the fixes Print That asked for (the full list, release by
+release, is in [`docs/illustrator-2026-updates.md`](docs/illustrator-2026-updates.md)):
+
+- **Gradients:** dithering against banding and perceptual (OKLab) blending.
+- **Artboards:** background colours, a clear active artboard, renaming on the canvas, a right-click
+  menu (Duplicate, Rename, Lock, Export, Delete) and locking an artboard with its art.
+- **Snapping:** segment midpoints, tangent and perpendicular snapping with a 90° corner mark, 0°/45°/90°
+  angle guides for lines and the Pen, magenta labels and a marker while hovering, and a Snapping popover.
+- **Selection:** the Direct Selection tool selects a single edge of a shape.
+- **Blends:** a Blend panel with step easing and separate colour easing.
+- **Colour:** swatch libraries from `.ase`, `.acb` colour books and `.aco` files (spot colour books
+  load as spot colours); Recent Colors keep their spot swatch and show its name.
+- **Dialogs:** Move, Scale and the other dialogs open next to the pointer at a compact size and can be
+  dragged anywhere.
+- **Smaller things:** Relative/Absolute scaling, relinking every copy of an image and the missing files
+  beside it.
+
+Generative AI tools are intentionally left out: Vector W3K2 never needs an account or a connection.
+
 > [!NOTE]
-> **Branding:** the app is named Vector W3K2 and published by [Print That 204](https://printthat.ca)
-> (Winnipeg, Manitoba). Internal names (crates, the `.vectorcraft` file format, preference folders) stay
-> `vectorcraft` so files and settings from VectorCraft keep working. What changed from upstream for the
-> Illustrator 2026 features is listed in [`docs/illustrator-2026-updates.md`](docs/illustrator-2026-updates.md).
+> Internal names (the crates, the `.vectorcraft` file format and the preferences folder) stay
+> `vectorcraft`, so files and settings from VectorCraft keep working in Vector W3K2.
 
 <p align="center">
   <img src="docs/images/shot-1-neon.png" alt="The editor with the Neon Drive poster open: the title is selected, the Appearance panel shows its live Outer Glow, and the Properties panel shows its character settings" width="100%">
@@ -103,7 +156,9 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
   way a person does.
 - **Everywhere.** One codebase for the desktop apps and the same UI in the browser.
 
-## Quick start
+## Building
+
+You need [Rust](https://rustup.rs) 1.95 or newer.
 
 ```sh
 cargo run --release -p vectorcraft                          # desktop app
@@ -112,10 +167,15 @@ cargo run --release -p vectorcraft -- --control 7979        # + JSON control cha
 cargo run --release -p vectorcraft-cli -- mcp               # MCP server (stdio)
 cargo run --release -p vectorcraft-cli -- run --in examples/ribbons.vectorcraft --export out.pdf   # headless batch
 cargo run --release -p vectorcraft-cli -- bench examples/neon-drive.vectorcraft                   # render timing
-cargo xtask bundle                                        # dist/VectorCraft.app (macOS)
+cargo xtask bundle                                        # dist/Vector W3K2.app (macOS)
+pwsh packaging/windows/build-installer.ps1                # Windows installer + portable zip (needs Inno Setup 6)
 cd apps/vectorcraft-web && trunk build --release            # web build → dist/web
 cargo xtask ci                                            # fmt, clippy, tests, layering, wasm, vendor names
 ```
+
+On Windows the official builds use the MSVC toolchain. The GNU toolchain works too
+(`rustup default stable-x86_64-pc-windows-gnu`) with a full MinGW-w64 install on the `PATH` (for example
+WinLibs) and `CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-self-contained=no"`.
 
 Japanese fonts come from [storytold/craft-fonts](https://github.com/storytold/craft-fonts), an optional
 build input (releases always use it): `CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p vectorcraft` (an absolute path).

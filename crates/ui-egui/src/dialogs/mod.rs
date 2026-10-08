@@ -314,25 +314,32 @@ const FORM_MAX_WIDTH: f32 = 520.0;
 /// Where the open dialog sits: its top-left corner, chosen when it opened (by the pointer, so a
 /// dialog opened from the canvas or a menu appears next to where the user was working; it is kept
 /// inside the window). `None` without a pointer: centred.
-fn dialog_origin(ctx: &egui::Context, kind: &str) -> Option<egui::Pos2> {
+/// Also whether the dialog has just opened (the first frame places it; after that it stays where
+/// the user drags it).
+fn dialog_origin(ctx: &egui::Context, kind: &str) -> (Option<egui::Pos2>, bool) {
     let key = egui::Id::new("dialog-origin");
-    if let Some((k, p)) = ctx.data(|m| m.get_temp::<(String, Option<egui::Pos2>)>(key))
-        && k == kind
-    {
-        return p;
-    }
     let screen = ctx.content_rect();
+    // Placed again when the window is resized or the UI scale changes, so it stays on screen.
+    if let Some((k, p, was)) = ctx.data(|m| m.get_temp::<(String, Option<egui::Pos2>, egui::Rect)>(key))
+        && k == kind
+        && was == screen
+    {
+        return (p, false);
+    }
     // A little below and right of the pointer, so the dialog doesn't cover what was clicked.
     let at = ctx.input(|i| i.pointer.latest_pos()).filter(|p| screen.contains(*p)).map(|p| p + egui::vec2(16.0, 16.0));
-    ctx.data_mut(|m| m.insert_temp(key, (kind.to_string(), at)));
-    at
+    ctx.data_mut(|m| m.insert_temp(key, (kind.to_string(), at, screen)));
+    (at, true)
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
     let Some(mut d) = app.ui.dialog.clone() else {
         app.ui.dialog_file = None;
-        ctx.data_mut(|m| m.remove::<(String, Option<egui::Pos2>)>(egui::Id::new("dialog-origin")));
+        ctx.data_mut(|m| {
+            m.remove::<(String, Option<egui::Pos2>, egui::Rect)>(egui::Id::new("dialog-origin"));
+            m.remove::<bool>(egui::Id::new("dialog-moved"));
+        });
         return;
     };
     let spec = spec(&d.kind);
@@ -356,12 +363,23 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .resizable(false)
         .title_bar(false)
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(MARGIN)));
-    // By the pointer (where it was when the dialog opened), kept on screen; else centred.
-    let window = match dialog_origin(ctx, d.kind.as_str()) {
-        Some(at) => window.default_pos(at).constrain(true),
-        None => window.anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0]),
-    };
-    window.show(ctx, |ui| {
+    // By the pointer (where it was when the dialog opened), else centred, until the user drags it
+    // somewhere else: from then on it stays where it was dragged (kept on screen).
+    let moved_key = egui::Id::new("dialog-moved");
+    let moved = ctx.data(|m| m.get_temp::<bool>(moved_key)).unwrap_or(false);
+    // (The top-left corner is placed, never another pivot: egui keeps the dragged position by it.)
+    let window = match (dialog_origin(ctx, d.kind.as_str()), moved) {
+        (_, true) => window,
+        ((Some(at), _), false) => window.current_pos(at),
+        ((None, _), false) => {
+            let size =
+                ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", d.kind.as_str())))).map_or(egui::vec2(FORM_MAX_WIDTH, 200.0), |r| r.size());
+            window.current_pos(ctx.content_rect().center() + egui::vec2(0.0, -40.0) - size / 2.0)
+        }
+    }
+    .movable(true)
+    .constrain(true);
+    let shown = window.show(ctx, |ui| {
         // Never wider than the window (a large UI scale in a small window): the text wraps.
         // Form dialogs stay compact on wide screens instead of stretching across them.
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
@@ -391,6 +409,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
+    if shown.is_some_and(|r| r.response.dragged()) {
+        ctx.data_mut(|m| m.insert_temp(moved_key, true));
+    }
     if spec.ok.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ok = true;
     }

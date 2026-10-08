@@ -127,7 +127,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center() + egui::vec2(0.0, -20.0))
+        .constrain(true)
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(20)))
         .show(ctx, |ui| {
             ui.set_width(760.0);
