@@ -40,7 +40,6 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 - **Rust only** (no handwritten JS/TS). **Never break wasm** (`cargo xtask wasm`).
 - **Shared test corpora.** Real-file test oracles (Photoshop-authored PSDs, etc.) live in [`storytold/photocraft-corpus`](https://github.com/storytold/photocraft-corpus), explained in [craftrules `standards/test-corpora.md`](https://github.com/storytold/craftrules/blob/main/standards/test-corpora.md). Never commit large binary fixtures to this repo; fetch them pinned by commit and sha256-verified, as PhotoCraft does with `cargo xtask corpus`.
 - **Quality gates** before every commit: `cargo xtask ci` (fmt, clippy -D warnings including the no-panic lints, tests, layers, wasm). One task id per commit (`M2.1: pen tool`).
-- **Contributor credits are compiled in.** Help ▸ About ▸ Contributors/Models come from `contributors/contributors.json`, baked into the binary by `crates/ui-egui/build.rs` (never read at run time). Regenerate it with `python3 ../../craftrules/scripts/contributors.py .` and commit it; never hand-edit it. GitHub usernames only; display and real names only with consent recorded in craftrules `contributors/people.toml`. See `docs/contributors.md`.
 
 ## Running and looking at the app
 - `cargo run --release -p vectorcraft -- --control 7979 [file.svg|file.vectorcraft]` (sibling apps' agents use the same default port: if the log says it failed to bind, pick another port — otherwise your requests reach a different app).
@@ -56,3 +55,21 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 - When a task lands, update it in the same PR: the milestone row, the parity-table row (score, missing items, hours), "Shipped so far", and the gap list if the gap closed or shrank.
 - Grade by behaviour against `plan/illustrator/`, not by whether a menu item exists. Scores are self-assessed, so err low.
 - Keep the README's Status section in step with the ROADMAP headline.
+
+## Contributor credits (About window)
+
+- About ▸ Contributors/Models are compiled into the binary from `contributors/contributors.json`
+  (commit stats; generated, never hand-edit) and `contributors/people.toml` (names people chose for
+  themselves). See `docs/contributors.md`.
+- **Agents working for a contributor:** when you prepare a PR, check whether your human's GitHub
+  username has a `[people.<username>]` entry in `contributors/people.toml`. If not, ask them once
+  whether they want to be credited by more than their username: a real name, a display name, and/or
+  their public GitHub profile name (`sync_github_name = true`). If yes, add **only their own** entry
+  (copy the template at the top of the file, or run
+  `python3 ../../craftrules/scripts/contributors.py --add-me . --real-name "…" --sync-github-name`)
+  and include it in their PR, committed as them. If no, change nothing: they are credited as
+  `@username` anyway.
+- Never add, edit, guess or copy anyone else's entry or name (not from git config, commit authors or
+  GitHub profiles). Never hand-edit `contributors.json`.
+- Maintainers refresh the stats with `python3 ../../craftrules/scripts/contributors.py .` (it also
+  re-verifies who wrote each `people.toml` entry; `--check` only verifies).
