@@ -2,7 +2,8 @@
 //!
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment (an edge) to
 //! select just that segment's two anchors, click the fill to select the whole path, drag to move selected anchors, drag a direction handle to
-//! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
+//! reshape, marquee to select the anchors inside it and the segments it cuts through, drag a live
+//! rectangle's corner widget to round its corners (just the picked corners when there are some).
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
 //! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
@@ -180,6 +181,37 @@ fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
         }
     }
     None
+}
+
+/// Does the curve pass through `r`? (Sampled: chords of 1/32 of the curve, each clipped to `r`.)
+fn segment_crosses(c: &vectorcraft_geom::CubicBez, r: Rect) -> bool {
+    use vectorcraft_geom::ParamCurve;
+    let pts: Vec<Point> = (0..=32).map(|i| c.eval(i as f64 / 32.0)).collect();
+    pts.windows(2).any(|w| match w {
+        [a, b] => chord_meets_rect(*a, *b, r),
+        _ => false,
+    })
+}
+
+/// Liang–Barsky: does the segment a–b touch `r`?
+fn chord_meets_rect(a: Point, b: Point, r: Rect) -> bool {
+    let d = b - a;
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    for (p, q) in [(-d.x, a.x - r.x0), (d.x, r.x1 - a.x), (-d.y, a.y - r.y0), (d.y, r.y1 - a.y)] {
+        if p.abs() < 1e-12 {
+            if q < 0.0 {
+                return false;
+            }
+        } else {
+            let t = q / p;
+            if p < 0.0 {
+                t0 = t0.max(t);
+            } else {
+                t1 = t1.min(t);
+            }
+        }
+    }
+    t0 <= t1
 }
 
 fn anchors_json(v: &[AnchorRef]) -> Value {
@@ -367,11 +399,25 @@ impl Tool for DirectSelectionTool {
                 if r.width() < cx.tol(3.0) && r.height() < cx.tol(3.0) {
                     return if add { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                // Collect anchors inside the rect for every editable path.
+                // Collect the anchors inside the rect for every editable path, and the parts of
+                // shapes it crosses: a segment the marquee cuts through with neither end inside
+                // is picked by its two anchors, so a drag moves just that segment.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
                 cx.doc.walk(|n| {
                     if let NodeKind::Path { path, .. } = &n.kind {
-                        let v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
+                        let mut v: Vec<AnchorRef> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| (s, i)).collect();
+                        for (si, sp) in path.subpaths.iter().enumerate() {
+                            let n = sp.anchors.len();
+                            for seg in 0..sp.segment_count() {
+                                let (a0, a1) = (seg, (seg + 1) % n.max(1));
+                                if v.contains(&(si, a0)) || v.contains(&(si, a1)) || !segment_crosses(&sp.segment(seg), r) {
+                                    continue;
+                                }
+                                v.extend([(si, a0), (si, a1)]);
+                            }
+                        }
+                        v.sort_unstable();
+                        v.dedup();
                         if !v.is_empty() {
                             sel.push((n.id, v));
                         }
@@ -519,5 +565,80 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "add": false}))]);
+    }
+
+    #[test]
+    fn marquee_across_an_edge_picks_that_segment() {
+        let (d, id) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        // A box over the middle of the top edge (100,100)–(200,100), no anchor inside.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 140.0, 90.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 110.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 110.0));
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 0], [0, 1]]}], "add": false}))]);
+        // Around one corner: just that anchor, not the far ends of its two edges.
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 90.0, 90.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 110.0, 110.0));
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 0]]}], "add": false}))]);
+        // Touching nothing: nothing picked.
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 320.0, 320.0));
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [], "add": false}))]);
+    }
+
+    #[test]
+    fn every_kind_of_shape_picks_a_segment_by_click_and_by_marquee() {
+        use vectorcraft_doc::{Appearance, Node};
+        use vectorcraft_geom::shapes;
+        let r = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let open = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(
+            &[Point::new(100.0, 150.0), Point::new(200.0, 150.0), Point::new(200.0, 250.0)],
+            false,
+        ));
+        for (name, path) in [
+            ("ellipse", shapes::ellipse(r)),
+            ("polygon", shapes::polygon(Point::new(150.0, 150.0), 50.0, 6, 0.0)),
+            ("star", shapes::star(Point::new(150.0, 150.0), 50.0, 25.0, 5, 0.0)),
+            ("rounded rectangle", shapes::rounded_rectangle(r, 20.0)),
+            ("open path", open),
+        ] {
+            let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+            let l = d.layers[0].id;
+            let id = d.alloc_id();
+            d.insert(Some(l), 0, Node::path(id, path.clone(), Appearance::default_art())).unwrap();
+            let s = Selection::default();
+            let p = paint();
+            let cx = cx(&d, &s, &p);
+            // A point in the middle of the first segment.
+            let sp = &path.subpaths[0];
+            let mid = vectorcraft_geom::ParamCurve::eval(&sp.segment(0), 0.5);
+            let pair = json!([[0, 0], [0, 1 % sp.anchors.len()]]);
+            let mut t = DirectSelectionTool::new(false);
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, mid.x, mid.y));
+            assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": pair, "mode": "set"}))], "{name}: click");
+            // A small marquee across it, started outside the shape (a press on the fill or the
+            // stroke would pick those instead).
+            let seg = sp.segment(0);
+            let chord = seg.p3 - seg.p0;
+            let mut out = vectorcraft_geom::Vec2::new(-chord.y, chord.x).normalize();
+            if out.dot(mid - Point::new(150.0, 150.0)) <= 0.0 {
+                out = -out;
+            }
+            let side = vectorcraft_geom::Vec2::new(-out.y, out.x) * 3.0;
+            let (from, to) = (mid + out * 8.0 + side, mid - out * 3.0 - side);
+            let mut t = DirectSelectionTool::new(false);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, to.x, to.y));
+            assert_eq!(
+                a,
+                vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": pair}], "add": false}))],
+                "{name}: marquee"
+            );
+        }
     }
 }
