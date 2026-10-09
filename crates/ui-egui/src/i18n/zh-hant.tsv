@@ -2925,3 +2925,6 @@
 	Lock to the toolbar	鎖定至工具列
 	Unlock from the toolbar	從工具列解除鎖定
 	Drag out of the dock to move this panel	拖出停駐區以移動此面板
+	Unlock Anchor Points	解鎖錨點
+	Unlock Corner	解鎖轉角
+	Unlock the selected corner: split the shape into separate lines there	解鎖所選轉角：在該處將形狀拆分為獨立線段

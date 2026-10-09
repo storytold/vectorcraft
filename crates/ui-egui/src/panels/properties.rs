@@ -83,6 +83,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
     let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(_), .. }));
     let mut actions: Vec<(&str, &str)> = vec![];
+    // A corner picked with the Direct Selection tool: split the shape there.
+    if crate::menus::enabled(app, "path.unlockAnchors") {
+        actions.push((tl!("Unlock Corner"), "path.unlockAnchors"));
+    }
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
         actions.push((tl!("Make Clipping Mask"), "object.clippingMask.make"));

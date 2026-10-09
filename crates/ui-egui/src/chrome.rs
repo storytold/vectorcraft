@@ -167,6 +167,16 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
+                // A corner picked with the Direct Selection tool: split the shape there.
+                if anchor_mode && crate::menus::enabled(app, "path.unlockAnchors") {
+                    if widgets::flat_button(ui, tl!("Unlock"), 56.0)
+                        .on_hover_text(tl!("Unlock the selected corner: split the shape into separate lines there"))
+                        .clicked()
+                    {
+                        app.run("path.unlockAnchors", json!({})).ok();
+                    }
+                    ui.add_space(4.0);
+                }
                 crate::place::control_bar_details(app, ui);
                 crate::toolbar::control_bar_options(app, ui);
                 crate::dialogs::envelope::control_bar(app, ui);
