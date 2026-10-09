@@ -55,12 +55,26 @@ release, is in [`docs/illustrator-2026-updates.md`](docs/illustrator-2026-update
   menu (Duplicate, Rename, Lock, Export, Delete) and locking an artboard with its art.
 - **Snapping:** segment midpoints, tangent and perpendicular snapping with a 90° corner mark, 0°/45°/90°
   angle guides for lines and the Pen, magenta labels and a marker while hovering, and a Snapping popover.
-- **Selection:** the Direct Selection tool selects a single edge of a shape.
+- **Selection:** Selection (V) is the black arrow and Direct Selection (A) the white arrow, as in
+  Illustrator. The white arrow picks single points and single edges by click or by dragging a box,
+  shows the line or point under the pointer bolder, and pulses a picked line gently so it reads as
+  selected. Delete removes just the picked edges: a box opens there and an open line splits.
+- **Editing lines:** dragging an end of a picked line moves only that end, so the line swings around
+  its other end. Dragging an open end onto another snaps on with a magenta "join" mark and joins
+  them, closing the shape when both ends belong to one line. Only closed shapes are filled: lines
+  from the Line and Pen tools have no fill, and deleting an edge of a filled box leaves the lines
+  with their stroke while the old fill stays as its own shape.
+- **Corners:** a corner radius field in the Essentials, Essentials Classic and Print and Proofing
+  workspaces, four corner fields for rounding each corner on its own, and the white arrow rounds just
+  the corners you pick.
+- **Panels:** drag any panel by its name tab to float it anywhere, lock it beside the toolbar
+  (padlock or drop it there) or put it back in the dock (× or drop it there). Positions are kept
+  between sessions.
 - **Blends:** a Blend panel with step easing and separate colour easing.
 - **Colour:** swatch libraries from `.ase`, `.acb` colour books and `.aco` files (spot colour books
   load as spot colours); Recent Colors keep their spot swatch and show its name.
 - **Dialogs:** Move, Scale and the other dialogs open next to the pointer at a compact size and can be
-  dragged anywhere.
+  dragged anywhere, where they stay.
 - **Smaller things:** Relative/Absolute scaling, relinking every copy of an image and the missing files
   beside it.
 
