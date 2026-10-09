@@ -33,7 +33,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(12.0);
             ui.label(
                 egui::RichText::new(tl!(
-                    "Based on VectorCraft by the ArtCraft team and contributors. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft."
+                    "Based on VectorCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft."
                 ))
                 .size(11.0),
             );

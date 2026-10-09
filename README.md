@@ -240,7 +240,7 @@ signed and published. Every bundled asset is listed with its licence in [`ASSETS
 ## License and credits
 
 VectorCraft is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
-Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors. Required notices are in [NOTICE](NOTICE).
+Copyright and required notices are in [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
 
 Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
 with its author, source and license in [ASSETS.md](ASSETS.md). Release builds also embed the
@@ -250,7 +250,6 @@ Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/ma
 The Vector W3K2 app icon ("PT": a black P and a cyan T) is Print That 204's original
 artwork; its palette and files are in [`assets/app-icon/`](assets/app-icon/README.md).
 
-The ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team; this build does not use them.
 "Print That 204", "Print That" and Vector W3K2 are Print That 204's names.
 
 <sub>Adobe, Photoshop, Illustrator, Premiere Pro, Lightroom, Acrobat, After Effects and InDesign are trademarks or registered trademarks of Adobe Inc. in the United States and/or other countries. Vector W3K2 and VectorCraft are independent, open-source projects and are not affiliated with, sponsored by or endorsed by Adobe Inc.; these names are used only to describe the workflows it is compatible with.</sub>

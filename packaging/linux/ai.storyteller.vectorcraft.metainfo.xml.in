@@ -20,10 +20,9 @@
   <launchable type="desktop-id">ai.storyteller.vectorcraft.desktop</launchable>
   <icon type="stock">ai.storyteller.vectorcraft</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://getartcraft.com/apps/vectorcraft</url>
+  <url type="homepage">https://printthat.ca</url>
   <url type="bugtracker">https://github.com/storytold/vectorcraft/issues</url>
   <url type="help">https://github.com/storytold/vectorcraft</url>
-  <url type="contact">https://discord.gg/artcraft</url>
   <categories>
     <category>Graphics</category>
     <category>2DGraphics</category>
