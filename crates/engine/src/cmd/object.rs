@@ -630,8 +630,11 @@ pub(super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Result<()> {
 
 /// Turn path, compound path or text `c` into a clipping path (its paint goes).
 pub(super) fn as_clipping_path(c: &mut Node) -> Result<()> {
-    if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
-        return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
+    // A compound shape clips by its outline.
+    if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::CompoundShape { .. } | NodeKind::Text(_)) {
+        return Err(EngineError::Other(
+            "the top object must be a path, compound path, compound shape or text object to use as a clipping mask".into(),
+        ));
     }
     c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
     match &mut c.kind {

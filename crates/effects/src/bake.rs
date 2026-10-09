@@ -39,7 +39,8 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
-    has_adjustment(n)
+    matches!(n.kind, NodeKind::CompoundShape { .. })
+        || has_adjustment(n)
         || has_crop_marks(n)
         || has_pathfinder(n)
         || has_own_paint(n)
@@ -86,6 +87,17 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if has_adjustment(n)
         && let Some(m) = adjust_in_document(d, n)
     {
+        return Some(bake_node(d, &m).unwrap_or(m));
+    }
+    // Compound shapes: their evaluated path, with their transparency and opacity mask (its
+    // subpaths become a compound path with ids of their own).
+    if matches!(n.kind, NodeKind::CompoundShape { .. })
+        && let Some(m) = crate::evaluate_compound_shape(n)
+    {
+        let mut m = crate::carry_transparency(n, m);
+        if let NodeKind::Path { path, rule, .. } = &m.kind {
+            m.kind = path_kind(d, path.clone(), *rule);
+        }
         return Some(bake_node(d, &m).unwrap_or(m));
     }
     // Crop marks: the object and its marks.

@@ -207,6 +207,10 @@ pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
         Some(p) => match d.node(p).map(|x| &x.kind) {
             Some(NodeKind::Layer { .. }) => true,
             Some(NodeKind::Group { .. }) => !n.is_layer(),
+            // A compound shape takes what covers a region.
+            Some(NodeKind::CompoundShape { .. }) => {
+                !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::PlacedDocument(_))
+            }
             _ => false,
         },
     }
@@ -665,12 +669,18 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     let moved = s.edit(label, |d, sel| {
         let mut nodes = vec![];
         for id in &ids {
-            nodes.push(if copy {
+            // An object joining a compound shape (or leaving one) takes the Add mode.
+            let stays = d.parent_of(*id) == parent;
+            let mut n = if copy {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
                 d.reid(&n)
             } else {
                 Arc::unwrap_or_clone(d.remove(*id)?)
-            });
+            };
+            if !stays {
+                n.shape_mode = vectorcraft_doc::ShapeMode::Add;
+            }
+            nodes.push(n);
         }
         let count = d.children(parent).map_or(0, Vec::len);
         let mut index = match anchor {

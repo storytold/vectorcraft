@@ -858,7 +858,11 @@
 	Exit Isolation Mode	結束隔離模式
 	Expand	展開
 	Expand Appearance	展開外觀
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	展開適用於複合形狀 (按住 Alt 按一下形狀模式)，已列入開發計畫
+	Expand applies to compound shapes (Alt-click a shape mode)	展開適用於複合形狀 (按住 Alt 按一下形狀模式)
+	Expand the compound shape into a path	將複合形狀展開為路徑
+	Shape Mode: {mode}	形狀模式：{mode}
+	Compound Shape	複合形狀
+	Shape Mode	形狀模式
 	Expand Brush Strokes	展開筆刷筆畫
 	Expand Compound Shape	展開複合形狀
 	Expand Gradient Mesh	展開漸層網格

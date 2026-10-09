@@ -135,7 +135,7 @@ fn make_refuses_a_top_object_that_cannot_clip() {
     let group = s.doc().unwrap().selection.objects[0];
     select(&mut s, &[art, group]);
     let err = s.execute("object.clippingMask.make", &json!({})).unwrap_err();
-    assert!(err.to_string().contains("path, compound path or text"), "{err}");
+    assert!(err.to_string().contains("path, compound path, compound shape or text"), "{err}");
 }
 
 /// An SVG clip path made of several shapes (imported as one multi-subpath clipping path) and an

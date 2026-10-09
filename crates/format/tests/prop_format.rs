@@ -5,7 +5,9 @@
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeId, NodeKind};
-use vectorcraft_format::{SaveOptions, base64_decode, base64_encode, load, load_file, pdf_content, preview, save, save_with, sniff};
+use vectorcraft_format::{
+    COMPOUND_SHAPES_SINCE, SaveOptions, base64_decode, base64_encode, load, load_file, pdf_content, preview, save, save_with, sniff,
+};
 use vectorcraft_geom::Affine;
 use vectorcraft_testkit::fixtures;
 use vectorcraft_testkit::invariants::{check_document, check_native_roundtrip, check_native_roundtrip_exact, doc_json, json_approx_eq};
@@ -92,9 +94,13 @@ proptest! {
         }
         let d = s.doc().unwrap().doc.clone();
         let want = doc_json(&load(&save(&d, false)).unwrap());
+        // Versions before compound shapes hold them as plain art (what v4 writes).
+        let older = SaveOptions { version: COMPOUND_SHAPES_SINCE - 1, ..SaveOptions::default() };
+        let want_older = doc_json(&load(&save_with(&d, &older).unwrap()).unwrap());
         for o in [SaveOptions { compress: true, ..SaveOptions::default() }, SaveOptions { version: 2, ..SaveOptions::default() }, SaveOptions { version: 1, pretty: true, ..SaveOptions::default() }] {
             let back = load(&save_with(&d, &o).unwrap()).unwrap();
-            prop_assert!(json_approx_eq(&doc_json(&back), &want, 1e-12), "{:?} differs", o);
+            let want = if o.version < COMPOUND_SHAPES_SINCE { &want_older } else { &want };
+            prop_assert!(json_approx_eq(&doc_json(&back), want, 1e-12), "{:?} differs", o);
         }
     }
 

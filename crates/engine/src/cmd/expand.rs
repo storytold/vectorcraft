@@ -106,6 +106,8 @@ struct Expandable {
     blends: bool,
     /// Placed documents (Object expands them into the art they show).
     placed: bool,
+    /// Compound shapes (Object expands them into their outline).
+    compound_shapes: bool,
 }
 
 impl Expandable {
@@ -113,13 +115,14 @@ impl Expandable {
         let mut e = Self::default();
         for n in roots.iter().filter_map(|r| d.node(*r)) {
             n.walk(&mut |c| {
-                let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+                let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::CompoundShape { .. });
                 e.text |= matches!(c.kind, NodeKind::Text(_));
                 e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
                 e.effects |= !c.appearance.effects.is_empty();
                 e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
                 e.blends |= matches!(c.kind, NodeKind::Blend { .. });
                 e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
+                e.compound_shapes |= matches!(c.kind, NodeKind::CompoundShape { .. });
                 e.stroke |= shape && !c.appearance.stroke_paint().is_none();
                 e.fill |= match &c.kind {
                     NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
@@ -131,7 +134,7 @@ impl Expandable {
     }
 
     fn object(&self) -> bool {
-        self.text || self.live || self.effects || self.envelope || self.blends || self.placed
+        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.compound_shapes
     }
 }
 
@@ -163,6 +166,11 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     if object && e.blends {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| super::live::expand_blends(d, &roots).map(|_| ()))?;
+    }
+    // Compound shapes: their outline (its effects, strokes and gradients expand below).
+    if object && e.compound_shapes {
+        let roots = selected_roots(s)?;
+        s.edit("Expand", |d, _| super::compoundshape::expand_under(d, &roots))?;
     }
     if object && e.effects {
         let _ = run_raw(s, "effect.expandAppearance", &json!({}));

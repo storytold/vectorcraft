@@ -2221,6 +2221,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 sub("Compound Path", vec![c("Make", "object.compoundPath.make"), c("Release", "object.compoundPath.release")]),
                 sub(
+                    "Compound Shape",
+                    vec![
+                        c("Make", "object.compoundShape.make"),
+                        c("Release", "object.compoundShape.release"),
+                        c("Expand", "object.compoundShape.expand"),
+                    ],
+                ),
+                sub(
                     "Artboards",
                     vec![
                         c("Convert to Artboards", "artboard.convertToArtboards"),
@@ -2632,6 +2640,12 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         }
         if any(|k| matches!(k, NodeKind::Compound { .. })) {
             v.push(c("Release Compound Path", "object.compoundPath.release"));
+        }
+        if several {
+            v.push(c("Make Compound Shape", "object.compoundShape.make"));
+        }
+        if any(|k| matches!(k, NodeKind::CompoundShape { .. })) {
+            v.extend([c("Release Compound Shape", "object.compoundShape.release"), c("Expand Compound Shape", "object.compoundShape.expand")]);
         }
         v.extend([
             c("Make Guides", "view.guides.make"),
@@ -3353,6 +3367,9 @@ pub const CONTEXT_LABELS: &[&str] = &[
     "Release Clipping Mask",
     "Make Compound Path",
     "Release Compound Path",
+    "Make Compound Shape",
+    "Release Compound Shape",
+    "Expand Compound Shape",
     "Select All",
 ];
 

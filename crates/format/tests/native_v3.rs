@@ -212,7 +212,10 @@ fn version_1_files_load() {
 fn saves_down_to_older_versions() {
     let mut d = rich_doc();
     d.color_profiles = ColorProfiles { rgb: None, cmyk: Some("Coated".into()) };
-    let current = doc_json(&load(&save(&d, false)).unwrap());
+    // What versions before compound shapes can hold: the document as v4 writes it (compound
+    // shapes as plain art).
+    assert!(d.has_compound_shapes(), "the fixture has a compound shape");
+    let current = doc_json(&load(&save_with(&d, &opts(4, false)).unwrap()).unwrap());
     for version in [1, 2] {
         let bytes = save_with(&d, &opts(version, false)).unwrap();
         let v = json_of(&bytes);

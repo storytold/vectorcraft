@@ -856,7 +856,11 @@
 	Exit Isolation Mode	Выйти из режима изоляции
 	Expand	Разобрать
 	Expand Appearance	Разобрать оформление
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	«Разобрать» применяется к составным фигурам (Alt+щелчок по режиму фигуры) — в плане развития
+	Expand applies to compound shapes (Alt-click a shape mode)	«Разобрать» применяется к составным фигурам (Alt+щелчок по режиму фигуры)
+	Expand the compound shape into a path	Разобрать составную фигуру в контур
+	Shape Mode: {mode}	Режим фигуры: {mode}
+	Compound Shape	Составная фигура
+	Shape Mode	Режим фигуры
 	Expand Brush Strokes	Разобрать мазки кисти
 	Expand Compound Shape	Разобрать составную фигуру
 	Expand Gradient Mesh	Разобрать градиентную сетку
@@ -3591,7 +3595,7 @@ axis	Both	Оба
 @msg	the selection isn't in perspective	выделение не в перспективе
 @msg	the stroke has no weight	у обводки нет толщины
 @msg	the thumbnail image is malformed	изображение миниатюры повреждено
-@msg	the top object must be a path, compound path or text object to use as a clipping mask	верхний объект должен быть контуром, составным контуром или текстовым объектом, чтобы использовать его как маску обрезки
+@msg	the top object must be a path, compound path, compound shape or text object to use as a clipping mask	верхний объект должен быть контуром, составным контуром, составной фигурой или текстовым объектом, чтобы использовать его как маску обрезки
 @msg	the {tool} tool has no options	инструмент {tool} не имеет параметров
 @msg	there are no objects to release	нет объектов для освобождения
 @msg	there are no printer settings to open here	здесь нет настроек принтера для открытия
@@ -3703,6 +3707,11 @@ axis	Both	Оба
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
+@msg	Expand Compound Shape: the compound shape is empty	Разобрать составную фигуру: составная фигура пуста
+@msg	Make Compound Shape: select two or more objects	Создать составную фигуру: выделите два или более объекта
+@msg	compound shapes can only contain paths, compound paths, groups, type, compound shapes and live objects	составные фигуры могут содержать только контуры, составные контуры, группы, текст, составные фигуры и динамические объекты
+@msg	select a compound shape	выделите составную фигуру
+@msg	select members of a compound shape	выделите элементы составной фигуры
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы

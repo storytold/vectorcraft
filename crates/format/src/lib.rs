@@ -40,13 +40,15 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::{Read as _, Write as _};
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_doc::{Document, ImageBlob};
+use vectorcraft_doc::{Document, ImageBlob, Node, NodeKind};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{write_atomic, write_atomic_with};
 
-/// v4: large data after the JSON (v1 to v3 files still load).
-pub const VERSION: u32 = 4;
+/// v5: compound shapes (v4: large data after the JSON; v1 to v4 files still load).
+pub const VERSION: u32 = 5;
+/// The first version whose readers know compound shapes.
+pub const COMPOUND_SHAPES_SINCE: u32 = 5;
 /// Data this large or larger goes after the JSON (v4), not into it as base64.
 pub const INLINE_MAX: usize = 8 << 10;
 /// What separates the JSON from the data after it (v4).
@@ -244,6 +246,16 @@ pub fn save_with(doc: &Document, o: &SaveOptions) -> Result<Vec<u8>, FormatError
         d.placed_as_groups();
     } else {
         d.drop_placed_resources();
+    }
+    // Older apps don't know compound shapes: callers that can evaluate them pass their outlines
+    // ([`Document::compound_shapes_as`]); any left become groups of their members.
+    if o.version < COMPOUND_SHAPES_SINCE && d.has_compound_shapes() {
+        d.compound_shapes_as(&mut |n| {
+            let children = n.children().cloned().unwrap_or_default();
+            let mut g = Node::new(n.id, NodeKind::Group { children, clip: false });
+            (g.name, g.visible, g.locked, g.opacity, g.blend, g.mask) = (n.name.clone(), n.visible, n.locked, n.opacity, n.blend, n.mask.clone());
+            g
+        });
     }
     let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).

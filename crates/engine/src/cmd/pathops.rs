@@ -254,6 +254,12 @@ fn leaves(n: &Node, out: &mut Vec<Node>) {
                 leaves(c, out);
             }
         }
+        // A compound shape is its outline, painted as it is.
+        NodeKind::CompoundShape { .. } => {
+            if let Some(p) = vectorcraft_render::effects::evaluate_compound_shape(n) {
+                out.push(vectorcraft_render::effects::carry_transparency(n, p));
+            }
+        }
         _ => {}
     }
 }
@@ -304,6 +310,10 @@ fn pf_label(op: PathfinderOp) -> &'static str {
 }
 
 fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
+    // A Shape Mode on compound-shape members sets their mode.
+    if let Some(r) = super::compoundshape::shape_mode_on_members(s, op) {
+        return r;
+    }
     let roots = selected_roots(s)?;
     let Some(&top) = roots.last() else { return Err(EngineError::Other("nothing selected".into())) };
     let shape_mode =

@@ -11,8 +11,11 @@ pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
     clip.clip_outline(Some(&outline_text), &unite)
 }
 
-/// Text as one path of its glyph outlines, in document space.
+/// Text as one path of its glyph outlines, in document space; a compound shape as its outline.
 fn outline_text(n: &Node) -> Option<Node> {
+    if let Some(p) = crate::compound_shape_path(n) {
+        return Some(Node::path(n.id, p, Appearance::default()));
+    }
     let NodeKind::Text(t) = &n.kind else { return None };
     let mut bp = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).to_bezpath();
     bp.apply_affine(t.xf);

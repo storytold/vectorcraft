@@ -192,6 +192,11 @@ fn every_context_label_is_a_menu_string() {
     app.run("object.compoundPath.make", json!({})).unwrap();
     shown.extend(labels(&menus::context_items(&app)));
     app.run("object.compoundPath.release", json!({})).unwrap();
+    // A compound shape.
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.compoundShape.make", json!({})).unwrap();
+    shown.extend(labels(&menus::context_items(&app)));
+    app.run("object.compoundShape.release", json!({})).unwrap();
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
     app.run("object.clippingMask.make", json!({})).unwrap();
     shown.extend(labels(&menus::context_items(&app)));

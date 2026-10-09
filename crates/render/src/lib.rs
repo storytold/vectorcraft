@@ -813,6 +813,10 @@ impl Renderer {
             self.stats.drawn += 1;
             return;
         }
+        // A compound shape draws its evaluated path, which carries its fills, strokes and effects.
+        if matches!(a.kind, NodeKind::CompoundShape { .. }) {
+            return self.draw_live(ctx, f, a);
+        }
         if fx::has_object_fx(a) {
             return self.draw_object_fx(ctx, f, a, true);
         }
@@ -969,9 +973,12 @@ impl Renderer {
                     self.draw_node(ctx, f, &art, true);
                 }
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
-                self.draw_live_node(ctx, f, n)
-            }
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::CompoundShape { .. } => self.draw_live_node(ctx, f, n),
         }
     }
 

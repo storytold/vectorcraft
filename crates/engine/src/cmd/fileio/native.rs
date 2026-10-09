@@ -133,6 +133,22 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     } else {
         std::borrow::Cow::Borrowed(doc)
     };
+    // Older versions get compound shapes' outlines.
+    let full = if so.version < vectorcraft_format::COMPOUND_SHAPES_SINCE && full.has_compound_shapes() {
+        let mut d = full.into_owned();
+        let mut found = vec![];
+        d.compound_shapes_as(&mut |n| {
+            found.push(n.clone());
+            n.clone()
+        });
+        let mut art: std::collections::HashMap<_, _> =
+            found.iter().filter_map(|n| Some((n.id, crate::cmd::compoundshape::expanded(&mut d, n)?))).collect();
+        // One that covers nothing: an empty group.
+        d.compound_shapes_as(&mut |n| art.remove(&n.id).unwrap_or_else(|| vectorcraft_doc::Node::group(n.id, vec![])));
+        std::borrow::Cow::Owned(d)
+    } else {
+        full
+    };
     let doc = &*full;
     if extras.preview {
         so.preview = preview_png(doc)?;

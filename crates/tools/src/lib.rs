@@ -377,6 +377,14 @@ impl ToolContext<'_> {
         let half = (5.0 + f64::from(self.anchor_size.clamp(1, 7)) - 3.0) / 2.0;
         self.tol(self.selection_tolerance.max(half + 2.0))
     }
+    /// What a press at `p` picks: a selected compound-shape member anywhere in its own shape (even
+    /// in a hole it cuts, [`vectorcraft_doc::hit::selected_member_at`]), else the topmost object
+    /// ([`vectorcraft_doc::hit::hit_test`]).
+    pub fn hit(&self, p: Point) -> Option<vectorcraft_doc::hit::Hit> {
+        vectorcraft_doc::hit::selected_member_at(self.doc, p, self.hit_options(), &self.selection.objects)
+            .or_else(|| vectorcraft_doc::hit::hit_test(self.doc, p, self.hit_options()))
+    }
+
     pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
         vectorcraft_doc::hit::HitOptions {
             tol: self.pick_tol(),

@@ -141,6 +141,10 @@ pub enum Op {
     ClipRelease,
     Compound,
     CompoundRelease,
+    /// Make Compound Shape in mode `n % 4` (add, subtract, intersect, exclude).
+    CompoundShape(u8),
+    CompoundShapeRelease,
+    CompoundShapeExpand,
     Lock,
     UnlockAll,
     Hide,
@@ -238,6 +242,9 @@ fn arb_leaf_op() -> impl Strategy<Value = Op> {
         1 => Just(Op::ClipRelease),
         1 => Just(Op::Compound),
         1 => Just(Op::CompoundRelease),
+        1 => (0u8..4).prop_map(Op::CompoundShape),
+        1 => Just(Op::CompoundShapeRelease),
+        1 => Just(Op::CompoundShapeExpand),
         1 => Just(Op::Lock),
         1 => Just(Op::UnlockAll),
         1 => Just(Op::Hide),
@@ -369,6 +376,12 @@ impl Op {
             Op::ClipRelease => c("object.clippingMask.release", json!({})),
             Op::Compound => c("object.compoundPath.make", json!({})),
             Op::CompoundRelease => c("object.compoundPath.release", json!({})),
+            Op::CompoundShape(m) => {
+                let mode = ["add", "subtract", "intersect", "exclude"][*m as usize % 4];
+                c("object.compoundShape.make", json!({ "mode": mode }))
+            }
+            Op::CompoundShapeRelease => c("object.compoundShape.release", json!({})),
+            Op::CompoundShapeExpand => c("object.compoundShape.expand", json!({})),
             Op::Lock => c("object.lock", json!({})),
             Op::UnlockAll => c("object.unlockAll", json!({})),
             Op::Hide => c("object.hide", json!({})),

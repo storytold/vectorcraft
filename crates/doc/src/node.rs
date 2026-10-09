@@ -71,6 +71,63 @@ impl LayerColor {
     }
 }
 
+/// How a member of a compound shape ([`NodeKind::CompoundShape`]) combines with the members below
+/// it (Illustrator's shape modes, Affinity's compound modes). The bottom member's mode is ignored:
+/// the others fold onto it in paint order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShapeMode {
+    /// Adds the member's area (Unite).
+    #[default]
+    Add,
+    /// Removes the member's area from what is below it (Minus Front).
+    Subtract,
+    /// Keeps only where the member overlaps what is below it.
+    Intersect,
+    /// Keeps where either the member or what is below it is, but not both (Xor).
+    Exclude,
+}
+
+impl ShapeMode {
+    pub const ALL: [ShapeMode; 4] = [ShapeMode::Add, ShapeMode::Subtract, ShapeMode::Intersect, ShapeMode::Exclude];
+    /// The id commands take (`add`, `subtract`, `intersect`, `exclude`).
+    pub fn id(self) -> &'static str {
+        match self {
+            ShapeMode::Add => "add",
+            ShapeMode::Subtract => "subtract",
+            ShapeMode::Intersect => "intersect",
+            ShapeMode::Exclude => "exclude",
+        }
+    }
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.id() == id)
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            ShapeMode::Add => "Add",
+            ShapeMode::Subtract => "Subtract",
+            ShapeMode::Intersect => "Intersect",
+            ShapeMode::Exclude => "Exclude",
+        }
+    }
+    /// Combine "inside what is below" with "inside this member".
+    pub fn apply(self, below: bool, inside: bool) -> bool {
+        match self {
+            ShapeMode::Add => below || inside,
+            ShapeMode::Subtract => below && !inside,
+            ShapeMode::Intersect => below && inside,
+            ShapeMode::Exclude => below != inside,
+        }
+    }
+    /// Is a point inside the compound, given whether it is inside each member (bottom first) and
+    /// each member's mode?
+    pub fn fold(inside: &[bool], modes: &[ShapeMode]) -> bool {
+        let mut it = inside.iter().zip(modes);
+        let Some((first, _)) = it.next() else { return false };
+        it.fold(*first, |acc, (m, mode)| mode.apply(acc, *m))
+    }
+}
+
 /// Live shape parameters (Illustrator's "Live Shapes"). The node's path is regenerated from these
 /// while the shape stays live; editing anchors directly converts it to a plain path.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -387,6 +444,13 @@ pub enum NodeKind {
         #[serde(default)]
         rule: FillRule,
     },
+    /// Compound shape: the members (any art) combine by their [`Node::shape_mode`] into one shape,
+    /// evaluated live and painted with the compound's own appearance. The members keep their own
+    /// paint, which shows again on Release.
+    #[serde(rename = "compoundShape")]
+    CompoundShape {
+        children: Vec<Arc<Node>>,
+    },
     Text(Box<TextObject>),
     Image(ImageObject),
     SymbolInstance {
@@ -496,6 +560,9 @@ pub struct Node {
     /// Object › Perspective: the perspective grid plane the object is attached to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub perspective: Option<Box<crate::PerspectiveAttachment>>,
+    /// As a member of a compound shape: how it combines with the members below it.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub shape_mode: ShapeMode,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -547,6 +614,7 @@ impl Node {
             slice: None,
             bbox_angle: 0.0,
             perspective: None,
+            shape_mode: ShapeMode::Add,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -570,6 +638,7 @@ impl Node {
             NodeKind::Layer { children, .. }
             | NodeKind::Group { children, .. }
             | NodeKind::Compound { children, .. }
+            | NodeKind::CompoundShape { children }
             | NodeKind::Blend { children, .. }
             | NodeKind::Envelope { content: children, .. }
             | NodeKind::Repeat(RepeatSpec { source: children, .. }) => Some(children),
@@ -581,6 +650,7 @@ impl Node {
             NodeKind::Layer { children, .. }
             | NodeKind::Group { children, .. }
             | NodeKind::Compound { children, .. }
+            | NodeKind::CompoundShape { children }
             | NodeKind::Blend { children, .. }
             | NodeKind::Envelope { content: children, .. }
             | NodeKind::Repeat(RepeatSpec { source: children, .. }) => Some(children),
@@ -643,6 +713,7 @@ impl Node {
             NodeKind::Path { guide: true, .. } => "Guide",
             NodeKind::Path { .. } => "Path",
             NodeKind::Compound { .. } => "Compound Path",
+            NodeKind::CompoundShape { .. } => "Compound Shape",
             NodeKind::Text(_) => "Type",
             NodeKind::Image(_) => "Image",
             NodeKind::SymbolInstance { .. } => "Symbol",
@@ -696,7 +767,7 @@ impl Node {
     /// ([`Appearance::outset`]) instead of measuring along their shape.
     pub fn reach_bounds(&self) -> Option<Rect> {
         match &self.kind {
-            NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::CompoundShape { .. } => {
                 let o = self.appearance.outset();
                 self.geometric_bounds().map(|b| b.inflate(o, o))
             }
@@ -715,6 +786,7 @@ impl Node {
                 .skip(usize::from(self.shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
+            NodeKind::CompoundShape { children } => compound_shape_bounds(children),
             NodeKind::Text(t) => self.projected(t.bounds()),
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
             NodeKind::SymbolInstance { xf, .. } => self.projected(Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0)))),
@@ -810,7 +882,10 @@ impl Node {
                     }
                 }
             }
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            NodeKind::Layer { children, .. }
+            | NodeKind::Group { children, .. }
+            | NodeKind::Compound { children, .. }
+            | NodeKind::CompoundShape { children } => {
                 for c in children.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }
@@ -942,6 +1017,23 @@ impl Node {
     }
 }
 
+/// A box round a compound shape's outline without evaluating it: the members' geometric bounds
+/// folded by their modes (Add and Exclude grow it, Intersect narrows it, Subtract leaves it).
+/// Exact for boxes; otherwise it may be larger than the outline, never smaller.
+pub fn compound_shape_bounds(children: &[Arc<Node>]) -> Option<Rect> {
+    let mut it = children.iter().filter(|c| c.visible);
+    let first = it.next()?;
+    it.fold(first.geometric_bounds(), |acc, c| match c.shape_mode {
+        ShapeMode::Add | ShapeMode::Exclude => vectorcraft_geom::union_opt(acc, c.geometric_bounds()),
+        ShapeMode::Subtract => acc,
+        ShapeMode::Intersect => {
+            let (a, b) = (acc?, c.geometric_bounds()?);
+            let i = a.intersect(b);
+            (i.width() >= 0.0 && i.height() >= 0.0 && a.overlaps(b)).then_some(i)
+        }
+    })
+}
+
 /// Unites filled regions (each under its own fill rule) into one path filled non-zero. Booleans
 /// live above this crate (`vectorcraft-pathops`), so callers supply it.
 pub type Uniter<'a> = &'a dyn Fn(&[(BezPath, FillRule)]) -> BezPath;
@@ -979,7 +1071,8 @@ impl Node {
                     c.push_clip_shapes(text, out);
                 }
             }
-            NodeKind::Text(_) => {
+            // The outliner evaluates a compound shape into its path (booleans live above this crate).
+            NodeKind::Text(_) | NodeKind::CompoundShape { .. } => {
                 if let Some(o) = text.and_then(|f| f(self)) {
                     o.push_clip_shapes(None, out);
                 }

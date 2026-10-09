@@ -838,7 +838,11 @@
 	Exit Isolation Mode	退出隔离模式
 	Expand	扩展
 	Expand Appearance	扩展外观
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	扩展仅适用于复合形状 (Alt+单击形状模式)——已在路线图中
+	Expand applies to compound shapes (Alt-click a shape mode)	扩展仅适用于复合形状 (Alt+单击形状模式)
+	Expand the compound shape into a path	将复合形状扩展为路径
+	Shape Mode: {mode}	形状模式：{mode}
+	Compound Shape	复合形状
+	Shape Mode	形状模式
 	Expand Brush Strokes	扩展画笔描边
 	Expand Compound Shape	扩展复合形状
 	Expand Gradient Mesh	扩展渐变网格

@@ -85,7 +85,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ("squares-exclude", tl!("Exclude"), "exclude"),
             ] {
                 if widgets::icon_button(ui, icon, tip, false, 28.0).clicked() {
-                    app.run(&format!("object.pathfinder.{op}"), json!({})).ok();
+                    super::pathfinder::run_shape_mode(app, ui, op, tip);
                 }
             }
             if widgets::icon_button(ui, "ellipsis", tl!("More Pathfinder options"), false, 28.0).clicked() {

@@ -137,6 +137,45 @@ fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
 }
 
 impl Document {
+    /// Does the document hold a compound shape anywhere (layers, symbols, patterns, masks)?
+    pub fn has_compound_shapes(&self) -> bool {
+        let mut any = false;
+        for root in roots(self) {
+            walk_all(root, &mut |n| any |= matches!(n.kind, NodeKind::CompoundShape { .. }));
+        }
+        any
+    }
+
+    /// Every compound shape (the outermost of nested ones) replaced by `art(compound)`, for apps
+    /// that don't know them. Only the subtrees holding one are copied.
+    pub fn compound_shapes_as(&mut self, art: &mut dyn FnMut(&Node) -> Node) {
+        fn holds(n: &Node) -> bool {
+            let mut hit = false;
+            walk_all(n, &mut |c| hit |= matches!(c.kind, NodeKind::CompoundShape { .. }));
+            hit
+        }
+        fn update(n: &mut Arc<Node>, art: &mut dyn FnMut(&Node) -> Node) {
+            if !holds(n) {
+                return;
+            }
+            if matches!(n.kind, NodeKind::CompoundShape { .. }) {
+                *n = Arc::new(art(n));
+            }
+            let n = Arc::make_mut(n);
+            if let Some(m) = &mut n.mask {
+                update(&mut m.art, art);
+            }
+            for c in n.children_mut().into_iter().flatten() {
+                update(c, art);
+            }
+        }
+        for root in roots_mut(self) {
+            update(root, art);
+        }
+    }
+}
+
+impl Document {
     /// Visit every placed document: in the layers, then in symbol definitions and pattern
     /// swatches, opacity-mask art included.
     pub fn visit_placed<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a PlacedDocument)) {

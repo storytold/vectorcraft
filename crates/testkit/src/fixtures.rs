@@ -143,6 +143,14 @@ pub fn rich_session() -> Session {
     let e = ellipse(&mut s, 380.0, 230.0, 80.0, 80.0);
     select(&mut s, &[d, e]);
     exec(&mut s, "object.compoundPath.make", json!({}));
+    // A live compound shape: a ring (a square minus a circle) with a member of each mode.
+    let ring = rect(&mut s, 470.0, 200.0, 80.0, 80.0);
+    let hole = ellipse(&mut s, 490.0, 220.0, 40.0, 40.0);
+    select(&mut s, &[ring, hole]);
+    let cs = id_of(&exec(&mut s, "object.compoundShape.make", json!({"mode": "subtract"})));
+    let x = rect(&mut s, 520.0, 250.0, 50.0, 50.0);
+    exec(&mut s, "layer.move", json!({"ids": [x.0], "target": cs.0, "place": "inside"}));
+    exec(&mut s, "object.compoundShape.setMode", json!({"ids": [x.0], "mode": "exclude"}));
     let clip = ellipse(&mut s, 30.0, 150.0, 80.0, 80.0);
     let inner = rect(&mut s, 10.0, 170.0, 140.0, 30.0);
     exec(&mut s, "paint.setFill", json!({"color": "#22aa44"}));

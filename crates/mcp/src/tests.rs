@@ -615,3 +615,16 @@ fn drawing_gestures_snap_to_smart_guides() {
     let events = json!([{"kind": "down", "x": 300, "y": 420}, {"kind": "up", "x": 300, "y": 420}, {"kind": "move", "x": 151.5, "y": 431}, {"kind": "down", "x": 151.5, "y": 431}, {"kind": "up", "x": 151.5, "y": 431}]);
     assert_eq!(bounds(&mut s, 6, events, "pen"), [150.0, 420.0, 150.0, 11.0]);
 }
+
+#[test]
+fn pathfinder_live_makes_a_compound_shape() {
+    let mut s = server();
+    let r1 = id_of(&call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 0, "y": 0, "width": 100, "height": 100})));
+    let r2 = id_of(&call(&mut s, 2, "draw_shape", json!({"shape": "rectangle", "x": 50, "y": 50, "width": 100, "height": 100})));
+    let c = id_of(&call(&mut s, 3, "pathfinder", json!({"operation": "minusFront", "ids": [r1, r2], "live": true})));
+    let d = doc_json(&mut s).to_string();
+    assert!(d.contains("\"compoundShape\"") && d.contains("\"subtract\""), "{c} {d}");
+    // Not a shape mode: an error.
+    let e = call(&mut s, 4, "pathfinder", json!({"operation": "divide", "ids": [c], "live": true}));
+    assert_eq!(e["isError"], true, "{e}");
+}

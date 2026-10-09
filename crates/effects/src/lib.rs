@@ -33,6 +33,7 @@
 mod adjust;
 mod bake;
 mod clip;
+mod compound;
 mod distort;
 mod group;
 mod live;
@@ -57,6 +58,7 @@ use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 pub use adjust::{ADJUSTMENTS, ColorMap, ImageHook, adjust, adjust_in_document, color_map, curve_at, curve_points, has_adjustment, is_adjustment};
 pub use bake::{StrokeArt, bake_appearance, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
+pub use compound::{carry_transparency, compound_shape_path, evaluate_compound_shape};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, paints,
     pathfinder_children,

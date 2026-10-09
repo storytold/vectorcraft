@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
-use vectorcraft_format::{BLOB_MAGIC, FormatError, INLINE_MAX, SaveOptions, load, load_file, pdf_content, save_with};
+use vectorcraft_format::{BLOB_MAGIC, FormatError, INLINE_MAX, SaveOptions, VERSION, load, load_file, pdf_content, save_with};
 use vectorcraft_geom::Affine;
 
 /// A document showing image `key` of `len` bytes.
@@ -49,7 +49,7 @@ fn small_files_stay_plain_json_and_older_versions_inline() {
     let small = save_with(&doc_with_image("small", 100), &SaveOptions::default()).unwrap();
     assert!(!has_tail(&small));
     let v: Value = serde_json::from_slice(&small).unwrap();
-    assert_eq!(v["version"], 4);
+    assert_eq!(v["version"], VERSION);
     let big = doc_with_image("big", INLINE_MAX + 10);
     let v3 = save_with(&big, &SaveOptions { version: 3, ..SaveOptions::default() }).unwrap();
     assert!(!has_tail(&v3), "version 3 keeps everything in the JSON");

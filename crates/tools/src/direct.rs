@@ -304,7 +304,7 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Idle;
                     return out;
                 }
-                let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
+                let Some(h) = cx.hit(p) else {
                     self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift };
                     return vec![];
                 };
@@ -381,7 +381,7 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Idle;
                     return out;
                 }
-                if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
+                if let Some(h) = cx.hit(p) {
                     // A segment of a path that isn't selected as a whole: its two anchors get
                     // selected, and dragging it reshapes it if it's curved, else moves it. Alt picks
                     // the whole path (and Alt-drag copies it), as with Group Selection.

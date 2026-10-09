@@ -858,7 +858,11 @@
 	Exit Isolation Mode	Salir del modo de aislamiento
 	Expand	Expandir
 	Expand Appearance	Expandir apariencia
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Expandir se aplica a formas compuestas (Alt+clic en un modo de forma): en la hoja de ruta
+	Expand applies to compound shapes (Alt-click a shape mode)	Expandir se aplica a formas compuestas (Alt+clic en un modo de forma)
+	Expand the compound shape into a path	Expandir la forma compuesta en un trazado
+	Shape Mode: {mode}	Modo de forma: {mode}
+	Compound Shape	Forma compuesta
+	Shape Mode	Modo de forma
 	Expand Brush Strokes	Expandir trazos de pincel
 	Expand Compound Shape	Expandir forma compuesta
 	Expand Gradient Mesh	Expandir malla de degradado
@@ -3595,7 +3599,7 @@ axis	Both	Ambos
 @msg	the selection isn't in perspective	la selección no está en perspectiva
 @msg	the stroke has no weight	el trazo no tiene grosor
 @msg	the thumbnail image is malformed	la miniatura está mal formada
-@msg	the top object must be a path, compound path or text object to use as a clipping mask	el objeto superior debe ser un trazado, un trazado compuesto o un objeto de texto para usarlo como máscara de recorte
+@msg	the top object must be a path, compound path, compound shape or text object to use as a clipping mask	el objeto superior debe ser un trazado, un trazado compuesto, una forma compuesta o un objeto de texto para usarlo como máscara de recorte
 @msg	the {tool} tool has no options	la herramienta {tool} no tiene opciones
 @msg	there are no objects to release	no hay objetos que soltar
 @msg	there are no printer settings to open here	aquí no hay ajustes de impresora que abrir
@@ -3707,6 +3711,11 @@ axis	Both	Ambos
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este archivo se guardó sin compatibilidad con PDF y sus datos de edición no se pueden leer ({why})
+@msg	Expand Compound Shape: the compound shape is empty	Expandir forma compuesta: la forma compuesta está vacía
+@msg	Make Compound Shape: select two or more objects	Crear forma compuesta: selecciona dos o más objetos
+@msg	compound shapes can only contain paths, compound paths, groups, type, compound shapes and live objects	las formas compuestas solo pueden contener trazados, trazados compuestos, grupos, texto, formas compuestas y objetos dinámicos
+@msg	select a compound shape	selecciona una forma compuesta
+@msg	select members of a compound shape	selecciona miembros de una forma compuesta
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

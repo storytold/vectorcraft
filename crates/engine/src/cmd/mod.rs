@@ -9,6 +9,7 @@ pub mod clipboard;
 mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
+mod compoundshape;
 mod create;
 mod css;
 mod cut;
@@ -213,6 +214,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
         v.extend(pathops::specs());
+        v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());

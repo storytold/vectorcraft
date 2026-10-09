@@ -145,7 +145,12 @@ impl Renderer {
         match &a.kind {
             NodeKind::PlacedDocument(p) => self.draw_placed(ctx, f, p),
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Repeat(_)
+            | NodeKind::Group { .. }
+            | NodeKind::Layer { .. }
+            | NodeKind::CompoundShape { .. } => {
                 let items = self.live_expanded(f.doc, a, cache);
                 // The flag holds while this blend is drawn (see `draw_live`).
                 if self.knockout && matches!(a.kind, NodeKind::Blend { .. }) {

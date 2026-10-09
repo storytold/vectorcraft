@@ -50,9 +50,10 @@ pub const CATEGORIES: [(&str, &str); 11] = [
 ];
 
 /// The object counts of `document.info` and their labels.
-const OBJECT_LABELS: [(&str, &str); 17] = [
+const OBJECT_LABELS: [(&str, &str); 18] = [
     ("paths", "Paths"),
     ("compoundPaths", "Compound Paths"),
+    ("compoundShapes", "Compound Shapes"),
     ("groups", "Groups"),
     ("clipGroups", "Clipping Masks"),
     ("textObjects", "Text Objects"),
@@ -241,6 +242,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Path { guide: true, .. } => Some("guides"),
                 NodeKind::Path { .. } => Some("paths"),
                 NodeKind::Compound { .. } => Some("compoundPaths"),
+                NodeKind::CompoundShape { .. } => Some("compoundShapes"),
                 NodeKind::Text(t) => {
                     for run in &t.runs {
                         fonts.insert((run.style.font_family.clone(), run.style.font_style.clone()));

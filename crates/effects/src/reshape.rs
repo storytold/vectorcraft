@@ -46,8 +46,13 @@ pub(crate) fn glyph_outlines(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::Bez
 
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
 /// and (when the object has its own fills/strokes) the whole outline with the object's items below
-/// the characters under them and the others over them, as the renderer paints them.
+/// the characters under them and the others over them, as the renderer paints them. A compound
+/// shape outlines to its evaluated path ([`crate::evaluate_compound_shape`]), so every outliner
+/// hook evaluates compound shapes too.
 pub fn outline_text(n: &Node) -> Option<Node> {
+    if matches!(n.kind, NodeKind::CompoundShape { .. }) {
+        return crate::evaluate_compound_shape(n);
+    }
     let NodeKind::Text(t) = &n.kind else { return None };
     let (runs, all) = glyph_outlines(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);

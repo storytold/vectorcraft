@@ -1425,7 +1425,11 @@ fn map_node(n: &Node, w: &Warper) -> Node {
             *path = map_nonlinear(path, w.piece, w.f);
             *live = None;
         }
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+        // A compound shape stays live: its members bend.
+        NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Compound { children, .. }
+        | NodeKind::CompoundShape { children } => {
             for c in children.iter_mut() {
                 *c = Arc::new(map_node(c, w));
             }
@@ -1609,7 +1613,15 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
 
 /// Is this one of the live kinds?
 pub fn is_live(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_))
+    matches!(
+        n.kind,
+        NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::CompoundShape { .. }
+    )
 }
 
 /// Mesh tessellation as filled quad paths (no stroke), `n`×`n` per patch.
@@ -1644,6 +1656,12 @@ pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
         NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
         NodeKind::Repeat(r) => r.expand(),
         NodeKind::PlacedDocument(p) => p.art(n),
+        // Booleans live above this crate: the outliner evaluates a compound shape into its path
+        // (painted with the compound's appearance). Without one, the members as they are.
+        NodeKind::CompoundShape { children } => match hooks.outline.and_then(|h| h(n)) {
+            Some(o) => vec![o],
+            None => children.iter().map(|c| (**c).clone()).collect(),
+        },
         _ => vec![n.clone()],
     }
 }

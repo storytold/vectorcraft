@@ -1,9 +1,11 @@
 //! Pathfinder panel: Shape Modes (+ Expand) and Pathfinders, with icons drawn for VectorCraft.
+//! Alt-click a Shape Mode for a live compound shape (`object.compoundShape.make`); with members of
+//! a compound shape selected, a Shape Mode sets their mode.
 
 use egui::Ui;
 use serde_json::json;
 
-use super::{pstate, selection_len, set_pstate};
+use super::{alt_held, pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -13,6 +15,35 @@ pub const SHAPE_MODES: [(&str, &str, &str); 4] = [
     ("dc-pf-intersect", "Intersect", "intersect"),
     ("dc-pf-exclude", "Exclude", "exclude"),
 ];
+
+/// The compound-shape mode (`object.compoundShape.*` `mode`) a Shape Mode stands for.
+pub fn shape_mode_of(op: &str) -> &'static str {
+    match op {
+        "minusFront" => "subtract",
+        "intersect" => "intersect",
+        "exclude" => "exclude",
+        _ => "add",
+    }
+}
+
+/// Are all the selected objects members of a compound shape (a Shape Mode sets their mode)?
+pub fn members_selected(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|d| {
+        !d.selection.objects.is_empty()
+            && d.selection.objects.iter().all(|id| {
+                d.doc.parent_of(*id).and_then(|p| d.doc.node(p)).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::CompoundShape { .. }))
+            })
+    })
+}
+
+/// A Shape Mode clicked: with Alt (or on compound-shape members), live; else destructive.
+pub fn run_shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, label: &str) {
+    if alt_held(ui) {
+        app.run("object.compoundShape.make", json!({ "mode": shape_mode_of(op) })).ok();
+    } else {
+        run(app, ui, op, label);
+    }
+}
 
 pub const PATHFINDERS: [(&str, &str, &str); 6] = [
     ("dc-pf-divide", "Divide", "divide"),
@@ -31,22 +62,25 @@ fn run(app: &mut VectorcraftApp, ui: &Ui, op: &str, label: &str) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
-    let t = crate::theme::Tokens::get(ui.ctx());
     widgets::subheader(ui, tl!("Shape Modes:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
+        let members = members_selected(app);
         for (icon, tip, op) in SHAPE_MODES {
-            if widgets::icon_button_enabled(ui, icon, tip, false, n >= 2, 34.0).clicked() {
-                run(app, ui, op, tip);
+            if widgets::icon_button_enabled(ui, icon, tip, false, n >= 2 || members, 34.0).clicked() {
+                run_shape_mode(app, ui, op, tip);
             }
         }
-        ui.add_enabled_ui(false, |ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(90.0), 26.0), egui::Sense::hover());
-            ui.painter().rect_filled(r, 2, t.hover.gamma_multiply(0.5));
-            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, tl!("Expand"), egui::FontId::proportional(12.5), t.text_disabled);
-        })
-        .response
-        .on_disabled_hover_text(tl!("Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap"));
+        let expand = crate::menus::enabled(app, "object.compoundShape.expand");
+        let width = ui.available_width().min(90.0);
+        let r = ui
+            .add_enabled_ui(expand, |ui| widgets::flat_button(ui, tl!("Expand"), width))
+            .inner
+            .on_hover_text(tl!("Expand the compound shape into a path"))
+            .on_disabled_hover_text(tl!("Expand applies to compound shapes (Alt-click a shape mode)"));
+        if r.clicked() {
+            app.run("object.compoundShape.expand", json!({})).ok();
+        }
     });
     widgets::subheader(ui, tl!("Pathfinders:"));
     ui.horizontal(|ui| {
@@ -72,7 +106,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     menu_item(ui, tl!("Pathfinder Options…"), false, false);
     ui.separator();
-    menu_item(ui, tl!("Make Compound Shape"), false, false);
-    menu_item(ui, tl!("Release Compound Shape"), false, false);
-    menu_item(ui, tl!("Expand Compound Shape"), false, false);
+    for (label, id) in [
+        (tl!("Make Compound Shape"), "object.compoundShape.make"),
+        (tl!("Release Compound Shape"), "object.compoundShape.release"),
+        (tl!("Expand Compound Shape"), "object.compoundShape.expand"),
+    ] {
+        let on = crate::menus::enabled(app, id) && (id != "object.compoundShape.make" || selection_len(app) >= 2);
+        if menu_item(ui, label, on, false) {
+            app.run(id, json!({})).ok();
+        }
+    }
 }

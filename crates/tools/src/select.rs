@@ -199,7 +199,11 @@ impl Tool for SelectionTool {
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
-                    if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
+                    if cx.double_click_isolate
+                        && cx.doc.node(top).is_some_and(|n| {
+                            matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. } | vectorcraft_doc::NodeKind::CompoundShape { .. })
+                        })
+                    {
                         return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
                     }
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
@@ -259,6 +263,14 @@ impl Tool for SelectionTool {
                 {
                     self.state = State::Moving { start: p, began: false, deselect: None, key: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
+                }
+                // A selected compound-shape member drags from anywhere in its own shape.
+                if !m.shift
+                    && let Some(h) = vectorcraft_doc::hit::selected_member_at(cx.doc, p, cx.hit_options(), &cx.selection.objects)
+                {
+                    let key = (cx.selection.objects.len() > 1 && !m.cmd && !m.alt).then_some(h.leaf);
+                    self.state = State::Moving { start: p, began: false, deselect: None, key };
+                    return vec![];
                 }
                 match hit_test(cx.doc, p, cx.hit_options()) {
                     Some(h) => {
@@ -435,6 +447,9 @@ impl Tool for SelectionTool {
         }
         if let Some(c) = self.guide.cursor(cx, p) {
             return c;
+        }
+        if vectorcraft_doc::hit::selected_member_at(cx.doc, p, cx.hit_options(), &cx.selection.objects).is_some() {
+            return Cursor::Move;
         }
         if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
             if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {

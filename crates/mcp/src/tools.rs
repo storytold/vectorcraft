@@ -384,11 +384,12 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "pathfinder",
             "Pathfinder",
-            "Combine the selected (or `ids`) objects destructively, back to front: unite, minusFront, intersect, exclude, divide, trim, merge, crop, outline, minusBack. For a non-destructive version apply the pathfinder.* effect to a group.",
+            "Combine the selected (or `ids`) objects, back to front: unite, minusFront, intersect, exclude, divide, trim, merge, crop, outline, minusBack. Destructive, except with `live: true` for the four shape modes (unite, minusFront, intersect, exclude): a live compound shape whose members stay editable and keep a mode each (`object.compoundShape.*` via run_command: setMode, release, expand).",
             obj(
                 json!({
                     "operation": {"type": "string", "enum": ["unite", "minusFront", "intersect", "exclude", "divide", "trim", "merge", "crop", "outline", "minusBack"]},
                     "ids": {"type": "array", "items": {"type": "integer"}},
+                    "live": {"type": "boolean", "description": "A live compound shape (shape modes only)."},
                 }),
                 &["operation"],
             ),
@@ -847,7 +848,18 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         }
         "pathfinder" => {
             select_ids(b, a)?;
-            j(exec(b, &format!("object.pathfinder.{}", req_str(a, "operation")?), json!({}))?)
+            let op = req_str(a, "operation")?;
+            if a.get("live").and_then(Value::as_bool).unwrap_or(false) {
+                let mode = match op {
+                    "unite" => "add",
+                    "minusFront" => "subtract",
+                    "intersect" => "intersect",
+                    "exclude" => "exclude",
+                    _ => return Err(format!("`live` works with the shape modes (unite, minusFront, intersect, exclude), not `{op}`")),
+                };
+                return j(exec(b, "object.compoundShape.make", json!({ "mode": mode }))?);
+            }
+            j(exec(b, &format!("object.pathfinder.{op}"), json!({}))?)
         }
         "transform" => j(transform(b, a)?),
         "create_graph" => {

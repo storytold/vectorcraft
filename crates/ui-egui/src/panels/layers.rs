@@ -36,7 +36,7 @@ use std::sync::Arc;
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ShapeMode};
 use vectorcraft_engine::OpenRows;
 
 use crate::theme::Tokens;
@@ -213,6 +213,8 @@ struct Row {
     depth: usize,
     /// A clipping path: its group or layer clips.
     clip_path: bool,
+    /// A compound-shape member above the bottom one: how it combines (its mode button).
+    shape_mode: Option<ShapeMode>,
     /// It holds rows ([`opens`]), and shows them.
     opens: bool,
     open: bool,
@@ -239,7 +241,7 @@ fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str) 
     let mask_layer = doc.mask_edit.map(|m| m.layer);
     let mut out = vec![];
     for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
-        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query), &mut out);
+        push_rows(l, 0, (false, None), (Color32::PLACEHOLDER, true), (open, opts, query), &mut out);
     }
     out
 }
@@ -249,7 +251,7 @@ fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str) 
 fn push_rows(
     n: &Arc<Node>,
     depth: usize,
-    clip_path: bool,
+    (clip_path, shape_mode): (bool, Option<ShapeMode>),
     (colour, shown): (Color32, bool),
     cx: (&OpenRows, &PanelOptions, &str),
     out: &mut Vec<Row>,
@@ -270,10 +272,11 @@ fn push_rows(
     let searching = !query.is_empty();
     let open = opens && (searching || open_rows.contains(n.id));
     let at = out.len();
-    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template() });
+    out.push(Row { node: n.clone(), depth, clip_path, shape_mode, opens, open, colour, dim: !shown || n.is_template() });
     if open && let Some(children) = n.children() {
         for (i, c) in children.iter().enumerate().rev() {
-            push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
+            let mode = (i > 0 && matches!(n.kind, NodeKind::CompoundShape { .. })).then_some(c.shape_mode);
+            push_rows(c, depth + 1, (i == 0 && n.clips(), mode), (colour, shown), cx, out);
         }
     }
     // Searching, a row stays for its own name or for a row it keeps inside it.
@@ -538,6 +541,18 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
             LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
             LayersDrag::Art => true,
         },
+        // A compound shape takes what covers a region (it joins in the Add mode).
+        NodeKind::CompoundShape { .. } => {
+            let region = |i: &NodeId| {
+                doc.node(*i).is_some_and(|c| {
+                    !matches!(c.kind, NodeKind::Layer { .. } | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::PlacedDocument(_))
+                })
+            };
+            match drag {
+                LayersDrag::Rows(ids) => ids.iter().all(region),
+                LayersDrag::Art => false,
+            }
+        }
         _ => false,
     }
 }
@@ -605,7 +620,13 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.display_name() };
     let font = egui::FontId::proportional(13.0);
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
-    let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
+    // A compound-shape member's mode button sits at the end of the name.
+    let name_right = r.right() - 44.0 - if item.shape_mode.is_some() { MODE_BUTTON + 4.0 } else { 0.0 };
+    let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(name_right, r.center().y + 10.0));
+    if let Some(mode) = item.shape_mode {
+        let br = egui::Rect::from_center_size(egui::pos2(name_right + 2.0 + MODE_BUTTON / 2.0, r.center().y), vec2(MODE_BUTTON, MODE_BUTTON));
+        shape_mode_button(ui, n, mode, br, out);
+    }
     let name_end;
     match renaming {
         Some((rid, mut buf)) if rid == n.id.0 => {
@@ -690,6 +711,47 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
+}
+
+/// Side of a compound-shape member's mode button.
+const MODE_BUTTON: f32 = 18.0;
+
+/// The icon (drawn for VectorCraft, as in the Pathfinder panel) and label of a shape mode.
+pub(crate) fn shape_mode_icon(mode: ShapeMode) -> (&'static str, &'static str) {
+    match mode {
+        ShapeMode::Add => ("dc-pf-unite", "Add"),
+        ShapeMode::Subtract => ("dc-pf-minus-front", "Subtract"),
+        ShapeMode::Intersect => ("dc-pf-intersect", "Intersect"),
+        ShapeMode::Exclude => ("dc-pf-exclude", "Exclude"),
+    }
+}
+
+/// Compound-shape member `n`'s mode button in `rect`: its mode's icon; a click lists the modes
+/// to pick from (`object.compoundShape.setMode`).
+fn shape_mode_button(ui: &mut Ui, n: &Node, mode: ShapeMode, rect: egui::Rect, out: &mut Out) {
+    let t = Tokens::get(ui.ctx());
+    let resp = ui.interact(rect, ui.id().with(("shapemode", n.id.0)), Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 2.0, t.hover);
+    }
+    let (icon, label) = shape_mode_icon(mode);
+    icons::paint(ui, icon, rect.shrink(1.0), if resp.hovered() { t.text } else { t.icon });
+    let resp = resp.on_hover_text(crate::i18n::fmt(tl!("Shape Mode: {mode}"), &[("mode", tl!(label))]));
+    egui::Popup::menu(&resp).show(|ui| {
+        ui.set_min_width(140.0);
+        for m in ShapeMode::ALL {
+            let (icon, label) = shape_mode_icon(m);
+            let picked = ui
+                .horizontal(|ui| {
+                    icons::icon(ui, icon, 16.0, t.icon);
+                    widgets::menu_item(ui, label, true, m == mode)
+                })
+                .inner;
+            if picked {
+                out.actions.push(("object.compoundShape.setMode".into(), json!({"ids": [n.id.0], "mode": m.id()})));
+            }
+        }
+    });
 }
 
 /// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
@@ -932,6 +994,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         [id] => doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })),
         _ => false,
     };
+    // A compound shape isolates too (its members are edited on their own).
+    let isolatable =
+        one_container || matches!(targets.as_slice(), [id] if doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::CompoundShape { .. })));
     let layers_in: Vec<&Node> = targets.iter().filter_map(|id| doc.node(*id)).filter(|n| n.is_layer()).collect();
     let template = layers_in.first().is_some_and(|l| l.is_template());
     // The top-level layers holding the rows, and the others.
@@ -957,7 +1022,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(("Exit Isolation Mode", "object.exitIsolation", json!({}), true, false))
     } else {
         let id = targets.first().map(|i| i.0);
-        Some(("Enter Isolation Mode", "object.isolate", json!({ "id": id }), one_container, false))
+        Some(("Enter Isolation Mode", "object.isolate", json!({ "id": id }), isolatable, false))
     });
     items.extend([
         None,
@@ -1044,6 +1109,31 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
+
+    #[test]
+    fn compound_shape_members_show_their_mode() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100}))["id"].clone();
+        let b = run(&mut app, "shape.rectangle", json!({"x": 25, "y": 25, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "select.set", json!({ "ids": [a, b] }));
+        let c = NodeId(run(&mut app, "object.compoundShape.make", json!({"mode": "subtract"}))["id"].as_u64().unwrap());
+        let st = app.session.active_mut().unwrap();
+        let layer = st.doc.layers[0].id;
+        st.layers_open.set(layer, true);
+        st.layers_open.set(c, true);
+        let st = app.session.active().unwrap();
+        let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "");
+        // Layer, compound shape, then its members top first: only the front one has a mode button.
+        let modes: Vec<Option<ShapeMode>> = rows.iter().map(|r| r.shape_mode).collect();
+        assert_eq!(modes, vec![None, None, Some(ShapeMode::Subtract), None]);
+        assert!(rows[1].opens);
+        // The panel draws it.
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+    }
 
     /// Filled target circles drawn by one headless frame of the panel.
     fn filled_targets(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
