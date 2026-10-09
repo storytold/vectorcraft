@@ -131,7 +131,7 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
         Some(u) => err(format!("can't open `{}`: {}", file_name(name), u.hint)),
-        None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
+        None => err(format!("can't open `{name}`: not a format Vector W3K2 reads (see document.formats)")),
     })?;
     let title = file_name(name);
     let mut converted = false;
@@ -256,9 +256,8 @@ fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &Loa
 }
 
 /// What opening a `.ai` file that another app saved reads, and what Save does with it.
-pub const FOREIGN_AI: &str = "opened from the art the file carries for other apps (its PDF-compatible content, or PostScript in older .ai files: paths, fills, strokes, gradients, text, images, clipping, artboards): \
-data only the app that saved it understands, such as live effects, appearance stacks, symbols, brushes and editable type settings comes in as plain artwork. \
-Save asks where to save, so the original file isn't overwritten by accident";
+pub const FOREIGN_AI: &str =
+    "art read from the file; what only its own app understands (live effects, symbols, brushes) is plain artwork. Save asks where to save";
 
 /// A file named by a command's params: `{path}` (read from disk) or `{name, dataBase64}`.
 pub(crate) struct Source<'a> {
@@ -293,7 +292,7 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
 /// Decode an image's header (and, for formats stored as PNG, its pixels).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
-    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    let kind = reader.format().ok_or_else(|| err("not an image Vector W3K2 reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     let ppi = super::ppi::resolution(bytes);
     let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") {

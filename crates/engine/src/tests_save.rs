@@ -338,6 +338,26 @@ fn a_template_places_like_a_native_file() {
     assert!(st.doc.node_count() > empty && !st.selection.is_empty(), "the template's art is placed and selected");
 }
 
+/// Text, a second layer and a second artboard come back from the .ai unmodified.
+#[test]
+fn a_reopened_ai_with_text_and_artboards_is_not_modified() {
+    let d = dir("aidirty");
+    let mut s = session();
+    rect(&mut s);
+    s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Hello", "size": 18})).unwrap();
+    s.execute("object.setLiveShape", &json!({"radius": 6})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})).unwrap();
+    s.execute("layer.new", &json!({"name": "Ink"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 60, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("artboard.new", &json!({"x": 220, "y": 0, "width": 200, "height": 100, "name": "B"})).unwrap();
+    let ai = path(&d, "art.ai");
+    s.execute("file.saveAs", &json!({"path": ai})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "saved");
+    s.execute("document.open", &json!({"path": ai})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "just opened from its .ai");
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn new_documents_save_as_ai_and_reopen_whole() {
     let d = dir("aidefault");
@@ -358,6 +378,7 @@ fn new_documents_save_as_ai_and_reopen_whole() {
     let st = s.doc().unwrap();
     assert_eq!((st.path.as_deref(), st.format), (Some(ai.as_str()), "ai"));
     assert_eq!(st.doc.layers, before);
+    assert!(!st.is_dirty(), "a document just opened from its .ai is not modified");
     // A .ai file another app wrote (a plain PDF named .ai): its art opens with a note, and Save
     // asks where rather than overwriting it.
     let other = path(&d, "other.ai");
@@ -365,7 +386,7 @@ fn new_documents_save_as_ai_and_reopen_whole() {
     std::fs::copy(path(&d, "plain.pdf"), &other).unwrap();
     let r = s.execute("document.open", &json!({"path": other})).unwrap();
     assert_eq!(r["restored"], false, "{r}");
-    assert!(r["warnings"][0].as_str().unwrap().contains("only the app that saved it"), "{r}");
+    assert!(r["warnings"][0].as_str().unwrap().contains("only its own app understands"), "{r}");
     assert_eq!(s.doc().unwrap().path, None);
     assert_eq!(save_plan(&s, SaveMode::Save, &json!({})).unwrap().name, "other.ai");
     let _ = std::fs::remove_dir_all(d);

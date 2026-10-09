@@ -474,7 +474,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         ui.label(egui::RichText::new(text).size(11.0).color(t.text));
                         ui.add(egui::Spinner::new().size(12.0).color(t.accent));
                     } else if !app.ui.status.is_empty() {
-                        ui.label(egui::RichText::new(&app.ui.status).size(11.0).color(t.text));
+                        // A long message is cut at the zoom and rotation fields, whole on hover.
+                        ui.add(egui::Label::new(egui::RichText::new(&app.ui.status).size(11.0).color(t.text)).truncate())
+                            .on_hover_text(&app.ui.status);
                     }
                 });
             });

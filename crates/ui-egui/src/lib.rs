@@ -51,6 +51,8 @@ pub mod workspaces;
 #[cfg(test)]
 mod tests_adjust;
 #[cfg(test)]
+mod tests_aireopen;
+#[cfg(test)]
 mod tests_aisave;
 #[cfg(test)]
 mod tests_background;

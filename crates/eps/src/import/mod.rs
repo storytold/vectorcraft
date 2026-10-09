@@ -114,7 +114,7 @@ impl Dsc {
 /// What went wrong, for the user.
 fn reason(e: &PsError) -> String {
     match e {
-        PsError::Ps("undefined", at) => format!("it uses `{at}`, which VectorCraft's PostScript reader doesn't know"),
+        PsError::Ps("undefined", at) => format!("it uses `{at}`, which Vector W3K2's PostScript reader doesn't know"),
         PsError::Ps(name, at) if at.is_empty() => format!("a PostScript error ({name})"),
         PsError::Ps(name, at) => format!("a PostScript error ({name} in `{at}`)"),
         PsError::Limit(what) => what.to_string(),
@@ -144,7 +144,7 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
         (Ok(()), true) => return Ok(finish(out)),
-        (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
+        (Ok(()), false) => "it draws nothing Vector W3K2's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e),
     };
     if let Some(doc) = tiff.and_then(|t| preview(t, frame)) {
