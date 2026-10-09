@@ -3,7 +3,7 @@ name = "vectorcraft-text"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft text: font database, shaping, layout, glyph outlines"
+description = "Vector W3K2 text: font database, shaping, layout, glyph outlines"
 
 [lints]
 workspace = true

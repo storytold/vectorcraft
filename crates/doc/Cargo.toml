@@ -3,7 +3,7 @@ name = "vectorcraft-doc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft document model: artboards, layers, objects, appearance (pure data + serde)"
+description = "Vector W3K2 document model: artboards, layers, objects, appearance (pure data + serde)"
 
 [lints]
 workspace = true

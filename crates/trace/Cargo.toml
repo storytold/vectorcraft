@@ -3,7 +3,7 @@ name = "vectorcraft-trace"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft Image Trace: raster to vector tracing (quantize, boundary follow, polygon, Bezier fit)"
+description = "Vector W3K2 Image Trace: raster to vector tracing (quantize, boundary follow, polygon, Bezier fit)"
 
 [lints]
 workspace = true

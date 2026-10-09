@@ -13,7 +13,9 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .open(&mut open)
-        .pivot(egui::Align2::CENTER_CENTER).default_pos(ctx.content_rect().center() + egui::vec2(0.0, 0.0)).constrain(true)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center() + egui::vec2(0.0, 0.0))
+        .constrain(true)
         .frame(egui::Frame::window(&ctx.global_style()).inner_margin(egui::Margin::same(18)))
         .show(ctx, |ui| {
             ui.set_width(380.0);
@@ -30,13 +32,6 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
             ui.add_space(12.0);
             crate::community::links(app, ui);
-            ui.add_space(12.0);
-            ui.label(
-                egui::RichText::new(tl!(
-                    "Based on VectorCraft by the ArtCraft team and contributors. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft."
-                ))
-                .size(11.0),
-            );
         });
     app.ui.about = open;
 }

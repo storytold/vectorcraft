@@ -3,7 +3,7 @@ name = "vectorcraft-render"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft renderer: document to pixels (vello_cpu backend)"
+description = "Vector W3K2 renderer: document to pixels (vello_cpu backend)"
 
 [lints]
 workspace = true

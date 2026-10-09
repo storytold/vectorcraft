@@ -12,7 +12,7 @@
 # Clean-room: every entry was written from the plain meaning of the English label using the
 # vector-drawing vocabulary in everyday use in Taiwan (錨點, 路徑, 筆畫, 填色, 工作區域, 路徑管理員 ...).
 # No proprietary localisation resource, string table or product UI was consulted or copied; add
-# entries the same way. Product and technology names (VectorCraft, ArtCraft, SVG, OpenType, CMYK,
+# entries the same way. Product and technology names (VectorCraft, SVG, OpenType, CMYK,
 # Lab ...) and paper sizes (Letter, Tabloid) stay in Latin letters; the trailing "…" of dialog
 # commands is kept. Full-width punctuation (，。：) inside sentences; half-width parentheses and
 # the " · " separators as in the English. Terms shared with PhotoCraft use the same words as its
@@ -1683,7 +1683,6 @@
 	Paragraph Style Options	段落樣式選項
 	Paragraph Styles	段落樣式
 	Paragraph Symbol	段落符號
-	Based on VectorCraft by the ArtCraft team and contributors. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	以 ArtCraft 團隊與貢獻者的 VectorCraft 為基礎。MIT OR Apache-2.0。字體：Source Sans 3、Inter、JetBrains Mono (OFL)。圖示：Lucide (ISC) + VectorCraft。
 	Password	密碼
 	Paste	貼上
 	Paste in Back	貼至後方

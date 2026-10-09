@@ -3,7 +3,7 @@ name = "vectorcraft-pathops"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft path operations: booleans (Pathfinder), shape builder regions, offset, outline stroke, simplify"
+description = "Vector W3K2 path operations: booleans (Pathfinder), shape builder regions, offset, outline stroke, simplify"
 
 [lints]
 workspace = true

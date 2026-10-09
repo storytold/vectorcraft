@@ -3,7 +3,7 @@ name = "vectorcraft-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft engine: sessions, history, selection, the command registry"
+description = "Vector W3K2 engine: sessions, history, selection, the command registry"
 
 [lints]
 workspace = true

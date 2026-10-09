@@ -3,7 +3,7 @@ name = "vectorcraft-testkit"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft test helpers: fixtures, generators, render comparison, geometry assertions"
+description = "Vector W3K2 test helpers: fixtures, generators, render comparison, geometry assertions"
 publish = false
 
 [lints]

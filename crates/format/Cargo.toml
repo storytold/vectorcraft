@@ -3,7 +3,7 @@ name = "vectorcraft-format"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft native .vectorcraft format (versioned JSON, embedded images)"
+description = "Vector W3K2 native .vectorcraft format (versioned JSON, embedded images)"
 
 [lints]
 workspace = true

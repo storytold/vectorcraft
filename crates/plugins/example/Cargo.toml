@@ -1,12 +1,12 @@
 [package]
 name = "vectorcraft-plugin-desaturate"
-description = "Example VectorCraft WebAssembly object filter plug-in: Desaturate"
+description = "Example Vector W3K2 WebAssembly object filter plug-in: Desaturate"
 version = "1.0.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
-# Not a member of the VectorCraft workspace: it builds for wasm32-unknown-unknown only.
+# Not a member of the Vector W3K2 workspace: it builds for wasm32-unknown-unknown only.
 [workspace]
 
 [lib]

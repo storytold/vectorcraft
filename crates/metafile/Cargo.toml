@@ -3,7 +3,7 @@ name = "vectorcraft-metafile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft Windows metafiles: hand-written EMF and WMF writers and readers"
+description = "Vector W3K2 Windows metafiles: hand-written EMF and WMF writers and readers"
 
 [lints]
 workspace = true

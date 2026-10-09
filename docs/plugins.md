@@ -1,6 +1,6 @@
 # Plug-ins: the WebAssembly plug-in API (ABI v1)
 
-VectorCraft does not host native plug-ins built for other illustration apps: that needs unsafe FFI into
+Vector W3K2 does not host native plug-ins built for other illustration apps: that needs unsafe FFI into
 arbitrary machine code and cannot work in the browser build. Instead, plug-ins are **WebAssembly modules**
 run in a sandbox. One `.wasm` file works on macOS, Windows, Linux and the web. The design follows PhotoCraft's
 plug-in API (same sandbox, same manifest and parameter schema), extended for vector documents.
@@ -140,7 +140,7 @@ object, holding only geometry (`type`, `path`, `fillRule`, `bounds`).
 ```
 
 - `type`: `"path"` or `"compound"` (a compound path: `path` holds its members' subpaths, painted as one).
-- `path`: VectorCraft's own path form. Each subpath is a run of anchors; `p` is the anchor, `in` / `out` its handles
+- `path`: Vector W3K2's own path form. Each subpath is a run of anchors; `p` is the anchor, `in` / `out` its handles
   (absent: no handle), `kind` `"Smooth"` when the handles stay collinear. Coordinates are points, y down.
 - `fills`, `strokes`: the object's fills and strokes in paint order (bottom first); `null` is no paint. Paints use the
   native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`, `{"type": "gradient", "gradient":

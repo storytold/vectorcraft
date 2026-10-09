@@ -1,4 +1,4 @@
-# Flatpak manifest for VectorCraft, ready for a Flathub submission.
+# Flatpak manifest for Vector W3K2, ready for a Flathub submission.
 #
 # Flatpak builds run offline, so the crate sources must be vendored first. From the repo root:
 #

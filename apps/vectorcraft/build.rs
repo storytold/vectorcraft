@@ -16,7 +16,7 @@ fn main() -> Result<(), String> {
         .set("ProductName", "Vector W3K2")
         .set("FileDescription", "Vector W3K2 vector illustration editor")
         .set("CompanyName", "Print That 204")
-        .set("LegalCopyright", "Copyright (c) Print That 204 and the VectorCraft authors. MIT OR Apache-2.0.")
+        .set("LegalCopyright", "Copyright (c) 2026 Print That 204.")
         .set("OriginalFilename", "vectorcraft.exe")
         .set("InternalName", "vectorcraft");
     if let Err(e) = res.compile() {

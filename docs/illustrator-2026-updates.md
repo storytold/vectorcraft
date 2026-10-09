@@ -1,11 +1,11 @@
-# Illustrator 2026 updates vs VectorCraft
+# Illustrator 2026 updates vs Vector W3K2
 
-Illustrator's release notes for 29.8 (August 2025) through 30.8 (August 2026), checked against VectorCraft.
+Illustrator's release notes for 29.8 (August 2025) through 30.8 (August 2026), checked against Vector W3K2.
 Generative AI features (Text to Vector Graphic, Turntable, Concept to Vector, Rewrite, Generative Expand,
 Remove Background, Generative Shape Fill, Firefly Boards and the rest) are out of scope and not listed, as are
 cloud-only features (Projects, cloud storage export, account settings, credits).
 
-Status: ✅ in VectorCraft (already there, or added on the `illustrator-2026-updates` branch) · ⬜ not yet.
+Status: ✅ in Vector W3K2 (already there, or added on the `illustrator-2026-updates` branch) · ⬜ not yet.
 
 | Release | Feature | Status | Notes |
 |---|---|---|---|
