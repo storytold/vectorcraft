@@ -105,6 +105,15 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("path.insertAnchor", "Add Anchor Point", [], None, "{id, subpath, segment, t: 0..1}", has_doc, insert_anchor),
         cmd!("path.cutAtAnchors", "Cut Path at Selected Anchor Points", [], None, "{}", has_selection, cut_at_anchors),
+        cmd!(
+            "path.unlockAnchors",
+            "Unlock Anchor Points",
+            ["Object", "Path"],
+            None,
+            "{} split the paths at the direct-selected anchors into separate open lines (unmakes a joined shape; the ends of an open path stay as they are); a filled shape that opens keeps its fill as a shape of its own below the lines, as one undo step → {ids}",
+            has_unlockable,
+            unlock_anchors
+        ),
     ]
 }
 
@@ -751,4 +760,117 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Are anchors picked where a path can be split (a corner of a closed path, or a point inside
+/// an open one)?
+fn has_unlockable(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    let ok = st.selection.anchors.iter().any(|(id, set)| {
+        st.doc
+            .node(*id)
+            .and_then(|n| n.path_data())
+            .is_some_and(|pd| set.iter().any(|(si, ai)| pd.subpaths.get(*si).is_some_and(|sp| !split_points(sp, &[*ai]).is_empty())))
+    });
+    if ok { Ok(()) } else { Err("select a corner or a point inside a line with the Direct Selection tool".into()) }
+}
+
+/// The anchors of `sp` among `picked` it can be split at: any anchor of a closed subpath, an
+/// inner anchor of an open one.
+fn split_points(sp: &SubPath, picked: &[usize]) -> Vec<usize> {
+    let n = sp.anchors.len();
+    let mut v: Vec<usize> = picked.iter().copied().filter(|a| *a < n && (sp.closed && n >= 2 || *a > 0 && *a + 1 < n)).collect();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// `sp` split at the anchors `cuts` (from [`split_points`]) into open pieces; each split point
+/// ends one piece and starts the next, at the same spot.
+fn split_subpath(sp: &SubPath, cuts: &[usize]) -> Vec<SubPath> {
+    let n = sp.anchors.len();
+    let (Some(&first), Some(&last)) = (cuts.first(), cuts.last()) else { return vec![sp.clone()] };
+    // Runs of anchor indices (mod n for a closed subpath), each from one split point to the next.
+    let mut runs: Vec<(usize, usize)> = cuts.windows(2).filter_map(|w| Some((*w.first()?, *w.get(1)?))).collect();
+    if sp.closed {
+        runs.push((last, first + n));
+    } else {
+        runs.insert(0, (0, first));
+        runs.push((last, n.saturating_sub(1)));
+    }
+    runs.into_iter()
+        .filter(|(a, b)| b > a)
+        .map(|(a, b)| {
+            let mut anchors: Vec<Anchor> = (a..=b).filter_map(|i| sp.anchors.get(i % n).copied()).collect();
+            if let Some(f) = anchors.first_mut() {
+                f.h_in = f.p;
+            }
+            if let Some(l) = anchors.last_mut() {
+                l.h_out = l.p;
+            }
+            SubPath::new(anchors, false)
+        })
+        .collect()
+}
+
+/// Object > Path > Unlock Anchor Points: split paths at the picked anchors into separate lines.
+fn unlock_anchors(s: &mut Session, _: &Value) -> Result<Value> {
+    let picked = s.doc()?.selection.anchors.clone();
+    let ids = s.edit("Unlock Anchor Points", |d, sel| {
+        let mut out = vec![];
+        for (id, set) in &picked {
+            let Some(node) = d.node(*id).cloned() else { continue };
+            let Some(pd) = node.path_data() else { continue };
+            let mut keep = vec![];
+            let mut pieces = vec![];
+            let mut opens_closed = false;
+            for (si, sp) in pd.subpaths.iter().enumerate() {
+                let at: Vec<usize> = set.iter().filter(|(s, _)| *s == si).map(|(_, a)| *a).collect();
+                let cuts = split_points(sp, &at);
+                if cuts.is_empty() {
+                    keep.push(sp.clone());
+                } else {
+                    opens_closed |= sp.closed;
+                    pieces.extend(split_subpath(sp, &cuts));
+                }
+            }
+            if pieces.is_empty() {
+                continue;
+            }
+            // A filled shape that opens keeps its fill as a shape of its own just below.
+            let mut lines = node.clone();
+            if opens_closed && !node.appearance.fill_paint().is_none() {
+                let mut fill = d.reid(&node);
+                fill.appearance.items.retain(|i| i.is_fill());
+                if let Some((parent, idx, _)) = d.position(*id) {
+                    d.insert(parent, idx, fill)?;
+                }
+                lines.appearance.items.retain(|i| !i.is_fill());
+            }
+            let mut rest = pieces.into_iter();
+            keep.extend(rest.next());
+            {
+                let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+                n.appearance = lines.appearance.clone();
+            }
+            *path_mut(d, *id)? = PathData::new(keep);
+            out.push(*id);
+            // The other pieces become lines of their own, just above, styled the same.
+            let Some((parent, idx, _)) = d.position(*id) else { continue };
+            for (k, piece) in rest.enumerate() {
+                let mut n = d.reid(&lines);
+                if let NodeKind::Path { path, live, .. } = &mut n.kind {
+                    *path = PathData::single(piece);
+                    *live = None;
+                }
+                out.push(d.insert(parent, idx + 1 + k, n)?);
+            }
+        }
+        if out.is_empty() {
+            return Err(EngineError::Other("select a corner or a point inside a line with the Direct Selection tool".into()));
+        }
+        sel.set(out.iter().copied());
+        Ok(out)
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

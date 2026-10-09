@@ -119,3 +119,70 @@ fn pen_lines_are_unfilled_until_the_path_closes() {
     let l = run(&mut s, "shape.line", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50}))["id"].as_u64().unwrap();
     assert!(!filled(&s, l));
 }
+
+/// A triangle made by joining: a box with its top edge deleted, the two side ends dragged together.
+fn triangle(s: &mut Session) -> u64 {
+    let id = open_box(s);
+    run(s, "select.anchors", json!({"id": id, "anchors": [[0, 0]], "mode": "set"}));
+    run(s, "path.moveAnchors", json!({"dx": -100, "dy": 0, "join": true}));
+    id
+}
+
+#[test]
+fn unlocking_a_corner_opens_the_shape_there_and_undo_restores_it() {
+    let mut s = session();
+    let id = triangle(&mut s);
+    let before = shape(&s, id);
+    // The bottom-right corner (100, 100) is anchor 1.
+    run(&mut s, "select.anchors", json!({"id": id, "anchors": [[0, 1]], "mode": "set"}));
+    let r = run(&mut s, "path.unlockAnchors", json!({}));
+    assert_eq!(r["ids"], json!([id]));
+    assert_eq!(shape(&s, id), [(vec![(100.0, 100.0), (0.0, 100.0), (0.0, 0.0), (100.0, 100.0)], false)]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(shape(&s, id), before);
+}
+
+#[test]
+fn unlocking_every_corner_gives_separate_lines() {
+    let mut s = session();
+    let id = triangle(&mut s);
+    let n_before = paths(&s).len();
+    run(&mut s, "select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"}));
+    let ids: Vec<u64> = run(&mut s, "path.unlockAnchors", json!({}))["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 3);
+    for i in &ids {
+        let sh = shape(&s, *i);
+        assert_eq!(sh.len(), 1);
+        assert_eq!(sh[0].0.len(), 2, "a two-point line");
+        assert!(!sh[0].1);
+        assert!(!filled(&s, *i) && stroked(&s, *i));
+    }
+    assert_eq!(paths(&s).len(), n_before + 2);
+}
+
+#[test]
+fn unlocking_a_filled_shapes_corner_keeps_the_fill_below() {
+    let mut s = session();
+    run(&mut s, "paint.setFill", json!({"color": "#3366cc"}));
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+    run(&mut s, "select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "set"}));
+    run(&mut s, "path.unlockAnchors", json!({}));
+    let all = paths(&s);
+    assert_eq!(all.len(), 2);
+    assert_eq!(all[1], id);
+    assert!(!filled(&s, id) && stroked(&s, id));
+    assert!(filled(&s, all[0]) && !stroked(&s, all[0]));
+    assert!(!shape(&s, id)[0].1);
+}
+
+#[test]
+fn unlocking_an_inner_point_of_a_line_splits_it_and_its_ends_do_nothing() {
+    let mut s = session();
+    let id = run(&mut s, "path.create", json!({"anchors": [{"x": 0, "y": 0}, {"x": 50, "y": 0}, {"x": 50, "y": 50}]}))["id"].as_u64().unwrap();
+    run(&mut s, "select.anchors", json!({"id": id, "anchors": [[0, 0]], "mode": "set"}));
+    assert!(s.execute("path.unlockAnchors", &json!({})).is_err(), "an open end is already unlocked");
+    run(&mut s, "select.anchors", json!({"id": id, "anchors": [[0, 1]], "mode": "set"}));
+    let ids = run(&mut s, "path.unlockAnchors", json!({}))["ids"].clone();
+    assert_eq!(ids.as_array().map(Vec::len), Some(2));
+    assert_eq!(shape(&s, id), [(vec![(0.0, 0.0), (50.0, 0.0)], false)]);
+}

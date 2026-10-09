@@ -2949,3 +2949,6 @@
 	Mark Size	標記大小
 	Summa needs white space of 3 to 4 times the mark size around each mark.	Summa 需要每個標記周圍留有標記大小 3 到 4 倍的空白。
 	Max X Distance	最大 X 距離
+	Unlock Anchor Points	解鎖錨點
+	Unlock Corner	解鎖轉角
+	Unlock the selected corner: split the shape into separate lines there	解鎖所選轉角：在該處將形狀拆分為獨立線段
