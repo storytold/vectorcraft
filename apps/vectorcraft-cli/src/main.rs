@@ -50,7 +50,7 @@ fn stdout_failed(e: std::io::Error) -> ! {
 }
 
 const USAGE: &str = "\
-vectorcraft-cli — VectorCraft automation
+vectorcraft-cli — Vector W3K2 automation
 
 USAGE:
   vectorcraft-cli mcp [--connect ADDR | --headless]

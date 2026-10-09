@@ -25,7 +25,7 @@ commands:
   ci              fmt --check, clippy -D warnings, test, assets, brands, layers, wasm (stops at first failure)
   corpus [--download]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite
-  bundle          build dist/VectorCraft.app (macOS) with assets/app-icon/vectorcraft.icns
+  bundle          build dist/Vector W3K2.app (macOS) with assets/app-icon/vectorcraft.icns
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)

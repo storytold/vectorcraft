@@ -69,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a swatch library (.vcswatches, .gpl, or the .ase Swatch Exchange, .acb colour book and .aco palette files other design apps write and install, spot colour books included), or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a swatch library (.vcswatches, .gpl, or the .ase Swatch Exchange, .acb colour book and .aco palette files other design apps write and install, spot colour books included), or the swatches of any document Vector W3K2 opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
             always,
             load
         ),

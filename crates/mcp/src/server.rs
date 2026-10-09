@@ -20,7 +20,7 @@ const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
 
-const INSTRUCTIONS: &str = "VectorCraft is a professional vector illustration app. Coordinates are \
+const INSTRUCTIONS: &str = "Vector W3K2 is a professional vector illustration app. Coordinates are \
 points in document space (y down, origin at the first artboard's top-left; a new document is 612×792). \
 Draw with draw_shape / draw_path, change colours with set_paint, look with screenshot and inspect_document. \
 Every menu action is a command: find it with list_commands and run it with run_command. New objects become \
@@ -157,7 +157,7 @@ impl Server {
                         "completions": {},
                         "logging": {},
                     },
-                    "serverInfo": {"name": "vectorcraft", "title": "VectorCraft", "version": env!("CARGO_PKG_VERSION")},
+                    "serverInfo": {"name": "vectorcraft", "title": "Vector W3K2", "version": env!("CARGO_PKG_VERSION")},
                     "instructions": format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe()),
                 }))
             }

@@ -192,7 +192,7 @@ fn hand_built_emf_plays_like_gdi() {
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
     let mm = 72.0 / 25.4;
     assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 50.0 * mm, 30.0 * mm), 0.01));
-    assert_eq!(back.warnings, vec!["2 records of kinds VectorCraft doesn't read were skipped".to_string()]);
+    assert_eq!(back.warnings, vec!["2 records of kinds Vector W3K2 doesn't read were skipped".to_string()]);
     let layer = back.document.layers[0].children().unwrap().clone();
     // The rectangle outside the clip; the lines and the text in a clipping group.
     assert_eq!(layer.len(), 2);
@@ -279,7 +279,7 @@ fn hand_built_wmf_plays_like_gdi() {
     ];
     let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
     assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 72.0, 72.0), 1e-9));
-    assert_eq!(back.warnings, vec!["1 record of kinds VectorCraft doesn't read was skipped".to_string()]);
+    assert_eq!(back.warnings, vec!["1 record of kinds Vector W3K2 doesn't read was skipped".to_string()]);
     let p = paths(&back.document);
     assert_eq!(p.len(), 2);
     assert_eq!(fill_rgb(&p[0]), Some([0, 0, 255]));

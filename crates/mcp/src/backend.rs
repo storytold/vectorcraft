@@ -85,7 +85,7 @@ impl Backend for Remote {
                 self.conn = None;
                 self.roundtrip(&line).map_err(|e| {
                     self.conn = None;
-                    format!("VectorCraft app at {} is not reachable: {e}", self.addr)
+                    format!("Vector W3K2 app at {} is not reachable: {e}", self.addr)
                 })?
             }
         };

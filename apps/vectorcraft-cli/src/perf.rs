@@ -81,7 +81,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     let load = load_average();
-    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, load average {}", load.map_or("?".into(), |l| format!("{l:.1}")));
+    outln!("Vector W3K2 performance budgets — {n} paths, {cores} cores, load average {}", load.map_or("?".into(), |l| format!("{l:.1}")));
     let noisy = load.is_some_and(|l| l > cores as f64 * 0.75);
     if noisy {
         outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
