@@ -1001,8 +1001,8 @@ impl VectorcraftApp {
         self.take_dropped_files(ctx);
     }
 
-    /// Files dropped on the window: documents opened, pictures and text placed on the canvas
-    /// ([`Self::drop_target`]).
+    /// Files dropped on the window: documents, libraries, presets and plug-ins opened, pictures
+    /// and text placed on the canvas ([`Self::drop_target`]).
     #[cfg(not(target_arch = "wasm32"))]
     fn take_dropped_files(&mut self, ctx: &egui::Context) {
         let (dropped, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.modifiers.shift));

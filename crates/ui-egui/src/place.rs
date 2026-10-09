@@ -42,8 +42,9 @@ pub struct DropAt {
 pub enum DropTarget {
     /// The canvas of the document it was dropped on.
     Place(DropAt),
-    /// Opened as a document: no document is open, the drop missed the canvas (the tab bar), or it
-    /// is a document dropped where the platform doesn't say.
+    /// Opened as File → Open opens it: no document is open, the drop missed the canvas (the tab
+    /// bar), it is a document dropped where the platform doesn't say, or it is a library, a presets
+    /// file or a plug-in.
     Open,
 }
 
@@ -300,10 +301,12 @@ impl VectorcraftApp {
     /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
-    /// own and a picture or text is placed in the middle of the view.
+    /// own and a picture or text is placed in the middle of the view. A library, a presets file or
+    /// a plug-in opens wherever it is dropped, as File → Open opens it ([`io::opens_as`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {
+            _ if io::opens_as(name).is_some() => return DropTarget::Open,
             Some(p) if !rect.contains(p) => return DropTarget::Open,
             Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
             None if is_document(name) => return DropTarget::Open,
@@ -386,7 +389,9 @@ pub fn drain(app: &mut VectorcraftApp) {
     }
 }
 
-/// Files dragged over the window: the canvas is outlined where they would be placed.
+/// Files dragged over the window: the canvas is outlined where they would be placed. On the web
+/// the browser gives a dragged file's type but not its name, so the canvas is outlined for any
+/// file dragged over it, including libraries, presets and plug-ins, which open when dropped.
 pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
     let pos = drag_pos(ctx);
     let placed = ctx.input(|i| {
