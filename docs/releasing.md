@@ -63,7 +63,7 @@ The rules are in craftrules `standards/fonts.md`, the build option in
 ### macOS
 
 `packaging/macos/package.sh` builds `aarch64-apple-darwin` and `x86_64-apple-darwin` with
-`MACOSX_DEPLOYMENT_TARGET=11.0`, joins them with `lipo` and assembles `VectorCraft.app`:
+`MACOSX_DEPLOYMENT_TARGET=11.0`, joins them with `lipo` and assembles `Vector W3K2.app`:
 
 - `Info.plist` is generated from `Info.plist.in` (bundle id `ai.storyteller.vectorcraft`,
   `LSMinimumSystemVersion` 11.0, the version and the build commit). The icon is
