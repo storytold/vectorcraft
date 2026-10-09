@@ -26,6 +26,11 @@ enum State {
     MoveAnchors {
         start: Point,
         began: bool,
+        /// The one open end being dragged (id, subpath, anchor, where it started), if that is
+        /// what is picked: it snaps onto another open end and joins there on release.
+        end: Option<(NodeId, usize, usize, Point)>,
+        /// The open end it currently snaps to.
+        snap: Option<Point>,
     },
     MoveObject {
         start: Point,
@@ -220,6 +225,52 @@ fn chord_meets_rect(a: Point, b: Point, r: Rect) -> bool {
     t0 <= t1
 }
 
+/// Smart-guide magenta, as the Pen and Line tools use for snap points.
+const SNAP: [u8; 3] = crate::guides::MAGENTA;
+
+/// The single open-path end the selection picks, with where it is: (id, subpath, anchor, point).
+fn picked_open_end(cx: &ToolContext) -> Option<(NodeId, usize, usize, Point)> {
+    let [id] = cx.selection.objects.as_slice() else { return None };
+    let set = cx.selection.partial(*id)?;
+    let mut it = set.iter();
+    let (&(si, ai), None) = (it.next()?, it.next()) else { return None };
+    let sp = cx.doc.node(*id)?.path_data()?.subpaths.get(si)?;
+    let is_end = !sp.closed && sp.anchors.len() >= 2 && (ai == 0 || ai + 1 == sp.anchors.len());
+    if !is_end {
+        return None;
+    }
+    Some((*id, si, ai, sp.anchors.get(ai)?.p))
+}
+
+/// The open-path end nearest `p` within `tol`, other than `own` (and not the other end of a
+/// two-point line, which would close it onto itself).
+pub fn open_end_near(doc: &vectorcraft_doc::Document, own: (NodeId, usize, usize), p: Point, tol: f64) -> Option<Point> {
+    let mut best: Option<(f64, Point)> = None;
+    doc.walk(|n| {
+        let NodeKind::Path { path, .. } = &n.kind else { return };
+        if !doc.is_editable(n.id) {
+            return;
+        }
+        for (si, sp) in path.subpaths.iter().enumerate() {
+            let len = sp.anchors.len();
+            if sp.closed || len < 2 {
+                continue;
+            }
+            for ai in [0, len - 1] {
+                if (n.id, si, ai) == own || (n.id == own.0 && si == own.1 && len == 2) {
+                    continue;
+                }
+                let Some(a) = sp.anchors.get(ai) else { continue };
+                let dist = a.p.distance(p);
+                if dist <= tol && best.is_none_or(|(b, _)| dist < b) {
+                    best = Some((dist, a.p));
+                }
+            }
+        }
+    });
+    best.map(|(_, q)| q)
+}
+
 fn anchors_json(v: &[AnchorRef]) -> Value {
     Value::Array(v.iter().map(|(s, a)| json!([s, a])).collect())
 }
@@ -284,11 +335,14 @@ impl Tool for DirectSelectionTool {
                 }
                 if let Some((id, si, ai)) = hit_anchor(cx, p, tol, false) {
                     let already = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, ai)));
-                    self.state = State::MoveAnchors { start: p, began: false };
+                    self.state = State::MoveAnchors { start: p, began: false, end: None, snap: None };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))];
                     }
-                    if !already {
+                    // Pressing an end of a picked line picks just that point, so the drag moves
+                    // that end and the line pivots around its other end.
+                    let on_picked_line = cx.selection.segments_of(cx.doc, id).iter().any(|(s, a0, a1)| *s == si && (*a0 == ai || *a1 == ai));
+                    if !already || on_picked_line {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))];
                     }
                     return vec![];
@@ -296,7 +350,7 @@ impl Tool for DirectSelectionTool {
                 // Clicking an edge selects just that segment (its two anchors), as in the
                 // reference app; dragging then moves only that edge.
                 if let Some((id, si, a0, a1)) = hit_segment(cx, p, tol) {
-                    self.state = State::MoveAnchors { start: p, began: false };
+                    self.state = State::MoveAnchors { start: p, began: false, end: None, snap: None };
                     let anchors = json!([[si, a0], [si, a1]]);
                     let segments = json!([[si, a0]]);
                     let selected = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, a0)) && s.contains(&(si, a1)))
@@ -329,16 +383,25 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Marquee { start: p, cur: p, add: ev.mods.shift };
                 vec![]
             }
-            (PointerKind::Drag, State::MoveAnchors { start, began }) => {
+            (PointerKind::Drag, State::MoveAnchors { start, began, end, .. }) => {
                 let mut out = vec![];
+                let mut end = end;
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
                     out.push(Action::Begin("Move".into()));
-                    self.state = State::MoveAnchors { start, began: true };
+                    end = picked_open_end(cx);
                 }
-                let d = move_delta(start, p, ev.mods.shift);
+                let mut d = move_delta(start, p, ev.mods.shift);
+                let mut snap = None;
+                if let Some((id, si, ai, from)) = end
+                    && let Some(q) = open_end_near(cx.doc, (id, si, ai), from + d, cx.tol(8.0))
+                {
+                    d = q - from;
+                    snap = Some(q);
+                }
+                self.state = State::MoveAnchors { start, began: true, end, snap };
                 out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
                 out
             }
@@ -398,6 +461,12 @@ impl Tool for DirectSelectionTool {
             (PointerKind::Up, State::Corner(c)) => {
                 self.state = State::Idle;
                 c.finish()
+            }
+            (PointerKind::Up, State::MoveAnchors { began: true, end: Some((_, _, _, from)), snap: Some(q), .. }) => {
+                // Dropped onto another open end: land there and join the two into one path.
+                self.state = State::Idle;
+                let d = q - from;
+                vec![Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y, "join": true})), Action::Commit]
             }
             (PointerKind::Up, State::MoveAnchors { began, .. } | State::MoveObject { began, .. } | State::SpinePoint { began, .. }) => {
                 self.state = State::Idle;
@@ -460,6 +529,9 @@ impl Tool for DirectSelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
             State::Corner(c) => c.overlays(cx),
+            State::MoveAnchors { snap: Some(q), .. } => {
+                vec![Overlay::Anchor { p: *q, color: SNAP, filled: true, size: 9.0 }, Overlay::Label { p: *q, text: "join".into(), color: SNAP }]
+            }
             _ => {
                 let mut out = self.spine_overlays(cx);
                 out.extend(self.mesh.overlays(cx));
@@ -677,5 +749,49 @@ mod tests {
                 "{name}: marquee"
             );
         }
+    }
+
+    #[test]
+    fn pressing_an_end_of_a_picked_line_picks_just_that_end() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.set([id]);
+        s.anchors.insert(id, std::collections::BTreeSet::from([(0, 0), (0, 1)]));
+        s.segments.insert(id, std::collections::BTreeSet::from([(0, 0, 4)]));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let q = d.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[1].p;
+        let a = DirectSelectionTool::new(false).pointer(&cx, &PointerEvent::new(PointerKind::Down, q.x, q.y));
+        assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 1]], "mode": "set"}))]);
+    }
+
+    #[test]
+    fn an_open_end_snaps_onto_another_and_joins_on_release() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(
+            &[Point::new(100.0, 100.0), Point::new(100.0, 200.0), Point::new(200.0, 200.0)],
+            false,
+        ));
+        d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        s.anchors.insert(id, std::collections::BTreeSet::from([(0, 2)]));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        // Released 5 pt off the other end: it lands exactly on it and joins.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 104.0, 103.0));
+        assert_eq!(a.last(), Some(&Action::Preview("path.moveAnchors".into(), json!({"dx": -100.0, "dy": -100.0}))));
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "join")));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 104.0, 103.0));
+        assert_eq!(a, vec![Action::Preview("path.moveAnchors".into(), json!({"dx": -100.0, "dy": -100.0, "join": true})), Action::Commit]);
+        // Far from any end: a plain move.
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 300.0));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
     }
 }

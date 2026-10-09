@@ -1268,6 +1268,8 @@ mod tests_labspots;
 #[cfg(test)]
 mod tests_layerclip;
 #[cfg(test)]
+mod tests_linejoin;
+#[cfg(test)]
 mod tests_linked_stops;
 #[cfg(test)]
 mod tests_links;

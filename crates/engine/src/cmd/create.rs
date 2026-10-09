@@ -388,10 +388,14 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
         PathData::single(SubPath::new(anchors, bool_or(p, "closed", false)))
     };
     let mut look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
-    // Open paths drawn with a stroke of None would be invisible: mimic Illustrator and keep what the user set.
+    // Only closed shapes are filled: an open path is just its lines (the Pen fills it when it
+    // closes), stroked in black if the stroke is None so it stays visible.
     let ap = &mut look.appearance;
-    if !path.is_closed() && ap.stroke_paint().is_none() && ap.fill_paint().is_none() {
-        ap.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+    if !path.is_closed() {
+        ap.items.retain(|i| !i.is_fill());
+        if ap.stroke_paint().is_none() {
+            ap.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+        }
     }
     add_look(s, "Pen", path_kind(path, None), look, None)
 }

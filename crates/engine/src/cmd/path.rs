@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy} move direct-selected anchors (whole paths if fully selected)",
+            "{dx, dy, join?: bool (a single dragged open end that lands on another open end joins it: closes its path, or joins the two paths)} move direct-selected anchors (whole paths if fully selected)",
             has_selection,
             move_anchors
         ),
@@ -141,7 +141,15 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.close", "missing id"))?;
     let h_in = point_param(p, "in");
     let independent = bool_or(p, "independent", false);
+    let fill = s.paint.fill.clone();
     s.edit("Close Path", |d, sel| {
+        // Closing makes it a shape: it takes the current fill if it has none.
+        if let Some(n) = d.node_mut(id)
+            && n.appearance.fill_paint().is_none()
+            && !fill.is_none()
+        {
+            n.appearance.set_fill(fill.clone());
+        }
         let path = path_mut(d, id)?;
         let sp = path.subpaths.iter_mut().rev().find(|s| !s.closed).ok_or_else(|| EngineError::Other("path is already closed".into()))?;
         sp.closed = true;
@@ -164,7 +172,8 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let sel = st.selection.clone();
     let scale_strokes = s.prefs.scale_strokes;
     let _ = scale_strokes;
-    s.edit("Move", |doc, _| {
+    let join = bool_or(p, "join", false);
+    s.edit("Move", |doc, selection| {
         for id in &sel.objects {
             match sel.anchors.get(id) {
                 Some(set) => {
@@ -182,9 +191,107 @@ pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        if join
+            && let [id] = sel.objects.as_slice()
+            && let Some(set) = sel.anchors.get(id)
+            && let [(si, ai)] = set.iter().copied().collect::<Vec<_>>().as_slice()
+            && join_end(doc, *id, *si, *ai)?
+        {
+            selection.set([*id]);
+        }
         Ok(())
     })?;
     ok()
+}
+
+/// Joins the open end (`si`, `ai`) of path `id` to an open end lying on it: the other end of
+/// its own subpath closes it, another subpath or path is joined on. Returns whether it joined.
+fn join_end(d: &mut vectorcraft_doc::Document, id: NodeId, si: usize, ai: usize) -> Result<bool> {
+    const EPS: f64 = 1e-6;
+    let Some(pd) = d.node(id).and_then(|n| n.path_data()) else { return Ok(false) };
+    let Some(sp) = pd.subpaths.get(si).filter(|s| !s.closed && s.anchors.len() >= 2) else { return Ok(false) };
+    let last = sp.anchors.len() - 1;
+    if ai != 0 && ai != last {
+        return Ok(false);
+    }
+    let Some(at) = sp.anchors.get(ai).map(|a| a.p) else { return Ok(false) };
+    // Its own other end: close the subpath, merging the two coincident points.
+    let other = if ai == 0 { last } else { 0 };
+    if last >= 2 && sp.anchors.get(other).is_some_and(|a| a.p.distance(at) < EPS) {
+        let path = path_mut(d, id)?;
+        let Some(sp) = path.subpaths.get_mut(si) else { return Ok(false) };
+        if let Some(l) = sp.anchors.pop()
+            && let Some(f) = sp.anchors.first_mut()
+        {
+            f.h_in = l.h_in;
+        }
+        sp.closed = true;
+        return Ok(true);
+    }
+    // Another open end at the same spot: on this path or on another editable path.
+    let mut target: Option<(NodeId, usize, bool)> = None;
+    d.walk(|n| {
+        if target.is_some() || !matches!(n.kind, NodeKind::Path { guide: false, .. }) {
+            return;
+        }
+        let Some(pd) = n.path_data() else { return };
+        for (tsi, t) in pd.subpaths.iter().enumerate() {
+            if t.closed || t.anchors.len() < 2 || (n.id == id && tsi == si) {
+                continue;
+            }
+            if t.anchors.first().is_some_and(|a| a.p.distance(at) < EPS) {
+                target = Some((n.id, tsi, false));
+            } else if t.anchors.last().is_some_and(|a| a.p.distance(at) < EPS) {
+                target = Some((n.id, tsi, true));
+            }
+            if target.is_some() {
+                return;
+            }
+        }
+    });
+    let Some((tid, tsi, at_last)) = target else { return Ok(false) };
+    if tid != id && !d.is_editable(tid) {
+        return Ok(false);
+    }
+    let Some(mut y) = d.node(tid).and_then(|n| n.path_data()).and_then(|p| p.subpaths.get(tsi)).cloned() else { return Ok(false) };
+    let Some(mut x) = d.node(id).and_then(|n| n.path_data()).and_then(|p| p.subpaths.get(si)).cloned() else { return Ok(false) };
+    // x runs into the dragged end, y runs out of the target end.
+    if ai == 0 {
+        x.reverse();
+    }
+    if at_last {
+        y.reverse();
+    }
+    if !y.anchors.is_empty() {
+        let first = y.anchors.remove(0);
+        if let Some(l) = x.anchors.last_mut() {
+            l.h_out = first.h_out;
+        }
+    }
+    x.anchors.extend(y.anchors);
+    if tid == id {
+        let path = path_mut(d, id)?;
+        let Some(slot) = path.subpaths.get_mut(si) else { return Ok(false) };
+        *slot = x;
+        if tsi < path.subpaths.len() {
+            path.subpaths.remove(tsi);
+        }
+    } else {
+        let empty = {
+            let tp = path_mut(d, tid)?;
+            if tsi < tp.subpaths.len() {
+                tp.subpaths.remove(tsi);
+            }
+            tp.subpaths.is_empty()
+        };
+        if empty {
+            d.remove(tid)?;
+        }
+        let path = path_mut(d, id)?;
+        let Some(slot) = path.subpaths.get_mut(si) else { return Ok(false) };
+        *slot = x;
+    }
+    Ok(true)
 }
 
 fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
@@ -480,6 +587,24 @@ pub(crate) fn delete_segments(s: &mut Session, _: &Value) -> Result<Value> {
         st.selection.segments.keys().map(|id| (*id, st.selection.segments_of(&st.doc, *id))).filter(|(_, v)| !v.is_empty()).collect();
     s.edit("Clear", |d, selection| {
         for (id, segs) in &picked {
+            // Only closed shapes keep a fill: opening a filled shape leaves its outline as plain
+            // lines, and its fill as a shape of its own (no stroke) just below them.
+            let opens_filled = d.node(*id).is_some_and(|n| {
+                !n.appearance.fill_paint().is_none()
+                    && n.path_data().is_some_and(|pd| segs.iter().any(|(si, _, _)| pd.subpaths.get(*si).is_some_and(|sp| sp.closed)))
+                    && n.path_data().is_some_and(|pd| pd.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>() > segs.len())
+            });
+            if opens_filled
+                && let Some(orig) = d.node(*id).cloned()
+                && let Some((parent, idx, _)) = d.position(*id)
+            {
+                let mut fill = d.reid(&orig);
+                fill.appearance.items.retain(|i| i.is_fill());
+                d.insert(parent, idx, fill)?;
+                if let Some(n) = d.node_mut(*id) {
+                    n.appearance.items.retain(|i| !i.is_fill());
+                }
+            }
             let remove_node = {
                 let path = path_mut(d, *id)?;
                 let mut out = Vec::with_capacity(path.subpaths.len());
