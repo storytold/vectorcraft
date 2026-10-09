@@ -3,8 +3,8 @@
 //! inside each system's range: a value typed outside it snaps to the nearest end.
 //!
 //! Fields: `system` (`summa` or `zund`) and `preview`; Summa: `mode`, `size`, `gap`, `xDistance`
-//! (points); Zünd: `diameter`, `gap` (points) and `fifth` (percent of the bottom edge from the
-//! bottom-right dot).
+//! (points); Zünd: `diameter`, `inset` (points) and `fifth` (percent of the left edge up from the
+//! bottom-left dot).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -32,7 +32,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// The dialog's fields as it opens for `system` (`summa` or `zund`), Summa in `mode`.
 pub fn fields(system: &str, mode: &str) -> Value {
     if system == "zund" {
-        json!({"system": "zund", "diameter": reg::ZUND_DOT_MM.2 * MM, "gap": reg::ZUND_GAP_MM * MM, "fifth": reg::ZUND_FIFTH * 100.0, "preview": true})
+        json!({"system": "zund", "diameter": reg::ZUND_DOT_MM.2 * MM, "inset": reg::ZUND_GAP_MM * MM, "fifth": reg::ZUND_FIFTH * 100.0, "preview": true})
     } else {
         let mode = OposMode::parse(mode).unwrap_or(OposMode::Opos);
         let size = reg::SUMMA_SIZE_MM.2;
@@ -55,7 +55,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 fn command(d: &Dialog) -> (&'static str, Value) {
     if d.str("system") == "zund" {
         let fifth = d.f64("fifth", reg::ZUND_FIFTH * 100.0) / 100.0;
-        ("registration.zund", json!({"diameter": d.f64("diameter", 0.0), "gap": d.f64("gap", 0.0), "fifth": fifth}))
+        ("registration.zund", json!({"diameter": d.f64("diameter", 0.0), "inset": d.f64("inset", 0.0), "fifth": fifth}))
     } else {
         let mode = OposMode::parse(&d.str("mode")).unwrap_or(OposMode::Opos);
         ("registration.summa", json!({"mode": mode.id(), "size": d.f64("size", 0.0), "gap": d.f64("gap", 0.0), "xDistance": d.f64("xDistance", 0.0)}))
@@ -85,10 +85,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         length_row(ui, d, "diameter", tl!("Dot Diameter"), (lo, hi));
         note(ui, &format!("{} {:.2}–{:.2} mm (0.2–0.4 in)", tl!("Allowed:"), lo, hi));
         ui.add_space(4.0);
-        length_row(ui, d, "gap", tl!("Distance from Art"), (0.0, 1000.0));
+        length_row(ui, d, "inset", tl!("Distance from Edge"), (0.0, 1000.0));
         form::slider_w(ui, d, ("fifth", tl!("Fifth Dot"), LABEL_W), 5.0..=95.0, "%", &|x| crate::panels::c32(&vectorcraft_color::Color::gray(x)));
-        note(ui, tl!("Four corner dots, plus a fifth on the bottom edge this far from the bottom-right dot toward the bottom-left one."));
-        note(ui, &format!("{} \"{}\"", tl!("Layer:"), reg::ZUND_LAYER));
+        note(ui, tl!("Four corner dots, plus a fifth up the left edge, this far from the bottom-left dot, to mark the registration corner."));
+        note(ui, tl!("The dots go at the corners of the artboard, not the artwork."));
+        note(ui, &format!("{} \"{}\" ({})", tl!("Layer:"), reg::ZUND_LAYER, tl!("locked")));
     } else {
         let modes: Vec<(&str, &str)> = OposMode::ALL.iter().map(|m| (m.id(), tl!(m.label()))).collect();
         form::choice(ui, d, "mode", tl!("Method"), (LABEL_W, 160.0), &modes);
@@ -101,7 +102,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         note(ui, tl!("Summa needs white space of 3 to 4 times the mark size around each mark."));
         ui.add_space(4.0);
         length_row(ui, d, "xDistance", tl!("Max X Distance"), (size_mm * (1.0 + reg::SUMMA_CLEAR), reg::SUMMA_X_DISTANCE_MM.1));
-        note(ui, &format!("{} \"{}\"", tl!("Layer:"), reg::SUMMA_LAYER));
+        note(ui, &format!("{} \"{}\" ({})", tl!("Layer:"), reg::SUMMA_LAYER, tl!("locked")));
     }
     let (cmd, p) = command(d);
     let label = if cmd == "registration.zund" { "Zünd Registration Dots" } else { "Summa OPOS Marks" };
@@ -146,7 +147,7 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         let doc = &app.session.doc().unwrap().doc;
         let layer = doc.layers.iter().find(|l| l.name.as_deref() == Some(reg::SUMMA_LAYER)).unwrap();
-        assert!(layer.children().unwrap().len() >= 6);
+        assert!(layer.children().unwrap().len() >= 5);
     }
 
     #[test]

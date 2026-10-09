@@ -4,10 +4,11 @@
 //! - **Summa OPOS** (`registration.summa`): solid black squares in a row below the art (the
 //!   origin mark at its lower left) and a row above it, at regular X intervals, on the layer
 //!   "Regmark" (the layer Summa's own plug-in makes); OPOS XY adds a 3 mm bar along the bottom
-//!   row between the marks (the cutter measures bowing along it), XY2 bars along both rows,
-//!   Random XY bars along both rows and up the outer columns.
+//!   row between the marks (the cutter measures bowing along it), XY 2 a bar along the top row
+//!   too; Random XY (for older Summas) is a larger round mark in each corner and an arrow
+//!   pointing left along the bottom, from the bottom-right mark toward the bottom-left.
 //! - **Zünd** (`registration.zund`): solid black dots at the four corners around the art plus a
-//!   fifth on the bottom edge, off-centre so the camera can tell the job's orientation.
+//!   fifth on the left edge just above the bottom-left dot, which marks the registration corner.
 //!
 //! The marks surround the selection (all artwork when nothing is selected, the marks layers left
 //! out) with a gap. Running a command again replaces its layer's marks. Sizes are in points.
@@ -19,7 +20,9 @@
 //! Illustrator plug-in on Alex's PC: layer "Regmark", 3 mm squares of 100% K with no stroke, a
 //! bottom bar between the marks as high as a mark and about 10 mm short of each.
 //! Zünd: black dots on a layer named "Register" (Zünd Cut Center's register layer name), 1/4 in
-//! dots in common use. The Random XY layout and the fifth dot's place are this app's choices.
+//! dots in common use. The XY, XY 2 and Random XY layouts and the Zünd fifth dot follow sketches Alex drew from the
+//! plug-ins' output; exact proportions of the circles, the arrow and the fifth dot are read off
+//! those sketches, not measured.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -46,9 +49,11 @@ pub const SUMMA_LINE_MM: (f64, f64) = (3.0, 10.0);
 pub const ZUND_DOT_MM: (f64, f64, f64) = (0.2 * 25.4, 0.4 * 25.4, 0.25 * 25.4);
 /// The default gap between the artwork and the Zünd dots' edges, mm.
 pub const ZUND_GAP_MM: f64 = 10.0;
-/// Where the fifth Zünd dot sits on the bottom edge: this fraction of the way from the
-/// bottom-right dot toward the bottom-left one.
-pub const ZUND_FIFTH: f64 = 0.25;
+/// Where the fifth Zünd dot sits on the left edge: this fraction of the way up from the
+/// bottom-left dot toward the top-left one (from Alex's sketch).
+pub const ZUND_FIFTH: f64 = 0.13;
+/// Random XY's round marks are this much larger than the square marks (from Alex's sketch).
+pub const ROUND_SCALE: f64 = 5.0 / 3.0;
 
 /// The layer each system's marks go on.
 pub const SUMMA_LAYER: &str = "Regmark";
@@ -59,11 +64,11 @@ pub const ZUND_LAYER: &str = "Register";
 pub enum OposMode {
     /// Marks only (OPOS X).
     Opos,
-    /// A line between the front marks.
+    /// Square marks and a bar along the bottom row.
     Xy,
-    /// Lines between the front and the rear marks.
+    /// Square marks and bars along the bottom and the top rows.
     Xy2,
-    /// A line between every column of marks.
+    /// For older Summas: a round mark in each corner and an arrow pointing left along the bottom.
     RandomXy,
 }
 
@@ -93,19 +98,24 @@ impl OposMode {
 /// Where the Summa marks go (document space, points).
 #[derive(Clone, Debug, PartialEq)]
 pub struct SummaLayout {
-    /// The marks: the origin first (lower left), then the bottom row left to right, then the top row.
-    /// The XY lines follow in `lines`.
+    /// The marks (squares, or circles inscribed in these squares when `round`): the origin first
+    /// (lower left), then the bottom row left to right, then the top row.
     pub marks: Vec<Rect>,
-    /// The XY lines.
+    pub round: bool,
+    /// The XY bars.
     pub lines: Vec<Rect>,
+    /// The Random XY arrow's outline, pointing left.
+    pub arrow: Option<Vec<Point>>,
     /// From one mark's corner to the next along X, and between the rows.
     pub x_distance: f64,
     pub y_distance: f64,
 }
 
-/// The Summa layout around `art`: marks `size` square, `gap` clear of the art, at most `max_step`
-/// apart along X.
+/// The Summa layout around `art`: marks `size` across (circles `size` × [`ROUND_SCALE`]), `gap`
+/// clear of the art, at most `max_step` apart along X (Random XY has just the four corner marks).
 pub fn summa_layout(art: Rect, mode: OposMode, size: f64, gap: f64, max_step: f64) -> std::result::Result<SummaLayout, String> {
+    // Random XY's circles are larger than the squares.
+    let size = if mode == OposMode::RandomXy { size * ROUND_SCALE } else { size };
     if ![art.x0, art.y0, art.x1, art.y1, size, gap, max_step].iter().all(|v| v.is_finite()) || size <= 0.0 || max_step <= 0.0 {
         return Err("the sizes must be positive numbers".into());
     }
@@ -115,7 +125,7 @@ pub fn summa_layout(art: Rect, mode: OposMode, size: f64, gap: f64, max_step: f6
     let bottom = art.y1 + gap;
     let span = right - left;
     // Capped so a huge document can't ask for millions of marks.
-    let steps = (span / max_step).ceil().clamp(1.0, 1000.0) as usize;
+    let steps = if mode == OposMode::RandomXy { 1 } else { (span / max_step).ceil().clamp(1.0, 1000.0) as usize };
     let step = span / steps as f64;
     let xs: Vec<f64> = (0..=steps).map(|i| left + step * i as f64).collect();
     let square = |x: f64, y: f64| Rect::new(x, y, x + size, y + size);
@@ -124,43 +134,63 @@ pub fn summa_layout(art: Rect, mode: OposMode, size: f64, gap: f64, max_step: f6
     let (thick, clear) = (SUMMA_LINE_MM.0 * MM, SUMMA_LINE_MM.1 * MM);
     let n = xs.len();
     let (bottom_row, top_row) = (marks.get(..n).unwrap_or_default(), marks.get(n..).unwrap_or_default());
-    // A bar along a row, between each pair of neighbouring marks, `clear` short of both.
-    let row_lines = |row: &[Rect]| -> Vec<Rect> {
-        row.windows(2)
-            .filter_map(|w| match w {
-                [a, b] => Some(Rect::new(a.x1 + clear, a.center().y - thick / 2.0, b.x0 - clear, a.center().y + thick / 2.0)),
-                _ => None,
-            })
-            .collect()
+    let too_close =
+        || format!("the marks are too close for the {} line: they need at least {:.0} mm between them", mode.label(), (2.0 * clear + thick) / MM);
+    // A bar along a row between neighbouring marks, `clear` short of both.
+    let row_bars = |row: &[Rect]| -> std::result::Result<Vec<Rect>, String> {
+        let mut out = vec![];
+        for w in row.windows(2) {
+            if let [a, b] = w {
+                let bar = Rect::new(a.x1 + clear, a.center().y - thick / 2.0, b.x0 - clear, a.center().y + thick / 2.0);
+                if bar.width() < thick {
+                    return Err(too_close());
+                }
+                out.push(bar);
+            }
+        }
+        Ok(out)
     };
-    // A bar up a column, between its bottom and top marks.
-    let column_line = |x: f64| Rect::new(x + (size - thick) / 2.0, top + size + clear, x + (size + thick) / 2.0, bottom - clear);
-    let mut lines = match mode {
-        OposMode::Opos => vec![],
-        OposMode::Xy => row_lines(bottom_row),
-        OposMode::Xy2 | OposMode::RandomXy => [row_lines(bottom_row), row_lines(top_row)].concat(),
-    };
-    if mode == OposMode::RandomXy {
-        lines.extend(xs.first().into_iter().chain(xs.last()).map(|x| column_line(*x)));
+    let mut lines = vec![];
+    let mut arrow = None;
+    match mode {
+        OposMode::Opos => {}
+        OposMode::Xy => lines = row_bars(bottom_row)?,
+        OposMode::Xy2 => lines = [row_bars(bottom_row)?, row_bars(top_row)?].concat(),
+        // An arrow pointing left along the bottom row: its tip at the art's left edge, as long as
+        // half the art is wide (at least 4 marks), shaft and head in proportion to the mark.
+        OposMode::RandomXy => {
+            if let [l, r] = bottom_row {
+                let cy = l.center().y;
+                let (shaft, head_w, head_l) = (size * 0.2, size * 0.75, size * 0.75);
+                let tip = art.x0.max(l.x1 + clear);
+                let tail = (tip + (art.width() / 2.0).max(size * 4.35)).min(r.x0 - clear);
+                if tail - tip < head_l + shaft {
+                    return Err(too_close());
+                }
+                let (h, w) = (shaft / 2.0, head_w / 2.0);
+                arrow = Some(vec![
+                    Point::new(tail, cy - h),
+                    Point::new(tip + head_l, cy - h),
+                    Point::new(tip + head_l, cy - w),
+                    Point::new(tip, cy),
+                    Point::new(tip + head_l, cy + w),
+                    Point::new(tip + head_l, cy + h),
+                    Point::new(tail, cy + h),
+                ]);
+            }
+        }
     }
-    if lines.iter().any(|l| l.width() < thick - 1e-9 || l.height() < thick - 1e-9) {
-        return Err(format!(
-            "the marks are too close for the {} lines: they need at least {:.0} mm between them",
-            mode.label(),
-            (2.0 * clear + thick) / MM
-        ));
-    }
-    Ok(SummaLayout { marks, lines, x_distance: step, y_distance: bottom - top })
+    Ok(SummaLayout { marks, round: mode == OposMode::RandomXy, lines, arrow, x_distance: step, y_distance: bottom - top })
 }
 
-/// The Zünd dot centres around `art`: the four corners (top left, top right, bottom right, bottom
-/// left), then the fifth on the bottom edge, `fifth` of the way from the bottom-right dot toward the
-/// bottom-left one.
-pub fn zund_layout(art: Rect, diameter: f64, gap: f64, fifth: f64) -> Vec<Point> {
+/// The Zünd dot centres at the corners of `page` (the artboard), `inset` in from its edges: top left,
+/// top right, bottom right, bottom left, then the fifth on the left edge, `fifth` of the way up from
+/// the bottom-left dot toward the top-left one (it marks the registration corner).
+pub fn zund_layout(page: Rect, diameter: f64, inset: f64, fifth: f64) -> Vec<Point> {
     let r = diameter / 2.0;
-    let (l, rt) = (art.x0 - gap - r, art.x1 + gap + r);
-    let (t, b) = (art.y0 - gap - r, art.y1 + gap + r);
-    vec![Point::new(l, t), Point::new(rt, t), Point::new(rt, b), Point::new(l, b), Point::new(rt - fifth * (rt - l), b)]
+    let (l, rt) = (page.x0 + inset + r, page.x1 - inset - r);
+    let (t, b) = (page.y0 + inset + r, page.y1 - inset - r);
+    vec![Point::new(l, t), Point::new(rt, t), Point::new(rt, b), Point::new(l, b), Point::new(l, b - fifth * (b - t))]
 }
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -170,7 +200,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Summa OPOS Marks",
             [],
             None,
-            "{mode?: opos|oposXY|oposXY2|oposRandomXY (opos), size?: pt (mark side, 1.5 to 10 mm; 3 mm), gap?: pt (art to marks; at least 3× the size, default 4×), xDistance?: pt (largest step between marks along X, up to 1300 mm; 400 mm), ids?} add Summa OPOS marks around the selection (all art when nothing is selected) on the layer \"Regmark\" (its old marks are replaced), as one undo step → {layer, marks, lines, xDistance, yDistance, origin: [x, y] (the origin mark's lower-left corner)}",
+            "{mode?: opos|oposXY|oposXY2|oposRandomXY (opos; Random XY's circles are 5/3 of the size), size?: pt (mark side, 1.5 to 10 mm; 3 mm), gap?: pt (art to marks; at least 3× the size, default 4×), xDistance?: pt (largest step between marks along X, up to 1300 mm; 400 mm), ids?} add Summa OPOS marks around the selection (all art when nothing is selected) on the locked layer \"Regmark\" (its old marks are replaced), as one undo step → {layer, marks, lines, xDistance, yDistance, origin: [x, y] (the origin mark's lower-left corner)}",
             has_doc,
             summa
         ),
@@ -179,7 +209,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Zünd Registration Dots",
             [],
             None,
-            "{diameter?: pt (0.2 to 0.4 in; 0.25 in), gap?: pt (art to the dots' edges; 10 mm), fifth?: 0.05..0.95 (the fifth dot's place on the bottom edge, from the bottom-right dot toward the bottom-left; 0.25), ids?} add five Zünd registration dots around the selection (all art when nothing is selected) on the layer \"Register\" (its old dots are replaced), as one undo step → {layer, dots: [[x, y]] (centres)}",
+            "{diameter?: pt (0.2 to 0.4 in; 0.25 in), inset?: pt (the dots' distance in from the artboard's edges; 10 mm), artboard?: index (default the active one), fifth?: 0.05..0.95 (the fifth dot's place on the left edge, up from the bottom-left dot toward the top-left one; 0.13), ids?} add five Zünd registration dots at the corners of the artboard (the document, not the art) on the locked layer \"Register\" (its old dots are replaced), as one undo step → {layer, dots: [[x, y]] (centres)}",
             has_doc,
             zund
         ),
@@ -226,7 +256,7 @@ fn mark_look() -> Appearance {
 }
 
 /// Put `paths` (name, outline) on the top-level layer `name`, replacing what it held (a new layer
-/// at the top when there is none), as one undo step. Returns the layer.
+/// at the top when there is none), then lock the layer, as one undo step. Returns the layer.
 fn fill_layer(s: &mut Session, label: &str, name: &str, paths: Vec<(String, vectorcraft_geom::PathData)>) -> Result<NodeId> {
     let lid = s.edit(label, |d, sel| {
         let existing = d.layers.iter().find(|l| l.name.as_deref() == Some(name)).map(|l| l.id);
@@ -250,6 +280,10 @@ fn fill_layer(s: &mut Session, label: &str, name: &str, paths: Vec<(String, vect
             n.name = Some(nm);
             d.insert(Some(lid), usize::MAX, n)?;
         }
+        // Locked, so the marks can't be nudged by accident (unlock the layer to move them).
+        if let Some(l) = d.node_mut(lid) {
+            l.locked = true;
+        }
         sel.prune(d);
         Ok(lid)
     })?;
@@ -269,14 +303,18 @@ fn summa(s: &mut Session, p: &Value) -> Result<Value> {
     let step = length(p, "xDistance", C, SUMMA_X_DISTANCE_MM.0, (size_mm * (1.0 + SUMMA_CLEAR), SUMMA_X_DISTANCE_MM.1))?;
     let art = art_rect(s, p, C)?;
     let lay = summa_layout(art, mode, size, gap, step).map_err(|e| bad(C, e))?;
-    let mut paths: Vec<(String, _)> = lay.marks.iter().enumerate().map(|(i, r)| (format!("OPOS Mark {}", i + 1), shapes::rectangle(*r))).collect();
+    let mark = |r: &Rect| if lay.round { shapes::ellipse(*r) } else { shapes::rectangle(*r) };
+    let mut paths: Vec<(String, _)> = lay.marks.iter().enumerate().map(|(i, r)| (format!("OPOS Mark {}", i + 1), mark(r))).collect();
     paths.extend(lay.lines.iter().enumerate().map(|(i, r)| (format!("OPOS XY Line {}", i + 1), shapes::rectangle(*r))));
+    paths.extend(
+        lay.arrow.iter().map(|pts| ("OPOS XY Arrow".to_string(), vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(pts, true)))),
+    );
     let lid = fill_layer(s, mode.label(), SUMMA_LAYER, paths)?;
     let origin = lay.marks.first().map(|r| [r.x0, r.y1]).unwrap_or_default();
     Ok(json!({
         "layer": lid.0,
         "marks": lay.marks.len(),
-        "lines": lay.lines.len(),
+        "lines": lay.lines.len() + usize::from(lay.arrow.is_some()),
         "xDistance": lay.x_distance,
         "yDistance": lay.y_distance,
         "origin": origin,
@@ -287,13 +325,21 @@ fn zund(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "registration.zund";
     let (lo, hi, def) = ZUND_DOT_MM;
     let diameter = length(p, "diameter", C, def, (lo, hi))?;
-    let gap = length(p, "gap", C, ZUND_GAP_MM, (0.0, 1000.0))?;
+    let inset = length(p, "inset", C, ZUND_GAP_MM, (0.0, 1000.0))?;
     let fifth = match p.get("fifth") {
         None | Some(Value::Null) => ZUND_FIFTH,
         Some(v) => v.as_f64().filter(|f| (0.05..=0.95).contains(f)).ok_or_else(|| bad(C, "fifth must be 0.05 to 0.95"))?,
     };
-    let art = art_rect(s, p, C)?;
-    let dots = zund_layout(art, diameter, gap, fifth);
+    let st = s.doc()?;
+    let index = match p.get("artboard").filter(|v| !v.is_null()) {
+        Some(v) => v.as_u64().ok_or_else(|| bad(C, "artboard must be a 0-based index"))? as usize,
+        None => st.active_artboard,
+    };
+    let page = st.doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(C, format!("there is no artboard {index}")))?;
+    if page.width() < 2.0 * (inset + diameter) || page.height() < 2.0 * (inset + diameter) {
+        return Err(bad(C, "the artboard is too small for the dots"));
+    }
+    let dots = zund_layout(page, diameter, inset, fifth);
     let paths = dots
         .iter()
         .enumerate()
@@ -339,11 +385,11 @@ mod tests {
     }
 
     #[test]
-    fn summa_xy_lines() {
+    fn summa_xy_has_a_bar_on_the_bottom_and_xy2_adds_the_top() {
         let art = Rect::new(0.0, 0.0, 300.0 * MM, 200.0 * MM);
         let size = 3.0 * MM;
         let xy = summa_layout(art, OposMode::Xy, size, 12.0 * MM, 400.0 * MM).unwrap();
-        assert_eq!((xy.marks.len(), xy.lines.len()), (4, 1));
+        assert_eq!((xy.marks.len(), xy.lines.len(), xy.round, xy.arrow.is_none()), (4, 1, false, true));
         let (line, a, b) = (xy.lines[0], xy.marks[0], xy.marks[1]);
         // 3 mm high, centred on the bottom row, 10 mm short of both marks (as Summa's plug-in).
         assert!((line.height() - 3.0 * MM).abs() < 1e-9);
@@ -352,11 +398,25 @@ mod tests {
         let xy2 = summa_layout(art, OposMode::Xy2, size, 12.0 * MM, 400.0 * MM).unwrap();
         assert_eq!(xy2.lines.len(), 2);
         assert!((xy2.lines[1].center().y - xy2.marks[2].center().y).abs() < 1e-9, "the second bar runs along the top row");
-        let random = summa_layout(art, OposMode::RandomXy, size, 12.0 * MM, 200.0 * MM).unwrap();
-        assert_eq!(random.marks.len(), 6);
-        assert_eq!(random.lines.len(), 2 + 2 + 2);
         // Too close for a bar.
         assert!(summa_layout(Rect::new(0.0, 0.0, 1.0, 100.0), OposMode::Xy, size, 9.0 * MM, 400.0 * MM).is_err());
+    }
+
+    #[test]
+    fn summa_random_xy_is_four_circles_and_an_arrow_pointing_left() {
+        let art = Rect::new(0.0, 0.0, 500.0 * MM, 200.0 * MM);
+        let size = 3.0 * MM;
+        let r = summa_layout(art, OposMode::RandomXy, size, 12.0 * MM, 100.0 * MM).unwrap();
+        assert_eq!((r.marks.len(), r.round, r.lines.len()), (4, true, 0), "corners only, however wide");
+        assert!((r.marks[0].width() - 5.0 * MM).abs() < 1e-9, "circles are 5/3 of the square size");
+        let arrow = r.arrow.unwrap();
+        let tip = arrow.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let tail = arrow.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!((tip - art.x0).abs() < 1e-9, "the tip is at the art's left edge");
+        assert!((tail - tip - art.width() / 2.0).abs() < 1e-9, "half the art long");
+        let tip_point = arrow.iter().find(|p| p.x == tip).unwrap();
+        assert!((tip_point.y - r.marks[0].center().y).abs() < 1e-9);
+        assert!(summa_layout(Rect::new(0.0, 0.0, 1.0, 100.0), OposMode::RandomXy, size, 9.0 * MM, 400.0 * MM).is_err());
     }
 
     #[test]
@@ -379,6 +439,18 @@ mod tests {
     }
 
     #[test]
+    fn random_xy_command_draws_circles_and_an_arrow() {
+        let mut s = session_with_box();
+        let r = s.execute("registration.summa", &json!({"mode": "oposRandomXY"})).unwrap();
+        assert_eq!((r["marks"].as_u64(), r["lines"].as_u64()), (Some(4), Some(1)));
+        let kids = layer_children(&s, SUMMA_LAYER);
+        assert_eq!(kids.len(), 5);
+        // A circle has four smooth anchors; the arrow is a 7-point polygon.
+        assert_eq!(kids[0].path_data().unwrap().subpaths[0].anchors.len(), 4);
+        assert_eq!(kids[4].path_data().unwrap().subpaths[0].anchors.len(), 7);
+    }
+
+    #[test]
     fn summa_rejects_sizes_outside_the_manual() {
         let mut s = session_with_box();
         assert!(s.execute("registration.summa", &json!({"size": 1.0 * MM})).is_err());
@@ -389,15 +461,16 @@ mod tests {
     }
 
     #[test]
-    fn zund_five_dots_with_the_fifth_off_centre() {
-        let art = Rect::new(0.0, 0.0, 400.0, 200.0);
-        let d = zund_layout(art, 18.0, 20.0, 0.25);
+    fn zund_five_dots_with_the_fifth_above_the_bottom_left() {
+        let page = Rect::new(0.0, 0.0, 400.0, 200.0);
+        let d = zund_layout(page, 18.0, 20.0, 0.13);
         assert_eq!(d.len(), 5);
-        let (l, r) = (d[3].x, d[2].x);
-        assert_eq!(d[4].y, d[2].y);
-        assert!((d[4].x - (r - 0.25 * (r - l))).abs() < 1e-9);
-        // Clear of the art.
-        assert!(d[0].x + 9.0 <= art.x0 - 20.0 + 1e-9 && d[2].y - 9.0 >= art.y1 + 20.0 - 1e-9);
+        let (t, b) = (d[0].y, d[3].y);
+        assert_eq!(d[4].x, d[3].x);
+        assert!((d[4].y - (b - 0.13 * (b - t))).abs() < 1e-9 && d[4].y < b);
+        // Inside the page by the inset, whatever the art is.
+        assert!((d[0].x - 29.0).abs() < 1e-9 && (d[0].y - 29.0).abs() < 1e-9);
+        assert!((d[2].x - 371.0).abs() < 1e-9 && (d[2].y - 171.0).abs() < 1e-9);
     }
 
     #[test]
@@ -417,19 +490,39 @@ mod tests {
     }
 
     #[test]
-    fn marks_go_around_the_selection() {
+    fn summa_goes_around_the_selection_and_zund_at_the_document_corners() {
         let mut s = session_with_box();
         s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 50, "height": 50})).unwrap();
-        let r = s.execute("registration.zund", &json!({})).unwrap();
-        let tl = &r["dots"][0];
-        // Around the selected small box only.
-        assert!(tl[0].as_f64().unwrap() > 900.0 && tl[1].as_f64().unwrap() > 900.0);
+        let r = s.execute("registration.summa", &json!({})).unwrap();
+        // Origin mark: lower left of the selected small box only.
+        assert!(r["origin"][0].as_f64().unwrap() > 900.0 && r["origin"][1].as_f64().unwrap() > 1000.0);
+        let z = s.execute("registration.zund", &json!({})).unwrap();
+        // Zünd ignores the art: the document is 2000 x 2000.
+        let (x, y) = (z["dots"][0][0].as_f64().unwrap(), z["dots"][0][1].as_f64().unwrap());
+        assert!(x < 60.0 && y < 60.0, "top-left dot at ({x}, {y})");
+        let br = &z["dots"][2];
+        assert!(br[0].as_f64().unwrap() > 1940.0 && br[1].as_f64().unwrap() > 1940.0);
+    }
+
+    #[test]
+    fn both_marks_layers_are_locked() {
+        let mut s = session_with_box();
+        s.execute("registration.summa", &json!({})).unwrap();
+        s.execute("registration.zund", &json!({})).unwrap();
+        for name in [SUMMA_LAYER, ZUND_LAYER] {
+            let d = &s.doc().unwrap().doc;
+            assert!(d.layers.iter().find(|l| l.name.as_deref() == Some(name)).unwrap().locked, "{name} is locked");
+        }
+        // Running again still works and re-locks.
+        s.execute("registration.summa", &json!({"mode": "oposXY"})).unwrap();
+        assert!(s.doc().unwrap().doc.layers.iter().find(|l| l.name.as_deref() == Some(SUMMA_LAYER)).unwrap().locked);
     }
 
     #[test]
     fn no_art_is_an_error() {
         let mut s = Session::new();
         s.execute("file.new", &json!({})).unwrap();
-        assert!(s.execute("registration.zund", &json!({})).is_err());
+        assert!(s.execute("registration.summa", &json!({})).is_err(), "Summa marks need art to go around");
+        assert!(s.execute("registration.zund", &json!({})).is_ok(), "Zünd dots go on the document, art or not");
     }
 }

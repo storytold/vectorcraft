@@ -1629,6 +1629,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                             "Summa",
                             vec![
                                 cp("OPOS Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "opos"})),
+                                cp("OPOS XY Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposXY"})),
                                 cp("OPOS XY 2 Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposXY2"})),
                                 cp("OPOS Random XY…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposRandomXY"})),
                             ],

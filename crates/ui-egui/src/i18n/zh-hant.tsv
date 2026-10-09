@@ -2943,7 +2943,7 @@
 	Allowed:	允許範圍：
 	Distance from Art	與圖稿的距離
 	Fifth Dot	第五個圓點
-	Four corner dots, plus a fifth on the bottom edge this far from the bottom-right dot toward the bottom-left one.	四角各一個圓點，另有第五個圓點位於底邊，從右下圓點朝左下圓點的這個距離處。
+	Four corner dots, plus a fifth up the left edge, this far from the bottom-left dot, to mark the registration corner.	四角各一個圓點，另有第五個圓點位於左側邊緣，與左下圓點相距此距離，用以標示套準角。
 	Layer:	圖層：
 	Method	方式
 	Mark Size	標記大小
@@ -2952,3 +2952,6 @@
 	Unlock Anchor Points	解鎖錨點
 	Unlock Corner	解鎖轉角
 	Unlock the selected corner: split the shape into separate lines there	解鎖所選轉角：在該處將形狀拆分為獨立線段
+	OPOS XY Marks…	OPOS XY 標記…
+	Distance from Edge	與邊緣的距離
+	The dots go at the corners of the artboard, not the artwork.	圓點位於畫板的四角，而非圖稿四周。
