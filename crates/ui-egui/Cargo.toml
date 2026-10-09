@@ -3,7 +3,7 @@ name = "vectorcraft-ui-egui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft egui frontend (menus, panels, tools and canvas); swappable — nothing below depends on it"
+description = "Vector W3K2 egui frontend (menus, panels, tools and canvas); swappable — nothing below depends on it"
 
 [lints]
 workspace = true

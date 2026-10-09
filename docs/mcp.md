@@ -1,8 +1,8 @@
-# VectorCraft MCP server
+# Vector W3K2 MCP server
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0, protocol `2025-06-18`; `2025-03-26` and `2024-11-05` also accepted). Agents use it to
-draw, inspect and look at VectorCraft documents.
+draw, inspect and look at Vector W3K2 documents.
 
 It has two backends:
 
@@ -265,7 +265,7 @@ can't be read becomes a placeholder in its box, named in `warnings` and `missing
 
 Native files: `run_command document.save {compress: true}` writes a gzip-compressed `.vectorcraft` (the
 `useCompression` preference makes that the default for saves; compressed files open like any other, told apart by
-their content). `version: 2` or `1` writes a file older VectorCraft versions open (format name `drawcraft`, never
+their content). `version: 2` or `1` writes a file older Vector W3K2 versions open (format name `drawcraft`, never
 compressed), and `preview: true` embeds a PNG of the first artboard, at most 256 px on its longer side. A save writes
 a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
 document uses are written, and document keys written by a newer version are kept.
@@ -1223,7 +1223,7 @@ password?}` (the page's objects), `clipboard.importImage {dataBase64, mime?}` (a
 physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
-copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). Pasting what VectorCraft copied
+copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). Pasting what Vector W3K2 copied
 keeps the lossless internal clipboard. Windows carries every format both ways; macOS and Linux carry one format
 (the text, else the PNG) and paste text and bitmaps. On the web only SVG text goes through the system clipboard.
 
@@ -1469,7 +1469,7 @@ minutes). Several apps running at once (agents' instances included) never see ea
 and an area being restored or discarded is held, so two apps launched together never both take it.
 
 `file.recovery.list` → `{copies: [{file, title, path, format, saved, open, running}], location}` (`open`: the copy of a
-document open here; `running`: kept by another VectorCraft that is running). `file.recovery.restore {file?}` opens
+document open here; `running`: kept by another Vector W3K2 that is running). `file.recovery.restore {file?}` opens
 copies left behind (default: all) as `"<name> [Recovered]"`: modified, and Save asks where to save them (suggesting
 their original file); the copy moves into this app's area. `file.recovery.discard {file?}` deletes them. Without a
 folder or browser storage the commands are disabled and say how to set one.
@@ -1517,7 +1517,7 @@ white and gradients and patterns as one colour. What a format leaves out comes b
 
 `document.open` and `file.place` read `.emf` and `.wmf` (placeable or not) into one artboard, the picture's frame, and
 one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
-images and point type in the font the file names. Records VectorCraft doesn't read (EMF+ drawing among them) are
+images and point type in the font the file names. Records Vector W3K2 doesn't read (EMF+ drawing among them) are
 skipped with one warning. `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard
 for `edit.paste`; the app pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's
 clipboard service offers it (the Windows desktop service doesn't read metafiles yet).
@@ -1630,7 +1630,7 @@ show) is the flat render. `maxEditability: true` turns layers and sublayers into
 named as the Layers panel names it (text objects by their text); layers with a clipping mask, an opacity mask, an
 appearance of their own or knockout stay one pixel layer. Hidden layers and objects are left out unless
 `hiddenLayers: true` writes them as hidden layers. `layers: false` writes one flat image, on white where nothing is
-drawn. Files are at most 30000 pixels a side; PSD files don't open in VectorCraft.
+drawn. Files are at most 30000 pixels a side; PSD files don't open in Vector W3K2.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"maxEditability":true}}}
@@ -1673,7 +1673,7 @@ unless `replace`). Saved presets live with the preferences. To print with a pres
 ## EPS and PostScript import
 
 `document.open` and `file.place` read `.eps` files, and PostScript by any name (an `.ai` saved without PDF
-compatibility opens as artwork; an `.ait` one as a new untitled document). An EPS file VectorCraft wrote restores the
+compatibility opens as artwork; an `.ait` one as a new untitled document). An EPS file Vector W3K2 wrote restores the
 document it carries (`restored: true`, as Preserve Editing does for PDF and SVG); when that document can't be read the
 PostScript is read instead and the first warning says why.
 

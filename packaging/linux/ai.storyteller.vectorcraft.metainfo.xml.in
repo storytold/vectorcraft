@@ -5,14 +5,14 @@
   <id>ai.storyteller.vectorcraft</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>VectorCraft</name>
+  <name>Vector W3K2</name>
   <summary>Draw and edit vector illustrations, SVG and PDF</summary>
   <developer id="ai.storyteller">
     <name>Learning Machines LLC</name>
   </developer>
   <description>
     <p>
-      VectorCraft is an open-source vector illustration app. Draw with pen, shape and brush tools,
+      Vector W3K2 is an open-source vector illustration app. Draw with pen, shape and brush tools,
       style art with fills, strokes, gradients and live effects, lay out artboards and type, and
       open and save SVG and PDF.
     </p>

@@ -3,7 +3,7 @@ name = "vectorcraft-eps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft Encapsulated PostScript: a hand-written EPS writer (PostScript Level 2 and 3) with TIFF previews"
+description = "Vector W3K2 Encapsulated PostScript: a hand-written EPS writer (PostScript Level 2 and 3) with TIFF previews"
 
 [lints]
 workspace = true

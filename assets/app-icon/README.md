@@ -14,5 +14,5 @@ gradients or effects).
 **Tile:** `viewBox="0 0 512 512"`, a rounded square with `rx=112` (orange) holding a white one with `rx=80`. `vectorcraft.svg` is the master, with the
 letters as outlines (set in the bundled bold sans and outlined with `vectorcraft-cli convert --outline-text`);
 the PNG, ICO and ICNS files are rendered from it with `vectorcraft-cli convert vectorcraft.svg out.png
---scale N`. The file names keep the upstream VectorCraft names so the build and packaging scripts find
+--scale N`. The file names keep their original names so the build and packaging scripts find
 them. Licence: see `LICENSE.txt`.

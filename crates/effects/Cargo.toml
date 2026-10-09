@@ -3,7 +3,7 @@ name = "vectorcraft-effects"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft live effects evaluated to geometry"
+description = "Vector W3K2 live effects evaluated to geometry"
 
 [lints]
 workspace = true

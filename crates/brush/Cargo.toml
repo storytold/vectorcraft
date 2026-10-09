@@ -3,7 +3,7 @@ name = "vectorcraft-brush"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft brushes: calligraphic, scatter, art, pattern and bristle brush definitions and stroke geometry"
+description = "Vector W3K2 brushes: calligraphic, scatter, art, pattern and bristle brush definitions and stroke geometry"
 
 [lints]
 workspace = true

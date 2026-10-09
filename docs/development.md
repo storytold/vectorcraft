@@ -31,7 +31,7 @@ Font files are never committed to this repository. Fonts shared by the Crafting 
 [`standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md). To add
 a font, add it there. (The Latin fonts in `assets/fonts/` predate the rule and stay.)
 
-VectorCraft builds, tests and runs without craft-fonts. To embed its Japanese fonts (BIZ UDPGothic
+Vector W3K2 builds, tests and runs without craft-fonts. To embed its Japanese fonts (BIZ UDPGothic
 for UI text, Shippori Mincho and BIZ UDMincho for document text), point the `CRAFT_FONTS_DIR` build
 option at a checkout:
 
@@ -80,7 +80,7 @@ tells the two scripts apart, so the Traditional catalog is never shown to a Simp
 - The shared widgets (`widgets::check`, `dropdown`, `menu_item`, the buttons, `label_row`, tooltips of
   `icon_button`…), the menus, the dock, the toolbar, the dialog frame and `panels::empty_state` translate
   the text they are given, so a panel mostly needs its literals wrapped in `tl!` to be covered by the tests.
-- The language is VectorCraft › Language (the `app.language` UI command, `{lang: auto|<code>}`) or Edit ›
+- The language is Vector W3K2 › Language (the `app.language` UI command, `{lang: auto|<code>}`) or Edit ›
   Preferences › User Interface › Language; both set the `interfaceLanguage` preference (`auto` or a language
   code; `auto` follows the system locale: `VECTORCRAFT_LOCALE`, then `LC_ALL`/`LC_MESSAGES`/`LANG`/`LANGUAGE`,
   the macOS preferred languages, the Windows user locale). The web build has no locale detection yet and
@@ -104,7 +104,7 @@ tells the two scripts apart, so the Traditional catalog is never shown to a Simp
 
 `cargo xtask brands` (part of `cargo xtask ci`) fails when user-visible text names another vendor's products or company: string literals in Rust sources (command labels and params docs, menus, panels, MCP tool definitions), `Cargo.toml` descriptions and packaging files. Comments and test code are not checked. Say "the reference app" or name the feature itself. A line that must keep an old name, such as an alias that files or preferences from earlier versions still use, carries a `brand-ok` comment.
 
-## Robustness: VectorCraft never crashes
+## Robustness: Vector W3K2 never crashes
 
 A crash takes the user's unsaved work with it, and much of what the app reads is untrusted: SVG,
 PDF, `.ai` and `.vectorcraft` files, pasted data, MCP and control-channel messages, command

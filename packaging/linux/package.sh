@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and package VectorCraft for Linux (<arch> is x86_64 or aarch64):
+# Build and package Vector W3K2 for Linux (<arch> is x86_64 or aarch64):
 #
 #   $DIST/vectorcraft-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
 #   $DIST/vectorcraft-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
@@ -34,10 +34,10 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export VECTORCRAFT_MAINTAINER="${VECTORCRAFT_MAINTAINER:-VectorCraft maintainers <vectorcraft@storyteller.ai>}"
+export VECTORCRAFT_MAINTAINER="${VECTORCRAFT_MAINTAINER:-Print That 204 <https://printthat.ca>}"
 BASENAME="vectorcraft-$VERSION-linux-$ARCH"
 
-echo "==> VectorCraft $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> Vector W3K2 $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
   (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli)

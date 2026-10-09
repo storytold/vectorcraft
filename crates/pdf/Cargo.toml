@@ -3,7 +3,7 @@ name = "vectorcraft-pdf"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft PDF export and import"
+description = "Vector W3K2 PDF export and import"
 
 [lints]
 workspace = true

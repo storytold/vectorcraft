@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Build, sign and package VectorCraft for Windows.
+  Build, sign and package Vector W3K2 for Windows.
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):

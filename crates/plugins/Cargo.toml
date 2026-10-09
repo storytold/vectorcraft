@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-plugins"
-description = "Sandboxed WebAssembly plug-ins for VectorCraft: a resource-limited wasmi host for object filters and live effects"
+description = "Sandboxed WebAssembly plug-ins for Vector W3K2: a resource-limited wasmi host for object filters and live effects"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

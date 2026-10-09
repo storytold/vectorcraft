@@ -3,7 +3,7 @@ name = "vectorcraft-color"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft color"
+description = "Vector W3K2 color"
 
 [lints]
 workspace = true

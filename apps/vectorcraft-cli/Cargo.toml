@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "VectorCraft command line: MCP server (stdio) and headless batch runs"
+description = "Vector W3K2 command line: MCP server (stdio) and headless batch runs"
 
 [[bin]]
 name = "vectorcraft-cli"

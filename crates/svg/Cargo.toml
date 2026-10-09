@@ -3,7 +3,7 @@ name = "vectorcraft-svg"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft SVG import and export"
+description = "Vector W3K2 SVG import and export"
 
 [lints]
 workspace = true

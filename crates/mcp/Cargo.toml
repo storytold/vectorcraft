@@ -3,7 +3,7 @@ name = "vectorcraft-mcp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft MCP server: JSON-RPC 2.0 over stdio, driving a running app or a headless session"
+description = "Vector W3K2 MCP server: JSON-RPC 2.0 over stdio, driving a running app or a headless session"
 
 [lints]
 workspace = true
