@@ -190,8 +190,13 @@ fn a_drag_across_type_not_being_edited_selects_its_text() {
     };
     let (a, b) = (pt(7), pt(9));
     // The press starts editing the type and the drag selects, in one gesture.
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, a.x + 0.1, a.y));
+    assert!(
+        tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "Click to edit text"))
+    );
     let out = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, a.x + 0.1, a.y));
     assert!(out.contains(&Action::Exec("select.set".into(), json!({"ids": [id.0]}))));
+    assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "Click to edit text")));
     tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, b.x + 0.1, b.y));
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, b.x + 0.1, b.y));
     assert_eq!(tool.editing, Some(id));

@@ -2,7 +2,7 @@
 //! gradient swatches and Save to Swatches), type buttons, the Fill/Stroke proxy, angle and aspect
 //! ratio fields with preset menus, Reverse, the gradient slider and the selected stop's fields.
 //!
-//! On the slider: click below the ramp to add a stop, drag a stop to move it (Alt drags a copy;
+//! On the slider: click a clear place below the ramp to add a stop, drag a stop to move it (Alt drags a copy;
 //! Alt-dropping it on another stop swaps their colours), drag it off to remove it, double-click it
 //! for the stop popover, and drag a diamond to move a midpoint (a selected diamond's midpoint
 //! shows in Location). Dropping a colour swatch on the ramp adds a stop of that colour, or
@@ -34,6 +34,8 @@ use crate::{VectorcraftApp, icons};
 
 /// Dragging a stop this far below the ramp removes it.
 const REMOVE_DISTANCE: f32 = 28.0;
+/// Newly added stops stay at least this many screen pixels from another stop.
+const ADD_STOP_MIN_SPACING: f32 = 12.0;
 /// The Angle field's preset menu, degrees.
 const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0];
 /// The Aspect Ratio field's preset menu, percent.
@@ -54,6 +56,14 @@ fn select_stop(app: &mut VectorcraftApp, i: Option<usize>) {
 /// Offset (0..1) of an x position on a ramp spanning `left..left + width`.
 pub fn x_to_offset(x: f32, left: f32, width: f32) -> f32 {
     ((x - left) / width.max(1.0)).clamp(0.0, 1.0)
+}
+
+/// Whether a new stop at `offset` is far enough from every marker to be a distinct target.
+fn can_insert_stop(stops: &[GradientStop], offset: f32, width: f32) -> bool {
+    let width = width.max(1.0);
+    stops
+        .iter()
+        .all(|s| (s.offset - offset).abs() * width >= ADD_STOP_MIN_SPACING)
 }
 
 /// Stops as `paint.editGradient` JSON.
@@ -180,11 +190,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if hidden {
             ui.add_space(6.0);
             super::proxy(app, ui, 36.0);
+            widgets::dim_label(ui, if app.session.fill_active { tl!("Fill") } else { tl!("Stroke") });
             return;
         }
         ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
+                widgets::dim_label(ui, if app.session.fill_active { tl!("Fill") } else { tl!("Stroke") });
                 widgets::dim_label(ui, tl!("Type:"));
                 for (k, icon, tip) in [
                     (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
@@ -346,7 +358,7 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     let (r, resp) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::click_and_drag());
     widgets::gradient_chip(ui, r, &g.gradient);
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
-    let resp = resp.on_hover_text(tl!("Gradient Fill: click to apply, drag onto art"));
+    let resp = resp.on_hover_text(if app.session.fill_active { tl!("Fill") } else { tl!("Stroke") });
     if resp.clicked() && !is_grad {
         edit(app, json!({}), Live::Released);
     }
@@ -529,13 +541,17 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let below = Rect::from_min_max(pos2(bar.left(), bar.bottom()), pos2(bar.right(), area.bottom()));
     let add_resp = ui.interact(below, ui.id().with("grad-add"), Sense::click());
     let bar_resp = ui.interact(bar, ui.id().with("grad-bar"), Sense::click());
-    if add_resp.hovered() && is_grad {
+    if add_resp.hovered()
+        && is_grad
+        && add_resp.hover_pos().is_some_and(|p| can_insert_stop(stops, offset_at(p), bar.width()))
+    {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
     }
     if !is_grad && (bar_resp.clicked() || add_resp.clicked()) {
         edit(app, json!({}), Live::Released);
     } else if add_resp.clicked()
         && let Some(p) = add_resp.interact_pointer_pos()
+        && can_insert_stop(stops, offset_at(p), bar.width())
     {
         let (v, i) = insert_stop(g, offset_at(p));
         select = Some(i);
@@ -697,7 +713,11 @@ mod tests {
         assert_eq!(x_to_offset(50.0, 0.0, 200.0), 0.25);
         assert_eq!(x_to_offset(-5.0, 0.0, 200.0), 0.0);
         assert_eq!(x_to_offset(500.0, 0.0, 200.0), 1.0);
-        let j = stops_json(&Gradient::default().stops);
+        let stops = Gradient::default().stops;
+        assert!(!can_insert_stop(&stops, 0.02, 200.0), "too close to the first stop");
+        assert!(!can_insert_stop(&stops, 0.96, 200.0), "too close to the last stop");
+        assert!(can_insert_stop(&stops, 0.5, 200.0));
+        let j = stops_json(&stops);
         assert_eq!(j.as_array().unwrap().len(), 2);
         assert_eq!(j[1]["midpoint"], json!(0.5));
     }
@@ -1005,4 +1025,4 @@ mod tests {
         stop_eyedropper(&mut app);
         assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient"})));
     }
-}
+                    }

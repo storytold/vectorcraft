@@ -80,6 +80,8 @@ pub struct TypeTool {
     drag: Option<Point>,
     /// Smart Guides for where new type goes.
     snap: DrawSnap,
+    /// Existing, unedited type under the pointer, shown with an edit cue.
+    hover_edit: Option<Point>,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
     /// Click counting for double/triple click (position of the last click, count).
@@ -104,6 +106,12 @@ impl TypeTool {
             NodeKind::Text(t) => Some(t),
             _ => None,
         }
+    }
+
+    fn text_at(cx: &ToolContext, p: Point) -> Option<NodeId> {
+        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { type_path_only: false, ..cx.hit_options() })?;
+        Self::text(cx, h.leaf)?;
+        Some(h.leaf)
     }
 
     /// Layout of `t`, cached by content (overlays run every frame).
@@ -252,14 +260,14 @@ impl TypeTool {
     /// edit, selecting the type); None when no type is under `p`. A click among the characters
     /// edits them, whatever Type Object Selection by Path Only says.
     fn edit_at(&mut self, cx: &ToolContext, p: Point) -> Option<Vec<Action>> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { type_path_only: false, ..cx.hit_options() })?;
-        let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind) else { return None };
+        let id = Self::text_at(cx, p)?;
+        let t = Self::text(cx, id)?;
         let lay = self.layout(t);
         let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * p);
         let mut out = self.finish(cx);
-        self.start_editing(h.leaf, byte);
+        self.start_editing(id, byte);
         self.clicks = (Some(p), 1);
-        out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
+        out.push(Action::Exec("select.set".into(), json!({"ids": [id.0]})));
         Some(out)
     }
 
@@ -378,6 +386,7 @@ impl Tool for TypeTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
+                self.hover_edit = None;
                 if let Some(byte) = self.hit_edited(cx, ev.pos) {
                     let same = self.clicks.0.is_some_and(|q| (q - ev.pos).hypot() <= cx.tol(4.0));
                     let n = if same { self.clicks.1 + 1 } else { 1 };
@@ -432,6 +441,7 @@ impl Tool for TypeTool {
                 vec![]
             }
             PointerKind::Move => {
+                self.hover_edit = Self::text_at(cx, ev.pos).filter(|id| Some(*id) != self.editing).map(|_| ev.pos);
                 // The type being edited is no target: its guides would only point at itself.
                 self.snap.hover(cx, ev.pos, self.editing.as_slice(), None);
                 vec![]
@@ -719,6 +729,9 @@ impl Tool for TypeTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
+        if let Some(p) = self.hover_edit {
+            o.push(Overlay::Label { p: Point::new(p.x + cx.tol(8.0), p.y - cx.tol(8.0)), text: "Click to edit text".into(), color: [79, 128, 255] });
+        }
         if let (Some((_, s)), Some(d)) = (self.press, self.drag) {
             o.push(Overlay::Marquee(Rect::from_points(s, d)));
         }

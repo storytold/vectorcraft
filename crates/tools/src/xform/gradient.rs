@@ -47,8 +47,10 @@ const STOP_GAP: f64 = 10.0;
 const STOP_HIT: f64 = 6.0;
 /// Midpoint diamonds sit this far above the bar.
 const MID_GAP: f64 = 7.0;
+/// A click must be this many screen pixels from another stop before it can add one.
+const ADD_STOP_MIN_SPACING: f64 = 12.0;
 const MID_HIT: f64 = 5.0;
-/// The bar (where a click adds a stop) reaches this far above it, and down through the stop row.
+/// The bar (where a click adds a stop) reaches this far to either side of its line.
 const BAR_HIT: f64 = 4.0;
 /// A radial's focal dot, and the centre ring around it (the start handle).
 const FOCAL_HIT: f64 = 3.0;
@@ -86,6 +88,8 @@ pub enum Part {
     Aspect,
     /// The bar at an offset (0..1): a click adds a stop there.
     Bar(f32),
+    /// The protected strip between the bar and stop chips: deliberately does nothing.
+    Guard,
 }
 
 impl Annotator {
@@ -125,6 +129,14 @@ impl Annotator {
         let v = self.vector();
         let len = v.hypot();
         if len < 1e-12 { Vec2::new(0.0, 1.0) } else { Vec2::new(-v.y, v.x) / len }
+    }
+    /// Whether a click at `t` has enough screen-space clearance to make a distinct stop.
+    fn can_insert_stop(&self, cx: &ToolContext, t: f32) -> bool {
+        let p = self.at(t as f64);
+        self.gradient
+            .stops
+            .iter()
+            .all(|s| p.distance(self.at(s.offset as f64)) >= cx.tol(ADD_STOP_MIN_SPACING))
     }
     /// Where stop `i`'s chip sits.
     pub fn stop_point(&self, cx: &ToolContext, i: usize) -> Option<Point> {
@@ -173,9 +185,16 @@ impl Annotator {
         if t > 1.0 && near(Some(self.geom.end), ROTATE) {
             return Some(Part::Rotate);
         }
-        let across = -cx.tol(BAR_HIT)..=cx.tol(STOP_GAP + STOP_HIT);
-        if self.vector().hypot() > 1e-12 && (0.0..=1.0).contains(&t) && across.contains(&d) {
-            return Some(Part::Bar(t as f32));
+        let along_bar = self.vector().hypot() > 1e-12 && (0.0..=1.0).contains(&t);
+        if along_bar {
+            let bar = -cx.tol(BAR_HIT)..=cx.tol(BAR_HIT);
+            if bar.contains(&d) {
+                return Some(Part::Bar(t as f32));
+            }
+            let stop_row = cx.tol(BAR_HIT)..=cx.tol(STOP_GAP + STOP_HIT);
+            if stop_row.contains(&d) {
+                return Some(Part::Guard);
+            }
         }
         if radial && self.off_ellipse(p).is_some_and(|d| d <= cx.tol(BAR_HIT)) {
             return Some(Part::Rotate);
@@ -316,6 +335,7 @@ impl GradientTool {
             Some((a, Part::Mid(index))) => Grab::Mid { index, from: a.clone() },
             Some((a, Part::Start)) => Grab::Move { geom: a.geom, bar: None },
             Some((a, Part::Bar(t))) => Grab::Move { geom: a.geom, bar: Some(t) },
+            Some((_, Part::Guard)) => return out,
             Some((a, Part::End)) => Grab::End(a.geom),
             Some((a, Part::Rotate)) => Grab::Rotate { geom: a.geom, from: (p - a.geom.start).atan2() - a.vector().atan2() },
             Some((a, Part::Focal)) => Grab::Focal(a.geom),
@@ -433,6 +453,9 @@ impl GradientTool {
             // A click on the bar adds a stop there.
             Grab::Move { bar: Some(t), .. } => {
                 let Some(a) = Annotator::of(cx) else { return vec![] };
+                if !a.can_insert_stop(cx, t) {
+                    return vec![];
+                }
                 let (stops, i) = insert_stop(&a.gradient, t);
                 vec![Action::Exec("paint.editGradient".into(), Self::stops_params(cx, &stops)), Self::select_stop(i)]
             }
@@ -568,8 +591,10 @@ impl Tool for GradientTool {
                 _ => Cursor::Move,
             };
         }
-        match Annotator::of(cx).and_then(|a| a.hit(cx, p)) {
-            Some(Part::Bar(_)) => Cursor::AddStop,
+        let Some(a) = Annotator::of(cx) else { return Cursor::Crosshair };
+        match a.hit(cx, p) {
+            Some(Part::Bar(t)) if a.can_insert_stop(cx, t) => Cursor::AddStop,
+            Some(Part::Bar(_)) | Some(Part::Guard) => Cursor::Arrow,
             Some(Part::Rotate) => Cursor::Rotate,
             Some(_) => Cursor::Move,
             None => Cursor::Crosshair,
@@ -764,6 +789,19 @@ mod tests {
         let (c, v) = exec(&a[0]);
         assert_eq!((c, offsets(v)), ("paint.editGradient", vec![0.0, 30.0, 100.0]));
         assert_eq!(a[1], GradientTool::select_stop(1));
+
+        // A near miss beside a stop does not create a second, nearly coincident stop.
+        let near = Point::new(108.0, 150.0);
+        assert_eq!(t.cursor(&cx, near, Mods::default()), Cursor::Arrow);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, near)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, near)).is_empty());
+
+        // The strip through the stop row is protected instead of falling through to an art click.
+        let stop_row = Point::new(130.0, 158.0);
+        assert_eq!(Annotator::of(&cx).unwrap().hit(&cx, stop_row), Some(Part::Guard));
+        assert_eq!(t.cursor(&cx, stop_row, Mods::default()), Cursor::Arrow);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, stop_row)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, stop_row)).is_empty());
     }
 
     #[test]
@@ -925,4 +963,4 @@ mod tests {
         assert_eq!((hit(100.0, 200.0), hit(0.0, 150.0), hit(100.0, 220.0)), (Some(Part::Rotate), Some(Part::Rotate), None));
         assert_eq!(GradientTool::default().cursor(&cx, Point::new(100.0, 200.0), Mods::default()), Cursor::Rotate);
     }
-}
+                                     }
