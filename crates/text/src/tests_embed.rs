@@ -19,6 +19,42 @@ fn fs_type_flags_decide_the_embedding() {
     assert_eq!(Embedding::from_fs_type(0x0108), Embedding::Whole, "no subsetting");
 }
 
+/// The bundled Source Sans 3 Regular renamed `family` (13 characters, as long as the original
+/// name) with OS/2 `fsType` set to `fs_type`.
+fn licensed_font(family: &str, fs_type: u16) -> Vec<u8> {
+    let mut data = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf").to_vec();
+    let table = |data: &[u8], tag: &[u8; 4]| {
+        let f = skrifa::FontRef::new(data).unwrap();
+        let r = f.table_directory.table_records().iter().find(|r| r.tag().to_be_bytes() == *tag).unwrap();
+        (r.offset() as usize, r.length() as usize)
+    };
+    let (os2, _) = table(&data, b"OS/2");
+    data[os2 + 8..os2 + 10].copy_from_slice(&fs_type.to_be_bytes());
+    let (name, len) = table(&data, b"name");
+    assert_eq!(family.len(), "Source Sans 3".len());
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    for (from, to) in [(utf16("Source Sans 3"), utf16(family)), (b"Source Sans 3".to_vec(), family.as_bytes().to_vec())] {
+        let mut i = name;
+        while let Some(at) = data[i..name + len].windows(from.len()).position(|w| w == from) {
+            data[i + at..i + at + to.len()].copy_from_slice(&to);
+            i += at + to.len();
+        }
+    }
+    data
+}
+
+/// A font file goes with a document (File → Package) only when exports may embed it: not when
+/// its license is restricted or allows bitmaps only.
+#[test]
+fn fonts_exports_may_not_embed_are_not_embeddable() {
+    let db = FontDb::with_font_dirs(vec![]);
+    for (family, fs_type, embeddable) in [("Bitmap Sans 3", 0x0200, false), ("Lowbit Sans 3", 0x0003, false), ("Wholed Sans 3", 0x0100, true)] {
+        assert!(db.add_font(licensed_font(family, fs_type)) > 0, "{family}");
+        let face = db.face(family, "Regular").unwrap();
+        assert_eq!((face.family.as_str(), face.embeddable()), (family, embeddable), "fsType {fs_type:#06x}");
+    }
+}
+
 #[test]
 fn a_subset_holds_only_the_glyphs_used_and_maps_their_characters() {
     let face = FontDb::global().face("Source Sans 3", "Regular").unwrap();

@@ -107,6 +107,30 @@ fn the_web_downloads_a_zip() {
 }
 
 #[test]
+fn fonts_left_out_of_the_package_are_named() {
+    let dir = Folder::new("fonts");
+    let mut app = saved(&dir);
+    app.run("text.create", json!({"x": 10, "y": 40, "text": "Kept"})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "No Such Font Family"})).unwrap();
+    app.run("ui.packageDialog", json!({})).unwrap();
+    let out = dir.path("out");
+    std::fs::create_dir_all(&out).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["skippedFonts"], json!([{"font": "No Such Font Family Regular", "reason": "not available on this computer"}]));
+    let gone = "fonts not copied: No Such Font Family Regular";
+    assert!(app.ui.status.contains(gone), "{}", app.ui.status);
+    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    assert!(detail.contains(gone) && !detail.contains("Source Sans 3"), "{detail}");
+    // The web's download says so too.
+    app.ui.dialog = None;
+    app.services.download = Some(Box::new(|_: &str, _: &[u8]| {}));
+    app.run("ui.packageDialog", json!({})).unwrap();
+    confirm(&mut app).unwrap();
+    assert!(app.ui.status.contains(gone), "{}", app.ui.status);
+}
+
+#[test]
 fn package_without_a_location_says_so() {
     let dir = Folder::new("empty");
     let mut app = saved(&dir);

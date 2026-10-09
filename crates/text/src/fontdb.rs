@@ -270,9 +270,10 @@ impl FontFace {
         use skrifa::raw::TableProvider;
         self.skrifa().and_then(|f| f.os2().ok()).map_or(0, |t| t.fs_type())
     }
-    /// May the font file be copied along with a document (its licence doesn't restrict embedding)?
+    /// May the font file be copied along with a document? Its license allows embedding its
+    /// outlines, as exports check it ([`Self::embedding`]).
     pub fn embeddable(&self) -> bool {
-        self.fs_type() & 0x000f != 0x0002
+        self.embedding() != crate::embed::Embedding::Forbidden
     }
     /// The face's index in its font file ([`Self::file_data`]; collections hold several).
     pub fn face_index(&self) -> u32 {

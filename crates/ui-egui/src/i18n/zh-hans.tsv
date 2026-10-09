@@ -2891,6 +2891,7 @@
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 	{count} file(s) in {folder}{note}. Show the package folder?	{folder} 中有 {count} 个文件{note}。要显示打包文件夹吗？
 	{count} linked file(s) not found	找不到 {count} 个链接文件
+	fonts not copied: {fonts}	未复制的字体：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	自存储此文档后，有 {count} 个链接图像已更改。要显示新版本吗？
 	{count} more rules: Export writes every one.	另有 {count} 条规则：导出时会全部写出。
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	已略过 {count} 个未命名对象：请为它们命名，或在面板菜单中开启“未命名对象”。

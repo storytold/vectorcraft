@@ -2967,6 +2967,7 @@
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 	{count} file(s) in {folder}{note}. Show the package folder?	Файлов: {count} в {folder}{note}. Показать папку пакета?
 	{count} linked file(s) not found	Не найдено связанных файлов: {count}
+	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	Связанных изображений ({count}) изменились с момента сохранения этого документа. Показать новые версии?
 	{count} more rules: Export writes every one.	Ещё правил: {count}: экспорт записывает все.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Пропущено объектов без имени: {count}: назовите их или включите «Объекты без имени» в меню панели.

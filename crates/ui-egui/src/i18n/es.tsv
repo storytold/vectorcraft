@@ -2971,6 +2971,7 @@
 	Scrub Numeric Fields by Dragging	Ajustar campos numéricos arrastrando
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} archivo(s) en {folder}{note}. ¿Mostrar la carpeta del paquete?
 	{count} linked file(s) not found	No se encontraron {count} archivo(s) vinculado(s)
+	fonts not copied: {fonts}	fuentes no copiadas: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} imagen(es) vinculada(s) cambiaron desde que se guardó este documento. ¿Mostrar las versiones nuevas?
 	{count} more rules: Export writes every one.	{count} reglas más: Exportar las escribe todas.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Se omitieron {count} objetos sin nombre: ponles nombre o activa Objetos sin nombre en el menú del panel.

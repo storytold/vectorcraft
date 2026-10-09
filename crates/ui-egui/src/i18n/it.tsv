@@ -2971,6 +2971,7 @@
 	Scrub Numeric Fields by Dragging	Regola i campi numerici trascinando
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} file in {folder}{note}. Vuoi mostrare la cartella del pacchetto?
 	{count} linked file(s) not found	File collegati non trovati: {count}
+	fonts not copied: {fonts}	font non copiati: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	Immagini collegate modificate dopo il salvataggio di questo documento: {count}. Vuoi mostrare le nuove versioni?
 	{count} more rules: Export writes every one.	Altre {count} regole: Esporta le scrive tutte.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} oggetti senza nome esclusi: assegna loro un nome o attiva Oggetti senza nome nel menu del pannello.

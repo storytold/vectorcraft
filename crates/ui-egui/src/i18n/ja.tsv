@@ -2648,6 +2648,7 @@
 	to	→
 	{count} file(s) in {folder}{note}. Show the package folder?	{folder} に {count} 個のファイル{note}。パッケージフォルダーを表示しますか？
 	{count} linked file(s) not found	リンクファイルが {count} 個見つかりません
+	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	保存後に {count} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
 	{count} more rules: Export writes every one.	ほかに {count} 個のルールがあります。書き出しにはすべて含まれます。
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	名前のないオブジェクト {count} 個を除外しました。名前を付けるか、パネルメニューで「名前のないオブジェクト」をオンにしてください。

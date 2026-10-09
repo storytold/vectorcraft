@@ -158,6 +158,36 @@ fn a_missing_link_is_reported_not_copied() {
 }
 
 #[test]
+fn a_font_named_by_another_of_its_names_is_copied() {
+    let dir = Folder::new("package-alias");
+    let mut s = poster(&dir);
+    // The bundled Semibold by its PostScript name, as an SVG or a PDF can name it.
+    run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Alias", "font": "SourceSans3-Semibold"}));
+    let r = run(&mut s, "file.package", json!({}));
+    assert_eq!((r["fonts"].as_u64(), r["skippedFonts"].clone()), (Some(2), json!([])), "{}", r["skippedFonts"]);
+    let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let report = String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap();
+    assert!(report.contains("SourceSans3-Semibold Regular → Fonts/"), "{report}");
+    let details = report.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
+    assert!(details.contains("embedding allowed") && !details.contains("missing"), "{report}");
+}
+
+#[test]
+fn a_substituted_style_names_the_style_shown() {
+    let dir = Folder::new("package-style");
+    let mut s = poster(&dir);
+    // No Source Sans 3 has a Black Wide, bundled or installed: its closest style stands in, and
+    // that style's file is copied.
+    run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Heavy", "font": "Source Sans 3", "style": "Black Wide"}));
+    let r = run(&mut s, "file.package", json!({}));
+    assert_eq!(r["skippedFonts"], json!([]));
+    let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let report = String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap();
+    assert!(report.contains("Source Sans 3 Black Wide (shown in Source Sans 3 "), "{report}");
+    assert!(report.contains("Source Sans 3 Black Wide: substituted: shown in Source Sans 3 "), "{report}");
+}
+
+#[test]
 fn the_document_info_report_has_every_category() {
     let dir = Folder::new("docinfo-report");
     let mut s = poster(&dir);

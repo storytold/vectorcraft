@@ -2590,6 +2590,7 @@
 	to	para
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} arquivo(s) em {folder}{note}. Mostrar a pasta do pacote?
 	{count} linked file(s) not found	{count} arquivo(s) vinculado(s) não encontrado(s)
+	fonts not copied: {fonts}	fontes não copiadas: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} imagem(ns) vinculada(s) alterada(s) desde que este documento foi salvo. Mostrar as novas versões?
 	{count} more rules: Export writes every one.	{count} regras a mais: a Exportação escreve cada uma.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objetos sem nome deixados de fora: nomeie-os, ou ative Objetos Sem Nome no menu do painel.

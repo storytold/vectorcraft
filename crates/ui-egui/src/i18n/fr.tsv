@@ -2968,6 +2968,7 @@
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 	{count} file(s) in {folder}{note}. Show the package folder?	{count} fichier(s) dans {folder}{note}. Afficher le dossier de l’assemblage ?
 	{count} linked file(s) not found	{count} fichier(s) lié(s) introuvable(s)
+	fonts not copied: {fonts}	polices non copiées : {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} image(s) liée(s) modifiée(s) depuis l’enregistrement de ce document. Afficher les nouvelles versions ?
 	{count} more rules: Export writes every one.	{count} règles de plus : Exporter les écrit toutes.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objets sans nom omis : nommez-les ou activez Objets sans nom dans le menu du panneau.

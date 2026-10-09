@@ -2979,6 +2979,7 @@
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
 	{count} file(s) in {folder}{note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
 	{count} linked file(s) not found	找不到 {count} 個連結檔案
+	fonts not copied: {fonts}	未複製的字體：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	自儲存此文件後，有 {count} 個連結影像已變更。要顯示新版本嗎？
 	{count} more rules: Export writes every one.	另有 {count} 條規則：匯出時會全部寫出。
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	已略過 {count} 個未命名物件：請為它們命名，或在面板選單中開啟「未命名物件」。

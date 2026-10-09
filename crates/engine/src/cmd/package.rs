@@ -109,8 +109,15 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         lines.push("FONTS".to_string());
         for (family, style) in super::fonts::used_fonts(&st.doc) {
             let font = format!("{family} {style}");
-            let reason = match db.face(&family, &style) {
-                Some(f) if f.family.eq_ignore_ascii_case(&family) && f.embeddable() => {
+            // Found by any of its names, as the canvas draws it.
+            let resolved = db.resolve(&family, &style).filter(|(_, m)| *m != vectorcraft_text::FontMatch::Missing);
+            // A style the family lacks is shown in its closest style, whose file is copied.
+            let shown = match &resolved {
+                Some((f, vectorcraft_text::FontMatch::Style)) => format!(" (shown in {} {})", f.family, f.style),
+                _ => String::new(),
+            };
+            let reason = match resolved {
+                Some((f, _)) if f.embeddable() => {
                     let data = f.file_data();
                     let file = f.path().and_then(Path::file_name).map_or_else(
                         || format!("{}-{}.{}", f.family, f.style, font_ext(data)).replace(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)), ""),
@@ -121,13 +128,13 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
                         entries.push((format!("Fonts/{file}"), data.to_vec()));
                         fonts += 1;
                     }
-                    lines.push(format!("{font} → Fonts/{file}"));
+                    lines.push(format!("{font}{shown} → Fonts/{file}"));
                     continue;
                 }
-                Some(f) if f.family.eq_ignore_ascii_case(&family) => "its licence doesn't allow embedding",
-                _ => "not available on this computer",
+                Some(_) => "its licence doesn't allow embedding",
+                None => "not available on this computer",
             };
-            lines.push(format!("{font}: {reason}, not copied"));
+            lines.push(format!("{font}{shown}: {reason}, not copied"));
             skipped.push(json!({ "font": font, "reason": reason }));
         }
         lines.push(String::new());
