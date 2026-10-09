@@ -35,18 +35,23 @@ fn ids(rows: &[Value]) -> Vec<Value> {
 }
 
 /// After a document opened (`document.open`'s result `r`): ask about its missing linked files,
-/// then about its modified ones. The web reads no linked files, so missing ones just show their
+/// then about its modified ones, then about the fonts it opened without
+/// ([`super::missing_fonts`]). The web reads no linked files, so missing ones just show their
 /// previews there.
 pub fn after_open(app: &mut VectorcraftApp, r: &Value) {
+    // The fonts' dialog waits for these questions (one dialog at a time).
+    super::missing_fonts::after_open(app, r);
     let rows = |k: &str| r[k].as_array().cloned().unwrap_or_default();
     let (missing, modified) = (rows("missingLinks"), ids(&rows("modifiedLinks")));
     if missing.is_empty() || cfg!(target_arch = "wasm32") {
         if !missing.is_empty() {
             app.status(format!("{} linked file(s) can't be read here: their previews show", missing.len()));
         }
-        return ask_update(app, modified);
+        ask_update(app, modified);
+    } else {
+        open(app, missing, modified);
     }
-    open(app, missing, modified);
+    super::settle(app);
 }
 
 fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>) {

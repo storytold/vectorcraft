@@ -6,7 +6,9 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions).
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! faces).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -1882,5 +1884,129 @@ proptest! {
             let file = ai::eps(&bytes, ai::page_ps());
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.eps", &file).ok().map(|l| l.doc))?;
         }
+    }
+}
+
+// ---------- font files a folder search reads ----------
+
+/// A small font file holding what a folder search reads: an outline table's tag, the `name` and
+/// `OS/2` tables of the bundled Source Sans 3 renamed "Findme Sans 3", and an `fvar` table with a
+/// weight axis and three named instances (named by name ids 2, 1 and 4).
+fn search_font() -> Vec<u8> {
+    let font = vectorcraft_testkit::fonts::renamed("Findme Sans 3");
+    let be32 = |at: usize| u32::from_be_bytes(font[at..at + 4].try_into().unwrap()) as usize;
+    let table = |tag: &[u8; 4]| {
+        let n = u16::from_be_bytes([font[4], font[5]]) as usize;
+        let r = (0..n).map(|i| 12 + 16 * i).find(|&r| &font[r..r + 4] == tag).unwrap();
+        font[be32(r + 8)..be32(r + 8) + be32(r + 12)].to_vec()
+    };
+    // fvar 1.0: the axis array at 16, one axis of 20 bytes, three instances of 8.
+    let mut fvar = vec![];
+    for v in [1u16, 0, 16, 2, 1, 20, 3, 8] {
+        fvar.extend(v.to_be_bytes());
+    }
+    fvar.extend(b"wght");
+    for v in [100i32, 400, 900] {
+        fvar.extend((v << 16).to_be_bytes());
+    }
+    fvar.extend([0, 0, 1, 0]);
+    for (name, weight) in [(2u16, 300i32), (1, 600), (4, 900)] {
+        fvar.extend(name.to_be_bytes());
+        fvar.extend(0u16.to_be_bytes());
+        fvar.extend((weight << 16).to_be_bytes());
+    }
+    let tables: [(&[u8; 4], Vec<u8>); 4] = [(b"OS/2", table(b"OS/2")), (b"fvar", fvar), (b"glyf", vec![0; 4]), (b"name", table(b"name"))];
+    let mut out = 0x0001_0000_u32.to_be_bytes().to_vec();
+    for v in [tables.len() as u16, 0, 0, 0] {
+        out.extend(v.to_be_bytes());
+    }
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in &tables {
+        out.extend(*tag);
+        for v in [0, offset as u32, data.len() as u32] {
+            out.extend(v.to_be_bytes());
+        }
+        offset += data.len().next_multiple_of(4);
+    }
+    for (_, data) in &tables {
+        out.extend(data);
+        out.resize(out.len().next_multiple_of(4), 0);
+    }
+    out
+}
+
+/// `font` as a collection of `faces % 5` faces that all read it, whose header gives `faces` as the
+/// count.
+fn search_collection(font: &[u8], faces: u32) -> Vec<u8> {
+    let k = (faces % 5) as usize;
+    let base = 12 + 4 * k;
+    let mut out = b"ttcf".to_vec();
+    out.extend(0x0001_0000_u32.to_be_bytes());
+    out.extend(faces.to_be_bytes());
+    for _ in 0..k {
+        out.extend((base as u32).to_be_bytes());
+    }
+    // The tables' offsets count from the start of the collection.
+    let mut f = font.to_vec();
+    let n = u16::from_be_bytes([f[4], f[5]]) as usize;
+    for i in 0..n {
+        let at = 12 + 16 * i + 8;
+        let offset = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) + base as u32;
+        f[at..at + 4].copy_from_slice(&offset.to_be_bytes());
+    }
+    out.extend(f);
+    out
+}
+
+/// The fonts a search for "Findme Sans 3" looks for: the face, and a style of the family as if the
+/// family were installed.
+fn findme_wanted() -> vectorcraft_text::WantedFonts {
+    use vectorcraft_text::WantedFont;
+    vectorcraft_text::WantedFonts::new(&[
+        WantedFont { family: "Findme Sans 3".into(), style: "Regular".into(), installed: None },
+        WantedFont { family: "FINDME SANS 3".into(), style: "Black".into(), installed: Some("Findme Sans 3".into()) },
+        WantedFont { family: "SourceSans3-Regular".into(), style: "Bold".into(), installed: None },
+    ])
+}
+
+/// Whether reading `bytes` as a font file a search reads panics.
+fn search_reads(what: &str, bytes: &[u8]) -> Result<Vec<usize>, TestCaseError> {
+    let path = vectorcraft_testkit::temp_dir("font-search-fuzz").join(format!("{:?}.ttc", std::thread::current().id()));
+    std::fs::write(&path, bytes).unwrap();
+    catch_quiet(|| findme_wanted().provided_by(&path)).map_err(|e| TestCaseError::fail(format!("{what}: a search reading the file panicked: {e}")))
+}
+
+/// The samples the fuzz properties mutate reach the matching: each provides the face it names.
+#[test]
+fn the_search_font_samples_are_read_whole() {
+    let font = search_font();
+    assert_eq!(search_reads("font", &font).unwrap(), [0, 2]);
+    assert_eq!(search_reads("collection", &search_collection(&font, 3)).unwrap(), [0, 2]);
+    // Two faces, and a header that gives seven.
+    assert_eq!(search_reads("collection claiming more faces", &search_collection(&font, 7)).unwrap(), [0, 2]);
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn font_files_a_search_reads_never_panic(
+        faces in prop::option::of(any::<u32>()),
+        cut in prop::option::of(0usize..12_000),
+        edits in prop::collection::vec((0usize..12_000, any::<u8>()), 0..12),
+    ) {
+        let font = search_font();
+        let mut bytes = match faces {
+            Some(n) => search_collection(&font, n),
+            None => font,
+        };
+        for (at, b) in edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        search_reads("mutated font file", &bytes)?;
     }
 }

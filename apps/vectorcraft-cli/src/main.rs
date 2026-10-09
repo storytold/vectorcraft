@@ -41,6 +41,9 @@ macro_rules! out {
 #[path = "../../vectorcraft/src/mac_fonts.rs"]
 mod mac_fonts;
 mod perf;
+/// The desktop app's settings folder, shared: exports and MCP read the same Fonts folder.
+#[path = "../../vectorcraft/src/prefs_dir.rs"]
+mod prefs_dir;
 /// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
 #[cfg(all(windows, not(target_vendor = "win7")))]
 #[path = "../../vectorcraft/src/system_fonts.rs"]
@@ -110,6 +113,7 @@ fn main() -> ExitCode {
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();
+    prefs_dir::install_fonts();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let r = match args.first().map(String::as_str) {
         Some("mcp") => mcp(&args[1..]),

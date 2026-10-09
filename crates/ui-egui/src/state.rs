@@ -347,6 +347,18 @@ pub struct UiState {
     /// dialog is open.
     #[serde(skip)]
     pub dialog_file: Option<std::sync::Arc<crate::dialogs::import_pdf::DialogFile>>,
+    /// The documents (uids) whose Missing Fonts dialog waits until no dialog is open, the next one to
+    /// show first ([`crate::dialogs::settle`]).
+    #[serde(skip)]
+    pub pending_fonts: Vec<u64>,
+    /// The document (uid) whose Missing Fonts dialog is on show. When another dialog takes its
+    /// place, [`crate::dialogs::settle`] puts the document back at the front of `pending_fonts`.
+    #[serde(skip)]
+    pub fonts_dialog: Option<u64>,
+    /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
+    /// dialog is gone.
+    #[serde(skip)]
+    pub dialog_search: Option<u64>,
     /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
     #[serde(default)]
     pub dxf_options: Value,
@@ -519,6 +531,9 @@ impl Default for UiState {
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
+            pending_fonts: vec![],
+            fonts_dialog: None,
+            dialog_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
             dxf_import: Value::Null,

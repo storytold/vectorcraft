@@ -859,6 +859,15 @@ pub struct Session {
     pub(crate) plane_widget_press: bool,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
+    /// The last search for the files of missing fonts (`text.findFontFiles`), until another
+    /// starts; dropping it stops it.
+    pub(crate) font_search: Option<cmd::fontfiles::FontSearch>,
+    /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
+    /// Tests set it.
+    pub search_rules: Option<cmd::findfiles::Rules>,
+    /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
+    /// it.
+    pub search_threads: Option<usize>,
 }
 
 impl Default for Session {
@@ -910,6 +919,9 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             ruler_guide: None,
+            font_search: None,
+            search_rules: None,
+            search_threads: None,
         }
     }
 
@@ -1452,6 +1464,8 @@ mod tests_flatpreview;
 mod tests_flatten;
 #[cfg(test)]
 mod tests_focal;
+#[cfg(test)]
+mod tests_fontfiles;
 #[cfg(test)]
 mod tests_fontlist;
 #[cfg(test)]

@@ -2057,6 +2057,24 @@
 	Reflect Y	Y 軸でリフレクト
 	Refresh	更新
 	Refresh Font List	フォントリストを更新
+	Missing Fonts	見つからないフォント
+	Missing Fonts Dialog	見つからないフォントダイアログ
+	These fonts aren't available. Their text shows in another font.	これらのフォントは使用できません。テキストは別のフォントで表示されます。
+	Search Fonts Folder	「Fonts」フォルダーを検索
+	Find in Folder…	フォルダー内を検索…
+	Find Fonts in Folder…	フォルダー内のフォントを検索…
+	Find Font Files	フォントファイルを検索
+	Add Font Files	フォントファイルを追加
+	Add Fonts	フォントを追加
+	Stop	停止
+	Searching…	検索中…
+	Not found	見つかりません
+	{folders} folder(s) and {files} file(s) searched	{folders} 個のフォルダーと {files} 個のファイルを検索しました
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} 個のフォルダーをスキップしました（他のアプリやシステムのフォルダー、隠しフォルダーなど）
+	{count} folder(s) or file(s) couldn't be read	{count} 個のフォルダーまたはファイルを読み込めませんでした
+	The search stopped at its limit: search a smaller folder.	検索は上限で停止しました。より小さなフォルダーを検索してください。
+	Copy only fonts you own or are licensed to install.	所有しているフォント、またはインストールするライセンスがあるフォントだけをコピーしてください。
+	VectorCraft copies the fonts to {folder}.	VectorCraft はフォントを {folder} にコピーします。
 	Registry name:	レジストリ名:
 	Release Compound Shape	複合シェイプを解除
 	Release Opacity Mask	不透明マスクを解除

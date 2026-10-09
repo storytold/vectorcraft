@@ -28,6 +28,7 @@ mod mac_fonts;
 mod mac_menu;
 #[cfg(target_os = "macos")]
 mod open_documents;
+mod prefs_dir;
 mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod system_fonts;
@@ -141,27 +142,13 @@ fn discard_marked_text() {
 /// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
 /// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).
 fn prefs_path() -> Option<std::path::PathBuf> {
-    prefs_path_for("VectorCraft", "vectorcraft")
+    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
 }
 
 /// The same place under the project's former name (DrawCraft): read once if there are no
 /// VectorCraft preferences yet, so settings survive the rename.
 fn legacy_prefs_path() -> Option<std::path::PathBuf> {
-    prefs_path_for("DrawCraft", "drawcraft")
-}
-
-fn prefs_path_for(name: &str, lower: &str) -> Option<std::path::PathBuf> {
-    let base = if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support").join(name))
-    } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join(name))
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(std::path::PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join(lower))
-    };
-    base.map(|b| b.join("ui.json"))
+    prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
 }
 
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
@@ -397,6 +384,8 @@ fn main() -> std::process::ExitCode {
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();
+    // VectorCraft's own Fonts folder, which text.addFontFiles copies fonts into.
+    prefs_dir::install_fonts();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");

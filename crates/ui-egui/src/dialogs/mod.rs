@@ -39,6 +39,7 @@ pub mod import_pdf;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
+pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
 pub mod new_color_group;
@@ -246,6 +247,7 @@ registry! {
     FileInfo: [file_info::KIND] => file_info::SPEC,
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     MissingLinks: [missing_links::KIND] => missing_links::SPEC,
+    MissingFonts: [missing_fonts::KIND] => missing_fonts::SPEC,
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
@@ -310,20 +312,35 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
 
 /// Close the open dialog as Cancel does, rolling back a live preview (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
+    missing_fonts::requeue_replaced(app);
     if app.ui.dialog.take().is_some_and(|d| spec(&d.kind).preview) {
         let _ = app.session.cancel_interaction();
     }
+    settle(app);
 }
 
 /// Apply the open dialog (OK).
 pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
+    missing_fonts::requeue_replaced(app);
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     // A file dialog it shows off the UI thread confirms the dialog as it is again.
-    crate::picks::as_entry(app, || crate::picks::Entry::Confirm(Box::new(d.clone())), |app| (spec(&d.kind).confirm)(app, &d))
+    let r = crate::picks::as_entry(app, || crate::picks::Entry::Confirm(Box::new(d.clone())), |app| (spec(&d.kind).confirm)(app, &d));
+    settle(app);
+    r
+}
+
+/// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
+/// for its turn again, the search a Missing Fonts dialog started stops once that dialog is gone,
+/// and with no dialog open the next document's Missing Fonts dialog opens (one dialog at a time).
+pub(crate) fn settle(app: &mut VectorcraftApp) {
+    missing_fonts::requeue_replaced(app);
+    missing_fonts::stop_when_closed(app);
+    missing_fonts::open_next(app);
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
+    settle(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).
     let (shown_id, focus_id) = (egui::Id::new("dialog-shown"), egui::Id::new("dialog-focus-pending"));

@@ -2056,6 +2056,24 @@
 	Reflect…	Reflejar…
 	Refresh	Actualizar
 	Refresh Font List	Actualizar lista de fuentes
+	Missing Fonts	Fuentes que faltan
+	Missing Fonts Dialog	Cuadro de diálogo Fuentes que faltan
+	These fonts aren't available. Their text shows in another font.	Estas fuentes no están disponibles. Su texto se muestra con otra fuente.
+	Search Fonts Folder	Buscar en la carpeta Fonts
+	Find in Folder…	Buscar en una carpeta…
+	Find Fonts in Folder…	Buscar fuentes en una carpeta…
+	Find Font Files	Buscar archivos de fuentes
+	Add Font Files	Agregar archivos de fuentes
+	Add Fonts	Agregar fuentes
+	Stop	Detener
+	Searching…	Buscando…
+	Not found	No se encontró
+	{folders} folder(s) and {files} file(s) searched	Se buscó en {folders} carpeta(s) y {files} archivo(s)
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Se omitieron {count} carpeta(s), como las de otras aplicaciones y del sistema y las ocultas
+	{count} folder(s) or file(s) couldn't be read	No se pudieron leer {count} carpeta(s) o archivo(s)
+	The search stopped at its limit: search a smaller folder.	La búsqueda se detuvo en su límite: busca en una carpeta más pequeña.
+	Copy only fonts you own or are licensed to install.	Copia solo fuentes que te pertenezcan o cuya licencia te permita instalarlas.
+	VectorCraft copies the fonts to {folder}.	VectorCraft copia las fuentes en {folder}.
 	Registered Trademark Symbol	Símbolo de marca registrada
 	Registration marks	Marcas de registro
 	Registry name:	Nombre del registro:
@@ -3686,6 +3704,22 @@ axis	Both	Ambos
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este archivo se guardó sin compatibilidad con PDF y sus datos de edición no se pueden leer ({why})
+@msg	No fonts are missing in this document	No faltan fuentes en este documento
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no busca en carpetas de otras aplicaciones ni del sistema: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no busca en las carpetas Shared ni Public de Users: {path}
+@msg	{path} is not a folder	{path} no es una carpeta
+@msg	the search couldn't start: try again in a moment	no se pudo iniciar la búsqueda: inténtalo de nuevo en un momento
+@msg	searching a folder isn't available on the web	en la web no se puede buscar en una carpeta
+@msg	every search thread stopped on an internal error (please report this bug)	todos los hilos de búsqueda se detuvieron por un error interno (informa de este error)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	La carpeta Fonts de VectorCraft no está configurada aquí: la configuran la aplicación de escritorio y vectorcraft-cli
+@msg	choose the font files to add	elige los archivos de fuentes que quieres agregar
+@msg	{n} font file(s) are now in {folder}	{n} archivo(s) de fuentes ahora están en {folder}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo(s) de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	aquí no están disponibles {n} fuente(s): su texto se muestra con otra fuente
+@msg	not a file	no es un archivo
+@msg	larger than 256 MB	mayor de 256 MB
+@msg	the files come to more than 1 GB: add fewer at a time	los archivos suman más de 1 GB: agrega menos a la vez
+@msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios

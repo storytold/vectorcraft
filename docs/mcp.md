@@ -2495,7 +2495,11 @@ included) the fonts in DirectWrite's system font collection, such as those Adobe
 the fonts CoreText's font manager lists outside them, such as those apps and font managers register from their own
 folders; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
-Flatpak sandbox the host's fonts). Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
+Flatpak sandbox the host's fonts). The scan also reads the folder the `fontsFolder` preference names (Preferences › Type ›
+Additional Fonts Folder) with its subfolders and, in the desktop app and `vectorcraft-cli`, VectorCraft's own `Fonts` folder
+next to the preferences: `~/Library/Application Support/VectorCraft/Fonts` on macOS, `%APPDATA%\VectorCraft\Fonts` on
+Windows, and `$XDG_CONFIG_HOME/vectorcraft/Fonts` or `~/.config/vectorcraft/Fonts` on Linux and BSD. `text.addFontFiles`
+copies fonts into that folder. Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
 as bitmap-only fonts) are left out. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
 lists every family available, the installed ones included, as the font menus do: without the system's hidden
@@ -2510,6 +2514,48 @@ comes to the front and a font folder changed meanwhile.
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
+
+`text.missingFonts` lists the fonts that the active document's type uses, in its layers and its symbols, and that aren't
+available as named: `{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or
+`substitute`, as in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
+longer than 256 bytes are left out. `fontsNextToDocument` is the `Fonts` folder next to the saved document
+(File › Package writes it), when there is one and a search may start there. `text.findFontFiles {folder}` looks for
+the fonts' files in an absolute folder and its subfolders on separate threads and returns at once with
+`state: "searching"` and an `id`; `fonts: [{family, style?}]` names other fonts to look for. `text.findFontFiles {}`
+returns the last search's state with the files found so far for each font: `searching`, `done`, `stopped` (with
+`stopped`: `stop`, `time` or `limit`) or `failed` (with `error`); before the first search it returns
+`{state: "idle", fonts: []}`, without an `id`. `{stop: true}` stops the search. A search reads the table directories
+and the `name`, `fvar` and `OS/2` tables of `.ttf`, `.otf`, `.ttc` and `.otc` files, and it lists a file for a font
+only when adding the file makes the font resolve exactly as `text.fonts` resolves it. It ends after `maxSeconds` (60 by
+default, 1 to 600), at its limits on the entries listed, the folders waiting to be listed, the font files read (10,000)
+and the files kept (1,000), or once every font has a file. Folders more than 64 levels below the picked one are skipped
+and counted in `skipped`.
+
+A search does not enter app and media library packages (`.app`, `.bundle`, `.framework`, `.photoslibrary` and the like),
+folders named `Program Files` (also `Program Files (x86)` and `Program Files (Arm)`), `ProgramData`, `$Recycle.Bin` or
+`System Volume Information`, the system's folders at the root of a volume (a macOS, Linux, BSD or Windows root, told by
+the folders it holds), the `Shared` and `Public` folders in `Users`, a home folder's `Library`, `AppData`,
+`Applications` and `snap` folders and the folders in it whose names start with a dot, the app data folders in a
+`Library` folder (`Application Support`, `Containers`, `Group Containers`, `Caches`, `Preferences`), or the folders the
+environment names for apps and the system (such as `APPDATA`, `LOCALAPPDATA`, `ProgramFiles`, `SystemRoot` and
+`XDG_CONFIG_HOME`), and a search of a folder inside one of them fails. The walk also skips other hidden folders and
+folders whose contents are in the cloud, and it follows no links; a picked folder may be one of those, and a picked path
+that goes through a link is searched at its target. Programs installed in other folders, such as a folder on another
+drive, are searched as any other folder is.
+
+`text.addFontFiles {files}` copies files that the session's last search found into VectorCraft's `Fonts` folder, then
+scans the fonts again, and type set in them redraws. It never replaces a file: a file with the same contents is kept
+(`kept`), and when another file has the name, the copy gets a number (`Name 2.otf`). Copy only fonts you own or are
+licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
+`text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
+folder and no folder search.
+
+```json
+{"name":"run_command","arguments":{"command":"text.missingFonts","params":{}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{"folder":"/Users/me/Downloads"}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{}}}
+{"name":"run_command","arguments":{"command":"text.addFontFiles","params":{"files":["/Users/me/Downloads/Example/Example-Regular.otf"]}}}
 ```
 
 ## Tool options

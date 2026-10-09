@@ -2048,6 +2048,24 @@
 	Reflect…	Відобразити…
 	Refresh	Оновити
 	Refresh Font List	Оновити список шрифтів
+	Missing Fonts	Відсутні шрифти
+	Missing Fonts Dialog	Діалогове вікно «Відсутні шрифти»
+	These fonts aren't available. Their text shows in another font.	Ці шрифти недоступні. Їхній текст показано іншим шрифтом.
+	Search Fonts Folder	Шукати в папці Fonts
+	Find in Folder…	Знайти в папці…
+	Find Fonts in Folder…	Знайти шрифти в папці…
+	Find Font Files	Знайти файли шрифтів
+	Add Font Files	Додати файли шрифтів
+	Add Fonts	Додати шрифти
+	Stop	Зупинити
+	Searching…	Пошук…
+	Not found	Не знайдено
+	{folders} folder(s) and {files} file(s) searched	Переглянуто папок: {folders}, файлів: {files}
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, зокрема папки інших програм і системи та приховані папки
+	{count} folder(s) or file(s) couldn't be read	Не вдалося прочитати папок або файлів: {count}
+	The search stopped at its limit: search a smaller folder.	Пошук зупинився на межі: виберіть меншу папку.
+	Copy only fonts you own or are licensed to install.	Копіюйте лише шрифти, які належать вам або які ви маєте право встановлювати за ліцензією.
+	VectorCraft copies the fonts to {folder}.	VectorCraft копіює шрифти в {folder}.
 	Registered Trademark Symbol	Символ зареєстрованого товарного знаку
 	Registration marks	Мітки поєднання
 	Registry name:	Ім’я у реєстрі:
@@ -3669,6 +3687,22 @@ axis	Both	Обидві
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
+@msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не шукає в папках інших програм і системи: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не шукає в папках Shared і Public у Users: {path}
+@msg	{path} is not a folder	{path} не є папкою
+@msg	the search couldn't start: try again in a moment	не вдалося почати пошук: спробуйте ще раз за мить
+@msg	searching a folder isn't available on the web	пошук у папці недоступний у веб-версії
+@msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts VectorCraft тут не задано: її задають настільна програма та vectorcraft-cli
+@msg	choose the font files to add	виберіть файли шрифтів для додавання
+@msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	тут недоступно шрифтів: {n}; їхній текст показано іншим шрифтом
+@msg	not a file	не файл
+@msg	larger than 256 MB	більше 256 МБ
+@msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
+@msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб

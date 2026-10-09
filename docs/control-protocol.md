@@ -373,6 +373,23 @@ folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it 
 Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
 `confirm` dialog whose `ui.dialog.confirm` runs `links.update`.
 
+Missing fonts: once the missing linked file questions are answered, or at once when there are none, `app.open` of a
+document whose type uses fonts that aren't available (`text.missingFonts`) opens the `missingFonts` dialog, one document
+at a time, and so does `links.editOriginal` of a placed document. When another dialog takes its place (Import PDF for a
+file opened next, for example), the dialog opens again once that one closes. Fields: `document` (the document's uid),
+`fonts` (`[{family, style, status, resolved}]`), `fontsNextToDocument` (the `Fonts` folder next to the document, or
+empty), `state` (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`, `found`
+(`text.findFontFiles`'s `fonts`, with the files found), `searched`, `skipped`, `unreadable`, `stopped`, `error` and
+`chosen` (the files to add; a font's first file is chosen when the search finds it).
+`ui.dialog.set {field: "searchFolder", value}` then `ui.dialog.confirm` searches that folder (`text.findFontFiles`),
+keeps the dialog open and clears `searchFolder`, also when the search doesn't start. The fields change as frames draw
+the dialog; `text.findFontFiles {}` reports the search directly. `ui.dialog.confirm` without `searchFolder` copies the
+files in `chosen` (`text.addFontFiles`) and closes the dialog, and `ui.dialog.cancel` closes it and stops its search.
+`ui.missingFontsDialog {folder?}` opens the dialog for the active document, searching `folder` when given.
+`ui.findFontsInFolder {folder?}` (Find in Folder… in Type › Find Font…, shown when the document misses fonts) asks for a
+folder, then opens the dialog searching it. The web shows a status line instead of the dialog, and both commands are
+disabled there.
+
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
 dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area

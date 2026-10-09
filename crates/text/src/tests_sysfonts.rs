@@ -279,3 +279,207 @@ fn fonts_the_platform_lists_outside_the_font_folders_are_cataloged() {
     assert_eq!(db.styles("Service Sans3"), ["Regular"]);
     assert!(!FontDb::with_font_dirs(vec![file.parent().unwrap().to_path_buf()]).has_family("Service Sans3"));
 }
+
+/// The bundled Source Sans 3 Regular with a `name` table of `records` (platform, language, name id,
+/// text): Windows Unicode (UTF-16) or Mac Roman (ASCII here).
+fn named(records: &[(u16, u16, u16, &str)]) -> Vec<u8> {
+    let mut records = records.to_vec();
+    records.sort_by_key(|r| (r.0, r.1, r.2));
+    let (mut name, mut strings) = (vec![], vec![]);
+    let n = records.len() as u16;
+    for v in [0, n, 6 + 12 * n] {
+        name.extend_from_slice(&v.to_be_bytes());
+    }
+    for &(platform, lang, id, s) in &records {
+        let bytes: Vec<u8> = if platform == 3 { s.encode_utf16().flat_map(u16::to_be_bytes).collect() } else { s.as_bytes().to_vec() };
+        let encoding = if platform == 3 { 1 } else { 0 };
+        for v in [platform, encoding, lang, id, bytes.len() as u16, strings.len() as u16] {
+            name.extend_from_slice(&v.to_be_bytes());
+        }
+        strings.extend(bytes);
+    }
+    name.extend(strings);
+    let base = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/SourceSans3-Regular.ttf")).unwrap();
+    let font = skrifa::FontRef::new(&base).unwrap();
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+        }
+    }
+    builder.build()
+}
+
+const EN: u16 = 0x0409;
+const JA: u16 = 0x0411;
+
+/// Copying a file a search offers into a folder the scan reads makes the font resolve exactly from
+/// that file, and a file it doesn't offer doesn't: the search matches fonts as `resolve` finds
+/// them. Each case resolves the font, copies the file into a scanned folder, rescans and resolves
+/// again, as the app does.
+#[test]
+fn wanted_fonts_match_as_resolve_finds_them() {
+    let one = named(&[(3, EN, 1, "Parity One"), (3, EN, 2, "Regular"), (3, EN, 6, "ParityOne-Regular")]);
+    let two = named(&[
+        (3, EN, 1, "Parity Two"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "ParityTwo-Regular"),
+        (3, EN, 16, "Parity Two"),
+        (3, JA, 16, "パリティ二"),
+        (3, EN, 17, "Regular"),
+    ]);
+    // Laid out like Hiragino Sans W3: a legacy family per weight, paired with its legacy style, and
+    // a PostScript name that reads as the legacy family.
+    let three = |postscript: &str| {
+        named(&[
+            (1, 0, 1, "Parity Three"),
+            (1, 0, 2, "W3"),
+            (3, EN, 1, "Parity Three W3"),
+            (3, EN, 2, "Regular"),
+            (3, EN, 6, postscript),
+            (3, EN, 16, "Parity Three"),
+            (3, EN, 17, "W3"),
+            (3, JA, 1, "パリティ三 W3"),
+            (3, JA, 2, "Regular"),
+            (3, JA, 16, "パリティ三"),
+            (3, JA, 17, "W3"),
+        ])
+    };
+    let (three, three_ps) = (three("ParityThree-W3"), three("PThree-W3"));
+    // A PostScript name that is the family's name.
+    let findme = named(&[(3, EN, 1, "Findme"), (3, EN, 2, "Regular"), (3, EN, 6, "Findme")]);
+    let psdiff = named(&[(3, EN, 1, "Psdiff Sans"), (3, EN, 2, "Regular"), (3, EN, 6, "PsdiffSans-Regular")]);
+    let variable = crate::test_fonts::variable_font().unwrap();
+    let four = |style: &str, ja_style: &str| {
+        named(&[
+            (3, EN, 1, "Parity Four"),
+            (3, EN, 2, style),
+            (3, EN, 6, &format!("ParityFour-{style}")),
+            (3, EN, 16, "Parity Four"),
+            (3, EN, 17, style),
+            (3, JA, 16, "パリティ四"),
+            (3, JA, 17, ja_style),
+        ])
+    };
+    let (four_regular, four_bold) = (four("Regular", "標準"), four("Bold", "太字"));
+    let five = named(&[(3, EN, 1, "Parity Five"), (3, EN, 2, "Bold"), (3, EN, 6, "ParityFive-Bold"), (3, EN, 17, "Bold"), (3, JA, 17, "太字")]);
+    // (family, style, Parity Four Regular installed, candidate file, provides it)
+    let cases: Vec<(&str, &str, bool, &[u8], bool)> = vec![
+        ("Parity One", "Regular", false, &one, true),
+        ("parity one", "REGULAR", false, &one, true),
+        ("Parity One", "Bold", false, &one, false),
+        ("Parity One", "Regular", false, &four_bold, false),
+        ("パリティ二", "Regular", false, &two, true),
+        ("パリティ二", "Bold", false, &two, false),
+        ("Parity Three W3", "Regular", false, &three_ps, true),
+        ("Parity Three W3", "Bold", false, &three_ps, false),
+        ("PThree-W3", "Bold", false, &three_ps, true),
+        // The legacy family reads as the PostScript name, which names the W3 face.
+        ("Parity Three W3", "Bold", false, &three, true),
+        ("パリティ三", "W3", false, &three, true),
+        ("パリティ三", "Bold", false, &three, false),
+        ("Findme", "Bold", false, &findme, false),
+        ("Find-me", "Regular", false, &findme, true),
+        // A family's name goes before a PostScript name that reads the same.
+        ("Find-me", "Bold", false, &findme, false),
+        ("PsdiffSans-Regular", "Bold", false, &psdiff, true),
+        ("Varitest Sans", "SemiBold", false, &variable, true),
+        ("Varitest Sans", "Normal", false, &variable, true),
+        ("VaritestSans-Bold", "Regular", false, &variable, true),
+        ("Varitest Sans", "Black", false, &variable, false),
+        ("Parity Five", "太字", false, &five, true),
+        ("Parity Four", "Bold", true, &four_bold, true),
+        ("パリティ四", "Bold", true, &four_bold, true),
+        ("Parity Four", "太字", true, &four_bold, false),
+        ("Parity Four", "Bold", true, &one, false),
+    ];
+    for (i, (family, style, installed, candidate, provides)) in cases.into_iter().enumerate() {
+        let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-wanted-{i}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (base, new) = (dir.join("base"), dir.join("new"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        if installed {
+            std::fs::write(base.join("ParityFour-Regular.ttf"), &four_regular).unwrap();
+        }
+        let db = FontDb::with_font_dirs(vec![base, new.clone()]);
+        let (face, m) = db.resolve(family, style).unwrap();
+        assert_eq!(m, if installed { FontMatch::Style } else { FontMatch::Missing }, "case {i}: {family} {style}");
+        let wanted = WantedFont { family: family.into(), style: style.into(), installed: (m == FontMatch::Style).then(|| face.family.clone()) };
+        let file = new.join("Candidate.ttf");
+        std::fs::write(&file, candidate).unwrap();
+        db.load_system_fonts();
+        let (face, m) = db.resolve(family, style).unwrap();
+        let exact = m == FontMatch::Exact && face.path().map(|p| std::fs::canonicalize(p).unwrap()) == Some(std::fs::canonicalize(&file).unwrap());
+        assert_eq!(exact, provides, "case {i}: resolve gave {face:?} {m:?} for {family} {style}");
+        assert_eq!(WantedFonts::new(&[wanted]).provided_by(&file) == [0], provides, "case {i}: the search, for {family} {style}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// A search reads only so much of a file: of a collection whose header gives 300 faces it reads
+/// the first 64, and a cap on the bytes read ends it early.
+#[test]
+fn a_search_reads_at_most_its_share_of_a_font_file() {
+    use crate::fontdb::file_face_names_within;
+    let face = renamed("SourceSans3-Regular.ttf");
+    let tables = u16::from_be_bytes([face[4], face[5]]) as usize;
+    let len = |tag: &[u8]| {
+        let r = (0..tables).map(|i| 12 + 16 * i).find(|&r| &face[r..r + 4] == tag).unwrap();
+        u64::from(u32::from_be_bytes(face[r + 12..r + 16].try_into().unwrap()))
+    };
+    // What one face costs: its table directory and its name and OS/2 tables.
+    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2");
+    let n = 300;
+    let base = 12 + 4 * n;
+    let mut ttc = b"ttcf".to_vec();
+    ttc.extend_from_slice(&0x0001_0000_u32.to_be_bytes());
+    ttc.extend_from_slice(&(n as u32).to_be_bytes());
+    for _ in 0..n {
+        ttc.extend_from_slice(&(base as u32).to_be_bytes());
+    }
+    // Every face is the one font, whose table offsets count from the start of the collection.
+    let mut f = face.clone();
+    for r in 0..tables {
+        let at = 12 + r * 16 + 8;
+        let off = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) + base as u32;
+        f[at..at + 4].copy_from_slice(&off.to_be_bytes());
+    }
+    ttc.extend(f);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-many", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Many.ttc");
+    std::fs::write(&file, ttc).unwrap();
+    assert_eq!(file_face_names_within(&file, 256, u64::MAX).len(), 256);
+    assert_eq!(file_face_names_within(&file, 64, u64::MAX).len(), 64);
+    // The header, 64 offsets and three faces.
+    assert_eq!(file_face_names_within(&file, 64, 12 + 4 * 64 + 3 * per_face).len(), 3);
+    let wanted = WantedFonts::new(&[WantedFont { family: FAMILY.into(), style: "Regular".into(), installed: None }]);
+    assert_eq!(wanted.provided_by(&file), [0]);
+    assert!(wanted.provided_by(&dir.join("No Such.ttf")).is_empty());
+}
+
+#[test]
+fn font_files_are_told_by_their_extension() {
+    for name in ["a/B.TTF", "c.otf", "d.Ttc", "e.otc"] {
+        assert!(is_font_file(Path::new(name)), "{name}");
+    }
+    for name in ["f.ttf.txt", "ttf", ".29457", "g.woff2", "h.fon"] {
+        assert!(!is_font_file(Path::new(name)), "{name}");
+    }
+}
+
+/// VectorCraft's own Fonts folder joins the scan once set, even before it exists; only the first
+/// folder set counts.
+#[test]
+fn the_app_font_folder_is_read_by_the_scan() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-app-fonts", std::process::id()));
+    set_app_font_dir(dir.clone());
+    set_app_font_dir(dir.join("Other"));
+    assert_eq!(app_font_dir(), Some(dir.as_path()));
+    let dirs = system_font_dirs();
+    assert_eq!(dirs.iter().filter(|d| **d == dir).count(), 1, "{dirs:?}");
+    assert!(!dirs.contains(&dir.join("Other")));
+}

@@ -137,6 +137,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("type.recentFont15", "Recent Font 15", "", "{} apply the 15. most recently used font"),
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
+    (
+        "ui.missingFontsDialog",
+        "Missing Fonts Dialog",
+        "",
+        "{folder?} open Missing Fonts (dialog `missingFonts`) for the fonts the active document uses that aren't available (text.missingFonts); with folder, it looks for their files there at once (text.findFontFiles). An error when no font is missing. Opening a document whose fonts are missing shows it after the missing linked file questions (dialog `missingLinks`). Disabled on the web",
+    ),
+    (
+        "ui.findFontsInFolder",
+        "Find Fonts in Folder…",
+        "",
+        "{folder?} Type › Find Font's Find in Folder…: asks for a folder (or takes folder), then opens Missing Fonts looking there for the files of the fonts the active document misses (text.findFontFiles). Disabled where there is no folder picker (the web)",
+    ),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
     (
         "file.export.svg",
@@ -873,6 +885,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::find_font::open(app);
             Ok(Value::Null)
         }
+        "ui.missingFontsDialog" => crate::dialogs::missing_fonts::open_command(app, s("folder")),
+        "ui.findFontsInFolder" => crate::dialogs::missing_fonts::find_in_folder_command(app, s("folder")),
         "file.clearRecent" => {
             app.ui.recent_files.clear();
             Ok(Value::Null)
@@ -1841,6 +1855,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
+        "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),

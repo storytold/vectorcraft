@@ -780,17 +780,26 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, FaceStyle)> {
 const OUTLINE_TABLES: [&[u8; 4]; 4] = [b"glyf", b"CFF ", b"CFF2", b"VARC"];
 
 /// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
-/// directories and `name` and `fvar` tables: a scan opens hundreds of font files, many of them
-/// megabytes long. Faces without outlines the font engine draws (no [`OUTLINE_TABLES`] table) are
-/// left out.
+/// directories and `name`, `fvar` and `OS/2` tables: a scan opens hundreds of font files, many of
+/// them megabytes long. Faces without outlines the font engine draws (no [`OUTLINE_TABLES`] table)
+/// are left out.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_face_names(path: &Path) -> Vec<FaceStyle> {
-    use std::io::{Read, Seek, SeekFrom};
-    /// Caps on what a (possibly damaged) file can make the scan read.
+    /// The most faces read from a (possibly damaged) collection.
     const MAX_FACES: u32 = 256;
+    file_face_names_within(path, MAX_FACES, u64::MAX)
+}
+
+/// [`file_face_names`], reading at most `max_faces` faces and `max_read` bytes of the file in all.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn file_face_names_within(path: &Path, max_faces: u32, max_read: u64) -> Vec<FaceStyle> {
+    use std::io::{Read, Seek, SeekFrom};
+    /// The largest table read from a (possibly damaged) file.
     const MAX_NAME_TABLE: u32 = 1 << 20;
     let Ok(mut file) = std::fs::File::open(path) else { return vec![] };
+    let mut read = 0u64;
     let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
+        read = read.checked_add(u64::try_from(len).ok()?).filter(|r| *r <= max_read)?;
         let mut buf = vec![0; len];
         file.seek(SeekFrom::Start(offset)).ok()?;
         file.read_exact(&mut buf).ok()?;
@@ -800,7 +809,7 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
     let Some(head) = read_at(0, 12) else { return vec![] };
     // A collection lists where each face's table directory starts.
     let starts: Vec<u32> = if head.starts_with(b"ttcf") {
-        let n = be32(&head, 8).unwrap_or(0).min(MAX_FACES) as usize;
+        let n = be32(&head, 8).unwrap_or(0).min(max_faces) as usize;
         read_at(12, n * 4).map(|b| b.as_chunks::<4>().0.iter().map(|c| u32::from_be_bytes(*c)).collect()).unwrap_or_default()
     } else {
         vec![0]
@@ -840,6 +849,139 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
         })
         .flatten()
         .collect()
+}
+
+/// Whether the file at `path` is a font file by its extension (`.ttf`, `.otf`, `.ttc` or `.otc`,
+/// in any case), as the font scan reads the files in a folder.
+pub fn is_font_file(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| ["ttf", "otf", "ttc", "otc"].iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// A font a document names that isn't available, to look for in font files ([`WantedFonts`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WantedFont {
+    pub family: String,
+    pub style: String,
+    /// When the family is installed but not the style ([`FontMatch::Style`]): the family of the
+    /// face [`FontDb::resolve`] gives instead. `None` when the family is missing.
+    pub installed: Option<String>,
+}
+
+/// Fonts to look for in font files: [`WantedFonts::provided_by`] tells which of them a file
+/// provides.
+#[derive(Debug, Default)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub struct WantedFonts {
+    fonts: Vec<WantedFont>,
+    /// The indexes of the fonts by every name a face could answer to them by: the family as given
+    /// and the installed family (ASCII-lowercased), and the family normalized ([`norm`]).
+    by_name: HashMap<String, Vec<usize>>,
+}
+
+impl WantedFonts {
+    /// The most faces and bytes of one file a search reads.
+    #[cfg(not(target_arch = "wasm32"))]
+    const SEARCH_FACES: u32 = 64;
+    #[cfg(not(target_arch = "wasm32"))]
+    const SEARCH_READ: u64 = 8 << 20;
+
+    pub fn new(fonts: &[WantedFont]) -> Self {
+        let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, w) in fonts.iter().enumerate() {
+            let mut names = vec![w.family.to_ascii_lowercase(), norm(&w.family)];
+            names.extend(w.installed.as_ref().map(|c| c.to_ascii_lowercase()));
+            names.sort();
+            names.dedup();
+            for n in names.into_iter().filter(|n| !n.is_empty()) {
+                by_name.entry(n).or_default().push(i);
+            }
+        }
+        Self { fonts: fonts.to_vec(), by_name }
+    }
+
+    pub fn len(&self) -> usize {
+        self.fonts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.fonts.is_empty()
+    }
+
+    /// The indexes of the fonts that the font file at `path` provides: copied into a folder the
+    /// font scan reads, the file makes [`FontDb::resolve`] find each of them exactly, in one of its
+    /// faces or a variable font's named instances. The file is read as the scan reads it (its
+    /// table directories and its `name`, `fvar` and `OS/2` tables), at most 64 faces and 8 MB of
+    /// it. Sorted; none on the web.
+    pub fn provided_by(&self, path: &Path) -> Vec<usize> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let faces = file_face_names_within(path, Self::SEARCH_FACES, Self::SEARCH_READ);
+            self.provided_by_faces(&faces)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = path;
+            Vec::new()
+        }
+    }
+
+    /// [`Self::provided_by`] for the faces of a file.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    fn provided_by_faces(&self, faces: &[FaceStyle]) -> Vec<usize> {
+        let mut candidates: Vec<usize> = Vec::new();
+        for f in faces {
+            let names = std::iter::once(f.family.to_ascii_lowercase())
+                .chain(f.keys.families.iter().cloned())
+                .chain(f.keys.legacy.iter().map(|(family, _)| family.clone()))
+                .chain(f.keys.postscript.iter().cloned());
+            for n in names {
+                candidates.extend(self.by_name.get(&n).into_iter().flatten());
+            }
+        }
+        candidates.sort_unstable();
+        candidates.dedup();
+        candidates.retain(|i| self.fonts.get(*i).is_some_and(|w| provides(w, faces)));
+        candidates
+    }
+}
+
+/// Whether the faces of a font file, cataloged by a rescan, make [`FontDb::resolve`] find `w`
+/// exactly in one of them: [`FontDb::canonical`] and [`FontDb::find`] over these faces, as they
+/// would run once the file is cataloged.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+fn provides(w: &WantedFont, faces: &[FaceStyle]) -> bool {
+    let sk = norm(&w.style);
+    // A face of `family` with the style among its style names, as `find` looks for it once the
+    // family's files are loaded.
+    let styled = |family: &str| faces.iter().any(|f| f.family.eq_ignore_ascii_case(family) && f.keys.styles.contains(&sk));
+    let named_as_given = faces.iter().any(|f| f.family.eq_ignore_ascii_case(&w.family));
+    if let Some(installed) = &w.installed {
+        // A family cataloged by the name as given is found by it.
+        if named_as_given && !w.family.eq_ignore_ascii_case(installed) {
+            return styled(&w.family);
+        }
+        // The installed family is loaded: a face of it is loaded from the file only when its own
+        // style is the one asked for (`is_cataloged`).
+        return faces.iter().any(|f| f.family.eq_ignore_ascii_case(installed) && norm(&f.style) == sk);
+    }
+    if named_as_given {
+        return styled(&w.family);
+    }
+    let key = norm(&w.family);
+    if key.is_empty() {
+        return false;
+    }
+    // Another of a family's names keeps the style asked for.
+    if let Some(f) = faces.iter().find(|f| f.keys.families.contains(&key)) {
+        return styled(&f.family);
+    }
+    // A legacy family with its legacy style, or a PostScript name, names its face whatever style
+    // is asked for.
+    if faces.iter().any(|f| f.keys.legacy.iter().any(|(family, style)| *family == key && *style == sk) || f.keys.postscript.contains(&key)) {
+        return true;
+    }
+    // A legacy family with another style: that style of the family.
+    faces.iter().find(|f| f.keys.legacy.iter().any(|(family, _)| *family == key)).is_some_and(|f| styled(&f.family))
 }
 
 /// A font file holding `tables` (tag, data), sorted by tag as table directories are.
@@ -915,9 +1057,34 @@ pub fn user_font_dirs() -> Vec<PathBuf> {
     Vec::new()
 }
 
-/// The platform's font folders (the system's and the user's) and the font files known to it
-/// outside them (on Windows those registered with it, and those [`set_platform_font_files`]
-/// lists), scanned by [`FontDb::global`].
+/// VectorCraft's own Fonts folder, set by the app ([`set_app_font_dir`]).
+#[cfg(not(target_arch = "wasm32"))]
+static APP_FONT_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Have [`system_font_dirs`] read `dir` with its subfolders: VectorCraft's own Fonts folder, which
+/// `text.addFontFiles` copies font files into. The desktop app and `vectorcraft-cli` set it before
+/// the first scan, as they install [`set_platform_font_files`]. A folder that doesn't exist yet is
+/// read once it does. Only the first call counts. Ignored on wasm.
+pub fn set_app_font_dir(dir: PathBuf) {
+    #[cfg(not(target_arch = "wasm32"))]
+    // A second call keeps the first folder, as documented.
+    let _ = APP_FONT_DIR.set(dir);
+    #[cfg(target_arch = "wasm32")]
+    let _ = dir;
+}
+
+/// The folder [`set_app_font_dir`] set: none before that, and none on wasm.
+pub fn app_font_dir() -> Option<&'static Path> {
+    #[cfg(not(target_arch = "wasm32"))]
+    return APP_FONT_DIR.get().map(PathBuf::as_path);
+    #[cfg(target_arch = "wasm32")]
+    None
+}
+
+/// The platform's font folders (the system's and the user's), VectorCraft's own Fonts folder
+/// ([`set_app_font_dir`]), the font files known to the platform outside them (on Windows those
+/// registered with it, and those [`set_platform_font_files`] lists) and the folders the user added
+/// ([`set_user_font_dirs`]), scanned by [`FontDb::global`].
 pub fn system_font_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(target_arch = "wasm32") {
@@ -958,6 +1125,7 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
         // In a Flatpak sandbox, the host's fonts (system, local and the user's).
         dirs.extend(["/run/host/fonts", "/run/host/local-fonts", "/run/host/user-fonts"].map(Into::into));
     }
+    dirs.extend(app_font_dir().map(Path::to_path_buf));
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(list) = PLATFORM_FONT_FILES.get() {
         let files = fonts_outside(list(), &dirs);
@@ -1341,8 +1509,7 @@ impl FontDb {
         for (p, named) in files {
             // A file named by itself is a font whatever its name (font services keep fonts in
             // files without an extension); one of a folder's only with a font's extension.
-            let ext = p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-            if !named && !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
+            if !named && !is_font_file(&p) {
                 continue;
             }
             for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {

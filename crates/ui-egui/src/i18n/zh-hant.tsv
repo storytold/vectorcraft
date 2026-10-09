@@ -2059,6 +2059,24 @@
 	Reflect…	鏡射…
 	Refresh	重新整理
 	Refresh Font List	重新整理字體清單
+	Missing Fonts	遺失的字體
+	Missing Fonts Dialog	遺失的字體對話框
+	These fonts aren't available. Their text shows in another font.	這些字體無法使用。其文字以其他字體顯示。
+	Search Fonts Folder	搜尋 Fonts 資料夾
+	Find in Folder…	在資料夾中尋找…
+	Find Fonts in Folder…	在資料夾中尋找字體…
+	Find Font Files	尋找字體檔案
+	Add Font Files	新增字體檔案
+	Add Fonts	新增字體
+	Stop	停止
+	Searching…	搜尋中…
+	Not found	找不到
+	{folders} folder(s) and {files} file(s) searched	已搜尋 {folders} 個資料夾、{files} 個檔案
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	已略過 {count} 個資料夾，例如其他應用程式和系統的資料夾，以及隱藏的資料夾
+	{count} folder(s) or file(s) couldn't be read	有 {count} 個資料夾或檔案無法讀取
+	The search stopped at its limit: search a smaller folder.	搜尋已達上限而停止：請搜尋較小的資料夾。
+	Copy only fonts you own or are licensed to install.	只複製您擁有或已取得安裝授權的字體。
+	VectorCraft copies the fonts to {folder}.	VectorCraft 會將字體複製到 {folder}。
 	Registered Trademark Symbol	註冊商標符號
 	Registration marks	對位標記
 	Registry name:	登錄名稱：

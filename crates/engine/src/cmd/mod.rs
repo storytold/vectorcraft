@@ -22,7 +22,9 @@ mod effectcmd;
 pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
+pub mod findfiles;
 pub mod flatten;
+pub mod fontfiles;
 mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
@@ -222,6 +224,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(inline::specs());
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
+        v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
