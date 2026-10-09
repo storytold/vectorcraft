@@ -149,7 +149,7 @@ fn standards_and_screens_leave_the_editing_data_out() {
 #[test]
 fn save_dialogs_offer_every_format_save_writes() {
     let labels = |name: &str| save_filters(name).into_iter().map(|(l, _)| l).collect::<Vec<_>>();
-    assert_eq!(labels("a.ai")[0], "PDF-compatible .ai");
+    assert_eq!(labels("a.ai")[0], ".ai document");
     assert_eq!(labels("a.vectorcraft").len(), SAVE_FORMATS.len());
     assert_eq!(labels("a.svg")[0], "SVG");
     assert!(labels("a.png").is_empty() && labels("noext").is_empty(), "exports pick their own name");

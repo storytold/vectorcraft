@@ -89,11 +89,11 @@ fn a_linked_pngs_bytes_are_embedded() {
         serde_json::from_slice::<Value>(&text).unwrap()["images"].clone()
     };
     // By default only the preview.
-    let plain = images(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap());
+    let plain = images(&s.execute("file.saveCopy", &json!({"format": "vectorcraft", "compress": false})).unwrap());
     let (_, image) = plain.as_object().unwrap().iter().next().unwrap();
     assert_eq!(image["proxy"], true);
     // Include Linked Files: the file's own bytes.
-    let r = s.execute("file.saveCopy", &json!({"compress": false, "includeLinked": true})).unwrap();
+    let r = s.execute("file.saveCopy", &json!({"format": "vectorcraft", "compress": false, "includeLinked": true})).unwrap();
     let full = images(&r);
     let (_, image) = full.as_object().unwrap().iter().next().unwrap();
     assert!(image.get("proxy").is_none());
@@ -119,13 +119,14 @@ fn an_embedded_profile_is_restored() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     Arc::make_mut(&mut s.doc_mut().unwrap().doc).color_profiles.rgb = Some(name.clone());
-    let file = bytes_of(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap()["dataBase64"]);
+    let file = bytes_of(&s.execute("file.saveCopy", &json!({"format": "vectorcraft", "compress": false})).unwrap()["dataBase64"]);
     let v: Value = serde_json::from_slice(&file).unwrap();
     assert_eq!(vectorcraft_format::base64_decode(v["profiles"][&name]["data"].as_str().unwrap()).unwrap(), icc.to_vec());
     // Not embedded when asked not to; built-in profiles never are (they are everywhere).
-    let none: Value =
-        serde_json::from_slice(&bytes_of(&s.execute("file.saveCopy", &json!({"compress": false, "embedProfiles": false})).unwrap()["dataBase64"]))
-            .unwrap();
+    let none: Value = serde_json::from_slice(&bytes_of(
+        &s.execute("file.saveCopy", &json!({"format": "vectorcraft", "compress": false, "embedProfiles": false})).unwrap()["dataBase64"],
+    ))
+    .unwrap();
     assert!(none.get("profiles").is_none());
     // Elsewhere (a profile name this machine lacks): opening installs it and the document keeps it.
     let elsewhere = format!("Studio RGB elsewhere {}", std::process::id());
@@ -152,12 +153,14 @@ fn an_embedded_profile_is_restored() {
 #[test]
 fn pdf_compatible_files_carry_a_pdf() {
     let mut s = three_boards();
-    let file = bytes_of(&s.execute("file.saveCopy", &json!({"pdfCompatible": true})).unwrap()["dataBase64"]);
+    let file = bytes_of(&s.execute("file.saveCopy", &json!({"format": "vectorcraft", "pdfCompatible": true})).unwrap()["dataBase64"]);
     let pdf = vectorcraft_format::pdf_content(&file).unwrap();
     assert!(pdf.starts_with(b"%PDF"));
     let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
     assert_eq!(info["pages"], 3);
-    assert!(vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({})).unwrap()["dataBase64"])).is_none());
+    assert!(
+        vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"])).is_none()
+    );
 }
 
 #[test]

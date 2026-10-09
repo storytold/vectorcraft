@@ -234,10 +234,11 @@ fn export_without_path_returns_bytes_and_never_retargets() {
     assert_eq!(&b64(&r)[..2], [0xFF, 0xD8]);
     assert!(r.get("path").is_none());
     assert!(s.execute("document.export", &json!({"path": dir.join("x.dwg").to_string_lossy()})).is_err(), "DWG can't be written");
-    // A never-saved document hands its native bytes back.
+    // A never-saved document hands its bytes back: a .ai file (a PDF carrying the native document).
     let mut s = session(10.0, 10.0, 1);
     let r = s.execute("document.save", &json!({})).unwrap();
-    assert!(vectorcraft_format::sniff(&b64(&r)));
+    assert_eq!(r["format"], "ai");
+    assert!(vectorcraft_pdf::editing(&b64(&r)).is_some());
     assert_eq!(s.doc().unwrap().path, None);
     let _ = std::fs::remove_dir_all(dir);
 }
