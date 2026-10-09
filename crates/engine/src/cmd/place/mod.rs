@@ -137,7 +137,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
         return Ok(Loaded { name, format: &text::FORMAT, art: Art::Text(text), natural: TEXT_FRAME, warnings: vec![], link: None, board: None });
     }
     let format = fileio::detect(src.name, &src.bytes)
-        .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format VectorCraft reads (see document.formats)")))?;
+        .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format Vector W3K2 reads (see document.formats)")))?;
     let page = match p.get("page") {
         None => 1,
         Some(v) => v.as_u64().filter(|n| (1..=100_000).contains(n)).ok_or_else(|| bad(cmd, "page must be a whole number from 1"))? as usize,

@@ -349,7 +349,7 @@ pub fn export_json(set: &str, overrides: &BTreeMap<String, String>) -> Value {
 }
 
 pub fn import_json(v: &Value) -> Result<(String, BTreeMap<String, String>), String> {
-    let o = v.get("overrides").and_then(Value::as_object).ok_or("not a VectorCraft shortcut set (missing `overrides`)")?;
+    let o = v.get("overrides").and_then(Value::as_object).ok_or("not a Vector W3K2 shortcut set (missing `overrides`)")?;
     let mut out = BTreeMap::new();
     for (k, v) in o {
         let s = v.as_str().ok_or_else(|| format!("shortcut for `{k}` must be a string"))?;

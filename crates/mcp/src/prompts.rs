@@ -156,7 +156,7 @@ pub static PROMPTS: &[PromptDef] = &[
             },
         ],
         text: "\
-Design a poster in VectorCraft.
+Design a poster in Vector W3K2.
 
 Brief: {brief}
 Palette: {palette}
@@ -208,7 +208,7 @@ rasterise unless the brief asks for it.",
             },
         ],
         text: "\
-Draw a set of {count} icons of {subject} in VectorCraft, {detail}.
+Draw a set of {count} icons of {subject} in Vector W3K2, {detail}.
 
 Coordinates are points in document space (y down, origin at the first artboard's
 top-left).
@@ -251,7 +251,7 @@ Return the ids of the icons in a grid, and leave them as separate objects on one
             },
         ],
         text: "\
-Recolour the current selection in VectorCraft with {palette}, using the `{method}` recolour method.
+Recolour the current selection in Vector W3K2 with {palette}, using the `{method}` recolour method.
 
 Method:
 1. inspect_document to see what is selected and what colours it actually uses.
@@ -289,7 +289,7 @@ One undo step covers the whole change; gradients and linked swatches stay linked
             },
         ],
         text: "\
-Trace the image at {path} in VectorCraft with the \"{preset}\" preset, then style the result
+Trace the image at {path} in Vector W3K2 with the \"{preset}\" preset, then style the result
 with the {effect} effect.
 
 Method:
@@ -334,7 +334,7 @@ The trace is real geometry: every traced shape stays selectable and editable.",
             },
         ],
         text: "\
-Export the document in VectorCraft to {formats}, into {directory}, at {scale} pixels per
+Export the document in Vector W3K2 to {formats}, into {directory}, at {scale} pixels per
 point for the raster formats.
 
 Method:
