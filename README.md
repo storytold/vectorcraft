@@ -73,6 +73,10 @@ release, is in [`docs/illustrator-2026-updates.md`](docs/illustrator-2026-update
 - **Blends:** a Blend panel with step easing and separate colour easing.
 - **Colour:** swatch libraries from `.ase`, `.acb` colour books and `.aco` files (spot colour books
   load as spot colours); Recent Colors keep their spot swatch and show its name.
+- **Cutter registration marks:** File › Registration › Summa (OPOS marks, OPOS XY with a bar along the bottom, OPOS XY 2 with bars top and bottom, and OPOS Random XY
+  for older Summas: a round mark in each corner and an arrow pointing left) and File › Registration › Zünd (five registration dots, the fifth above the bottom-left one to
+  show the registration corner), built in with no plug-in. The marks go around the selection
+  or all the art, on a layer of their own, with a live preview and sizes kept inside each system's range.
 - **Dialogs:** Move, Scale and the other dialogs open next to the pointer at a compact size and can be
   dragged anywhere, where they stay.
 - **Smaller things:** Relative/Absolute scaling, relinking every copy of an image and the missing files

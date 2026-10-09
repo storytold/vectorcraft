@@ -327,6 +327,8 @@ fn cs() -> Lang {
 /// Each language's own name in the Language menu is left alone too.
 const CZECH_KEEP_AS_IS: &[&str] = &[
     "Vector W3K2",
+    "Summa",
+    "Zünd",
     "OpenType",
     "Essentials",
     "Essentials Classic",

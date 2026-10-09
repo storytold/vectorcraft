@@ -56,6 +56,7 @@ mod psd_options;
 pub mod raster_effects;
 pub mod recolor;
 mod recovery;
+pub mod registration;
 pub mod saturate;
 mod save_changes;
 pub mod save_for_web;
@@ -267,6 +268,7 @@ registry! {
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
+    RegistrationMarks: [registration::KIND] => registration::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),

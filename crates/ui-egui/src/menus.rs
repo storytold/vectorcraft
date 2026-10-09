@@ -481,6 +481,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+Alt+Shift+P",
         "{} open Package for the saved document (dialog `package`: folder, name, copyLinks, linksFolder, relink, copyFonts, report; a document never saved asks to Save As first); OK saves unsaved changes, runs file.package (the web downloads the zip) and offers file.showPackage",
     ),
+    (
+        "ui.registrationDialog",
+        "Registration Marks…",
+        "",
+        "{system: summa|zund, mode?: opos|oposXY|oposXY2|oposRandomXY (Summa)} open the registration marks dialog (dialog `registrationMarks`, previewed live; fields: system, mode, size, gap, xDistance for Summa, diameter, gap, fifth (percent) for Zünd); OK runs registration.summa or registration.zund",
+    ),
     ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
     (
         "docInfo.save",
@@ -960,6 +966,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
+        "ui.registrationDialog" => crate::dialogs::registration::open(app, p),
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
@@ -1531,6 +1538,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
         "ui.placementOptionsDialog" => selected_image(app, |_| true),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
+        "ui.registrationDialog" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
@@ -1614,6 +1622,21 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
+                sub(
+                    "Registration",
+                    vec![
+                        sub(
+                            "Summa",
+                            vec![
+                                cp("OPOS Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "opos"})),
+                                cp("OPOS XY Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposXY"})),
+                                cp("OPOS XY 2 Marks…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposXY2"})),
+                                cp("OPOS Random XY…", "ui.registrationDialog", json!({"system": "summa", "mode": "oposRandomXY"})),
+                            ],
+                        ),
+                        sub("Zünd", vec![cp("Registration Dots…", "ui.registrationDialog", json!({"system": "zund"}))]),
+                    ],
+                ),
                 sub("Scripts", vec![todos("Other Script…", "Cmd+F12")]),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
@@ -2449,7 +2472,7 @@ fn label_of(it: &Item) -> &'static str {
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | "ui.registrationDialog");
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
