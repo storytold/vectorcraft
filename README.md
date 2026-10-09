@@ -70,6 +70,11 @@ release, is in [`docs/illustrator-2026-updates.md`](docs/illustrator-2026-update
 - **Panels:** drag any panel by its name tab to float it anywhere, lock it beside the toolbar
   (padlock or drop it there) or put it back in the dock (× or drop it there). Positions are kept
   between sessions.
+- **Illustrator `.ai` files:** Save and Save As write `.ai` by default. Illustrator opens them (it
+  reads their PDF-compatible content, with type kept as type), and Vector W3K2 reopens them with
+  nothing lost. `.ai` files saved by Illustrator open from their PDF-compatible content, with a note
+  saying what Illustrator-only data comes in as plain artwork; Save then asks where to save, so the
+  original is never overwritten by accident. `.vectorcraft` stays available in Save As.
 - **Blends:** a Blend panel with step easing and separate colour easing.
 - **Colour:** swatch libraries from `.ase`, `.acb` colour books and `.aco` files (spot colour books
   load as spot colours); Recent Colors keep their spot swatch and show its name.

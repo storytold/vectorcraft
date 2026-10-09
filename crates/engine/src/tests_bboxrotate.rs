@@ -191,7 +191,7 @@ fn native_files_keep_the_angle() {
     let mut s = session();
     let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     let a = turned_rect(&mut s);
-    let data = s.execute("document.save", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let data = s.execute("document.save", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
     let text = String::from_utf8(vectorcraft_format::base64_decode(&data).unwrap()).unwrap();
     // Only turned objects write it.
     assert_eq!(text.matches("bbox_angle").count(), 1);

@@ -135,9 +135,9 @@ fn save_format_of(f: &str) -> std::result::Result<&'static Format, String> {
 }
 
 /// The format Save writes for `format` (an id or extension), else the format `path`'s extension
-/// names, else native (see [`SAVE_FORMATS`]); other formats are exports.
+/// names, else Illustrator `.ai` (see [`SAVE_FORMATS`]); other formats are exports.
 pub fn save_format(format: Option<&str>, path: Option<&str>) -> std::result::Result<&'static Format, String> {
-    save_format_of(format.or_else(|| path.and_then(format_for_name).map(|f| f.id)).unwrap_or("vectorcraft"))
+    save_format_of(format.or_else(|| path.and_then(format_for_name).map(|f| f.id)).unwrap_or("ai"))
 }
 
 /// [`save_format_of`] for command `cmd`.
@@ -231,7 +231,7 @@ fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
 fn fidelity_warning(f: &Format) -> Option<String> {
     (!is_native(f)).then(|| {
         format!(
-            "{} keeps the artwork but not everything a VectorCraft document holds (editable effects, symbols, swatches, styles): save as VectorCraft to keep it all editable",
+            "{} keeps the artwork but not everything a VectorCraft document holds (editable effects, symbols, swatches, styles): save as .ai or VectorCraft to keep it all editable",
             f.label
         )
     })
@@ -342,6 +342,14 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
     if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
         // A PDF of every artboard with the PDF options, always carrying the native document.
         o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+        // Type stays type for Illustrator and other apps (as Illustrator writes its own .ai
+        // files), unless a preset or the options say otherwise.
+        if !o.contains_key("preset") {
+            let advanced = o.entry("advanced").or_insert_with(|| json!({}));
+            if let Some(m) = advanced.as_object_mut() {
+                m.entry("outlineText").or_insert(json!(false));
+            }
+        }
         // Use Compression compresses the PDF's content.
         if let Some(c) = o.get("compress").and_then(Value::as_bool) {
             let compression = o.entry("compression").or_insert_with(|| json!({}));
@@ -528,7 +536,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), native and .ai: separateArtboards?: false (also save each artboard of range?: \"1-3, 5\"|\"all\" (default) to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document), .ai: compress?: true (compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format: .ai for a new document), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), native and .ai: separateArtboards?: false (also save each artboard of range?: \"1-3, 5\"|\"all\" (default) to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document), .ai: compress?: true (compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

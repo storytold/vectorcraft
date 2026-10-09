@@ -117,7 +117,7 @@ pub struct DocState {
     /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
     pub transparency_grid: bool,
     /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
-    /// from or last saved as.
+    /// from or last saved as (`ai` for a new document).
     pub format: &'static str,
     /// That format's options as last saved (SVG options for SVG, the Save PDF settings for PDF;
     /// empty for native files): Save reuses them and `file.formatOptions` reads them back.
@@ -166,7 +166,8 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,
-            format: "vectorcraft",
+            // New documents save as .ai (a PDF carrying the native document).
+            format: "ai",
             save_options: Default::default(),
             converted: false,
             view,

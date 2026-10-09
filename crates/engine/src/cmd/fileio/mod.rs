@@ -461,7 +461,7 @@ pub const FORMATS: &[Format] = &[
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
     Format {
         id: "ai",
-        label: "PDF-compatible .ai",
+        label: ".ai document",
         extensions: &["ai"],
         mime: "application/pdf",
         read: true,
@@ -470,7 +470,7 @@ pub const FORMATS: &[Format] = &[
         raster: false,
         options: native::AI_OPTIONS,
     },
-    reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
+    reader("ait", ".ait template", &["ait"], "application/pdf", false),
     Format {
         id: "png",
         label: "PNG",

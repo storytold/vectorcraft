@@ -225,7 +225,7 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted } = loaded;
+    let Loaded { mut doc, format, mut warnings, restored, converted } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
@@ -239,6 +239,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &Loa
     // writes .ai that way).
     let partial = format.id == "pdf" && opts.is_partial();
     let lossy_ai = format.id == "ai" && !restored;
+    if lossy_ai {
+        warnings.insert(0, FOREIGN_AI.to_string());
+    }
     let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
     let saves_back = path.is_some();
     let converted = saves_back && converted && s.prefs.append_converted;
@@ -251,6 +254,11 @@ fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &Loa
     let title = s.documents()[index].title();
     Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings, "restored": restored }), links.to_json()))
 }
+
+/// What opening a `.ai` file that another app saved reads, and what Save does with it.
+pub const FOREIGN_AI: &str = "opened from the art the file carries for other apps (its PDF-compatible content, or PostScript in older .ai files: paths, fills, strokes, gradients, text, images, clipping, artboards): \
+data only the app that saved it understands, such as live effects, appearance stacks, symbols, brushes and editable type settings comes in as plain artwork. \
+Save asks where to save, so the original file isn't overwritten by accident";
 
 /// A file named by a command's params: `{path}` (read from disk) or `{name, dataBase64}`.
 pub(crate) struct Source<'a> {

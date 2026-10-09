@@ -27,7 +27,9 @@ fn bytes_of(r: &Value) -> Vec<u8> {
 }
 
 /// The file `document.save` (no path) gives back with `p`.
-fn saved(s: &mut Session, p: Value) -> Vec<u8> {
+/// A native save (new documents save as .ai by default).
+fn saved(s: &mut Session, mut p: Value) -> Vec<u8> {
+    p["format"] = json!("vectorcraft");
     bytes_of(&s.execute("document.save", &p).unwrap())
 }
 
@@ -69,7 +71,7 @@ fn use_compression_preference_sets_the_default() {
     assert!(!is_compressed(&saved(&mut s, json!({"compress": false}))), "the param wins");
     // Older versions can't read compressed files: those saves stay plain.
     assert!(!is_compressed(&saved(&mut s, json!({"version": 2}))));
-    assert!(s.execute("document.save", &json!({"version": 2, "compress": true})).is_err());
+    assert!(s.execute("document.save", &json!({"format": "vectorcraft", "version": 2, "compress": true})).is_err());
     assert!(is_compressed(&bytes_of(&s.execute("file.saveAsTemplate", &json!({})).unwrap())));
     // Exports write what they're told.
     let r = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap();
@@ -86,7 +88,11 @@ fn saves_for_older_versions() {
         open(&mut s, "old.drawcraft", &bytes);
         assert_eq!(s.doc().unwrap().doc.node_count(), 2);
     }
-    for bad in [json!({"version": 0}), json!({"version": 9}), json!({"version": "two"})] {
+    for bad in [
+        json!({"format": "vectorcraft", "version": 0}),
+        json!({"format": "vectorcraft", "version": 9}),
+        json!({"format": "vectorcraft", "version": "two"}),
+    ] {
         assert!(s.execute("document.save", &bad).is_err(), "{bad}");
     }
     let formats = s.execute("document.formats", &json!({})).unwrap();

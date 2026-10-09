@@ -37,8 +37,8 @@ fn last(w: &Written) -> String {
 fn saves_add_the_format_extension_to_a_bare_name() {
     let (mut app, w) = saving_app("/tmp/Untitled-1");
     app.run("file.save", json!({})).unwrap();
-    assert_eq!(last(&w), "/tmp/Untitled-1.vectorcraft");
-    assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/tmp/Untitled-1.vectorcraft"));
+    assert_eq!(last(&w), "/tmp/Untitled-1.ai");
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/tmp/Untitled-1.ai"));
     let (mut app, w) = saving_app("/tmp/copy");
     app.run("file.saveCopy", json!({"format": "svg", "svg": {}})).unwrap();
     assert_eq!(last(&w), "/tmp/copy.svg");

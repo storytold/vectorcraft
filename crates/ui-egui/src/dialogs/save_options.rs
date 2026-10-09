@@ -301,8 +301,8 @@ mod tests {
         // The save panel offers every save format, the document's own first.
         let pick = &picks.borrow()[0];
         let labels: Vec<&str> = pick.filters.iter().map(|f| f.0).collect();
-        assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai"]);
-        assert_eq!(pick.name, "Untitled-1.vectorcraft");
+        assert_eq!(labels, [".ai document", "VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed"]);
+        assert_eq!(pick.name, "Untitled-1.ai", "new documents save as .ai");
         let d = dialog(&app);
         assert_eq!((d.kind.as_str(), d.str("path").as_str(), d.str("mode").as_str()), ("svgOptions", "art.svg", "save"));
         assert!(written.borrow().is_empty(), "nothing is written before OK");
@@ -332,7 +332,7 @@ mod tests {
         let (mut app, written, picks) = desktop("copy.vectorcraft");
         app.session.prefs.templates_folder = "/templates".into();
         app.run("file.saveCopy", json!({})).unwrap();
-        assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
+        assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.ai");
         assert!(app.ui.dialog.is_none(), "the native format has no options");
         assert!(vectorcraft_format::sniff(&written.borrow()[0].1));
         assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
@@ -348,7 +348,7 @@ mod tests {
         let (mut app, written) = web();
         app.run("file.saveAs", json!({})).unwrap();
         let d = dialog(&app);
-        assert_eq!((heading(d).as_str(), d.str("path").as_str(), d.str("format").as_str()), ("Save As", "Untitled-1.vectorcraft", "vectorcraft"));
+        assert_eq!((heading(d).as_str(), d.str("path").as_str(), d.str("format").as_str()), ("Save As", "Untitled-1.ai", "ai"));
         frame(&mut app, false);
         let mut d = app.ui.dialog.take().unwrap();
         switch_format(&mut app, &mut d, "pdf");

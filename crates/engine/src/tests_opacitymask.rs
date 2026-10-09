@@ -202,7 +202,7 @@ fn saving_while_editing_writes_no_editing_layer() {
     let mut s = session();
     let obj = editing_mask(&mut s);
     s.execute("object.move", &json!({"dx": 50, "dy": 0})).unwrap();
-    let bytes = data(&s.execute("document.save", &json!({})).unwrap());
+    let bytes = data(&s.execute("document.save", &json!({"format": "vectorcraft"})).unwrap());
     let back = vectorcraft_format::load(&bytes).unwrap();
     assert!(back.mask_edit.is_none() && !has_edit_layer(&back));
     assert_eq!(back.layers.len(), 1);

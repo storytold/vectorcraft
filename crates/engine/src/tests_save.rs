@@ -266,7 +266,7 @@ fn save_plans_suggest_names_and_folders() {
     s.execute("file.info", &json!({"title": "Map"})).unwrap();
     let plan = |s: &Session, mode, p: Value| save_plan(s, mode, &p).unwrap();
     let p = plan(&s, SaveMode::Save, json!({}));
-    assert_eq!((p.path, p.name.as_str(), p.format.id, p.folder), (None, "Map.vectorcraft", "vectorcraft", None));
+    assert_eq!((p.path, p.name.as_str(), p.format.id, p.folder), (None, "Map.ai", "ai", None));
     assert_eq!(plan(&s, SaveMode::Copy, json!({"format": "pdf"})).name, "Map copy.pdf");
     assert_eq!(plan(&s, SaveMode::Template, json!({"format": "svg"})).format.id, "template", "a template is always native");
     assert_eq!(SaveMode::of("file.saveCopy"), Some(SaveMode::Copy));
@@ -321,7 +321,7 @@ fn a_pdf_opened_in_part_is_not_saved_back_over_the_whole_file() {
     // One page of it: Save asks for a name instead of dropping the other page.
     s.execute("document.open", &json!({"path": pdf, "pages": "1"})).unwrap();
     let st = s.doc().unwrap();
-    assert_eq!((st.path.as_deref(), st.format), (None, "vectorcraft"));
+    assert_eq!((st.path.as_deref(), st.format), (None, "ai"));
     assert!(s.execute("document.save", &json!({})).unwrap().get("dataBase64").is_some());
     let _ = std::fs::remove_dir_all(d);
 }
@@ -336,4 +336,37 @@ fn a_template_places_like_a_native_file() {
     s.execute("file.place", &json!({"name": "card.vctemplate", "dataBase64": tpl["dataBase64"]})).unwrap();
     let st = s.doc().unwrap();
     assert!(st.doc.node_count() > empty && !st.selection.is_empty(), "the template's art is placed and selected");
+}
+
+#[test]
+fn new_documents_save_as_ai_and_reopen_whole() {
+    let d = dir("aidefault");
+    let mut s = session();
+    rect(&mut s);
+    let before = s.doc().unwrap().doc.layers.clone();
+    let p = save_plan(&s, SaveMode::Save, &json!({})).unwrap();
+    assert_eq!((p.format.id, p.name.ends_with(".ai")), ("ai", true));
+    let ai = path(&d, "art.ai");
+    let r = s.execute("file.saveAs", &json!({"path": ai})).unwrap();
+    assert_eq!(r["format"], "ai");
+    let bytes = std::fs::read(&ai).unwrap();
+    assert!(bytes.starts_with(b"%PDF"), "other apps read the PDF-compatible content");
+    // It reopens as the same document, and Save writes it back to the same file.
+    let r = s.execute("document.open", &json!({"path": ai})).unwrap();
+    assert_eq!((&r["format"], &r["restored"]), (&json!("ai"), &json!(true)), "{r}");
+    assert!(r["warnings"].as_array().unwrap().is_empty(), "{r}");
+    let st = s.doc().unwrap();
+    assert_eq!((st.path.as_deref(), st.format), (Some(ai.as_str()), "ai"));
+    assert_eq!(st.doc.layers, before);
+    // A .ai file another app wrote (a plain PDF named .ai): its art opens with a note, and Save
+    // asks where rather than overwriting it.
+    let other = path(&d, "other.ai");
+    s.execute("document.export", &json!({"path": path(&d, "plain.pdf"), "format": "pdf", "preserveEditing": false})).unwrap();
+    std::fs::copy(path(&d, "plain.pdf"), &other).unwrap();
+    let r = s.execute("document.open", &json!({"path": other})).unwrap();
+    assert_eq!(r["restored"], false, "{r}");
+    assert!(r["warnings"][0].as_str().unwrap().contains("only the app that saved it"), "{r}");
+    assert_eq!(s.doc().unwrap().path, None);
+    assert_eq!(save_plan(&s, SaveMode::Save, &json!({})).unwrap().name, "other.ai");
+    let _ = std::fs::remove_dir_all(d);
 }
