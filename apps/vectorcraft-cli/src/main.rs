@@ -9,8 +9,8 @@
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000]
 //! ```
-// Denied, not forbidden: the DirectWrite font lister shared with the desktop app (Windows) allows
-// it for its COM calls, and nothing else may.
+// Denied, not forbidden: the font listers shared with the desktop app allow it for their
+// DirectWrite (Windows) and CoreText (macOS) calls, and nothing else may.
 #![deny(unsafe_code)]
 
 use std::io::Write;
@@ -36,6 +36,10 @@ macro_rules! out {
     }};
 }
 
+/// The desktop app's CoreText font lister, shared: exports and MCP find the same fonts.
+#[cfg(target_os = "macos")]
+#[path = "../../vectorcraft/src/mac_fonts.rs"]
+mod mac_fonts;
 mod perf;
 /// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
 #[cfg(all(windows, not(target_vendor = "win7")))]
@@ -104,6 +108,8 @@ fn main() -> ExitCode {
     // Before any font lookup: the fonts font services load (#579).
     #[cfg(all(windows, not(target_vendor = "win7")))]
     system_fonts::install();
+    #[cfg(target_os = "macos")]
+    mac_fonts::install();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let r = match args.first().map(String::as_str) {
         Some("mcp") => mcp(&args[1..]),

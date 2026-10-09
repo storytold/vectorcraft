@@ -31,6 +31,12 @@ log = { workspace = true }
 [target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
 windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
 
+# CoreText's font manager (the desktop app's src/mac_fonts.rs, shared): fonts that apps and font
+# managers register from their own folders (#579). Zlib OR Apache-2.0 OR MIT.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFString", "CFURL"] }
+objc2-core-text = { version = "0.3", default-features = false, features = ["std", "CTFontManager"] }
+
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
 serde_json = { workspace = true }

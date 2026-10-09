@@ -105,6 +105,22 @@ fn the_scan_reads_collections_and_loads_fonts_only_when_used() {
 }
 
 #[test]
+fn fonts_without_outlines_the_engine_draws_are_left_out() {
+    let dir = font_dir("outlines");
+    // The Bold's TrueType outlines under another tag, as in fonts that keep their outlines in
+    // Apple's `hvgl` table or hold bitmaps only. The tag keeps the table directory sorted.
+    let bold = dir.join("Sub/Sysfont-Bold.TTF");
+    let mut data = std::fs::read(&bold).unwrap();
+    let tables = u16::from_be_bytes([data[4], data[5]]) as usize;
+    let rec = (0..tables).map(|i| 12 + 16 * i).find(|&r| &data[r..r + 4] == b"glyf").unwrap();
+    data[rec..rec + 4].copy_from_slice(b"gxyz");
+    std::fs::write(&bold, data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    assert_eq!(db.styles(FAMILY), ["Regular"]);
+    assert_eq!(db.load_system_fonts(), 1);
+}
+
+#[test]
 fn rescanning_finds_fonts_installed_since() {
     let dir = font_dir("rescan");
     let later = dir.join("Later");

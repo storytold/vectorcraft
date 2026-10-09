@@ -51,6 +51,11 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", 
 # Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit, muda and rfd.
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSNotification", "NSOperation", "NSString", "NSURL"] }
 block2 = "0.6"
+# CoreText's font manager (src/mac_fonts.rs): fonts that apps and font managers register from their
+# own folders (#579). Zlib OR Apache-2.0 OR MIT; objc2-core-foundation already comes with
+# objc2-foundation.
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFString", "CFURL"] }
+objc2-core-text = { version = "0.3", default-features = false, features = ["std", "CTFontManager"] }
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.

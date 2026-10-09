@@ -773,9 +773,15 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, FaceStyle)> {
         .collect()
 }
 
+/// The tables holding outlines the font engine draws: TrueType, CFF, CFF2 and VARC. A face with
+/// none of them (outlines in Apple's `hvgl` table, bitmaps only) draws nothing.
+#[cfg(not(target_arch = "wasm32"))]
+const OUTLINE_TABLES: [&[u8; 4]; 4] = [b"glyf", b"CFF ", b"CFF2", b"VARC"];
+
 /// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
 /// directories and `name` and `fvar` tables: a scan opens hundreds of font files, many of them
-/// megabytes long.
+/// megabytes long. Faces without outlines the font engine draws (no [`OUTLINE_TABLES`] table) are
+/// left out.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_face_names(path: &Path) -> Vec<FaceStyle> {
     use std::io::{Read, Seek, SeekFrom};
@@ -804,6 +810,9 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
             let dir = read_at(start.into(), 12)?;
             let tables = u16::from_be_bytes(dir.get(4..6)?.try_into().ok()?) as usize;
             let records = read_at(u64::from(start) + 12, tables * 16)?;
+            if !records.as_chunks::<16>().0.iter().any(|r| OUTLINE_TABLES.iter().any(|t| r.starts_with(*t))) {
+                return None;
+            }
             let mut table = |tag: &[u8; 4]| -> Option<Vec<u8>> {
                 let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(tag))?;
                 let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
@@ -869,7 +878,9 @@ static PLATFORM_FONT_FILES: std::sync::OnceLock<PlatformFontFiles> = std::sync::
 /// folders, asked again by each scan and each check for installed fonts
 /// ([`FontDb::installed_fonts_changed`]). The desktop app lists DirectWrite's system font
 /// collection on Windows: fonts a font service such as Adobe Fonts loads in place, from files
-/// outside the font folders and unknown to the registry (#579). Only the first call counts.
+/// outside the font folders and unknown to the registry (#579). On macOS it lists the fonts
+/// CoreText's font manager has available, which apps and font managers can register from any
+/// folder. Only the first call counts.
 pub fn set_platform_font_files(list: PlatformFontFiles) {
     #[cfg(not(target_arch = "wasm32"))]
     // A second call keeps the first lister, as documented.
