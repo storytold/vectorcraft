@@ -2925,3 +2925,27 @@
 	Lock to the toolbar	鎖定至工具列
 	Unlock from the toolbar	從工具列解除鎖定
 	Drag out of the dock to move this panel	拖出停駐區以移動此面板
+	Registration	套準
+	Summa	Summa
+	Zünd	Zünd
+	OPOS Marks…	OPOS 標記…
+	OPOS XY 2 Marks…	OPOS XY 2 標記…
+	OPOS Random XY…	OPOS 隨機 XY…
+	Registration Dots…	套準圓點…
+	Registration Marks…	套準標記…
+	Summa OPOS Marks	Summa OPOS 標記
+	Zünd Registration Dots	Zünd 套準圓點
+	OPOS Marks	OPOS 標記
+	OPOS XY Marks	OPOS XY 標記
+	OPOS XY 2 Marks	OPOS XY 2 標記
+	OPOS Random XY	OPOS 隨機 XY
+	Dot Diameter	圓點直徑
+	Allowed:	允許範圍：
+	Distance from Art	與圖稿的距離
+	Fifth Dot	第五個圓點
+	Four corner dots, plus a fifth on the bottom edge this far from the bottom-right dot toward the bottom-left one.	四角各一個圓點，另有第五個圓點位於底邊，從右下圓點朝左下圓點的這個距離處。
+	Layer:	圖層：
+	Method	方式
+	Mark Size	標記大小
+	Summa needs white space of 3 to 4 times the mark size around each mark.	Summa 需要每個標記周圍留有標記大小 3 到 4 倍的空白。
+	Max X Distance	最大 X 距離

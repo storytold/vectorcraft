@@ -57,6 +57,7 @@ pub mod printtiling;
 pub mod rasterfx;
 mod recolor;
 pub mod recovery;
+pub mod registration;
 mod select;
 pub(crate) mod slices;
 mod stroke;
@@ -252,6 +253,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(cut::specs());
         v.extend(halftone::specs());
         v.extend(perspgrid::specs());
+        v.extend(registration::specs());
         v
     })
 }
