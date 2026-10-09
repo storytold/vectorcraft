@@ -1761,6 +1761,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     vec![
                         c("Join", "path.join"),
                         c("Average…", "path.average"),
+                        c("Unlock Anchor Points", "path.unlockAnchors"),
                         Sep,
                         c("Outline Stroke", "object.path.outlineStroke"),
                         c("Offset Path…", "object.path.offsetPath"),
@@ -2281,7 +2282,7 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         }
         let paths = any(|k| matches!(k, NodeKind::Path { .. }));
         if paths {
-            v.extend([c("Join", "path.join"), c("Average…", "path.average")]);
+            v.extend([c("Unlock Anchor Points", "path.unlockAnchors"), c("Join", "path.join"), c("Average…", "path.average")]);
         }
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));
