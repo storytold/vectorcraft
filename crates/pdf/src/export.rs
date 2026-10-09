@@ -535,6 +535,34 @@ fn xf(a: Affine) -> Transform {
     Transform::from_row(c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32, c[4] as f32, c[5] as f32)
 }
 
+/// Plain stroke `st` at `width` in `paint`: its caps, joins, miter limit, opacity and dashes.
+fn plain_stroke(st: &StrokeLayer, paint: krilla::paint::Paint, width: f64) -> Stroke {
+    let dash = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| {
+        let mut pat: Vec<f32> = d.pattern.iter().map(|v| *v as f32).collect();
+        if pat.len() % 2 == 1 {
+            pat.extend(pat.clone());
+        }
+        StrokeDash { array: pat, offset: d.offset as f32 }
+    });
+    Stroke {
+        paint,
+        width: width as f32,
+        miter_limit: st.miter_limit.max(1.0) as f32,
+        line_cap: match st.cap {
+            LineCap::Butt => krilla::paint::LineCap::Butt,
+            LineCap::Round => krilla::paint::LineCap::Round,
+            LineCap::Square => krilla::paint::LineCap::Square,
+        },
+        line_join: match st.join {
+            LineJoin::Miter => krilla::paint::LineJoin::Miter,
+            LineJoin::Round => krilla::paint::LineJoin::Round,
+            LineJoin::Bevel => krilla::paint::LineJoin::Bevel,
+        },
+        opacity: norm(st.opacity),
+        dash,
+    }
+}
+
 fn to_path(bp: &BezPath) -> Option<Path> {
     let mut pb = PathBuilder::new();
     for el in bp.elements() {
@@ -1012,9 +1040,38 @@ impl Exporter<'_> {
         }
     }
 
+    /// A shape with just a plain solid fill and a plain solid centred stroke, as one path painted
+    /// both ways (the PDF `B` operator), so other apps read one path, not two. False when the
+    /// appearance is anything else.
+    fn fill_and_stroke(&mut self, s: &mut Surface, n: &Node, path: &Path, r: FillRule, bounds: Rect) -> bool {
+        let [AppearanceItem::Fill(fl), AppearanceItem::Stroke(st)] = n.appearance.items.as_slice() else { return false };
+        let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
+        if !(fl.visible && st.visible && solid(&fl.paint) && solid(&st.paint) && st.width > 0.0 && st.width.is_finite()) {
+            return false;
+        }
+        if fl.blend != BlendMode::Normal || st.blend != BlendMode::Normal || fl.overprint || st.overprint {
+            return false;
+        }
+        if !fl.effects.is_empty() || !st.effects.is_empty() || !stroke::is_plain(st) {
+            return false;
+        }
+        let (Some(fill_paint), Some(stroke_paint)) = (self.paint(&fl.paint, bounds), self.paint(&st.paint, st.paint_bounds(bounds))) else {
+            return false;
+        };
+        s.set_fill(Some(Fill { paint: fill_paint, opacity: norm(fl.opacity), rule: rule(r) }));
+        s.set_stroke(Some(plain_stroke(st, stroke_paint, st.width)));
+        s.draw_path(path);
+        s.set_fill(None);
+        s.set_stroke(None);
+        true
+    }
+
     fn shape(&mut self, s: &mut Surface, n: &Node, bp: &BezPath, r: FillRule, page: Rect) {
         let Some(path) = to_path(bp) else { return };
         let bounds = bp.bounding_box();
+        if self.fill_and_stroke(s, n, &path, r, bounds) {
+            return;
+        }
         for item in &n.appearance.items {
             match item {
                 AppearanceItem::Fill(fl) => {
@@ -1191,31 +1248,8 @@ impl Exporter<'_> {
         }
         match &w.shape {
             WrittenShape::Stroke { width } => {
-                let dash = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| {
-                    let mut pat: Vec<f32> = d.pattern.iter().map(|v| *v as f32).collect();
-                    if pat.len() % 2 == 1 {
-                        pat.extend(pat.clone());
-                    }
-                    StrokeDash { array: pat, offset: d.offset as f32 }
-                });
                 s.set_fill(None);
-                s.set_stroke(Some(Stroke {
-                    paint,
-                    width: *width as f32,
-                    miter_limit: st.miter_limit.max(1.0) as f32,
-                    line_cap: match st.cap {
-                        LineCap::Butt => krilla::paint::LineCap::Butt,
-                        LineCap::Round => krilla::paint::LineCap::Round,
-                        LineCap::Square => krilla::paint::LineCap::Square,
-                    },
-                    line_join: match st.join {
-                        LineJoin::Miter => krilla::paint::LineJoin::Miter,
-                        LineJoin::Round => krilla::paint::LineJoin::Round,
-                        LineJoin::Bevel => krilla::paint::LineJoin::Bevel,
-                    },
-                    opacity: norm(st.opacity),
-                    dash,
-                }));
+                s.set_stroke(Some(plain_stroke(st, paint, *width)));
                 s.draw_path(path);
                 s.set_stroke(None);
             }

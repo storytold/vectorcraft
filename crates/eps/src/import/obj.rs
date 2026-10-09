@@ -297,6 +297,7 @@ ops! {
     CurrentTransfer = "currenttransfer", CurrentColorTransfer = "currentcolortransfer",
     CurrentBlackGeneration = "currentblackgeneration", CurrentUnderColorRemoval = "currentundercolorremoval",
     SetCacheLimit = "setcachelimit", UCache = "ucache", SetUCacheParams = "setucacheparams", FindEncoding = "findencoding",
+    CacheStatus = "cachestatus", UCacheStatus = "ucachestatus", CurrentCacheParams = "currentcacheparams",
     // Coordinates.
     Matrix = "matrix", IdentMatrix = "identmatrix", DefaultMatrix = "defaultmatrix", CurrentMatrix = "currentmatrix",
     SetMatrix = "setmatrix", InitMatrix = "initmatrix", Concat = "concat", ConcatMatrix = "concatmatrix",

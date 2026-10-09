@@ -453,6 +453,14 @@ fn device_settings_are_accepted_and_change_nothing() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+#[test]
+fn font_cache_queries_answer_like_an_empty_cache() {
+    // An old .ai prolog asks the font cache for its state before it sets anything up.
+    let r = read("cachestatus 7 {pop} repeat ucachestatus 5 {pop} repeat currentcacheparams 4 {pop} repeat 0 0 5 5 rectfill");
+    assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
 /// Check that `body` draws one square, blue: it sets blue when what it checks holds, else red.
 fn blue(body: &str) {
     let r = read(&format!("{body} 10 10 80 80 rectfill"));

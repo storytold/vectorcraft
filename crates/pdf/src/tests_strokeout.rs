@@ -69,3 +69,31 @@ fn outside_strokes_keep_their_miter_spikes() {
     assert!(dark(back.over_white(x, y)), "the PDF keeps the spike: {:?}", back.over_white(x, y));
     assert!(!dark(back.over_white(x, 20)), "past its tip");
 }
+
+/// A shape with a plain solid fill and stroke is one path painted both ways (`B`), not a fill
+/// path and a stroke path.
+#[test]
+fn a_plain_fill_and_stroke_is_one_path() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut n = Node::path(
+        NodeId(0),
+        vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(20.0, 20.0, 80.0, 60.0)),
+        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::BLACK), 3.0),
+    );
+    n.id = d.alloc_id();
+    let layer = d.default_layer().unwrap();
+    d.insert(Some(layer), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).to_string();
+    let ops: Vec<&str> = text.lines().map(str::trim).collect();
+    assert_eq!(ops.iter().filter(|o| **o == "B").count(), 1, "one fill-and-stroke path");
+    assert!(!ops.iter().any(|o| matches!(*o, "f" | "S")), "no separate fill or stroke path");
+    // It reads back as a shape with both.
+    let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap();
+    let mut both = 0;
+    back.walk(|m| {
+        if m.appearance.fill().is_some() && m.appearance.stroke().is_some() {
+            both += 1;
+        }
+    });
+    assert_eq!(both, 1);
+}

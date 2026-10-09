@@ -231,7 +231,7 @@ fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
 fn fidelity_warning(f: &Format) -> Option<String> {
     (!is_native(f)).then(|| {
         format!(
-            "{} keeps the artwork but not everything a VectorCraft document holds (editable effects, symbols, swatches, styles): save as .ai or VectorCraft to keep it all editable",
+            "{} keeps the artwork but not everything a Vector W3K2 document holds (editable effects, symbols, swatches, styles): save as .ai or VectorCraft to keep it all editable",
             f.label
         )
     })
@@ -303,7 +303,7 @@ fn blank_pages(doc: &Document) -> Document {
 }
 
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
-const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
+const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: Vector W3K2 opens it as before, other apps show empty pages";
 
 /// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
 /// document's own). Bad options fail here, before anything is encoded.

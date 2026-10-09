@@ -31,7 +31,7 @@ const MAX_DRAWN: usize = 1 << 24;
 const SHADING_SAMPLES: usize = 32;
 
 const FAR_AWAY: &str = "objects far outside the page were left out";
-const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
+const TOO_MUCH: &str = "the file draws more than Vector W3K2 reads: the rest was left out";
 const TILING_PATTERNS: &str = "pattern fills are filled with mid-grey";
 const SAMPLED_FUNCTIONS: &str = "shadings whose colours come from sampled functions are filled with their middle colour";
 
@@ -915,6 +915,25 @@ impl Interp<'_> {
                 self.stack.truncate(at);
             }
             UCache => {}
+            // An empty font cache: seven counts (bsize bmax msize mmax csize cmax blimit), the cache
+            // parameters' mark and limits.
+            CacheStatus => {
+                for n in [0, 0, 0, 0, 0, 0, 1_000_000] {
+                    self.push(Obj::Int(n))?;
+                }
+            }
+            UCacheStatus => {
+                self.push(Obj::Mark)?;
+                for n in [0, 1_000_000, 0, 1_000_000] {
+                    self.push(Obj::Int(n))?;
+                }
+            }
+            CurrentCacheParams => {
+                self.push(Obj::Mark)?;
+                for n in [1_000_000, 1_000_000, 1_000_000] {
+                    self.push(Obj::Int(n))?;
+                }
+            }
             CurrentScreen => {
                 self.push(Obj::Real(60.0))?;
                 self.push(Obj::Real(45.0))?;
