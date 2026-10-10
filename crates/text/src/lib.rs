@@ -510,6 +510,8 @@ mod tests_combos;
 mod tests_embed;
 #[cfg(test)]
 mod tests_fit;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests_font_coverage;
 #[cfg(test)]
 mod tests_inline;
 #[cfg(test)]
