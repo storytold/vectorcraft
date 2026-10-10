@@ -1166,11 +1166,14 @@ fn spin_generic(
             ui.painter().line_segment([m + vec2(0.0, d), m + vec2(3.0, -d)], Stroke::new(1.2, c));
         }
         // A blank field (values that differ) has nothing to step from.
-        if sresp.clicked()
+        if enabled
+            && sresp.clicked()
             && let Some(p) = sresp.interact_pointer_pos()
             && let Some(v) = value
         {
-            let nv = if up.contains(p) { v + step } else { v - step };
+            // Match the numeric field's Shift+Arrow behavior on the pointer stepper too.
+            let amount = if ui.input(|i| i.modifiers.shift) { step * 10.0 } else { step };
+            let nv = if up.contains(p) { v + amount } else { v - amount };
             out = Some(SpinPick::Value(nv.max(min)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };

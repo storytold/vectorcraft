@@ -139,3 +139,46 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
     // Units no stroke is measured in keep the pt ladder, in points.
     assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
+
+/// #991: the spinner to the left of Stroke Weight honors Shift on both arrows, while a
+/// normal click still steps by one point (the focused numeric field already handles Shift+↑/↓).
+#[test]
+fn stroke_weight_stepper_uses_ten_point_shift_steps() {
+    use super::tests_appearance::frame_raw;
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = app_with_rect();
+    run(&mut app, "stroke.set", json!({"weight": 14}));
+    let t = texts(&ctx, &mut app, stroke::show);
+    let r = text_rect(&t, "Weight:");
+    let x = r.right() + ctx.global_style().spacing.item_spacing.x + 8.0;
+    let click_step = |app: &mut VectorcraftApp, y: f32, modifiers: egui::Modifiers| {
+        let pos = egui::pos2(x, y);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers,
+        };
+        for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+            frame_raw(
+                &ctx,
+                app,
+                egui::RawInput {
+                    modifiers,
+                    events: vec![event],
+                    ..Default::default()
+                },
+                stroke::show,
+            );
+        }
+    };
+
+    click_step(&mut app, r.center().y - 5.0, egui::Modifiers::SHIFT);
+    assert_eq!(app.session.shown_stroke().unwrap().width, 24.0);
+    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::NONE);
+    assert_eq!(app.session.shown_stroke().unwrap().width, 23.0);
+    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::SHIFT);
+    assert_eq!(app.session.shown_stroke().unwrap().width, 13.0);
+}
