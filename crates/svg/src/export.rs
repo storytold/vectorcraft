@@ -103,7 +103,11 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        // Internal document units are points; `ww` / `hh` are points too. SVG treats unitless
+        // numbers as CSS pixels, so a 210 mm artboard (595.27 pt) would render as 595.27 px and
+        // come out 0.75× the size in a viewer (72/96). Append `pt` so the rendered size matches
+        // the document's. (#864)
+        out.push_str(&format!(" width=\"{ww}pt\" height=\"{hh}pt\""));
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();

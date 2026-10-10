@@ -503,7 +503,9 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(s.contains("viewBox=\"0 0 200 100\""), "{s}");
     assert!(s.contains("M10.12 20"), "{s}");
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("M10.123 20"), "{s}");
+    // #864: the SVG's width / height are in points (`pt`), so a viewer renders the artboard at
+    // the document's intended size instead of treating the value as CSS pixels.
+    assert!(s.contains("width=\"200pt\" height=\"100pt\"") && s.contains("M10.123 20"), "{s}");
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
