@@ -1,8 +1,9 @@
-//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Distort › Diffuse
-//! Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize,
-//! Sharpen › Unsharp Mask, Stylize › Glowing
-//! Edges, Texture › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and
-//! Video › De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
+//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Brush Strokes ›
+//! Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes
+//! and Sumi-e, Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone,
+//! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing Edges, Texture
+//! › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and Video ›
+//! De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
 //!
 //! - Every distance is in document units (points) and becomes pixels through the raster's
 //!   [`PixelSpace::px`], so an effect looks the same at any zoom and at any Document Raster Effects
@@ -12,6 +13,7 @@
 //! - Beyond the raster's edges is transparency.
 
 mod blur;
+mod brushstrokes;
 mod distort;
 mod edges;
 mod pixelate;
@@ -24,14 +26,23 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::util::{flag, num, text};
 
+pub use brushstrokes::{STROKE_DIRECTIONS, StrokeDirection};
 pub use distort::{GLASS_TEXTURES, GlassTexture};
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 19] = [
+pub const PIXEL_EFFECTS: [&str; 27] = [
     "blur.radial",
     "blur.smart",
+    "brushStrokes.accentedEdges",
+    "brushStrokes.angledStrokes",
+    "brushStrokes.crosshatch",
+    "brushStrokes.darkStrokes",
+    "brushStrokes.inkOutlines",
+    "brushStrokes.spatter",
+    "brushStrokes.sprayedStrokes",
+    "brushStrokes.sumiE",
     "distort.diffuseGlow",
     "distort.glass",
     "distort.oceanRipple",
@@ -62,6 +73,32 @@ pub enum PixelFx {
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
     SmartBlur { radius: f64, threshold: f64, samples: u32 },
+    /// Brush Strokes › Accented Edges: the edges, about `width` (1..14) wide, accented towards
+    /// white chalk or black ink as `brightness` (0..50) says; `smoothness` (1..15) softens them.
+    AccentedEdges { width: f64, brightness: f64, smoothness: f64 },
+    /// Brush Strokes › Angled Strokes: diagonal strokes `length` long, the light areas' and the
+    /// dark areas' going opposite ways, split as `balance` (0..100) says, as crisp as `sharpness`
+    /// (0..10).
+    AngledStrokes { balance: f64, length: f64, sharpness: f64 },
+    /// Brush Strokes › Crosshatch: pencil hatching `length` long along both diagonals, as crisp
+    /// as `sharpness` (0..20), in `strength` (1..3) passes.
+    Crosshatch { length: f64, sharpness: f64, strength: u32 },
+    /// Brush Strokes › Dark Strokes: short strokes towards black in the dark areas, long ones
+    /// towards white in the light areas, split by `balance` (0..10), as dark as `black` (0..10)
+    /// and as light as `white` (0..10).
+    DarkStrokes { balance: f64, black: f64, white: f64 },
+    /// Brush Strokes › Ink Outlines: pen-and-ink outlines and strokes `length` long, the shadows
+    /// darkened by `dark` (0..50) and the highlights lightened by `light` (0..50).
+    InkOutlines { length: f64, dark: f64, light: f64 },
+    /// Brush Strokes › Spatter: a spatter airbrush spraying within `radius` (0..25), its grains as
+    /// smooth as `smoothness` (1..15).
+    Spatter { radius: f64, smoothness: f64 },
+    /// Brush Strokes › Sprayed Strokes: sprayed strokes `length` long along `direction`, scattered
+    /// as `radius` (0..25) says.
+    SprayedStrokes { length: f64, radius: f64, direction: StrokeDirection },
+    /// Brush Strokes › Sumi-e: wet black brush strokes `width` (3..15) across on rice paper, as
+    /// loaded as `pressure` (0..15) says, with `contrast` (0..40).
+    SumiE { width: f64, pressure: f64, contrast: f64 },
     /// Distort › Diffuse Glow: the highlights glow white as strongly as `glow` (0..20), from the
     /// brightness `clear` (0..20) leaves clear, under white grain as dense as `graininess` (0..10).
     DiffuseGlow { graininess: f64, glow: f64, clear: f64 },
@@ -165,6 +202,44 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             threshold: num(p, "threshold", 25.0).clamp(0.1, 100.0),
             samples: quality([("low", 5), ("medium", 7), ("high", 9)], 7),
         },
+        "brushStrokes.accentedEdges" => PixelFx::AccentedEdges {
+            width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
+            brightness: num(p, "edgeBrightness", 38.0).clamp(0.0, 50.0),
+            smoothness: num(p, "smoothness", 5.0).clamp(1.0, 15.0),
+        },
+        "brushStrokes.angledStrokes" => PixelFx::AngledStrokes {
+            balance: num(p, "directionBalance", 50.0).clamp(0.0, 100.0),
+            length: num(p, "strokeLength", 15.0).clamp(3.0, 50.0),
+            sharpness: num(p, "sharpness", 3.0).clamp(0.0, 10.0),
+        },
+        "brushStrokes.crosshatch" => PixelFx::Crosshatch {
+            length: num(p, "strokeLength", 9.0).clamp(3.0, 50.0),
+            sharpness: num(p, "sharpness", 6.0).clamp(0.0, 20.0),
+            strength: num(p, "strength", 1.0).clamp(1.0, 3.0).round() as u32,
+        },
+        "brushStrokes.darkStrokes" => PixelFx::DarkStrokes {
+            balance: num(p, "balance", 5.0).clamp(0.0, 10.0),
+            black: num(p, "blackIntensity", 6.0).clamp(0.0, 10.0),
+            white: num(p, "whiteIntensity", 2.0).clamp(0.0, 10.0),
+        },
+        "brushStrokes.inkOutlines" => PixelFx::InkOutlines {
+            length: num(p, "strokeLength", 4.0).clamp(1.0, 50.0),
+            dark: num(p, "darkIntensity", 20.0).clamp(0.0, 50.0),
+            light: num(p, "lightIntensity", 10.0).clamp(0.0, 50.0),
+        },
+        "brushStrokes.spatter" => {
+            PixelFx::Spatter { radius: num(p, "sprayRadius", 10.0).clamp(0.0, 25.0), smoothness: num(p, "smoothness", 5.0).clamp(1.0, 15.0) }
+        }
+        "brushStrokes.sprayedStrokes" => PixelFx::SprayedStrokes {
+            length: num(p, "strokeLength", 12.0).clamp(0.0, 20.0),
+            radius: num(p, "sprayRadius", 7.0).clamp(0.0, 25.0),
+            direction: StrokeDirection::parse(text(p, "strokeDirection", "rightDiagonal")),
+        },
+        "brushStrokes.sumiE" => PixelFx::SumiE {
+            width: num(p, "strokeWidth", 10.0).clamp(3.0, 15.0),
+            pressure: num(p, "strokePressure", 2.0).clamp(0.0, 15.0),
+            contrast: num(p, "contrast", 16.0).clamp(0.0, 40.0),
+        },
         "distort.diffuseGlow" => PixelFx::DiffuseGlow {
             graininess: num(p, "graininess", 6.0).clamp(0.0, 10.0),
             glow: num(p, "glowAmount", 10.0).clamp(0.0, 20.0),
@@ -248,6 +323,15 @@ impl PixelFx {
             PixelFx::RadialBlur { zoom: false, .. } => (far - near).max(0.0),
             PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
+            PixelFx::AccentedEdges { .. } => 0.0,
+            // Strokes reach out of the object as far as they reach into it.
+            PixelFx::AngledStrokes { length, .. } | PixelFx::InkOutlines { length, .. } => brushstrokes::stroke_reach(length),
+            PixelFx::Crosshatch { length, .. } => brushstrokes::stroke_reach(length) + brushstrokes::rough(length),
+            PixelFx::DarkStrokes { .. } => brushstrokes::stroke_reach(brushstrokes::LIGHT_LENGTH),
+            PixelFx::Spatter { radius, .. } => brushstrokes::spatter_shift(radius),
+            PixelFx::SprayedStrokes { length, radius, .. } => brushstrokes::stroke_reach(length) + brushstrokes::spray_shift(radius),
+            // Sumi-e keeps the object's shape.
+            PixelFx::SumiE { .. } => 0.0,
             PixelFx::DiffuseGlow { .. } => 0.0,
             // Content shifted outwards reaches past the bounds by as much as the shift.
             PixelFx::Glass { distortion, .. } => distort::glass_shift(distortion),
@@ -275,6 +359,17 @@ impl PixelFx {
         match *self {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, .. } => Some(radius),
+            PixelFx::AccentedEdges { width, smoothness, .. } => Some(brushstrokes::accent_reach(width, smoothness)),
+            // The strokes, and the softened tones that choose them.
+            PixelFx::AngledStrokes { length, .. } => Some(brushstrokes::stroke_reach(length).max(brushstrokes::TONE_REACH)),
+            PixelFx::Crosshatch { length, .. } => {
+                Some((brushstrokes::stroke_reach(length) + brushstrokes::rough(length)).max(brushstrokes::TONE_REACH))
+            }
+            PixelFx::DarkStrokes { .. } => Some(brushstrokes::stroke_reach(brushstrokes::LIGHT_LENGTH).max(brushstrokes::TONE_REACH)),
+            PixelFx::InkOutlines { length, .. } => Some(brushstrokes::ink_reach(length)),
+            PixelFx::Spatter { radius, .. } => Some(brushstrokes::spatter_shift(radius)),
+            PixelFx::SprayedStrokes { length, radius, .. } => Some(brushstrokes::stroke_reach(length) + brushstrokes::spray_shift(radius)),
+            PixelFx::SumiE { width, .. } => Some(brushstrokes::sumi_reach(width)),
             PixelFx::DiffuseGlow { .. } => Some(3.0 * distort::GLOW_SPREAD),
             PixelFx::Glass { distortion, .. } => Some(distort::glass_shift(distortion)),
             PixelFx::OceanRipple { size, magnitude } => Some(distort::ripple_shift(size, magnitude)),
@@ -306,6 +401,14 @@ impl PixelFx {
         match *self {
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
             PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
+            PixelFx::AccentedEdges { width, brightness, smoothness } => brushstrokes::accented_edges(px, w, h, space, width, brightness, smoothness),
+            PixelFx::AngledStrokes { balance, length, sharpness } => brushstrokes::angled_strokes(px, w, h, space, balance, length, sharpness),
+            PixelFx::Crosshatch { length, sharpness, strength } => brushstrokes::crosshatch(px, w, h, space, length, sharpness, strength),
+            PixelFx::DarkStrokes { balance, black, white } => brushstrokes::dark_strokes(px, w, h, space, balance, black, white),
+            PixelFx::InkOutlines { length, dark, light } => brushstrokes::ink_outlines(px, w, h, space, length, dark, light),
+            PixelFx::Spatter { radius, smoothness } => brushstrokes::spatter(px, w, h, space, radius, smoothness),
+            PixelFx::SprayedStrokes { length, radius, direction } => brushstrokes::sprayed_strokes(px, w, h, space, length, radius, direction),
+            PixelFx::SumiE { width, pressure, contrast } => brushstrokes::sumi_e(px, w, h, space, width, pressure, contrast),
             PixelFx::DiffuseGlow { graininess, glow, clear } => distort::diffuse_glow(px, w, h, space, graininess, glow, clear),
             PixelFx::Glass { distortion, smoothness, texture, scaling, invert } => {
                 distort::glass(px, w, h, space, distortion, smoothness, texture, scaling, invert)

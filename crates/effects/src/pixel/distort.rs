@@ -159,7 +159,7 @@ pub(super) fn diffuse_glow(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
 /// Move the object's content by `shift(q)` (document units; `q` a pixel's centre relative to the
 /// object's centre, its length capped at `most`): each pixel takes the colour `shift` away from it,
 /// interpolated between pixels, transparent beyond the raster.
-fn displace(px: &mut [[u8; 4]], w: usize, h: usize, place: &Place, most: f64, shift: impl Fn(Point) -> Vec2) {
+pub(super) fn displace(px: &mut [[u8; 4]], w: usize, h: usize, place: &Place, most: f64, shift: impl Fn(Point) -> Vec2) {
     if !(most.is_finite() && most > 0.0) {
         return;
     }

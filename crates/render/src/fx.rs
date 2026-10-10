@@ -61,6 +61,7 @@ pub(crate) fn has_object_fx(n: &Node) -> bool {
         || effects::has_container_appearance(n)
         || effects::has_crop_marks(n)
         || effects::has_adjustment(n)
+        || effects::has_revolve(n)
 }
 
 /// Is `n` a group or layer (whose evaluated art keeps its knockout setting)?
@@ -123,6 +124,12 @@ fn item_effects(item: &AppearanceItem) -> &[Effect] {
 
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows.
 pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
+    if let Some(art) = effects::revolve_art(n) {
+        return cull_bounds(&art).map(|b| {
+            let o = effects::outset(&n.appearance.effects, b);
+            b.inflate(o, o)
+        });
+    }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext::of(n);
     let g = effected_path(n, &bp);
@@ -408,12 +415,13 @@ impl Renderer {
             _ => None,
         };
         let container = is_container(a);
-        let art = match effects::crop_marks_art(a).or_else(|| effects::reshape(a, symbol.as_ref())) {
+        let art = match effects::crop_marks_art(a).or_else(|| effects::revolve_art(a)).or_else(|| effects::reshape(a, symbol.as_ref())) {
             Some(r) => r,
             None if container => effects::evaluate_container(a).unwrap_or_else(|| (**a).clone()),
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::Path { .. } | NodeKind::Compound { .. }) => (**a).clone(),
             None => effects::outline_art(a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
+        let art = if effects::has_revolve(a) { effects::evaluate_container(&art).unwrap_or(art) } else { art };
         let mut art = self.adjusted_art(doc, art, effects::color_map(&a.appearance.effects).as_ref());
         // A path's geometry effects still apply when it is drawn.
         let path = matches!(art.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });

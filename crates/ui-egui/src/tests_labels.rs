@@ -95,6 +95,24 @@ fn effect_menu_lists_the_distort_filters_between_blur_and_pixelate() {
     assert!(raster.contains(&"Distort & Transform"));
 }
 
+/// Effect › Brush Strokes, between Blur and Distort: each filter opens its dialog.
+#[test]
+fn effect_menu_lists_the_brush_strokes_filters_between_blur_and_distort() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let strokes: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Brush Strokes"]).collect();
+    let labels: Vec<&str> = strokes.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        ["Accented Edges…", "Angled Strokes…", "Crosshatch…", "Dark Strokes…", "Ink Outlines…", "Spatter…", "Sprayed Strokes…", "Sumi-e…"]
+    );
+    assert!(strokes.iter().all(|e| e.command.as_deref() == Some("effect.dialog")));
+    let raster: Vec<&str> =
+        entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
+    let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
+    assert!(at("Blur") < at("Brush Strokes") && at("Brush Strokes") < at("Distort"));
+}
+
 /// Effect › Texture, between Sharpen and Video: each filter opens its dialog.
 #[test]
 fn effect_menu_lists_the_texture_filters_between_sharpen_and_video() {

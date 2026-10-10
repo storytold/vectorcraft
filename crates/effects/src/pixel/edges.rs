@@ -21,38 +21,20 @@ pub(super) fn glow(px: &mut [[u8; 4]], w: usize, h: usize, width: f64, brightnes
             if alpha > 0.0 { [f32::from(p[0]) / 255.0 / alpha, f32::from(p[1]) / 255.0 / alpha, f32::from(p[2]) / 255.0 / alpha] } else { [0.0; 3] };
         (straight, alpha)
     };
-    let signal = |x: isize, y: isize| {
-        let (rgb, alpha) = pixel(x, y);
-        (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) * alpha
-    };
-    let mut edges = vec![0.0f32; px.len()];
+    let signal: Vec<f32> = (0..px.len())
+        .map(|i| {
+            let (rgb, alpha) = pixel((i % w) as isize, (i / w) as isize);
+            (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) * alpha
+        })
+        .collect();
+    let coverage: Vec<f32> = src.iter().map(|p| f32::from(p[3]) / 255.0).collect();
+    let mut edges: Vec<f32> = sobel(&signal, w, h).iter().zip(sobel(&coverage, w, h)).map(|(s, a)| s.max(a).clamp(0.0, 1.0)).collect();
     let mut colours: [Vec<f32>; 3] = std::array::from_fn(|_| vec![0.0; px.len()]);
-    for y in 0..h {
-        for x in 0..w {
-            let x = x as isize;
-            let y = y as isize;
-            let gx = -signal(x - 1, y - 1) + signal(x + 1, y - 1) - 2.0 * signal(x - 1, y) + 2.0 * signal(x + 1, y) - signal(x - 1, y + 1)
-                + signal(x + 1, y + 1);
-            let gy = -signal(x - 1, y - 1) - 2.0 * signal(x, y - 1) - signal(x + 1, y - 1)
-                + signal(x - 1, y + 1)
-                + 2.0 * signal(x, y + 1)
-                + signal(x + 1, y + 1);
-            let alpha_signal = |x, y| pixel(x, y).1;
-            let agx = -alpha_signal(x - 1, y - 1) + alpha_signal(x + 1, y - 1) - 2.0 * alpha_signal(x - 1, y) + 2.0 * alpha_signal(x + 1, y)
-                - alpha_signal(x - 1, y + 1)
-                + alpha_signal(x + 1, y + 1);
-            let agy = -alpha_signal(x - 1, y - 1) - 2.0 * alpha_signal(x, y - 1) - alpha_signal(x + 1, y - 1)
-                + alpha_signal(x - 1, y + 1)
-                + 2.0 * alpha_signal(x, y + 1)
-                + alpha_signal(x + 1, y + 1);
-            let index = y as usize * w + x as usize;
-            let edge = gx.hypot(gy).max(agx.hypot(agy)).clamp(0.0, 1.0);
-            if let Some(value) = edges.get_mut(index) {
-                *value = edge;
-                let (rgb, alpha) = pixel(x, y);
-                for channel in 0..3 {
-                    colours[channel][index] = rgb[channel] * alpha * edge;
-                }
+    for (index, edge) in edges.iter().enumerate() {
+        let (rgb, alpha) = pixel((index % w) as isize, (index / w) as isize);
+        for (colour, v) in colours.iter_mut().zip(rgb) {
+            if let Some(c) = colour.get_mut(index) {
+                *c = v * alpha * edge;
             }
         }
     }
@@ -84,4 +66,26 @@ pub(super) fn glow(px: &mut [[u8; 4]], w: usize, h: usize, width: f64, brightnes
             (a * 255.0).round() as u8,
         ];
     }
+}
+
+/// The Sobel gradient's length over a `w` × `h` plane of values (zero beyond its edges): 8 × the
+/// slope per pixel on a ramp, 4 × the step at a sharp edge. Empty when the sizes don't match.
+pub(super) fn sobel(v: &[f32], w: usize, h: usize) -> Vec<f32> {
+    if w == 0 || w.checked_mul(h) != Some(v.len()) {
+        return Vec::new();
+    }
+    let at = |x: usize, dx: isize, y: usize, dy: isize| -> f32 {
+        match (x.checked_add_signed(dx), y.checked_add_signed(dy)) {
+            (Some(x), Some(y)) if x < w && y < h => v.get(y * w + x).copied().unwrap_or(0.0),
+            _ => 0.0,
+        }
+    };
+    (0..v.len())
+        .map(|i| {
+            let (x, y) = (i % w, i / w);
+            let gx = at(x, 1, y, -1) - at(x, -1, y, -1) + 2.0 * (at(x, 1, y, 0) - at(x, -1, y, 0)) + at(x, 1, y, 1) - at(x, -1, y, 1);
+            let gy = at(x, -1, y, 1) - at(x, -1, y, -1) + 2.0 * (at(x, 0, y, 1) - at(x, 0, y, -1)) + at(x, 1, y, 1) - at(x, 1, y, -1);
+            gx.hypot(gy)
+        })
+        .collect()
 }

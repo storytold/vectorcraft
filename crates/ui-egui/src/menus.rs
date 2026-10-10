@@ -3303,8 +3303,9 @@ fn font_items(english_names: bool) -> Vec<Item> {
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
-const RASTER_MENUS: [(&str, &[&str]); 6] = [
+const RASTER_MENUS: [(&str, &[&str]); 7] = [
     ("Blur", &["Effect", "Blur"]),
+    ("Brush Strokes", &["Effect", "Brush Strokes"]),
     ("Distort", &["Effect", "Distort"]),
     ("Pixelate", &["Effect", "Pixelate"]),
     ("Sharpen", &["Effect", "Sharpen"]),
@@ -3362,6 +3363,10 @@ fn effect_menu() -> Vec<Item> {
             };
             out.push(sub(sub_name, placeholder));
         } else {
+            let mut items = items;
+            if sub_name == "3D and Materials" {
+                items.extend([todo("Extrude & Bevel…"), todo("Inflate…"), todo("Rotate…"), todo("Materials…")]);
+            }
             out.push(sub(sub_name, items));
         }
     }

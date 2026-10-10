@@ -89,6 +89,10 @@ pub struct Tokens {
     pub error: Color32,
     /// Warning marks (a modified linked file).
     pub warning: Color32,
+    /// Rotation gizmo axes, also labelled X, Y and Z.
+    pub axis_x: Color32,
+    pub axis_y: Color32,
+    pub axis_z: Color32,
 }
 
 impl Tokens {
@@ -133,6 +137,9 @@ impl Tokens {
             bleed: hex(0xf03030),
             error: hex(0xe34850),
             warning: hex(0xf0a330),
+            axis_x: hex(0xef6058),
+            axis_y: hex(0x45af63),
+            axis_z: hex(0x378ef0),
         };
         match b {
             Brightness::Dark => base,

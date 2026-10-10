@@ -233,14 +233,14 @@ fn bevel(d: f64, width: f64) -> f64 {
 
 /// The object's straight luminance (0..1) softened by a Gaussian of `sigma` pixels, weighted by
 /// coverage so the transparency around it doesn't darken its edges.
-struct Tones {
+pub(super) struct Tones {
     v: Vec<f32>,
     w: usize,
     h: usize,
 }
 
 impl Tones {
-    fn new(px: &[[u8; 4]], w: usize, h: usize, sigma: f64) -> Self {
+    pub(super) fn new(px: &[[u8; 4]], w: usize, h: usize, sigma: f64) -> Self {
         let mut l: Vec<f32> = px.iter().map(|p| luma([p[0], p[1], p[2]].map(f32::from)) / 255.0).collect();
         let mut a: Vec<f32> = px.iter().map(|p| f32::from(p[3]) / 255.0).collect();
         blur_plane(&mut l, w, h, sigma);
@@ -249,7 +249,7 @@ impl Tones {
         Self { v, w, h }
     }
 
-    fn get(&self, x: usize, y: usize) -> f64 {
+    pub(super) fn get(&self, x: usize, y: usize) -> f64 {
         let (x, y) = (x.min(self.w.saturating_sub(1)), y.min(self.h.saturating_sub(1)));
         self.v.get(y * self.w + x).map_or(0.0, |v| f64::from(*v))
     }

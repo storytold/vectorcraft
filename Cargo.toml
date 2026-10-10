@@ -20,6 +20,7 @@ vectorcraft-brush = { path = "crates/brush" }
 vectorcraft-trace = { path = "crates/trace" }
 vectorcraft-text = { path = "crates/text" }
 vectorcraft-effects = { path = "crates/effects" }
+vectorcraft-three-d = { path = "crates/three-d" }
 vectorcraft-render = { path = "crates/render" }
 vectorcraft-svg = { path = "crates/svg" }
 vectorcraft-pdf = { path = "crates/pdf" }

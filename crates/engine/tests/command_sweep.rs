@@ -292,6 +292,26 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "blur.radial", "params": {"amount": 1e308, "method": 5, "quality": "best"}})),
         ("effect.apply", json!({"effect": "blur.smart", "params": {"radius": 1e308, "threshold": -1e308, "quality": null}})),
         ("effect.apply", json!({"effect": "sharpen.unsharpMask", "params": {"amount": -1, "radius": "1e999", "threshold": 1e308}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.accentedEdges", "params": {"edgeWidth": 1e308, "edgeBrightness": "NaN", "smoothness": -1e308}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.angledStrokes", "params": {"directionBalance": [1], "strokeLength": 1e308, "sharpness": null}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.crosshatch", "params": {"strokeLength": "1e999", "sharpness": 1e308, "strength": -1e308}})),
+        ("effect.apply", json!({"effect": "brushStrokes.darkStrokes", "params": {"balance": -1e308, "blackIntensity": {}, "whiteIntensity": 1e308}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.inkOutlines", "params": {"strokeLength": -1, "darkIntensity": 1e308, "lightIntensity": "x"}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.spatter", "params": {"sprayRadius": 1e308, "smoothness": "NaN"}})),
+        (
+            "effect.apply",
+            json!({"effect": "brushStrokes.sprayedStrokes", "params": {"strokeLength": 1e308, "sprayRadius": -1e308, "strokeDirection": 3}}),
+        ),
+        ("effect.apply", json!({"effect": "brushStrokes.sumiE", "params": {"strokeWidth": 0, "strokePressure": 1e308, "contrast": [1]}})),
         ("effect.apply", json!({"effect": "pixelate.colorHalftone", "params": {"maxRadius": 1e308, "channel1": "1e999", "channel4": null}})),
         ("effect.apply", json!({"effect": "pixelate.crystallize", "params": {"cellSize": -1e308}})),
         ("effect.apply", json!({"effect": "pixelate.mezzotint", "params": {"type": 5}})),

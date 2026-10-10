@@ -819,6 +819,34 @@ default) white ones knock out instead; `"discard"` writes none.
 {"name":"run_command","arguments":{"command":"view.overprintPreview","params":{"on":true}}}
 ```
 
+## Revolve (initial 3D effect)
+
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
+or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
+SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+
+Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
+`edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspective`
+(0..100%, default 0), `segments` (8..128, default 64), `shade` (default true), `lightAzimuth`
+(degrees, default -45), `lightElevation` (degrees, default 45), `lightIntensity` (0..100%, default 80),
+`ambient` (0..100%, default 25), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
+Open profiles have no end caps. Visibility of intersecting surfaces is approximate.
+The dialog's Lighting tab manipulates the same `lightAzimuth` and `lightElevation` parameters;
+its guide visibility and tab choice are UI state, excluded from saved effect parameters.
+`expandVisibleOnly` is saved with the effect. It trims covered portions of opaque solid surfaces only
+when running `effect.expandAppearance`, preserving visible interiors through openings. Set it to false
+to expand all faces. Live preview and SVG/PDF baking keep the full surface. Transparent/unknown paint,
+non-normal blending, later geometry effects or bounded visibility failures preserve all faces.
+See [Revolve](revolve.md) for the scope and limitations.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.revolve","item":null,"params":{"angle":360,"offset":20,"edge":"left","rotationX":0,"rotationY":0,"rotationZ":0}}}}
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"angle":180,"lightAzimuth":30}}}}
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"expandVisibleOnly":true}}}}
+{"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
+```
+
 ## Edit Colors and Recolor Artwork
 
 `edit.colors.invert`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`, `edit.colors.saturate`,

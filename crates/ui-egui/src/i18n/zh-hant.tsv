@@ -3449,3 +3449,58 @@ effect	Soft	柔和
 	Define a variable first	請先定義一個變數
 	Text	文字
 	Visibility	可見性
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	照明
+	Revolve angle	旋轉成形角度
+	Axis side	軸的位置
+	Rotation X	X 軸旋轉
+	Rotation Y	Y 軸旋轉
+	Rotation Z	Z 軸旋轉
+	Shading	明暗處理
+	Direction	方向
+	Elevation	仰角
+	Ambient	環境光
+	Segments	分段數
+	Show axis	顯示軸
+	Reset all	全部重設
+	Reset to default	重設為預設值
+	Reset all Revolve settings to their defaults.	將所有旋轉成形設定重設為預設值。
+	Drag values or labels. Double-click a value to type.	拖曳數值或標籤。按兩下數值即可輸入。
+	Drag rings to rotate. Shift snaps to 15°.	拖曳圓環旋轉。按住 Shift 以 15° 為間距調整。
+	Drag the light, or its rings. Shift snaps to 15°.	拖曳光源或圓環。按住 Shift 以 15° 為間距調整。
+lighting	Light	光源
+	Keep visible surfaces only when expanding	展開時僅保留可見表面
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	展開外觀時裁剪被遮擋的幾何區域。即時預覽保留完整表面。透明繪製或超出可見性處理限制的表面保留所有面。
+	Accented Edges…	強調邊緣…
+	Angled Strokes…	傾斜筆觸…
+	Crosshatch…	交叉影線…
+	Dark Strokes…	深色筆觸…
+	Ink Outlines…	墨水輪廓…
+	Spatter…	噴濺…
+	Sprayed Strokes…	噴灑筆觸…
+	Sumi-e…	水墨畫…
+	Accented Edges	強調邊緣
+	Angled Strokes	傾斜筆觸
+	Crosshatch	交叉影線
+	Dark Strokes	深色筆觸
+	Ink Outlines	墨水輪廓
+	Spatter	噴濺
+	Sprayed Strokes	噴灑筆觸
+	Sumi-e	水墨畫
+	Direction Balance	方向平衡
+	Stroke Length	筆觸長度
+	Sharpness	銳利度
+	Strength	力度
+	Balance	平衡
+	Black Intensity	黑色強度
+	White Intensity	白色強度
+	Dark Intensity	暗部強度
+	Spray Radius	噴灑半徑
+	Stroke Direction	筆觸方向
+	Stroke Width	筆觸寬度
+	Stroke Pressure	筆觸壓力
+	Right Diagonal	右對角線
+	Left Diagonal	左對角線

@@ -175,7 +175,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.interact(rect, egui::Id::new("canvas"), Sense::click_and_drag());
     // A press on the canvas while the context menu is open only closes it (a drag too, which egui
     // alone would leave open); the tool doesn't get it.
-    if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
+    if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
+        // The artboard's 3D gizmo owns these gestures while its options are open.
+        // Do not let a ring drag also move or deselect the editable source path.
+    } else if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
         egui::Popup::close_all(ui.ctx());
     } else {
         handle_input(app, ui, &resp, rect);
@@ -401,7 +404,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     // Selection visuals and tool overlays.
-    if app.ui.view.edges {
+    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    if app.ui.view.edges && !revolve_edit {
         hover_highlight(app, &painter, &xf);
         selection_overlay(app, &painter, &xf);
         if app.ui.view.text_threads {
@@ -413,7 +417,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let view_info = app.view_info();
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.
-    if app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator {
+    if !revolve_edit && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
         let overlays = app.session.overlays(view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
     }
@@ -423,7 +427,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
     }
-    if app.ui.task_bar && !app.session.tool_busy() && app.ui.screen_mode < 3 {
+    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {

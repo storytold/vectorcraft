@@ -694,3 +694,40 @@
 	Ocean Ripple…	Vlnky na hladině…
 	Rename Data Set	Přejmenovat sadu dat
 	Rename Variable	Přejmenovat proměnnou
+
+# Interactive Revolve controls.
+	Lighting	Osvětlení
+	Revolve angle	Úhel otočení
+	Axis side	Strana osy
+	Rotation X	Otočení X
+	Rotation Y	Otočení Y
+	Rotation Z	Otočení Z
+	Shading	Stínování
+	Direction	Směr
+	Elevation	Výška světla
+	Intensity	Intenzita
+	Ambient	Okolní osvětlení
+	Segments	Segmenty
+	Show axis	Zobrazit osu
+	Reset all	Obnovit vše
+	Reset to default	Obnovit výchozí hodnotu
+	Reset all Revolve settings to their defaults.	Obnovit výchozí hodnoty všech nastavení rotačního tělesa.
+	Drag values or labels. Double-click a value to type.	Upravte hodnoty přetažením čísel nebo popisků. Dvojím kliknutím na hodnotu ji zadáte.
+	Drag rings to rotate. Shift snaps to 15°.	Otáčejte přetažením prstenců. Shift nastaví kroky po 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Přetáhněte světlo nebo jeho prstence. Shift nastaví kroky po 15°.
+lighting	Light	Světlo
+	Keep visible surfaces only when expanding	Při rozšíření ponechat pouze viditelné povrchy
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Při rozšíření vzhledu oříznout zakrytou geometrii. Živý náhled zachová celý povrch. Průhledné výplně a povrchy překračující limity výpočtu viditelnosti zachovají všechny plochy.
+	Left	Vlevo
+	Right	Vpravo
+	Offset	Odsazení
+	Rotation	Otočení
+	Cancel	Zrušit
+	Accented Edges…	Zdůrazněné okraje…
+	Angled Strokes…	Šikmé tahy…
+	Crosshatch…	Křížové šrafování…
+	Dark Strokes…	Tmavé tahy…
+	Ink Outlines…	Obrysy tuší…
+	Spatter…	Rozstřik…
+	Sprayed Strokes…	Stříkané tahy…
+	Sumi-e…	Sumi-e…

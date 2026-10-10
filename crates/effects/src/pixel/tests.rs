@@ -276,6 +276,14 @@ fn pixel_timings() {
         ("blur.smart", json!({"quality": "low"})),
         ("blur.smart", json!({"quality": "high", "radius": 30})),
         ("sharpen.unsharpMask", json!({"radius": 20})),
+        ("brushStrokes.accentedEdges", json!({"edgeWidth": 14})),
+        ("brushStrokes.angledStrokes", json!({"strokeLength": 50})),
+        ("brushStrokes.crosshatch", json!({"strokeLength": 50, "strength": 3})),
+        ("brushStrokes.darkStrokes", json!({})),
+        ("brushStrokes.inkOutlines", json!({"strokeLength": 50})),
+        ("brushStrokes.spatter", json!({"sprayRadius": 25})),
+        ("brushStrokes.sprayedStrokes", json!({"strokeLength": 20, "sprayRadius": 25})),
+        ("brushStrokes.sumiE", json!({"strokeWidth": 15})),
         ("pixelate.colorHalftone", json!({"maxRadius": 4})),
         ("pixelate.crystallize", json!({"cellSize": 3})),
         ("pixelate.crystallize", json!({"cellSize": 300})),
@@ -965,6 +973,325 @@ fn distort_patterns_follow_the_object_at_any_resolution() {
         ("distort.oceanRipple", json!({"rippleMagnitude": 12})),
     ] {
         let f = fx(id, p);
+        let mut one = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut one, w, h, &space(w, h));
+        let mut two = image(2 * w, 2 * h, |x, y| art((x as f64 + 0.5) / 2.0, (y as f64 + 0.5) / 2.0));
+        let fine = PixelSpace { to_doc: Affine::scale(0.5), px: 0.5, ..space(w, h) };
+        f.apply(&mut two, 2 * w, 2 * h, &fine);
+        let down = image(w, h, |x, y| {
+            let q = [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| at(&two, 2 * w, 2 * x + dx, 2 * y + dy));
+            std::array::from_fn(|c| (q.iter().map(|p| u32::from(p[c])).sum::<u32>() / 4) as u8)
+        });
+        let diff = one.iter().zip(&down).map(|(a, b)| f64::from(a.abs_diff(*b))).sum::<f64>() / one.len() as f64;
+        assert!(diff < 12.0, "{id}: {diff}");
+        let moved = PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: Point::new(31.0, 27.0), ..space(w, h) };
+        let mut shifted = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut shifted, w, h, &moved);
+        assert_eq!(shifted, one, "{id}");
+    }
+}
+
+/// The Brush Strokes effect ids.
+fn brush_strokes() -> impl Iterator<Item = &'static str> {
+    PIXEL_EFFECTS.into_iter().filter(|id| id.starts_with("brushStrokes."))
+}
+
+#[test]
+fn brush_strokes_params_take_defaults_and_stay_in_range() {
+    assert_eq!(fx("brushStrokes.accentedEdges", json!({})), PixelFx::AccentedEdges { width: 2.0, brightness: 38.0, smoothness: 5.0 });
+    assert_eq!(
+        fx("brushStrokes.accentedEdges", json!({"edgeWidth": 99, "edgeBrightness": -1, "smoothness": "x"})),
+        PixelFx::AccentedEdges { width: 14.0, brightness: 0.0, smoothness: 5.0 }
+    );
+    assert_eq!(fx("brushStrokes.angledStrokes", json!({})), PixelFx::AngledStrokes { balance: 50.0, length: 15.0, sharpness: 3.0 });
+    assert_eq!(
+        fx("brushStrokes.angledStrokes", json!({"directionBalance": 1e308, "strokeLength": 0, "sharpness": 11})),
+        PixelFx::AngledStrokes { balance: 100.0, length: 3.0, sharpness: 10.0 }
+    );
+    assert_eq!(fx("brushStrokes.crosshatch", json!({})), PixelFx::Crosshatch { length: 9.0, sharpness: 6.0, strength: 1 });
+    assert_eq!(
+        fx("brushStrokes.crosshatch", json!({"strokeLength": 51, "sharpness": -1, "strength": 2.6})),
+        PixelFx::Crosshatch { length: 50.0, sharpness: 0.0, strength: 3 }
+    );
+    assert_eq!(fx("brushStrokes.crosshatch", json!({"strength": -7})), PixelFx::Crosshatch { length: 9.0, sharpness: 6.0, strength: 1 });
+    assert_eq!(fx("brushStrokes.darkStrokes", json!({})), PixelFx::DarkStrokes { balance: 5.0, black: 6.0, white: 2.0 });
+    assert_eq!(
+        fx("brushStrokes.darkStrokes", json!({"balance": 11, "blackIntensity": -1, "whiteIntensity": 1e9})),
+        PixelFx::DarkStrokes { balance: 10.0, black: 0.0, white: 10.0 }
+    );
+    assert_eq!(fx("brushStrokes.inkOutlines", json!({})), PixelFx::InkOutlines { length: 4.0, dark: 20.0, light: 10.0 });
+    assert_eq!(
+        fx("brushStrokes.inkOutlines", json!({"strokeLength": 0, "darkIntensity": 51, "lightIntensity": -5})),
+        PixelFx::InkOutlines { length: 1.0, dark: 50.0, light: 0.0 }
+    );
+    assert_eq!(fx("brushStrokes.spatter", json!({})), PixelFx::Spatter { radius: 10.0, smoothness: 5.0 });
+    assert_eq!(fx("brushStrokes.spatter", json!({"sprayRadius": 26, "smoothness": 0})), PixelFx::Spatter { radius: 25.0, smoothness: 1.0 });
+    assert_eq!(
+        fx("brushStrokes.sprayedStrokes", json!({})),
+        PixelFx::SprayedStrokes { length: 12.0, radius: 7.0, direction: StrokeDirection::RightDiagonal }
+    );
+    assert_eq!(
+        fx("brushStrokes.sprayedStrokes", json!({"strokeLength": -1, "sprayRadius": 1e308, "strokeDirection": "VERTICAL"})),
+        PixelFx::SprayedStrokes { length: 0.0, radius: 25.0, direction: StrokeDirection::Vertical }
+    );
+    assert_eq!(fx("brushStrokes.sprayedStrokes", json!({"strokeDirection": "diagonal"})), fx("brushStrokes.sprayedStrokes", json!({})));
+    assert_eq!(fx("brushStrokes.sumiE", json!({})), PixelFx::SumiE { width: 10.0, pressure: 2.0, contrast: 16.0 });
+    assert_eq!(
+        fx("brushStrokes.sumiE", json!({"strokeWidth": 2, "strokePressure": 16, "contrast": -1})),
+        PixelFx::SumiE { width: 3.0, pressure: 15.0, contrast: 0.0 }
+    );
+    // Outsets: the strokes and the shifts reach out of the object as far as into it; Accented
+    // Edges and Sumi-e keep the object's shape.
+    let b = Rect::new(0.0, 0.0, 100.0, 50.0);
+    let reach = brushstrokes::stroke_reach;
+    assert!((reach(20.0) - (0.75 * 20.0 + 1.5 / 15.0 * 20.0 + 1.0)).abs() < 1e-9);
+    assert_eq!(fx("brushStrokes.accentedEdges", json!({})).outset(b), 0.0);
+    assert_eq!(fx("brushStrokes.accentedEdges", json!({})).reach(), Some(3.0 * (0.35 * 2.0 + 0.5) + 1.0));
+    assert_eq!(fx("brushStrokes.angledStrokes", json!({})).outset(b), reach(15.0));
+    assert_eq!(fx("brushStrokes.crosshatch", json!({})).outset(b), reach(9.0) + 0.9);
+    assert_eq!(fx("brushStrokes.darkStrokes", json!({})).outset(b), reach(9.0));
+    assert_eq!(fx("brushStrokes.inkOutlines", json!({"strokeLength": 50})).outset(b), reach(50.0));
+    let spatter = fx("brushStrokes.spatter", json!({}));
+    assert_eq!((spatter.outset(b), spatter.reach()), (4.0, Some(4.0)));
+    assert_eq!(fx("brushStrokes.spatter", json!({"sprayRadius": 0})).outset(b), 0.0);
+    assert_eq!(fx("brushStrokes.sprayedStrokes", json!({})).outset(b), reach(12.0) + 0.3 * 7.0);
+    assert_eq!(fx("brushStrokes.sumiE", json!({})).outset(b), 0.0);
+    for id in brush_strokes() {
+        let f = fx(id, json!({}));
+        assert!(f.reach().is_some_and(|r| r >= f.outset(b)), "{id}");
+    }
+}
+
+/// A light square in a darker ground with a ramp across it, over the whole raster: edges,
+/// shadows and highlights for the strokes to work on.
+fn scene(w: usize, h: usize) -> Vec<u8> {
+    image(w, h, |x, y| if (12..36).contains(&x) && (12..36).contains(&y) { [235, 220, 190, 255] } else { [(30 + x) as u8, 40, 90, 255] })
+}
+
+/// `src` (`w` × `h`) through effect `id` with parameters `p`.
+fn run_fx(src: &[u8], w: usize, h: usize, id: &str, p: serde_json::Value) -> Vec<u8> {
+    let mut d = src.to_vec();
+    fx(id, p).apply(&mut d, w, h, &space(w, h));
+    d
+}
+
+#[test]
+fn brush_strokes_each_repaint_the_art_their_own_way() {
+    let (w, h) = (48, 48);
+    let src = scene(w, h);
+    let mut seen: Vec<(&str, Vec<u8>)> = vec![];
+    for id in brush_strokes() {
+        let d = run_fx(&src, w, h, id, json!({}));
+        assert_ne!(d, src, "{id} changes the art");
+        for (other, o) in &seen {
+            assert_ne!(&d, o, "{id} differs from {other}");
+        }
+        seen.push((id, d));
+    }
+    assert_eq!(seen.len(), 8);
+    // Each stroke direction paints its own way.
+    let mut ways: Vec<Vec<u8>> = vec![];
+    for (_, way) in STROKE_DIRECTIONS {
+        let d = run_fx(&src, w, h, "brushStrokes.sprayedStrokes", json!({"strokeDirection": way}));
+        assert!(!ways.contains(&d), "{way} differs from the other directions");
+        ways.push(d);
+    }
+    // Every option shows.
+    for (id, a, b) in [
+        ("brushStrokes.accentedEdges", json!({"edgeWidth": 1}), json!({"edgeWidth": 14})),
+        ("brushStrokes.accentedEdges", json!({"smoothness": 1}), json!({"smoothness": 15})),
+        ("brushStrokes.angledStrokes", json!({"directionBalance": 0}), json!({"directionBalance": 100})),
+        ("brushStrokes.angledStrokes", json!({"strokeLength": 3}), json!({"strokeLength": 50})),
+        ("brushStrokes.angledStrokes", json!({"sharpness": 0}), json!({"sharpness": 10})),
+        ("brushStrokes.crosshatch", json!({"strokeLength": 3}), json!({"strokeLength": 50})),
+        ("brushStrokes.crosshatch", json!({"sharpness": 0}), json!({"sharpness": 20})),
+        ("brushStrokes.crosshatch", json!({"strength": 1}), json!({"strength": 3})),
+        ("brushStrokes.darkStrokes", json!({"balance": 0}), json!({"balance": 10})),
+        ("brushStrokes.darkStrokes", json!({"blackIntensity": 0}), json!({"blackIntensity": 10})),
+        ("brushStrokes.darkStrokes", json!({"whiteIntensity": 0}), json!({"whiteIntensity": 10})),
+        ("brushStrokes.inkOutlines", json!({"strokeLength": 1}), json!({"strokeLength": 50})),
+        ("brushStrokes.inkOutlines", json!({"darkIntensity": 0}), json!({"darkIntensity": 50})),
+        ("brushStrokes.inkOutlines", json!({"lightIntensity": 0}), json!({"lightIntensity": 50})),
+        ("brushStrokes.spatter", json!({"sprayRadius": 5}), json!({"sprayRadius": 25})),
+        ("brushStrokes.spatter", json!({"smoothness": 1}), json!({"smoothness": 15})),
+        ("brushStrokes.sprayedStrokes", json!({"strokeLength": 0}), json!({"strokeLength": 20})),
+        ("brushStrokes.sprayedStrokes", json!({"sprayRadius": 0}), json!({"sprayRadius": 25})),
+        ("brushStrokes.sumiE", json!({"strokeWidth": 3}), json!({"strokeWidth": 15})),
+        ("brushStrokes.sumiE", json!({"strokePressure": 0}), json!({"strokePressure": 15})),
+        ("brushStrokes.sumiE", json!({"contrast": 0}), json!({"contrast": 40})),
+    ] {
+        assert_ne!(run_fx(&src, w, h, id, a.clone()), run_fx(&src, w, h, id, b.clone()), "{id}: {a} and {b}");
+    }
+}
+
+/// The mean of the colour channels over columns `xs` and rows `ys` (0..255).
+fn mean_tone(d: &[u8], w: usize, xs: std::ops::Range<usize>, ys: std::ops::Range<usize>) -> f64 {
+    let px: Vec<[u8; 4]> = ys.flat_map(|y| xs.clone().map(move |x| (x, y))).map(|(x, y)| at(d, w, x, y)).collect();
+    px.iter().map(|p| f64::from(p[0]) + f64::from(p[1]) + f64::from(p[2])).sum::<f64>() / (3.0 * px.len().max(1) as f64)
+}
+
+/// Dark on the left, light on the right, opaque over the whole raster.
+fn halves(w: usize, h: usize) -> Vec<u8> {
+    image(w, h, |x, _| if x < w / 2 { [50, 60, 100, 255] } else { [210, 200, 180, 255] })
+}
+
+#[test]
+fn accented_edges_draw_chalk_or_ink_on_the_edges_only() {
+    let (w, h) = (48, 48);
+    // The halves inside a transparent margin.
+    let both = halves(w, h);
+    let src = image(w, h, |x, y| if (4..44).contains(&x) && (4..44).contains(&y) { at(&both, w, x, y) } else { [0; 4] });
+    let chalk = run_fx(&src, w, h, "brushStrokes.accentedEdges", json!({"edgeBrightness": 50}));
+    let ink = run_fx(&src, w, h, "brushStrokes.accentedEdges", json!({"edgeBrightness": 0}));
+    let sum = |p: [u8; 4]| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]);
+    // Along the edge between the halves: white chalk on the dark side, black ink on the light.
+    assert!(sum(at(&chalk, w, 23, 24)) > sum(at(&src, w, 23, 24)) + 150, "{:?}", at(&chalk, w, 23, 24));
+    assert!(sum(at(&ink, w, 24, 24)) + 150 < sum(at(&src, w, 24, 24)), "{:?}", at(&ink, w, 24, 24));
+    // Away from the edges nothing changes, and the object keeps its shape.
+    for (x, y) in [(13, 24), (34, 24), (13, 13)] {
+        assert_eq!(at(&chalk, w, x, y), at(&src, w, x, y), "({x}, {y})");
+    }
+    for (a, b) in chalk.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0) {
+        assert_eq!(a[3], b[3]);
+    }
+}
+
+#[test]
+fn dark_and_ink_strokes_darken_the_shadows_and_sumi_e_inks_them_black() {
+    let (w, h) = (64, 48);
+    let src = halves(w, h);
+    let (shadow, light) = (8..24, 40..56);
+    let tone = |d: &[u8], xs: std::ops::Range<usize>| mean_tone(d, w, xs, 8..40);
+    let dark = run_fx(&src, w, h, "brushStrokes.darkStrokes", json!({}));
+    assert!(tone(&dark, shadow.clone()) < tone(&src, shadow.clone()) - 20.0, "dark strokes in the shadows");
+    assert!(tone(&dark, light.clone()) > tone(&src, light.clone()) + 5.0, "white strokes in the light");
+    let ink = run_fx(&src, w, h, "brushStrokes.inkOutlines", json!({}));
+    assert!(tone(&ink, shadow.clone()) < tone(&src, shadow.clone()) - 10.0, "ink in the shadows");
+    // The outline along the edge is darker than the light side around it.
+    assert!(tone(&ink, 32..34) + 40.0 < tone(&ink, light.clone()), "an ink outline along the edge");
+    let sumi = run_fx(&src, w, h, "brushStrokes.sumiE", json!({}));
+    assert!(tone(&sumi, shadow.clone()) < 0.4 * tone(&src, shadow.clone()), "rich blacks: {}", tone(&sumi, shadow.clone()));
+    assert!(tone(&sumi, 50..56) > 150.0, "the light stays light: {}", tone(&sumi, 50..56));
+}
+
+#[test]
+fn sumi_e_keeps_the_shape_and_the_hues() {
+    let (w, h) = (48, 48);
+    // A strong yellow square and a dark blue one in a transparent margin.
+    let src = image(w, h, |x, y| match (x, y) {
+        (8..24, 8..40) => [230, 200, 40, 255],
+        (24..40, 8..40) => [30, 40, 120, 255],
+        _ => [0; 4],
+    });
+    let d = run_fx(&src, w, h, "brushStrokes.sumiE", json!({"contrast": 40, "strokePressure": 15}));
+    // Transparency stays transparent and the coverage stays as it was: no fringe.
+    for (a, b) in d.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0) {
+        assert_eq!(a[3], b[3]);
+        if b[3] == 0 {
+            assert_eq!(*a, [0; 4]);
+        }
+    }
+    // The yellow stays yellow, no more saturated than it was.
+    let sat = |p: [u8; 4]| {
+        let (hi, lo) = (p[..3].iter().max().copied().unwrap(), p[..3].iter().min().copied().unwrap());
+        f64::from(hi - lo) / f64::from(hi.max(1))
+    };
+    let y = at(&d, w, 12, 24);
+    assert!(y[0] > y[2] + 80 && y[1] > y[2] + 80, "{y:?}");
+    assert!(sat(y) <= sat([230, 200, 40, 255]) + 0.02, "{y:?}");
+    // The dark blue is inked darker, still blue.
+    let b = at(&d, w, 34, 24);
+    assert!(b[2] < 120 && b[2] >= b[0] && b[2] >= b[1], "{b:?}");
+}
+
+#[test]
+fn crosshatch_hatches_flat_colour_and_keeps_its_tone() {
+    let (w, h) = (48, 48);
+    let src = image(w, h, |_, _| grey(128));
+    let spread = |d: &[u8]| {
+        let m = mean_tone(d, w, 8..40, 8..40);
+        let var = (8..40).flat_map(|x| (8..40).map(move |y| (x, y))).map(|(x, y)| (f64::from(at(d, w, x, y)[0]) - m).powi(2)).sum::<f64>() / 1024.0;
+        (m, var.sqrt())
+    };
+    let (one, three) =
+        (run_fx(&src, w, h, "brushStrokes.crosshatch", json!({})), run_fx(&src, w, h, "brushStrokes.crosshatch", json!({"strength": 3})));
+    let ((m1, s1), (_, s3)) = (spread(&one), spread(&three));
+    assert!((m1 - 128.0).abs() < 25.0 && s1 > 3.0, "{m1} ± {s1}");
+    assert!(s3 > s1, "more passes, more hatching: {s3} vs {s1}");
+}
+
+#[test]
+fn stroke_directions_smear_along_themselves() {
+    let (w, h) = (48, 48);
+    // A white line two pixels thick across black.
+    let src = image(w, h, |_, y| if (23..25).contains(&y) { grey(255) } else { grey(0) });
+    let row = |d: &[u8], y: usize| mean_tone(d, w, 12..36, y..y + 1);
+    let along = run_fx(&src, w, h, "brushStrokes.sprayedStrokes", json!({"sprayRadius": 0, "strokeDirection": "horizontal"}));
+    let across = run_fx(&src, w, h, "brushStrokes.sprayedStrokes", json!({"sprayRadius": 0, "strokeDirection": "vertical"}));
+    assert!(row(&along, 20) < 1.0 && row(&along, 24) > 250.0, "strokes along the line keep it");
+    assert!(row(&across, 20) > 15.0 && row(&across, 24) < 200.0, "strokes across it spread it: {} {}", row(&across, 20), row(&across, 24));
+    // Diagonal strokes spread it too, along the diagonal.
+    let diagonal = run_fx(&src, w, h, "brushStrokes.sprayedStrokes", json!({"sprayRadius": 0}));
+    assert!(row(&diagonal, 20) > 5.0);
+}
+
+#[test]
+fn spatter_scatters_content_no_farther_than_its_radius() {
+    let (w, h) = (64, 32);
+    // The left half white, the right half transparent.
+    let src = image(w, h, |x, _| if x < 32 { grey(255) } else { [0; 4] });
+    assert_eq!(run_fx(&src, w, h, "brushStrokes.spatter", json!({"sprayRadius": 0})), src, "no radius, no spatter");
+    let f = fx("brushStrokes.spatter", json!({"sprayRadius": 15}));
+    let most = f.reach().unwrap();
+    let d = run_fx(&src, w, h, "brushStrokes.spatter", json!({"sprayRadius": 15}));
+    assert_ne!(d, src);
+    let inside = |v: usize, n: usize| (v as f64 + 0.5).min(n as f64 - v as f64 - 0.5) > most + 1.0;
+    for y in (0..h).filter(|y| inside(*y, h)) {
+        for x in (0..w).filter(|x| inside(*x, w) && (*x as f64 + 0.5 - 32.0).abs() > most + 1.0) {
+            assert_eq!(at(&d, w, x, y), at(&src, w, x, y), "({x}, {y})");
+        }
+    }
+    // The edge is spattered: white specks past it and holes before it.
+    let past = (33..36).flat_map(|x| (8..24).map(move |y| (x, y))).filter(|(x, y)| at(&d, w, *x, *y)[3] > 127).count();
+    let holes = (28..31).flat_map(|x| (8..24).map(move |y| (x, y))).filter(|(x, y)| at(&d, w, *x, *y)[3] < 128).count();
+    assert!(past > 0 && holes > 0, "{past} specks past the edge, {holes} holes before it");
+}
+
+#[test]
+fn brush_strokes_look_no_farther_than_their_reach() {
+    let (w, h) = (200, 24);
+    let base = image(w, h, |x, y| [(x * 7 % 256) as u8, (y * 11 % 256) as u8, 120, 255]);
+    let cases = brush_strokes().map(|id| (id, json!({}))).chain([
+        ("brushStrokes.accentedEdges", json!({"edgeWidth": 14, "smoothness": 15})),
+        ("brushStrokes.angledStrokes", json!({"strokeLength": 50})),
+        ("brushStrokes.crosshatch", json!({"strokeLength": 50, "strength": 3})),
+        ("brushStrokes.inkOutlines", json!({"strokeLength": 50})),
+        ("brushStrokes.spatter", json!({"sprayRadius": 25, "smoothness": 15})),
+        ("brushStrokes.sprayedStrokes", json!({"strokeLength": 20, "sprayRadius": 25, "strokeDirection": "horizontal"})),
+        ("brushStrokes.sumiE", json!({"strokeWidth": 15})),
+    ]);
+    for (id, p) in cases {
+        let reach = fx(id, p.clone()).reach().unwrap();
+        // Everything from `cut` on differs; the pixels left of 20 can't tell.
+        let cut = 20 + reach.ceil() as usize + 1;
+        assert!(cut < w, "{id}");
+        let other = image(w, h, |x, y| if x >= cut { [255 - (x * 5 % 256) as u8, 30, (y * 9 % 256) as u8, 200] } else { at(&base, w, x, y) });
+        let (a, b) = (run_fx(&base, w, h, id, p.clone()), run_fx(&other, w, h, id, p.clone()));
+        for (x, y) in (0..20).flat_map(|x| (0..h).map(move |y| (x, y))) {
+            let (pa, pb) = (at(&a, w, x, y), at(&b, w, x, y));
+            assert!(pa.iter().zip(pb).all(|(u, v)| u.abs_diff(v) <= 2), "{id} {p}: ({x}, {y}) {pa:?} vs {pb:?}, reach {reach}");
+        }
+    }
+}
+
+#[test]
+fn brush_strokes_follow_the_object_at_any_resolution() {
+    let (w, h) = (48, 48);
+    let art = |x: f64, y: f64| -> [u8; 4] {
+        if (8.0..40.0).contains(&x) && (8.0..40.0).contains(&y) { [(x * 5.0) as u8, (y * 5.0) as u8, 120, 255] } else { [0; 4] }
+    };
+    for id in brush_strokes() {
+        let f = fx(id, json!({}));
         let mut one = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
         f.apply(&mut one, w, h, &space(w, h));
         let mut two = image(2 * w, 2 * h, |x, y| art((x as f64 + 0.5) / 2.0, (y as f64 + 0.5) / 2.0));

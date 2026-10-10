@@ -4449,6 +4449,7 @@ dependencies = [
  "vectorcraft-pathops",
  "vectorcraft-plugins",
  "vectorcraft-text",
+ "vectorcraft-three-d",
 ]
 
 [[package]]
@@ -4705,6 +4706,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-three-d"
+version = "0.8.0"
+dependencies = [
+ "vectorcraft-geom",
+]
+
+[[package]]
 name = "vectorcraft-tools"
 version = "0.8.0"
 dependencies = [
@@ -4758,6 +4766,7 @@ dependencies = [
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-text",
+ "vectorcraft-three-d",
  "vectorcraft-tools",
  "wat",
 ]

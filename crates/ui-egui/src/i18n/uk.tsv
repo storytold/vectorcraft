@@ -4020,3 +4020,56 @@ axis	Both	Обидві
 	Define a variable first	Спочатку визначте змінну
 	Text	Текст
 	Visibility	Видимість
+
+# Interactive Revolve controls.
+	Lighting	Освітлення
+	Revolve angle	Кут обертання
+	Axis side	Бік осі
+	Rotation X	Обертання X
+	Rotation Y	Обертання Y
+	Rotation Z	Обертання Z
+	Shading	Затінення
+	Direction	Напрямок
+	Elevation	Висота
+	Ambient	Навколишнє освітлення
+	Segments	Сегменти
+	Show axis	Показати вісь
+	Reset all	Скинути все
+	Reset to default	Відновити типове значення
+	Reset all Revolve settings to their defaults.	Відновити типові значення всіх параметрів обертання.
+	Drag values or labels. Double-click a value to type.	Перетягуйте значення або підписи. Двічі клацніть значення, щоб увести його.
+	Drag rings to rotate. Shift snaps to 15°.	Перетягуйте кільця для обертання. Shift задає крок 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Перетягуйте джерело світла або його кільця. Shift задає крок 15°.
+	Keep visible surfaces only when expanding	Під час розгортання зберігати лише видимі поверхні
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Обрізає приховану геометрію під час розгортання оформлення. Попередній перегляд зберігає всю поверхню. Прозорі заливки та поверхні, що перевищують обмеження видимості, зберігають усі грані.
+lighting	Light	Світло
+	Accented Edges…	Акцент на краях…
+	Angled Strokes…	Похилі мазки…
+	Crosshatch…	Перехресне штрихування…
+	Dark Strokes…	Темні мазки…
+	Ink Outlines…	Контури тушшю…
+	Spatter…	Розбризкування…
+	Sprayed Strokes…	Розпилені мазки…
+	Sumi-e…	Сумі-е…
+	Accented Edges	Акцент на краях
+	Angled Strokes	Похилі мазки
+	Crosshatch	Перехресне штрихування
+	Dark Strokes	Темні мазки
+	Ink Outlines	Контури тушшю
+	Spatter	Розбризкування
+	Sprayed Strokes	Розпилені мазки
+	Sumi-e	Сумі-е
+	Direction Balance	Баланс напрямку
+	Stroke Length	Довжина мазка
+	Sharpness	Різкість
+	Strength	Сила
+	Balance	Баланс
+	Black Intensity	Інтенсивність чорного
+	White Intensity	Інтенсивність білого
+	Dark Intensity	Інтенсивність темного
+	Spray Radius	Радіус розпилення
+	Stroke Direction	Напрямок мазків
+	Stroke Width	Ширина мазка
+	Stroke Pressure	Натиск мазка
+	Right Diagonal	Діагональ праворуч
+	Left Diagonal	Діагональ ліворуч
