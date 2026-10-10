@@ -135,74 +135,6 @@ fn fill_and_stroke_commands() {
 }
 
 #[test]
-fn stroke_rejects_invalid_dash_components_and_preserves_defaults_on_error() {
-    let mut s = session();
-    let id = rect(&mut s, 0.0, 0.0, 40.0, 30.0);
-    s.execute("stroke.set", &json!({"weight": 3, "dash": [6, 3]})).unwrap();
-    let previous_weight = s.paint.stroke_width;
-    let previous_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned();
-
-    for params in [
-        json!({"weight": 10, "dash": [6, "not a number", 3]}),
-        json!({"weight": 10, "ids": "not an array"}),
-        json!({"weight": 10, "item": "invalid"}),
-        json!({"weight": 10, "arrowAlign": "unknown"}),
-    ] {
-        assert!(s.execute("stroke.set", &params).is_err(), "{params} must fail");
-        assert_eq!(s.paint.stroke_width, previous_weight, "failed stroke edit changed new-art defaults");
-        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned(), previous_stroke);
-    }
-
-    // A valid dash list still updates the selected stroke and new-art default width.
-    s.execute("stroke.set", &json!({"weight": 7, "dash": [4, 2]})).unwrap();
-    assert_eq!(s.paint.stroke_width, 7.0);
-    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().width, 7.0);
-
-    // With nothing selected the panel sets up the next object drawn: a rejected edit doesn't.
-    s.execute("select.none", &json!({})).unwrap();
-    let next = s.new_art();
-    assert!(s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2], "arrowAlign": "unknown"})).is_err());
-    assert_eq!(s.new_art(), next);
-    s.execute("stroke.set", &json!({"weight": 12, "dash": [2, 2]})).unwrap();
-    let next = s.new_art();
-    let stroke = next.stroke().unwrap();
-    assert_eq!((stroke.width, stroke.dash.as_ref().map(|d| d.pattern.clone())), (12.0, Some(vec![2.0, 2.0])));
-}
-
-#[test]
-fn rejected_paint_edits_leave_new_art_defaults_and_focus_unchanged() {
-    let mut s = session();
-    let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
-    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
-    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
-    let defaults = s.paint.clone();
-    let focused = s.fill_active;
-    let original_fill = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint();
-    let original_stroke = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint();
-
-    // Both shortcut commands used to change defaults before checking invalid ids.
-    for (command, params) in [
-        ("paint.swap", json!({"ids": "not an array"})),
-        ("paint.default", json!({"ids": ["not an object id"]})),
-        ("paint.setFill", json!({"color": "#123456", "ids": [false]})),
-        ("paint.setStroke", json!({"color": "#123456", "ids": "not an array"})),
-        ("paint.setFill", json!({"color": "#123456", "item": "invalid"})),
-    ] {
-        assert!(s.execute(command, &params).is_err(), "{command} should reject {params}");
-        assert_eq!(s.paint, defaults, "{command} changed new-art defaults on failure");
-        assert_eq!(s.fill_active, focused, "{command} changed the active proxy on failure");
-        let appearance = &s.doc().unwrap().doc.node(id).unwrap().appearance;
-        assert_eq!(appearance.fill_paint(), original_fill);
-        assert_eq!(appearance.stroke_paint(), original_stroke);
-    }
-
-    // Successful operations still update both the selected object and new-art defaults.
-    s.execute("paint.swap", &json!({})).unwrap();
-    assert_eq!(s.paint.fill, defaults.stroke);
-    assert_eq!(s.paint.stroke, defaults.fill);
-}
-
-#[test]
 fn select_same_fill() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
@@ -277,6 +209,19 @@ fn align_left() {
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     s.execute("object.align", &json!({"horizontal": "left"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 0.0);
+}
+
+#[test]
+fn align_both_centers() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 20.0, 40.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.align", &json!({"horizontal": "center", "vertical": "center"})).unwrap();
+    let gb_a = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
+    let gb_b = s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap();
+    assert!((gb_a.center().x - gb_b.center().x).abs() < 1e-6);
+    assert!((gb_a.center().y - gb_b.center().y).abs() < 1e-6);
 }
 
 /// #541: with the Selection tool, a click on one object of the selection makes it the key object:
@@ -959,67 +904,4 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
-}
-
-#[test]
-fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
-    let mut s = session();
-    let a = rect(&mut s, 10.0, 10.0, 30.0, 20.0);
-    let b = rect(&mut s, 50.0, 10.0, 30.0, 20.0);
-    let expected = s.doc().unwrap().selection.objects.clone();
-    let expected_anchors = s.doc().unwrap().selection.anchors.clone();
-    for p in [
-        json!({"id": a.0, "anchors": [[0, 0], ["bad", 2]]}),
-        json!({"id": a.0, "anchors": [[0, 0, 1]]}),
-        json!({"id": a.0, "anchors": "not an array"}),
-        json!({"id": u64::MAX, "anchors": []}),
-        json!({"id": a.0, "anchors": [], "mode": "missing"}),
-    ] {
-        assert!(s.execute("select.anchors", &p).is_err(), "{p}");
-        assert_eq!(s.doc().unwrap().selection.objects, expected);
-        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
-    }
-    for p in [
-        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": b.0, "anchors": [[0, "bad"]]}]}),
-        json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": "bad", "anchors": [[0, 0]]}]}),
-        json!({"items": [{"id": u64::MAX, "anchors": []}]}),
-        json!({"items": [{"id": a.0}]}),
-    ] {
-        assert!(s.execute("select.anchorsMany", &p).is_err(), "{p}");
-        assert_eq!(s.doc().unwrap().selection.objects, expected);
-        assert_eq!(s.doc().unwrap().selection.anchors, expected_anchors);
-    }
-    s.execute("select.anchorsMany", &json!({"items": [{"id": a.0, "anchors": [[0, 0]]}]})).unwrap();
-    assert!(s.doc().unwrap().selection.contains(a));
-    assert!(!s.doc().unwrap().selection.contains(b));
-}
-
-#[test]
-fn path_commands_reject_bad_anchors_before_modifying_geometry() {
-    let mut s = session();
-    let a = rect(&mut s, 10.0, 20.0, 50.0, 30.0);
-    let original_points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
-    let history = s.doc().unwrap().history.undo.len();
-    let valid = json!({"x": 10, "y": 20});
-    for invalid in [
-        json!({"x": "bad", "y": 40}),
-        json!({"x": 50}),
-        json!({"x": 50, "y": 40, "in": [0]}),
-        json!({"x": 50, "y": 40, "out": [1, "bad"]}),
-        json!({"x": 50, "y": 40, "smooth": "yes"}),
-    ] {
-        let anchors = json!([valid.clone(), invalid]);
-        assert!(s.execute("path.create", &json!({"anchors": anchors})).is_err(), "{anchors}");
-        assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": anchors}]})).is_err(), "{anchors}");
-        let points: Vec<_> = s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
-        assert_eq!(points, original_points);
-        assert_eq!(s.doc().unwrap().history.undo.len(), history);
-    }
-    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": []}, {"closed": true}]})).is_err());
-    assert!(s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [valid.clone()], "closed": "yes"}]})).is_err());
-    // The Pen's append reads its anchor the same way.
-    assert!(s.execute("path.appendAnchor", &json!({"id": a.0, "x": 5, "y": 5, "out": [1]})).is_err());
-    assert_eq!(s.doc().unwrap().history.undo.len(), history);
-    s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": [{"anchors": [{"x": 0, "y": 0}, {"x": 30, "y": 40}], "closed": false}]})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 2);
 }

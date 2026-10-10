@@ -58,14 +58,20 @@ pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
 pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     let n = selection_len(app);
     let to = align_to(app, ui.ctx());
-    for (icon, tip, axis, v) in [
+    for (i, (icon, tip, axis, v)) in [
         ("align-start-vertical", "Horizontal Align Left", "horizontal", "left"),
         ("align-center-vertical", "Horizontal Align Center", "horizontal", "center"),
         ("align-end-vertical", "Horizontal Align Right", "horizontal", "right"),
         ("align-start-horizontal", "Vertical Align Top", "vertical", "top"),
         ("align-center-horizontal", "Vertical Align Center", "vertical", "center"),
         ("align-end-horizontal", "Vertical Align Bottom", "vertical", "bottom"),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if i == 3 && widgets::icon_button(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, size).clicked() {
+            app.run("object.align", align_params(json!({"horizontal": "center", "vertical": "center"}), to, n)).ok();
+        }
         if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
             app.run("object.align", align_params(json!({axis: v}), to, n)).ok();
         }
@@ -91,6 +97,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.x = 5.0;
         for (i, (icon, tip, axis, v)) in ALIGN.iter().enumerate() {
             if i == 3 {
+                ui.add_space(6.0);
+                if widgets::icon_button_enabled(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, n >= 1, 32.0).clicked() {
+                    app.run("object.align", align_params(json!({"horizontal": "center", "vertical": "center"}), to, n)).ok();
+                }
                 ui.add_space(6.0);
             }
             if widgets::icon_button_enabled(ui, icon, tl!(tip), false, n >= 1, 32.0).clicked() {
@@ -185,6 +195,14 @@ mod tests {
         let p = align_params(json!({"vertical": "top"}), AlignTo::Selection, 3);
         assert_eq!(p["to"], "selection");
         assert_eq!(align_params(json!({}), AlignTo::Key, 1)["to"], "key");
+    }
+
+    #[test]
+    fn align_both_centers_params() {
+        let p = align_params(json!({"horizontal": "center", "vertical": "center"}), AlignTo::Selection, 2);
+        assert_eq!(p["horizontal"], "center");
+        assert_eq!(p["vertical"], "center");
+        assert_eq!(p["to"], "selection");
     }
 
     /// #541: while the selection has a key object Align aligns to it, whatever Align To says;
