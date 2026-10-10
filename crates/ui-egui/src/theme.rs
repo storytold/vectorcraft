@@ -280,6 +280,9 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
 pub fn apply(ctx: &egui::Context, b: Brightness) {
     let t = Tokens::for_brightness(b);
     ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+    // The appearance mode decides light or dark ([`crate::prefs_dialog`]): pin egui's own theme to
+    // it, or a system change would swap in egui's stock style under the tokens.
+    ctx.set_theme(if t.dark { egui::Theme::Dark } else { egui::Theme::Light });
     let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
     v.window_fill = t.panel;

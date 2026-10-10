@@ -3725,3 +3725,9 @@ theme	Appearance	外観
 @msg	no user workspace `{from}`	ユーザーワークスペース `{from}` が見つかりません
 @msg	unknown workspace (one of {_1})	不明なワークスペースです ({_1} のいずれかを指定してください)
 @msg	workspace name can't be empty	ワークスペース名を入力してください
+	Appearance Mode	外観モード
+	Dark Theme	ダークテーマ
+	Light Theme	ライトテーマ
+	Sync with system	システムに合わせる
+	Active	使用中
+	Next Appearance Mode	次の外観モード

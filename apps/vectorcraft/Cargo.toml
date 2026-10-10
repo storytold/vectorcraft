@@ -34,6 +34,12 @@ webbrowser = { workspace = true }
 # The window's monitors, size and position (the same winit eframe runs on).
 winit = { version = "0.30", default-features = false }
 
+# Appearance Mode › Sync with system (src/appearance.rs): the XDG desktop portal's colour scheme,
+# followed through its SettingChanged signal. Already in Cargo.lock (accesskit's AT-SPI); pinned
+# exactly to the same version.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "=5.19.0"
+
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { workspace = true }
 

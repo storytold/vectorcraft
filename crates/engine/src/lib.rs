@@ -495,7 +495,15 @@ pub struct Prefs {
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
+    /// The single brightness older versions saved (and `prefs.set uiBrightness` still takes):
+    /// setting it picks that brightness and fixes the appearance mode to its family.
     pub ui_brightness: String,
+    /// `auto` (follow the system's light or dark appearance), `dark` or `light`.
+    pub appearance_mode: String,
+    /// The brightness shown in dark mode: `dark` or `mediumDark`.
+    pub dark_theme: String,
+    /// The brightness shown in light mode: `mediumLight` or `light`.
+    pub light_theme: String,
     pub canvas_color: String,
     pub auto_collapse_icon_panels: bool,
     /// User Interface › Show Tool Group Labels: the toolbar's group names (Select, Shapes, Draw…);
@@ -714,6 +722,9 @@ impl Default for Prefs {
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
+            appearance_mode: s("dark"),
+            dark_theme: s("mediumDark"),
+            light_theme: s("light"),
             canvas_color: s("matchUi"),
             auto_collapse_icon_panels: false,
             tool_group_labels: true,

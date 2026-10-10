@@ -185,6 +185,10 @@ pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
+/// The system's light or dark appearance where egui doesn't report it (Linux desktops whose
+/// windowing doesn't pass it on, such as Wayland): `None` when unknown.
+pub type SystemThemeFn = Box<dyn Fn(&egui::Context) -> Option<egui::Theme>>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
@@ -242,6 +246,9 @@ pub struct Services {
     /// and the compositor finds it not answering): what asked runs again with the answer
     /// ([`picks`]). Without it they are shown in line.
     pub start_pick: Option<picks::StartPick>,
+    /// The system appearance, for Appearance Mode › Sync with system ([`SystemThemeFn`]). Without
+    /// it, what egui reports.
+    pub system_theme: Option<SystemThemeFn>,
 }
 
 /// Cached canvas raster.
