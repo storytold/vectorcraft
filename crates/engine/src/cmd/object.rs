@@ -363,7 +363,12 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
             let t = -n.as_f64().unwrap_or(90.0).to_radians();
             Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
         }
-        _ => Affine::scale_non_uniform(-1.0, 1.0),
+        None | Some(Value::Null) => Affine::scale_non_uniform(-1.0, 1.0),
+        Some(Value::String(a)) if a == "vertical" => Affine::scale_non_uniform(-1.0, 1.0),
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
+        }
     };
     apply_transform(s, "Reflect", ids, about(o, m), p)
 }
@@ -372,8 +377,8 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
-    let m =
-        if str_param(p, "axis") == Some("vertical") { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
+    let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
+    let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
     apply_transform(s, "Shear", ids, about(o, m), p)
 }
 
@@ -936,12 +941,33 @@ impl Session {
 
 /// Measure with preview (visual) bounds? The `bounds` param, else Use Preview Bounds.
 fn preview_bounds(s: &Session, p: &Value, cmd: &str) -> Result<bool> {
-    match str_param(p, "bounds") {
+    match choice(p, cmd, "bounds", &["preview", "geometric"])? {
         None => Ok(s.prefs.use_preview_bounds),
-        Some("preview") => Ok(true),
-        Some("geometric") => Ok(false),
-        Some(b) => Err(bad(cmd, format!("bounds must be \"preview\" or \"geometric\", not `{b}`"))),
+        Some(b) => Ok(b == "preview"),
     }
+}
+
+/// Param `key` of the Align commands and Shear: one of `values`, or `None` when it is missing or
+/// null. Any other value is an error that lists `values` and names the value given.
+fn choice<'a>(p: &'a Value, cmd: &str, key: &str, values: &[&str]) -> Result<Option<&'a str>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    match v.as_str() {
+        Some(s) if values.contains(&s) => Ok(Some(s)),
+        s => {
+            let quoted: Vec<String> = values.iter().map(|value| format!("\"{value}\"")).collect();
+            let list = match quoted.split_last() {
+                Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+                _ => quoted.concat(),
+            };
+            let given = s.map_or_else(|| v.to_string(), str::to_string);
+            Err(bad(cmd, format!("{key} must be {list}, not `{given}`")))
+        }
+    }
+}
+
+/// `horizontal` and `vertical` of `object.align` and `object.distribute`, each checked by [`choice`].
+fn direction<'a>(p: &'a Value, cmd: &str) -> Result<(Option<&'a str>, Option<&'a str>)> {
+    Ok((choice(p, cmd, "horizontal", &["left", "center", "right"])?, choice(p, cmd, "vertical", &["top", "center", "bottom"])?))
 }
 
 /// `ids` with their bounds (`preview`: visual bounds).
@@ -992,9 +1018,12 @@ fn key_root(s: &Session, ids: &[NodeId]) -> Option<NodeId> {
 fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.align")?;
+    let (h, v) = direction(p, "object.align")?;
+    choice(p, "object.align", "to", &["selection", "artboard", "key"])?;
+    if h.is_none() && v.is_none() {
+        return Err(bad("object.align", "give horizontal or vertical"));
+    }
     let r = reference_rect(s, p, &ids, preview)?;
-    let h = str_param(p, "horizontal");
-    let v = str_param(p, "vertical");
     let key = key_root(s, &ids);
     let moves: Vec<(NodeId, Vec2)> = {
         let d = &s.doc()?.doc;
@@ -1037,7 +1066,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let preview = preview_bounds(s, p, "object.distribute")?;
     let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
-    let (horiz, key): (bool, fn(&Rect, bool) -> f64) = match (str_param(p, "horizontal"), str_param(p, "vertical")) {
+    let (horiz, key): (bool, fn(&Rect, bool) -> f64) = match direction(p, "object.distribute")? {
         (Some(h), _) => (
             true,
             match h {
@@ -1089,7 +1118,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let horiz = str_param(p, "axis") != Some("vertical");
+    let horiz = choice(p, "object.distributeSpacing", "axis", &["horizontal", "vertical"])? != Some("vertical");
     let preview = preview_bounds(s, p, "object.distributeSpacing")?;
     let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     items.sort_by(|a, b| if horiz { a.1.x0.total_cmp(&b.1.x0) } else { a.1.y0.total_cmp(&b.1.y0) });
@@ -1099,7 +1128,11 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let size = |r: &Rect| if horiz { r.width() } else { r.height() };
     let start = |r: &Rect| if horiz { r.x0 } else { r.y0 };
-    let spacing = p.get("spacing").and_then(Value::as_f64).filter(|g| g.is_finite());
+    let spacing = p
+        .get("spacing")
+        .filter(|v| !v.is_null())
+        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", format!("spacing must be a number, not `{v}`"))))
+        .transpose()?;
     let gap = match spacing {
         Some(g) => g,
         None => {

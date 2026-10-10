@@ -104,6 +104,37 @@ fn reflect_and_shear_tools() {
     assert!((b.width() - 150.0).abs() < 1e-6, "{b:?}");
 }
 
+/// Reflect and Shear return an error that names an `axis` they don't take (Reflect also takes an
+/// angle): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
+/// then reflects across the vertical axis and Shear shears along the horizontal one.
+#[test]
+fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 10.0);
+    let n = undo_len(&s);
+    let reflect = "axis must be \"vertical\", \"horizontal\" or an angle in degrees";
+    let shear = "axis must be \"horizontal\" or \"vertical\"";
+    for (cmd, p, msg) in [
+        ("object.reflect", json!({"axis": "diagonal", "origin": [0, 0]}), format!("{reflect}, not `diagonal`")),
+        ("object.reflect", json!({"axis": "45", "origin": [0, 0]}), format!("{reflect}, not `45`")),
+        ("object.reflect", json!({"axis": true, "origin": [0, 0]}), format!("{reflect}, not `true`")),
+        ("object.shear", json!({"angle": 30, "axis": "diagonal"}), format!("{shear}, not `diagonal`")),
+        ("object.shear", json!({"angle": 30, "axis": 90}), format!("{shear}, not `90`")),
+    ] {
+        let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
+        assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));
+    }
+    assert!(close(bounds(&s, a), Rect::new(10.0, 20.0, 40.0, 30.0)), "nothing moved: {:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), n, "no undo step");
+    s.execute("object.reflect", &json!({"axis": null, "origin": [0, 0]})).unwrap();
+    assert!(close(bounds(&s, a), Rect::new(-40.0, 20.0, -10.0, 30.0)), "across the vertical axis: {:?}", bounds(&s, a));
+    s.execute("object.reflect", &json!({"axis": 0, "origin": [0, 0]})).unwrap();
+    assert!(close(bounds(&s, a), Rect::new(-40.0, -30.0, -10.0, -20.0)), "an angle still reflects: {:?}", bounds(&s, a));
+    s.execute("object.shear", &json!({"angle": 45, "axis": null, "origin": [0, 0]})).unwrap();
+    let b = bounds(&s, a);
+    assert!((b.y0 + 30.0).abs() < 1e-6 && (b.y1 + 20.0).abs() < 1e-6 && b.width() > 30.0, "along the horizontal axis: {b:?}");
+}
+
 #[test]
 fn distort_command_maps_corners() {
     let mut s = session();

@@ -381,6 +381,64 @@ fn clipping_and_compound() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
 }
 
+/// `object.align` without `horizontal` or `vertical` (an unknown key such as `align` counts as
+/// neither) returns an error: nothing moves, and the undo and redo stacks stay as they were.
+#[test]
+fn align_without_a_direction_is_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 50.0, 30.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let stacks = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    let before = stacks(&s);
+    for p in [json!({}), json!({"align": "left"}), json!({"to": "artboard"}), json!({"horizontal": null, "vertical": null})] {
+        let e = s.execute("object.align", &p).expect_err(&p.to_string());
+        assert_eq!(e.to_string(), "invalid parameters for `object.align`: give horizontal or vertical", "{p}");
+    }
+    assert_eq!(stacks(&s), before, "no undo step, and the redo step is kept");
+    assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 50.0, "nothing moved");
+}
+
+/// Align, Distribute and Distribute Spacing return an error that names a value outside their
+/// choices: nothing moves and no undo step is recorded. A null value counts as not given, and
+/// Distribute Spacing without an `axis` spaces the objects horizontally.
+#[test]
+fn align_and_distribute_reject_bad_params_without_changing_state() {
+    let mut s = session();
+    let ids: Vec<NodeId> = [0.0, 50.0, 200.0].into_iter().map(|x| rect(&mut s, x, x / 2.0, 10.0, 10.0)).collect();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let bounds = |s: &Session| ids.iter().map(|id| s.doc().unwrap().doc.node(*id).unwrap().geometric_bounds().unwrap()).collect::<Vec<_>>();
+    let before = bounds(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let h = "horizontal must be \"left\", \"center\" or \"right\"";
+    let v = "vertical must be \"top\", \"center\" or \"bottom\"";
+    for (cmd, p, msg) in [
+        ("object.align", json!({"horizontal": "middle"}), format!("{h}, not `middle`")),
+        ("object.align", json!({"vertical": "centre"}), format!("{v}, not `centre`")),
+        ("object.align", json!({"horizontal": true}), format!("{h}, not `true`")),
+        ("object.align", json!({"horizontal": "left", "to": "page"}), "to must be \"selection\", \"artboard\" or \"key\", not `page`".into()),
+        ("object.align", json!({"horizontal": "left", "to": 0}), "to must be \"selection\", \"artboard\" or \"key\", not `0`".into()),
+        ("object.align", json!({"horizontal": "left", "bounds": false}), "bounds must be \"preview\" or \"geometric\", not `false`".into()),
+        ("object.align", json!({"horizontal": "left", "vertical": "middle"}), format!("{v}, not `middle`")),
+        ("object.distribute", json!({"horizontal": "middle"}), format!("{h}, not `middle`")),
+        ("object.distribute", json!({"vertical": "centre"}), format!("{v}, not `centre`")),
+        ("object.distribute", json!({"horizontal": "left", "vertical": "middle"}), format!("{v}, not `middle`")),
+        ("object.distributeSpacing", json!({"axis": "diagonal"}), "axis must be \"horizontal\" or \"vertical\", not `diagonal`".into()),
+        ("object.distributeSpacing", json!({"axis": "vertical", "spacing": "5"}), "spacing must be a number, not `\"5\"`".into()),
+    ] {
+        let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
+        assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));
+    }
+    assert_eq!(bounds(&s), before, "nothing moved");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("object.align", &json!({"horizontal": null, "vertical": "top", "to": null, "bounds": null})).unwrap();
+    assert!(bounds(&s).iter().all(|b| b.y0 == 0.0), "aligned to the top");
+    s.execute("object.distributeSpacing", &json!({"axis": null, "spacing": null})).unwrap();
+    assert_eq!(bounds(&s).iter().map(|b| b.x0).collect::<Vec<_>>(), [0.0, 100.0, 200.0], "equal horizontal gaps");
+}
+
 #[test]
 fn align_left() {
     let mut s = session();

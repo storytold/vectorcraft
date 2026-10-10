@@ -3482,6 +3482,8 @@ axis	Both	Les deux
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}` : none, art ou type
 @msg	artboard {0} does not exist	le plan de travail {0} n’existe pas
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	à cette échelle, le dessin mesure {w} × {h} pt, plus que ne peut contenir la zone de travail : choisissez une échelle plus petite ou ajustez-le au plan de travail
+@msg	axis must be "horizontal" or "vertical", not `{v}`	axis doit être "horizontal" ou "vertical", pas `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis doit être "vertical", "horizontal" ou un angle en degrés, pas `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arrière-plan {other} : transparent, white, black ou une couleur comme "#ff8800"
 @msg	bad color {v}	couleur non valide {v}
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
@@ -3491,6 +3493,7 @@ axis	Both	Les deux
 @msg	bad trailer	trailer non valide
 @msg	balance must be between 0 and 100	l’équilibre doit être compris entre 0 et 100
 @msg	batch step {_1} (`{id}`) failed: {e}	l’étape {_1} du lot (`{id}`) a échoué : {e}
+@msg	bounds must be "preview" or "geometric", not `{v}`	bounds doit être "preview" ou "geometric", pas `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	la luminosité doit valoir dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	impossible d’encoder le document : {0}
 @msg	can't parse shortcut `{c}`	impossible d’interpréter le raccourci `{c}`
@@ -3524,8 +3527,10 @@ axis	Both	Les deux
 @msg	freeform line {i} must be an array of point indices	la ligne de forme libre {i} doit être un tableau d’indices de points
 @msg	give both `start` and `end` [x, y] (or neither)	indiquez à la fois `start` et `end` [x, y] (ou aucun des deux)
 @msg	give corners of the path: anchors between two straight sides	indiquez des angles du tracé : des points d’ancrage entre deux côtés droits
+@msg	give horizontal or vertical	indiquez horizontal ou vertical
 @msg	give the path `id` and the width point `index`	indiquez l’`id` du tracé et l’`index` du point de largeur
 @msg	guides are locked	les repères sont verrouillés
+@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal doit être "left", "center" ou "right", pas `{v}`
 @msg	image '{key}' has no pixels and was left out	l’image « {key} » n’a aucun pixel et a été ignorée
 @msg	image data `{_1}` is missing	les données d’image `{_1}` sont manquantes
 @msg	image would be too large; lower the resolution	l’image serait trop grande ; réduisez la résolution
@@ -3725,6 +3730,7 @@ axis	Both	Les deux
 @msg	shadings of more than 4096 patches or triangles were left out	les ombrages de plus de 4096 carreaux ou triangles ont été ignorés
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	les ombrages dont les fonctions sont de type inconnu sont remplis de leur couleur médiane
 @msg	shortcut for `{k}` must be a string	le raccourci de `{k}` doit être une chaîne
+@msg	spacing must be a number, not `{v}`	spacing doit être un nombre, pas `{v}`
 @msg	stop {i} needs `offset`	le point de couleur {i} nécessite `offset`
 @msg	stop {i} needs a valid `color`	le point de couleur {i} nécessite une `color` valide
 @msg	stop {i}: `{k}` must be a number	point de couleur {i} : `{k}` doit être un nombre
@@ -3792,6 +3798,7 @@ axis	Both	Les deux
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF ASCII et ouvrez ce fichier
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	c’est un fichier PostScript (un .ai enregistré dans un ancien format ou sans compatibilité PDF, ou un fichier EPS), qui ne peut pas encore être ouvert : enregistrez-le au format PDF, .ai compatible PDF ou SVG
 @msg	this is not a PostScript file	ce n’est pas un fichier PostScript
+@msg	to must be "selection", "artboard" or "key", not `{v}`	to doit être "selection", "artboard" ou "key", pas `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	les raccourcis d’outils doivent être une seule touche (éventuellement avec Maj)
 @msg	truncated	tronqué
 @msg	unknown command `{0}`	commande inconnue `{0}`
@@ -3816,6 +3823,7 @@ axis	Both	Les deux
 @msg	unknown workspace (one of {_1})	espace de travail inconnu (valeurs possibles : {_1})
 @msg	unsupported: {0}	non pris en charge : {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	les fichiers de version {0} ne peuvent pas être compressés : seules les versions {COMPRESSED_SINCE} et ultérieures ouvrent les fichiers compressés
+@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical doit être "top", "center" ou "bottom", pas `{v}`
 @msg	width and height are at least 1 pixel	la largeur et la hauteur valent au moins 1 pixel
 @msg	workspace name can't be empty	le nom de l’espace de travail ne peut pas être vide
 @msg	{C}: no effect at index {from}	{C} : aucun effet à l’indice {from}

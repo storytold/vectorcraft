@@ -435,7 +435,7 @@ Long-tail commands:
 ```json
 {"name":"list_commands","arguments":{"filter":"align"}}
 {"name":"run_command","arguments":{"command":"select.all"}}
-{"name":"run_command","arguments":{"command":"object.align","params":{"align":"left"}}}
+{"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left"}}}
 {"name":"run_command","arguments":{"command":"object.group"}}
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/art.pdf","range":"1, 3","compatibility":"1.5"}}}
 {"name":"run_command","arguments":{"command":"document.pdfSettings","params":{"marks":{"trim":true},"includeDocument":true}}}
@@ -1505,6 +1505,10 @@ Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
 ```
+
+`object.align` needs `horizontal` or `vertical`. The three Align commands, `object.reflect` and `object.shear` return
+an error naming any `horizontal`, `vertical`, `to`, `axis` or `bounds` value outside the ones `list_commands` gives for
+that parameter, and any `spacing` that is not a number; nothing moves.
 
 ## Selection preferences
 

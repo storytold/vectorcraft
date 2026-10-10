@@ -3481,6 +3481,8 @@ axis	Both	Оба
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art или type
 @msg	artboard {0} does not exist	монтажная область {0} не существует
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при этом масштабе рисунок имеет размер {w} × {h} пт, что больше холста: выберите меньший масштаб или впишите его в монтажную область
+@msg	axis must be "horizontal" or "vertical", not `{v}`	axis должно быть "horizontal" или "vertical", а не `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
 @msg	bad colour `{hex}` (#rrggbb)	недопустимый цвет `{hex}` (#rrggbb)
@@ -3490,6 +3492,7 @@ axis	Both	Оба
 @msg	bad trailer	недопустимый трейлер
 @msg	balance must be between 0 and 100	баланс должен быть от 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	шаг пакета {_1} (`{id}`) не выполнен: {e}
+@msg	bounds must be "preview" or "geometric", not `{v}`	bounds должно быть "preview" или "geometric", а не `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	яркость должна быть dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не удалось закодировать документ: {0}
 @msg	can't parse shortcut `{c}`	не удалось разобрать сочетание `{c}`
@@ -3523,8 +3526,10 @@ axis	Both	Оба
 @msg	freeform line {i} must be an array of point indices	произвольная линия {i} должна быть массивом индексов точек
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
+@msg	give horizontal or vertical	укажите horizontal или vertical
 @msg	give the path `id` and the width point `index`	укажите `id` контура и `index` точки ширины
 @msg	guides are locked	направляющие заблокированы
+@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal должно быть "left", "center" или "right", а не `{v}`
 @msg	image '{key}' has no pixels and was left out	изображение '{key}' не имеет пикселей и было пропущено
 @msg	image data `{_1}` is missing	данные изображения `{_1}` отсутствуют
 @msg	image would be too large; lower the resolution	изображение было бы слишком большим; уменьшите разрешение
@@ -3724,6 +3729,7 @@ axis	Both	Оба
 @msg	shadings of more than 4096 patches or triangles were left out	заливки с более чем 4096 фрагментов или треугольников были пропущены
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	заливки, функции которых имеют неизвестный тип, заполняются своим средним цветом
 @msg	shortcut for `{k}` must be a string	сочетание для `{k}` должно быть строкой
+@msg	spacing must be a number, not `{v}`	spacing должно быть числом, а не `{v}`
 @msg	stop {i} needs `offset`	точке перехода {i} нужен `offset`
 @msg	stop {i} needs a valid `color`	точке перехода {i} нужен допустимый `color`
 @msg	stop {i}: `{k}` must be a number	точка перехода {i}: `{k}` должно быть числом
@@ -3791,6 +3797,7 @@ axis	Both	Оба
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	это чертёж DWG, который невозможно прочитать: сохраните его из приложения CAD как ASCII DXF и откройте его
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо файл EPS), который пока невозможно открыть: сохраните его как PDF, .ai с совместимостью с PDF или SVG
 @msg	this is not a PostScript file	это не файл PostScript
+@msg	to must be "selection", "artboard" or "key", not `{v}`	to должно быть "selection", "artboard" или "key", а не `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	сочетания инструментов должны быть одной клавишей (необязательно с Shift)
 @msg	truncated	усечено
 @msg	unknown command `{0}`	неизвестная команда `{0}`
@@ -3815,6 +3822,7 @@ axis	Both	Оба
 @msg	unknown workspace (one of {_1})	неизвестная рабочая среда (одна из: {_1})
 @msg	unsupported: {0}	не поддерживается: {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файлы версии {0} не могут быть сжаты: только версия {COMPRESSED_SINCE} и новее открывают сжатые файлы
+@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical должно быть "top", "center" или "bottom", а не `{v}`
 @msg	width and height are at least 1 pixel	ширина и высота должны быть не менее 1 пикселя
 @msg	workspace name can't be empty	имя рабочей среды не может быть пустым
 @msg	{C}: no effect at index {from}	{C}: нет эффекта с индексом {from}

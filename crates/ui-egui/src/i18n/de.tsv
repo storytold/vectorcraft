@@ -3384,6 +3384,8 @@ theme	Appearance	Erscheinungsbild
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art oder type
 @msg	artboard {0} does not exist	Zeichenfläche {0} ist nicht vorhanden
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	in diesem Maßstab misst die Zeichnung {w} × {h} pt, mehr als die Arbeitsfläche fasst: Wählen Sie einen kleineren Maßstab oder passen Sie sie an die Zeichenfläche an
+@msg	axis must be "horizontal" or "vertical", not `{v}`	axis muss "horizontal" oder "vertical" sein, nicht `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
@@ -3393,6 +3395,7 @@ theme	Appearance	Erscheinungsbild
 @msg	bad trailer	fehlerhafter Trailer
 @msg	balance must be between 0 and 100	balance muss zwischen 0 und 100 liegen
 @msg	batch step {_1} (`{id}`) failed: {e}	Stapelschritt {_1} (`{id}`) ist fehlgeschlagen: {e}
+@msg	bounds must be "preview" or "geometric", not `{v}`	bounds muss "preview" oder "geometric" sein, nicht `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness muss dark|mediumDark|mediumLight|light sein
 @msg	can't encode the document: {0}	das Dokument kann nicht kodiert werden: {0}
 @msg	can't parse shortcut `{c}`	Tastaturbefehl `{c}` kann nicht ausgewertet werden
@@ -3426,8 +3429,10 @@ theme	Appearance	Erscheinungsbild
 @msg	freeform line {i} must be an array of point indices	Freiformlinie {i} muss ein Array von Punktindizes sein
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
 @msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
+@msg	give horizontal or vertical	geben Sie horizontal oder vertical an
 @msg	give the path `id` and the width point `index`	geben Sie die `id` des Pfads und den `index` des Breitenpunkts an
 @msg	guides are locked	die Hilfslinien sind gesperrt
+@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal muss "left", "center" oder "right" sein, nicht `{v}`
 @msg	image '{key}' has no pixels and was left out	das Bild '{key}' hat keine Pixel und wurde ausgelassen
 @msg	image data `{_1}` is missing	die Bilddaten `{_1}` fehlen
 @msg	image would be too large; lower the resolution	das Bild wäre zu groß; verringern Sie die Auflösung
@@ -3628,6 +3633,7 @@ theme	Appearance	Erscheinungsbild
 @msg	shadings of more than 4096 patches or triangles were left out	Schattierungen mit mehr als 4096 Teilflächen oder Dreiecken wurden ausgelassen
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	Schattierungen, deren Funktionen einen unbekannten Typ haben, werden mit ihrer mittleren Farbe gefüllt
 @msg	shortcut for `{k}` must be a string	der Tastaturbefehl für `{k}` muss eine Zeichenfolge sein
+@msg	spacing must be a number, not `{v}`	spacing muss eine Zahl sein, nicht `{v}`
 @msg	stop {i} needs `offset`	Farbstopp {i} braucht `offset`
 @msg	stop {i} needs a valid `color`	Farbstopp {i} braucht eine gültige `color`
 @msg	stop {i}: `{k}` must be a number	Farbstopp {i}: `{k}` muss eine Zahl sein
@@ -3695,6 +3701,7 @@ theme	Appearance	Erscheinungsbild
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	dies ist eine PostScript-Datei (eine .ai-Datei in einem älteren Format oder ohne PDF-Kompatibilität oder eine EPS-Datei), die noch nicht geöffnet werden kann: Speichern Sie sie als PDF, als PDF-kompatible .ai-Datei oder als SVG
 @msg	this is not a PostScript file	dies ist keine PostScript-Datei
+@msg	to must be "selection", "artboard" or "key", not `{v}`	to muss "selection", "artboard" oder "key" sein, nicht `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
 @msg	unknown command `{0}`	unbekannter Befehl `{0}`
@@ -3719,6 +3726,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown workspace (one of {_1})	unbekannter Arbeitsbereich (einer von {_1})
 @msg	unsupported: {0}	nicht unterstützt: {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	Dateien der Version {0} können nicht komprimiert werden: Erst Version {COMPRESSED_SINCE} und neuer öffnen komprimierte Dateien
+@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical muss "top", "center" oder "bottom" sein, nicht `{v}`
 @msg	width and height are at least 1 pixel	Breite und Höhe betragen mindestens 1 Pixel
 @msg	workspace name can't be empty	der Name des Arbeitsbereichs darf nicht leer sein
 @msg	{C}: no effect at index {from}	{C}: kein Effekt bei Index {from}
