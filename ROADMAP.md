@@ -1,8 +1,8 @@
 # VectorCraft Roadmap
 
-**Stage: alpha** · next: beta, ~20 points (ready for real work ~55% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
+**Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (essentials-user score ~75% added; ready for real work re-examined: 55% full, 65% mainstream; core-workflow gate applied: stays alpha; earlier the same day: full re-measure against Illustrator 2026 30.x, restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (full readiness ~62% by the standard's additive method; per-audience hours; essentials-user score ~75% added; ready for real work re-examined: 55% full, 65% mainstream; core-workflow gate applied: stays alpha; earlier the same day: full re-measure against Illustrator 2026 30.x, restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -24,11 +24,16 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 |---|---|---|
 | **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 347/375 wired (92.5%), tools 89/92, Illustrator effects 44/50, Photoshop effects 20/57, 3D 0/4 |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
-| **Ready for real work, mainstream illustrator** (paths, type, colour, artboards, effects, SVG/PDF/PNG, their own `.ai`) | **~65%** (60–70%) | estimated |
-| **Ready for real work, full Illustrator** (decides the stage) | **~55%** (50–60%) | estimated |
-| **Ready for real work, essentials user** (core tools, default settings) | **~75%** (70–80%) | estimated, [method](docs/target-app-parity.md#essentials-user) |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
+
+**Readiness by audience** (all estimated; method in [target-app-parity.md](docs/target-app-parity.md#ready-for-real-work)):
+
+| Audience | Ready % | Opus 5.5 agent hours to ~95% (one agent) | With 4–6 agents | Work that dominates |
+|---|---:|---:|---:|---|
+| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (55–90 h), raster effects (30–50 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
+| **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
+| **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
 
 Hours are Opus 5.5 agent wall-clock hours, calibrated from this repo's merged-PR timestamps (e.g. 0.7–1.2 h per
 Photoshop-style filter, ~0.8 h per medium feature); see [calibration](docs/target-app-parity.md#calibration).
@@ -134,6 +139,7 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Method aligned with the standard, no new evidence: full ready for real work is the additive weighted sum, ~62%; hours per audience; beta ~13 points away |
 | 2026-10-10 | minor | Added the essentials-user readiness score (~75%) |
 | 2026-10-10 | minor | Ready for real work re-examined against the issue tracker and user feedback: 50% → 55% (full), 65% mainstream added; see target-app-parity.md |
 | 2026-10-10 | minor | Applied the core-workflow gate (docs/roadmap.md › Alpha gate): passes, stage stays alpha |

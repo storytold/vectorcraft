@@ -203,7 +203,7 @@ and what's next; [`docs/target-app-parity.md`](docs/target-app-parity.md) the fu
 [`docs/gaps.md`](docs/gaps.md) the ranked list of what's missing.
 
 **Where we are (2026-10-10): alpha.** About 88% of Illustrator 2026's menu items, tools, effects and formats exist
-(92.5% of menu items do something), feature depth is ~75%, and we estimate ~65% "ready for real work" for a mainstream illustrator (~55% against
+(92.5% of menu items do something), feature depth is ~75%, and we estimate ~65% "ready for real work" for a mainstream illustrator (~62% against
 all of Illustrator): everyday
 vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and

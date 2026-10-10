@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (essentials-user score ~75% added; ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (full readiness recomputed as the standard's additive weighted sum, ~62%; per-audience hours; essentials-user score ~75% added; ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 The authoritative parity assessment. [`ROADMAP.md`](../ROADMAP.md) summarizes it; [`gaps.md`](gaps.md) is
 the work list made from it. Deep areas have their own checklists: [UI and interaction](ui-parity.md),
@@ -14,7 +14,7 @@ the work list made from it. Deep areas have their own checklists: [UI and intera
 | **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 347 of 375 items wired (92.5%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 20 of 57 (35%), 3D 0 of 4; blended by the area weights below |
 | **Feature depth** (each area scored by behaviour, weighted) | **~75%** | estimated, area table below |
 | **Ready for real work, mainstream illustrator** | **~65%** (60–70%) | estimated, see [Ready for real work](#ready-for-real-work) |
-| **Ready for real work, full Illustrator** (decides the stage) | **~55%** (50–60%) | estimated |
+| **Ready for real work, full Illustrator** (decides the stage) | **~62%** (57–67%) | estimated: additive weighted sum over the dimensions, see [Ready for real work](#ready-for-real-work) |
 | **Ready for real work, essentials user** (core features only, see [Essentials user](#essentials-user)) | **~75%** (70–80%) | estimated |
 | **Remaining to beta** | **~170–270 h** one agent | estimated, [gaps.md](gaps.md) beta list |
 | **Remaining to full parity** | **~360–590 h** one agent · ~95–165 h wall clock with 4–6 agents | estimated, sum of the area table + fidelity pass + hardening |
@@ -107,20 +107,48 @@ documents) moved other rows up.
 
 ## Ready for real work
 
-Two numbers, because the professionals who use VectorCraft mostly live in a subset of Illustrator:
+Three audiences, each with its own readiness and its own hours to ~95%. Essentials ⊂ mainstream ⊂ full, so the
+hours nest. Hours are calibrated as in [Calibration](#calibration). They divide by about 3.5–4 across 4–6 agents
+for the feature and fidelity work; stability on users' hardware, the real-file corpus and native-language
+review parallelize less and need humans.
 
-| | Value | Kind |
-|---|---|---|
-| **Mainstream illustrator** (pen, shape and path editing, type, colour, gradients and swatches, artboards and layers, live effects and appearance, SVG/PDF/PNG export, opening their own `.ai` files) | **~65%** (60–70%) | estimated |
-| **Full Illustrator** (every area, including 3D, the Effect Gallery, CJK composition, scripting, generative AI) | **~55%** (50–60%) | estimated; decides the stage |
+| Audience | Ready % | Opus 5.5 agent hours to ~95% (one agent) | With 4–6 agents | Work that dominates |
+|---|---:|---:|---:|---|
+| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (55–90 h), raster effects (30–50 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
+| **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
+| **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
 
-Both start from feature depth over the areas concerned: **~83%** over the 16 mainstream areas (weight 83 of
-105: selection, drawing, path operations, colour, strokes, appearance, live effects, type core, symbols and
-blends, layers and artboards, view, guides, file formats, Export for Screens, UI chrome, print), **~75%** over
-all of them. Each is then discounted by about ×0.9 for interaction fidelity, ×0.92 for stability on real
-machines and ×0.92 for Illustrator-file exchange (83 × 0.9 × 0.92 × 0.92 ≈ 63; 75 × the same ≈ 57). The
-dimensions a typical illustrator rarely hits (plug-in ecosystem, generative AI, pen tilt, languages beyond
-their own) are **not** in either number; they cost the full-parity hours, not readiness.
+### Full Illustrator: additive weighted sum over the dimensions
+
+The standard's method, the same in every app: a weighted **sum** over the dimensions, with written weights.
+Values are from [By dimension](#by-dimension).
+
+| Dimension | Weight | Value | Contribution |
+|---|---:|---:|---:|
+| Features (depth) | 35 | 75% | 26.3 |
+| UI/UX fidelity | 15 | 55% | 8.3 |
+| File formats | 12 | 75% | 9.0 |
+| Stability | 10 | 60% | 6.0 |
+| Performance | 8 | 60% | 4.8 |
+| Platforms | 5 | 80% | 4.0 |
+| Hardware | 4 | 35% | 1.4 |
+| Localization | 4 | 54% | 2.2 |
+| Ecosystem and plug-ins | 4 | 15% | 0.6 |
+| AI features | 3 | 0% | 0.0 |
+| **Ready for real work** | **100** | | **~62%** |
+
+The weights put most of the number on what professionals use daily (features, interaction, files, stability).
+Generative AI also sits inside the features row at weight 2 of 105, so it is counted slightly twice; that costs
+under a point.
+
+### Mainstream illustrator and essentials user
+
+Both start from feature depth over the areas concerned. **Mainstream:** ~83% over 16 areas (weight 83 of 105:
+selection, drawing, path operations, colour, strokes, appearance, live effects, type core, symbols and blends,
+layers and artboards, view, guides, file formats, Export for Screens, UI chrome, print). That is discounted
+×0.9 for interaction fidelity, ×0.92 for stability on real machines and ×0.92 for Illustrator-file exchange
+(83 × 0.9 × 0.92 × 0.92 ≈ 63). The dimensions a typical illustrator rarely hits (plug-in ecosystem,
+generative AI, pen tilt, languages beyond their own) are left out. **Essentials:** see [Essentials user](#essentials-user).
 
 The discounts, with the evidence:
 
@@ -423,6 +451,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Method aligned with the standard, no new evidence: the full ready-for-real-work number is the additive weighted sum over the dimensions (~62%). The multiplicative 55% from earlier today is withdrawn, and the 50% before it was an unbroken-down judgement. Added hours to ~95% for each audience (full 340–560 h, mainstream 230–380 h, essentials 60–105 h). Beta distance is now ~13 points |
 | 2026-10-10 | minor | Added the essentials-user readiness score (~75%): 16 core features weighted, depth ~91%, discounted for launch, discoverability and files people send |
 | 2026-10-10 | minor | Second look at ready for real work at the owner's request: 50% → 55% full Illustrator, and a new mainstream-illustrator figure of 65%. Why: the old 25-point discount was a judgement with no breakdown. Now each discount is written down and checked against the tracker: 86% of 79 core-drawing issues closed, 20 of 28 `.ai`/EPS issues fixed and the open ones about structure, praise from 15 people, no reports of switching; dimensions a typical illustrator rarely hits are taken out of readiness. Feature breadth, depth and hours unchanged |
 | 2026-10-10 | minor | Stage checked against the core-workflow gate: passes, stays alpha |
