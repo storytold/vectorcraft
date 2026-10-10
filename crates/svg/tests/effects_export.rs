@@ -22,6 +22,23 @@ fn fx(id: &str) -> Effect {
 }
 
 #[test]
+fn revolve_exports_shaded_vector_faces_and_keeps_the_source_live() {
+    let bp = vectorcraft_geom::BezPath::from_svg("M100 30 L130 50 L130 140 L100 160").unwrap();
+    let mut n = Node::path(
+        NodeId(0),
+        vectorcraft_geom::PathData::from_bezpath(&bp),
+        Appearance::basic(Paint::solid(Color::rgb(0.8, 0.2, 0.1)), Paint::None, 0.0),
+    );
+    n.appearance.effects.push(fx("threeD.revolve"));
+    let d = doc_with(n);
+    let before = d.clone();
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.matches("<path").count() > 50, "Revolve should export vector surfaces");
+    assert!(!svg.contains("<image"), "no raster fallback");
+    assert_eq!(d, before, "export leaves source editable");
+}
+
+#[test]
 fn a_strokes_own_glow_filters_the_stroke_element_only() {
     let mut n = Node::path(
         NodeId(0),

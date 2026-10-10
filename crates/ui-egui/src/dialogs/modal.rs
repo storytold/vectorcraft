@@ -11,6 +11,11 @@ use crate::theme::{self, Tokens};
 /// screen's centre until it is moved, with `margin` inside its frame. `add` draws the contents and
 /// should start with [`heading`] (or [`drag_band`]) so the window can be moved.
 pub(crate) fn show<R>(ctx: &egui::Context, title: &str, id: Id, nudge: f32, margin: i8, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    show_at(ctx, title, id, egui::vec2(0.0, nudge), margin, add)
+}
+
+/// A modal that starts at a chosen offset, then keeps the user's dragged position.
+pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2, margin: i8, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     let t = Tokens::get(ctx);
     let dim = backdrop();
     egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
@@ -23,7 +28,7 @@ pub(crate) fn show<R>(ctx: &egui::Context, title: &str, id: Id, nudge: f32, marg
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .anchor(egui::Align2::CENTER_CENTER, offset(ctx, id, nudge))
+        .anchor(egui::Align2::CENTER_CENTER, offset(ctx, id, initial))
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(margin)))
         .show(ctx, add)
         .and_then(|r| r.inner)
@@ -67,9 +72,9 @@ fn handle(id: Id) -> Id {
 /// its [`drag_band`] is dragged, where it sat when the drag began plus how far the pointer has moved
 /// since the press, kept on screen (applied before the window places itself, so it follows the
 /// pointer without a frame's lag).
-fn offset(ctx: &egui::Context, id: Id, nudge: f32) -> Vec2 {
+fn offset(ctx: &egui::Context, id: Id, initial: Vec2) -> Vec2 {
     let (key, start_key) = (id.with("modal-offset"), id.with("modal-drag-start"));
-    let offset = ctx.data(|m| m.get_temp::<Vec2>(key)).unwrap_or(egui::vec2(0.0, nudge));
+    let offset = ctx.data(|m| m.get_temp::<Vec2>(key)).unwrap_or(initial);
     let dragged = ctx.read_response(handle(id)).is_some_and(|r| r.dragged());
     let moved = ctx.input(|i| Some(i.pointer.latest_pos()? - i.pointer.press_origin()?));
     let (true, Some(moved), Some(rect)) = (dragged, moved, ctx.memory(|m| m.area_rect(id))) else {

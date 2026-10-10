@@ -3362,6 +3362,10 @@ fn effect_menu() -> Vec<Item> {
             };
             out.push(sub(sub_name, placeholder));
         } else {
+            let mut items = items;
+            if sub_name == "3D and Materials" {
+                items.extend([todo("Extrude & Bevel…"), todo("Inflate…"), todo("Rotate…"), todo("Materials…")]);
+            }
             out.push(sub(sub_name, items));
         }
     }

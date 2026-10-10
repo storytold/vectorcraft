@@ -3994,3 +3994,25 @@ theme	Appearance	Erscheinungsbild
 	Define a variable first	Definieren Sie zuerst eine Variable
 	Text	Text
 	Visibility	Sichtbarkeit
+# 3D and Materials › Revolve: its options dialog and gizmos.
+	Ambient	Umgebungslicht
+	Axis side	Achsenseite
+	Direction	Richtung
+	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
+	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
+	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
+	Elevation	Höhe
+	Intensity	Intensität
+	Keep visible surfaces only when expanding	Beim Umwandeln nur sichtbare Flächen behalten
+	Lighting	Beleuchtung
+	Reset all	Alle zurücksetzen
+	Reset all Revolve settings to their defaults.	Alle Einstellungen für „Kreiseln“ auf ihre Standardwerte zurücksetzen.
+	Reset to default	Auf Standard zurücksetzen
+	Revolve angle	Kreiselwinkel
+	Rotation X	Drehung X
+	Rotation Y	Drehung Y
+	Rotation Z	Drehung Z
+	Segments	Segmente
+	Shading	Schattierung
+	Show axis	Achse einblenden
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Entfernt bei „Aussehen umwandeln“ verdeckte Geometrie. Die Live-Vorschau behält die ganze Oberfläche. Transparente Farben und Oberflächen jenseits der Sichtbarkeitsgrenzen behalten alle Flächen.

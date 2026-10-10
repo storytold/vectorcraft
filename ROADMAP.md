@@ -22,7 +22,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 347/375 wired (92.5%), tools 89/92, Illustrator effects 44/50, Photoshop effects 20/57, 3D 0/4 |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 20/57, 3D 1/4 (initial Revolve) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -31,7 +31,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | Audience | Ready % | Opus 5.5 agent hours to ~95% (one agent) | With 4–6 agents | Work that dominates |
 |---|---:|---:|---:|---|
-| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (55–90 h), raster effects (30–50 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
+| **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (30–50 h), advanced type (20–28 h), generative AI (30–60 h), localization (70–110 h) and ecosystem |
 | **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
 | **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
 
@@ -70,7 +70,7 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | Appearance, transparency, graphic styles, masks | 97% | 1–2 |
 | Live vector effects | 85% | 6–10 |
 | Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 40% | 30–50 |
-| 3D and Materials | 0% | 55–90 |
+| 3D and Materials | ~8% | 50–85 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
 | Symbols, blends, envelopes, Repeat, perspective | 85% | 6–10 |
@@ -123,7 +123,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
-| 2026-10-10 | Progress docs re-measured and restructured to the craftrules standard (this page, `docs/target-app-parity.md`, `gaps.md`, `ui-parity.md`, the format, hardware, localization, effects and type checklists). Same day: v0.8.0; Effect › Distort, Pixelate and Texture filters (13); German interface; Variables (data merge); Graph Type value axes and tick marks; restart when the first frame never reaches the screen (#964) |
+| 2026-10-10 | Initial live Revolve (Effect › 3D and Materials, #846, #605), in its own `three-d` crate. Progress docs re-measured and restructured to the craftrules standard (this page, `docs/target-app-parity.md`, `gaps.md`, `ui-parity.md`, the format, hardware, localization, effects and type checklists). Same day: v0.8.0; Effect › Distort, Pixelate and Texture filters (13); German interface; Variables (data merge); Graph Type value axes and tick marks; restart when the first frame never reaches the screen (#964) |
 | 2026-10-09 | Radial Blur, Smart Blur, Unsharp Mask (gap 2 begins); 340 commits, the busiest day |
 | 2026-10-08 | v0.5.0–v0.7.0; community contributions: Pen and shape-tool modifiers, Layers, Artboards, Japanese composition, Hebrew/Arabic type, interface languages, saved selections |
 | 2026-10-07 | v0.4.0; issue fixes; Layers panel rework |

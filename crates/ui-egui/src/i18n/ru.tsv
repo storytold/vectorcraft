@@ -4035,3 +4035,28 @@ axis	Both	Оба
 	Define a variable first	Сначала определите переменную
 	Text	Текст
 	Visibility	Видимость
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	Освещение
+	Revolve angle	Угол вращения профиля
+	Axis side	Сторона оси
+	Rotation X	Поворот X
+	Rotation Y	Поворот Y
+	Rotation Z	Поворот Z
+	Shading	Затенение
+	Direction	Направление
+	Elevation	Высота
+	Ambient	Фоновое освещение
+	Segments	Сегменты
+	Show axis	Показать ось
+	Reset all	Сбросить всё
+	Reset to default	Вернуть значение по умолчанию
+	Reset all Revolve settings to their defaults.	Возвращает все настройки вращения профиля к значениям по умолчанию.
+	Drag values or labels. Double-click a value to type.	Перетаскивайте значения или подписи. Для ввода дважды щёлкните значение.
+	Drag rings to rotate. Shift snaps to 15°.	Перетаскивайте кольца для вращения. Shift задаёт шаг 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Перетаскивайте источник света или кольца. Shift задаёт шаг 15°.
+lighting	Light	Свет
+	Keep visible surfaces only when expanding	При разборе сохранять только видимые поверхности
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Удаляет скрытую геометрию при разборе оформления. Предпросмотр сохраняет всю поверхность. Прозрачные краски и поверхности, превышающие ограничения видимости, сохраняют все грани.

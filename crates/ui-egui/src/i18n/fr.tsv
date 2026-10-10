@@ -4049,3 +4049,26 @@ effect	Soft	Doux
 	Define a variable first	Définissez d’abord une variable
 	Text	Texte
 	Visibility	Visibilité
+
+# Interactive Revolve controls.
+	Lighting	Éclairage
+	Revolve angle	Angle de révolution
+	Axis side	Côté de l’axe
+	Rotation X	Rotation X
+	Rotation Y	Rotation Y
+	Rotation Z	Rotation Z
+	Shading	Ombrage
+	Direction	Direction
+	Elevation	Élévation
+	Ambient	Lumière ambiante
+	Segments	Segments
+	Show axis	Afficher l’axe
+	Reset all	Tout réinitialiser
+	Reset to default	Valeur par défaut
+	Reset all Revolve settings to their defaults.	Rétablir les valeurs par défaut de tous les réglages de révolution.
+	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
+	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
+	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
+lighting	Light	Lumière

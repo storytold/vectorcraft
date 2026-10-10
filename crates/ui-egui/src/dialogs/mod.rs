@@ -67,6 +67,8 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
+mod revolve;
+pub(crate) mod revolve_gizmo;
 pub mod saturate;
 mod save_changes;
 pub mod save_for_web;
@@ -355,6 +357,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).
     let (shown_id, focus_id) = (egui::Id::new("dialog-shown"), egui::Id::new("dialog-focus-pending"));
     let Some(mut d) = app.ui.dialog.clone() else {
+        revolve_gizmo::clear(ctx);
         app.ui.dialog_file = None;
         ctx.data_mut(|m| {
             m.remove::<String>(shown_id);
@@ -362,6 +365,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
         return;
     };
+    if !revolve_gizmo::active(&d) {
+        revolve_gizmo::clear(ctx);
+    }
     let focus_first = ctx.data_mut(|m| {
         if m.get_temp::<String>(shown_id).as_deref() != Some(d.kind.as_str()) {
             m.insert_temp(shown_id, d.kind.clone());
@@ -377,7 +383,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut cancel = false;
     let mut discard = false;
     let heading = (spec.heading)(&d);
-    modal::show(ctx, &heading, egui::Id::new(("dialog", d.kind.as_str())), -40.0, MARGIN, |ui| {
+    let revolves = revolve_gizmo::active(&d);
+    if revolves {
+        revolve_gizmo::show(app, ctx, &mut d);
+    }
+    let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
+    let id = egui::Id::new(("dialog", d.kind.as_str()));
+    let id = if revolves { id.with("revolve") } else { id };
+    modal::show_at(ctx, &heading, id, initial, MARGIN, |ui| {
         // Never wider than the window (a large UI scale in a small window): the text wraps.
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
         ui.set_min_width(spec.min_width.min(room));

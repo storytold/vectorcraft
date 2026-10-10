@@ -13,7 +13,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 |---|---:|---:|---:|---:|
 | Illustrator effects (vector and stylize) | 50 | 44 | 88% | 6–10 |
 | Photoshop effects (raster, Effect Gallery) | 57 | 20 | 35% | 30–50 |
-| 3D and Materials | 4 (+3 Classic) | 0 | 0% | 50–80 |
+| 3D and Materials | 4 (+3 Classic) | 1 (initial Revolve) | ~8% | 45–75 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
 ## Illustrator effects
@@ -57,17 +57,20 @@ Gallery dialog another 4–6 h. These parallelize well across agents.
 
 | Item | Ours |
 |---|---|
-| Extrude & Bevel, Revolve, Inflate, Rotate | none (menu stubs) |
+| Revolve | initial: live, editable profile, rotation and light gizmos, flat shading, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
+| Extrude & Bevel, Inflate, Rotate | none (menu stubs) |
 | Materials panel, lighting, ray-traced render | none |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |
 | Export 3D objects (OBJ, USDA, glTF) | none |
 
-Plan: a software renderer in its own crate (the layering allows it below L6), output to SVG/PDF as images or
-projected vectors. 50–80 h, the largest single gap.
+The `three-d` crate (depends only on `geom`) builds, rotates, projects, shades and depth-sorts the surfaces;
+the effects crate turns them into art. What's left (Extrude & Bevel, Inflate, Rotate, caps, materials, ray-traced
+rendering, Turntable, 3D export) is 45–75 h, still the largest single gap.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Initial Revolve landed (#846) |
 | 2026-10-10 | major | First checklist, counted from the effects catalogue (20/57 Photoshop effects, 44/50 Illustrator effects) |

@@ -229,6 +229,26 @@ fn effect_dialog_applies_to_its_appearance_item() {
 }
 
 #[test]
+fn revolve_dialog_preview_cancel_confirm_and_undo() {
+    let mut app = app();
+    app.run("path.create", json!({"d":"M150 40 L180 60 L180 140 L150 160"})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("effect.dialog", json!({"effect":"threeD.revolve","item":null})).unwrap();
+    frame(&mut app, Default::default());
+    assert!(app.session.in_interaction());
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    app.run("effect.dialog", json!({"effect":"threeD.revolve","item":null})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(180));
+    frame(&mut app, Default::default());
+    confirm(&mut app).unwrap();
+    assert_ne!(app.session.doc().unwrap().doc, before);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn dialogs_are_as_tall_as_their_content() {
     // The save prompt, shown after a taller dialog, is as tall as its text and buttons: no empty
     // band around the buttons, nothing inherited from the other dialog.

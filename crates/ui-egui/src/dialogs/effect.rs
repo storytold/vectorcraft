@@ -127,6 +127,12 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (id, relative) = (d.str("__effect"), d.bool("relative"));
+    if id == vectorcraft_effects::REVOLVE {
+        super::revolve::body(app, ui, d);
+        let (cmd, params) = command(d);
+        form::preview(app, ui, d, &d.str("__label"), cmd, params);
+        return false;
+    }
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(ui, d, &plugin.manifest().params),

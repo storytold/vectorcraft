@@ -2754,3 +2754,30 @@
 	Ocean Ripple…	Ondulação oceânica…
 	Rename Data Set	Renomear conjunto de dados
 	Rename Variable	Renomear variável
+
+# Interactive Revolve controls.
+	Lighting	Iluminação
+	Revolve angle	Ângulo de giro
+	Axis side	Lado do eixo
+	Rotation X	Rotação X
+	Rotation Y	Rotação Y
+	Rotation Z	Rotação Z
+	Shading	Sombreamento
+	Direction	Direção
+	Elevation	Elevação
+	Intensity	Intensidade
+	Ambient	Luz ambiente
+	Segments	Segmentos
+	Show axis	Mostrar eixo
+	Reset all	Redefinir tudo
+	Reset to default	Restaurar padrão
+	Reset all Revolve settings to their defaults.	Restaurar os valores padrão de todas as configurações de revolução.
+	Drag values or labels. Double-click a value to type.	Arraste os valores ou rótulos. Clique duas vezes em um valor para digitá-lo.
+	Drag rings to rotate. Shift snaps to 15°.	Arraste os anéis para girar. Shift ajusta em incrementos de 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Arraste a luz ou seus anéis. Shift ajusta em incrementos de 15°.
+lighting	Light	Luz
+	Keep visible surfaces only when expanding	Manter apenas as superfícies visíveis ao expandir
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Recortar a geometria coberta ao expandir a aparência. A visualização ao vivo mantém toda a superfície. Pinturas transparentes e superfícies que excedem os limites de visibilidade mantêm todas as faces.
+	Left	Esquerda
+	Right	Direita
+	Offset	Deslocamento

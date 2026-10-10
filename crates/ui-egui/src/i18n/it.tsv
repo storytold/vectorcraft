@@ -4039,3 +4039,28 @@ effect	Regular	Normale
 	Define a variable first	Definisci prima una variabile
 	Text	Testo
 	Visibility	Visibilità
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	Illuminazione
+	Revolve angle	Angolo di rivoluzione
+	Axis side	Lato dell’asse
+	Rotation X	Rotazione X
+	Rotation Y	Rotazione Y
+	Rotation Z	Rotazione Z
+	Shading	Ombreggiatura
+	Direction	Direzione
+	Elevation	Elevazione
+	Ambient	Luce ambientale
+	Segments	Segmenti
+	Show axis	Mostra asse
+	Reset all	Ripristina tutto
+	Reset to default	Ripristina valore predefinito
+	Reset all Revolve settings to their defaults.	Ripristina tutte le impostazioni di rivoluzione ai valori predefiniti.
+	Drag values or labels. Double-click a value to type.	Trascina i valori o le etichette. Fai doppio clic su un valore per digitarlo.
+	Drag rings to rotate. Shift snaps to 15°.	Trascina gli anelli per ruotare. Shift usa incrementi di 15°.
+	Drag the light, or its rings. Shift snaps to 15°.	Trascina la luce o i suoi anelli. Shift usa incrementi di 15°.
+lighting	Light	Luce
+	Keep visible surfaces only when expanding	Mantieni solo le superfici visibili durante l’espansione
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Ritaglia la geometria coperta durante Espandi aspetto. L’anteprima mantiene la superficie completa. Le tinte trasparenti e le superfici che superano i limiti di visibilità mantengono tutte le facce.

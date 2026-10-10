@@ -42,6 +42,7 @@ mod marks;
 pub mod pixel;
 mod raster;
 mod reshape;
+mod revolve;
 pub mod stroke;
 mod stylize;
 mod util;
@@ -68,6 +69,7 @@ pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};
+pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use warp::{WarpStyle, warp_point};
 
 /// Catalogue entry for one effect.
@@ -122,6 +124,7 @@ fn lengths_of(id: &str) -> Lengths {
         "distort.tweak" => Lengths { always: &[], absolute: &["h", "v"] },
         "distort.transform" => always(&["moveH", "moveV"]),
         "path.offsetPath" => always(&["offset"]),
+        "threeD.revolve" => always(&["offset"]),
         "path.outlineStroke" => always(&["width"]),
         "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" | "blur.smart" | "sharpen.unsharpMask" => always(&["radius"]),
         "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
@@ -179,6 +182,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
     let g = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: false, lengths: lengths_of(id) };
     let r = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: true, lengths: lengths_of(id) };
     let mut v = vec![
+        g(
+            REVOLVE,
+            "Revolve…",
+            &["Effect", "3D and Materials"],
+            "{angle: degrees (0..360, 360), offset: pt (0..100000, 0), edge: left|right, rotationX: degrees (0), rotationY: degrees (0), rotationZ: degrees (0), perspective: % (0..100, 0), segments: integer (8..128, 64), shade: bool (true), lightAzimuth: degrees (-45), lightElevation: degrees (45), lightIntensity: % (80), ambient: % (25), expandVisibleOnly: bool (true, trim covered opaque solid surfaces only on Expand Appearance)}. Open paths create uncapped surfaces; intersecting profiles use approximate painter visibility.",
+            json!({"angle":360.0,"offset":0.0,"edge":"left","rotationX":0.0,"rotationY":0.0,"rotationZ":0.0,"perspective":0.0,"segments":64,"shade":true,"lightAzimuth":-45.0,"lightElevation":45.0,"lightIntensity":80.0,"ambient":25.0,"expandVisibleOnly":true}),
+        ),
         g(
             "convertToShape.rectangle",
             "Rectangle…",
@@ -589,6 +599,7 @@ pub fn is_geometry(id: &str) -> bool {
         && !is_pathfinder(id)
         && !is_adjustment(id)
         && id != CROP_MARKS
+        && id != REVOLVE
         && (catalog_index().contains_key(id) || vectorcraft_plugins::effect::plugin_id(id).is_some())
 }
 

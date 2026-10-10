@@ -3668,3 +3668,28 @@ effect	Vertical	垂直
 	Define a variable first	请先定义一个变量
 	Text	文本
 	Visibility	可见性
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	照明
+	Revolve angle	旋转成形角度
+	Axis side	轴的位置
+	Rotation X	X 轴旋转
+	Rotation Y	Y 轴旋转
+	Rotation Z	Z 轴旋转
+	Shading	明暗处理
+	Direction	方向
+	Elevation	仰角
+	Ambient	环境光
+	Segments	分段数
+	Show axis	显示轴
+	Reset all	全部重置
+	Reset to default	重置为默认值
+	Reset all Revolve settings to their defaults.	将所有旋转成形设置重置为默认值。
+	Drag values or labels. Double-click a value to type.	拖动数值或标签。双击数值即可输入。
+	Drag rings to rotate. Shift snaps to 15°.	拖动圆环旋转。按住 Shift 以 15° 为步长调整。
+	Drag the light, or its rings. Shift snaps to 15°.	拖动光源或圆环。按住 Shift 以 15° 为步长调整。
+lighting	Light	光源
+	Keep visible surfaces only when expanding	扩展时仅保留可见表面
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	扩展外观时裁剪被遮挡的几何区域。实时预览保留完整表面。透明绘制或超出可见性处理限制的表面保留所有面。

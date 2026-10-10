@@ -41,6 +41,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("trace", Class::Layer(2)),
     ("text", Class::Layer(2)),
     ("effects", Class::Layer(2)),
+    ("three-d", Class::Layer(2)),
     ("render", Class::Layer(3)),
     ("svg", Class::Layer(3)),
     ("pdf", Class::Layer(3)),
@@ -78,6 +79,7 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     // Non-native art in Illustrator editing data is a PDF, drawn by the PDF importer.
     &["pdf", "eps"],
     &["plugins", "effects"],
+    &["three-d", "effects"],
 ];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {

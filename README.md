@@ -224,7 +224,7 @@ The scores are self-assessed from our code against Illustrator's public document
 **What's missing:**
 - reliable exchange of Illustrator's own `.ai` files (layer structure in real files; Illustrator's editing data isn't written);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
-- 3D and Materials;
+- 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
 - most of the Photoshop-style raster effects (20 of 57) and the Effect Gallery;
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
@@ -234,7 +234,7 @@ The scores are self-assessed from our code against Illustrator's public document
 alongside the raster-effects package; then type, the Illustrator 2026 additions and 3D. The ranked list is in
 [`docs/gaps.md`](docs/gaps.md).
 
-**Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
+**Workspace:** `crates/{geom, color, doc, pathops, text, effects, three-d, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 

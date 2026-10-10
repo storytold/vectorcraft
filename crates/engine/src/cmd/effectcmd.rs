@@ -107,6 +107,7 @@ fn edit_effects(
             let Some(n) = d.node_mut(*id) else { continue };
             let index = item.effects_item(&n.appearance, cmd)?;
             if n.appearance.effects_mut(index).is_some_and(&mut f) {
+                check_revolve_count(n, cmd)?;
                 done.push(*id);
             }
         }
@@ -115,6 +116,14 @@ fn edit_effects(
         }
         Ok(done)
     })
+}
+
+fn check_revolve_count(n: &Node, cmd: &str) -> Result<()> {
+    let count = n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).filter(|e| e.id == effects::REVOLVE).count();
+    if count > 1 {
+        return Err(bad(cmd, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+    }
+    Ok(())
 }
 
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
@@ -140,6 +149,15 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "ids": [gid.0], "index": 0, "item": null, "grouped": true }));
     }
     let item = item_target(s, p, C)?;
+    if id == effects::REVOLVE {
+        for id in appearance_targets(s, p)? {
+            let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
+            effects::validate_revolve(n, &effect.params).map_err(|e| bad(C, e))?;
+            if effects::has_revolve(n) {
+                return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
+            }
+        }
+    }
     let mut index = 0;
     let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", |fx| {
         fx.push(effect.clone());
@@ -237,6 +255,7 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(fx) = n.appearance.effects_mut(di) else { continue };
             let at = to.min(fx.len());
             fx.insert(at, e);
+            check_revolve_count(n, C)?;
             landed.get_or_insert((at, di));
             done.push(*id);
         }
@@ -258,6 +277,20 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let visible = p.get("visible").and_then(Value::as_bool);
     let item = item_target(s, p, C)?;
+    for id in appearance_targets(s, p)? {
+        let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        let target = item.effects_item(&n.appearance, C)?;
+        if let Some(e) = n.appearance.effects_at(target).and_then(|fx| fx.get(index))
+            && e.id == effects::REVOLVE
+            && visible != Some(false)
+        {
+            let mut prospective = effects::merged_params(&e.id, &e.params);
+            if let (Some(cur), Some(new)) = (prospective.as_object_mut(), params.as_object()) {
+                cur.extend(new.clone());
+            }
+            effects::validate_revolve(n, &prospective).map_err(|e| bad(C, e))?;
+        }
+    }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), |fx| {
         let Some(e) = fx.get_mut(index) else { return false };
         if let (Value::Object(new), cur) = (&params, &mut e.params) {
@@ -454,6 +487,7 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
 mod tests {
     use serde_json::json;
     use vectorcraft_doc::NodeKind;
+    use vectorcraft_render::effects;
 
     use crate::{NodeId, Session};
 
@@ -466,6 +500,71 @@ mod tests {
 
     fn node(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
         s.doc().unwrap().doc.node(id).cloned().unwrap()
+    }
+
+    #[test]
+    fn revolve_commands_keep_profile_live_edit_options_expand_and_undo() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M 150 40 L 180 60 L 180 140 L 150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let source = node(&s, id).path_data().unwrap().clone();
+        s.execute("effect.apply", &json!({"effect":"threeD.revolve","ids":[id.0],"item":null})).unwrap();
+        let before = effects_for_test(&s, id);
+        assert_eq!(node(&s, id).path_data(), Some(&source));
+        let doc = &s.doc().unwrap().doc;
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+        assert_eq!(restored.node(id).unwrap().path_data(), Some(&source));
+        assert_eq!(effects::revolve_art(restored.node(id).unwrap()).unwrap(), before);
+        let pdf = s.execute("document.serialize", &json!({"format":"pdf"})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+        assert!(bytes.starts_with(b"%PDF"));
+        assert!(s.execute("effect.apply", &json!({"effect":"threeD.revolve","ids":[id.0],"item":null})).is_err());
+        assert!(s.execute("effect.duplicate", &json!({"index":0,"ids":[id.0],"item":null})).is_err());
+        s.execute("effect.setParams", &json!({"index":0,"params":{"angle":180,"offset":10},"ids":[id.0],"item":null})).unwrap();
+        assert_ne!(effects_for_test(&s, id), before);
+        assert!(s.execute("effect.setParams", &json!({"index":0,"params":{"edge":"invalid"},"ids":[id.0],"item":null})).is_err());
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }));
+        assert!(!effects::has_revolve(&node(&s, id)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id).path_data(), Some(&source));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(effects_for_test(&s, id), before);
+    }
+
+    fn effects_for_test(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
+        effects::revolve_art(&node(s, id)).unwrap()
+    }
+
+    #[test]
+    fn revolve_visibility_parameter_saves_expands_and_undoes_without_other_appearance_changes() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":300,"height":300})).unwrap();
+        let r = s.execute("path.create", &json!({"d":"M 150 40 L 180 60 L 180 140 L 150 160"})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect":"threeD.revolve","ids":[id.0],"item":null})).unwrap();
+        let live = node(&s, id);
+        let restored = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        assert_eq!(restored.node(id).unwrap().appearance.effects[0].params["expandVisibleOnly"], json!(true));
+        let count = |n: &vectorcraft_doc::Node| n.children().unwrap()[0].children().unwrap().len();
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        let visible = count(&node(&s, id));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), live);
+        s.execute("effect.setParams", &json!({"index":0,"item":null,"ids":[id.0],"params":{"expandVisibleOnly":false}})).unwrap();
+        s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+        assert!(count(&node(&s, id)) > visible);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id).appearance.effects[0].params["expandVisibleOnly"], json!(false));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, id), live);
+        // The shared command still expands ordinary multiple-fill artwork as before.
+        let r = s.execute("shape.rectangle", &json!({"x":10,"y":10,"width":20,"height":20})).unwrap();
+        let ordinary = NodeId(r["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect":"distort.twist","ids":[ordinary.0],"params":{"angle":15}})).unwrap();
+        s.execute("effect.expandAppearance", &json!({"ids":[ordinary.0]})).unwrap();
+        assert!(node(&s, ordinary).appearance.effects.is_empty());
     }
 
     #[test]

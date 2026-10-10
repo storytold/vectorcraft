@@ -4032,3 +4032,28 @@ effect	Vertical	垂直
 	Define a variable first	先に変数を定義してください
 	Text	テキスト
 	Visibility	表示状態
+
+# Revolve profile guidance.
+
+# Interactive Revolve controls.
+	Lighting	照明
+	Revolve angle	回転体の角度
+	Axis side	軸の位置
+	Rotation X	X 軸回転
+	Rotation Y	Y 軸回転
+	Rotation Z	Z 軸回転
+	Shading	陰影
+	Direction	方向
+	Elevation	仰角
+	Ambient	環境光
+	Segments	分割数
+	Show axis	軸を表示
+	Reset all	すべてリセット
+	Reset to default	初期値に戻す
+	Reset all Revolve settings to their defaults.	回転体のすべての設定を初期値に戻します。
+	Drag values or labels. Double-click a value to type.	数値やラベルをドラッグして調整。数値をダブルクリックすると入力できます。
+	Drag rings to rotate. Shift snaps to 15°.	リングをドラッグして回転。Shiftで15°刻みに調整。
+	Drag the light, or its rings. Shift snaps to 15°.	ライトやリングをドラッグ。Shiftで15°刻みに調整。
+lighting	Light	ライト
+	Keep visible surfaces only when expanding	アピアランス分割時に見える面だけを保持
+	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	アピアランスの分割時に隠れた部分を除去します。プレビューでは面全体を保持します。透明なペイントや可視性処理の制限を超える面は、すべての面を保持します。

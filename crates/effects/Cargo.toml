@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 vectorcraft-geom = { workspace = true }
+vectorcraft-three-d = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-pathops = { workspace = true }
 vectorcraft-text = { workspace = true }

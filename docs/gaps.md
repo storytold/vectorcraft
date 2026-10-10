@@ -26,7 +26,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 8–16 | macOS pressure | [hardware-parity.md](hardware-parity.md) |
 | 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 17–28 | no | [target-app-parity.md](target-app-parity.md) |
-| 12 | [G3 3D and Materials](#g3-3d-and-materials) | 50–80 | no | [effects-parity.md](effects-parity.md) |
+| 12 | [G3 3D and Materials](#g3-3d-and-materials) | 45–75 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 8–14 | no | [target-app-parity.md](target-app-parity.md) |
 | 15 | [G15 Performance budgets and a GPU renderer](#g15-performance-budgets-and-a-gpu-renderer) | 15–25 | budgets only | [hardware-parity.md](hardware-parity.md) |
@@ -143,11 +143,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G3 3D and Materials
 
-- **Missing:** Extrude & Bevel, Revolve, Inflate and Rotate with lighting and materials, 3D Classic, Turntable,
-  3D export (OBJ, USDA, glTF). A software renderer in its own crate, output to SVG/PDF as images or projected
-  vectors. Someone offered to contribute (#605).
+- **Done:** an initial live Revolve in the `three-d` crate (#846, from the contributor who offered in #605).
+- **Missing:** Extrude & Bevel, Inflate and Rotate, caps, materials and better lighting, exact visibility for
+  intersecting surfaces, 3D Classic, Turntable, 3D export (OBJ, USDA, glTF).
 - **Impact:** specialist, but a visible menu of stubs.
-- **Estimate:** 50–80 h, the largest single gap; plan in `plan/` before coding.
+- **Estimate:** 45–75 h, the largest single gap; plan in `plan/` before coding.
 
 ## G7 Views and windows
 
@@ -201,6 +201,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
 | 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
 | 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |
 | 2026-10-10 | major | Moved from the ROADMAP's "Where we're lacking"; kept ids G1–G8, added G9–G19 (file formats, stability, bugs, preferences, 30.x additions, pen hardware, performance, localization, ecosystem, AI, accessibility) and re-ranked |
