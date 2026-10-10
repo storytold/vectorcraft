@@ -48,4 +48,5 @@ sync_github_name = true
 
 [people.vbasky]
 real_name = "Vikram Bhaskaran"
+display_name = "Vikram Bhaskaran"
 sync_github_name = false
