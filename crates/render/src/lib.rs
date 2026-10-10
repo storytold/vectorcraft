@@ -17,6 +17,7 @@ mod paint;
 mod pattern;
 pub mod placed_document;
 pub mod proof;
+mod seams;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -112,7 +113,8 @@ pub struct RenderOptions {
     pub isolated: Option<NodeId>,
     /// Composite in floating point (exports): translucent art over opaque art comes out exactly
     /// opaque, where 8-bit compositing leaves alpha 254 on some anti-aliased edges (#787). Off,
-    /// the faster 8-bit pipeline (the canvas).
+    /// the faster 8-bit pipeline (the canvas). Art Optimized exports also accumulate compatible
+    /// opaque fill regions together, avoiding seams at shared edges (#983).
     pub precise: bool,
 }
 
@@ -1079,7 +1081,7 @@ impl Renderer {
             if !rest.is_empty() {
                 self.dimmed(ctx, f, &mut |r, c, fr| rest.iter().for_each(|n| r.draw_arc(c, fr, n)));
             }
-        } else {
+        } else if !self.draw_seamless_fills(ctx, f, children) {
             for c in children {
                 self.draw_arc(ctx, f, c);
             }

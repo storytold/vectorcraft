@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (moved from the ROADMAP's "Where we're lacking", re-ranked, added file-format, stability, hardware, localization, ecosystem and AI gaps) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (G11: opaque-fill Asset Export ghost borders corrected, #983) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -19,7 +19,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 2 | [G9 Illustrator `.ai` and EPS files from real users](#g9-illustrator-ai-and-eps-files-from-real-users) | 10–20 | yes | [file-format-parity.md](file-format-parity.md) |
 | 3 | [G10 Launch and stability on real machines](#g10-launch-and-stability-on-real-machines) | 20–35 | yes | — |
 | 4 | [G8 Hardening at scale](#g8-hardening-at-scale) | 30–50 | yes (part) | — |
-| 5 | [G11 Correctness bugs in core tools](#g11-correctness-bugs-in-core-tools) | 8–15 | yes | [target-app-parity.md](target-app-parity.md) |
+| 5 | [G11 Correctness bugs in core tools](#g11-correctness-bugs-in-core-tools) | 7–13 | yes | [target-app-parity.md](target-app-parity.md) |
 | 6 | [G4 Advanced type](#g4-advanced-type) | 34–47 | core part | [type-parity.md](type-parity.md) |
 | 7 | [G12 Preferences and panels that don't act yet](#g12-preferences-and-panels-that-dont-act-yet) | 13–20 | yes | [ui-parity.md](ui-parity.md) |
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 24–40 | no | [effects-parity.md](effects-parity.md) |
@@ -86,11 +86,17 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G11 Correctness bugs in core tools
 
-- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Asset Export
-  anti-aliasing ghost borders (#983); Transform effect dialog's invisible checkboxes and missing options (#885);
+- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Asset Export seams with complex appearances (#983);
+  Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.
-- **Estimate:** 8–15 h.
+- **Done:** Art Optimized Asset Export accumulates disjoint analytic opaque-fill coverage, removing shared-edge
+  ghost borders (#983). Original synthetic regression tests cover transparent/opaque backgrounds, crop/scale,
+  genuine transparency and gaps, thin art, unchanged image pixels, painter order, parent clipping/opacity/masks,
+  gradient placement and CMYK inks. The bounded fix handles compatible sibling solid/gradient fills; strokes,
+  object masks/effects, non-normal blends, translucent fills, cross-container seams and over-budget geometry
+  retain ordinary compositing. Unsafe boolean tolerance at extreme coordinates/scales also falls back.
+- **Estimate:** 7–13 h.
 
 ## G4 Advanced type
 
@@ -201,6 +207,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | G11: opaque-fill Asset Export ghost borders corrected (#983); remaining estimate 8–15 → 7–13 h; headline totals unchanged within rounding |
 | 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
 | 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
 | 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |

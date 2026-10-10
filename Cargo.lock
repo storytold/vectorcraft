@@ -4639,6 +4639,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom",
+ "vectorcraft-pathops",
  "vectorcraft-testkit",
  "vectorcraft-text",
  "vello_common 0.2.0",

@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first checklist, from the `FORMATS` table and Illustrator 2026's documented formats) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (Art Optimized raster export shared-edge smoothing, #983) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/mod.rs`). Illustrator's list comes from its public
@@ -60,7 +60,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | EMF / WMF | open, export | yes | yes | |
 | PSD | open, place, export | yes (merged image, every mode and depth) | yes (layered, max editability) | placing as layers (Photoshop Import Options) missing |
 | PSB | open | yes (merged image) | no | |
-| PNG / JPEG / GIF / BMP / TIFF / Targa | open, export | yes (Targa: export only) | yes | Targa import missing |
+| PNG / JPEG / GIF / BMP / TIFF / Targa | open, export | yes (Targa: export only) | yes | Art Optimized export accumulates disjoint opaque fill coverage to avoid shared-edge ghost borders (#983), including CMYK ink output; complex appearances retain ordinary rendering; `render/src/encode/tests.rs`, `engine/src/tests_assets.rs`. Targa import missing |
 | WebP | export (Export for Screens) | yes | yes (lossless only; lossy written lossless with a warning) | |
 | HEIC / HEIF | open, place | no | no | |
 | JPEG 2000 | open, place | no | no | |
@@ -78,4 +78,5 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Art Optimized raster export removes compatible opaque-fill shared-edge seams without inflating paths or forcing opacity (#983); explicit None/Type modes retain their behavior |
 | 2026-10-10 | major | First checklist; moved the `.ai` editing-data scope from the ROADMAP's "Out of scope" here; added the user-reported `.ai` failures |

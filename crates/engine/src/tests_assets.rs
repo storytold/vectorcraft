@@ -127,6 +127,23 @@ fn an_asset_exports_its_art_alone() {
     assert!(!text.to_lowercase().contains("#0000ff"), "no blue: {text}");
 }
 
+/// #983: the fractional shared edge is covered by the asset, even after scaling and cropping.
+#[test]
+fn asset_export_has_no_ghost_border_at_a_shared_edge() {
+    let mut s = session();
+    s.paint.fill = Paint::solid(Color::BLACK);
+    let a = rect(&mut s, 10.3, 20.7, 16.375, 32.0);
+    let b = rect(&mut s, 26.675, 20.7, 15.625, 32.0);
+    run(&mut s, "assets.add", json!({"ids": [a, b], "multiple": false}));
+    for scale in ["1x", "1.5x", "2x"] {
+        for background in ["transparent", "white"] {
+            let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": scale, "background": background}]})));
+            let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+            assert!(img.pixels().all(|p| p.0 == [0, 0, 0, 255]), "{scale}, {background}: a solid black asset");
+        }
+    }
+}
+
 #[test]
 fn names_follow_the_object_or_count_up_and_can_be_changed() {
     let mut s = session();

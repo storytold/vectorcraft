@@ -110,6 +110,274 @@ fn backgrounds_are_opaque_or_transparent() {
     assert_eq!(webp.get_pixel(0, 0).0, [0, 0, 0, 255]);
 }
 
+/// #983: complementary opaque shapes cover every subpixel of the square. Smoothing each shape
+/// before source-over compositing instead leaves a translucent diagonal (or background bleed).
+#[test]
+fn art_export_has_no_ghost_border_between_touching_shapes() {
+    let mut d = Document::new(32.0, 32.0);
+    let l = d.layers[0].id;
+    for points in [[(0.0, 0.0), (32.0, 0.0), (32.0, 32.0)], [(0.0, 0.0), (32.0, 32.0), (0.0, 32.0)]] {
+        let mut p = vectorcraft_geom::BezPath::new();
+        p.move_to(points[0]);
+        p.line_to(points[1]);
+        p.line_to(points[2]);
+        p.close_path();
+        let n =
+            Node::path(d.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&p), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        d.insert(Some(l), d.layers[0].children().unwrap().len(), n).unwrap();
+    }
+    for background in [None, Some([255; 3]), Some([255, 0, 0])] {
+        for ppi in [72.0, 108.0, 144.0] {
+            for threads in [0, 2] {
+                let mut renderer = Renderer::new();
+                renderer.threads = threads;
+                let opts = RasterExportOptions { background, ppi, ..Default::default() };
+                let file = renderer.export_region(&d, d.artboards[0].rect, RasterFormat::Png, &opts).unwrap();
+                let img = image::load_from_memory(&file).unwrap().to_rgba8();
+                for (x, y, p) in img.enumerate_pixels() {
+                    assert_eq!(p.0, [0, 0, 0, 255], "background {background:?}, {ppi} ppi, threads={threads}, ({x}, {y})");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn art_export_preserves_transparency_and_real_gaps() {
+    let mut d = Document::new(16.0, 16.0);
+    let l = d.layers[0].id;
+    for (i, r) in [Rect::new(2.0, 2.0, 10.0, 14.0), Rect::new(6.0, 2.0, 14.0, 14.0)].into_iter().enumerate() {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+        n.opacity = 0.5;
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert_eq!(img.get_pixel(0, 0).0, [0; 4]);
+    assert_eq!(img.get_pixel(4, 8).0, [255, 0, 0, 128]);
+    assert_eq!(img.get_pixel(8, 8).0, [255, 0, 0, 192]);
+    let mut d = Document::new(16.0, 16.0);
+    add_rect(&mut d, Rect::new(2.0, 2.0, 7.25, 14.0), false);
+    add_rect(&mut d, Rect::new(7.75, 2.0, 14.0, 14.0), false);
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert!((100..=150).contains(&img.get_pixel(7, 8)[3]), "the real half-pixel gap remains visible");
+}
+
+#[test]
+fn art_export_preserves_subpixel_thin_art() {
+    let mut d = Document::new(16.0, 16.0);
+    add_rect(&mut d, Rect::new(0.0, 0.2, 16.0, 0.3), false);
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert!((24..=28).contains(&img.get_pixel(8, 0)[3]), "one tenth of a pixel of black ink: {:?}", img.get_pixel(8, 0));
+}
+
+#[test]
+fn art_export_preserves_tiny_geometry_at_high_scale() {
+    let mut d = Document::new(16e-6, 16e-6);
+    add_rect(&mut d, Rect::new(0.0, 0.2e-6, 16e-6, 0.3e-6), false);
+    // A second opaque fill activates shared-edge handling without covering the hairline.
+    add_rect(&mut d, Rect::new(0.0, 8e-6, 16e-6, 16e-6), false);
+    let opts = RasterExportOptions { ppi: 72e6, ..Default::default() };
+    let img = export(&d, RasterFormat::Png, &opts);
+    assert_eq!(img.dimensions(), (16, 16));
+    assert!((24..=28).contains(&img.get_pixel(8, 0)[3]), "scaled hairline must retain its analytic coverage: {:?}", img.get_pixel(8, 0));
+}
+
+#[test]
+fn art_export_applies_clipping_opacity_and_masks_after_shared_coverage() {
+    for masked in [false, true] {
+        for opacity in [1.0, 0.5] {
+            let make = |split| {
+                let mut d = Document::new(32.0, 32.0);
+                if split {
+                    add_rect(&mut d, Rect::new(0.0, 0.0, 16.375, 32.0), false);
+                    add_rect(&mut d, Rect::new(16.375, 0.0, 32.0, 32.0), false);
+                } else {
+                    add_rect(&mut d, Rect::new(0.0, 0.0, 32.0, 32.0), false);
+                }
+                let clip = Node::path(d.alloc_id(), shapes::ellipse(Rect::new(2.3, 3.7, 29.2, 28.6)), Appearance::default());
+                d.insert(Some(d.layers[0].id), 0, clip).unwrap();
+                let mask = masked.then(|| {
+                    let art = Node::path(
+                        d.alloc_id(),
+                        shapes::rectangle(Rect::new(0.0, 0.0, 32.0, 32.0)),
+                        Appearance::basic(Paint::solid(Color::rgb(0.5, 0.5, 0.5)), Paint::None, 0.0),
+                    );
+                    Box::new(vectorcraft_doc::OpacityMask::new(art, true))
+                });
+                let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+                let NodeKind::Layer { clip, .. } = &mut layer.kind else { panic!("layer") };
+                *clip = true;
+                layer.opacity = opacity;
+                layer.mask = mask;
+                export(&d, RasterFormat::Png, &RasterExportOptions::default())
+            };
+            assert_eq!(make(true), make(false), "split art must match a single fill under clip/opacity/mask: opacity={opacity}, mask={masked}");
+        }
+    }
+}
+
+#[test]
+fn art_export_keeps_gradient_geometry_when_occluded() {
+    let mut d = Document::new(32.0, 16.0);
+    let n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 32.0, 16.0)),
+        Appearance::basic(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default()))), Paint::None, 0.0),
+    );
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let before = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    let top = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(16.375, 0.0, 32.0, 16.0)),
+        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0),
+    );
+    d.insert(Some(d.layers[0].id), 1, top).unwrap();
+    let after = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    for x in 0..16 {
+        assert_eq!(after.get_pixel(x, 8), before.get_pixel(x, 8), "occlusion must not resize the gradient: x={x}");
+    }
+    assert_eq!(after.get_pixel(20, 8).0, [255, 0, 0, 255]);
+    assert!(after.pixels().all(|p| p[3] == 255), "no backdrop at the gradient's shared edge");
+}
+
+#[test]
+fn art_export_preserves_over_budget_fill_runs() {
+    let mut d = Document::new(32.0, 16.0);
+    for i in 0..65 {
+        add_rect(&mut d, Rect::new(i as f64 * 0.375, 0.25, 32.0, 15.75), false);
+    }
+    let art = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    let ordinary = export(&d, RasterFormat::Png, &RasterExportOptions { anti_alias: AntiAlias::Type, ..Default::default() });
+    assert_eq!(art, ordinary, "a run exceeding the geometry budget must retain ordinary rendering in its entirety");
+}
+
+#[test]
+fn art_export_does_not_double_composite_touching_translucent_shapes() {
+    let mut d = Document::new(32.0, 16.0);
+    let l = d.layers[0].id;
+    for (i, r) in [Rect::new(0.0, 0.0, 16.375, 16.0), Rect::new(16.375, 0.0, 32.0, 16.0)].into_iter().enumerate() {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        n.opacity = 0.5;
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert!(img.pixels().all(|p| (111..=128).contains(&p[3])), "translucent art is never overpainted at the shared edge: {:?}", img.get_pixel(16, 8));
+}
+
+#[test]
+fn art_export_preserves_pixel_aligned_image_samples() {
+    use vectorcraft_doc::{ImageBlob, ImageObject};
+    let mut d = Document::new(2.0, 1.0);
+    let px = [0, 0, 0, 255, 255, 255, 255, 255];
+    let png = encode(&px, 2, 1, &PngOptions::default()).unwrap();
+    d.images.insert("pixels".into(), ImageBlob::new("image/png", png));
+    let n = Node::new(
+        d.alloc_id(),
+        NodeKind::Image(ImageObject {
+            key: "pixels".into(),
+            width: 2,
+            height: 1,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+        }),
+    );
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert_eq!(img.into_raw(), px);
+}
+
+#[test]
+fn art_export_keeps_shared_edges_opaque_at_large_sizes() {
+    for (w, h) in [(520.0, 520.0), (16_385.0, 2.0)] {
+        let mut d = Document::new(w, h);
+        add_rect(&mut d, Rect::new(0.0, 0.0, 511.375, h), false);
+        add_rect(&mut d, Rect::new(511.375, 0.0, w, h), false);
+        let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+        assert_eq!(img.dimensions(), (w as u32, h as u32));
+        assert!(img.pixels().all(|p| p.0 == [0, 0, 0, 255]), "{w} × {h}: opaque at every size");
+    }
+}
+
+#[test]
+fn art_export_mixes_touching_colours_by_coverage() {
+    let mut d = Document::new(32.0, 32.0);
+    let l = d.layers[0].id;
+    for (i, (points, color)) in
+        [([(0.0, 0.0), (32.0, 0.0), (32.0, 32.0)], Color::rgb(1.0, 0.0, 0.0)), ([(0.0, 0.0), (32.0, 32.0), (0.0, 32.0)], Color::rgb(0.0, 0.0, 1.0))]
+            .into_iter()
+            .enumerate()
+    {
+        let mut p = vectorcraft_geom::BezPath::new();
+        p.move_to(points[0]);
+        p.line_to(points[1]);
+        p.line_to(points[2]);
+        p.close_path();
+        let n = Node::path(d.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&p), Appearance::basic(Paint::solid(color), Paint::None, 0.0));
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert_eq!(img.get_pixel(20, 10).0, [255, 0, 0, 255]);
+    assert_eq!(img.get_pixel(10, 20).0, [0, 0, 255, 255]);
+    let p = img.get_pixel(10, 10);
+    assert_eq!((p[1], p[3]), (0, 255));
+    assert!((127..=128).contains(&p[0]) && (127..=128).contains(&p[2]), "equal red/blue coverage: {p:?}");
+}
+
+#[test]
+fn art_export_keeps_uniform_fill_colour_at_shared_edges() {
+    let mut d = Document::new(32.0, 32.0);
+    let l = d.layers[0].id;
+    for (i, points) in [[(0.0, 0.0), (32.0, 0.0), (32.0, 32.0)], [(0.0, 0.0), (32.0, 32.0), (0.0, 32.0)]].into_iter().enumerate() {
+        let mut p = vectorcraft_geom::BezPath::new();
+        p.move_to(points[0]);
+        p.line_to(points[1]);
+        p.line_to(points[2]);
+        p.close_path();
+        let n = Node::path(
+            d.alloc_id(),
+            vectorcraft_geom::PathData::from_bezpath(&p),
+            Appearance::basic(Paint::solid(Color::rgb(0.8, 0.2, 0.2)), Paint::None, 0.0),
+        );
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert!(img.pixels().all(|p| p.0 == [204, 51, 51, 255]), "the shared edge must keep the same ink colour: {:?}", img.get_pixel(16, 16));
+}
+
+#[test]
+fn art_export_preserves_painter_order_in_overlapping_fills() {
+    let mut d = Document::new(32.0, 16.0);
+    let l = d.layers[0].id;
+    for (i, (r, color)) in
+        [(Rect::new(0.0, 0.0, 25.0, 16.0), Color::rgb(1.0, 0.0, 0.0)), (Rect::new(10.375, 0.0, 32.0, 16.0), Color::rgb(0.0, 0.0, 1.0))]
+            .into_iter()
+            .enumerate()
+    {
+        let n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(color), Paint::None, 0.0));
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let img = export(&d, RasterFormat::Png, &RasterExportOptions::default());
+    assert_eq!(img.get_pixel(5, 8).0, [255, 0, 0, 255]);
+    assert_eq!(img.get_pixel(15, 8).0, [0, 0, 255, 255], "top fill wins in the overlap");
+    assert_eq!(img.get_pixel(10, 8).0, [96, 0, 159, 255], "3/8 red, 5/8 blue, no backdrop");
+}
+
+#[test]
+fn art_export_cmyk_keeps_ink_amounts_at_shared_edges() {
+    let mut d = Document::new_with_mode(32.0, 16.0, vectorcraft_doc::ColorMode::Cmyk);
+    let l = d.layers[0].id;
+    for (i, r) in [Rect::new(0.0, 0.0, 16.375, 16.0), Rect::new(16.375, 0.0, 32.0, 16.0)].into_iter().enumerate() {
+        let n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Paint::None, 0.0));
+        d.insert(Some(l), i, n).unwrap();
+    }
+    let opts = RasterExportOptions { tiff: tiff::TiffOptions { color_model: jpeg::ColorModel::Cmyk, ..Default::default() }, ..Default::default() };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::Tiff, &opts).unwrap();
+    let mut dec = ::tiff::decoder::Decoder::new(std::io::Cursor::new(file)).unwrap();
+    let ::tiff::decoder::DecodingResult::U8(inks) = dec.read_image().unwrap() else { panic!("8-bit CMYK") };
+    assert!(inks.as_chunks::<4>().0.iter().all(|p| *p == [0, 0, 0, 255]), "K-only black, including the shared edge");
+}
+
 /// #787: translucent art over opaque art (or a background) stays exactly opaque, its anti-aliased
 /// edges too, so the file is written as RGB.
 #[test]

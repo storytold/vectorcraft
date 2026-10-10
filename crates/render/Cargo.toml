@@ -15,6 +15,7 @@ vectorcraft-doc = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
+vectorcraft-pathops = { workspace = true }
 vello_cpu = { workspace = true }
 # Filter types (Gaussian blur, drop shadow) are not re-exported by vello_cpu 0.2.
 vello_common = { version = "0.2", default-features = false }
