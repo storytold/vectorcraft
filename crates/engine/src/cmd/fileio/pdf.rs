@@ -249,7 +249,11 @@ pub const EDITING_NEEDS_EVERY_ARTBOARD: &str =
 /// to images at the document's raster effects resolution. Preserve Editing embeds `doc` itself
 /// when the PDF has every artboard (a PDF of some reopens as just those).
 pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
-    encode_carrying(cmd, doc, p, || Ok(vectorcraft_format::save(doc, false)))
+    // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
+    let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
+    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
+    warnings.extend(drawn_warnings);
+    Ok((bytes, warnings))
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the

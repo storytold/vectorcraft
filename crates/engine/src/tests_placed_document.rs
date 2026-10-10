@@ -199,6 +199,154 @@ fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
 }
 
 #[test]
+fn ai_export_preserves_placed_links_while_drawing_full_art_or_previews() {
+    for missing in [false, true] {
+        let dir = Folder::new(&format!("placed-ai-editable-{missing}"));
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, &format!("placed-ai-editable-{missing}"));
+        let mut s = session();
+        let id = place(&mut s, &src);
+        let parent = dir.file("parent.vectorcraft");
+        save(&mut s, &parent);
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        open(&mut s, &parent);
+        let original = placed(&s, id);
+        for pdf_compatible in [true, false] {
+            for (command, include_linked) in
+                [("document.export", false), ("document.export", true), ("document.serialize", false), ("document.serialize", true)]
+            {
+                let out = s.execute(command, &json!({"format": "ai", "pdfCompatible": pdf_compatible, "includeLinked": include_linked})).unwrap();
+                let bytes = decode(&out);
+                let editing = vectorcraft_pdf::editing(&bytes).unwrap();
+                let native = vectorcraft_format::load(&editing.data).unwrap();
+                assert_eq!(
+                    native.images[&original.key].is_proxy(),
+                    missing || !include_linked,
+                    "Include Linked Files retains available source bytes"
+                );
+                if pdf_compatible {
+                    let (images, paths) = pdf_contents(&bytes);
+                    if missing {
+                        assert!(images > 0, "the missing file draws its preview");
+                        assert!(out["warnings"].to_string().contains("output as their previews"));
+                    } else {
+                        assert_eq!(images, 0, "the PDF uses the file's vectors");
+                        assert!(paths > 0);
+                    }
+                }
+                let mut restored = session();
+                let result = restored
+                    .execute("document.open", &json!({"name": "export.ai", "dataBase64": vectorcraft_format::base64_encode(&bytes)}))
+                    .unwrap();
+                assert_eq!(result["restored"], true);
+                assert_eq!(placed(&restored, id), original, "link metadata stays editable");
+                assert_eq!(placed(&s, id), original, "export leaves the source intact");
+                if missing {
+                    assert_eq!(restored.execute("links.check", &json!({})).unwrap()["missing"], 1);
+                    let replacement = dir.file("replacement.vectorcraft");
+                    source(&replacement, 100.0, 50.0, BLUE, 1);
+                    let relinked = restored.execute("links.relink", &json!({"ids": [id.0], "path": replacement})).unwrap();
+                    assert_eq!(relinked["relinked"], json!([id.0]));
+                    assert_eq!(placed(&restored, id).link.path, replacement);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ai_export_public_aliases_preserve_missing_placed_links() {
+    let dir = Folder::new("placed-ai-public-aliases-latest");
+    let src = dir.file("logo.vectorcraft");
+    star_source(&src, "placed-ai-public-aliases-latest-unique");
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let parent = dir.file("parent.vectorcraft");
+    save(&mut s, &parent);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &parent);
+    let original = placed(&s, id);
+    assert!(s.doc().unwrap().doc.images[&original.key].is_proxy());
+
+    for alias in
+        ["vectorcraft", ".vectorcraft", "VECTORCRAFT", "drawcraft", ".DRAWCRAFT", "template", "vctemplate", ".VCTEMPLATE", "ai", ".ai", "AI", ".AI"]
+    {
+        let canonical = cmd::fileio::format(alias).unwrap().id;
+        let enc = cmd::fileio::encode_all(&s.doc().unwrap().doc, alias, &json!({"pdfCompatible": false, "includeLinked": false})).unwrap();
+        let bytes = &enc.files[0].1;
+        let raw = if canonical == "ai" { vectorcraft_pdf::editing(bytes).unwrap().data } else { bytes.clone() };
+        let native = vectorcraft_format::load(&raw).unwrap();
+        assert!(
+            matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original),
+            "{alias}: preparation discarded the editable placed link"
+        );
+        assert!(native.images[&original.key].is_proxy(), "{alias}");
+        assert_eq!(placed(&s, id), original, "{alias}: source changed");
+    }
+}
+
+/// Include Linked Files must retain relinkable objects when only their previews are available.
+#[test]
+fn native_included_links_keep_missing_placed_documents_editable() {
+    for missing in [true, false] {
+        let dir = Folder::new(&format!("native-included-links-{missing}"));
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, &format!("native-included-links-{missing}"));
+        let source_bytes = std::fs::read(&src).unwrap();
+        let mut s = session();
+        let id = place(&mut s, &src);
+        let parent = decode(&s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap());
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        s.execute("document.open", &json!({"name": "parent.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&parent)})).unwrap();
+        let original = placed(&s, id);
+        assert!(s.doc().unwrap().doc.images[&original.key].is_proxy());
+        let before = s.execute("document.json", &json!({})).unwrap();
+        for format in ["vectorcraft", "template"] {
+            for command in ["document.serialize", "document.export", "document.save"] {
+                for include_linked in [true, false] {
+                    let out = s.execute(command, &json!({"format": format, "includeLinked": include_linked, "compress": false})).unwrap();
+                    let bytes = decode(&out);
+                    let native = vectorcraft_format::load(&bytes).unwrap();
+                    assert_eq!(file_json(&bytes)["version"], vectorcraft_format::VERSION);
+                    assert!(
+                        matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original),
+                        "{command}/{format}/{missing}/{include_linked}: discarded the editable link"
+                    );
+                    let blob = &native.images[&original.key];
+                    assert_eq!(blob.is_proxy(), missing || !include_linked);
+                    if !missing && include_linked {
+                        assert_eq!(blob.bytes.as_slice(), source_bytes.as_slice());
+                    }
+                    assert_eq!(s.execute("document.json", &json!({})).unwrap(), before);
+                    if missing && include_linked {
+                        let mut restored = Session::new();
+                        restored
+                            .execute(
+                                "document.open",
+                                &json!({"name": "included.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&bytes)}),
+                            )
+                            .unwrap();
+                        assert_eq!(placed(&restored, id), original);
+                        assert_eq!(restored.execute("links.check", &json!({})).unwrap()["missing"], 1);
+                        let replacement = dir.file("replacement.vectorcraft");
+                        source(&replacement, 100.0, 50.0, BLUE, 1);
+                        assert_eq!(
+                            restored.execute("links.relink", &json!({"ids": [id.0], "path": replacement})).unwrap()["relinked"],
+                            json!([id.0])
+                        );
+                        assert_eq!(placed(&restored, id).link.path, replacement);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_document_saved_with_previews_outputs_its_files_art() {
     let dir = Folder::new("placed-preview-output");
     let src = dir.file("logo.vectorcraft");
@@ -478,4 +626,257 @@ fn link_info_gives_the_artboards_size_not_pixels() {
         (Some("ok"), Some("logo.vectorcraft"), json!([200.0, 200.0])),
         "{i}"
     );
+}
+
+/// Save As reads its defaults from the catalog; using them must retain current editable links.
+#[test]
+fn native_save_catalog_defaults_keep_placed_documents_editable() {
+    for missing in [false, true] {
+        let dir = Folder::new(if missing { "native-default-missing" } else { "native-default-linked" });
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, if missing { "native-default-missing" } else { "native-default-linked" });
+        let mut s = session();
+        let id = place(&mut s, &src);
+        let original = placed(&s, id);
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+        let saved = dir.file("default-options.vectorcraft");
+        s.execute("document.save", &json!({"path": saved, "version": options["options"]["version"]["value"]})).unwrap();
+        let bytes = std::fs::read(&saved).unwrap();
+        let native = vectorcraft_format::load(&bytes).unwrap();
+        let mut written = original.clone();
+        // Native saves record a sibling link relative to the destination as well as its
+        // absolute path. This is relocation metadata, not a change to the placed object.
+        written.link.relative = Some("logo.vectorcraft".into());
+        assert!(matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == written), "source missing: {missing}");
+        assert_eq!(file_json(&bytes)["version"], vectorcraft_format::VERSION);
+        assert_eq!(placed(&s, id), original, "saving does not rewrite the live link");
+        let mut reopened = Session::new();
+        open(&mut reopened, &saved);
+        assert_eq!(placed(&reopened, id).link.path, src);
+        assert_eq!(reopened.execute("links.check", &json!({})).unwrap()["missing"], usize::from(missing));
+    }
+}
+
+/// Generic and dedicated PDF exports share editable links and prepared drawn pages.
+#[test]
+fn pdf_editing_keeps_placed_links_separate_from_drawn_previews() {
+    for missing in [true, false] {
+        let dir = Folder::new(&format!("pdf-editable-links-{missing}"));
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, &format!("pdf-editable-links-{missing}"));
+        let mut s = session();
+        parent_star(&mut s);
+        let id = place(&mut s, &src);
+        s.execute("artboard.new", &json!({"x":600,"y":0,"width":100,"height":100})).unwrap();
+        let parent = decode(&s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap());
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        s.execute("document.open", &json!({"name": "parent.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&parent)})).unwrap();
+        let original = placed(&s, id);
+        assert!(s.doc().unwrap().doc.images[&original.key].is_proxy());
+        let before = s.execute("document.json", &json!({})).unwrap();
+        for command in ["document.serialize", "document.export", "document.save", "document.exportPdf"] {
+            let out = s.execute(command, &json!({"format":"pdf","preserveEditing":true,"range":"all","thumbnails":false})).unwrap();
+            let bytes = decode(&out);
+            let editing = vectorcraft_pdf::editing(&bytes).unwrap();
+            assert!(editing.intact);
+            let native = vectorcraft_format::load(&editing.data).unwrap();
+            assert!(matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original), "{command}: discarded editable link");
+            let (images, paths) = pdf_contents(&bytes);
+            assert_eq!(images > 0, missing, "{command}: pages still draw previews or vectors");
+            if !missing {
+                assert!(paths > 0);
+            }
+            assert_eq!(
+                out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                missing,
+                "{out}"
+            );
+            let mut restored = Session::new();
+            assert_eq!(
+                restored.execute("document.open", &json!({"name":"editable.pdf","dataBase64":vectorcraft_format::base64_encode(&bytes)})).unwrap()["restored"],
+                true
+            );
+            assert_eq!(placed(&restored, id), original);
+            assert_eq!(restored.execute("links.check", &json!({})).unwrap()["missing"], usize::from(missing));
+            assert_eq!(s.execute("document.json", &json!({})).unwrap(), before);
+            if missing {
+                let replacement = dir.file("replacement.vectorcraft");
+                source(&replacement, 100.0, 50.0, BLUE, 1);
+                assert_eq!(restored.execute("links.relink", &json!({"ids":[id.0],"path":replacement})).unwrap()["relinked"], json!([id.0]));
+            }
+        }
+        for alias in ["PDF", ".pdf"] {
+            let enc = cmd::fileio::encode_all(&s.doc().unwrap().doc, alias, &json!({"preserveEditing":true})).unwrap();
+            let editing = vectorcraft_pdf::editing(&enc.files[0].1).unwrap();
+            let native = vectorcraft_format::load(&editing.data).unwrap();
+            assert!(matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original), "{alias}");
+        }
+        for params in [json!({"format":"pdf","preserveEditing":false}), json!({"format":"pdf","preserveEditing":true,"range":"1"})] {
+            let out = s.execute("document.serialize", &params).unwrap();
+            let bytes = decode(&out);
+            assert!(vectorcraft_pdf::editing(&bytes).is_none(), "{params}");
+            assert_eq!(pdf_contents(&bytes).0 > 0, missing);
+        }
+    }
+}
+
+/// EPS draws hydrated artwork but carries the original link metadata with requested source bytes.
+#[test]
+fn eps_editing_keeps_placed_links_and_requested_source_bytes() {
+    for missing in [true, false] {
+        let dir = Folder::new(&format!("eps-editable-links-{missing}"));
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, &format!("eps-editable-links-{missing}"));
+        let source_bytes = std::fs::read(&src).unwrap();
+        let mut s = session();
+        parent_star(&mut s);
+        let id = place(&mut s, &src);
+        let parent = decode(&s.execute("document.serialize", &json!({"format":"vectorcraft"})).unwrap());
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        s.execute("document.open", &json!({"name":"parent.vectorcraft","dataBase64":vectorcraft_format::base64_encode(&parent)})).unwrap();
+        let original = placed(&s, id);
+        assert!(s.doc().unwrap().doc.images[&original.key].is_proxy());
+        let before = s.execute("document.json", &json!({})).unwrap();
+        for include_linked in [false, true] {
+            let params = json!({"format":"eps","includeLinkedFiles":include_linked,"previewFormat":"none","thumbnails":false});
+            for command in ["document.serialize", "document.export", "document.exportEps"] {
+                let out = s.execute(command, &params).unwrap();
+                let bytes = decode(&out);
+                let raw = vectorcraft_eps::native(&bytes).unwrap();
+                let native = vectorcraft_format::load(&raw).unwrap();
+                assert!(
+                    matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original),
+                    "{command}/{missing}/{include_linked}: editable link lost"
+                );
+                let blob = &native.images[&original.key];
+                assert_eq!(blob.is_proxy(), missing || !include_linked);
+                if !missing && include_linked {
+                    assert_eq!(blob.bytes.as_slice(), source_bytes.as_slice());
+                }
+                assert_eq!(
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    missing,
+                    "{out}"
+                );
+                // Read the printed page, independently of the native editing attachment.
+                let drawn = vectorcraft_eps::import_with(&bytes, false).unwrap();
+                assert!(!drawn.preview);
+                let (mut images, mut paths) = (0, 0);
+                drawn.document.walk(|n| match n.kind {
+                    NodeKind::Image(_) => images += 1,
+                    NodeKind::Path { .. } | NodeKind::Compound { .. } => paths += 1,
+                    _ => {}
+                });
+                assert_eq!(images > 0, missing, "{command}: drawn output uses vectors or the preview");
+                if !missing {
+                    assert!(paths > 0);
+                }
+                let mut restored = Session::new();
+                assert_eq!(
+                    restored
+                        .execute("document.open", &json!({"name":"editable.eps","dataBase64":vectorcraft_format::base64_encode(&bytes)}))
+                        .unwrap()["restored"],
+                    true
+                );
+                assert_eq!(placed(&restored, id), original);
+                assert_eq!(restored.execute("links.check", &json!({})).unwrap()["missing"], usize::from(missing));
+                assert_eq!(s.execute("document.json", &json!({})).unwrap(), before);
+                if missing {
+                    let replacement = dir.file("replacement.vectorcraft");
+                    source(&replacement, 100.0, 50.0, BLUE, 1);
+                    assert_eq!(restored.execute("links.relink", &json!({"ids":[id.0],"path":replacement})).unwrap()["relinked"], json!([id.0]));
+                }
+            }
+        }
+        for alias in ["EPS", ".eps"] {
+            let enc = cmd::fileio::encode_all(&s.doc().unwrap().doc, alias, &json!({"previewFormat":"none","thumbnails":false})).unwrap();
+            let native = vectorcraft_format::load(&vectorcraft_eps::native(&enc.files[0].1).unwrap()).unwrap();
+            assert!(matches!(&native.node(id).unwrap().kind, NodeKind::PlacedDocument(p) if **p == original), "{alias}");
+        }
+    }
+}
+
+/// An SVG's editing attachment keeps links even when its visible output must use previews.
+#[test]
+fn svg_editing_keeps_placed_links_separate_from_drawn_previews() {
+    for missing in [true, false] {
+        let dir = Folder::new(&format!("svg-editable-links-{missing}"));
+        let src = dir.file("logo.vectorcraft");
+        star_source(&src, &format!("svg-editable-links-{missing}"));
+        let mut s = session();
+        parent_star(&mut s);
+        let id = place(&mut s, &src);
+        let parent = decode(&s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap());
+        if missing {
+            std::fs::remove_file(&src).unwrap();
+        }
+        s.execute("document.open", &json!({"name": "parent.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&parent)})).unwrap();
+        let original = placed(&s, id);
+        assert!(s.doc().unwrap().doc.images[&original.key].is_proxy());
+        let before = s.execute("document.json", &json!({})).unwrap();
+        for format in ["svg", "svgz"] {
+            for command in ["document.serialize", "document.export", "document.save"] {
+                let out = s.execute(command, &json!({"format": format, "svg": {"preserveEditing": true, "range": "1"}})).unwrap();
+                let bytes = out
+                    .get("dataBase64")
+                    .map(|b| vectorcraft_format::base64_decode(b.as_str().unwrap()).unwrap())
+                    .unwrap_or_else(|| out["text"].as_str().unwrap().as_bytes().to_vec());
+                let text = vectorcraft_svg::text_of(&bytes).unwrap();
+                assert_eq!(text.contains("<image"), missing, "{format}/{command}: {text}");
+                assert_eq!(
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    missing,
+                    "{out}"
+                );
+                let mut restored = Session::new();
+                let opened = restored
+                    .execute("document.open", &json!({"name": format!("editable.{format}"), "dataBase64": vectorcraft_format::base64_encode(&bytes)}))
+                    .unwrap();
+                assert_eq!(opened["restored"], true, "{opened}");
+                eprintln!("SVG_EDITING_RESTORED_READY missing={missing} format={format} command={command}");
+                assert_eq!(placed(&restored, id), original, "{format}/{command}: link or transform lost");
+                assert_eq!(restored.execute("links.check", &json!({})).unwrap()["missing"], usize::from(missing));
+                assert_eq!(s.execute("document.json", &json!({})).unwrap(), before, "source unchanged");
+                if missing {
+                    let replacement = dir.file("replacement.vectorcraft");
+                    source(&replacement, 100.0, 50.0, BLUE, 1);
+                    assert_eq!(restored.execute("links.relink", &json!({"ids": [id.0], "path": replacement})).unwrap()["relinked"], json!([id.0]));
+                    assert_eq!(placed(&restored, id).link.path, replacement);
+                }
+            }
+            let out = s.execute("document.serialize", &json!({"format": format, "preserveEditing": false})).unwrap();
+            let bytes = out
+                .get("dataBase64")
+                .map(|b| vectorcraft_format::base64_decode(b.as_str().unwrap()).unwrap())
+                .unwrap_or_else(|| out["text"].as_str().unwrap().as_bytes().to_vec());
+            assert_eq!(vectorcraft_svg::text_of(&bytes).unwrap().contains("<image"), missing);
+            let mut reopened = Session::new();
+            assert_eq!(
+                reopened
+                    .execute("document.open", &json!({"name": format!("plain.{format}"), "dataBase64": vectorcraft_format::base64_encode(&bytes)}))
+                    .unwrap()["restored"],
+                false
+            );
+        }
+        // Dot and case aliases must reach the same original/prepared document boundary.
+        for alias in ["SVG", ".svg", "SVGZ"] {
+            let enc = cmd::fileio::encode_all(&s.doc().unwrap().doc, alias, &json!({"preserveEditing": true})).unwrap();
+            let format = cmd::fileio::format(alias).unwrap().id;
+            let mut restored = Session::new();
+            restored
+                .execute(
+                    "document.open",
+                    &json!({"name": format!("alias.{format}"), "dataBase64": vectorcraft_format::base64_encode(&enc.files[0].1)}),
+                )
+                .unwrap();
+            assert_eq!(placed(&restored, id), original, "{alias}");
+        }
+    }
 }
