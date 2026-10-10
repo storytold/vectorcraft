@@ -32,6 +32,26 @@ Other clients use the same command in their JSON config:
 
 For a live session, start the app first: `cargo run --release -p vectorcraft -- --control 7979`.
 
+### From an installed release
+
+The release packages ship `vectorcraft-cli` alongside the desktop app, so no build is needed:
+
+| Install | CLI |
+|---|---|
+| Windows (MSI) | `C:\Program Files\VectorCraft\vectorcraft-cli.exe`, not added to `PATH` |
+| Linux (deb, rpm) | `/usr/bin/vectorcraft-cli` |
+| macOS | the separate `vectorcraft-cli-<version>-macos-universal.zip` release asset (the `.app` holds only the desktop app) |
+
+```sh
+# Windows
+claude mcp add vectorcraft -- "C:\Program Files\VectorCraft\vectorcraft-cli.exe" mcp
+# Linux, or macOS with the CLI unzipped onto PATH
+claude mcp add vectorcraft -- vectorcraft-cli mcp
+```
+
+An unofficial community plugin, [artcraft-claude-plugin](https://github.com/sawizzle/artcraft-claude-plugin),
+registers the installed ArtCraft apps in Claude Code in one step and adds usage notes for agents.
+
 ## Protocol
 
 Newline-delimited JSON-RPC 2.0 on stdio. The revision is **`2025-06-18`**; `2025-03-26` and `2024-11-05` are
