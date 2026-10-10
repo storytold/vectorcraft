@@ -99,6 +99,16 @@ pub struct UndoGroup {
     journal: usize,
 }
 
+/// What Select → Reselect repeats: the Select → Same command that made the selection and the
+/// objects it chose. The objects are kept as well as the command because a command like
+/// `select.same.fillColor` reads its reference off the current selection, which a Deselect has
+/// already cleared (#903).
+#[derive(Clone, Debug)]
+pub struct LastSelection {
+    pub cmd: String,
+    pub ids: Vec<NodeId>,
+}
+
 /// Per-document editing state.
 #[derive(Clone, Debug)]
 pub struct DocState {
@@ -127,7 +137,7 @@ pub struct DocState {
     /// For Object → Transform → Transform Again (⌘D).
     pub last_transform: Option<(Affine, bool)>,
     /// Selection saved by Select → Reselect.
-    pub last_selection_cmd: Option<(String, Value)>,
+    pub last_selection: Option<LastSelection>,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
@@ -237,7 +247,7 @@ impl DocState {
             interaction: None,
             undo_group: None,
             last_transform: None,
-            last_selection_cmd: None,
+            last_selection: None,
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,

@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
+use crate::LastSelection;
+
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -21,7 +23,15 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("select.allOnArtboard", "All on Active Artboard", ["Select"], Some("Cmd+Alt+A"), "{artboard?: index}", has_doc, all_on_artboard),
         cmd!("select.none", "Deselect", ["Select"], Some("Cmd+Shift+A"), "{}", has_doc, none),
-        cmd!("select.reselect", "Reselect", ["Select"], Some("Cmd+6"), "{}", has_doc, reselect),
+        cmd!(
+            "select.reselect",
+            "Reselect",
+            ["Select"],
+            Some("Cmd+6"),
+            "{} the objects the last Select → Same chose, skipping any since deleted, hidden, locked or taken off the layer that isolation mode left out → {count, ids}",
+            has_doc,
+            reselect
+        ),
         cmd!("select.inverse", "Inverse", ["Select"], None, "{}", has_doc, inverse),
         cmd!("select.nextAbove", "Next Object Above", ["Select"], Some("Cmd+Alt+]"), "{}", has_selection, |s, _| step(s, 1)),
         cmd!("select.nextBelow", "Next Object Below", ["Select"], Some("Cmd+Alt+["), "{}", has_selection, |s, _| step(s, -1)),
@@ -215,9 +225,19 @@ fn none(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// Reselect puts back the objects the last Select → Same chose. It works from the saved ids, not
+/// by repeating the command: those commands read their reference off the selection, which a
+/// Deselect has cleared (#903). Objects deleted, hidden, locked or out of the isolated group since
+/// are skipped.
 fn reselect(s: &mut Session, _: &Value) -> Result<Value> {
-    let Some((c, p)) = s.doc()?.last_selection_cmd.clone() else { return ok() };
-    s.execute(&c, &p)
+    let Some(last) = s.doc()?.last_selection.clone() else { return ok() };
+    let reach: BTreeSet<NodeId> = {
+        let st = s.doc()?;
+        selectable(&st.doc, st.isolation).into_iter().collect()
+    };
+    let ids: Vec<NodeId> = last.ids.into_iter().filter(|id| reach.contains(id)).collect();
+    s.select(|_, sel| sel.set(ids.iter().copied()))?;
+    selection_result(s)
 }
 
 fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
@@ -378,12 +398,12 @@ fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
 fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
-    select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))
+    select_where(s, cmd, |_, n| !n.is_container() && eq(n, &refn))
 }
 
 /// Select the visible, unlocked objects in visible, unlocked layers that `f` accepts (not looking
-/// inside accepted ones); Select > Reselect repeats `cmd` with `p`.
-fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
+/// inside accepted ones); Select ▸ Reselect repeats the choice from the ids it lands here.
+fn select_where(s: &mut Session, cmd: &str, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
     fn visit(d: &Document, n: &Node, f: &impl Fn(&Document, &Node) -> bool, ids: &mut Vec<NodeId>) {
         // Hidden or locked objects and sublayers (and what they hold) are out of reach.
         if !n.visible || n.locked || n.is_template() {
@@ -402,7 +422,7 @@ fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &No
         visit(&st.doc, l, &f, &mut ids);
     }
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
-    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone()));
+    s.doc_mut()?.last_selection = Some(LastSelection { cmd: cmd.to_string(), ids: ids.to_vec() });
     Ok(json!({ "count": ids.len() }))
 }
 
@@ -416,7 +436,7 @@ fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
         .and_then(|id| super::style::linked_style(&st.doc, st.doc.node(*id)?))
         .map(|g| g.id)
         .ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
-    select_where(s, cmd, &json!({}), |d, n| n.graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
+    select_where(s, cmd, |d, n| n.graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
 }
 
 /// An appearance attribute Select > Same > Appearance Attribute matches.
@@ -438,7 +458,7 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
             Attribute::Item(ap.items.iter().rev().find(|i| i.is_fill()).cloned().ok_or_else(|| bad(cmd, "the object has no fill, stroke or effect"))?)
         }
     };
-    select_where(s, cmd, p, |_, n| match &attr {
+    select_where(s, cmd, |_, n| match &attr {
         Attribute::Item(it) => n.appearance.items.contains(it),
         Attribute::Effect(e) => n.appearance.effects.iter().any(|x| x.id == e.id && x.params == e.params),
     })

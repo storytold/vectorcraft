@@ -73,3 +73,51 @@ fn single_id_toggle_validates_before_mutating() {
     // A malformed array must not silently fall back to a valid single id.
     assert!(s.execute("select.toggle", &json!({"ids": "bad", "id": a.0})).is_err());
 }
+
+fn paint_fill(s: &mut Session, id: u64, color: &str) {
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": color})).unwrap();
+}
+
+/// #903: a Select → Same command reads its reference off the selection, so repeating the command
+/// after a Deselect failed. Reselect puts the objects back from the ids the command chose.
+#[test]
+fn reselect_repeats_a_same_selection_after_deselect() {
+    let (mut s, a, b) = session();
+    paint_fill(&mut s, a.0, "#ff0000");
+    paint_fill(&mut s, b.0, "#ff0000");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.execute("select.same.fillColor", &json!({})).unwrap(), json!({"count": 2}));
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.reselect", &json!({})).unwrap(), json!({"count": 2, "ids": [a.0, b.0]}));
+    assert_eq!(s.active().unwrap().selection.objects, vec![a, b]);
+    // The record survives: Reselect after another Deselect is the same choice again.
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.reselect", &json!({})).unwrap(), json!({"count": 2, "ids": [a.0, b.0]}));
+}
+
+#[test]
+fn reselect_skips_objects_that_are_gone_or_out_of_reach() {
+    let (mut s, a, b) = session();
+    let c = NodeId(s.execute("shape.rectangle", &json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    for id in [a.0, b.0, c.0] {
+        paint_fill(&mut s, id, "#ff0000");
+    }
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.execute("select.same.fillColor", &json!({})).unwrap(), json!({"count": 3}));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.reselect", &json!({})).unwrap(), json!({"count": 1, "ids": [a.0]}));
+}
+
+#[test]
+fn reselect_without_a_same_command_is_a_no_op() {
+    let (mut s, a, _) = session();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.reselect", &json!({})).unwrap(), Value::Null);
+    assert!(s.active().unwrap().selection.is_empty());
+}

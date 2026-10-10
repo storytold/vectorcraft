@@ -197,6 +197,7 @@ fn windows_display_gpus() -> Vec<DisplayGpu> {
 
 /// The PCI `(vendor, device)` of a Windows device id such as
 /// `PCI\VEN_10DE&DEV_2204&SUBSYS_40421458&REV_A1`, any case; `None` for anything else.
+#[cfg(any(windows, test))]
 fn pci_ids(device_id: &str) -> Option<(u32, u32)> {
     let field = |key: &str| {
         device_id.split(['\\', '&']).find_map(|part| {
