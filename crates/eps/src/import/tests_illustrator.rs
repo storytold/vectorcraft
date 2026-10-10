@@ -92,3 +92,27 @@ fn unbalanced_and_runaway_groups_are_read_safely() {
     assert_eq!(t, format!("{}p{} p", "g[".repeat(MAX_NEST), "]".repeat(MAX_NEST)));
     assert!(warnings.iter().any(|w| w.contains("nested more than")), "{warnings:?}");
 }
+
+/// A file of the legacy format that names Illustrator's procsets (as Rhino's export does) instead of
+/// defining its operators comes in through the layers reader, with its layer names, though its
+/// header has no `%AI…` comments.
+#[test]
+fn a_file_that_names_illustrators_procsets_comes_in_with_its_layers() {
+    let layer = |name: &str, body: &str| {
+        let style = "0 A\n0 R\n0 0 0 1 K\n0 i 1 J 1 j 0.8 w 4 M []0 d\n0 D";
+        format!("%AI5_BeginLayer\n1 1 1 1 0 0 -1 0 0 0 Lb\n({name}) Ln\n{style}\n{body}\nS\nLB\n%AI5_EndLayer--\n")
+    };
+    let text = format!(
+        "%!PS-Adobe-3.0\n%%Creator: Rhinoceros\n%%BoundingBox: 0 0 200 100\n\
+         %%DocumentNeededResources: procset Adobe_packedarray 2.0 0\n%%+ procset Adobe_IllustratorA_AI3 1.0 0\n%%EndComments\n\
+         %%BeginProlog\n%%IncludeResource: procset Adobe_packedarray 2.0 0\nAdobe_packedarray /initialize get exec\n%%EndProlog\n\
+         %%BeginSetup\n%AI5_BeginNonPrinting\nNp\n%AI5_EndNonPrinting--\nAdobe_cmykcolor /initialize get exec\n%%EndSetup\n{}{}\
+         %%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nAdobe_packedarray /terminate get exec\n%%EOF\n",
+        layer("SECTION::Cut", "10 10 m\n90 10 L\n90 90 L"),
+        layer("SECTION::Hatch", "110 10 m\n190 90 L"),
+    );
+    let r = import(text.as_bytes()).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["SECTION::Cut", "SECTION::Hatch"]);
+    assert!(!r.preview);
+}

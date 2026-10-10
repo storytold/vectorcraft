@@ -35,8 +35,8 @@ private editing data. VectorCraft:
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
-  brushes, symbols and pattern fills come in as their drawn look (#637), legacy `.ai` without the prolog not
-  read.
+  brushes, symbols and pattern fills come in as their drawn look (#637), legacy `.ai` without the prolog
+  opens from its layers (#1027) but not when it has type.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible only).
   Closing the open-side issues: 10–20 h with users' files.
 
@@ -78,4 +78,5 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Legacy `.ai` without the prolog opens from its layers unless it has type (#1027) |
 | 2026-10-10 | major | First checklist; moved the `.ai` editing-data scope from the ROADMAP's "Out of scope" here; added the user-reported `.ai` failures |

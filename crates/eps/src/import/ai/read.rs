@@ -275,6 +275,7 @@ const IGNORED: &[&str] = &[
     "XH",
     "XF",
     "D",
+    "i",
     "X=",
     "X+",
     "Bc",

@@ -23,7 +23,9 @@
 //! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in as its
 //! preview (a TIFF image, a Windows metafile or an EPSI bitmap), with a warning that names the
 //! error, the operator and the procedures it ran in; without a preview, what was drawn before the
-//! error is kept (with that warning), else the file is refused.
+//! error is kept (with that warning), else the file is refused. Before that, a file in the legacy
+//! Illustrator format (one that names its prolog's procsets instead of defining them, as other apps
+//! write it) comes in from its layers, read as editing data by `native`, when they can be read.
 
 mod ai;
 mod ate;
@@ -84,8 +86,9 @@ struct Dsc {
     /// `llx lly urx ury` in PostScript's default space.
     bbox: Option<[f64; 4]>,
     pages: Option<u32>,
-    /// In the legacy Illustrator format: its header has `%AI…` comments or names the app as the
-    /// creator (see the module docs for the specification).
+    /// In the legacy Illustrator format: its header has `%AI…` comments, names the app as the
+    /// creator or names its procset (`Adobe_IllustratorA_AI3`, `Adobe_Illustrator_AI5`; see the
+    /// module docs for the specification).
     illustrator: bool,
 }
 
@@ -118,7 +121,9 @@ impl Dsc {
             }
             let value = |key: &str| line.strip_prefix(key).map(str::trim);
             let creator = value("%%Creator:").is_some_and(|v| v.contains("Illustrator")); // brand-ok: the creator its files name
-            if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator) {
+            // Files of the legacy format that other apps write (Rhino's) name its procsets instead.
+            let procset = line.contains("procset Adobe_Illustrator"); // brand-ok: the procset name its files give
+            if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator || procset) {
                 d.illustrator = true;
             }
             if let Some(v) = value("%%HiResBoundingBox:") {
@@ -195,6 +200,15 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
         out.warn(&format!("only the first of the file's {n} pages was read"));
     }
     let drew = !out.drawn.is_empty();
+    // A file of Illustrator's legacy format that names its procsets instead of defining them has
+    // operators the interpreter can't run: its layers are read from the text, as editing data.
+    if editing_data
+        && dsc.illustrator
+        && (result.is_err() || !drew)
+        && let Ok((document, warnings)) = native::ai_alone(ps)
+    {
+        return Ok(Imported { document, warnings, preview: false });
+    }
     let why = match (&result, drew) {
         (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out))),
         (Ok(()), true) => return Ok(finish(out)),
