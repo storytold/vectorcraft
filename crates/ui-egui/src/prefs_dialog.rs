@@ -205,9 +205,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     for c in PREF_CATEGORIES {
                         let sel = *c == cat;
-                        let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
-                        let b = egui::Button::selectable(sel, text).frame_when_inactive(false).min_size(egui::vec2(184.0, 24.0));
-                        if ui.add(b).clicked() {
+                        if category_button(ui, tl!(*c), sel, &t).clicked() {
                             d.fields.insert("__category".into(), json!(c));
                         }
                     }
@@ -262,6 +260,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
     }
+}
+
+/// Selected categories keep the app accent even when egui switches its light/dark style.
+fn category_button(ui: &mut egui::Ui, label: &str, selected: bool, t: &Tokens) -> egui::Response {
+    let text = egui::RichText::new(label).size(12.5).color(if selected { egui::Color32::WHITE } else { t.text });
+    let button = egui::Button::selectable(selected, text).min_size(egui::vec2(184.0, 24.0));
+    ui.add(if selected { button.fill(t.accent_strong).stroke(egui::Stroke::NONE) } else { button })
 }
 
 fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
@@ -926,6 +931,27 @@ mod tests {
         confirm(&mut a).unwrap();
         assert_eq!((a.session.prefs.appearance_mode.as_str(), a.session.prefs.light_theme.as_str()), ("auto", "mediumLight"));
         assert_eq!(a.ui.engine_prefs["appearanceMode"], json!("auto"));
+    }
+
+    /// The selected category has a painted accent row even when the pointer is idle.
+    #[test]
+    fn selected_preferences_category_paints_accent() {
+        fn has_accent(shape: &egui::Shape, accent: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Rect(rect) => rect.fill == accent,
+                egui::Shape::Vec(shapes) => shapes.iter().any(|shape| has_accent(shape, accent)),
+                _ => false,
+            }
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Brightness::MediumDark);
+        let tokens = Tokens::for_brightness(Brightness::MediumDark);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            category_button(ui, "User Interface", true, &tokens);
+        });
+        output.textures_delta.clear();
+        assert!(output.shapes.iter().any(|clipped| has_accent(&clipped.shape, tokens.accent_strong)));
     }
 
     #[test]
