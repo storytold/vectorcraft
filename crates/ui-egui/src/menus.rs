@@ -2101,11 +2101,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Crop Image", "ui.cropImage"),
                 c("Rasterize…", "object.rasterize"),
                 cp("Create Gradient Mesh…", "object.mesh.create", json!({"rows": 4, "cols": 4, "appearance": "flat", "highlight": 100})),
-                cp(
-                    "Create Object Mosaic…",
-                    "object.createObjectMosaic",
-                    json!({"columns": 10, "rows": 10, "spacingX": 0, "spacingY": 0, "gray": false, "deleteRaster": false}),
-                ),
+                c("Create Object Mosaic…", "object.createObjectMosaic"),
                 c("Vector Halftone…", "object.vectorHalftone"),
                 c("Create Trim Marks", "object.createTrimMarks"),
                 c("Flatten Transparency…", "ui.flattenTransparencyDialog"),
@@ -3065,6 +3061,19 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
+        return;
+    }
+    // Create Object Mosaic… needs editable grid settings, not the command's 10 × 10 defaults.
+    if id == "object.createObjectMosaic" && p.as_object().is_none_or(|o| o.is_empty()) {
+        let params = json!({
+            "columns": 10,
+            "rows": 10,
+            "spacingX": 0,
+            "spacingY": 0,
+            "gray": false,
+            "deleteRaster": false
+        });
+        let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Create Object Mosaic", "params": params}));
         return;
     }
     // Rasterize…: its options, starting from the document's raster effects settings.

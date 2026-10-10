@@ -124,6 +124,29 @@ mod tests {
 
     /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
     /// value axis on the side picked.
+    /// #1000: the Object menu must expose its parameters instead of creating the hard-coded
+    /// 10 × 10 grid, and OK must pass the edited values to the engine command.
+    #[test]
+    fn object_mosaic_menu_uses_edited_grid_dimensions() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+        app.run("object.rasterize", json!({"ppi": 72})).unwrap();
+
+        crate::menus::invoke(&mut app, "object.createObjectMosaic", Value::Null);
+        let dialog = app.ui.dialog.as_ref().expect("mosaic options dialog");
+        assert_eq!(dialog.kind, "command");
+        assert_eq!(dialog.str("__command"), "object.createObjectMosaic");
+        assert_eq!(dialog.fields["columns"], json!(10));
+        assert_eq!(dialog.fields["rows"], json!(10));
+        app.ui.dialog.as_mut().unwrap().fields.insert("columns".into(), json!(3));
+        app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), json!(2));
+
+        let result = crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(result["tiles"], json!(6));
+        assert!(app.ui.dialog.is_none());
+    }
+
     #[test]
     fn graph_type_value_axis_is_a_dropdown_of_its_sides() {
         let doc = vectorcraft_engine::find_command("graph.setType").unwrap().params;
