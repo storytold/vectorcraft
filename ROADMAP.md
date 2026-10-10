@@ -2,7 +2,7 @@
 
 **Stage: alpha** · next: beta, ~20 points (ready for real work ~55% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (newbie-user score ~75% added; ready for real work re-examined: 55% full, 65% mainstream; core-workflow gate applied: stays alpha; earlier the same day: full re-measure against Illustrator 2026 30.x, restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (essentials-user score ~75% added; ready for real work re-examined: 55% full, 65% mainstream; core-workflow gate applied: stays alpha; earlier the same day: full re-measure against Illustrator 2026 30.x, restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -26,7 +26,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **Ready for real work, mainstream illustrator** (paths, type, colour, artboards, effects, SVG/PDF/PNG, their own `.ai`) | **~65%** (60–70%) | estimated |
 | **Ready for real work, full Illustrator** (decides the stage) | **~55%** (50–60%) | estimated |
-| **Ready for real work, newbie user** (core tools, default settings) | **~75%** (70–80%) | estimated, [method](docs/target-app-parity.md#newbie-user) |
+| **Ready for real work, essentials user** (core tools, default settings) | **~75%** (70–80%) | estimated, [method](docs/target-app-parity.md#essentials-user) |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
 
@@ -134,7 +134,7 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-10 | minor | Added the newbie-user readiness score (~75%) |
+| 2026-10-10 | minor | Added the essentials-user readiness score (~75%) |
 | 2026-10-10 | minor | Ready for real work re-examined against the issue tracker and user feedback: 50% → 55% (full), 65% mainstream added; see target-app-parity.md |
 | 2026-10-10 | minor | Applied the core-workflow gate (docs/roadmap.md › Alpha gate): passes, stage stays alpha |
 | 2026-10-10 | major | Re-measured against Illustrator 2026 (30.x) from code counts, 71 open issues and public docs; stage set to alpha; moved the parity estimate, honest assessment and "Shipped so far" to `docs/target-app-parity.md`, the gap list to `docs/gaps.md`, milestones to `docs/roadmap.md`, the `.ai` scope to `docs/file-format-parity.md` |
