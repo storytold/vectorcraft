@@ -424,7 +424,7 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
 /// command feeds); returns the one clicked, for the caller to apply.
 pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    crate::widgets::subheader(ui, "Recent Colors");
+    crate::widgets::subheader(ui, tl!("Recent Colors"));
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;

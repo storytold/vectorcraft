@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 use vectorcraft_geom::{Affine, Point};
 
-use super::{Channels, PixelSpace, gaussian, to16};
+use super::{Channels, PixelSpace, Px16, gaussian, pick, to16};
 use crate::util::noise;
 
 /// Mezzotint's patterns, in its Type menu's order: (label, parameter value).
@@ -62,7 +62,7 @@ impl Mezzotint {
 
     /// The pattern of Type `value` (a [`MEZZOTINT_TYPES`] value, any case); Fine Dots otherwise.
     pub fn parse(value: &str) -> Self {
-        MEZZOTINT_TYPES.iter().zip(MEZZOTINT_KINDS).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(Self::FINE_DOTS, |(_, kind)| kind)
+        pick(&MEZZOTINT_TYPES, &MEZZOTINT_KINDS, value, Self::FINE_DOTS)
     }
 }
 
@@ -70,48 +70,48 @@ impl Mezzotint {
 const SEED: u64 = 0x5049_5845_4C41_5445;
 
 /// A random number in [0, 1) for cell (`i`, `j`) of pattern `salt`; `k` picks one of several.
-fn rand(salt: u64, i: i64, j: i64, k: u64) -> f64 {
+pub(super) fn rand(salt: u64, i: i64, j: i64, k: u64) -> f64 {
     0.5 * (noise(SEED ^ salt, i as u64, j as u64, k) + 1.0)
 }
 
 /// The cell holding coordinate `v` (in cells); `None` far beyond any raster (or not finite).
-fn cell(v: f64) -> Option<i64> {
+pub(super) fn cell(v: f64) -> Option<i64> {
     let f = v.floor();
     (f.abs() < 1e15).then_some(f as i64)
 }
 
 /// Where a raster's pixels lie relative to the object's centre, in document units.
-struct Place {
+pub(super) struct Place {
     /// Pixel coordinates → document coordinates relative to the centre.
-    to_rel: Affine,
+    pub(super) to_rel: Affine,
     /// The other way.
-    to_px: Affine,
+    pub(super) to_px: Affine,
     /// A pixel's size in document units.
-    px: f64,
+    pub(super) px: f64,
     w: usize,
     h: usize,
 }
 
 impl Place {
-    fn new(space: &PixelSpace, w: usize, h: usize) -> Option<Self> {
+    pub(super) fn new(space: &PixelSpace, w: usize, h: usize) -> Option<Self> {
         let to_rel = Affine::translate(-space.center.to_vec2()) * space.to_doc;
         let to_px = to_rel.inverse();
         (to_rel.is_finite() && to_px.is_finite() && space.px.is_finite() && space.px > 0.0).then_some(Self { to_rel, to_px, px: space.px, w, h })
     }
 
     /// The centre of pixel (`x`, `y`).
-    fn at(&self, x: usize, y: usize) -> Point {
+    pub(super) fn at(&self, x: usize, y: usize) -> Point {
         self.to_rel * Point::new(x as f64 + 0.5, y as f64 + 0.5)
     }
 
     /// The index of the pixel holding point `p`; `None` outside the raster.
-    fn index(&self, p: Point) -> Option<usize> {
+    pub(super) fn index(&self, p: Point) -> Option<usize> {
         let q = self.to_px * p;
         (q.x >= 0.0 && q.y >= 0.0 && q.x < self.w as f64 && q.y < self.h as f64).then(|| q.y as usize * self.w + q.x as usize)
     }
 
     /// Run `f(x, y, pixel)` on every pixel.
-    fn each(&self, px: &mut [[u8; 4]], mut f: impl FnMut(usize, usize, &mut [u8; 4])) {
+    pub(super) fn each(&self, px: &mut [[u8; 4]], mut f: impl FnMut(usize, usize, &mut [u8; 4])) {
         for (y, row) in px.chunks_exact_mut(self.w.max(1)).enumerate().take(self.h) {
             for (x, p) in row.iter_mut().enumerate() {
                 f(x, y, p);
@@ -122,7 +122,7 @@ impl Place {
 
 /// The cells around a pixel's cell, in the order they can hold its nearest random point: the
 /// cell itself, its 8 neighbours, then the ring around them.
-const AROUND: [(i64, i64); 25] = [
+pub(super) const AROUND: [(i64, i64); 25] = [
     (0, 0),
     (-1, 0),
     (1, 0),
@@ -152,18 +152,18 @@ const AROUND: [(i64, i64); 25] = [
 
 /// What the cells [`AROUND`] one cell hold, made when first asked for and kept while consecutive
 /// pixels stay in that cell.
-struct Around<T> {
+pub(super) struct Around<T> {
     cell: Option<(i64, i64)>,
     items: [Option<T>; 25],
 }
 
 impl<T: Copy> Around<T> {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self { cell: None, items: [None; 25] }
     }
 
     /// Item `k` of [`AROUND`] cell (`i`, `j`): `make(cell i', j')`.
-    fn get(&mut self, (i, j): (i64, i64), k: usize, make: impl FnOnce(i64, i64) -> T) -> Option<T> {
+    pub(super) fn get(&mut self, (i, j): (i64, i64), k: usize, make: impl FnOnce(i64, i64) -> T) -> Option<T> {
         if self.cell != Some((i, j)) {
             self.cell = Some((i, j));
             self.items = [None; 25];
@@ -175,8 +175,24 @@ impl<T: Copy> Around<T> {
 }
 
 /// The random point of cell (`i`, `j`) of pattern `salt`, in cells.
-fn point_in(salt: u64, i: i64, j: i64) -> Point {
+pub(super) fn point_in(salt: u64, i: i64, j: i64) -> Point {
     Point::new(i as f64 + rand(salt, i, j, 0), j as f64 + rand(salt, i, j, 1))
+}
+
+/// How far cell `c` lies from coordinate `t` (in cells) along one axis.
+pub(super) fn gap(c: i64, t: f64) -> f64 {
+    (c as f64 - t).max(t - c as f64 - 1.0).max(0.0)
+}
+
+/// Smooth random values in [0, 1) of pattern `salt` at whole coordinates, blended between them.
+pub(super) fn value_noise(salt: u64, x: f64, y: f64) -> f64 {
+    let (Some(i), Some(j)) = (cell(x), cell(y)) else { return 0.5 };
+    let smooth = |t: f64| t * t * (3.0 - 2.0 * t);
+    let (fx, fy) = (smooth(x - i as f64), smooth(y - j as f64));
+    let at = |di: i64, dj: i64| rand(salt, i.wrapping_add(di), j.wrapping_add(dj), 0);
+    let top = at(0, 0) + (at(1, 0) - at(0, 0)) * fx;
+    let bottom = at(0, 1) + (at(1, 1) - at(0, 1)) * fx;
+    top + (bottom - top) * fy
 }
 
 /// Crystallize: every pixel takes the colour at the nearest of one random point per `cell` ×
@@ -188,8 +204,6 @@ pub(super) fn crystallize(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelS
     }
     let src = px.to_vec();
     let mut around = Around::new();
-    // How far cell `c` lies from coordinate `t` (in cells) along one axis.
-    let gap = |c: i64, t: f64| (c as f64 - t).max(t - c as f64 - 1.0).max(0.0);
     place.each(px, |x, y, out| {
         let q = place.at(x, y);
         let (u, v) = (q.x / cell_size, q.y / cell_size);
@@ -215,6 +229,34 @@ pub(super) fn crystallize(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelS
     });
 }
 
+/// The object's colours softened by a Gaussian of `sigma` pixels, with its coverage as it is: what
+/// the cell filters (Pointillize, Patchwork, Stained Glass) fill their cells with.
+pub(super) struct Soft {
+    colour: Vec<Px16>,
+    alpha: Vec<u8>,
+}
+
+impl Soft {
+    pub(super) fn new(px: &[[u8; 4]], w: usize, sigma: f64) -> Self {
+        let mut colour = to16(px);
+        gaussian(&mut colour, w, sigma);
+        Self { colour, alpha: px.iter().map(|p| p[3]).collect() }
+    }
+
+    /// The colour around pixel `k` (premultiplied, 0..1), as opaque as the object is at `k`; clear
+    /// outside the raster.
+    pub(super) fn at(&self, k: Option<usize>) -> [f32; 4] {
+        let a = k.and_then(|k| self.alpha.get(k)).map_or(0.0, |a| f32::from(*a) / 255.0);
+        match k.and_then(|k| self.colour.get(k)) {
+            Some(p) if p[3] > 0 => {
+                let s = a / f32::from(p[3]);
+                [f32::from(p[0]) * s, f32::from(p[1]) * s, f32::from(p[2]) * s, a]
+            }
+            _ => [0.0; 4],
+        }
+    }
+}
+
 /// One of Pointillize's dots: where (in cells), its radius (document units), its stacking order
 /// and its colour (premultiplied, 0..1).
 #[derive(Clone, Copy)]
@@ -237,20 +279,10 @@ pub(super) fn pointillize(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelS
     }
     // Each dot takes the colour around its centre, not of a single pixel there, and is as opaque
     // as the object at its centre (whole dots on the object, none beside it).
-    let alpha: Vec<u8> = px.iter().map(|p| p[3]).collect();
-    let mut soft = to16(px);
-    gaussian(&mut soft, w, cell_size / place.px / 4.0);
+    let soft = Soft::new(px, w, cell_size / place.px / 4.0);
     let dot = |i: i64, j: i64| {
         let at = point_in(2, i, j);
-        let k = place.index(Point::new(at.x * cell_size, at.y * cell_size));
-        let a = k.and_then(|k| alpha.get(k)).map_or(0.0, |a| f32::from(*a) / 255.0);
-        let colour = match k.and_then(|k| soft.get(k)) {
-            Some(p) if p[3] > 0 => {
-                let s = a / f32::from(p[3]);
-                [f32::from(p[0]) * s, f32::from(p[1]) * s, f32::from(p[2]) * s, a]
-            }
-            _ => [0.0; 4],
-        };
+        let colour = soft.at(place.index(Point::new(at.x * cell_size, at.y * cell_size)));
         Dot { at, radius: (DOT_RADIUS.0 + DOT_RADIUS.1 * rand(2, i, j, 2)) * cell_size, z: rand(2, i, j, 3), colour }
     };
     let mut around = Around::new();
@@ -499,19 +531,6 @@ pub(super) fn mezzotint(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpa
 /// Mezzotint's threshold in [0, 1) at point `q` (document units around the centre) of pattern
 /// `salt`.
 fn threshold(kind: Mezzotint, salt: u64, q: Point) -> f64 {
-    let smooth = |t: f64| t * t * (3.0 - 2.0 * t);
-    // Random values at whole coordinates, blended smoothly between them along x (and y).
-    let blend = |x: f64, y: f64, along_y: bool| {
-        let (Some(i), Some(j)) = (cell(x), cell(y)) else { return 0.5 };
-        let (fx, fy) = (smooth(x - i as f64), smooth(y - j as f64));
-        let at = |di: i64, dj: i64| rand(salt, i.wrapping_add(di), j.wrapping_add(dj), 0);
-        let top = at(0, 0) + (at(1, 0) - at(0, 0)) * fx;
-        if !along_y {
-            return top;
-        }
-        let bottom = at(0, 1) + (at(1, 1) - at(0, 1)) * fx;
-        top + (bottom - top) * fy
-    };
     let grain = |size: f64| match (cell(q.x / size), cell(q.y / size)) {
         (Some(i), Some(j)) => rand(salt, i, j, 1),
         _ => 0.5,
@@ -520,12 +539,10 @@ fn threshold(kind: Mezzotint, salt: u64, q: Point) -> f64 {
         Mezzotint::Dots { size, smooth: false, .. } => grain(f64::from(size)),
         Mezzotint::Dots { size, grainy, .. } => {
             let s = f64::from(size);
-            let blob = blend(q.x / s, q.y / s, true);
+            let blob = value_noise(salt, q.x / s, q.y / s);
             if grainy { 0.5 * (blob + grain(1.0)) } else { blob }
         }
-        Mezzotint::Lines { length, width } => {
-            let row = (q.y / f64::from(width)).floor();
-            blend(q.x / f64::from(length), row, false)
-        }
+        // Blended along x only: whole rows.
+        Mezzotint::Lines { length, width } => value_noise(salt, q.x / f64::from(length), (q.y / f64::from(width)).floor()),
     }
 }

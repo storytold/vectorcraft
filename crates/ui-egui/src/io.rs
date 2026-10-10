@@ -15,8 +15,8 @@ use crate::{FilePick, Services, VectorcraftApp, dialogs};
 const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"];
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
-/// graphic style library files open in the library panel and flattener, PDF, print and perspective
-/// grid presets files are imported. → `document.open`'s result for a document opened now (its
+/// graphic style library files open in the library panel, Libraries panel files are added to it,
+/// and flattener, PDF, print and perspective grid presets files are imported. → `document.open`'s result for a document opened now (its
 /// `warnings` say what didn't come in as it was), else null.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
     let ext = fileio::extension(name);
@@ -38,6 +38,9 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         app.status(format!("Imported {what}: {}", names.join(", ")));
         return Ok(Value::Null);
+    }
+    if vectorcraft_engine::cmd::library::LIBRARY_EXTS.contains(&ext.as_str()) {
+        return crate::panels::libraries::import(app, json!({"data": String::from_utf8_lossy(bytes)})).map(|_| Value::Null);
     }
     let swatches = vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str());
     if swatches || ext == vectorcraft_doc::style_libs::STYLES_EXT {

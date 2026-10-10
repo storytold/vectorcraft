@@ -37,6 +37,7 @@ use vectorcraft_geom::{FillRule, PathData};
 use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
+use crate::ps;
 
 /// Deepest nesting of layers, groups and dictionaries.
 const MAX_DEPTH: usize = 256;
@@ -248,6 +249,8 @@ struct Reader<'a> {
     hidden_ids: HashSet<NodeId>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
+    /// A `/ForeignObject`'s `/Data`: its PDF as ASCII85 in comment lines, until the object closes.
+    foreign_data: Option<Vec<u8>>,
     /// The page ended: what follows isn't art.
     done: bool,
     /// The dictionary closed last was opened on a `%_` line.
@@ -316,8 +319,11 @@ const SKIPPED: &[(&str, &str)] = &[
     ("Alternate_Content", "End_Versioned_Content"),
 ];
 
-/// The note for a `/ForeignObject`, art the editor shows but doesn't edit.
-pub const NON_NATIVE_ART: &str = "non-native art (a placed PDF's content) is left out: VectorCraft doesn't draw it from the editing data yet";
+/// The note for a `/ForeignObject` (non-native art, the content of a placed PDF, which the editor
+/// shows but doesn't edit) whose PDF can't be read.
+pub const NON_NATIVE_ART_UNREAD: &str = "non-native art (a placed PDF's content) that VectorCraft can't read is left out";
+/// The name of the group a `/ForeignObject`'s art comes in as.
+pub const NON_NATIVE_ART: &str = "Non-native art";
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
 /// `BeginSymbol`); DSC comments (`%%BeginProlog`) keep their `%`.
@@ -350,6 +356,7 @@ impl<'a> Reader<'a> {
             pending_stroke: None,
             spots: Vec::new(),
             raster: None,
+            foreign_data: None,
             after_object: false,
             nodes: 0,
             unsupported: BTreeSet::new(),
@@ -659,8 +666,10 @@ impl<'a> Reader<'a> {
                     // of it may start with `%_` and read as hidden tokens: a `(` there would open
                     // a string that swallows the rest of the layer.
                     let key = o.entries.last().and_then(|(k, _)| k.as_deref());
-                    if (o.ty == "Binary" && key == Some("ASCII85Decode")) || (o.ty == "ForeignObject" && key == Some("Data")) {
+                    if o.ty == "Binary" && key == Some("ASCII85Decode") {
                         self.lex.skip_past(b"~>");
+                    } else if o.ty == "ForeignObject" && key == Some("Data") {
+                        self.foreign_data = Some(self.lex.skip_past(b"~>").to_vec());
                     }
                 }
                 return Ok(());
@@ -839,9 +848,7 @@ impl<'a> Reader<'a> {
             "Document" => self.document(&o),
             "AI11Text" => self.text_slot(&o)?,
             "SymbolInstance" => self.unreadable("symbols"),
-            // Art Illustrator shows but doesn't edit (a placed PDF's content): its PDF is kept in
-            // the dictionary, which nothing draws from yet, so the file opens without it.
-            "ForeignObject" => self.warn(NON_NATIVE_ART),
+            "ForeignObject" => self.foreign_art(&o)?,
             _ => {}
         }
         Ok(())
@@ -856,6 +863,94 @@ impl<'a> Reader<'a> {
         n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}:{frame}")));
         let hidden = self.obj_hidden;
         self.add(n, hidden)
+    }
+
+    /// Non-native art (`/ForeignObject`): the content of a placed PDF, which Illustrator shows but
+    /// doesn't edit. Its `/Data` is that PDF (ASCII85 in comment lines, kept by the `,` handler),
+    /// `/Bounds` the art's box in a space measured from `/Origin` with y down, and `/RTransform`
+    /// maps that space onto the art (both read off files: the box lands on the clipping paths
+    /// around it). The PDF importer reads the PDF, and its art is fitted to the box, as one
+    /// group. Without data, or with a PDF that can't be read, nothing is drawn.
+    fn foreign_art(&mut self, o: &Obj) -> Result<(), String> {
+        let Some(text) = self.foreign_data.take() else { return Ok(()) };
+        // One `%` starts each line; the rest, `_` included, is data.
+        let mut encoded = String::with_capacity(text.len());
+        for line in text.split(|b| matches!(b, b'\r' | b'\n')) {
+            encoded.push_str(&String::from_utf8_lossy(line.strip_prefix(b"%").unwrap_or(line)));
+        }
+        let Some(pdf) = ps::ascii85_decode(&encoded) else {
+            self.warn(NON_NATIVE_ART_UNREAD);
+            return Ok(());
+        };
+        let (rt, origin, bounds) = (o.get("RTransform").map(Self::nums), o.get("Origin").map(Self::nums), o.get("Bounds").map(Self::nums));
+        let (Some([a, b, c, d, tx, ty]), Some([ox, oy]), Some([x0, y0, x1, y1])) = (rt.as_deref(), origin.as_deref(), bounds.as_deref()) else {
+            self.warn(NON_NATIVE_ART_UNREAD);
+            return Ok(());
+        };
+        let place = Affine::new([*a, *b, *c, *d, *tx, *ty]) * Affine::new([1.0, 0.0, 0.0, -1.0, *ox, *oy]);
+        let art_box = place.transform_rect_bbox(Rect::new(*x0, *y0, *x1, *y1));
+        if !sane(art_box) || art_box.width() <= 0.0 || art_box.height() <= 0.0 {
+            self.warn(NON_NATIVE_ART_UNREAD);
+            return Ok(());
+        }
+        let target = self.ensure_space().transform_rect_bbox(art_box);
+        let opts = vectorcraft_pdf::ImportOptions { layers: false, ..Default::default() };
+        let read = match vectorcraft_pdf::import_with_report(&pdf, &opts) {
+            Ok(r) => r,
+            Err(e) => {
+                self.warn(&format!("{NON_NATIVE_ART_UNREAD} ({e})"));
+                return Ok(());
+            }
+        };
+        let mut art: Vec<Node> = read.document.layers.iter().filter_map(|l| l.children()).flatten().map(|n| n.as_ref().clone()).collect();
+        let Some(bbox) = art.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.geometric_bounds())) else { return Ok(()) };
+        if bbox.width() <= 0.0 || bbox.height() <= 0.0 {
+            return Ok(());
+        }
+        // The art's own box onto the object's box (its measure of the same art), upside down:
+        // the object's space has y down, and the PDF's content is kept in its own y-up
+        // coordinates, so the PDF's bottom is the top of the box.
+        let fit = Affine::translate((target.x0, target.y1))
+            * Affine::scale_non_uniform(target.width() / bbox.width(), -target.height() / bbox.height())
+            * Affine::translate((-bbox.x0, -bbox.y0));
+        for n in &mut art {
+            n.transform(fit, true);
+            // The PDF's swatches stay with it: its colours keep their values, unlinked.
+            self.reid(n);
+        }
+        for (key, blob) in read.document.images {
+            self.doc.images.entry(key).or_insert(blob);
+        }
+        let gs = self.gs.clone();
+        let mut group = self.new_node(NodeKind::Group { children: art.into_iter().map(Arc::new).collect(), clip: false }, &gs);
+        group.name = Some(NON_NATIVE_ART.into());
+        self.add(group, self.obj_hidden)
+    }
+
+    /// Give `n` and its descendants ids of this document, and unlink their swatches.
+    fn reid(&mut self, n: &mut Node) {
+        n.id = self.doc.alloc_id();
+        for it in &mut n.appearance.items {
+            let p = match it {
+                AppearanceItem::Fill(f) => &mut f.paint,
+                AppearanceItem::Stroke(s) => &mut s.paint,
+            };
+            if let Paint::Gradient(g) = p {
+                g.swatch = None;
+            }
+            p.map_links(&mut |_, link, _| {
+                *link = None;
+                true
+            });
+        }
+        if let Some(m) = &mut n.mask {
+            self.reid(Arc::make_mut(&mut m.art));
+        }
+        if let Some(children) = n.children_mut() {
+            for c in children {
+                self.reid(Arc::make_mut(c));
+            }
+        }
     }
 
     /// Note something the data has that isn't read: an error on a layer that shows, left out of a

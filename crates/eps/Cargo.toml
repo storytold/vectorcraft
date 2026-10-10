@@ -17,6 +17,8 @@ vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
 # Windows metafile previews, opened when a file's PostScript can't be read.
 vectorcraft-metafile = { workspace = true }
+# Non-native art in Illustrator editing data (a placed PDF's content, kept as a PDF).
+vectorcraft-pdf = { workspace = true }
 # The TIFF writer (previews) and PackBits, shared with raster export.
 vectorcraft-render = { workspace = true }
 kurbo = { workspace = true }

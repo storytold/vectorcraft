@@ -804,6 +804,53 @@ fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
     })
 }
 
+/// Libraries panel library file `data` imported, then each kind's first item used on the rich
+/// document and moved into its first group, the group deleted and the library exported (#926).
+fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "library.import", data, |s, r| {
+        let lib = r["id"].clone();
+        let Ok(got) = no_panic(s.execute("library.get", &json!({"library": lib}))) else { return };
+        let _ = no_panic(s.execute("select.all", &json!({})));
+        for (list, kind, key) in
+            [("graphics", "graphic", "id"), ("colors", "fillColor", "name"), ("charStyles", "charStyle", "name"), ("paraStyles", "paraStyle", "name")]
+        {
+            if let Some(item) = got[list].get(0) {
+                let _ = no_panic(s.execute("library.use", &json!({"library": lib, "kind": kind, "item": item[key]})));
+                let to = json!({"library": lib, "kind": kind, "item": item[key], "group": got["groups"][0]["name"]});
+                let _ = no_panic(s.execute("library.moveItem", &to));
+            }
+        }
+        if let Some(g) = got["groups"].get(0) {
+            let _ = no_panic(s.execute("library.deleteGroup", &json!({"library": lib, "group": g["name"]})));
+        }
+        let _ = no_panic(s.execute("library.export", &json!({"library": lib})));
+    })
+}
+
+/// A Libraries panel library of the rich document's first object (a graphic), a colour, its
+/// type's character and paragraph styles and a group, exported, made once.
+fn saved_library() -> String {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        let mut s = rich_session();
+        s.execute("library.create", &json!({"name": "Fuzz"})).unwrap();
+        let first = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+        let g = s.execute("library.add", &json!({"kind": "graphic", "ids": [first]})).unwrap()["id"].clone();
+        s.execute("library.add", &json!({"kind": "fillColor", "color": "#336699"})).unwrap();
+        s.execute("select.all", &json!({})).unwrap();
+        for kind in ["charStyle", "paraStyle"] {
+            s.execute("library.add", &json!({"kind": kind})).unwrap();
+        }
+        s.execute(
+            "library.createGroup",
+            &json!({"name": "Logos", "items": [{"kind": "graphic", "item": g}, {"kind": "fillColor", "item": "#336699"}]}),
+        )
+        .unwrap();
+        s.execute("library.export", &json!({})).unwrap()["data"].as_str().unwrap().to_string()
+    })
+    .clone()
+}
+
 fn flattener_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "flattener.presets.import", data, |s, r| {
         let _ = no_panic(s.execute("select.all", &json!({})));
@@ -865,11 +912,12 @@ proptest! {
     #![proptest_config(config())]
 
     #[test]
-    fn library_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "GIMP Palette\n","{\"format\": \"vcswatches\", ", "{\"format\": \"vcstyles\", ", "{\"format\": \"vcflattener\", "])) {
+    fn library_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "GIMP Palette\n","{\"format\": \"vcswatches\", ", "{\"format\": \"vcstyles\", ", "{\"format\": \"vcflattener\", ", "{\"name\": \"L\", "])) {
         let data = format!("{head}{s}");
         swatches("swatch library garbage", &data)?;
         styles("style library garbage", &data)?;
         flattener_presets("flattener preset garbage", &data)?;
+        libraries("library garbage", &data)?;
     }
 
     #[test]
@@ -888,6 +936,14 @@ proptest! {
     fn mutated_flattener_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("flattener.presets.export", json!({"names": ["high", "medium", "low"]}));
         flattener_presets("mutated flattener presets", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn mutated_libraries_never_panic(keep in 0.0f64..1.2, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        // Cut anywhere in the file (whole most of the time), the edits anywhere in it.
+        let text = saved_library();
+        let cut = (text.chars().count() as f64 * keep) as usize;
+        libraries("mutated library", &mutate_text(&text, cut, &edits))?;
     }
 
     #[test]

@@ -160,6 +160,12 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("blur.radial", "quality") => Some(&[("Draft", "draft"), ("Good", "good"), ("Best", "best")]),
         ("blur.smart", "quality") => Some(&[("Low", "low"), ("Medium", "medium"), ("High", "high")]),
         ("pixelate.mezzotint", "type") => Some(&vectorcraft_effects::pixel::MEZZOTINT_TYPES),
+        ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
+        ("texture.texturizer", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
+        ("texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
+        ("video.deinterlace", "eliminate") => Some(&[("Odd Fields", "odd"), ("Even Fields", "even")]),
+        ("video.deinterlace", "create") => Some(&[("Duplication", "duplication"), ("Interpolation", "interpolation")]),
+        ("stylize.innerGlow", "source") => Some(&[("Center", "center"), ("Edge", "edge")]),
         ("path.offsetPath", "joins") => Some(&[("Miter", "miter"), ("Round", "round"), ("Bevel", "bevel")]),
         ("distort.roughen" | "distort.zigZag", "points") => Some(&[("Smooth", "smooth"), ("Corner", "corner")]),
         _ => None,
@@ -413,7 +419,9 @@ mod tests {
     #[test]
     fn fields_that_pick_a_value_are_dropdowns_of_its_values() {
         // The values come from the effect's parameter documentation (`joins: "miter"|"round"|…`).
-        for (effect, key) in [("path.offsetPath", "joins"), ("distort.zigZag", "points"), ("distort.roughen", "points")] {
+        for (effect, key) in
+            [("path.offsetPath", "joins"), ("distort.zigZag", "points"), ("distort.roughen", "points"), ("stylize.innerGlow", "source")]
+        {
             let doc = vectorcraft_effects::effect_info(effect).unwrap().params;
             let listed = doc.split(&format!("{key}: ")).nth(1).unwrap().split([',', '}', ' ']).next().unwrap().to_string();
             let values: Vec<String> = choices(effect, key).unwrap().iter().map(|(_, v)| format!("\"{v}\"")).collect();

@@ -248,17 +248,33 @@ fn digits_unnamed(text: &str) -> Vec<u8> {
     out
 }
 
-/// #708: a glyph whose ToUnicode value is U+FFFD isn't type showing "�". This subset font has no
-/// character map of its own, so the digits keep their outlines, drawn as the file draws them, and
-/// a warning names the font.
+/// #708, #811: a glyph whose ToUnicode value is U+FFFD isn't type showing "�". This subset font
+/// has no character map of its own, but the font is installed: each digit is found by its outline
+/// there, so the whole text stays one type object, with no outlines left behind.
 #[test]
-fn glyphs_mapped_to_the_replacement_character_keep_their_outlines() {
+fn unnamed_glyphs_of_an_installed_font_are_found_by_their_outline() {
     let bytes = digits_unnamed("Tel 02-12345");
     let report = import_with_report(&bytes, &ImportOptions { text_as: TextAs::Text, ..Default::default() }).unwrap();
-    let all = texts(&report.document).concat();
-    assert!(!all.contains('\u{FFFD}') && all.contains("Tel"), "no replacement characters: {all:?}");
-    assert!(ink(&report.document).width() > 50.0, "the digits are outlines");
-    assert!(report.warnings.iter().any(|w| w.contains("U+FFFD")), "{:?}", report.warnings);
+    assert_eq!(texts(&report.document), ["Tel 02-12345"]);
+    let mut paths = 0;
+    report.document.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
+    assert_eq!(paths, 0, "no outlines left: {:?}", report.warnings);
+    assert!(!report.warnings.iter().any(|w| w.contains("U+FFFD")), "{:?}", report.warnings);
+}
+
+/// #811: an outline is named only by a glyph that draws it exactly; one moved off its place, or an
+/// empty glyph (which every space draws), stays unnamed and keeps its outlines.
+#[test]
+fn glyphs_are_named_only_by_an_exact_outline() {
+    let db = FontDb::global();
+    let face = db.face("Source Sans 3", "Regular").unwrap();
+    let k = 1000.0 / face.units_per_em();
+    let pdf_space = |c: char| Affine::new([k, 0.0, 0.0, -k, 0.0, 0.0]) * db.outline(&face, face.glyph_for(c)).as_ref().clone();
+    for c in ['R', 'a', '7', '&', 'é'] {
+        assert_eq!(crate::import::identify_glyph(&face, &pdf_space(c)), Some(c));
+    }
+    assert_eq!(crate::import::identify_glyph(&face, &(Affine::translate((100.0, 0.0)) * pdf_space('R'))), None);
+    assert_eq!(crate::import::identify_glyph(&face, &BezPath::new()), None);
 }
 
 /// #708: where the embedded font program has a character map, a glyph's character comes from it.

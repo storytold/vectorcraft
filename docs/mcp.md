@@ -282,7 +282,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
 | `pathfinder` | `{operation, ids?}` | `unite`, `minusFront`, `intersect`, `exclude`, `divide`, `trim`, `merge`, `crop`, `outline`, `minusBack`. For a live version, apply the `pathfinder.*` effect to a group (`effect.apply` groups several loose selected objects first). |
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. With `copy`, the first step duplicates. |
-| `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. Edit later with `graph.setData` / `graph.setType` via `run_command`. |
+| `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | |
 
@@ -521,9 +521,10 @@ CMYK too.
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
 reader (see EPS and PostScript import). An `.ai` saved without PDF compatibility (its PDF part is only a placeholder
 page) opens from its editing data alone: its type is made from the file's text document where it can be (point type,
-area type and type on a path), and what can't be is left out with a warning; so is non-native art (the content of a
-placed PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data); without editing data
-it says it can't be opened.
+area type and type on a path), and what can't be is left out with a warning. Non-native art (the content of a placed
+PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data) is drawn by the PDF importer,
+as a group named "Non-native art" fitted to the object's box; one whose PDF can't be read is left out with a warning.
+Without editing data it says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -953,9 +954,26 @@ gives another colour merges into the document's), a colour paints the selection'
 to the document (numbered when its name is taken by other attributes) and applied to the selected text, each as one
 undo step. `library.removeItem {library?, kind, item}` removes one.
 
+Items can be put in user-named groups, which the panel shows as collapsible sections after the ungrouped items (its
+search field filters every item by name; `library.get` lists them all to filter). `library.createGroup {library?,
+name?, items?: [{kind, item}]}` makes one (a name another group has, ignoring case, gets a number) with those items
+moved into it; `library.renameGroup {library?, group, name}` renames one; `library.deleteGroup {library?, group}`
+deletes one, its items staying in the library ungrouped; and `library.moveItem {library?, kind, item, group?}` moves
+an item into a group (without `group`, out of its group). An item is in one group at most; `library.get` lists the
+groups as `groups: [{name, items: [{kind: "color"|"charStyle"|"paraStyle"|"graphic", item}]}]` (a graphic by its id).
+
+`library.export {library?, path?}` writes a library (its colours, styles, graphics with their art and thumbnails, and
+its groups) as a `.vclibrary` file, the JSON the library folder keeps (without `path`: `{data}`, the file's text).
+`library.import {path? | data? | dataBase64?, name?}` adds the library of such a file as a new library and makes it
+the current one; a name another library has gets a number (`Brand (2)`). Imported files are checked: at most 10,000
+items of each kind and 1,000 groups, names clipped and made unique, thumbnails kept only when they are small PNGs, and
+groups naming items that aren't there dropped. Files written before groups load as they are.
+
 ```json
 {"name":"run_command","arguments":{"command":"library.add","params":{"kind":"graphic","name":"Logo"}}}
 {"name":"run_command","arguments":{"command":"library.use","params":{"kind":"graphic","item":"Logo","center":[300,200]}}}
+{"name":"run_command","arguments":{"command":"library.createGroup","params":{"name":"Logos","items":[{"kind":"graphic","item":"Logo"}]}}}
+{"name":"run_command","arguments":{"command":"library.export","params":{"path":"/tmp/Brand.vclibrary"}}}
 ```
 
 ## Strokes on type
@@ -1380,7 +1398,7 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 
 ## Live Corners
 
-`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of any path (one undo step): a live
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
 rectangle's or polygon's, a star's, a pen path's. A corner is an anchor without handles between two straight sides
 (not an open path's ends, not a smooth anchor, not one the sides run straight on through). `radius` (pt) and `kind`
 (`round`, `invertedRound` or `chamfer`) go to the `corners` given, else to the corners holding a Direct-Selected
@@ -1396,9 +1414,10 @@ draws no larger than takes the cut halfway along the corner's shorter side (half
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
-rounds the corners whose widgets show (every corner, or the Direct-Selected ones), outlining in red those that reach
-their limit; the Selection tool shows the widgets of live rectangles and polygons, the Direct Selection tool those of
-any path. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
+rounds the corners whose widgets show (every corner, or the Direct-Selected ones) on every selected path at once,
+outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
+the Direct Selection tool those of any path. Several objects each with their own corners are one call:
+`items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
 dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 
 ```json

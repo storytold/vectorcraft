@@ -58,6 +58,25 @@ fn a_whole_rectangle_rounds_all_corners_and_given_corners_alone() {
     assert_eq!(corners(&s, id).1[3], CornerKind::Chamfer);
 }
 
+/// #938: `items` rounds several objects in one step, each its own corners (or all of them).
+#[test]
+fn items_round_several_objects_each_its_own_corners() {
+    let (mut s, a) = session();
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 60})).unwrap()["id"].as_u64().unwrap());
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, json!({"items": [{"id": a.0, "corners": [2]}, {"id": b.0}], "radius": 6}));
+    assert_eq!(corners(&s, a).0, [0.0, 0.0, 6.0, 0.0]);
+    assert_eq!(corners(&s, b).0, [6.0; 4]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one step");
+    for p in [
+        json!({"items": 3, "radius": 1}),
+        json!({"items": [{"corners": [1]}], "radius": 1}),
+        json!({"items": [{"id": a.0, "corners": [9]}], "radius": 1}),
+    ] {
+        assert!(s.execute("object.setLiveShape", &p).is_err(), "{p}");
+    }
+}
+
 #[test]
 fn bad_corners_and_kinds_are_errors() {
     let (mut s, id) = session();

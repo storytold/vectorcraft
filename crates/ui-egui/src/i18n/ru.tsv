@@ -1584,6 +1584,37 @@
 	New Bristle Brush	Новая щетинная кисть
 	Calligraphic Brush Options	Параметры каллиграфической кисти
 	Bristle Brush Options	Параметры щетинной кисти
+	Scatter Brush Options	Параметры кисти-распыления
+	Art Brush Options	Параметры художественной кисти
+	Pattern Brush Options	Параметры узорной кисти
+	Scatter:	Рассеивание:
+	Rotation:	Поворот:
+	Rotation relative to:	Поворот относительно:
+	Brush Scale Options	Параметры масштабирования кисти
+	Scale Proportionately	Масштабировать пропорционально
+	Stretch to Fit Stroke Length	Растянуть по длине обводки
+	Stretch Between Guides	Растянуть между направляющими
+	Start:	Начало:
+	End:	Конец:
+	Left to Right	Слева направо
+	Right to Left	Справа налево
+	Top to Bottom	Сверху вниз
+	Bottom to Top	Снизу вверх
+	Flip:	Отразить:
+	Outer Corner Tile	Фрагмент внешнего угла
+	Side Tile	Боковой фрагмент
+	Inner Corner Tile	Фрагмент внутреннего угла
+	Start Tile	Начальный фрагмент
+	End Tile	Конечный фрагмент
+	Fit	Подгонка
+	Stretch to fit	Растянуть для подгонки
+	Add space to fit	Добавить интервалы для подгонки
+	Approximate path	Приблизить к контуру
+	Colorization	Перекрашивание
+	Tints	Оттенки
+	Tints and Shades	Оттенки и тени
+	Hue Shift	Сдвиг тона
+	Key Color:	Ключевой цвет:
 	Roundness:	Округлость:
 	Fixed	Фиксированный
 	Pressure	Нажим
@@ -2756,6 +2787,23 @@
 	Add to Library	Добавить в библиотеку
 	Delete Library	Удалить библиотеку
 	Delete Library Item	Удалить элемент библиотеки
+	No results	Ничего не найдено
+	No items in this library match “{query}”.	В этой библиотеке нет элементов, соответствующих «{query}».
+	Right-click an item to move it into this group.	Щёлкните элемент правой кнопкой мыши, чтобы переместить его в эту группу.
+	New Group	Новая группа
+	New Group…	Новая группа…
+	Move to Group	Переместить в группу
+	No Group	Без группы
+	Rename Group…	Переименовать группу…
+	Delete Group	Удалить группу
+	Import Library…	Импортировать библиотеку…
+	Export Library…	Экспортировать библиотеку…
+	Import Library	Импортировать библиотеку
+	Export Library	Экспортировать библиотеку
+	New Library Group	Новая группа библиотеки
+	Rename Library Group	Переименовать группу библиотеки
+	Delete Library Group	Удалить группу библиотеки
+	Move Library Item to Group	Переместить элемент библиотеки в группу
 	Library	Библиотека
 	Rename Library	Переименовать библиотеку
 	Show Library	Показать библиотеку
@@ -2951,6 +2999,7 @@
 	Untitled	Без названия
 	Update Link	Обновить связь
 	Update Links	Обновить связи
+	Update Changed Links	Обновить измененные связи
 	Update Modified Links	Обновить изменённые связи
 	Updated {} image(s)	Обновлено изображений: {}
 	UPPERCASE	ПРОПИСНЫЕ
@@ -3086,6 +3135,7 @@
 	{count} linked file(s) not found	Не найдено связанных файлов: {count}
 	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	Связанных изображений ({count}) изменились с момента сохранения этого документа. Показать новые версии?
+	{count} linked image(s) changed on disk. Show the new versions?	Связанных изображений ({count}) изменились на диске. Показать новые версии?
 	{count} more rules: Export writes every one.	Ещё правил: {count}: экспорт записывает все.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Пропущено объектов без имени: {count}: назовите их или включите «Объекты без имени» в меню панели.
 	{effect} is already applied	{effect} уже применён
@@ -3481,7 +3531,6 @@ axis	Both	Оба
 @msg	no bounds	нет границ
 @msg	no brush named `{name}`	нет кисти с именем `{name}`
 @msg	no brush selected	кисть не выбрана
-@msg	this kind of brush has no options dialog yet	у кисти этого типа пока нет окна параметров
 @msg	no catalog	нет каталога
 @msg	no changes since the last save	нет изменений с момента последнего сохранения
 @msg	no clock to keep a heartbeat by	нет часов для поддержания сигнала
@@ -3737,6 +3786,7 @@ axis	Both	Оба
 @msg	{_1} is already used by {_2}	{_1} уже используется {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	здесь невозможно прочитать связанных файлов: {_1}: отображаются их предварительные просмотры
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	связанных изображений ({_1}) изменились на диске: «Обновить связи» покажет новые версии
+@msg	Updated {_1} linked file(s) changed on disk	Обновлено связанных файлов, измененных на диске: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: не сохранён, поэтому не закрыт
 @msg	{bpp}-bit bitmaps can't be read	растровые изображения с глубиной {bpp} бит не читаются
 @msg	{command} didn't create an object	{command} не создал объект
@@ -3875,3 +3925,57 @@ axis	Both	Оба
 @msg	the PSD file is cut short	файл PSD обрезан
 @msg	the PSD file's header is damaged	заголовок файла PSD повреждён
 @msg	the PSD file's image data can't be read: {e}	не удаётся прочитать данные изображения файла PSD: {e}
+	Video	Видео
+	De-Interlace…	Устранение чересстрочности…
+	De-Interlace	Устранение чересстрочности
+	NTSC Colors	Цвета NTSC
+	Eliminate	Удалить
+	Create New Fields by	Создать новые поля
+	Odd Fields	Нечётные поля
+	Even Fields	Чётные поля
+	Duplication	Дублированием
+	Interpolation	Интерполяцией
+@msg	Imported library {name}	Импортирована библиотека {name}
+	RGB:	RGB:
+	CMYK:	CMYK:
+	Texture	Текстура
+	Craquelure…	Кракелюры…
+	Grain…	Зерно…
+	Mosaic Tiles…	Мозаичные фрагменты…
+	Patchwork…	Цветная плитка…
+	Stained Glass…	Витраж…
+	Texturizer…	Текстуризатор…
+	Craquelure	Кракелюры
+	Grain	Зерно
+	Mosaic Tiles	Мозаичные фрагменты
+	Patchwork	Цветная плитка
+	Stained Glass	Витраж
+	Texturizer	Текстуризатор
+	Crack Spacing	Интервал трещин
+	Crack Depth	Глубина трещин
+	Crack Brightness	Яркость трещин
+	Intensity	Интенсивность
+	Grain Type	Тип зерна
+	Tile Size	Размер фрагментов
+	Grout Width	Ширина швов
+	Lighten Grout	Осветление швов
+	Square Size	Размер квадратов
+	Relief	Рельеф
+	Border Thickness	Толщина границ
+	Light Intensity	Интенсивность света
+	Light Direction	Направление света
+	Sprinkles	Брызги
+	Clumped	Комки
+	Contrasty	Контрастное
+	Enlarged	Укрупнённое
+	Stippled	Пунктир
+	Speckle	Крапинки
+	Brick	Кирпич
+	Burlap	Мешковина
+	Canvas	Холст
+	Sandstone	Песчаник
+	Bottom Left	Снизу слева
+	Top Left	Сверху слева
+	Top Right	Сверху справа
+	Bottom Right	Снизу справа
+	Edge	Край

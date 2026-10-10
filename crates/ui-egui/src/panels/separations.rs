@@ -50,7 +50,7 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run(app, "view.separationsPreview", json!({"plates": plates.iter().map(|p| p.name.clone()).collect::<Vec<_>>()}));
                 }
             });
-            ui.label(egui::RichText::new("CMYK").size(12.0).color(if on { t.text } else { t.text_dim }));
+            ui.label(egui::RichText::new(tl!("CMYK")).size(12.0).color(if on { t.text } else { t.text_dim }));
         });
         for p in &plates {
             ui.horizontal(|ui| {
@@ -86,13 +86,13 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::active_settings();
     widgets::section_header(ui, tl!("Color Settings"));
     ui.horizontal(|ui| {
-        ui.label("RGB:");
+        ui.label(tl!("RGB:"));
         if let Some(n) = profile_dropdown(ui, "cms-rgb", &st.rgb, ProfileKind::Rgb, None) {
             run(app, "edit.colorSettings", json!({"rgb": n}));
         }
     });
     ui.horizontal(|ui| {
-        ui.label("CMYK:");
+        ui.label(tl!("CMYK:"));
         if let Some(n) = profile_dropdown(ui, "cms-cmyk", &st.cmyk, ProfileKind::Cmyk, None) {
             run(app, "edit.colorSettings", json!({"cmyk": n}));
         }

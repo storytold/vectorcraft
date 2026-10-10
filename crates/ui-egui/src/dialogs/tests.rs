@@ -176,6 +176,12 @@ fn raster_filter_dialogs_preview_and_apply() {
         ("pixelate.crystallize", "cellSize", "20"),
         ("pixelate.mezzotint", "type", "longLines"),
         ("pixelate.pointillize", "cellSize", "12"),
+        ("texture.craquelure", "crackDepth", "9"),
+        ("texture.grain", "grainType", "stippled"),
+        ("texture.mosaicTiles", "tileSize", "20"),
+        ("texture.patchwork", "relief", "20"),
+        ("texture.stainedGlass", "borderThickness", "2"),
+        ("texture.texturizer", "lightDirection", "bottomLeft"),
     ] {
         let mut app = app();
         let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
@@ -203,6 +209,10 @@ fn raster_filter_dialogs_preview_and_apply() {
     assert_eq!(super::form::humanize("maxRadius"), "Max. Radius:");
     assert_eq!(super::form::humanize("channel3"), "Channel 3:");
     assert_eq!(super::form::humanize("cellSize"), "Cell Size:");
+    assert_eq!(super::form::humanize("lightDirection"), "Light Direction:");
+    let doc = vectorcraft_effects::effect_info("texture.texturizer").unwrap().params;
+    let ranks: Vec<usize> = ["texture", "scaling", "relief", "lightDirection", "invert"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
 }
 
 #[test]

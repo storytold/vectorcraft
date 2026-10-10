@@ -172,6 +172,7 @@ pub fn defaults() -> &'static [Brush] {
                     rotation: (-180.0, 180.0),
                     rotation_relative_to_path: false,
                     colorization: Colorization::Tints,
+                    modes: None,
                 }),
             },
             Brush {
@@ -184,6 +185,7 @@ pub fn defaults() -> &'static [Brush] {
                     rotation: (-35.0, 35.0),
                     rotation_relative_to_path: true,
                     colorization: Colorization::None,
+                    modes: None,
                 }),
             },
             Brush {

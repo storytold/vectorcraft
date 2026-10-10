@@ -1588,6 +1588,37 @@
 	New Bristle Brush	Nuevo pincel de cerdas
 	Calligraphic Brush Options	Opciones de pincel caligráfico
 	Bristle Brush Options	Opciones de pincel de cerdas
+	Scatter Brush Options	Opciones de pincel de dispersión
+	Art Brush Options	Opciones de pincel de arte
+	Pattern Brush Options	Opciones de pincel de motivo
+	Scatter:	Dispersión:
+	Rotation:	Rotación:
+	Rotation relative to:	Rotación relativa a:
+	Brush Scale Options	Opciones de escala del pincel
+	Scale Proportionately	Escalar proporcionalmente
+	Stretch to Fit Stroke Length	Estirar para ajustar a la longitud del trazo
+	Stretch Between Guides	Estirar entre guías
+	Start:	Inicio:
+	End:	Final:
+	Left to Right	De izquierda a derecha
+	Right to Left	De derecha a izquierda
+	Top to Bottom	De arriba abajo
+	Bottom to Top	De abajo arriba
+	Flip:	Voltear:
+	Outer Corner Tile	Mosaico de esquina exterior
+	Side Tile	Mosaico lateral
+	Inner Corner Tile	Mosaico de esquina interior
+	Start Tile	Mosaico inicial
+	End Tile	Mosaico final
+	Fit	Ajuste
+	Stretch to fit	Estirar para ajustar
+	Add space to fit	Agregar espacio para ajustar
+	Approximate path	Aproximar trazado
+	Colorization	Coloración
+	Tints	Matices
+	Tints and Shades	Matices y sombras
+	Hue Shift	Cambio de tono
+	Key Color:	Color clave:
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión
@@ -2760,6 +2791,23 @@
 	Add to Library	Añadir a la biblioteca
 	Delete Library	Eliminar biblioteca
 	Delete Library Item	Eliminar elemento de la biblioteca
+	No results	Sin resultados
+	No items in this library match “{query}”.	Ningún elemento de esta biblioteca coincide con “{query}”.
+	Right-click an item to move it into this group.	Haz clic con el botón derecho en un elemento para moverlo a este grupo.
+	New Group	Nuevo grupo
+	New Group…	Nuevo grupo…
+	Move to Group	Mover al grupo
+	No Group	Sin grupo
+	Rename Group…	Cambiar nombre del grupo…
+	Delete Group	Eliminar grupo
+	Import Library…	Importar biblioteca…
+	Export Library…	Exportar biblioteca…
+	Import Library	Importar biblioteca
+	Export Library	Exportar biblioteca
+	New Library Group	Nuevo grupo de biblioteca
+	Rename Library Group	Cambiar nombre del grupo de biblioteca
+	Delete Library Group	Eliminar grupo de biblioteca
+	Move Library Item to Group	Mover elemento de la biblioteca al grupo
 	Library	Biblioteca
 	Rename Library	Cambiar nombre de la biblioteca
 	Show Library	Mostrar biblioteca
@@ -2955,6 +3003,7 @@
 	Untitled	Sin título
 	Update Link	Actualizar vínculo
 	Update Links	Actualizar vínculos
+	Update Changed Links	Actualizar vínculos cambiados
 	Update Modified Links	Actualizar vínculos modificados
 	Updated {} image(s)	Se actualizaron {} imagen(es)
 	UPPERCASE	MAYÚSCULAS
@@ -3090,6 +3139,7 @@
 	{count} linked file(s) not found	No se encontraron {count} archivo(s) vinculado(s)
 	fonts not copied: {fonts}	fuentes no copiadas: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} imagen(es) vinculada(s) cambiaron desde que se guardó este documento. ¿Mostrar las versiones nuevas?
+	{count} linked image(s) changed on disk. Show the new versions?	{count} imagen(es) vinculada(s) cambiaron en el disco. ¿Mostrar las versiones nuevas?
 	{count} more rules: Export writes every one.	{count} reglas más: Exportar las escribe todas.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Se omitieron {count} objetos sin nombre: ponles nombre o activa Objetos sin nombre en el menú del panel.
 	{effect} is already applied	{effect} ya está aplicado
@@ -3485,7 +3535,6 @@ axis	Both	Ambos
 @msg	no bounds	sin límites
 @msg	no brush named `{name}`	no hay ningún pincel llamado `{name}`
 @msg	no brush selected	no hay ningún pincel seleccionado
-@msg	this kind of brush has no options dialog yet	este tipo de pincel aún no tiene un cuadro de opciones
 @msg	no catalog	no hay catálogo
 @msg	no changes since the last save	no hay cambios desde la última vez que se guardó
 @msg	no clock to keep a heartbeat by	no hay reloj para mantener la señal de actividad
@@ -3741,6 +3790,7 @@ axis	Both	Ambos
 @msg	{_1} is already used by {_2}	{_1} ya lo usa {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	aquí no se pueden leer {_1} archivo(s) vinculado(s): se muestran sus previsualizaciones
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagen(es) vinculada(s) cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
+@msg	Updated {_1} linked file(s) changed on disk	Se actualizaron {_1} archivo(s) vinculado(s) que cambiaron en el disco
 @msg	{_1}: not saved, so not closed	{_1}: no se guardó, así que no se cerró
 @msg	{bpp}-bit bitmaps can't be read	no se pueden leer mapas de bits de {bpp} bits
 @msg	{command} didn't create an object	{command} no creó ningún objeto
@@ -3877,3 +3927,57 @@ axis	Both	Ambos
 @msg	the PSD file is cut short	el archivo PSD está incompleto
 @msg	the PSD file's header is damaged	el encabezado del archivo PSD está dañado
 @msg	the PSD file's image data can't be read: {e}	no se pueden leer los datos de imagen del archivo PSD: {e}
+	Video	Video
+	De-Interlace…	Desentrelazar…
+	De-Interlace	Desentrelazar
+	NTSC Colors	Colores NTSC
+	Eliminate	Eliminar
+	Create New Fields by	Crear campos nuevos por
+	Odd Fields	Campos impares
+	Even Fields	Campos pares
+	Duplication	Duplicación
+	Interpolation	Interpolación
+@msg	Imported library {name}	Biblioteca {name} importada
+	RGB:	RGB:
+	CMYK:	CMYK:
+	Texture	Textura
+	Craquelure…	Craquelado…
+	Grain…	Granulado…
+	Mosaic Tiles…	Azulejos de mosaico…
+	Patchwork…	Retazos…
+	Stained Glass…	Vidriera…
+	Texturizer…	Texturizador…
+	Craquelure	Craquelado
+	Grain	Granulado
+	Mosaic Tiles	Azulejos de mosaico
+	Patchwork	Retazos
+	Stained Glass	Vidriera
+	Texturizer	Texturizador
+	Crack Spacing	Espaciado de grietas
+	Crack Depth	Profundidad de grietas
+	Crack Brightness	Brillo de grietas
+	Intensity	Intensidad
+	Grain Type	Tipo de granulado
+	Tile Size	Tamaño de azulejo
+	Grout Width	Anchura de la junta
+	Lighten Grout	Aclarar junta
+	Square Size	Tamaño de cuadrado
+	Relief	Relieve
+	Border Thickness	Grosor del borde
+	Light Intensity	Intensidad de luz
+	Light Direction	Dirección de la luz
+	Sprinkles	Espolvoreado
+	Clumped	Agrupado
+	Contrasty	Contrastado
+	Enlarged	Ampliado
+	Stippled	Punteado
+	Speckle	Moteado
+	Brick	Ladrillo
+	Burlap	Arpillera
+	Canvas	Lienzo
+	Sandstone	Arenisca
+	Bottom Left	Abajo a la izquierda
+	Top Left	Arriba a la izquierda
+	Top Right	Arriba a la derecha
+	Bottom Right	Abajo a la derecha
+	Edge	Borde

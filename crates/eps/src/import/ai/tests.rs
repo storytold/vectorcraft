@@ -5,7 +5,7 @@ use std::sync::Arc;
 use kurbo::{Point, Rect};
 use vectorcraft_color::gradient::GradientKind;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{ColorMode, Document, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind};
 
 use super::*;
 
@@ -332,13 +332,102 @@ fn sections_it_skips() {
 /// Non-native art (a placed PDF's content) keeps its PDF as ASCII85 in comment lines after
 /// `/Data ,`. ASCII85 has `_`, so a line may start with `%_`, which otherwise reads as hidden
 /// tokens, and a `(` in it would swallow the rest of the layer (a letterhead saved by Illustrator
-/// 28 wouldn't open: "it ends inside a layer"). The art is left out with a note.
+/// 28 wouldn't open: "it ends inside a layer"). Data that isn't a PDF is left out with a note.
 #[test]
-fn non_native_art_is_skipped_with_its_ascii85_data() {
-    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
+fn non_native_art_that_is_not_a_pdf_is_left_out_with_a_note() {
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
     let s = read_ok(&layer(&format!("{foreign}{}", rect_path(0.0, 0.0, 1.0, 1.0) + "f\n")));
     assert_eq!(art(&s.doc).len(), 1);
-    assert!(s.warnings.iter().any(|w| w == read::NON_NATIVE_ART), "{:?}", s.warnings);
+    assert!(s.warnings.iter().any(|w| w.starts_with(read::NON_NATIVE_ART_UNREAD)), "{:?}", s.warnings);
+}
+
+/// A PDF with one page of `size` points holding `content`.
+fn tiny_pdf(size: f64, content: &str) -> Vec<u8> {
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {size} {size}] /Contents 4 0 R >>"),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1),
+    ];
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![];
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for o in offsets {
+        pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+    pdf
+}
+
+/// `bytes` as ASCII85 in comment lines of 60 characters, ending with `~>`.
+fn ascii85_comment_lines(bytes: &[u8]) -> String {
+    let mut text = String::new();
+    for chunk in bytes.chunks(4) {
+        let mut word = [0u8; 4];
+        word[..chunk.len()].copy_from_slice(chunk);
+        let mut v = u32::from_be_bytes(word);
+        let mut digits = [0u8; 5];
+        for d in digits.iter_mut().rev() {
+            *d = (v % 85) as u8 + b'!';
+            v /= 85;
+        }
+        text.extend(digits.iter().take(chunk.len() + 1).map(|d| char::from(*d)));
+    }
+    let mut lines = String::new();
+    for line in text.as_bytes().chunks(60) {
+        lines.push('%');
+        lines.push_str(std::str::from_utf8(line).unwrap());
+        lines.push('\n');
+    }
+    lines.push_str("%~>\n");
+    lines
+}
+
+/// The PDF of non-native art is drawn by the PDF importer, its art fitted to the object's box:
+/// `/Bounds` in a space measured from `/Origin` with y down, then `/RTransform`. Two squares at
+/// 1..5 × 2..8 of a 10-point page, blue below red: bounds (1, 2)–(5, 8) → from the origin
+/// (10, 20), y down, (11, 18)–(15, 12) → twice that plus (100, 50): x 122..130, y 74..86 in art
+/// space, which is y 14..26 in the document (crop marks 100 high). The space has y down, so the
+/// PDF's bottom (blue) is the top of the box.
+#[test]
+fn non_native_art_is_drawn_from_its_pdf_fitted_to_its_bounds() {
+    let pdf = tiny_pdf(10.0, "0 0 1 rg 1 2 4 3 re f 1 0 0 rg 1 5 4 3 re f");
+    let foreign = format!(
+        "q\n/ForeignObject :\n1 /Version ,\n2 0 0 2 100 50  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n{};\n0 0 Xd\n6 () XW\n0 Ae\n{}h\nW\nn\nQ\n",
+        ascii85_comment_lines(&pdf),
+        rect_path(120.0, 70.0, 130.0, 90.0)
+    );
+    let s = read_ok(&layer(&foreign));
+    assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+    let objects = art(&s.doc);
+    assert_eq!(objects.len(), 1, "{objects:?}");
+    // A clipping group: the clip path first, then the non-native art's group.
+    let NodeKind::Group { children, clip: true } = &objects[0].kind else { panic!("{:?}", objects[0].kind) };
+    assert_eq!(children.len(), 2);
+    let group = &children[1];
+    assert_eq!(group.name.as_deref(), Some(read::NON_NATIVE_ART));
+    let bounds = group.geometric_bounds().unwrap();
+    for (got, want) in [(bounds.x0, 122.0), (bounds.y0, 14.0), (bounds.x1, 130.0), (bounds.y1, 26.0)] {
+        assert!((got - want).abs() < 1e-6, "{bounds:?}");
+    }
+    let paths = group.children().unwrap();
+    assert_eq!(paths.len(), 2);
+    let fill =
+        |n: &Node| n.appearance.items.iter().find_map(|it| if let AppearanceItem::Fill(f) = it { Some(f.paint.clone()) } else { None }).unwrap();
+    let (blue, red) = (fill(&paths[0]), fill(&paths[1]));
+    assert!(matches!(&blue, Paint::Solid { color, swatch: None, .. } if color.to_rgba8(1.0) == [0, 0, 255, 255]), "{blue:?}");
+    assert!(matches!(&red, Paint::Solid { color, swatch: None, .. } if color.to_rgba8(1.0) == [255, 0, 0, 255]), "{red:?}");
+    let (b, r) = (paths[0].geometric_bounds().unwrap(), paths[1].geometric_bounds().unwrap());
+    assert!((b.y0 - 14.0).abs() < 1e-6 && (b.y1 - 20.0).abs() < 1e-6, "blue {b:?}");
+    assert!((r.y0 - 20.0).abs() < 1e-6 && (r.y1 - 26.0).abs() < 1e-6, "red {r:?}");
+    // Its ids are this document's.
+    assert_ne!(group.id, paths[0].id);
+    assert_ne!(paths[0].id, paths[1].id);
 }
 
 #[test]

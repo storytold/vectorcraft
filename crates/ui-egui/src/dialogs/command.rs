@@ -1,5 +1,5 @@
 //! The generic parameter dialog (`ui.paramDialog`): edits a command's parameters (`__command`,
-//! headed `__label`) and runs it on OK.
+//! headed `__label`) and runs it on OK, with the fixed ones in `__params` (not shown) added.
 
 use serde_json::Value;
 
@@ -60,7 +60,10 @@ const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("
 /// Closes before running, so a dialog the command opens stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let cmd = d.str("__command");
-    let params = form::params(d);
+    let mut params = form::params(d);
+    if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
+        o.extend(fixed.clone());
+    }
     app.ui.dialog = None;
     // A tool's click-to-size shape (Flare) goes on the active perspective plane while the grid shows.
     let at = |x: &str, y: &str| Some(vectorcraft_geom::Point::new(params.get(x)?.as_f64()?, params.get(y)?.as_f64()?));

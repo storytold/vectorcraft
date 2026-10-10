@@ -10,6 +10,7 @@ mod about;
 mod all_tools;
 pub mod artboard_options;
 pub mod blend_options;
+mod brush_art_options;
 pub mod brush_options;
 pub mod color_balance;
 pub mod color_guide_options;

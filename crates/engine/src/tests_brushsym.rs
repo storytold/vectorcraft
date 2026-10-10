@@ -297,6 +297,77 @@ fn brush_options_set_variation_modes() {
     assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap(), b, "a refused edit changes nothing");
 }
 
+/// The bounds of the brush art `id`'s strokes draw.
+fn brushed_bounds(s: &Session, id: NodeId) -> Rect {
+    let st = s.doc().unwrap();
+    let pieces = vectorcraft_brush::node_pieces(&st.doc, &node(s, id)).expect("brushed");
+    vectorcraft_brush::pieces_bounds(&pieces).expect("draws")
+}
+
+/// Scatter, Art and Pattern Brush Options: the params reach the brush and every stroke painted
+/// with it redraws; values out of range are clamped, unknown choices refused.
+#[test]
+fn scatter_art_and_pattern_brush_options_update_strokes() {
+    let mut s = session();
+    // A rectangle as an art brush (straight edges: no flattening between sizes).
+    let r = rect(&mut s, 10.0, 200.0, 40.0, 8.0);
+    let bar = s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let id = line(&mut s);
+    select(&mut s, &[id]);
+    let edit = |s: &mut Session, name: &str, params: Value| -> f64 {
+        s.execute("brush.apply", &json!({ "name": name })).unwrap();
+        let before = brushed_bounds(s, id).height();
+        s.execute("brush.options", &json!({ "name": name, "params": params })).unwrap();
+        brushed_bounds(s, id).height() / before
+    };
+    // Art: Width 300 % draws the art three times as wide across the path.
+    let art = json!({"width": 300, "direction": "rightToLeft", "flip_across": true});
+    assert!((edit(&mut s, &bar, art) - 3.0).abs() < 1e-6);
+    s.execute("brush.options", &json!({"name": bar, "params": {"scale": {"mode": "betweenGuides", "start": 0.2, "end": 0.6}}})).unwrap();
+    let b = s.execute("brush.get", &json!({ "name": bar })).unwrap();
+    assert_eq!(
+        (&b["direction"], &b["flip_across"], &b["scale"]),
+        (&json!("rightToLeft"), &json!(true), &json!({"mode": "betweenGuides", "start": 0.2, "end": 0.6}))
+    );
+    // Pattern: Scale 200 % doubles the tiles.
+    assert!((edit(&mut s, "Stitches", json!({"scale": 200, "spacing": 50, "fit": "addSpace", "flip_along": true})) - 2.0).abs() < 0.05);
+    let b = s.execute("brush.get", &json!({"name": "Stitches"})).unwrap();
+    assert_eq!((&b["spacing"], &b["fit"]), (&json!(50.0), &json!("addSpace")));
+    // Scatter: a fixed Size of 200 % doubles the dots; the modes and Hue Shift are kept.
+    let key = json!({"model": "rgb", "r": 0.0, "g": 0.0, "b": 0.0});
+    let scatter = json!({"size": [200, 50], "modes": ["fixed", "fixed", "fixed", "random"], "rotation_relative_to_path": true, "colorization": {"method": "hueShift", "key": key}});
+    assert!((edit(&mut s, "Dots", scatter) - 2.0).abs() < 0.05);
+    let b = s.execute("brush.get", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(
+        (&b["modes"], &b["colorization"]["method"], &b["colorization"]["key"]),
+        (&json!(["fixed", "fixed", "fixed", "random"]), &json!("hueShift"), &key)
+    );
+    // Out of range: clamped. Unknown choices: refused, nothing changes.
+    let junk = json!({"size": [1e308, -1e308], "spacing": [0, 1e308], "rotation": [720, -1e9], "scatter": [-1e308, 5]});
+    s.execute("brush.options", &json!({"name": "Dots", "params": junk})).unwrap();
+    let b = s.execute("brush.get", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(
+        (&b["size"], &b["spacing"], &b["rotation"], &b["scatter"]),
+        (&json!([10000.0, 1.0]), &json!([1.0, 10000.0]), &json!([180.0, -180.0]), &json!([-1000.0, 5.0]))
+    );
+    assert!(brushed_bounds(&s, id).is_finite());
+    for (name, bad) in [
+        ("Dots", json!({"modes": ["fixed", "tilt", "fixed", "fixed"]})),
+        ("Dots", json!({"modes": ["fixed"]})),
+        ("Dots", json!({"colorization": {"method": "sparkle"}})),
+        ("Arrow", json!({"direction": "diagonal"})),
+        ("Arrow", json!({"width": "wide"})),
+        ("Chain", json!({"fit": "squeeze"})),
+    ] {
+        let before = s.execute("brush.get", &json!({ "name": name })).unwrap();
+        assert!(s.execute("brush.options", &json!({ "name": name, "params": bad })).is_err(), "{bad}");
+        assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap(), before);
+    }
+    s.execute("brush.options", &json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308}})).unwrap();
+    let b = s.execute("brush.get", &json!({"name": "Chain"})).unwrap();
+    assert_eq!((&b["scale"], &b["spacing"]), (&json!(10000.0), &json!(0.0)));
+}
+
 // ---------- symbols ----------
 
 fn make_symbol(s: &mut Session) -> (NodeId, String, Rect) {

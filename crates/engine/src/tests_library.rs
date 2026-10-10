@@ -161,3 +161,181 @@ fn libraries_are_kept_in_files_across_sessions() {
     assert_eq!(run(&mut v, "library.list", json!({}))["libraries"], json!([]));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A library "Brand" holding a graphic, a colour and a character style, each added from the
+/// selection → (session, the graphic's id, the colour's name, the style's name).
+fn brand() -> (Session, String, String, String) {
+    let mut s = session();
+    run(&mut s, "library.create", json!({"name": "Brand"}));
+    let r = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#336699", "ids": [r]}));
+    run(&mut s, "select.set", json!({"ids": [r]}));
+    let g = run(&mut s, "library.add", json!({"kind": "graphic", "name": "Logo"}))["id"].as_str().unwrap().to_string();
+    let c = run(&mut s, "library.add", json!({"kind": "fillColor"}))["name"].as_str().unwrap().to_string();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Type", "size": 18}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let st = run(&mut s, "library.add", json!({"kind": "charStyle"}))["name"].as_str().unwrap().to_string();
+    (s, g, c, st)
+}
+
+/// The current library's groups as `library.get` reports them: (name, [(kind, item)]).
+fn groups(s: &mut Session) -> Vec<(String, Vec<(String, String)>)> {
+    let got = run(s, "library.get", json!({}));
+    got["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| {
+            let items = g["items"].as_array().unwrap().iter().map(|r| (r["kind"].as_str().unwrap().into(), r["item"].as_str().unwrap().into()));
+            (g["name"].as_str().unwrap().to_string(), items.collect())
+        })
+        .collect()
+}
+
+fn refs(v: &[(&str, &str)]) -> Vec<(String, String)> {
+    v.iter().map(|(k, i)| (k.to_string(), i.to_string())).collect()
+}
+
+/// Graphics added one after another get ids of their own (the third used to repeat the second's).
+#[test]
+fn every_graphic_gets_an_id_of_its_own() {
+    let mut s = session();
+    run(&mut s, "library.create", json!({}));
+    let mut ids = vec![];
+    for x in [0, 30, 60, 90] {
+        let r = run(&mut s, "shape.rectangle", json!({"x": x, "y": 0, "width": 10 + x, "height": 10}))["id"].clone();
+        ids.push(run(&mut s, "library.add", json!({"kind": "graphic", "ids": [r]}))["id"].as_str().unwrap().to_string());
+    }
+    assert_eq!(ids, ["graphic", "graphic-2", "graphic-3", "graphic-4"]);
+}
+
+/// Items go into user-named groups and back out (#926); deleting a group keeps its items.
+#[test]
+fn items_are_grouped_moved_and_ungrouped() {
+    let (mut s, g, c, st) = brand();
+    assert!(groups(&mut s).is_empty(), "no groups yet");
+    // A group made with items; a graphic is named by its name or its id.
+    let r = run(&mut s, "library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": "Logo"}]}));
+    assert_eq!(r["group"], "Logos");
+    assert_eq!(groups(&mut s), [("Logos".into(), refs(&[("graphic", &g)]))]);
+    // A name taken (ignoring case) gets a number.
+    assert_eq!(run(&mut s, "library.createGroup", json!({"name": "logos"}))["group"], "logos 2");
+    run(&mut s, "library.renameGroup", json!({"group": "logos 2", "name": "Palette"}));
+    assert!(s.execute("library.renameGroup", &json!({"group": "Palette", "name": "LOGOS"})).is_err(), "another group's name");
+    assert!(s.execute("library.renameGroup", &json!({"group": "Nope", "name": "X"})).is_err());
+    // Moving an item takes it out of the group it was in; a colour is named as fill or stroke.
+    run(&mut s, "library.moveItem", json!({"kind": "strokeColor", "item": c, "group": "palette"}));
+    run(&mut s, "library.moveItem", json!({"kind": "charStyle", "item": st, "group": "Palette"}));
+    let moved = run(&mut s, "library.moveItem", json!({"kind": "graphic", "item": "Logo", "group": "Palette"}));
+    assert_eq!((moved["item"].as_str(), moved["group"].as_str()), (Some(g.as_str()), Some("Palette")));
+    assert_eq!(groups(&mut s), [("Logos".into(), vec![]), ("Palette".into(), refs(&[("color", &c), ("charStyle", &st), ("graphic", &g)]))]);
+    // Without a group, out of its group.
+    assert!(run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": c}))["group"].is_null());
+    assert!(s.execute("library.moveItem", &json!({"kind": "fillColor", "item": c, "group": "Nope"})).is_err());
+    assert!(s.execute("library.moveItem", &json!({"kind": "fillColor", "item": "#nope", "group": "Palette"})).is_err());
+    assert!(s.execute("library.createGroup", &json!({"items": [{"kind": "graphic", "item": "nope"}]})).is_err(), "no such item");
+    assert_eq!(groups(&mut s).len(), 2, "a failed command makes no group");
+    // A deleted item leaves its group.
+    run(&mut s, "library.removeItem", json!({"kind": "charStyle", "item": st}));
+    assert_eq!(groups(&mut s)[1].1, refs(&[("graphic", &g)]));
+    // A deleted group's items stay, ungrouped.
+    assert_eq!(run(&mut s, "library.deleteGroup", json!({"group": "Palette"}))["ungrouped"], 1);
+    assert_eq!(run(&mut s, "library.get", json!({}))["graphics"].as_array().unwrap().len(), 1);
+    assert_eq!(groups(&mut s), [("Logos".into(), vec![])]);
+    assert_eq!(run(&mut s, "library.list", json!({}))["libraries"][0]["groups"], 1);
+}
+
+/// A library goes out to a file with its art and groups and comes back as a new library, numbered
+/// when its name is taken; the graphic it brings places in a document (#926).
+#[test]
+fn a_library_is_exported_and_imported() {
+    let (mut s, g, c, _) = brand();
+    run(&mut s, "library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": g}, {"kind": "fillColor", "item": c}]}));
+    let out = run(&mut s, "library.export", json!({}));
+    assert_eq!(out["name"], "Brand");
+    let data = out["data"].as_str().unwrap().to_string();
+    let r = run(&mut s, "library.import", json!({"data": data}));
+    let counts = ["graphics", "colors", "charStyles", "paraStyles", "groups"].map(|k| r[k].as_u64().unwrap());
+    assert_eq!((r["name"].as_str(), counts), (Some("Brand (2)"), [1, 1, 1, 0, 1]));
+    let id = r["id"].as_str().unwrap().to_string();
+    assert_eq!(run(&mut s, "library.list", json!({}))["current"], id, "the imported library is the current one");
+    let a = run(&mut s, "library.get", json!({"library": "Brand"}));
+    let b = run(&mut s, "library.get", json!({"library": id}));
+    for k in ["graphics", "colors", "charStyles", "paraStyles", "groups"] {
+        assert_eq!(a[k], b[k], "{k}");
+    }
+    // Again: the next number; given a name, that name.
+    let b64 = vectorcraft_format::base64_encode(data.as_bytes());
+    assert_eq!(run(&mut s, "library.import", json!({"dataBase64": b64}))["name"], "Brand (3)");
+    assert_eq!(run(&mut s, "library.import", json!({"data": data, "name": "Client"}))["name"], "Client");
+    // Its graphic places in another document.
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let placed = run(&mut s, "library.use", json!({"library": id, "kind": "graphic", "item": "Logo", "center": [50, 50]}));
+    assert_eq!(placed["ids"].as_array().unwrap().len(), 1);
+    // Not a library file.
+    let swatches = json!({"format": "vcswatches", "name": "S"}).to_string();
+    for bad in [json!({"data": "{not json"}), json!({"data": "[1, 2]"}), json!({"data": swatches}), json!({"dataBase64": "%%"}), json!({})] {
+        assert!(s.execute("library.import", &bad).is_err(), "{bad}");
+    }
+}
+
+/// A file written before groups loads; one with repeated names, groups naming items that aren't
+/// there or kinds this version doesn't know, and a thumbnail claiming a huge image is made safe.
+#[test]
+fn imported_libraries_are_made_consistent() {
+    let mut s = session();
+    let old = json!({"name": "Old", "colors": [{"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}}]});
+    let r = run(&mut s, "library.import", json!({"data": old.to_string()}));
+    assert_eq!((r["colors"].as_u64(), r["groups"].as_u64()), (Some(1), Some(0)));
+    // A PNG header claiming 100000 × 100000 pixels.
+    let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+    png.extend(100_000u32.to_be_bytes());
+    png.extend(100_000u32.to_be_bytes());
+    png.extend([8, 6, 0, 0, 0]);
+    let messy = json!({
+        "name": "  ",
+        "colors": [{"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}}, {"name": "Red", "color": {"model": "rgb", "r": 0, "g": 1, "b": 0}}, {"name": "", "color": {"model": "rgb", "r": 0, "g": 0, "b": 1}}],
+        "graphics": [
+            {"id": "g", "name": "A", "width": 1, "height": 1, "data": "", "thumbnail": vectorcraft_format::base64_encode(&png)},
+            {"id": "g", "name": "B", "width": -5, "height": 1, "data": ""}
+        ],
+        "groups": [
+            {"name": "One", "items": [{"kind": "color", "item": "Red 2"}, {"kind": "graphic", "item": "nope"}, {"kind": "brush", "item": "Red"}]},
+            {"name": "one", "items": [{"kind": "color", "item": "Red 2"}, {"kind": "graphic", "item": "g-2"}]}
+        ]
+    });
+    let r = run(&mut s, "library.import", json!({"data": messy.to_string()}));
+    assert_eq!(r["name"], "Library", "a blank name");
+    let got = run(&mut s, "library.get", json!({}));
+    let names: Vec<&str> = got["colors"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Red", "Red 2", "Color"]);
+    let graphics = got["graphics"].as_array().unwrap();
+    assert_eq!((graphics[0]["id"].as_str(), graphics[1]["id"].as_str()), (Some("g"), Some("g-2")));
+    assert_eq!((graphics[0]["thumbnail"].as_str(), graphics[1]["width"].as_f64()), (Some(""), Some(0.0)));
+    assert_eq!(
+        got["groups"],
+        json!([{"name": "One", "items": [{"kind": "color", "item": "Red 2"}]}, {"name": "one 2", "items": [{"kind": "graphic", "item": "g-2"}]}])
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_library_is_exported_to_a_file_and_imported_from_it() {
+    let dir = vectorcraft_testkit::temp_dir("library-export");
+    let path = dir.join("Brand.vclibrary").to_string_lossy().to_string();
+    let (mut s, g, ..) = brand();
+    run(&mut s, "library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": g}]}));
+    assert_eq!(run(&mut s, "library.export", json!({"library": "Brand", "path": path}))["path"], path.as_str());
+    let mut t = session();
+    let r = run(&mut t, "library.import", json!({"path": path}));
+    assert_eq!((r["name"].as_str(), r["graphics"].as_u64(), r["groups"].as_u64()), (Some("Brand"), Some(1), Some(1)));
+    assert!(t.execute("library.import", &json!({"path": dir.join("missing.vclibrary").to_string_lossy()})).is_err());
+    // Groups are kept in the library folder's files too.
+    let folder = dir.join("folder").to_string_lossy().to_string();
+    let mut u = session();
+    u.libraries.set_dir(Some(folder.clone()));
+    run(&mut u, "library.import", json!({"path": path}));
+    let mut v = session();
+    v.libraries.set_dir(Some(folder));
+    assert_eq!(groups(&mut v), [("Logos".into(), refs(&[("graphic", &g)]))]);
+}

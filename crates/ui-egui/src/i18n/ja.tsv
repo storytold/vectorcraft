@@ -1681,6 +1681,37 @@
 	New Bristle Brush	新規剛毛ブラシ
 	Calligraphic Brush Options	絵筆ブラシオプション
 	Bristle Brush Options	剛毛ブラシオプション
+	Scatter Brush Options	散布ブラシオプション
+	Art Brush Options	アートブラシオプション
+	Pattern Brush Options	パターンブラシオプション
+	Scatter:	散布:
+	Rotation:	回転:
+	Rotation relative to:	回転の基準:
+	Brush Scale Options	ブラシ伸縮オプション
+	Scale Proportionately	縦横比を保持して拡大・縮小
+	Stretch to Fit Stroke Length	ストロークの長さに合わせて伸縮
+	Stretch Between Guides	ガイド間で伸縮
+	Start:	始点:
+	End:	終点:
+	Left to Right	左から右
+	Right to Left	右から左
+	Top to Bottom	上から下
+	Bottom to Top	下から上
+	Flip:	反転:
+	Outer Corner Tile	外角タイル
+	Side Tile	サイドタイル
+	Inner Corner Tile	内角タイル
+	Start Tile	始点タイル
+	End Tile	終点タイル
+	Fit	調整
+	Stretch to fit	伸縮して合わせる
+	Add space to fit	間隔を空けて合わせる
+	Approximate path	パスに近似
+	Colorization	着色
+	Tints	淡彩
+	Tints and Shades	淡彩と陰影
+	Hue Shift	色相シフト
+	Key Color:	キーカラー:
 	Roundness:	真円率:
 	Fixed	固定
 	Pressure	筆圧
@@ -2496,6 +2527,23 @@
 	Add to Library	ライブラリに追加
 	Delete Library	ライブラリを削除
 	Delete Library Item	ライブラリ項目を削除
+	No results	結果はありません
+	No items in this library match “{query}”.	このライブラリには「{query}」に一致する項目がありません。
+	Right-click an item to move it into this group.	項目を右クリックすると、このグループに移動できます。
+	New Group	新規グループ
+	New Group…	新規グループ…
+	Move to Group	グループに移動
+	No Group	グループなし
+	Rename Group…	グループ名を変更…
+	Delete Group	グループを削除
+	Import Library…	ライブラリを読み込み…
+	Export Library…	ライブラリを書き出し…
+	Import Library	ライブラリを読み込み
+	Export Library	ライブラリを書き出し
+	New Library Group	新規ライブラリグループ
+	Rename Library Group	ライブラリグループ名を変更
+	Delete Library Group	ライブラリグループを削除
+	Move Library Item to Group	ライブラリ項目をグループに移動
 	Library	ライブラリ
 	Rename Library	ライブラリ名を変更
 	Show Library	ライブラリを表示
@@ -2620,6 +2668,7 @@
 	Unshift	シフトを戻す
 	Update Link	リンクを更新
 	Update Links	リンクを更新
+	Update Changed Links	変更されたリンクを更新
 	Update Modified Links	変更されたリンクを更新
 	Use 	メニュー 
 	Use Artboards	アートボードを使用
@@ -2729,6 +2778,7 @@
 	{count} linked file(s) not found	リンクファイルが {count} 個見つかりません
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	保存後に {count} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
+	{count} linked image(s) changed on disk. Show the new versions?	{count} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
 	{count} more rules: Export writes every one.	ほかに {count} 個のルールがあります。書き出しにはすべて含まれます。
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	名前のないオブジェクト {count} 個を除外しました。名前を付けるか、パネルメニューで「名前のないオブジェクト」をオンにしてください。
 	{effect} is already applied	{effect} はすでに適用されています
@@ -3300,7 +3350,6 @@ theme	Appearance	外観
 @msg	Expand: no brush strokes selected	拡張: ブラシストロークが選択されていません
 @msg	no brush named `{name}`	`{name}` という名前のブラシが見つかりません
 @msg	no brush selected	ブラシが選択されていません
-@msg	this kind of brush has no options dialog yet	この種類のブラシにはまだオプションダイアログがありません
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
 @msg	the art has no bounds	アートに境界がありません
@@ -3672,6 +3721,7 @@ theme	Appearance	外観
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
 @msg	{_1} linked file(s) can't be read here: their previews show	この環境では {_1} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
+@msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
 @msg	Packaged {n} file(s) in {folder}{note}	{n} 個のファイルを {folder} にパッケージしました{note}
 @msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
@@ -3869,3 +3919,60 @@ theme	Appearance	外観
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
 @msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}
+	Video	ビデオ
+	De-Interlace…	インターレース解除…
+	De-Interlace	インターレース解除
+	NTSC Colors	NTSC カラー
+	Eliminate	削除
+	Create New Fields by	新規フィールドの作成
+	Odd Fields	奇数フィールド
+	Even Fields	偶数フィールド
+	Duplication	複製
+	Interpolation	補間
+@msg	Imported library {name}	ライブラリ {name} を読み込みました
+	RGB:	RGB:
+	CMYK:	CMYK:
+	Texture	テクスチャ
+	Craquelure…	クラッキング…
+	Grain…	粒状…
+	Mosaic Tiles…	モザイクタイル…
+	Patchwork…	パッチワーク…
+	Stained Glass…	ステンドグラス…
+	Texturizer…	テクスチャライザー…
+	Craquelure	クラッキング
+	Grain	粒状
+	Mosaic Tiles	モザイクタイル
+	Patchwork	パッチワーク
+	Stained Glass	ステンドグラス
+	Texturizer	テクスチャライザー
+	Crack Spacing	溝の間隔
+	Crack Depth	溝の深さ
+	Crack Brightness	溝の明るさ
+	Intensity	強さ
+	Grain Type	粒子の種類
+	Tile Size	タイルのサイズ
+	Grout Width	目地の幅
+	Lighten Grout	目地を明るく
+	Square Size	正方形のサイズ
+	Relief	レリーフ
+	Border Thickness	境界線の太さ
+	Light Intensity	光の強さ
+	Light Direction	光源の方向
+	Sprinkles	散布
+	Clumped	集合
+	Contrasty	高コントラスト
+	Enlarged	拡大
+	Stippled	スティップル
+	Speckle	斑点
+	Brick	レンガ
+	Burlap	麻布
+	Canvas	カンバス
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	ソフト
+effect	Horizontal	水平
+effect	Vertical	垂直
+	Edge	エッジ

@@ -64,6 +64,35 @@ fn effect_menu_lists_the_pixelate_filters_between_blur_and_sharpen() {
     assert!(at("Blur") < at("Pixelate") && at("Pixelate") < at("Sharpen"));
 }
 
+/// Effect › Video, after Sharpen: De-Interlace opens its dialog, NTSC Colors (no options) applies.
+#[test]
+fn effect_menu_lists_the_video_filters_last() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let video: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Video"]).collect();
+    let items: Vec<(&str, Option<&str>)> = video.iter().map(|e| (e.label.as_str(), e.command.as_deref())).collect();
+    assert_eq!(items, [("De-Interlace…", Some("effect.dialog")), ("NTSC Colors", Some("effect.apply"))]);
+    let raster: Vec<&str> =
+        entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
+    let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
+    assert!(at("Sharpen") < at("Video"));
+}
+
+/// Effect › Texture, between Sharpen and Video: each filter opens its dialog.
+#[test]
+fn effect_menu_lists_the_texture_filters_between_sharpen_and_video() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let texture: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Texture"]).collect();
+    let labels: Vec<&str> = texture.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Craquelure…", "Grain…", "Mosaic Tiles…", "Patchwork…", "Stained Glass…", "Texturizer…"]);
+    assert!(texture.iter().all(|e| e.command.as_deref() == Some("effect.dialog")));
+    let raster: Vec<&str> =
+        entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
+    let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
+    assert!(at("Sharpen") < at("Texture") && at("Texture") < at("Video"));
+}
+
 #[test]
 fn library_submenus_are_disabled_placeholders() {
     let app = app();

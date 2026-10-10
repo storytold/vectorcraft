@@ -4500,6 +4500,7 @@ dependencies = [
  "vectorcraft-effects",
  "vectorcraft-geom",
  "vectorcraft-metafile",
+ "vectorcraft-pdf",
  "vectorcraft-render",
  "vectorcraft-testkit",
  "vectorcraft-text",

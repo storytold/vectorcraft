@@ -367,13 +367,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
         if (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
-            painter.text(
-                r.left_top() - vec2(0.0, 4.0),
-                egui::Align2::LEFT_BOTTOM,
-                format!("{:02} - {}", i + 1, ab.name),
-                egui::FontId::proportional(11.0),
-                t.text_dim,
-            );
+            artboard_label(&painter, r, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
         }
     }
     if app.ui.view.guides {
@@ -1701,8 +1695,8 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             app.session.prefs.hide_corner_widget_above,
         )
     {
-        let color = c32(st.doc.layer_color(w.id));
-        for sp in w.visible().map(|q| xf.to_screen(q)) {
+        for (id, q) in w.visible_on() {
+            let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
             p.circle_filled(sp, 3.0, Color32::WHITE);
             p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
             p.circle_filled(sp, 1.0, color);
@@ -1747,6 +1741,22 @@ fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
     ctx.output_mut(|o| {
         o.ime = Some(egui::output::IMEOutput { purpose: egui::IMEPurpose::Normal, rect: r, cursor_rect: r, should_interrupt_composition: interrupt });
     });
+}
+
+/// The width an artboard needs on screen for its name to show (px): narrower, the name is left
+/// out rather than spilling over its neighbours.
+const MIN_LABELLED_ARTBOARD: f32 = 24.0;
+
+/// Artboard `name` above the top-left corner of its on-screen rect `r`, no wider than the
+/// artboard: a longer name ends in "…", and an artboard too narrow shows none (#949).
+fn artboard_label(painter: &egui::Painter, r: egui::Rect, name: &str, color: Color32) {
+    if r.width() < MIN_LABELLED_ARTBOARD {
+        return;
+    }
+    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), egui::FontId::proportional(11.0), color);
+    job.wrap = egui::text::TextWrapping { max_width: r.width(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    let galley = painter.layout_job(job);
+    painter.galley(r.left_top() - vec2(0.0, 4.0 + galley.size().y), galley, color);
 }
 
 /// Is overlay label `text` the Artboard tool's "01 - <artboard name>"? It holds a name, so it is
@@ -2217,6 +2227,31 @@ mod tests {
     fn artboard_labels_name_the_artboard() {
         assert!(names_an_artboard("01 - Layers") && names_an_artboard("12 - Artboard 12 - copy"));
         assert!(!names_an_artboard("anchor") && !names_an_artboard("1 - x") && !names_an_artboard("Off the mesh - move closer"));
+    }
+
+    /// #949: an artboard's name stays within the artboard's width on screen, ending in "…" when
+    /// longer, and an artboard too narrow shows none.
+    #[test]
+    fn artboard_labels_fit_their_artboard() {
+        let ctx = egui::Context::default();
+        let drawn = |width: f32| {
+            let r = egui::Rect::from_min_size(pos2(50.0, 50.0), vec2(width, 40.0));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| artboard_label(ui.painter(), r, "01 - A long artboard name", Color32::WHITE));
+            out.textures_delta.clear();
+            out.shapes
+                .into_iter()
+                .filter_map(|c| match c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.galley.size().x)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let full = drawn(400.0);
+        assert_eq!(full.first().map(|(s, _)| s.as_str()), Some("01 - A long artboard name"));
+        // Laid out no wider than the artboard (the galley keeps the whole text; it draws "…").
+        let (_, w) = drawn(30.0).first().cloned().unwrap();
+        assert!(full[0].1 > 30.0 && w <= 30.0 + 0.5, "{full:?} {w}");
+        assert!(drawn(10.0).is_empty());
     }
 
     fn middle(pos: Pos2, pressed: bool) -> egui::Event {

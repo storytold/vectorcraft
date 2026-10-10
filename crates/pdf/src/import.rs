@@ -503,6 +503,46 @@ fn matching_face(
     best.map(|(_, f)| f)
 }
 
+/// The characters a glyph no mapping names is looked for among (#811): those single-byte fonts
+/// encode (ASCII, Latin-1, Latin Extended-A, general punctuation, the euro and trade mark signs,
+/// the fi and fl ligatures).
+const IDENTIFIABLE: [std::ops::RangeInclusive<u32>; 6] =
+    [0x21..=0x7E, 0xA1..=0x17F, 0x2010..=0x2044, 0x20AC..=0x20AC, 0x2122..=0x2122, 0xFB01..=0xFB02];
+
+/// The character whose glyph in installed `face` draws `embedded` (a glyph outline in thousandths
+/// of an em, y up): the first of [`IDENTIFIABLE`] with the same outline, point for point. A subset
+/// font embedded without a character map still carries the font's own outlines, so a glyph whose
+/// subset code names nothing is found this way. `None` when no glyph matches (another version of
+/// the font, or a glyph that is no character), and for empty glyphs, which every space draws.
+pub(crate) fn identify_glyph(face: &vectorcraft_text::FontFace, embedded: &BezPath) -> Option<char> {
+    if embedded.elements().is_empty() {
+        return None;
+    }
+    let k = 1000.0 / face.units_per_em();
+    // Installed outlines are y-down in font units.
+    let to_pdf = Affine::new([k, 0.0, 0.0, -k, 0.0, 0.0]);
+    let db = vectorcraft_text::FontDb::global();
+    IDENTIFIABLE.iter().cloned().flatten().filter_map(char::from_u32).find(|c| {
+        let gid = face.glyph_for(*c);
+        gid != 0 && same_shape(embedded, &(to_pdf * db.outline(face, gid).as_ref().clone()))
+    })
+}
+
+/// Do outlines `a` and `b` draw the same segments, every point within 2/1000 em (closing
+/// commands aside)?
+fn same_shape(a: &BezPath, b: &BezPath) -> bool {
+    let drawn = |p: &BezPath| p.elements().iter().filter(|e| !matches!(e, PathEl::ClosePath)).copied().collect::<Vec<_>>();
+    let (a, b) = (drawn(a), drawn(b));
+    let near = |p: kurbo::Point, q: kurbo::Point| (p - q).hypot() <= 2.0;
+    a.len() == b.len()
+        && a.iter().zip(&b).all(|(x, y)| match (x, y) {
+            (PathEl::MoveTo(p), PathEl::MoveTo(q)) | (PathEl::LineTo(p), PathEl::LineTo(q)) => near(*p, *q),
+            (PathEl::QuadTo(p1, p2), PathEl::QuadTo(q1, q2)) => near(*p1, *q1) && near(*p2, *q2),
+            (PathEl::CurveTo(p1, p2, p3), PathEl::CurveTo(q1, q2, q3)) => near(*p1, *q1) && near(*p2, *q2) && near(*p3, *q3),
+            _ => false,
+        })
+}
+
 /// The character of glyph `text` when its outline can be compared with an installed font's: a
 /// single character, and not CJK punctuation set vertically (its vertical form differs).
 fn comparable(text: &str, vertical: bool) -> Option<char> {
@@ -666,6 +706,9 @@ struct Builder<'p> {
     /// Font (cache key) → the installed face that draws its glyphs, decided from its first glyph
     /// that can be compared ([`matching_face`]); `None`: its glyphs differ, so it stays outlines.
     matched: HashMap<u128, Option<Arc<vectorcraft_text::FontFace>>>,
+    /// (Font, glyph) → the character its outline matches in the installed face, for glyphs no
+    /// mapping names ([`Builder::identified_char`]).
+    identified: HashMap<(u128, u32), Option<char>>,
     /// Per font: the installed version its type names, when it isn't the one its family and style
     /// resolve to (see `CharStyle::font_version`).
     versions: HashMap<u128, Option<String>>,
@@ -817,6 +860,7 @@ impl<'p> Builder<'p> {
             cid_text: HashMap::new(),
             font_chars: HashMap::new(),
             matched: HashMap::new(),
+            identified: HashMap::new(),
             versions: HashMap::new(),
             mask: None,
             masked: vec![],
@@ -1286,6 +1330,17 @@ impl<'p> Builder<'p> {
 
     /// The family and style of font `key` (drawing glyph `o`): the installed face of its PostScript
     /// name, else the available family its name reads as; whether it is available.
+    /// The character of glyph `glyph` of font `key` that no mapping names, found by its outline in
+    /// the installed face of the font's name ([`identify_glyph`]); cached per glyph.
+    fn identified_char(&mut self, key: u128, glyph: u32, o: &hayro_interpret::font::OutlineGlyph) -> Option<char> {
+        if let Some(c) = self.identified.get(&(key, glyph)) {
+            return *c;
+        }
+        let c = self.font_name(key, o).face.and_then(|f| identify_glyph(&f, &o.outline()));
+        self.identified.insert((key, glyph), c);
+        c
+    }
+
     fn font_name(&mut self, key: u128, o: &hayro_interpret::font::OutlineGlyph) -> FontInfo {
         if let Some(n) = self.font_names.get(&key) {
             return n.clone();
@@ -1345,7 +1400,9 @@ impl<'p> Builder<'p> {
                             .font_chars
                             .entry(key)
                             .or_insert_with(|| o.font_data().and_then(|d| font_chars(d.data.as_ref().as_ref())).map(Arc::new));
-                        (chars.as_ref().and_then(|m| m.get(&glyph)).map(|c| BfString::Char(*c)), false)
+                        let named = chars.as_ref().and_then(|m| m.get(&glyph)).copied();
+                        // Still unnamed: the installed font may draw the same outline (#811).
+                        (named.or_else(|| self.identified_char(key, glyph, o)).map(BfString::Char), false)
                     }
                 }
             }

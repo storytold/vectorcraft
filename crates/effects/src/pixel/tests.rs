@@ -5,9 +5,17 @@ use vectorcraft_geom::{Affine, Point, Rect};
 use super::*;
 use crate::{RasterFx, raster_effects};
 
-/// A `w` × `h` raster whose pixels are document points (origin top-left).
+/// A `w` × `h` raster whose pixels are document points (origin top-left), of an object that fills it.
 fn space(w: usize, h: usize) -> PixelSpace {
-    PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(w as f64 / 2.0, h as f64 / 2.0), channels: Channels::Rgb }
+    let (w, h) = (w as f64, h as f64);
+    PixelSpace {
+        to_doc: Affine::IDENTITY,
+        px: 1.0,
+        center: Point::new(w / 2.0, h / 2.0),
+        channels: Channels::Rgb,
+        line: 1.0,
+        extent: 0.5 * w.hypot(h),
+    }
 }
 
 fn image(w: usize, h: usize, f: impl Fn(usize, usize) -> [u8; 4]) -> Vec<u8> {
@@ -224,7 +232,14 @@ fn lengths_are_document_units() {
     let edge = |scale: usize| image(40 * scale, 4, move |x, _| grey(if x < 20 * scale { 100 } else { 150 }));
     let run = |scale: usize| {
         let mut d = edge(scale);
-        let s = PixelSpace { to_doc: Affine::scale(1.0 / scale as f64), px: 1.0 / scale as f64, center: Point::ZERO, channels: Channels::Rgb };
+        let s = PixelSpace {
+            to_doc: Affine::scale(1.0 / scale as f64),
+            px: 1.0 / scale as f64,
+            center: Point::ZERO,
+            channels: Channels::Rgb,
+            line: 1.0,
+            extent: 0.0,
+        };
         fx("sharpen.unsharpMask", json!({"amount": 100, "radius": 2})).apply(&mut d, 40 * scale, 4, &s);
         (0..40 * scale).filter(|x| at(&d, 40 * scale, *x, 2)[0] < 99).count()
     };
@@ -253,7 +268,7 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
 fn pixel_timings() {
     let (w, h) = (2000, 2000);
     let src = image(w, h, |x, y| [(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8, 255]);
-    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb };
+    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb, line: 1.0, extent: 0.0 };
     let cases = [
         ("blur.radial", json!({"quality": "draft"})),
         ("blur.radial", json!({"quality": "good"})),
@@ -267,6 +282,14 @@ fn pixel_timings() {
         ("pixelate.mezzotint", json!({"type": "grainyDots"})),
         ("pixelate.pointillize", json!({"cellSize": 3})),
         ("pixelate.pointillize", json!({"cellSize": 300})),
+        ("texture.craquelure", json!({"crackSpacing": 2})),
+        ("texture.craquelure", json!({"crackSpacing": 100})),
+        ("texture.grain", json!({"grainType": "clumped"})),
+        ("texture.mosaicTiles", json!({"tileSize": 2})),
+        ("texture.patchwork", json!({"squareSize": 0})),
+        ("texture.stainedGlass", json!({"cellSize": 2})),
+        ("texture.texturizer", json!({"texture": "sandstone", "scaling": 50})),
+        ("texture.texturizer", json!({"texture": "burlap"})),
     ];
     for (id, p) in cases {
         let mut d = src.clone();
@@ -472,6 +495,332 @@ fn pixelate_patterns_follow_the_object_at_any_resolution() {
         assert!(diff < 24.0, "{id}: {diff}");
         // The object and its raster 7 × 3 points further: the same pixels.
         let moved = PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: Point::new(27.0, 23.0), ..space(w, h) };
+        let mut shifted = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut shifted, w, h, &moved);
+        assert_eq!(shifted, one, "{id}");
+    }
+}
+
+/// Video › De-Interlace: lines 1, 3, 5… (or 2, 4, 6…) are made again from the others, by copying
+/// the line above or by averaging the lines above and below; the lines are the document's raster
+/// rows, whatever the raster's own resolution.
+#[test]
+fn deinterlace_remakes_one_field_from_the_other() {
+    let (w, h) = (2, 6);
+    // Line n (from 1) is grey 40 n.
+    let src = image(w, h, |_, y| grey(40 * (y as u8 + 1)));
+    let run = |p: serde_json::Value, s: &PixelSpace| {
+        let mut d = src.clone();
+        fx("video.deinterlace", p).apply(&mut d, w, h, s);
+        (0..h).map(|y| at(&d, w, 1, y)[0]).collect::<Vec<_>>()
+    };
+    let s = space(w, h);
+    // Odd lines (1, 3, 5) copy the line above; line 1 has none, so it takes line 2.
+    assert_eq!(run(json!({}), &s), [80, 80, 80, 160, 160, 240]);
+    assert_eq!(run(json!({"eliminate": "even"}), &s), [40, 40, 120, 120, 200, 200]);
+    // Interpolated: the average of the lines around (one side at the edges).
+    assert_eq!(run(json!({"eliminate": "even", "create": "interpolation"}), &s), [40, 80, 120, 160, 200, 200]);
+    // Lines two pixels tall: lines 1 and 3 (pixels 0–1 and 4–5) copy their neighbour, row by row.
+    let coarse = PixelSpace { line: 2.0, ..space(w, h) };
+    assert_eq!(run(json!({}), &coarse), [120, 160, 120, 160, 120, 160]);
+    // A damaged space changes nothing.
+    assert_eq!(run(json!({}), &PixelSpace { line: f64::NAN, ..space(w, h) }), [40, 80, 120, 160, 200, 240]);
+}
+
+/// Video › NTSC Colors: saturated yellow and cyan lose saturation (their composite signal is too
+/// strong) but keep their brightness; greys, dark colours and transparency stay as they are.
+#[test]
+fn ntsc_colors_tame_only_colours_too_strong_for_the_signal() {
+    let (w, h) = (5, 1);
+    let px = [[255, 255, 0, 255], [0, 255, 255, 255], [128, 128, 128, 255], [100, 20, 20, 255], [0, 0, 0, 0]];
+    let mut d: Vec<u8> = px.concat();
+    fx("video.ntscColors", json!({})).apply(&mut d, w, h, &space(w, h));
+    let luma = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    for (x, &a) in px.iter().enumerate() {
+        let b = at(&d, w, x, 0);
+        if x >= 2 {
+            assert_eq!(b, a, "{x}: unchanged");
+            continue;
+        }
+        let spread = |p: [u8; 4]| p[..3].iter().max().unwrap() - p[..3].iter().min().unwrap();
+        assert!(spread(b) < spread(a), "{x}: less saturated {b:?}");
+        assert!((luma(a) - luma(b)).abs() < 3.0, "{x}: as bright {a:?} {b:?}");
+    }
+}
+
+#[test]
+fn texture_params_take_defaults_and_stay_in_range() {
+    assert_eq!(fx("texture.craquelure", json!({})), PixelFx::Craquelure { spacing: 15.0, depth: 6.0, brightness: 9.0 });
+    assert_eq!(
+        fx("texture.craquelure", json!({"crackSpacing": 1e9, "crackDepth": -1, "crackBrightness": "x"})),
+        PixelFx::Craquelure { spacing: 100.0, depth: 0.0, brightness: 9.0 }
+    );
+    assert_eq!(fx("texture.grain", json!({})), PixelFx::Grain { intensity: 40.0, contrast: 50.0, kind: Grain::Regular });
+    assert_eq!(
+        fx("texture.grain", json!({"intensity": 1e300, "contrast": -5, "grainType": "SPECKLE"})),
+        PixelFx::Grain { intensity: 100.0, contrast: 0.0, kind: Grain::Speckle }
+    );
+    assert_eq!(fx("texture.mosaicTiles", json!({})), PixelFx::MosaicTiles { tile: 12.0, grout: 3.0, lighten: 9.0 });
+    assert_eq!(
+        fx("texture.mosaicTiles", json!({"tileSize": 0, "groutWidth": 99, "lightenGrout": 11})),
+        PixelFx::MosaicTiles { tile: 2.0, grout: 15.0, lighten: 10.0 }
+    );
+    assert_eq!(fx("texture.patchwork", json!({})), PixelFx::Patchwork { square: 4.0, relief: 8.0 });
+    assert_eq!(fx("texture.patchwork", json!({"squareSize": -1, "relief": 26})), PixelFx::Patchwork { square: 0.0, relief: 25.0 });
+    assert_eq!(fx("texture.stainedGlass", json!({})), PixelFx::StainedGlass { cell: 10.0, border: 4.0, light: 3.0 });
+    assert_eq!(
+        fx("texture.stainedGlass", json!({"cellSize": 1, "borderThickness": 21, "lightIntensity": "1e999"})),
+        PixelFx::StainedGlass { cell: 2.0, border: 20.0, light: 3.0 }
+    );
+    let canvas = PixelFx::Texturizer { texture: Texture::Canvas, scaling: 1.0, relief: 4.0, light: Light::Top, invert: false };
+    assert_eq!(fx("texture.texturizer", json!({})), canvas);
+    assert_eq!(
+        fx("texture.texturizer", json!({"texture": "Brick", "scaling": 10, "relief": 60, "lightDirection": "bottomRight", "invert": true})),
+        PixelFx::Texturizer { texture: Texture::Brick, scaling: 0.5, relief: 50.0, light: Light::BottomRight, invert: true }
+    );
+    assert_eq!(
+        fx("texture.texturizer", json!({"texture": 3, "lightDirection": "up", "scaling": 1e9})),
+        PixelFx::Texturizer { texture: Texture::Canvas, scaling: 2.0, relief: 4.0, light: Light::Top, invert: false }
+    );
+    assert_eq!(fx("texture.grain", json!({"grainType": ["x"]})), fx("texture.grain", json!({})));
+    // Every menu value is documented in the catalogue and parses to a choice of its own.
+    for (id, key, table) in [
+        ("texture.grain", "grainType", GRAIN_TYPES.as_slice()),
+        ("texture.texturizer", "texture", TEXTURES.as_slice()),
+        ("texture.texturizer", "lightDirection", LIGHT_DIRECTIONS.as_slice()),
+    ] {
+        let doc = crate::effect_info(id).unwrap().params;
+        let parsed: Vec<PixelFx> = table.iter().map(|(_, v)| fx(id, json!({ key: v }))).collect();
+        for (i, (_, v)) in table.iter().enumerate() {
+            assert!(doc.contains(&format!("\"{v}\"")), "{id} {v}");
+            assert!(parsed.iter().skip(i + 1).all(|p| *p != parsed[i]), "{id} {v}");
+        }
+    }
+    // Panes and squares reach beyond the object; the surfaces stay on it.
+    let b = Rect::new(0.0, 0.0, 100.0, 50.0);
+    assert_eq!(fx("texture.stainedGlass", json!({"cellSize": 20})).outset(b), 30.0);
+    assert_eq!(fx("texture.patchwork", json!({"squareSize": 0})).outset(b), 1.0);
+    for id in ["texture.craquelure", "texture.grain", "texture.mosaicTiles", "texture.texturizer"] {
+        assert_eq!(fx(id, json!({})).outset(b), 0.0, "{id}");
+    }
+    assert_eq!(fx("texture.grain", json!({})).reach(), Some(0.0));
+    assert_eq!(fx("texture.craquelure", json!({"crackSpacing": 12})).reach(), Some(6.0));
+}
+
+/// The pixels of `d` (`w` wide) in the square `lo..hi` on both axes.
+fn square(d: &[u8], w: usize, lo: usize, hi: usize) -> Vec<[u8; 4]> {
+    (lo..hi).flat_map(|y| (lo..hi).map(move |x| (x, y))).map(|(x, y)| at(d, w, x, y)).collect()
+}
+
+/// A `w`-square raster of one colour.
+fn flat(w: usize, c: [u8; 4]) -> Vec<u8> {
+    image(w, w, |_, _| c)
+}
+
+#[test]
+fn craquelure_cracks_plates_and_contours() {
+    let w = 96;
+    let tan = [180, 150, 110, 255];
+    let mut d = flat(w, tan);
+    fx("texture.craquelure", json!({"crackBrightness": 10})).apply(&mut d, w, w, &space(w, w));
+    let px = square(&d, w, 16, 80);
+    let dark = px.iter().filter(|p| p[0] < 120).count() as f64 / px.len() as f64;
+    assert!((0.03..0.4).contains(&dark), "a network of dark cracks: {dark}");
+    assert!(px.iter().all(|p| p[3] == 255 && p[0] >= p[1] && p[1] >= p[2]), "the colour stays, darkened or lit");
+    assert!(px.iter().any(|p| p[0] > 182), "plate edges catch the light");
+    // Without depth there are no cracks and no relief; brightness lights the surface.
+    let mut flat_lit = flat(w, tan);
+    fx("texture.craquelure", json!({"crackDepth": 0, "crackBrightness": 10})).apply(&mut flat_lit, w, w, &space(w, w));
+    assert_eq!(flat_lit, flat(w, tan));
+    let mut dim = flat(w, tan);
+    fx("texture.craquelure", json!({"crackDepth": 0, "crackBrightness": 0})).apply(&mut dim, w, w, &space(w, w));
+    assert_eq!(at(&dim, w, 40, 40), [90, 75, 55, 255]);
+    // A dark half and a light half: a crack follows the contour between them, straight down (a
+    // dark line between lighter pixels in nearly every row), where one tone has none.
+    let craquelure = fx("texture.craquelure", json!({"crackSpacing": 100, "crackBrightness": 10}));
+    let rows_cracked = |src: Vec<u8>| {
+        let mut d = src;
+        craquelure.apply(&mut d, w, w, &space(w, w));
+        let v = |x: usize, y: usize| i32::from(at(&d, w, x, y)[0]);
+        (20..76).filter(|y| (26..35).any(|x| v(x, *y) + 8 < v(x - 2, *y) && v(x, *y) + 8 < v(x + 2, *y))).count()
+    };
+    let (contour, plain) = (rows_cracked(image(w, w, |x, _| grey(if x < 30 { 60 } else { 200 }))), rows_cracked(flat(w, grey(200))));
+    assert!(contour >= 48 && contour >= plain + 25, "{contour} rows cracked along the contour, {plain} without one");
+}
+
+#[test]
+fn grain_types_each_add_their_own_noise() {
+    let w = 48;
+    let mid = grey(128);
+    let mut seen: Vec<Vec<u8>> = Vec::new();
+    for (_, kind) in GRAIN_TYPES {
+        let mut d = flat(w, mid);
+        fx("texture.grain", json!({ "grainType": kind })).apply(&mut d, w, w, &space(w, w));
+        assert_ne!(d, flat(w, mid), "{kind} adds grain");
+        assert!(d.as_chunks::<4>().0.iter().all(|p| p[3] == 255), "{kind}: coverage stays");
+        assert!(!seen.contains(&d), "{kind}: a grain of its own");
+        seen.push(d);
+    }
+    // Regular grain is 1-point grains of every colour around the image's own.
+    let mut d = flat(w, mid);
+    fx("texture.grain", json!({})).apply(&mut d, w, w, &space(w, w));
+    let px = d.as_chunks::<4>().0;
+    let mean = px.iter().map(|p| f64::from(p[0])).sum::<f64>() / px.len() as f64;
+    assert!((mean - 128.0).abs() < 8.0, "{mean}");
+    assert!(px.iter().any(|p| p[0] != p[1]), "coloured grains");
+    // Horizontal grain runs in streaks along the rows.
+    let mut d = flat(w, mid);
+    fx("texture.grain", json!({"grainType": "horizontal", "intensity": 100})).apply(&mut d, w, w, &space(w, w));
+    let along = (0..w - 1).map(|x| u32::from(at(&d, w, x, 10)[0].abs_diff(at(&d, w, x + 1, 10)[0]))).sum::<u32>();
+    let across = (0..w - 1).map(|y| u32::from(at(&d, w, 10, y)[0].abs_diff(at(&d, w, 10, y + 1)[0]))).sum::<u32>();
+    assert!(along * 3 < across, "{along} along, {across} across");
+    // No intensity at neutral contrast leaves the image; contrast spreads its tones.
+    let ramp = image(w, w, |x, _| grey((x * 5) as u8));
+    let mut d = ramp.clone();
+    fx("texture.grain", json!({"intensity": 0})).apply(&mut d, w, w, &space(w, w));
+    assert_eq!(d, ramp);
+    fx("texture.grain", json!({"intensity": 0, "contrast": 100})).apply(&mut d, w, w, &space(w, w));
+    assert!(at(&d, w, 2, 0)[0] < at(&ramp, w, 2, 0)[0] && at(&d, w, 45, 0)[0] > at(&ramp, w, 45, 0)[0]);
+    // Sprinkles are the background colour, white.
+    let mut d = flat(w, [0, 0, 160, 255]);
+    fx("texture.grain", json!({"grainType": "sprinkles", "intensity": 100})).apply(&mut d, w, w, &space(w, w));
+    assert!(d.as_chunks::<4>().0.iter().any(|p| p[0] > 200 && p[2] > 240));
+}
+
+#[test]
+fn mosaic_tiles_lay_tiles_in_light_grout() {
+    let w = 96;
+    let blue = [40, 60, 160, 255];
+    let mut d = flat(w, blue);
+    fx("texture.mosaicTiles", json!({})).apply(&mut d, w, w, &space(w, w));
+    let px = square(&d, w, 8, 88);
+    let grout = px.iter().filter(|p| p[0] > 170).count() as f64 / px.len() as f64;
+    assert!((0.08..0.5).contains(&grout), "light grout between the tiles: {grout}");
+    assert!(px.iter().filter(|p| **p == blue).count() > px.len() / 10, "tile faces keep the colour");
+    // Dark grout without lightening.
+    let mut d = flat(w, blue);
+    fx("texture.mosaicTiles", json!({"lightenGrout": 0})).apply(&mut d, w, w, &space(w, w));
+    let px = square(&d, w, 8, 88);
+    let grout = px.iter().filter(|p| p[2] < 100).count() as f64 / px.len() as f64;
+    assert!((0.08..0.5).contains(&grout) && px.iter().all(|p| p[0] < 170), "dark grout: {grout}");
+    // Transparency around the object stays.
+    let mut d = image(w, w, |x, _| if x < 48 { blue } else { [0; 4] });
+    fx("texture.mosaicTiles", json!({})).apply(&mut d, w, w, &space(w, w));
+    assert!((0..w).all(|y| (48..w).all(|x| at(&d, w, x, y) == [0; 4])));
+}
+
+#[test]
+fn patchwork_fills_squares_with_one_colour_in_relief() {
+    let w = 64;
+    let src = image(w, w, |x, y| [(x * 4) as u8, (y * 4) as u8, 90, 255]);
+    let mut d = src.clone();
+    fx("texture.patchwork", json!({"squareSize": 8, "relief": 0})).apply(&mut d, w, w, &space(w, w));
+    // Squares of 8 points (the object's centre is a corner), each one colour.
+    for (i, j) in [(1, 1), (2, 5), (6, 3)] {
+        let first = at(&d, w, 8 * i, 8 * j);
+        assert!((0..8).all(|y| (0..8).all(|x| at(&d, w, 8 * i + x, 8 * j + y) == first)), "square {i} {j}");
+    }
+    assert_ne!(at(&d, w, 8, 8), at(&d, w, 16, 8));
+    // In relief, the squares' sides catch the light from the top left and fall into shade.
+    let mut lit = src.clone();
+    fx("texture.patchwork", json!({"squareSize": 8, "relief": 25})).apply(&mut lit, w, w, &space(w, w));
+    let (face, top, bottom) = (at(&lit, w, 28, 28)[1], at(&lit, w, 28, 24)[1], at(&lit, w, 28, 31)[1]);
+    assert!(top > face && bottom < face, "{top} {face} {bottom}");
+    // Squares around the object's edge are drawn whole.
+    let mut d = image(w, w, |x, _| if x < 30 { [200, 0, 0, 255] } else { [0; 4] });
+    fx("texture.patchwork", json!({"squareSize": 8, "relief": 0})).apply(&mut d, w, w, &space(w, w));
+    assert!((0..w).all(|y| at(&d, w, 31, y)[3] == 255 && at(&d, w, 33, y)[3] == 0));
+}
+
+#[test]
+fn stained_glass_leads_panes_and_lights_the_centre() {
+    let w = 96;
+    let src = image(w, w, |x, y| [(40 + x) as u8, (40 + y) as u8, 120, 255]);
+    let mut d = src.clone();
+    fx("texture.stainedGlass", json!({"lightIntensity": 0})).apply(&mut d, w, w, &space(w, w));
+    let px = square(&d, w, 16, 80);
+    let lead = px.iter().filter(|p| p[0] == 0 && p[1] == 0 && p[2] == 0).count() as f64 / px.len() as f64;
+    assert!((0.1..0.6).contains(&lead), "black lead: {lead}");
+    let same = (16..80).flat_map(|y| (16..79).map(move |x| (x, y))).filter(|(x, y)| at(&d, w, *x, *y) == at(&d, w, x + 1, *y)).count();
+    assert!(same * 5 > 2 * 64 * 63, "single-coloured panes: {same}");
+    assert!(px.iter().all(|p| p[3] == 255));
+    // The light shines through the middle, not the corners.
+    let mut lit = src.clone();
+    fx("texture.stainedGlass", json!({"lightIntensity": 10})).apply(&mut lit, w, w, &space(w, w));
+    let brighter = |x: usize, y: usize| i32::from(at(&lit, w, x, y)[2]) - i32::from(at(&d, w, x, y)[2]);
+    let centre = (44..52).flat_map(|y| (44..52).map(move |x| (x, y))).map(|(x, y)| brighter(x, y)).max().unwrap();
+    let corner = (0..6).flat_map(|y| (0..6).map(move |x| (x, y))).map(|(x, y)| brighter(x, y)).max().unwrap();
+    assert!(centre > 40 && corner * 3 < centre, "{centre} at the centre, {corner} in the corner");
+    // Panes beyond the object stay clear; lead outlines it.
+    let mut d = image(w, w, |x, y| if (24..72).contains(&x) && (24..72).contains(&y) { [200, 40, 40, 255] } else { [0; 4] });
+    fx("texture.stainedGlass", json!({})).apply(&mut d, w, w, &space(w, w));
+    assert!((0..6).all(|y| (0..w).all(|x| at(&d, w, x, y) == [0; 4])));
+    assert!(d.as_chunks::<4>().0.iter().all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]));
+}
+
+#[test]
+fn texturizer_lights_each_surface_from_its_side() {
+    let w = 64;
+    let mid = grey(150);
+    let run = |p: serde_json::Value| {
+        let mut d = flat(w, mid);
+        fx("texture.texturizer", p).apply(&mut d, w, w, &space(w, w));
+        d
+    };
+    let mut seen: Vec<Vec<u8>> = Vec::new();
+    for (_, texture) in TEXTURES {
+        let d = run(json!({ "texture": texture, "relief": 20 }));
+        assert_ne!(d, flat(w, mid), "{texture}");
+        assert!(!seen.contains(&d), "{texture}: a surface of its own");
+        // Inverted, the lit slopes are the shaded ones, and the other way round.
+        let inv = run(json!({ "texture": texture, "relief": 20, "invert": true }));
+        let shift = |d: &[u8]| d.as_chunks::<4>().0.iter().map(|p| i32::from(p[0]) - 150).collect::<Vec<_>>();
+        let (a, b) = (shift(&d), shift(&inv));
+        let opposite = a.iter().zip(&b).filter(|(a, b)| a.abs() > 4 && b.abs() > 4 && a.signum() != b.signum()).count();
+        let lit_or_shaded = a.iter().filter(|a| a.abs() > 4).count();
+        assert!(lit_or_shaded > 100 && opposite * 10 > lit_or_shaded * 8, "{texture}: {opposite} of {lit_or_shaded}");
+        // From the other side as well.
+        assert_ne!(run(json!({ "texture": texture, "relief": 20, "lightDirection": "bottom" })), d, "{texture}");
+        // No relief, no change.
+        assert_eq!(run(json!({ "texture": texture, "relief": 0 })), flat(w, mid), "{texture}");
+        seen.push(d);
+    }
+    // Scaling enlarges the surface: 200 % at 2 points a pixel draws as 100 % at 1.
+    let mut big = flat(w, mid);
+    let coarse = PixelSpace { to_doc: Affine::scale(2.0), px: 2.0, center: Point::new(64.0, 64.0), ..space(w, w) };
+    fx("texture.texturizer", json!({"texture": "brick", "scaling": 200, "relief": 20})).apply(&mut big, w, w, &coarse);
+    assert_eq!(big, run(json!({"texture": "brick", "relief": 20})));
+}
+
+/// The Texture filters' patterns lie in document space around the object's centre: the same at
+/// twice the resolution, and moving with the object.
+#[test]
+fn texture_patterns_follow_the_object_at_any_resolution() {
+    let (w, h) = (48, 48);
+    let art = |x: f64, y: f64| -> [u8; 4] {
+        if (8.0..40.0).contains(&x) && (8.0..40.0).contains(&y) { [(x * 5.0) as u8, (y * 5.0) as u8, 120, 255] } else { [0; 4] }
+    };
+    for (id, p) in [
+        ("texture.craquelure", json!({"crackSpacing": 8})),
+        ("texture.grain", json!({"grainType": "enlarged"})),
+        ("texture.mosaicTiles", json!({"tileSize": 8, "groutWidth": 2})),
+        ("texture.patchwork", json!({"squareSize": 6})),
+        ("texture.stainedGlass", json!({"cellSize": 8, "borderThickness": 2})),
+        ("texture.texturizer", json!({"texture": "sandstone", "relief": 10})),
+    ] {
+        let f = fx(id, p);
+        let mut one = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
+        f.apply(&mut one, w, h, &space(w, h));
+        let mut two = image(2 * w, 2 * h, |x, y| art((x as f64 + 0.5) / 2.0, (y as f64 + 0.5) / 2.0));
+        let fine = PixelSpace { to_doc: Affine::scale(0.5), px: 0.5, ..space(w, h) };
+        f.apply(&mut two, 2 * w, 2 * h, &fine);
+        let down = image(w, h, |x, y| {
+            let q = [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| at(&two, 2 * w, 2 * x + dx, 2 * y + dy));
+            std::array::from_fn(|c| (q.iter().map(|p| u32::from(p[c])).sum::<u32>() / 4) as u8)
+        });
+        let diff = one.iter().zip(&down).map(|(a, b)| f64::from(a.abs_diff(*b))).sum::<f64>() / one.len() as f64;
+        assert!(diff < 12.0, "{id}: {diff}");
+        let moved = PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: Point::new(31.0, 27.0), ..space(w, h) };
         let mut shifted = image(w, h, |x, y| art(x as f64 + 0.5, y as f64 + 0.5));
         f.apply(&mut shifted, w, h, &moved);
         assert_eq!(shifted, one, "{id}");

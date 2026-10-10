@@ -7,6 +7,8 @@ use std::cmp::Ordering;
 
 use egui::RichText;
 
+use crate::VectorcraftApp;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Contributor {
     pub login: &'static str,
@@ -214,7 +216,7 @@ impl Default for View {
 }
 
 /// About ▸ Contributors: a name toggle, a sort, and the list as a grab bag or a table.
-pub fn contributors_ui(ui: &mut egui::Ui) {
+pub fn contributors_ui(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let id = egui::Id::new("credits_view");
     let mut v = ui.data_mut(|d| d.get_temp::<View>(id)).unwrap_or_default();
     ui.horizontal_wrapped(|ui| {
@@ -254,14 +256,14 @@ pub fn contributors_ui(ui: &mut egui::Ui) {
         if list.is_empty() {
             ui.label(tl!("No contributor data was built into this copy."));
         } else if v.table {
-            table(ui, &list, &mut v);
+            table(app, ui, &list, &mut v);
         } else {
             ui.horizontal_wrapped(|ui| {
                 for (i, c) in list.iter().enumerate() {
                     if i > 0 {
                         ui.label(RichText::new("·").weak());
                     }
-                    ui.hyperlink_to(c.name(v.names), format!("https://github.com/{}", c.login)).on_hover_text(c.summary());
+                    link(app, ui, c, v.names);
                 }
             });
         }
@@ -269,7 +271,16 @@ pub fn contributors_ui(ui: &mut egui::Ui) {
     ui.data_mut(|d| d.insert_temp(id, v));
 }
 
-fn table(ui: &mut egui::Ui, list: &[&Contributor], v: &mut View) {
+fn link(app: &mut VectorcraftApp, ui: &mut egui::Ui, c: &Contributor, names: NameMode) -> egui::Response {
+    let url = format!("https://github.com/{}", c.login);
+    let r = ui.add(egui::Link::new(c.name(names))).on_hover_text(c.summary());
+    if r.clicked() {
+        app.open_url(&url);
+    }
+    r
+}
+
+fn table(app: &mut VectorcraftApp, ui: &mut egui::Ui, list: &[&Contributor], v: &mut View) {
     egui::Grid::new("credits_table").striped(true).num_columns(SortKey::ALL.len()).show(ui, |ui| {
         for k in SortKey::ALL {
             let arrow = if v.key == k { if v.ascending { " ▲" } else { " ▼" } } else { "" };
@@ -284,7 +295,7 @@ fn table(ui: &mut egui::Ui, list: &[&Contributor], v: &mut View) {
         }
         ui.end_row();
         for c in list {
-            ui.hyperlink_to(c.name(v.names), format!("https://github.com/{}", c.login)).on_hover_text(c.summary());
+            link(app, ui, c, v.names);
             ui.label(group(c.prs));
             ui.label(group(c.commits));
             ui.label(group(c.lines_added));

@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Node, NodeKind, PressureProfile};
 use vectorcraft_geom::{Affine, BezPath, PathData, PathEl, Point, Rect, SubPath};
 
 use crate::track::{Rng, Track, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, Direction, PatternBrush, PatternFit, Scatter, tolerance};
+use crate::{ArtBrush, ArtScale, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -188,13 +188,28 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
     out
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, name: &str) -> Vec<Node> {
+/// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
+/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
+/// draws, so a copy's random values stay the same whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+    let r = rng.range(a, b);
+    match mode {
+        Variation::Fixed => a,
+        Variation::Random => r,
+        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    }
+}
+
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
     let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
     let mut rng = Rng::new(seed_of(bp, name));
+    let [size_mode, spacing_mode, scatter_mode, rotation_mode] = sc.modes();
     let mut out = vec![];
     for t in tracks(bp, 0.05) {
         let l = t.len();
+        // The pen pressure at arc length `at` (half way without a recorded one).
+        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -202,8 +217,10 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, name: &str) -> Ve
             if guard > 20000 {
                 break;
             }
-            let size = rng.range(sc.size.0, sc.size.1).max(1.0) / 100.0 * weight;
-            let spacing = rng.range(sc.spacing.0, sc.spacing.1).max(1.0) / 100.0;
+            // Size and spacing place the next copy, so they take the pressure at the last one.
+            let p = pressure_at(s.unwrap_or(0.0));
+            let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
+            let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
             let pos = match s {
                 None => step / 2.0,
@@ -213,8 +230,9 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, name: &str) -> Ve
                 break;
             }
             s = Some(pos);
-            let off = rng.range(sc.scatter.0, sc.scatter.1) / 100.0 * ah * size;
-            let rot = rng.range(sc.rotation.0, sc.rotation.1).to_radians();
+            let p = pressure_at(pos);
+            let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
+            let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);
             let place = p + crate::track::normal(tg) * off;
             // Page rotation is counter-clockwise on screen (y-down), like the calligraphic angle.

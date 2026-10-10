@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change (brush.get shows them; calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size]; pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest)}, newName?} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180°, modes: [fixed|random|pressure for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest), rotation_relative_to_path. art: width 1..1000%, scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour)}}, newName?} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
         ),
@@ -383,10 +383,16 @@ fn brush_new(s: &mut Session, p: &Value) -> Result<Value> {
         }
         v[k] = serde_json::to_value(&art).unwrap_or_default();
     }
-    let b: Brush = serde_json::from_value(v).map_err(|e| bad(C, format!("invalid brush: {e}")))?;
-    lib.push(b);
+    lib.push(parse_brush(C, v)?);
     save_library(s, "New Brush", lib, None)?;
     Ok(json!({ "name": name }))
+}
+
+/// A brush definition from command params, its values kept within their ranges.
+fn parse_brush(cmd: &str, v: Value) -> Result<Brush> {
+    let mut b: Brush = serde_json::from_value(v).map_err(|e| bad(cmd, format!("invalid brush: {e}")))?;
+    b.sanitize();
+    Ok(b)
 }
 
 fn brush_delete(s: &mut Session, p: &Value) -> Result<Value> {
@@ -431,7 +437,7 @@ fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
         v["name"] = json!(name);
     }
     v["type"] = json!(lib[i].kind.type_id());
-    lib[i] = serde_json::from_value(v).map_err(|e| bad(C, format!("invalid brush: {e}")))?;
+    lib[i] = parse_brush(C, v)?;
     let out = lib[i].name.clone();
     let rename = new_name.map(|nn| (name, Some(nn)));
     save_library(s, "Brush Options", lib, rename)?;

@@ -130,6 +130,10 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
         "pixelate.colorHalftone" => always(&["maxRadius"]),
         "pixelate.crystallize" | "pixelate.pointillize" => always(&["cellSize"]),
+        "texture.craquelure" => always(&["crackSpacing"]),
+        "texture.mosaicTiles" => always(&["tileSize"]),
+        "texture.patchwork" => always(&["squareSize"]),
+        "texture.stainedGlass" => always(&["cellSize"]),
         _ => Lengths::default(),
     }
 }
@@ -144,6 +148,8 @@ const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
+const TEXTURE: &[&str] = &["Effect", "Texture"];
+const VIDEO: &[&str] = &["Effect", "Video"];
 const PATHFINDER: &[&str] = &["Effect", "Pathfinder"];
 const PLUGINS: &[&str] = &["Effect", "Plug-ins"];
 const ADJUST: &[&str] = &["Effect", "Color Adjustments"];
@@ -263,7 +269,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.innerGlow",
             "Inner Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"edge\"|\"center\"}",
+            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffffff", "source": "edge"}),
         ),
         r(
@@ -330,6 +336,62 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             PIXELATE,
             "{cellSize: pt 3..300 (5)} redraws the object as randomly placed dots of its colours on a white canvas",
             json!({"cellSize": 5.0}),
+        ),
+        r(
+            "texture.craquelure",
+            "Craquelure…",
+            TEXTURE,
+            "{crackSpacing: pt 2..100 (15; how far apart the cracks are), crackDepth: 0..10 (6; how deep and wide the cracks are, and how high the plates and the tones stand), crackBrightness: 0..10 (9; how brightly the plaster is lit)} paints the object on relief plaster cracked into plates and along the contours of its tones",
+            json!({"crackSpacing": 15.0, "crackDepth": 6.0, "crackBrightness": 9.0}),
+        ),
+        r(
+            "texture.grain",
+            "Grain…",
+            TEXTURE,
+            "{intensity: 0..100 (40), contrast: 0..100 (50; the image's contrast, 50 leaves it as it is), grainType: \"regular\"|\"soft\"|\"sprinkles\"|\"clumped\"|\"contrasty\"|\"enlarged\"|\"stippled\"|\"horizontal\"|\"vertical\"|\"speckle\" (\"regular\")} adds grain in 1 pt grains (2 pt Enlarged, clumps Clumped, streaks Horizontal and Vertical); Sprinkles and Stippled use the background colour, white",
+            json!({"intensity": 40.0, "contrast": 50.0, "grainType": "regular"}),
+        ),
+        r(
+            "texture.mosaicTiles",
+            "Mosaic Tiles…",
+            TEXTURE,
+            "{tileSize: pt 2..100 (12), groutWidth: 1..15 (3; the grout is half a point wide per step), lightenGrout: 0..10 (9; how light the grout is)} lays the object in irregular tiles bevelled at their edges, with sunken grout between them",
+            json!({"tileSize": 12.0, "groutWidth": 3.0, "lightenGrout": 9.0}),
+        ),
+        r(
+            "texture.patchwork",
+            "Patchwork…",
+            TEXTURE,
+            "{squareSize: pt 0..10 (4; 0 draws 1 pt squares), relief: 0..25 (8)} redraws the object in squares of the colour around their centres, raised to heights that follow its highlights and shadows, a little more or less at random, lit from the top left",
+            json!({"squareSize": 4.0, "relief": 8.0}),
+        ),
+        r(
+            "texture.stainedGlass",
+            "Stained Glass…",
+            TEXTURE,
+            "{cellSize: pt 2..50 (10), borderThickness: 1..20 (4; the lead between the panes, half a point wide per step, in the foreground colour: black), lightIntensity: 0..10 (3; a light behind the object's centre, fading out towards its corners)} redraws the object as single-coloured panes around random points about cellSize apart",
+            json!({"cellSize": 10.0, "borderThickness": 4.0, "lightIntensity": 3.0}),
+        ),
+        r(
+            "texture.texturizer",
+            "Texturizer…",
+            TEXTURE,
+            "{texture: \"brick\"|\"burlap\"|\"canvas\"|\"sandstone\" (\"canvas\"; surfaces made in code), scaling: % 50..200 (100), relief: 0..50 (4), lightDirection: \"bottom\"|\"bottomLeft\"|\"left\"|\"topLeft\"|\"top\"|\"topRight\"|\"right\"|\"bottomRight\" (\"top\"), invert: bool (false; turns the surface's heights over)} paints the object on a surface in relief",
+            json!({"texture": "canvas", "scaling": 100.0, "relief": 4.0, "lightDirection": "top", "invert": false}),
+        ),
+        r(
+            "video.deinterlace",
+            "De-Interlace…",
+            VIDEO,
+            "{eliminate: \"odd\"|\"even\" (\"odd\"; which field lines are taken out), create: \"duplication\"|\"interpolation\" (\"duplication\"; a line taken out becomes a copy of the line above, or the average of the lines above and below)} the field lines are the rows of the document's raster grid (Document Raster Effects Settings › Resolution), numbered from 1 at the top of the page",
+            json!({"eliminate": "odd", "create": "duplication"}),
+        ),
+        r(
+            "video.ntscColors",
+            "NTSC Colors",
+            VIDEO,
+            "{} makes colours a television signal can't carry (luma plus chroma past 110 % of white, or luma minus chroma below −20 %) less saturated, keeping their brightness",
+            json!({}),
         ),
     ];
     v.extend([

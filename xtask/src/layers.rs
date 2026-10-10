@@ -75,6 +75,8 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     &["text", "effects"],
     &["render", "eps"],
     &["metafile", "eps"],
+    // Non-native art in Illustrator editing data is a PDF, drawn by the PDF importer.
+    &["pdf", "eps"],
     &["plugins", "effects"],
 ];
 

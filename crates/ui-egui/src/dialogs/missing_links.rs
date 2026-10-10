@@ -2,8 +2,8 @@
 //! (`links.relink`), and with Apply to All the other missing files are looked for by name in its
 //! folder; Ignore keeps the images showing their saved preview, and with Apply to All ignores the
 //! rest. Afterwards, with Preferences › Update Links: Ask When Modified, the modified links are
-//! offered for update (`links.update`). Files changed while the app was in the background are
-//! checked when its window comes back to the front ([`after_focus`]).
+//! offered for update (`links.update`). Files another app changes while the document is open are
+//! offered the same way ([`ask_update_changed`], from [`vectorcraft_engine::link_watch`]).
 //!
 //! Fields: `missing` (`[{name, path, ids}]`, the one asked about first), `modified` (the ids of
 //! images whose file was modified), `applyToAll`, `path` (the replacement file; picked when empty)
@@ -61,6 +61,16 @@ fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>) {
 
 /// With Update Links: Ask When Modified, offer to read the modified linked files `ids` again.
 fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
+    ask(app, ids, tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"));
+}
+
+/// The same offer for linked files another app changed while the document is open
+/// ([`vectorcraft_engine::link_watch`]).
+pub(crate) fn ask_update_changed(app: &mut VectorcraftApp, ids: Vec<Value>) {
+    ask(app, ids, tl!("{count} linked image(s) changed on disk. Show the new versions?"));
+}
+
+fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, question: &str) {
     if ids.is_empty() {
         return;
     }
@@ -68,44 +78,8 @@ fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
         app.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", ids.len()));
         return;
     }
-    let detail = crate::i18n::fmt(
-        tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"),
-        &[("count", &ids.len().to_string())],
-    );
+    let detail = crate::i18n::fmt(question, &[("count", &ids.len().to_string())]);
     super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
-}
-
-/// A linked file as last seen: its path, and its size and modification time when it exists.
-pub(crate) type FileStamp = (String, Option<(u64, Option<std::time::SystemTime>)>);
-
-/// The window came back to the front (#925): linked files of the active document changed
-/// meanwhile are read again with Update Links: Automatically, offered for update with Ask When
-/// Modified (once per change of a file), and left to the Links panel with Manually. Nothing is
-/// asked while a dialog is open.
-pub fn after_focus(app: &mut VectorcraftApp) {
-    if cfg!(target_arch = "wasm32") || app.session.prefs.update_links == "manually" || app.ui.dialog.is_some() || app.session.active().is_none() {
-        return;
-    }
-    let Ok(r) = app.session.execute("links.check", &json!({})) else { return };
-    let rows: Vec<Value> = r["links"].as_array().into_iter().flatten().filter(|l| l["status"] == "modified").cloned().collect();
-    if rows.is_empty() {
-        return;
-    }
-    if app.session.prefs.update_links == "automatically" {
-        // A failure shows in the status bar, as the Links panel's Update Link does.
-        let _ = app.run("links.update", json!({ "ids": ids(&rows) }));
-        return;
-    }
-    // The file each link reads (one found elsewhere after a move), its size and when it was last
-    // changed (two changes can share a time on file systems that keep it coarsely).
-    let stamp = |l: &Value| -> FileStamp {
-        let path = l["found"].as_str().or(l["path"].as_str()).unwrap_or_default().to_string();
-        let meta = std::fs::metadata(&path).ok();
-        let at = meta.as_ref().map(|m| (m.len(), m.modified().ok()));
-        (path, at)
-    };
-    let new: Vec<Value> = rows.into_iter().filter(|l| app.links_asked.insert(stamp(l))).collect();
-    ask_update(app, ids(&new));
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -294,60 +268,6 @@ mod tests {
         std::fs::write(&pic, png([0, 200, 0])).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
         assert!(app.ui.dialog.is_none());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    /// #925: a linked file changed while the app was in the background follows Update Links when
-    /// the window comes back to the front.
-    #[test]
-    fn a_link_changed_in_the_background_follows_update_links_on_focus() {
-        let dir = std::env::temp_dir().join(format!("vectorcraft-focus-links-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let pic = dir.join("a.png");
-        // Each version a different size, so no two share a length and modification time.
-        let mut version = 0;
-        let mut change = || {
-            version += 1;
-            let mut out = vec![];
-            image::RgbaImage::from_pixel(100 + version, 50, image::Rgba([40 * version as u8, 0, 0, 255]))
-                .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-                .unwrap();
-            std::fs::write(&pic, out).unwrap();
-        };
-        change();
-        app.run("file.place", json!({"path": pic.to_string_lossy()})).unwrap();
-        let modified = |app: &mut VectorcraftApp| app.run("links.check", json!({})).unwrap()["modified"].as_u64().unwrap();
-        // The window coming to the front asks for the check.
-        let mut raw = egui::RawInput { events: vec![egui::Event::WindowFocused(true)], ..Default::default() };
-        app.raw_input_hook(&mut raw);
-        assert!(app.links_check);
-        // Ask When Modified (the default): asked once per change.
-        change();
-        after_focus(&mut app);
-        let d = app.ui.dialog.take().expect("asks");
-        assert_eq!(d.str("__command"), "links.update");
-        after_focus(&mut app);
-        assert!(app.ui.dialog.is_none(), "not twice for the same change");
-        change();
-        after_focus(&mut app);
-        assert!(app.ui.dialog.is_some(), "a new change asks again");
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(modified(&mut app), 0);
-        // Automatically: read again without asking.
-        app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
-        change();
-        after_focus(&mut app);
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(modified(&mut app), 0);
-        // Manually: left to the Links panel.
-        app.run("prefs.set", json!({"key": "updateLinks", "value": "manually"})).unwrap();
-        change();
-        after_focus(&mut app);
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(modified(&mut app), 1);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

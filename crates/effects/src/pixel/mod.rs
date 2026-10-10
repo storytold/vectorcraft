@@ -1,6 +1,7 @@
 //! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate › Color
-//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, and Stylize › Glowing
-//! Edges): filters over premultiplied RGBA8 pixels.
+//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Stylize › Glowing
+//! Edges, Texture › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and
+//! Video › De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
 //!
 //! - Every distance is in document units (points) and becomes pixels through the raster's
 //!   [`PixelSpace::px`], so an effect looks the same at any zoom and at any Document Raster Effects
@@ -13,16 +14,19 @@ mod blur;
 mod edges;
 mod pixelate;
 mod sharpen;
+mod texture;
+mod video;
 
 use serde_json::Value;
 use vectorcraft_geom::{Affine, Point, Rect};
 
-use crate::util::{num, text};
+use crate::util::{flag, num, text};
 
 pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
+pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 8] = [
+pub const PIXEL_EFFECTS: [&str; 16] = [
     "blur.radial",
     "blur.smart",
     "pixelate.colorHalftone",
@@ -31,6 +35,14 @@ pub const PIXEL_EFFECTS: [&str; 8] = [
     "pixelate.pointillize",
     "sharpen.unsharpMask",
     "stylize.glowingEdges",
+    "texture.craquelure",
+    "texture.grain",
+    "texture.mosaicTiles",
+    "texture.patchwork",
+    "texture.stainedGlass",
+    "texture.texturizer",
+    "video.deinterlace",
+    "video.ntscColors",
 ];
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
@@ -59,6 +71,29 @@ pub enum PixelFx {
     /// Pixelate › Pointillize: random dots about `cell` across of the object's colours on a white
     /// canvas.
     Pointillize { cell: f64 },
+    /// Texture › Craquelure: cracked relief plaster, plates about `spacing` apart, cracks as deep
+    /// as `depth` (0..10), lit as brightly as `brightness` (0..10).
+    Craquelure { spacing: f64, depth: f64, brightness: f64 },
+    /// Texture › Grain: noise of `kind` as strong as `intensity` (0..100), the image's contrast
+    /// set by `contrast` (0..100, 50 leaves it).
+    Grain { intensity: f64, contrast: f64, kind: Grain },
+    /// Texture › Mosaic Tiles: irregular tiles about `tile` across with sunken grout `grout` / 2
+    /// wide (1..15), lightened by `lighten` (0..10).
+    MosaicTiles { tile: f64, grout: f64, lighten: f64 },
+    /// Texture › Patchwork: squares `square` across of the colour around their centres, raised by
+    /// up to `relief` (0..25).
+    Patchwork { square: f64, relief: f64 },
+    /// Texture › Stained Glass: panes about `cell` across leaded `border` / 2 wide (1..20) in
+    /// black, lit at the centre by `light` (0..10).
+    StainedGlass { cell: f64, border: f64, light: f64 },
+    /// Texture › Texturizer: a `texture` surface scaled by `scaling` (0.5..2), in relief as strong
+    /// as `relief` (0..50), lit from `light`, its heights turned over when `invert`.
+    Texturizer { texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
+    /// Video › De-Interlace: the odd (or `even`) field lines made again from the others, by
+    /// duplication or, with `interpolate`, by averaging.
+    DeInterlace { even: bool, interpolate: bool },
+    /// Video › NTSC Colors: colours a television signal can't carry made less saturated.
+    NtscColors,
 }
 
 /// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
@@ -89,6 +124,12 @@ pub struct PixelSpace {
     pub center: Point,
     /// What the colour channels hold.
     pub channels: Channels,
+    /// The height of a line of the document's raster grid (document units: 72 / Document Raster
+    /// Effects Settings › Resolution), the fields De-Interlace works on.
+    pub line: f64,
+    /// How far the corners of the object's bounds lie from its centre (document units): Stained
+    /// Glass's light fades out over it.
+    pub extent: f64,
 }
 
 /// Effect `id`'s parameters `p` (defaults merged in) as a [`PixelFx`]; `None` for other effects.
@@ -126,6 +167,41 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "pixelate.crystallize" => PixelFx::Crystallize { cell: num(p, "cellSize", 10.0).clamp(3.0, 300.0) },
         "pixelate.mezzotint" => PixelFx::Mezzotint { kind: Mezzotint::parse(text(p, "type", "fineDots")) },
         "pixelate.pointillize" => PixelFx::Pointillize { cell: num(p, "cellSize", 5.0).clamp(3.0, 300.0) },
+        "texture.craquelure" => PixelFx::Craquelure {
+            spacing: num(p, "crackSpacing", 15.0).clamp(2.0, 100.0),
+            depth: num(p, "crackDepth", 6.0).clamp(0.0, 10.0),
+            brightness: num(p, "crackBrightness", 9.0).clamp(0.0, 10.0),
+        },
+        "texture.grain" => PixelFx::Grain {
+            intensity: num(p, "intensity", 40.0).clamp(0.0, 100.0),
+            contrast: num(p, "contrast", 50.0).clamp(0.0, 100.0),
+            kind: Grain::parse(text(p, "grainType", "regular")),
+        },
+        "texture.mosaicTiles" => PixelFx::MosaicTiles {
+            tile: num(p, "tileSize", 12.0).clamp(2.0, 100.0),
+            grout: num(p, "groutWidth", 3.0).clamp(1.0, 15.0),
+            lighten: num(p, "lightenGrout", 9.0).clamp(0.0, 10.0),
+        },
+        "texture.patchwork" => {
+            PixelFx::Patchwork { square: num(p, "squareSize", 4.0).clamp(0.0, 10.0), relief: num(p, "relief", 8.0).clamp(0.0, 25.0) }
+        }
+        "texture.stainedGlass" => PixelFx::StainedGlass {
+            cell: num(p, "cellSize", 10.0).clamp(2.0, 50.0),
+            border: num(p, "borderThickness", 4.0).clamp(1.0, 20.0),
+            light: num(p, "lightIntensity", 3.0).clamp(0.0, 10.0),
+        },
+        "texture.texturizer" => PixelFx::Texturizer {
+            texture: Texture::parse(text(p, "texture", "canvas")),
+            scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
+            relief: num(p, "relief", 4.0).clamp(0.0, 50.0),
+            light: Light::parse(text(p, "lightDirection", "top")),
+            invert: flag(p, "invert", false),
+        },
+        "video.deinterlace" => PixelFx::DeInterlace {
+            even: text(p, "eliminate", "odd").eq_ignore_ascii_case("even"),
+            interpolate: text(p, "create", "duplication").eq_ignore_ascii_case("interpolation"),
+        },
+        "video.ntscColors" => PixelFx::NtscColors,
         _ => return None,
     })
 }
@@ -143,9 +219,18 @@ impl PixelFx {
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::UnsharpMask { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
-            PixelFx::ColorHalftone { .. } | PixelFx::Mezzotint { .. } => 0.0,
-            // A crystal's or dot's point inside the object reaches out by up to its cell.
-            PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } => 1.5 * cell,
+            PixelFx::ColorHalftone { .. }
+            | PixelFx::Mezzotint { .. }
+            | PixelFx::Craquelure { .. }
+            | PixelFx::Grain { .. }
+            | PixelFx::MosaicTiles { .. }
+            | PixelFx::Texturizer { .. }
+            | PixelFx::DeInterlace { .. }
+            | PixelFx::NtscColors => 0.0,
+            // A crystal's, dot's or pane's point inside the object reaches out by up to its cell.
+            PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } | PixelFx::StainedGlass { cell, .. } => 1.5 * cell,
+            // A square whose centre is on the object is drawn whole.
+            PixelFx::Patchwork { square, .. } => square.max(1.0),
         }
     }
 
@@ -163,6 +248,15 @@ impl PixelFx {
             PixelFx::Mezzotint { .. } => Some(0.0),
             // The dots' points, and the softened colour around them.
             PixelFx::Pointillize { cell } => Some(2.5 * cell),
+            // The softened tones around the pixel.
+            PixelFx::Craquelure { spacing, .. } => Some(3.0 * texture::CONTOUR_SOFTNESS * spacing),
+            PixelFx::Grain { .. } | PixelFx::MosaicTiles { .. } | PixelFx::Texturizer { .. } => Some(0.0),
+            // The square's or pane's point, and the softened colour around it.
+            PixelFx::Patchwork { square, .. } => Some(2.0 * square.max(1.0)),
+            PixelFx::StainedGlass { cell, .. } => Some(2.5 * cell),
+            // The lines above and below.
+            PixelFx::DeInterlace { .. } => Some(video::MAX_LINE),
+            PixelFx::NtscColors => Some(0.0),
         }
     }
 
@@ -180,8 +274,24 @@ impl PixelFx {
             PixelFx::Crystallize { cell } => pixelate::crystallize(px, w, h, space, cell),
             PixelFx::Mezzotint { kind } => pixelate::mezzotint(px, w, h, space, kind),
             PixelFx::Pointillize { cell } => pixelate::pointillize(px, w, h, space, cell),
+            PixelFx::Craquelure { spacing, depth, brightness } => texture::craquelure(px, w, h, space, spacing, depth, brightness),
+            PixelFx::Grain { intensity, contrast, kind } => texture::grain(px, w, h, space, intensity, contrast, kind),
+            PixelFx::MosaicTiles { tile, grout, lighten } => texture::mosaic_tiles(px, w, h, space, tile, grout, lighten),
+            PixelFx::Patchwork { square, relief } => texture::patchwork(px, w, h, space, square, relief),
+            PixelFx::StainedGlass { cell, border, light } => texture::stained_glass(px, w, h, space, cell, border, light),
+            PixelFx::Texturizer { texture, scaling, relief, light, invert } => {
+                texture::texturizer(px, w, h, space, texture, scaling, relief, light, invert)
+            }
+            PixelFx::DeInterlace { even, interpolate } => video::deinterlace(px, w, h, space, even, interpolate),
+            PixelFx::NtscColors => video::ntsc(px),
         }
     }
+}
+
+/// The entry of `all` whose value in `table` (the same order) is `value`, any case; `default`
+/// otherwise.
+fn pick<T: Copy>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
+    table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| *t)
 }
 
 /// `data` as `w` × `h` RGBA pixels, `None` when it isn't that size (or is empty).

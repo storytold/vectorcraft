@@ -26,6 +26,9 @@ sync_github_name = false
 real_name = "Riccardo Balloch"
 sync_github_name = false
 
+[people.crqch]
+sync_github_name = true
+
 [people.mo0kid]
 sync_github_name = true
 

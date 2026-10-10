@@ -115,3 +115,31 @@ pub fn instance_art(art: &Node, inst: &Node) -> Node {
     }
     a
 }
+
+/// The solid colours of the fills and strokes under `nodes`, most used first (then in the order
+/// they first appear): the colours Brush Options offers as Hue Shift's key colour, the first being
+/// its default.
+pub fn art_colors<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Vec<Color> {
+    fn walk(n: &Node, seen: &mut std::collections::HashMap<String, (usize, usize, Color)>) {
+        for it in &n.appearance.items {
+            let (visible, paint) = match it {
+                AppearanceItem::Fill(f) => (f.visible, &f.paint),
+                AppearanceItem::Stroke(s) => (s.visible, &s.paint),
+            };
+            if let (true, Some(c)) = (visible, paint.color()) {
+                let order = seen.len();
+                seen.entry(c.to_hex()).or_insert((0, order, c)).0 += 1;
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, seen);
+        }
+    }
+    let mut seen = std::collections::HashMap::new();
+    for n in nodes {
+        walk(n, &mut seen);
+    }
+    let mut v: Vec<(usize, usize, Color)> = seen.into_values().collect();
+    v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    v.into_iter().map(|(.., c)| c).collect()
+}

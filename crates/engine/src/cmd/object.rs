@@ -196,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Shape Properties",
             [],
             None,
-            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n, polygonAngle?: degrees (counterclockwise from its first vertex straight up), polygonRadius?: pt (centre to vertex), sideLength?: pt (sets the radius), makeSidesEqual?: true (a polygon scaled unevenly: drops the uneven scale and shear, keeping its centre, angle and mean radius), pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared; the polygon params apply in that order: sides, makeSidesEqual, polygonAngle, then sideLength or else polygonRadius)",
+            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], items?: [{id, corners?: [i…]}] (several objects, each with its own corners, in place of ids and corners: the canvas's corner widgets across a selection), sides?: n, polygonAngle?: degrees (counterclockwise from its first vertex straight up), polygonRadius?: pt (centre to vertex), sideLength?: pt (sets the radius), makeSidesEqual?: true (a polygon scaled unevenly: drops the uneven scale and shear, keeping its centre, angle and mean radius), pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared; the polygon params apply in that order: sides, makeSidesEqual, polygonAngle, then sideLength or else polygonRadius)",
             has_selection,
             set_live_shape
         ),
@@ -1083,8 +1083,32 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
 }
 
 fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = targets(s, p)?;
-    let corners = corners_param(p)?;
+    // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
+    let items = match p.get("items").filter(|v| !v.is_null()) {
+        None => None,
+        Some(Value::Array(a)) => Some(
+            a.iter()
+                .map(|it| {
+                    let id = it
+                        .get("id")
+                        .and_then(Value::as_u64)
+                        .map(NodeId)
+                        .ok_or_else(|| bad("object.setLiveShape", format!("each of `items` is {{id, corners?}} with an object id, not {it}")))?;
+                    Ok((id, corners_param(it)?))
+                })
+                .collect::<Result<Vec<_>>>()?,
+        ),
+        Some(v) => return Err(bad("object.setLiveShape", format!("`items` must be an array of {{id, corners?}}, not {v}"))),
+    };
+    let ids = match &items {
+        Some(items) => items.iter().map(|(id, _)| *id).collect(),
+        None => targets(s, p)?,
+    };
+    let shared = corners_param(p)?;
+    let corners_of = |id: NodeId| match &items {
+        Some(items) => items.iter().find(|(i, _)| *i == id).and_then(|(_, c)| c.clone()),
+        None => shared.clone(),
+    };
     let kind = p
         .get("kind")
         .filter(|v| !v.is_null())
@@ -1154,6 +1178,7 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             let partial = sel.anchors.get_mut(id);
             // The corners to edit, the Direct-Selected ones and the anchor layout before the edit.
             let Some(c) = LiveCorners::new(path, live.as_ref()) else { continue };
+            let corners = corners_of(*id);
             let picked = match &corners {
                 Some(k) if k.last().is_some_and(|k| *k >= c.base.anchor_count()) => {
                     let n = c.base.anchor_count();

@@ -378,12 +378,6 @@ pub struct VectorcraftApp {
     /// The look for fonts installed or removed while the app was in the background, running
     /// ([`Self::refresh_installed_fonts`]): whether they were.
     font_check: Option<std::sync::mpsc::Receiver<bool>>,
-    /// The window came back to the front: check the active document's linked files next frame
-    /// ([`dialogs::missing_links::after_focus`]).
-    pub(crate) links_check: bool,
-    /// The changed linked files already offered for update (path, size and modification time), so
-    /// coming back to the window doesn't ask about the same change twice.
-    pub(crate) links_asked: std::collections::HashSet<dialogs::missing_links::FileStamp>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -481,8 +475,6 @@ impl VectorcraftApp {
             clipboard_probe: None,
             picks: picks::Picks::default(),
             font_check: None,
-            links_check: false,
-            links_asked: Default::default(),
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -764,6 +756,54 @@ impl VectorcraftApp {
         std::mem::take(&mut self.ime_discard)
     }
 
+    /// Linked files another app changed while their document is open: every two seconds, and as
+    /// soon as the window comes back to the front, stamp the active document's linked files on a
+    /// worker thread and act on the changed ones as Preferences › File Handling › Update Links
+    /// says ([`vectorcraft_engine::link_watch`]). No look starts while a dialog is open, so an
+    /// Ask When Modified question never goes unseen.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn tick_link_updates(&mut self, ctx: &egui::Context, now: f64) {
+        if let Some(r) = self.session.poll_link_scan() {
+            match r {
+                Ok(r) => {
+                    let n = |k: &str| r[k].as_array().map_or(0, Vec::len);
+                    if n("updated") > 0 {
+                        self.status(format!("Updated {} linked file(s) changed on disk", n("updated")));
+                    }
+                    if n("ask") > 0 {
+                        dialogs::missing_links::ask_update_changed(self, r["ask"].as_array().cloned().unwrap_or_default());
+                    }
+                    if n("modified") > 0 {
+                        self.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", n("modified")));
+                    }
+                }
+                Err(e) => self.status(e.to_string()),
+            }
+        }
+        let (last_key, focus_key) = (egui::Id::new("linkWatch.lastScan"), egui::Id::new("linkWatch.focused"));
+        let focused = ctx.input(|i| i.focused);
+        let was_focused: bool = ctx.data(|d| d.get_temp(focus_key)).unwrap_or(focused);
+        ctx.data_mut(|d| d.insert_temp(focus_key, focused));
+        if self.ui.dialog.is_some() || self.session.active().is_none() {
+            return;
+        }
+        let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);
+        if now - last >= 2.0 || (focused && !was_focused) {
+            // Walking the document's links costs a pass over it: only when a look is due.
+            // `start_link_scan` starts none for a document without links, which then doesn't
+            // wake the app for looks of its own (any frame still looks once one is due).
+            ctx.data_mut(|d| d.insert_temp(last_key, now));
+            self.session.start_link_scan();
+            let links = self.session.link_scan.is_some();
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new("linkWatch.links"), links));
+        }
+        if self.session.link_scan.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        } else if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("linkWatch.links"))).unwrap_or(false) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(2000));
+        }
+    }
+
     /// Show a transient status message.
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
@@ -896,11 +936,10 @@ impl VectorcraftApp {
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
         self.poll_font_check(ctx);
-        if std::mem::take(&mut self.links_check) {
-            dialogs::missing_links::after_focus(self);
-        }
         picks::poll(self, ctx);
         background::poll(self);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.tick_link_updates(ctx, now);
         if !self.background.jobs.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -1032,10 +1071,7 @@ impl VectorcraftApp {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
                 egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
-                egui::Event::WindowFocused(true) => {
-                    self.refresh_installed_fonts();
-                    self.links_check = true;
-                }
+                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(),
                 _ => {}
             }
         }

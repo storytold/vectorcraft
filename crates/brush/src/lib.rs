@@ -23,7 +23,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, Rect};
 
-pub use colorize::{colorize, instance_art, stain, tint_node};
+pub use colorize::{art_colors, colorize, instance_art, stain, tint_node};
 pub use defaults::defaults;
 pub use serde_json;
 
@@ -71,6 +71,15 @@ impl BrushKind {
             BrushKind::Bristle(_) => "bristle",
         }
     }
+    /// How the brush's art takes the stroke colour (Calligraphic and Bristle brushes paint with it).
+    pub fn colorization(&self) -> Colorization {
+        match self {
+            BrushKind::Art(a) => a.colorization,
+            BrushKind::Scatter(s) => s.colorization,
+            BrushKind::Pattern(p) => p.colorization,
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => Colorization::None,
+        }
+    }
 }
 
 /// How brush art takes the stroke colour.
@@ -86,6 +95,29 @@ pub enum Colorization {
     TintsAndShades,
     /// The key colour becomes the stroke colour; other colours rotate by the same hue offset.
     HueShift { key: vectorcraft_color::Color },
+}
+
+impl Colorization {
+    pub const IDS: [&'static str; 4] = ["none", "tints", "tintsAndShades", "hueShift"];
+    /// The name brush definitions use (`method`).
+    pub fn id(&self) -> &'static str {
+        match self {
+            Colorization::None => "none",
+            Colorization::Tints => "tints",
+            Colorization::TintsAndShades => "tintsAndShades",
+            Colorization::HueShift { .. } => "hueShift",
+        }
+    }
+    /// The method named `id` (`key`: the key colour of Hue Shift).
+    pub fn parse(id: &str, key: vectorcraft_color::Color) -> Option<Self> {
+        Some(match id {
+            "none" => Colorization::None,
+            "tints" => Colorization::Tints,
+            "tintsAndShades" => Colorization::TintsAndShades,
+            "hueShift" => Colorization::HueShift { key },
+            _ => return None,
+        })
+    }
 }
 
 /// Calligraphic brush: an elliptical nib swept along the path. Sizes are at 1 pt stroke weight
@@ -181,6 +213,12 @@ pub struct Scatter {
     /// Rotation relative to the path direction (else to the page).
     pub rotation_relative_to_path: bool,
     pub colorization: Colorization,
+    /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
+    /// first, Random any value between them, Pressure the first at the lightest pen pressure and
+    /// the second at the heaviest. `None` (brushes saved before there were modes): Random where
+    /// the two differ, else Fixed — see [`Scatter::modes`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<[Variation; 4]>,
 }
 
 impl Default for Scatter {
@@ -193,7 +231,22 @@ impl Default for Scatter {
             rotation: (0.0, 0.0),
             rotation_relative_to_path: false,
             colorization: Colorization::None,
+            modes: None,
         }
+    }
+}
+
+impl Scatter {
+    /// The ranges of size (%), spacing (%), scatter (%) and rotation (°).
+    pub const RANGES: [(f64, f64); 4] = [(1.0, 10000.0), (1.0, 10000.0), (-1000.0, 1000.0), (-180.0, 180.0)];
+
+    /// Size, spacing, scatter and rotation, each as its (first, second) values.
+    pub fn values(&self) -> [(f64, f64); 4] {
+        [self.size, self.spacing, self.scatter, self.rotation]
+    }
+    /// How size, spacing, scatter and rotation vary.
+    pub fn modes(&self) -> [Variation; 4] {
+        self.modes.unwrap_or_else(|| self.values().map(|(a, b)| if a != b { Variation::Random } else { Variation::Fixed }))
     }
 }
 
@@ -234,6 +287,11 @@ pub struct ArtBrush {
     pub flip_along: bool,
     pub flip_across: bool,
     pub colorization: Colorization,
+}
+
+impl ArtBrush {
+    /// The range of the width (%).
+    pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
 }
 
 impl Default for ArtBrush {
@@ -284,6 +342,12 @@ pub struct PatternBrush {
     pub flip_along: bool,
     pub flip_across: bool,
     pub colorization: Colorization,
+}
+
+impl PatternBrush {
+    /// The ranges of the scale and of the spacing (%).
+    pub const SCALE_RANGE: (f64, f64) = (1.0, 10000.0);
+    pub const SPACING_RANGE: (f64, f64) = (0.0, 10000.0);
 }
 
 impl Default for PatternBrush {
@@ -340,9 +404,101 @@ pub struct Bristle {
     pub stiffness: f64,
 }
 
+impl Bristle {
+    /// The ranges of the size (pt), the bristle length (%) and the other percentages.
+    pub const SIZE_RANGE: (f64, f64) = (0.1, 1296.0);
+    pub const LENGTH_RANGE: (f64, f64) = (25.0, 300.0);
+    pub const PERCENT_RANGE: (f64, f64) = (1.0, 100.0);
+}
+
 impl Default for Bristle {
     fn default() -> Self {
         Self { shape: BristleShape::RoundPoint, size: 6.0, length: 100.0, density: 50.0, thickness: 40.0, opacity: 75.0, stiffness: 50.0 }
+    }
+}
+
+// ---------- validation ----------
+
+/// `v` within `(lo, hi)`; `fallback` (kept within too) when it isn't a number.
+fn within(v: f64, (lo, hi): (f64, f64), fallback: f64) -> f64 {
+    if v.is_finite() { v.clamp(lo, hi) } else { fallback.clamp(lo, hi) }
+}
+
+fn within_pair((a, b): (f64, f64), range: (f64, f64), fallback: f64) -> (f64, f64) {
+    (within(a, range, fallback), within(b, range, fallback))
+}
+
+impl Colorization {
+    /// A Hue Shift key colour that isn't a colour (components out of reach) becomes black.
+    fn sanitize(&mut self) {
+        if let Colorization::HueShift { key } = self
+            && !key.to_rgb().iter().all(|c| c.is_finite())
+        {
+            *key = vectorcraft_color::Color::BLACK;
+        }
+    }
+}
+
+impl Brush {
+    /// The art the brush is made of: a scatter or art brush's art, a pattern brush's tiles.
+    pub fn art(&self) -> Vec<&Node> {
+        match &self.kind {
+            BrushKind::Scatter(s) => vec![&s.art],
+            BrushKind::Art(a) => vec![&a.art],
+            BrushKind::Pattern(p) => {
+                std::iter::once(&p.side).chain([&p.outer_corner, &p.inner_corner, &p.start, &p.end].into_iter().flatten()).collect()
+            }
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+        }
+    }
+
+    /// Keep every value of the definition within its range (definitions come from files and
+    /// commands, so they are untrusted): numbers are clamped, non-numbers take the default.
+    pub fn sanitize(&mut self) {
+        match &mut self.kind {
+            BrushKind::Calligraphic(c) => {
+                let d = Calligraphic::default();
+                let [angle, roundness, size] = Calligraphic::RANGES;
+                c.angle = within(c.angle, angle, d.angle);
+                c.roundness = within(c.roundness, roundness, d.roundness);
+                c.size = within(c.size, size, d.size);
+                for (v, max) in c.variation.iter_mut().zip(Calligraphic::MAX_VARIATION) {
+                    *v = within(*v, (0.0, max), 0.0);
+                }
+            }
+            BrushKind::Scatter(s) => {
+                let d = Scatter::default();
+                let [size, spacing, scatter, rotation] = Scatter::RANGES;
+                s.size = within_pair(s.size, size, d.size.0);
+                s.spacing = within_pair(s.spacing, spacing, d.spacing.0);
+                s.scatter = within_pair(s.scatter, scatter, 0.0);
+                s.rotation = within_pair(s.rotation, rotation, 0.0);
+                s.colorization.sanitize();
+            }
+            BrushKind::Art(a) => {
+                a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
+                if let ArtScale::BetweenGuides { start, end } = &mut a.scale {
+                    *start = within(*start, (0.0, 1.0), 0.0);
+                    *end = within(*end, (0.0, 1.0), 1.0);
+                }
+                a.colorization.sanitize();
+            }
+            BrushKind::Pattern(p) => {
+                p.scale = within(p.scale, PatternBrush::SCALE_RANGE, 100.0);
+                p.spacing = within(p.spacing, PatternBrush::SPACING_RANGE, 0.0);
+                p.colorization.sanitize();
+            }
+            BrushKind::Bristle(b) => {
+                let d = Bristle::default();
+                b.size = within(b.size, Bristle::SIZE_RANGE, d.size);
+                b.length = within(b.length, Bristle::LENGTH_RANGE, d.length);
+                for (v, fallback) in
+                    [(&mut b.density, d.density), (&mut b.thickness, d.thickness), (&mut b.opacity, d.opacity), (&mut b.stiffness, d.stiffness)]
+                {
+                    *v = within(*v, Bristle::PERCENT_RANGE, fallback);
+                }
+            }
+        }
     }
 }
 
@@ -356,9 +512,15 @@ pub fn library(doc: &Document) -> Vec<Brush> {
     }
 }
 
-/// Parse a stored library value (malformed entries are skipped).
+/// Parse a stored library value (malformed entries are skipped, values kept within their
+/// ranges — see [`Brush::sanitize`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    v.as_array().map(|a| a.iter().filter_map(|b| serde_json::from_value(b.clone()).ok()).collect()).unwrap_or_default()
+    let parse = |b: &serde_json::Value| {
+        let mut b: Brush = serde_json::from_value(b.clone()).ok()?;
+        b.sanitize();
+        Some(b)
+    };
+    v.as_array().map(|a| a.iter().filter_map(parse).collect()).unwrap_or_default()
 }
 
 /// Store `lib` as the document's brush library.
@@ -404,15 +566,10 @@ pub fn stroke_pieces(brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<N
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
         BrushKind::Art(a) => warp::art(a, bp, w),
-        BrushKind::Scatter(s) => warp::scatter(s, bp, w, &brush.name),
+        BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke.pressure.as_ref(), &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };
-    let colorization = match &brush.kind {
-        BrushKind::Art(a) => a.colorization,
-        BrushKind::Scatter(s) => s.colorization,
-        BrushKind::Pattern(p) => p.colorization,
-        _ => Colorization::None,
-    };
+    let colorization = brush.kind.colorization();
     for n in &mut out {
         colorize(n, colorization, &stroke.paint);
     }

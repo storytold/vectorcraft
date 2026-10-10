@@ -33,7 +33,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             match tab {
                 1 => {
                     ui.set_width(660.0);
-                    crate::credits::contributors_ui(ui);
+                    crate::credits::contributors_ui(app, ui);
                 }
                 2 => {
                     ui.set_width(660.0);

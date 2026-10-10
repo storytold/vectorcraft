@@ -89,7 +89,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if group.is_empty() {
                 continue;
             }
-            let has_options = brush_options::TYPES.contains(&ty);
             let row = |ui: &mut Ui, name: &str, size: egui::Vec2, label: bool| -> egui::Response {
                 let (r, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
                 // Dragged onto a path, the brush is applied to it.
@@ -121,7 +120,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             };
             // A click applies the brush; the second click of a double-click opens its options.
             let mut pick = |resp: egui::Response, name: &String| {
-                if resp.double_clicked() && has_options {
+                if resp.double_clicked() {
                     options = Some(name.clone());
                 } else if resp.clicked() {
                     clicked = Some(name.clone());

@@ -574,6 +574,14 @@ impl Tool for DirectSelectionTool {
                         }
                     }
                 });
+                // Objects without anchors to pick (type, images, symbols…) are selected whole when
+                // the marquee touches them, as with the Selection tool (#927).
+                for id in vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true) {
+                    let whole = cx.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
+                    if whole && !sel.iter().any(|(s, _)| *s == id) {
+                        sel.push((id, vec![]));
+                    }
+                }
                 sel.retain(|(id, _)| cx.doc.is_editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
                 vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}))]
@@ -838,6 +846,28 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
     }
+    /// #927: a marquee across type selects the type object whole, beside the anchors it holds.
+    #[test]
+    fn marquee_selects_type_it_touches() {
+        // The rectangle at (100, 100)–(200, 200) and area type at (300, 300).
+        let (d, text) = doc_with_area_type();
+        let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        // From empty canvas across the type to inside the rectangle (its bottom-right corner).
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 450.0, 450.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
+        let items = json!([{"id": rect.0, "anchors": [[0, 2]]}, {"id": text.0, "anchors": []}]);
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))]);
+        // Away from the type, only anchors.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": rect.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
+    }
+
     /// Shift-drag a marquee: the anchors inside toggle (#483), with Group Selection too.
     #[test]
     fn shift_marquee_toggles_anchors() {

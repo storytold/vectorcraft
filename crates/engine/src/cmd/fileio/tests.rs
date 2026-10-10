@@ -157,7 +157,11 @@ fn open_exts_cover_every_readable_format() {
     }
     let filters: Vec<_> = open_filters().collect();
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
-    assert_eq!(filters.len(), 6 + FORMATS.iter().filter(|f| f.read).count(), "and swatch libraries, flattener, PDF and print presets, plug-ins");
+    assert_eq!(
+        filters.len(),
+        7 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF and print presets, plug-ins"
+    );
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
 

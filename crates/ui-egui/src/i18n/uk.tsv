@@ -1580,6 +1580,37 @@
 	New Bristle Brush	Новий щетинний пензель
 	Calligraphic Brush Options	Параметри каліграфічного пензля
 	Bristle Brush Options	Параметри щетинного пензля
+	Scatter Brush Options	Параметри пензля-розпорошення
+	Art Brush Options	Параметри художнього пензля
+	Pattern Brush Options	Параметри візерункового пензля
+	Scatter:	Розсіювання:
+	Rotation:	Поворот:
+	Rotation relative to:	Поворот відносно:
+	Brush Scale Options	Параметри масштабування пензля
+	Scale Proportionately	Масштабувати пропорційно
+	Stretch to Fit Stroke Length	Розтягнути за довжиною обведення
+	Stretch Between Guides	Розтягнути між напрямними
+	Start:	Початок:
+	End:	Кінець:
+	Left to Right	Зліва направо
+	Right to Left	Справа наліво
+	Top to Bottom	Згори вниз
+	Bottom to Top	Знизу вгору
+	Flip:	Відобразити:
+	Outer Corner Tile	Фрагмент зовнішнього кута
+	Side Tile	Бічний фрагмент
+	Inner Corner Tile	Фрагмент внутрішнього кута
+	Start Tile	Початковий фрагмент
+	End Tile	Кінцевий фрагмент
+	Fit	Припасування
+	Stretch to fit	Розтягнути для припасування
+	Add space to fit	Додати інтервали для припасування
+	Approximate path	Наблизити до контуру
+	Colorization	Перефарбування
+	Tints	Відтінки
+	Tints and Shades	Відтінки й тіні
+	Hue Shift	Зсув тону
+	Key Color:	Ключовий колір:
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
@@ -2752,6 +2783,23 @@
 	Add to Library	Додати до бібліотеки
 	Delete Library	Видалити бібліотеку
 	Delete Library Item	Видалити елемент бібліотеки
+	No results	Нічого не знайдено
+	No items in this library match “{query}”.	У цій бібліотеці немає елементів, що відповідають «{query}».
+	Right-click an item to move it into this group.	Клацніть елемент правою кнопкою миші, щоб перемістити його в цю групу.
+	New Group	Нова група
+	New Group…	Нова група…
+	Move to Group	Перемістити в групу
+	No Group	Без групи
+	Rename Group…	Перейменувати групу…
+	Delete Group	Видалити групу
+	Import Library…	Імпортувати бібліотеку…
+	Export Library…	Експортувати бібліотеку…
+	Import Library	Імпортувати бібліотеку
+	Export Library	Експортувати бібліотеку
+	New Library Group	Нова група бібліотеки
+	Rename Library Group	Перейменувати групу бібліотеки
+	Delete Library Group	Видалити групу бібліотеки
+	Move Library Item to Group	Перемістити елемент бібліотеки в групу
 	Library	Бібліотека
 	Rename Library	Перейменувати бібліотеку
 	Show Library	Показати бібліотеку
@@ -2947,6 +2995,7 @@
 	Untitled	Без назви
 	Update Link	Оновити зв’язок
 	Update Links	Оновити зв’язки
+	Update Changed Links	Оновити змінені зв’язки
 	Update Modified Links	Оновити змінені зв’язки
 	Updated {} image(s)	Оновлено зображень: {}
 	UPPERCASE	ВЕЛИКІ ЛІТЕРИ
@@ -3082,6 +3131,7 @@
 	{count} linked file(s) not found	не знайдено пов’язаних файлів: {count}
 	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	пов’язані зображення ({count}) змінилися з моменту збереження цього документа. Показати нові версії?
+	{count} linked image(s) changed on disk. Show the new versions?	пов’язані зображення ({count}) змінилися на диску. Показати нові версії?
 	{count} more rules: Export writes every one.	ще правил: {count}: експорт записує все.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	пропущено об’єкти без імені: {count}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.
 	{effect} is already applied	{effect} вже застосований
@@ -3468,7 +3518,6 @@ axis	Both	Обидві
 @msg	no bounds	немає кордонів
 @msg	no brush named `{name}`	немає пензля з ім’ям `{name}`
 @msg	no brush selected	пензель не вибрано
-@msg	this kind of brush has no options dialog yet	пензель цього типу ще не має вікна параметрів
 @msg	no catalog	немає каталогу
 @msg	no changes since the last save	немає змін з моменту останнього збереження
 @msg	no clock to keep a heartbeat by	немає годинника для підтримки сигналу
@@ -3724,6 +3773,7 @@ axis	Both	Обидві
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
+@msg	Updated {_1} linked file(s) changed on disk	Оновлено пов’язаних файлів, змінених на диску: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: не збережено, тому не закрито
 @msg	{bpp}-bit bitmaps can't be read	растрові зображення з глибиною {bpp} біт не читаються
 @msg	{command} didn't create an object	{command} не створив об’єкт
@@ -3860,3 +3910,57 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+	Video	Відео
+	De-Interlace…	Усунення черезрядковості…
+	De-Interlace	Усунення черезрядковості
+	NTSC Colors	Кольори NTSC
+	Eliminate	Вилучити
+	Create New Fields by	Створити нові поля
+	Odd Fields	Непарні поля
+	Even Fields	Парні поля
+	Duplication	Дублюванням
+	Interpolation	Інтерполяцією
+@msg	Imported library {name}	Імпортовано бібліотеку {name}
+	RGB:	RGB:
+	CMYK:	CMYK:
+	Texture	Текстура
+	Craquelure…	Кракелюри…
+	Grain…	Зерно…
+	Mosaic Tiles…	Мозаїчні фрагменти…
+	Patchwork…	Клаптикова плитка…
+	Stained Glass…	Вітраж…
+	Texturizer…	Текстуризатор…
+	Craquelure	Кракелюри
+	Grain	Зерно
+	Mosaic Tiles	Мозаїчні фрагменти
+	Patchwork	Клаптикова плитка
+	Stained Glass	Вітраж
+	Texturizer	Текстуризатор
+	Crack Spacing	Інтервал тріщин
+	Crack Depth	Глибина тріщин
+	Crack Brightness	Яскравість тріщин
+	Intensity	Інтенсивність
+	Grain Type	Тип зерна
+	Tile Size	Розмір фрагментів
+	Grout Width	Ширина швів
+	Lighten Grout	Освітлення швів
+	Square Size	Розмір квадратів
+	Relief	Рельєф
+	Border Thickness	Товщина меж
+	Light Intensity	Інтенсивність світла
+	Light Direction	Напрямок світла
+	Sprinkles	Бризки
+	Clumped	Грудки
+	Contrasty	Контрастне
+	Enlarged	Збільшене
+	Stippled	Пунктир
+	Speckle	Цятки
+	Brick	Цегла
+	Burlap	Мішковина
+	Canvas	Полотно
+	Sandstone	Пісковик
+	Bottom Left	Знизу ліворуч
+	Top Left	Вгорі ліворуч
+	Top Right	Вгорі праворуч
+	Bottom Right	Знизу праворуч
+	Edge	Край

@@ -10,6 +10,7 @@ pub mod cmd;
 pub mod file_access;
 pub mod guard;
 pub mod inspect;
+pub mod link_watch;
 pub mod steps;
 mod tooling;
 pub mod units;
@@ -884,6 +885,11 @@ pub struct Session {
     /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
     /// it.
     pub search_threads: Option<usize>,
+    /// Each open document's linked files' size and modification time when last seen (linked
+    /// files changing while the document is open, [`link_watch`]).
+    pub link_stamps: std::collections::HashMap<(u64, String), link_watch::Stamp>,
+    /// The stamps being taken on a worker thread ([`Session::start_link_scan`]).
+    pub link_scan: Option<link_watch::LinkScan>,
 }
 
 impl Default for Session {
@@ -939,6 +945,8 @@ impl Session {
             font_search: None,
             search_rules: None,
             search_threads: None,
+            link_stamps: Default::default(),
+            link_scan: None,
         }
     }
 
@@ -1516,6 +1524,8 @@ mod tests_linked_stops;
 mod tests_links;
 #[cfg(test)]
 mod tests_linkspanel;
+#[cfg(test)]
+mod tests_linkwatch;
 #[cfg(test)]
 mod tests_liquify;
 #[cfg(test)]

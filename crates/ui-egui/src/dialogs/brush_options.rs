@@ -1,10 +1,12 @@
 //! Brush Options (double-click a brush in the Brushes panel, or the panel menu's Brush Options…).
 //! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random or
 //! Pressure with its Variation, over live previews of the nib and of a stroke (light, heavy, light
-//! pressure). Bristle Brush Options: Name, Shape and the bristle sliders. OK runs `brush.options`
-//! (strokes painted with the brush update); a name another brush has keeps the dialog open.
+//! pressure). Bristle Brush Options: Name, Shape and the bristle sliders. Scatter, Art and Pattern
+//! Brush Options: see [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with
+//! the brush update); a name another brush has keeps the dialog open.
 //!
-//! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle`), `name`.
+//! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle` | `scatter` | `art` |
+//! `pattern`), `name`.
 //! Calligraphic: `angle` (−180..180°), `roundness` (0..100 %), `size` (0..1296 pt), and per value
 //! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure`) and
 //! `angleVariation`, `roundnessVariation`, `sizeVariation`. Bristle: `shape` (`roundPoint`…),
@@ -12,10 +14,10 @@
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
-use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Variation};
+use vectorcraft_brush::{Bristle, Brush, BrushKind, Calligraphic, Variation};
 
 use super::swatch_options::{grid, label};
-use super::{DialogSpec, form};
+use super::{DialogSpec, brush_art_options, form};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -25,19 +27,16 @@ pub const KIND: &str = "brushOptions";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 440.0, ..DialogSpec::FORM };
 
-/// The brush types that have an options dialog.
-pub const TYPES: [&str; 2] = ["calligraphic", "bristle"];
-
 /// Calligraphic values: (field, label, suffix, decimals), in [`Calligraphic::RANGES`] order.
 const CALLI: [(&str, &str, &str, usize); 3] = [("angle", "Angle:", "°", 0), ("roundness", "Roundness:", "%", 0), ("size", "Size:", " pt", 1)];
 
-/// Bristle sliders: (field, label, min, max), in percent.
-const BRISTLE: [(&str, &str, f64, f64); 5] = [
-    ("length", "Bristle Length:", 25.0, 300.0),
-    ("density", "Bristle Density:", 1.0, 100.0),
-    ("thickness", "Bristle Thickness:", 1.0, 100.0),
-    ("opacity", "Paint Opacity:", 1.0, 100.0),
-    ("stiffness", "Stiffness:", 1.0, 100.0),
+/// Bristle sliders: (field, label, range), in percent.
+const BRISTLE: [(&str, &str, (f64, f64)); 5] = [
+    ("length", "Bristle Length:", Bristle::LENGTH_RANGE),
+    ("density", "Bristle Density:", Bristle::PERCENT_RANGE),
+    ("thickness", "Bristle Thickness:", Bristle::PERCENT_RANGE),
+    ("opacity", "Paint Opacity:", Bristle::PERCENT_RANGE),
+    ("stiffness", "Stiffness:", Bristle::PERCENT_RANGE),
 ];
 
 /// Bristle tip shapes: (value, label).
@@ -64,11 +63,12 @@ const STROKE_W: f32 = 400.0;
 fn heading(d: &Dialog) -> String {
     match d.str("__type").as_str() {
         "bristle" => tl!("Bristle Brush Options").into(),
-        _ => tl!("Calligraphic Brush Options").into(),
+        "calligraphic" => tl!("Calligraphic Brush Options").into(),
+        ty => brush_art_options::heading(ty).into(),
     }
 }
 
-fn mode_key(key: &str) -> String {
+pub(super) fn mode_key(key: &str) -> String {
     format!("{key}Mode")
 }
 
@@ -83,7 +83,7 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
         None => target(app).ok_or("no brush selected")?,
     };
     let def = app.run("brush.get", json!({ "name": name }))?;
-    let b: Brush = serde_json::from_value(def).map_err(|e| e.to_string())?;
+    let b: Brush = serde_json::from_value(def.clone()).map_err(|e| e.to_string())?;
     let mut f = Map::new();
     f.insert("__brush".into(), json!(b.name));
     f.insert("name".into(), json!(b.name));
@@ -104,16 +104,17 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
                 f.insert(key.into(), v.get(key).cloned().unwrap_or(Value::Null));
             }
         }
-        _ => return Err("this kind of brush has no options dialog yet".into()),
+        // The definition goes along, for the preview (and the art it carries).
+        BrushKind::Scatter(_) | BrushKind::Art(_) | BrushKind::Pattern(_) => brush_art_options::fields(&b, def, &mut f),
     }
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
     Ok(Value::Null)
 }
 
-/// Can Brush Options open without a name (its brush has a type with a dialog)?
+/// Can Brush Options open without a name (the selected path's brush, else the current one, exists)?
 pub fn available(app: &VectorcraftApp) -> bool {
     let Some(st) = app.session.active() else { return false };
-    target(app).and_then(|n| vectorcraft_brush::find(&st.doc, &n)).is_some_and(|b| TYPES.contains(&b.kind.type_id()))
+    target(app).is_some_and(|n| vectorcraft_brush::find(&st.doc, &n).is_some())
 }
 
 /// The brush Brush Options opens on without a name: the selected path's brush, else the current one.
@@ -124,7 +125,7 @@ fn target(app: &VectorcraftApp) -> Option<String> {
 }
 
 /// The value of field `key` within `range`.
-fn clamped(d: &Dialog, key: &str, (lo, hi): (f64, f64)) -> f64 {
+pub(super) fn clamped(d: &Dialog, key: &str, (lo, hi): (f64, f64)) -> f64 {
     d.f64(key, lo).clamp(lo, hi)
 }
 
@@ -141,13 +142,14 @@ fn calligraphic(d: &Dialog) -> Calligraphic {
 fn params(d: &Dialog) -> Value {
     match d.str("__type").as_str() {
         "bristle" => {
-            let mut p = json!({ "shape": d.str("shape"), "size": clamped(d, "size", (0.1, 1296.0)) });
-            for (key, _, lo, hi) in BRISTLE {
-                p[key] = json!(clamped(d, key, (lo, hi)));
+            let mut p = json!({ "shape": d.str("shape"), "size": clamped(d, "size", Bristle::SIZE_RANGE) });
+            for (key, _, range) in BRISTLE {
+                p[key] = json!(clamped(d, key, range));
             }
             p
         }
-        _ => serde_json::to_value(calligraphic(d)).unwrap_or_default(),
+        "calligraphic" => serde_json::to_value(calligraphic(d)).unwrap_or_default(),
+        _ => brush_art_options::params(d),
     }
 }
 
@@ -160,7 +162,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(10.0);
     match d.str("__type").as_str() {
         "bristle" => bristle_body(app, ui, d),
-        _ => calligraphic_body(ui, d),
+        "calligraphic" => calligraphic_body(ui, d),
+        _ => brush_art_options::body(ui, d),
     }
     false
 }
@@ -203,7 +206,7 @@ fn bristle_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         form::length(ui, d, "size", app.session.general_unit(), 80.0);
     });
     let rail = Tokens::get(ui.ctx()).input_border;
-    for (key, text, lo, hi) in BRISTLE {
+    for (key, text, (lo, hi)) in BRISTLE {
         widgets::label_row(ui, tl!(text), LABEL_W, |ui| form::slider_field(ui, d, key, lo..=hi, "%", &|_| rail));
     }
     ui.add_space(8.0);
@@ -212,7 +215,7 @@ fn bristle_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// A stroke painted with the brush the fields describe (type `ty`, definition fields `def`).
-fn stroke_preview(ui: &mut egui::Ui, ty: &str, mut def: Value, size: egui::Vec2) {
+pub(super) fn stroke_preview(ui: &mut egui::Ui, ty: &str, mut def: Value, size: egui::Vec2) {
     def["name"] = json!("preview");
     def["type"] = json!(ty);
     let (r, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -325,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn bristle_options_and_brushes_without_a_dialog() {
+    fn bristle_options_and_an_unknown_brush() {
         let mut app = app();
         app.run("ui.brushOptions", json!({"name": "Bristle Round"})).unwrap();
         let text = shown(&mut app);
@@ -336,9 +339,158 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         let def = app.run("brush.get", json!({"name": "Bristle Round"})).unwrap();
         assert_eq!((def["shape"].clone(), def["density"].clone(), def["length"].clone()), (json!("flatFan"), json!(1.0), json!(120.0)));
-        // Art, scatter and pattern brushes have no dialog yet: an error, nothing opens.
-        assert!(app.run("ui.brushOptions", json!({"name": "Arrow"})).is_err());
-        assert!(app.ui.dialog.is_none());
+        // No such brush: an error, nothing opens.
+        app.ui.dialog = None;
         assert!(app.run("ui.brushOptions", json!({"name": "Nope"})).is_err());
+        assert!(app.ui.dialog.is_none());
+    }
+
+    /// A path painted with brush `name`, and the height of the art its stroke draws.
+    fn brushed(app: &mut VectorcraftApp, name: &str) -> (vectorcraft_doc::NodeId, f64) {
+        let id = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 280, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        app.run("brush.apply", json!({ "name": name, "ids": [id.0] })).unwrap();
+        (id, drawn_height(app, id))
+    }
+
+    fn drawn_height(app: &VectorcraftApp, id: vectorcraft_doc::NodeId) -> f64 {
+        let st = app.session.active().unwrap();
+        let pieces = vectorcraft_brush::node_pieces(&st.doc, st.doc.node(id).unwrap()).unwrap();
+        vectorcraft_brush::pieces_bounds(&pieces).unwrap().height()
+    }
+
+    #[test]
+    fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
+        let mut app = app();
+        let (id, before) = brushed(&mut app, "Confetti");
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        let text = shown(&mut app);
+        for label in [
+            "Scatter Brush Options",
+            "Name:",
+            "Size:",
+            "Spacing:",
+            "Scatter:",
+            "Rotation:",
+            "Random",
+            "Rotation relative to:",
+            "Page",
+            "Colorization",
+            "Method:",
+            "Tints",
+            "Key Color:",
+        ] {
+            assert!(text.contains(label), "{label} in {text}");
+        }
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.f64("sizeMin", 0.0), d.f64("sizeMax", 0.0), d.str("sizeMode")), (60.0, 140.0, "random".into()));
+        assert_eq!((d.str("rotationRelativeTo"), d.str("colorization")), ("page".into(), "tints".into()));
+        // Values are kept within their ranges (rotation here); Fixed takes the first value.
+        set(
+            &mut app,
+            json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift"}),
+        );
+        assert!(shown(&mut app).contains("Hue Shift"));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let def = app.run("brush.get", json!({"name": "Confetti"})).unwrap();
+        assert_eq!(
+            (&def["size"], &def["rotation"][0], &def["modes"]),
+            (&json!([5000.0, 140.0]), &json!(-180.0), &json!(["fixed", "pressure", "random", "random"]))
+        );
+        assert_eq!((&def["rotation_relative_to_path"], &def["colorization"]["method"]), (&json!(true), &json!("hueShift")));
+        assert!(def["colorization"]["key"].is_object(), "the art's colour as the key: {def}");
+        assert!(drawn_height(&app, id) > before, "the stroke redraws with the bigger confetti");
+        // Opened again, it shows what was set.
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("sizeMode"), d.str("spacingMode"), d.str("colorization")), ("fixed".into(), "pressure".into(), "hueShift".into()));
+    }
+
+    #[test]
+    fn art_options_set_width_scale_direction_flips_and_colorization() {
+        let mut app = app();
+        let (id, before) = brushed(&mut app, "Arrow");
+        app.run("ui.brushOptions", json!({"name": "Arrow"})).unwrap();
+        let text = shown(&mut app);
+        for label in [
+            "Art Brush Options",
+            "Width:",
+            "Brush Scale Options",
+            "Scale Proportionately",
+            "Stretch to Fit Stroke Length",
+            "Stretch Between Guides",
+            "Start:",
+            "End:",
+            "Direction:",
+            "Flip Along",
+            "Flip Across",
+            "Colorization",
+        ] {
+            assert!(text.contains(label), "{label} in {text}");
+        }
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(
+            (d.f64("width", 0.0), d.str("scaleMode"), d.f64("guideEnd", 0.0), d.str("direction")),
+            (100.0, "betweenGuides".into(), 78.0, "leftToRight".into())
+        );
+        set(
+            &mut app,
+            json!({"width": 250, "guideStart": 10, "guideEnd": 140, "direction": "bottomToTop", "flipAcross": true, "colorization": "none"}),
+        );
+        super::super::confirm(&mut app).unwrap();
+        let def = app.run("brush.get", json!({"name": "Arrow"})).unwrap();
+        assert_eq!(
+            (&def["width"], &def["scale"], &def["direction"]),
+            (&json!(250.0), &json!({"mode": "betweenGuides", "start": 0.1, "end": 1.0}), &json!("bottomToTop"))
+        );
+        assert_eq!((&def["flip_across"], &def["flip_along"], &def["colorization"]), (&json!(true), &json!(false), &json!({"method": "none"})));
+        assert!(drawn_height(&app, id) != before, "the stroke redraws");
+        // Stretch to Fit drops the guides.
+        app.run("ui.brushOptions", json!({"name": "Arrow"})).unwrap();
+        set(&mut app, json!({"scaleMode": "stretch"}));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.run("brush.get", json!({"name": "Arrow"})).unwrap()["scale"], json!({"mode": "stretch"}));
+    }
+
+    #[test]
+    fn pattern_options_show_the_tiles_and_set_scale_spacing_fit() {
+        let mut app = app();
+        app.run("ui.brushOptions", json!({"name": "Chain"})).unwrap();
+        let text = shown(&mut app);
+        for label in [
+            "Pattern Brush Options",
+            "Scale:",
+            "Spacing:",
+            "Outer Corner Tile",
+            "Side Tile",
+            "Inner Corner Tile",
+            "Start Tile",
+            "End Tile",
+            "None",
+            "Fit",
+            "Stretch to fit",
+            "Add space to fit",
+            "Approximate path",
+            "Flip Along",
+        ] {
+            assert!(text.contains(label), "{label} in {text}");
+        }
+        let d = app.ui.dialog.as_ref().unwrap();
+        let mut tiles: Vec<&String> = d.fields["__tiles"].as_object().unwrap().keys().collect();
+        tiles.sort();
+        assert_eq!(tiles, ["innerCorner", "outerCorner", "side"], "Chain has side and corner tiles, no start or end");
+        // Diamonds (straight-edged tiles, so sizes compare exactly).
+        let (id, before) = brushed(&mut app, "Diamonds");
+        app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+        assert_eq!((app.ui.dialog.as_ref().unwrap().f64("spacing", 0.0), app.ui.dialog.as_ref().unwrap().str("fit")), (25.0, "addSpace".into()));
+        set(&mut app, json!({"scale": 200, "spacing": 30, "fit": "approximate", "flipAlong": true}));
+        super::super::confirm(&mut app).unwrap();
+        let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+        assert_eq!(
+            (&def["scale"], &def["spacing"], &def["fit"], &def["flip_along"]),
+            (&json!(200.0), &json!(30.0), &json!("approximate"), &json!(true))
+        );
+        assert!((drawn_height(&app, id) / before - 2.0).abs() < 1e-6, "tiles twice the size");
     }
 }

@@ -4,7 +4,10 @@
 //! live for the session only. A graphic is kept as a native document with a PNG thumbnail: adding
 //! one copies the selection as Copy does, and placing it pastes a copy as Paste does (its images,
 //! symbols, patterns and swatches come along; a swatch name the document gives another colour is
-//! merged into the document's).
+//! merged into the document's). Items can be put in user-named groups, and a library can be
+//! exported to a `.vclibrary` file and imported from one (#926).
+
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -16,10 +19,20 @@ use crate::Clipboard;
 
 /// The extension of a library file.
 pub const LIBRARY_EXT: &str = "vclibrary";
+/// The extensions of library files (open dialogs).
+pub const LIBRARY_EXTS: &[&str] = &[LIBRARY_EXT];
 /// Bytes a library file may have when read (graphics with large images included).
 const MAX_FILE: u64 = 512 << 20;
 /// Items of one kind a library may hold.
 const MAX_ITEMS: usize = 10_000;
+/// Groups a library may hold.
+const MAX_GROUPS: usize = 1_000;
+/// Characters of a library, group or item name kept from a file.
+const MAX_NAME: usize = 256;
+/// Base64 bytes a graphic's thumbnail may have (a 256-pixel PNG is far smaller).
+const MAX_THUMBNAIL: usize = 4 << 20;
+/// Pixels a side a thumbnail may claim (they are made at most 256).
+const MAX_THUMBNAIL_SIDE: u32 = 1024;
 
 /// A library: its name and its items, newest last.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -34,6 +47,38 @@ pub struct Library {
     pub para_styles: Vec<TextStyleDef>,
     #[serde(default)]
     pub graphics: Vec<LibraryGraphic>,
+    /// User-named groups of its items, in the order they were made (#926); an item is in one
+    /// group at most, the others are ungrouped. Files written before groups have none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<LibraryGroup>,
+}
+
+/// A user-named group of a library's items.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LibraryGroup {
+    pub name: String,
+    #[serde(default)]
+    pub items: Vec<ItemRef>,
+}
+
+/// A library item: its kind and its key (its name; a graphic's id).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ItemRef {
+    pub kind: ItemKind,
+    pub item: String,
+}
+
+/// What a library item is, as groups name it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ItemKind {
+    Color,
+    CharStyle,
+    ParaStyle,
+    Graphic,
+    /// A kind this version doesn't know (a newer one wrote it): dropped when the file is read.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -87,7 +132,7 @@ impl Libraries {
                 })
                 .and_then(|b| serde_json::from_slice::<Library>(&b).ok());
                 if let Some(mut lib) = lib {
-                    lib.cap();
+                    lib.sanitize();
                     self.libs.push((id, lib));
                 }
             }
@@ -120,12 +165,15 @@ impl Libraries {
 
     /// A new empty library called `name` → its id.
     fn create(&mut self, name: &str) -> Result<String> {
-        let base: String = name.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '-' }).collect();
-        let base = base.trim();
-        let base = if base.is_empty() { "Library" } else { base };
+        self.insert(Library { name: name.to_string(), ..Default::default() })
+    }
+
+    /// `lib` as a new library, its file named after it, made the current one → its id.
+    fn insert(&mut self, lib: Library) -> Result<String> {
+        let base = file_stem_for(&lib.name);
         let taken = |id: &str| self.libs.iter().any(|(i, _)| i.eq_ignore_ascii_case(id)) || self.file_exists(id);
-        let id = std::iter::once(base.to_string()).chain((2..).map(|n| format!("{base} {n}"))).find(|id| !taken(id)).unwrap_or_default();
-        self.libs.push((id.clone(), Library { name: name.to_string(), ..Default::default() }));
+        let id = std::iter::once(base.clone()).chain((2..).map(|n| format!("{base} {n}"))).find(|id| !taken(id)).unwrap_or_default();
+        self.libs.push((id.clone(), lib));
         if let Err(e) = self.save(&id) {
             self.libs.retain(|(i, _)| i != &id);
             return Err(e);
@@ -194,13 +242,121 @@ impl Libraries {
 }
 
 impl Library {
-    /// At most [`MAX_ITEMS`] of each kind (a hand-edited file may hold more).
-    fn cap(&mut self) {
+    /// Every item as (kind, key: its name, a graphic's id, name shown): colours, then character
+    /// and paragraph styles, then graphics.
+    pub fn items(&self) -> impl Iterator<Item = (ItemKind, &str, &str)> {
+        fn styles(kind: ItemKind, list: &[TextStyleDef]) -> impl Iterator<Item = (ItemKind, &str, &str)> {
+            list.iter().map(move |t| (kind, t.name.as_str(), t.name.as_str()))
+        }
+        self.colors
+            .iter()
+            .map(|c| (ItemKind::Color, c.name.as_str(), c.name.as_str()))
+            .chain(styles(ItemKind::CharStyle, &self.char_styles))
+            .chain(styles(ItemKind::ParaStyle, &self.para_styles))
+            .chain(self.graphics.iter().map(|g| (ItemKind::Graphic, g.id.as_str(), g.name.as_str())))
+    }
+
+    /// The group of each grouped item: (kind, key) → its index in [`Library::groups`].
+    pub fn group_index(&self) -> HashMap<(ItemKind, &str), usize> {
+        self.groups.iter().enumerate().flat_map(|(i, g)| g.items.iter().map(move |r| ((r.kind, r.item.as_str()), i))).collect()
+    }
+
+    /// Group `name` (else the one of that name ignoring case): its index.
+    fn group_position(&self, name: &str) -> Option<usize> {
+        let lower = name.to_lowercase();
+        self.groups.iter().position(|g| g.name == name).or_else(|| self.groups.iter().position(|g| g.name.to_lowercase() == lower))
+    }
+
+    /// Item `item` of `kind` (a graphic by id, else by name) as a group names it.
+    fn item_ref(&self, kind: ItemKind, item: &str) -> Option<ItemRef> {
+        let found = self.items().find(|(k, key, _)| *k == kind && *key == item);
+        let found = found.or_else(|| self.items().find(|(k, _, name)| *k == kind && kind == ItemKind::Graphic && *name == item));
+        found.map(|(kind, key, _)| ItemRef { kind, item: key.to_string() })
+    }
+
+    /// Take `r` out of its group.
+    fn ungroup(&mut self, r: &ItemRef) {
+        for g in &mut self.groups {
+            g.items.retain(|x| x != r);
+        }
+    }
+
+    /// Make a library read from a file (hand-edited, imported) safe and consistent: at most
+    /// [`MAX_ITEMS`] items of each kind and [`MAX_GROUPS`] groups, names clipped to [`MAX_NAME`]
+    /// characters and unique within their kind (a repeated one gets a number), sizes finite, a
+    /// thumbnail only when it is a small PNG, and groups holding only items there are, each in one
+    /// group at most.
+    fn sanitize(&mut self) {
+        clip(&mut self.name);
         self.colors.truncate(MAX_ITEMS);
         self.char_styles.truncate(MAX_ITEMS);
         self.para_styles.truncate(MAX_ITEMS);
         self.graphics.truncate(MAX_ITEMS);
+        self.groups.truncate(MAX_GROUPS);
+        uniquify(self.colors.iter_mut().map(|c| &mut c.name), "Color", " ", false);
+        uniquify(self.char_styles.iter_mut().map(|t| &mut t.name), "Character Style", " ", false);
+        uniquify(self.para_styles.iter_mut().map(|t| &mut t.name), "Paragraph Style", " ", false);
+        uniquify(self.graphics.iter_mut().map(|g| &mut g.name), "Graphic", " ", false);
+        uniquify(self.graphics.iter_mut().map(|g| &mut g.id), "graphic", "-", false);
+        uniquify(self.groups.iter_mut().map(|g| &mut g.name), "Group", " ", true);
+        for g in &mut self.graphics {
+            for v in [&mut g.width, &mut g.height] {
+                if !(v.is_finite() && *v >= 0.0) {
+                    *v = 0.0;
+                }
+            }
+            if !thumbnail_ok(&g.thumbnail) {
+                g.thumbnail.clear();
+            }
+        }
+        let mut groups = std::mem::take(&mut self.groups);
+        let present: HashSet<(ItemKind, &str)> = self.items().map(|(k, key, _)| (k, key)).collect();
+        let mut seen = HashSet::new();
+        for g in &mut groups {
+            g.items.retain(|r| present.contains(&(r.kind, r.item.as_str())) && seen.insert(r.clone()));
+        }
+        self.groups = groups;
     }
+}
+
+/// `name` cut to [`MAX_NAME`] characters.
+fn clip(name: &mut String) {
+    if let Some((at, _)) = name.char_indices().nth(MAX_NAME) {
+        name.truncate(at);
+    }
+}
+
+/// Clip each of `names` ([`clip`]) and make it unique among them (ignoring case when `fold`): an
+/// empty one becomes `fallback`, a repeated one gets a number after `sep` (`Blue 2`).
+fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep: &str, fold: bool) {
+    let key = |n: &str| if fold { n.to_lowercase() } else { n.to_string() };
+    let mut seen = HashSet::new();
+    for name in names {
+        clip(name);
+        if name.trim().is_empty() {
+            *name = fallback.to_string();
+        }
+        if seen.contains(&key(name)) {
+            let base = name.clone();
+            *name = (2..).map(|n| format!("{base}{sep}{n}")).find(|n| !seen.contains(&key(n))).unwrap_or_default();
+        }
+        seen.insert(key(name));
+    }
+}
+
+/// Whether `b64` is empty or a PNG of at most [`MAX_THUMBNAIL_SIDE`] pixels a side, judged by its
+/// header: the panel decodes it.
+fn thumbnail_ok(b64: &str) -> bool {
+    if b64.is_empty() {
+        return true;
+    }
+    // 32 base64 characters: 24 bytes, the signature then the IHDR chunk's length, type, width and
+    // height.
+    let Some(head) = b64.get(..32).filter(|_| b64.len() <= MAX_THUMBNAIL).and_then(vectorcraft_format::base64_decode) else { return false };
+    let side = |at: usize| {
+        head.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(u32::from_be_bytes).is_some_and(|v| (1..=MAX_THUMBNAIL_SIDE).contains(&v))
+    };
+    head.starts_with(b"\x89PNG\r\n\x1a\n") && head.get(12..16) == Some(b"IHDR".as_slice()) && side(16) && side(20)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -234,6 +390,14 @@ fn remove_file(_: &str) -> Result<()> {
     Ok(())
 }
 
+/// Library `name` as a file name without its extension: letters, digits, spaces, `-` and `_`
+/// kept, other characters as `-` ("Library" when nothing is left).
+pub fn file_stem_for(name: &str) -> String {
+    let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '-' }).collect();
+    let safe = safe.trim();
+    if safe.is_empty() { "Library".to_string() } else { safe.to_string() }
+}
+
 fn stem_of(path: &str) -> String {
     std::path::Path::new(path).file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned())
 }
@@ -260,6 +424,16 @@ impl Kind {
             _ => return Err(bad(cmd, "kind must be graphic, fillColor, strokeColor, charStyle or paraStyle")),
         })
     }
+
+    /// The kind as a group names it (fill and stroke colours are one list).
+    fn item_kind(self) -> ItemKind {
+        match self {
+            Kind::Graphic => ItemKind::Graphic,
+            Kind::FillColor | Kind::StrokeColor => ItemKind::Color,
+            Kind::CharStyle => ItemKind::CharStyle,
+            Kind::ParaStyle => ItemKind::ParaStyle,
+        }
+    }
 }
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -269,7 +443,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, graphics, colors, charStyles, paraStyles} (counts)], current: the current library's id or null, folder: the library folder, or null when libraries last for the session only (the web, headless)}",
+            "{} → {libraries: [{id, name, graphics, colors, charStyles, paraStyles, groups} (counts)], current: the current library's id or null, folder: the library folder, or null when libraries last for the session only (the web, headless)}",
             always,
             list
         ),
@@ -278,7 +452,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Library",
             [],
             None,
-            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}]}",
+            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}], groups: [{name, items: [{kind: color|charStyle|paraStyle|graphic, item: name (graphic: id)}]}] (an item is in one group at most; the others are ungrouped)}",
             always,
             get
         ),
@@ -336,7 +510,69 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             use_item
         ),
-        cmd!("library.removeItem", "Delete Library Item", [], None, "{library?, kind, item: name (graphic: id or name)} → null", always, remove_item),
+        cmd!(
+            "library.removeItem",
+            "Delete Library Item",
+            [],
+            None,
+            "{library?, kind, item: name (graphic: id or name)} delete an item (out of its group too) → null",
+            always,
+            remove_item
+        ),
+        cmd!(
+            "library.createGroup",
+            "New Library Group",
+            [],
+            None,
+            "{library?, name?: \"Group\" (a name the library's groups have, ignoring case, gets a number), items?: [{kind, item}] (moved into it out of their groups)} a new group of items, after the others → {library, group: its name}",
+            always,
+            create_group
+        ),
+        cmd!(
+            "library.renameGroup",
+            "Rename Library Group",
+            [],
+            None,
+            "{library?, group: name, name} rename a group (another group's name, ignoring case, is an error) → {library, group: the new name}",
+            always,
+            rename_group
+        ),
+        cmd!(
+            "library.deleteGroup",
+            "Delete Library Group",
+            [],
+            None,
+            "{library?, group: name} delete a group: its items stay in the library, ungrouped → {library, ungrouped: how many}",
+            always,
+            delete_group
+        ),
+        cmd!(
+            "library.moveItem",
+            "Move Library Item to Group",
+            [],
+            None,
+            "{library?, kind, item: name (graphic: id or name), group?: name (null or none: out of its group)} put an item in a group (out of the one it was in) → {library, kind, item, group: name or null}",
+            always,
+            move_item
+        ),
+        cmd!(
+            query "library.export",
+            "Export Library",
+            [],
+            None,
+            "{library?: id or name (default: the current library), path?} write a library (its colours, styles, graphics with their art and thumbnails, and groups) as a .vclibrary file (JSON, as libraries are kept) → {path, name}; without path → {data: the file's text, name}",
+            always,
+            export
+        ),
+        cmd!(
+            query "library.import",
+            "Import Library",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, name?: the library's name (default: the file's)} add the library of a .vclibrary file (as library.export writes) as a new library, made the current one; a name another library has gets a number (`Brand (2)`) → {id, name, graphics, colors, charStyles, paraStyles, groups (counts)}",
+            always,
+            import
+        ),
     ]
 }
 
@@ -362,6 +598,7 @@ fn counts(lib: &Library) -> Value {
         "colors": lib.colors.len(),
         "charStyles": lib.char_styles.len(),
         "paraStyles": lib.para_styles.len(),
+        "groups": lib.groups.len(),
     })
 }
 
@@ -391,6 +628,7 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
         "colors": lib.colors.iter().map(|c| json!({"name": c.name, "hex": c.color.to_hex(), "color": c.color})).collect::<Vec<_>>(),
         "charStyles": lib.char_styles.iter().map(|t| json!({"name": t.name, "attrs": t.attrs})).collect::<Vec<_>>(),
         "paraStyles": lib.para_styles.iter().map(|t| json!({"name": t.name, "attrs": t.attrs})).collect::<Vec<_>>(),
+        "groups": lib.groups,
     }))
 }
 
@@ -457,7 +695,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let base = given.clone().unwrap_or_else(|| g.name.clone());
                 g.name = unique(&base, |n| lib.graphics.iter().any(|o| o.name == n));
-                g.id = unique("graphic", |n| lib.graphics.iter().any(|o| o.id == n)).replace(' ', "-");
+                // Ids are `graphic`, `graphic-2`…: taken ones are looked for as they are kept.
+                g.id = unique("graphic", |n| lib.graphics.iter().any(|o| o.id == n.replace(' ', "-"))).replace(' ', "-");
                 let v = json!({ "name": g.name, "id": g.id, "existing": false });
                 lib.graphics.push(g);
                 v
@@ -682,22 +921,171 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     let (id, kind, item) = item_param(s, p, C)?;
     let item = item.to_string();
     s.libraries.change(&id, |lib| {
-        let before = (lib.graphics.len(), lib.colors.len(), lib.char_styles.len(), lib.para_styles.len());
+        let r = lib.item_ref(kind.item_kind(), &item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
         match kind {
-            Kind::Graphic => {
-                let at = lib.graphics.iter().position(|g| g.id == item).or_else(|| lib.graphics.iter().position(|g| g.name == item));
-                if let Some(i) = at {
-                    lib.graphics.remove(i);
-                }
-            }
-            Kind::FillColor | Kind::StrokeColor => lib.colors.retain(|c| c.name != item),
-            Kind::CharStyle => lib.char_styles.retain(|t| t.name != item),
-            Kind::ParaStyle => lib.para_styles.retain(|t| t.name != item),
+            Kind::Graphic => lib.graphics.retain(|g| g.id != r.item),
+            Kind::FillColor | Kind::StrokeColor => lib.colors.retain(|c| c.name != r.item),
+            Kind::CharStyle => lib.char_styles.retain(|t| t.name != r.item),
+            Kind::ParaStyle => lib.para_styles.retain(|t| t.name != r.item),
         }
-        if before == (lib.graphics.len(), lib.colors.len(), lib.char_styles.len(), lib.para_styles.len()) {
-            return Err(bad(C, format!("the library has no item `{item}`")));
-        }
+        lib.ungroup(&r);
         Ok(())
     })?;
     ok()
+}
+
+/// `p`'s `name`, trimmed and clipped, else `default`.
+fn name_param(p: &Value, default: &str) -> String {
+    let mut name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or(default).to_string();
+    clip(&mut name);
+    name
+}
+
+/// `p`'s `group`.
+fn group_param<'a>(p: &'a Value, cmd: &str) -> Result<&'a str> {
+    str_param(p, "group").ok_or_else(|| bad(cmd, "missing `group`"))
+}
+
+/// Group `name` of `lib`: its index.
+fn group_at(lib: &Library, name: &str, cmd: &str) -> Result<usize> {
+    lib.group_position(name).ok_or_else(|| bad(cmd, format!("the library has no group `{name}`")))
+}
+
+fn create_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.createGroup";
+    let id = library_id(s, p, C)?;
+    let base = name_param(p, "Group");
+    let wanted = match p.get("items") {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(items)) if items.len() <= 4 * MAX_ITEMS => items
+            .iter()
+            .map(|v| Ok((Kind::of(v, C)?.item_kind(), str_param(v, "item").ok_or_else(|| bad(C, "each of `items` is {kind, item}"))?)))
+            .collect::<Result<Vec<_>>>()?,
+        Some(_) => return Err(bad(C, "`items` is a list of {kind, item}")),
+    };
+    let name = s.libraries.change(&id, |lib| {
+        if lib.groups.len() >= MAX_GROUPS {
+            return Err(bad(C, format!("the library holds {MAX_GROUPS} groups already")));
+        }
+        let refs = wanted
+            .iter()
+            .map(|&(kind, item)| lib.item_ref(kind, item).ok_or_else(|| bad(C, format!("the library has no item `{item}`"))))
+            .collect::<Result<Vec<_>>>()?;
+        let name = unique(&base, |n| lib.group_position(n).is_some());
+        let mut items = vec![];
+        let mut seen = HashSet::new();
+        for r in refs {
+            lib.ungroup(&r);
+            if seen.insert(r.clone()) {
+                items.push(r);
+            }
+        }
+        lib.groups.push(LibraryGroup { name: name.clone(), items });
+        Ok(name)
+    })?;
+    Ok(json!({ "library": id, "group": name }))
+}
+
+fn rename_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.renameGroup";
+    let id = library_id(s, p, C)?;
+    let group = group_param(p, C)?;
+    if str_param(p, "name").is_none_or(|n| n.trim().is_empty()) {
+        return Err(bad(C, "missing `name`"));
+    }
+    let name = name_param(p, "");
+    s.libraries.change(&id, |lib| {
+        let i = group_at(lib, group, C)?;
+        if lib.group_position(&name).is_some_and(|j| j != i) {
+            return Err(bad(C, format!("the library has a group `{name}` already")));
+        }
+        if let Some(g) = lib.groups.get_mut(i) {
+            g.name.clone_from(&name);
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "library": id, "group": name }))
+}
+
+fn delete_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.deleteGroup";
+    let id = library_id(s, p, C)?;
+    let group = group_param(p, C)?;
+    let ungrouped = s.libraries.change(&id, |lib| {
+        let i = group_at(lib, group, C)?;
+        Ok(if i < lib.groups.len() { lib.groups.remove(i).items.len() } else { 0 })
+    })?;
+    Ok(json!({ "library": id, "ungrouped": ungrouped }))
+}
+
+fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.moveItem";
+    let (id, kind, item) = item_param(s, p, C)?;
+    let group = str_param(p, "group");
+    let (key, to) = s.libraries.change(&id, |lib| {
+        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
+        let at = group.map(|g| group_at(lib, g, C)).transpose()?;
+        lib.ungroup(&r);
+        let key = r.item.clone();
+        let to = at.and_then(|i| lib.groups.get_mut(i)).map(|g| {
+            g.items.push(r);
+            g.name.clone()
+        });
+        Ok((key, to))
+    })?;
+    Ok(json!({ "library": id, "kind": str_param(p, "kind"), "item": key, "group": to }))
+}
+
+fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.export";
+    let id = library_id(s, p, C)?;
+    let lib = s.libraries.get(&id).ok_or_else(|| bad(C, format!("no library `{id}`")))?;
+    let text = serde_json::to_string(lib).map_err(|e| bad(C, e.to_string()))?;
+    let name = lib.name.clone();
+    match str_param(p, "path") {
+        Some(path) => {
+            super::fileio::write_file(path, text.as_bytes())?;
+            Ok(json!({ "path": path, "name": name }))
+        }
+        None => Ok(json!({ "data": text, "name": name })),
+    }
+}
+
+fn import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.import";
+    let too_big = || bad(C, format!("the file is larger than {} MB", MAX_FILE >> 20));
+    let bytes: std::borrow::Cow<[u8]> = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => {
+            if super::fileio::file_stamp(path).is_some_and(|(len, _)| len > MAX_FILE) {
+                return Err(too_big());
+            }
+            super::fileio::read_file(path)?.into()
+        }
+        (None, Some(text), _) => text.as_bytes().into(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(C, "bad dataBase64"))?.into(),
+        _ => return Err(bad(C, "give `path`, `data` or `dataBase64`")),
+    };
+    if bytes.len() as u64 > MAX_FILE {
+        return Err(too_big());
+    }
+    let not_library = |e: String| bad(C, format!("not a library file: {e}"));
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| not_library(e.to_string()))?;
+    drop(bytes);
+    // A library names itself; another file of ours (swatches, styles) says what it is.
+    if !v.get("name").is_some_and(Value::is_string) || v.get("format").is_some_and(|f| f.as_str() != Some(LIBRARY_EXT)) {
+        return Err(not_library("it has no library name".into()));
+    }
+    let mut lib: Library = serde_json::from_value(v).map_err(|e| not_library(e.to_string()))?;
+    lib.sanitize();
+    let base = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or(lib.name.trim()).to_string();
+    let mut base = if base.is_empty() { "Library".to_string() } else { base };
+    clip(&mut base);
+    let taken = |n: &str| s.libraries.all().iter().any(|(_, l)| l.name.to_lowercase() == n.to_lowercase());
+    lib.name = std::iter::once(base.clone()).chain((2..).map(|n| format!("{base} ({n})"))).find(|n| !taken(n)).unwrap_or(base);
+    let mut r = json!({ "name": lib.name });
+    if let (Some(o), Value::Object(c)) = (r.as_object_mut(), counts(&lib)) {
+        o.extend(c);
+    }
+    r["id"] = json!(s.libraries.insert(lib)?);
+    Ok(r)
 }

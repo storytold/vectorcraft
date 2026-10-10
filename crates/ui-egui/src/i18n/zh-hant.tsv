@@ -1563,6 +1563,37 @@
 	New Bristle Brush	新增鬃毛筆刷
 	Calligraphic Brush Options	書法筆刷選項
 	Bristle Brush Options	鬃毛筆刷選項
+	Scatter Brush Options	散佈筆刷選項
+	Art Brush Options	藝術筆刷選項
+	Pattern Brush Options	圖樣筆刷選項
+	Scatter:	散佈：
+	Rotation:	旋轉：
+	Rotation relative to:	旋轉相對於：
+	Brush Scale Options	筆刷縮放選項
+	Scale Proportionately	等比例縮放
+	Stretch to Fit Stroke Length	延伸以符合筆畫長度
+	Stretch Between Guides	在參考線之間延伸
+	Start:	起點：
+	End:	終點：
+	Left to Right	由左至右
+	Right to Left	由右至左
+	Top to Bottom	由上而下
+	Bottom to Top	由下而上
+	Flip:	翻轉：
+	Outer Corner Tile	外角拼貼
+	Side Tile	邊線拼貼
+	Inner Corner Tile	內角拼貼
+	Start Tile	起點拼貼
+	End Tile	終點拼貼
+	Fit	符合
+	Stretch to fit	延伸以符合
+	Add space to fit	增加間距以符合
+	Approximate path	近似路徑
+	Colorization	上色
+	Tints	淺色
+	Tints and Shades	淺色與暗色
+	Hue Shift	色相偏移
+	Key Color:	主要顏色：
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
@@ -2738,6 +2769,23 @@
 	Add to Library	加入資料庫
 	Delete Library	刪除資料庫
 	Delete Library Item	刪除資料庫項目
+	No results	沒有結果
+	No items in this library match “{query}”.	此資料庫中沒有符合「{query}」的項目。
+	Right-click an item to move it into this group.	在項目上按一下右鍵，即可將其移至此群組。
+	New Group	新增群組
+	New Group…	新增群組…
+	Move to Group	移至群組
+	No Group	無群組
+	Rename Group…	重新命名群組…
+	Delete Group	刪除群組
+	Import Library…	匯入資料庫…
+	Export Library…	匯出資料庫…
+	Import Library	匯入資料庫
+	Export Library	匯出資料庫
+	New Library Group	新增資料庫群組
+	Rename Library Group	重新命名資料庫群組
+	Delete Library Group	刪除資料庫群組
+	Move Library Item to Group	將資料庫項目移至群組
 	Library	資料庫
 	Rename Library	重新命名資料庫
 	Show Library	顯示資料庫
@@ -2936,6 +2984,9 @@
 	Untitled	未命名
 	Update Link	更新連結
 	Update Links	更新連結
+	Update Changed Links	更新已變更的連結
+	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 個連結影像已在磁碟上變更。要顯示新版本嗎？
+@msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 個在磁碟上變更的連結檔案
 	Update Modified Links	更新已修改的連結
 	Updated {} image(s)	已更新 {} 張影像
 	UPPERCASE	全部大寫
@@ -3288,3 +3339,57 @@ axis	Both	兩者
 	Sync with system	跟隨系統
 	Active	目前
 	Next Appearance Mode	下一個外觀模式
+	Video	視訊
+	De-Interlace…	反交錯…
+	De-Interlace	反交錯
+	NTSC Colors	NTSC 色彩
+	Eliminate	消除
+	Create New Fields by	建立新圖場以
+	Odd Fields	奇數圖場
+	Even Fields	偶數圖場
+	Duplication	複製
+	Interpolation	內插
+	RGB:	RGB：
+	CMYK:	CMYK：
+	Texture	紋理
+	Craquelure…	龜裂紋…
+	Grain…	顆粒…
+	Mosaic Tiles…	馬賽克拼貼…
+	Patchwork…	拼綴圖…
+	Stained Glass…	彩色玻璃…
+	Texturizer…	紋理化…
+	Craquelure	龜裂紋
+	Grain	顆粒
+	Mosaic Tiles	馬賽克拼貼
+	Patchwork	拼綴圖
+	Stained Glass	彩色玻璃
+	Texturizer	紋理化
+	Crack Spacing	裂紋間距
+	Crack Depth	裂紋深度
+	Crack Brightness	裂紋亮度
+	Intensity	強度
+	Grain Type	顆粒類型
+	Tile Size	拼貼大小
+	Grout Width	縫隙寬度
+	Lighten Grout	加亮縫隙
+	Square Size	方塊大小
+	Relief	浮雕
+	Border Thickness	邊框粗細
+	Light Intensity	光源強度
+	Light Direction	光源方向
+	Sprinkles	噴灑
+	Clumped	結塊
+	Contrasty	高反差
+	Enlarged	放大
+	Stippled	點刻
+	Speckle	斑點
+	Brick	磚塊
+	Burlap	粗麻布
+	Canvas	畫布
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	柔和
+	Edge	邊緣

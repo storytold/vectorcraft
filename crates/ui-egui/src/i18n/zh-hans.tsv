@@ -1519,6 +1519,34 @@
 	New Bristle Brush	新建鬃毛画笔
 	Calligraphic Brush Options	书法画笔选项
 	Bristle Brush Options	鬃毛画笔选项
+	Scatter Brush Options	散布画笔选项
+	Art Brush Options	艺术画笔选项
+	Pattern Brush Options	图案画笔选项
+	Scatter:	散布：
+	Rotation:	旋转：
+	Rotation relative to:	旋转相对于：
+	Brush Scale Options	画笔缩放选项
+	Scale Proportionately	等比缩放
+	Stretch to Fit Stroke Length	伸展以适合描边长度
+	Stretch Between Guides	在参考线之间伸展
+	Start:	起点：
+	End:	终点：
+	Left to Right	从左到右
+	Right to Left	从右到左
+	Top to Bottom	从上到下
+	Bottom to Top	从下到上
+	Flip:	翻转：
+	Outer Corner Tile	外角拼贴
+	Side Tile	边线拼贴
+	Inner Corner Tile	内角拼贴
+	Start Tile	起点拼贴
+	End Tile	终点拼贴
+	Fit	适合
+	Stretch to fit	伸展以适合
+	Add space to fit	添加间距以适合
+	Approximate path	近似路径
+	Colorization	着色
+	Key Color:	主色：
 	Roundness:	圆度：
 	Fixed	固定
 	Pressure	压力
@@ -2652,6 +2680,23 @@
 	Add to Library	添加到库
 	Delete Library	删除库
 	Delete Library Item	删除库项目
+	No results	无结果
+	No items in this library match “{query}”.	此库中没有与“{query}”匹配的项目。
+	Right-click an item to move it into this group.	右键单击项目可将其移到此组。
+	New Group	新建组
+	New Group…	新建组…
+	Move to Group	移到组
+	No Group	无组
+	Rename Group…	重命名组…
+	Delete Group	删除组
+	Import Library…	导入库…
+	Export Library…	导出库…
+	Import Library	导入库
+	Export Library	导出库
+	New Library Group	新建库组
+	Rename Library Group	重命名库组
+	Delete Library Group	删除库组
+	Move Library Item to Group	将库项目移到组
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
@@ -2848,6 +2893,9 @@
 	Untitled	未命名
 	Update Link	更新链接
 	Update Links	更新链接
+	Update Changed Links	更新已更改的链接
+	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 个链接图像已在磁盘上更改。要显示新版本吗？
+@msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 个在磁盘上更改的链接文件
 	Update Modified Links	更新已修改的链接
 	Updated {} image(s)	已更新 {} 张图像
 	UPPERCASE	大写
@@ -3510,3 +3558,57 @@ axis	Both	两者
 	Sync with system	跟随系统
 	Active	当前
 	Next Appearance Mode	下一个外观模式
+	Video	视频
+	De-Interlace…	逐行…
+	De-Interlace	逐行
+	NTSC Colors	NTSC 颜色
+	Eliminate	消除
+	Create New Fields by	创建新场方式
+	Odd Fields	奇数场
+	Even Fields	偶数场
+	Duplication	复制
+	Interpolation	插值
+	Texture	纹理
+	Craquelure…	龟裂缝…
+	Grain…	颗粒…
+	Mosaic Tiles…	马赛克拼贴…
+	Patchwork…	拼缀图…
+	Stained Glass…	染色玻璃…
+	Texturizer…	纹理化…
+	Craquelure	龟裂缝
+	Grain	颗粒
+	Mosaic Tiles	马赛克拼贴
+	Patchwork	拼缀图
+	Stained Glass	染色玻璃
+	Texturizer	纹理化
+	Crack Spacing	裂缝间距
+	Crack Depth	裂缝深度
+	Crack Brightness	裂缝亮度
+	Intensity	强度
+	Grain Type	颗粒类型
+	Tile Size	拼贴大小
+	Grout Width	缝隙宽度
+	Lighten Grout	加亮缝隙
+	Square Size	方形大小
+	Relief	凸现
+	Border Thickness	边框粗细
+	Light Intensity	光照强度
+	Light Direction	光照方向
+	Sprinkles	喷洒
+	Clumped	结块
+	Contrasty	强反差
+	Enlarged	扩大
+	Stippled	点刻
+	Speckle	斑点
+	Brick	砖形
+	Burlap	粗麻布
+	Canvas	画布
+	Sandstone	砂岩
+	Bottom Left	左下
+	Top Left	左上
+	Top Right	右上
+	Bottom Right	右下
+effect	Soft	柔和
+effect	Horizontal	水平
+effect	Vertical	垂直
+	Edge	边缘
