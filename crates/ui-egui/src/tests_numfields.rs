@@ -206,6 +206,66 @@ fn arrow_keys_step_plain_fields() {
     assert_eq!(f.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &count), Some(4.0));
 }
 
+/// #991: the Stroke weight spinner keeps the field's keyboard modifiers.
+#[test]
+fn stroke_spinner_arrow_keys_honor_shift() {
+    let mut f = Field::new();
+    let weight = Cell::new(14.0);
+    let draw = |ui: &mut egui::Ui| {
+        ui.horizontal(|ui| {
+            widgets::spin_field(ui, "f", Some(weight.get()), Unit::Points, 120.0, 1.0, 0.0, &crate::panels::stroke::weight_presets(Unit::Points))
+                .inspect(|&v| weight.set(v))
+        })
+        .inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(f.click(1), &draw);
+    f.frame(vec![], &draw);
+    for (k, mods, want) in [
+        (Key::ArrowUp, Modifiers::SHIFT, 24.0),
+        (Key::ArrowDown, Modifiers::SHIFT, 14.0),
+        (Key::ArrowUp, Modifiers::NONE, 15.0),
+        (Key::ArrowDown, Modifiers::NONE, 14.0),
+        (Key::ArrowDown, Modifiers::SHIFT, 4.0),
+        (Key::ArrowDown, Modifiers::SHIFT, 0.0),
+    ] {
+        assert_eq!(f.frame(vec![Event::ModifiersChanged(mods), key(k, mods)], &draw), Some(want), "{k:?} {mods:?}");
+        assert_eq!(weight.get(), want);
+    }
+}
+
+/// #991: both stepper arrows use ten steps with Shift and one after releasing it.
+#[test]
+fn stroke_spinner_buttons_honor_shift_and_clamp_at_zero() {
+    let mut f = Field::new();
+    let weight = Cell::new(14.0);
+    let draw = |ui: &mut egui::Ui| {
+        ui.horizontal(|ui| {
+            widgets::spin_field(ui, "f", Some(weight.get()), Unit::Points, 120.0, 1.0, 0.0, &crate::panels::stroke::weight_presets(Unit::Points))
+                .inspect(|&v| weight.set(v))
+        })
+        .inner
+    };
+    f.frame(vec![], &draw);
+    // A modifier can change after the mouse release but before the next UI frame.
+    for (up, mods, after, want) in [
+        (true, Modifiers::SHIFT, Modifiers::NONE, 24.0),
+        (false, Modifiers::SHIFT, Modifiers::SHIFT, 14.0),
+        (true, Modifiers::NONE, Modifiers::SHIFT, 15.0),
+        (false, Modifiers::NONE, Modifiers::NONE, 14.0),
+        (false, Modifiers::SHIFT, Modifiers::SHIFT, 4.0),
+        (false, Modifiers::SHIFT, Modifiers::NONE, 0.0),
+    ] {
+        let r = f.rect.get();
+        let at = r.min + vec2(8.0, if up { 6.5 } else { 19.5 });
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: mods };
+        f.frame(vec![Event::ModifiersChanged(mods), Event::PointerMoved(at)], &draw);
+        f.frame(vec![button(true)], &draw);
+        assert_eq!(f.frame(vec![button(false), Event::ModifiersChanged(after)], &draw), Some(want), "up={up} {mods:?} → {after:?}");
+        assert_eq!(weight.get(), want);
+    }
+}
+
 /// A wheel turn of `dy` (`unit`s, up positive) with `modifiers`, the pointer at `at`.
 fn wheel(at: Pos2, unit: egui::MouseWheelUnit, dy: f32, modifiers: Modifiers) -> Vec<Event> {
     vec![Event::PointerMoved(at), Event::MouseWheel { unit, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers }]

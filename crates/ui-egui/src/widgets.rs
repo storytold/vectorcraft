@@ -1170,6 +1170,20 @@ fn spin_generic(
             && let Some(p) = sresp.interact_pointer_pos()
             && let Some(v) = value
         {
+            // Use the click's modifiers: Shift may change again before this frame is drawn.
+            let shift = ui.input(|i| {
+                i.events
+                    .iter()
+                    .rev()
+                    .find_map(|e| match e {
+                        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } if *pos == p => {
+                            Some(modifiers.shift)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or(i.modifiers.shift)
+            });
+            let step = if shift { 10.0 * step } else { step };
             let nv = if up.contains(p) { v + step } else { v - step };
             out = Some(SpinPick::Value(nv.max(min)));
         }
