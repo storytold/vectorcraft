@@ -190,3 +190,64 @@ fn a_pdf_of_some_artboards_carries_no_editing_data() {
         assert_eq!(warned, !kept, "{range}: {v}");
     }
 }
+
+#[test]
+fn ai_export_of_some_artboards_keeps_only_those_pages() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80, "artboards": 3})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "ai", "range": "2"})).unwrap();
+    let bytes = b64(&r);
+    assert!(vectorcraft_pdf::editing(&bytes).is_none());
+    assert!(r["warnings"].as_array().unwrap().contains(&json!(super::pdf::EDITING_NEEDS_EVERY_ARTBOARD)));
+    open(&mut s, "one.ai", &bytes);
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"artboards": 3})).unwrap();
+    assert!(s.execute("document.export", &json!({"format": "ai", "range": "2", "pdfCompatible": false})).is_err());
+}
+
+#[test]
+fn ai_export_validates_options_even_when_editing_data_is_omitted() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"artboards": 3})).unwrap();
+    let before = comparable(&s.doc().unwrap().doc);
+    for command in ["document.export", "document.serialize"] {
+        for range in ["all", "2"] {
+            for option in ["includeLinked", "embedProfiles", "compress", "pdfCompatible"] {
+                let mut params = json!({"format": "ai", "range": range});
+                params[option] = json!("no");
+                assert!(s.execute(command, &params).is_err(), "{command}: {params}");
+                assert_eq!(comparable(&s.doc().unwrap().doc), before);
+            }
+            assert!(
+                s.execute(
+                    command,
+                    &json!({"format": "ai", "range": range, "includeLinked": false, "embedProfiles": false, "compress": false, "pdfCompatible": true})
+                )
+                .is_ok()
+            );
+        }
+    }
+}
+
+#[test]
+fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80, "artboards": 2})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 180, "y": 100, "width": 30, "height": 20})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 50, "height": 40})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    let before = comparable(&s.doc().unwrap().doc);
+    let r = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "range": "2"})).unwrap();
+    let bytes = b64(&r);
+    let pages = vectorcraft_pdf::import(&bytes).unwrap();
+    assert_eq!(pages.artboards.len(), 1);
+    assert_eq!((pages.artboards[0].rect.width(), pages.artboards[0].rect.height()), (30.0, 20.0));
+    let editing = vectorcraft_pdf::editing(&bytes).unwrap();
+    let exported = vectorcraft_format::load(&editing.data).unwrap();
+    assert_eq!(exported.artboards.len(), 1);
+    assert_eq!(exported.artboards[0].rect, vectorcraft_geom::Rect::new(180.0, 100.0, 210.0, 120.0));
+    assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
+}

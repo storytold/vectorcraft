@@ -3,6 +3,7 @@
 //! artboard to a separate file, Include Linked Files, Embed ICC Profiles and Create
 //! PDF-Compatible File.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -25,8 +26,8 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption {
         name: "version",
         ty: "integer",
-        default: "3",
-        description: "the format version to write: 3 (current), or 2 or 1 for older VectorCraft versions (not compressed; newer features they don't know are lost there)",
+        default: "4",
+        description: "the format version to write: 4 (current), or 3, 2 or 1 for older VectorCraft versions (1 and 2 are never compressed; newer features they don't know are lost there)",
     },
     FormatOption {
         name: "preview",
@@ -71,11 +72,19 @@ const EMBED_PROFILES: FormatOption = FormatOption {
     description: "carry the ICC profiles the document is tagged with that were loaded from files (Edit → Assign Profile), so the document keeps them where they aren't installed",
 };
 
-/// The save options of a `.ai` file (a PDF carrying the native document; its PDF options come on
-/// top, see document.exportPdf).
+/// The save and export options of a `.ai` file (a PDF carrying the native document; its PDF
+/// options come on top, see document.exportPdf). Saves always retain every artboard.
 pub const AI_OPTIONS: &[FormatOption] = &[
+    super::ARTBOARD,
+    super::ARTBOARDS,
+    super::USE_ARTBOARDS,
+    FormatOption {
+        name: "range",
+        ty: "string",
+        default: "null",
+        description: "1-based artboards such as \"1-3, 5\", or \"all\": the PDF pages to export, or with separateArtboards the files to save separately",
+    },
     SEPARATE_ARTBOARDS,
-    SEPARATE_RANGE,
     INCLUDE_LINKED,
     EMBED_PROFILES,
     FormatOption {
@@ -133,15 +142,23 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     } else {
         std::borrow::Cow::Borrowed(doc)
     };
-    let doc = &*full;
     if extras.preview {
-        so.preview = preview_png(doc)?;
+        so.preview = preview_png(&full)?;
     }
     if extras.pdf {
         // Every artboard as PDF pages (no editing data: the file is the native document).
-        so.pdf = Some(super::pdf::encode(cmd, doc, &json!({ "range": "all", "preserveEditing": false }))?.0);
+        so.pdf = Some(super::pdf::encode(cmd, &full, &json!({ "range": "all", "preserveEditing": false }))?.0);
     }
-    vectorcraft_format::save_with(doc, &so).map_err(|e| bad(cmd, e.to_string()))
+    let native = match full {
+        Cow::Owned(full) if so.include_linked && so.version >= vectorcraft_format::VERSION => {
+            // Include available bytes without replacing missing, relinkable placed objects.
+            let mut original = doc.clone();
+            original.images = full.images;
+            Cow::Owned(original)
+        }
+        other => other,
+    };
+    vectorcraft_format::save_with(&native, &so).map_err(|e| bad(cmd, e.to_string()))
 }
 
 /// The ICC files of the profiles `doc` is tagged with that were loaded from files (the built-in
@@ -172,16 +189,40 @@ pub(super) fn install_profiles(profiles: BTreeMap<String, Vec<u8>>) -> Vec<Strin
         .collect()
 }
 
-/// The native document a `.ai` file carries, with the options in `p` that apply to it
-/// (`includeLinked`, `embedProfiles`; compact and uncompressed: the PDF compresses it).
-pub(super) fn ai_native(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<u8>> {
+/// Check AI options even when chosen PDF pages omit the native editing attachment.
+pub(super) fn ai_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<SaveOptions> {
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
-        o.retain(|k, _| !matches!(k.as_str(), "compress" | "version" | "preview" | "pdfCompatible"));
+        // AI carries the current native format without a separate preview. Its compression
+        // and PDF-content flags are still validated as booleans.
+        o.retain(|k, _| !matches!(k.as_str(), "version" | "preview"));
+        if o.get("pdfCompatible").is_some_and(Value::is_null) {
+            o.remove("pdfCompatible");
+        }
     }
     let (mut so, _) = save_options(cmd, f, doc, &q)?;
     so.pretty = false;
-    vectorcraft_format::save_with(doc, &so).map_err(|e| bad(cmd, e.to_string()))
+    so.compress = false; // The PDF compresses its editing attachment.
+    Ok(so)
+}
+
+/// The original native document carried by an AI file, with validated save options.
+pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<Vec<u8>> {
+    let native = if so.include_linked {
+        match crate::cmd::place::document::full_documents(doc).0 {
+            Cow::Borrowed(d) => Cow::Borrowed(d),
+            Cow::Owned(full) => {
+                // Include available files, retaining placed objects even when their files
+                // are missing. Only drawn output substitutes unlinked preview images.
+                let mut original = doc.clone();
+                original.images = full.images;
+                Cow::Owned(original)
+            }
+        }
+    } else {
+        Cow::Borrowed(doc)
+    };
+    vectorcraft_format::save_with(&native, so).map_err(|e| bad(cmd, e.to_string()))
 }
 
 /// The first artboard (else the art) as a PNG fitted into [`PREVIEW_MAX`] pixels (`None`: nothing

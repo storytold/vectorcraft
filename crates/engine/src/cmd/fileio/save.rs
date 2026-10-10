@@ -353,36 +353,41 @@ fn blank_pages(doc: &Document) -> Document {
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
 
-/// The encoder's params for a `.ai` file, from a save's or an export's: a PDF of every artboard
-/// with the PDF options, always carrying the native document, its layers and sublayers PDF layers
-/// (hidden ones off) unless asked otherwise; Use Compression compresses the PDF's content.
-pub(super) fn ai_params(params: &mut Value) {
-    let Some(o) = params.as_object_mut() else { return };
-    o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
-    // Apps that read the PDF part (not the native document) then find the layers, the hidden ones
-    // with their art (#372); a PDF standard decides for itself.
-    if o.get("standard").is_none_or(Value::is_null) {
-        o.entry("createLayers").or_insert(json!(true));
-    }
-    if let Some(c) = o.get("compress").and_then(Value::as_bool) {
-        let compression = o.entry("compression").or_insert_with(|| json!({}));
-        if let Some(m) = compression.as_object_mut() {
-            m.insert("compressText".into(), json!(c));
+/// The shared Save and Export encoder for PDF-compatible `.ai` files.
+pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Encoded> {
+    let mut params = if p.is_object() { p.clone() } else { json!({}) };
+    if let Some(o) = params.as_object_mut() {
+        o.insert("preserveEditing".into(), json!(true));
+        // Keep upstream AI PDF layers, including hidden layers, unless a standard decides.
+        if o.get("standard").is_none_or(Value::is_null) {
+            o.entry("createLayers").or_insert(json!(true));
+        }
+        if let Some(c) = o.get("compress").and_then(Value::as_bool) {
+            let compression = o.entry("compression").or_insert_with(|| json!({}));
+            if let Some(m) = compression.as_object_mut() {
+                m.insert("compressText".into(), json!(c));
+            }
         }
     }
-}
-
-/// Encode `doc` as a PDF-compatible `.ai` file (`params` as [`ai_params`] makes them) for command
-/// `cmd`: its pages (blank with `pdfCompatible: false`, which it then notes), carrying the native
-/// document. File › Save As writes it, and so do the exports (`document.export`, the CLI).
-pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, params: &Value) -> Result<Encoded> {
-    let compatible = bool_or(params, "pdfCompatible", true);
+    let native_options = super::native::ai_options(cmd, f, doc, &params)?;
+    let pdf_compatible = bool_or(&params, "pdfCompatible", true);
+    if !pdf_compatible {
+        let picked: ArtboardPick = super::encode::options(f, &params)?;
+        let picked = picked.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
+        if picked.is_some_and(|v| !v.into_iter().eq(0..doc.artboards.len())) {
+            return Err(bad(cmd, "pdfCompatible: false needs every artboard to keep the editable artwork"));
+        }
+    }
     let pages = doc.without_edit_modes();
-    let pages = if compatible { pages } else { std::borrow::Cow::Owned(blank_pages(&pages)) };
-    let native = || super::native::ai_native(cmd, f, doc, params);
-    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, params, native)?;
-    if !compatible {
-        warnings.insert(0, NOT_PDF_COMPATIBLE.to_string());
+    // Resolve placed files only for the drawn pages. Missing files become preview images there;
+    // the native attachment keeps the original placed objects and their relinkable metadata.
+    let (pages, placed_warnings) =
+        if pdf_compatible { crate::cmd::place::document::full_documents(&pages) } else { (std::borrow::Cow::Owned(blank_pages(&pages)), Vec::new()) };
+    let native = || super::native::ai_native(cmd, doc, &native_options);
+    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native)?;
+    warnings.extend(placed_warnings);
+    if !pdf_compatible {
+        warnings.push(NOT_PDF_COMPATIBLE.to_string());
     }
     Ok(Encoded { warnings, ..Encoded::one(bytes) })
 }
@@ -421,8 +426,9 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
     }
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
-    if plan.format.id == "ai" {
-        ai_params(&mut params);
+    if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
+        // Save keeps every artboard; exports may choose a subset instead.
+        o.insert("range".into(), json!("all"));
     }
     Ok(SaveJob { plan, doc, params, snapshot: st.doc.clone(), boards })
 }
@@ -596,7 +602,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), native and .ai: separateArtboards?: false (also save each artboard of range?: \"1-3, 5\"|\"all\" (default) to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document), .ai: compress?: true (compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), native and .ai: separateArtboards?: false (also save each artboard of range?: \"1-3, 5\"|\"all\" (default) to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document), .ai: compress?: true (compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

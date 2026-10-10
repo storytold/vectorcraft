@@ -67,7 +67,12 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
     let separate = separates(f);
     let options = if own_dialog(f) { &[][..] } else { f.options };
-    options.iter().filter(move |o| !(matches!(o.ty, "array" | "object") || (range && o.name == "artboard") || (separate && o.name == "range")))
+    options.iter().filter(move |o| {
+        !(matches!(o.ty, "array" | "object")
+            || (range && o.name == "artboard")
+            || (separate && o.name == "range")
+            || (f.id == "ai" && o.name == "useArtboards"))
+    })
 }
 
 /// An option's label: the save options as the reference app's options dialog names them, the

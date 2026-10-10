@@ -228,7 +228,7 @@ const ARTBOARDS: FormatOption = FormatOption {
     name: "artboards",
     ty: "array",
     default: "null",
-    description: "0-based artboards (PDF: one page each, default all; SVG, and raster formats with useArtboards: one file each)",
+    description: "0-based artboards (PDF and AI: one page each, default all; SVG, and raster formats with useArtboards: one file each)",
 };
 const RANGE: FormatOption = FormatOption {
     name: "range",
@@ -243,7 +243,7 @@ const USE_ARTBOARDS: FormatOption = FormatOption {
     name: "useArtboards",
     ty: "boolean",
     default: "null",
-    description: "true: every chosen artboard (default all), one file each named <file>-<artboard>.<ext> (PDF: one page each); false: the bounds of the visible art",
+    description: "true: every chosen artboard (default all), one file each named <file>-<artboard>.<ext> (PDF and AI: one page each); false: the bounds of the visible art",
 };
 const PPI: FormatOption = FormatOption {
     name: "ppi",
