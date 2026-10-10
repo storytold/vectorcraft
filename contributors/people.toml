@@ -62,3 +62,7 @@ sync_github_name = false
 [people.KattKnight]
 display_name = "KattKnight (ayla.dsc)"
 sync_github_name = false
+
+[people.sanyamsingh001]
+display_name = "sanyamsingh001"
+sync_github_name = false
