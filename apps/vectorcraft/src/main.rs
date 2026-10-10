@@ -23,6 +23,7 @@ compile_error!("the win7 target requires --no-default-features --features window
 
 mod clipboard;
 mod control_server;
+mod dev_build;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod logging;
@@ -514,6 +515,10 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
+    let dev_build = dev_build::detect();
+    if let Some(b) = &dev_build {
+        log::info!("development build from {} ({:?} {:?}, changes: {})", b.checkout, b.branch, b.commit, b.changes);
+    }
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     #[cfg(feature = "wgpu")]
@@ -600,6 +605,7 @@ fn main() -> std::process::ExitCode {
                     app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
                 }
                 app.custom_titlebar = custom_titlebar;
+                app.dev_build = dev_build;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());

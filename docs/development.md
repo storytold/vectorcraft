@@ -79,6 +79,7 @@ By default VectorCraft's own crates log at `info` and everything else at `warn`.
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>` |
 | `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
+| `VECTORCRAFT_DEV` | `1` or `0`: whether this is a development build, overriding the guess (a binary run from a cargo target directory of a checkout that still exists, as `cargo run` makes). A development build shows a DEV tag after the brand mark, whose tooltip gives the branch, commit, uncommitted changes, build age and checkout, and says "VectorCraft (dev)" in its window title; `ui.inspect` reports it as `devBuild` |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file (agents' test runs) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `WGPU_ADAPTER_NAME` | Graphics adapter by (part of) its name, any case (see [Desktop graphics processor](#desktop-graphics-processor)) |

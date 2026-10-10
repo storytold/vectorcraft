@@ -22,6 +22,7 @@ pub mod community;
 pub mod control;
 pub mod credits;
 pub mod cursors;
+pub mod dev_build;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
@@ -359,6 +360,10 @@ pub struct VectorcraftApp {
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
+    /// A development build (run from a cargo target directory) shows a DEV tag in the app bar
+    /// and "VectorCraft (dev)" in its window title; the host fills this in. `None` for installed
+    /// apps and the web app.
+    pub dev_build: Option<dev_build::DevBuild>,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
@@ -467,6 +472,7 @@ impl VectorcraftApp {
             custom_titlebar: false,
             last_window_title: String::new(),
             graphics_adapter: None,
+            dev_build: None,
             place: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
