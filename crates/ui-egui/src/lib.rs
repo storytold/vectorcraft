@@ -321,8 +321,9 @@ pub struct VectorcraftApp {
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
-    /// macOS: draw our own title strip under the traffic lights.
-    pub integrated_titlebar: bool,
+    /// macOS: the room the app bar keeps at its left for the window buttons over it, in points
+    /// (0 where the OS draws no buttons over the app bar).
+    pub titlebar_inset: f32,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
@@ -447,7 +448,7 @@ impl VectorcraftApp {
                 cursors: Default::default(),
             },
             perf: Perf::default(),
-            integrated_titlebar: false,
+            titlebar_inset: 0.0,
             last_effect: None,
             run_count: 0,
             clipboard_out: None,

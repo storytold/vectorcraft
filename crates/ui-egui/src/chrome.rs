@@ -12,15 +12,18 @@ use crate::theme::{self, Tokens};
 use crate::widgets;
 use crate::{VectorcraftApp, icons, menus, titlebar};
 
+/// The application bar's height, in points.
+pub const APP_BAR_HEIGHT: f32 = 44.0;
+
 /// The application bar: brand mark, Home, menus, then Discord, the appearance mode, search and
 /// the workspace switcher at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
 /// ([`titlebar`]): the caption buttons take the right end and the rest of the bar drags the window.
 pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let custom = app.custom_titlebar;
-    let left = if app.integrated_titlebar { 78 } else { 8 };
+    let left = app.titlebar_inset.clamp(8.0, f32::from(i8::MAX)) as i8;
     let frame = egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: if custom { 0 } else { 14 }, top: 0, bottom: 0 });
-    let bar = egui::Panel::top("app_bar").exact_size(44.0).frame(frame.stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
+    let bar = egui::Panel::top("app_bar").exact_size(APP_BAR_HEIGHT).frame(frame.stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
         if custom {
             titlebar::drag_area(ui, ui.max_rect());
         }

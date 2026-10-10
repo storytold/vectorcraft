@@ -57,10 +57,13 @@ windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
 # with default features off). Pinned exactly: review the diff before bumping.
 muda = { version = "=0.21.1", default-features = false }
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSMenu", "NSEvent", "NSPasteboard", "NSResponder", "NSTextInputContext"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSMenu", "NSEvent", "NSPasteboard", "NSResponder", "NSTextInputContext", "NSView", "NSWindow"] }
 # Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit, muda and rfd.
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSNotification", "NSOperation", "NSString", "NSURL"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSGeometry", "NSNotification", "NSOperation", "NSString", "NSURL"] }
 block2 = "0.6"
+# The window's AppKit view, to centre its buttons on the app bar (src/mac_window.rs). MIT OR
+# Apache-2.0 OR Zlib, already in the build through eframe and winit.
+raw-window-handle = "0.6"
 # CoreText's font manager (src/mac_fonts.rs): fonts that apps and font managers register from their
 # own folders (#579). Zlib OR Apache-2.0 OR MIT; objc2-core-foundation already comes with
 # objc2-foundation.

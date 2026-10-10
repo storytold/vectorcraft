@@ -32,6 +32,8 @@ mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
+mod mac_window;
+#[cfg(target_os = "macos")]
 mod open_documents;
 mod prefs_dir;
 mod printing;
@@ -70,7 +72,14 @@ impl eframe::App for App {
         }
         file_access::unconfined(|| self.app.raw_input_hook(raw));
     }
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        {
+            let bar = vectorcraft_ui_egui::chrome::APP_BAR_HEIGHT;
+            let inset = mac_window::center_buttons(frame, ui.ctx().zoom_factor(), bar);
+            self.app.titlebar_inset = inset.unwrap_or(mac_window::DEFAULT_INSET);
+        }
         file_access::unconfined(|| self.app.ui(ui));
         #[cfg(target_os = "macos")]
         if self.app.take_ime_discard() {
@@ -569,7 +578,6 @@ fn main() -> std::process::ExitCode {
                 {
                     app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
                 }
-                app.integrated_titlebar = cfg!(target_os = "macos");
                 app.custom_titlebar = CUSTOM_TITLEBAR;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
