@@ -19,6 +19,7 @@ mod headless;
 pub mod logging;
 mod prompts;
 mod resources;
+pub mod roots;
 mod server;
 mod tools;
 
@@ -26,8 +27,9 @@ pub use backend::{Backend, Remote};
 pub use headless::Headless;
 pub use prompts::{PROMPTS, PromptArg, PromptDef};
 pub use resources::{DOC_JSON_URI, DOC_URI, TEMPLATES};
+pub use roots::FileRoots;
 pub use server::{PROTOCOL_VERSION, Server};
-pub use tools::{ToolResult, call_tool, tool_definitions};
+pub use tools::{ToolResult, call_tool, call_tool_confined, tool_definitions};
 
 /// Default control-channel address of the desktop app.
 pub const DEFAULT_ADDR: &str = "127.0.0.1:7979";
@@ -58,5 +60,7 @@ mod tests_persp;
 mod tests_place;
 #[cfg(test)]
 mod tests_protocol;
+#[cfg(test)]
+mod tests_roots;
 #[cfg(test)]
 mod tests_svg;

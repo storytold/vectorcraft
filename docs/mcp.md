@@ -14,6 +14,33 @@ It has two backends:
 With no flag, the server tries `127.0.0.1:7979` and falls back to headless. Logs go to stderr; stdout carries
 only protocol messages.
 
+## Confining file access
+
+By default the server reads and writes anywhere the user could. To confine an agent to a folder,
+pass the same root flags as PhotoCraft:
+
+```sh
+vectorcraft-cli mcp --headless --automation-read-root ~/work --automation-write-root ~/work
+```
+
+Every agent-supplied file path is then resolved (symlinks first) and must sit under the matching
+root: reads (`open_file`, `document.open`, `file.place` and its info/queue, `links.relink`,
+library and preset loads, `plugin.install`, `color.loadProfile`, font searches) under the read
+root, writes (`save_file`, `export`, `file.package`, `file.print`, `css.export`, library and
+preset saves) under the write root. This holds for paths inside `command_run` / `run_command` /
+`invoke_menu` / `command_batch` too, including commands nested in an engine `command.batch`, and
+for both backends (remote calls are checked before they are forwarded to the app).
+
+With either flag set, the side without one is denied, so pass both to confine fully. A few
+pathless forms are rejected when confined because they would write somewhere implicit (saving to
+the document's own file, a library save to the user folder, a plug-in reload of the configured
+folder): pass an explicit path under the write root instead. Forms that provably return bytes
+inline (a pathless `export`, preset exports without a path) stay allowed.
+
+Out of scope: paths the agent never supplies. A document the desktop user opened themselves may
+live outside the roots, so saving it without a path, embedding its links, or packaging its
+linked files can still touch outside files.
+
 ## Build and register
 
 ```sh

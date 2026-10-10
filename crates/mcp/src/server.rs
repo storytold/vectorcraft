@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 use crate::backend::Backend;
 use crate::prompts;
 use crate::resources;
-use crate::tools::{call_tool, tool_definitions};
+use crate::roots::FileRoots;
+use crate::tools::{call_tool_confined, tool_definitions};
 
 /// The MCP revision we implement.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -33,6 +34,7 @@ vectorcraft://swatch/{name} read one thing at a time instead of the whole docume
 /// An MCP server bound to one backend.
 pub struct Server {
     backend: Box<dyn Backend>,
+    roots: FileRoots,
     initialized: bool,
     modern: bool,
     /// Whether this server's client asked for log records (`logging/setLevel`). The queue is
@@ -50,7 +52,14 @@ fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false, modern: false, logging: false }
+        Self { backend, roots: FileRoots::unconstrained(), initialized: false, modern: false, logging: false }
+    }
+
+    /// Confine the server's file access to the `--automation-read-root` /
+    /// `--automation-write-root` folders (`#832`).
+    pub fn with_roots(mut self, roots: FileRoots) -> Self {
+        self.roots = roots;
+        self
     }
 
     pub fn backend(&mut self) -> &mut dyn Backend {
@@ -201,7 +210,7 @@ impl Server {
                 {
                     return Err((INVALID_PARAMS, format!("unknown argument `{key}` for `{name}`")));
                 }
-                Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
+                Ok(call_tool_confined(self.backend.as_mut(), &self.roots, name, &args).to_value())
             }
             "resources/list" => Ok(resources::list()),
             "resources/templates/list" => Ok(resources::templates()),

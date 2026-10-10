@@ -66,9 +66,11 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
-  vectorcraft-cli mcp [--connect ADDR | --headless]
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
+      The root flags confine the server's file access to those folders (symlinks resolved
+      first); with either flag, the side without one is denied.
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
@@ -145,17 +147,21 @@ fn main() -> ExitCode {
 fn mcp(args: &[String]) -> Result<(), String> {
     let mut connect: Option<String> = None;
     let mut headless = false;
+    let (mut read_root, mut write_root) = (None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--connect" => connect = Some(it.next().cloned().ok_or("--connect needs an address")?),
             "--headless" => headless = true,
+            "--automation-read-root" => read_root = Some(it.next().cloned().ok_or("--automation-read-root needs a folder")?),
+            "--automation-write-root" => write_root = Some(it.next().cloned().ok_or("--automation-write-root needs a folder")?),
             other => return Err(format!("unknown mcp option `{other}`")),
         }
     }
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
+    let roots = vectorcraft_mcp::FileRoots::new(read_root.as_deref(), write_root.as_deref())?;
     let backend: Box<dyn Backend> = if headless {
         Box::new(Headless::with_document())
     } else if let Some(addr) = connect {
@@ -173,7 +179,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
     vectorcraft_mcp::logging::install();
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    Server::new(backend).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())
+    Server::new(backend).with_roots(roots).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())
 }
 
 fn commands() -> Result<(), String> {

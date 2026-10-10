@@ -5,6 +5,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format};
 
 use crate::backend::Backend;
+use crate::roots::{FileRoots, check_command};
 
 /// The result of `tools/call`: MCP content blocks plus the `isError` flag.
 #[derive(Clone, Debug, PartialEq)]
@@ -719,8 +720,23 @@ fn filter_commands(all: Value, a: &Args) -> Value {
     Value::Array(list.into_iter().filter(hit).collect())
 }
 
-fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, String> {
+fn dispatch(b: &mut dyn Backend, roots: &FileRoots, name: &str, a: &Args) -> Result<ToolResult, String> {
     let j = |v: Value| Ok(ToolResult::json(&v));
+    // The file tools' own paths, before anything reaches a backend.
+    match name {
+        "open_file" => roots.check_read(name, req_str(a, "path")?)?,
+        "save_file" => match a.get("path").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+            Some(path) => roots.check_write(name, path)?,
+            // Without a path the document's own file is written: implicit, denied when confined.
+            None => roots.require_write_path(name)?,
+        },
+        "export" | "screenshot" => {
+            if let Some(path) = a.get("path").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+                roots.check_write(name, path)?;
+            }
+        }
+        _ => {}
+    }
     match name {
         "command_list" => {
             let all = b.call("engine.commands", json!({}))?;
@@ -730,7 +746,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             }
             j(filter_commands(all, &filters))
         }
-        "command_batch" => command_batch(b, a),
+        "command_batch" => command_batch(b, roots, a),
         "render_preview" => render_preview(b, a),
         "ui_screenshot" => screenshot(b, &Map::from_iter([("window".into(), json!(true))])),
         "list_commands" => {
@@ -745,6 +761,9 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
                 Some(v @ Value::Object(_)) => v.clone(),
                 Some(_) => return Err("`params` must be an object".into()),
             };
+            if let Some(o) = params.as_object() {
+                check_command(roots, cmd, o)?;
+            }
             let method = if name == "invoke_menu" && b.has_ui() { "ui.menu.invoke" } else { "engine.execute" };
             j(b.call(method, json!({"command": cmd, "params": params}))?)
         }
@@ -879,20 +898,25 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
 /// Run one tool. Failures (unknown tool, bad arguments, command errors) come back as an
 /// `isError` result so the model can read and correct them.
 pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> ToolResult {
+    call_tool_confined(b, &FileRoots::unconstrained(), name, args)
+}
+
+/// [`call_tool`] with the server's confinement roots enforced (`#832`).
+pub fn call_tool_confined(b: &mut dyn Backend, roots: &FileRoots, name: &str, args: &Value) -> ToolResult {
     let empty = Map::new();
     let a = match args {
         Value::Object(o) => o,
         Value::Null => &empty,
         _ => return ToolResult::error("tool arguments must be a JSON object"),
     };
-    match vectorcraft_engine::guard::catch_panic(|| dispatch(b, name, a)) {
+    match vectorcraft_engine::guard::catch_panic(|| dispatch(b, roots, name, a)) {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => ToolResult::error(format!("{name}: {e}")),
         Err(e) => ToolResult::error(format!("internal error in `{name}`: {e} (please report this bug)")),
     }
 }
 
-fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
+fn command_batch(b: &mut dyn Backend, roots: &FileRoots, a: &Args) -> Result<ToolResult, String> {
     let steps = a.get("steps").and_then(Value::as_array).ok_or("`steps` must be an array")?;
     let stop = match a.get("stop_on_error") {
         None => true,
@@ -913,6 +937,10 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
                 Some(v @ Value::Object(_)) => vectorcraft_engine::steps::resolve(v, &values)?,
                 Some(_) => return Err("`params` must be an object".into()),
             };
+            // After `$N.path` resolution: the resolved params are what runs.
+            if let Some(o) = params.as_object() {
+                check_command(roots, id, o)?;
+            }
             b.call("engine.execute", json!({"command":id,"params":params}))
         })
         .unwrap_or_else(|e| Err(format!("internal error: {e}")));
