@@ -87,6 +87,10 @@ const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// `automatic` (#502).
 pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
+/// User Interface › Appearance Mode, and the brightnesses each mode shows.
+pub const APPEARANCE_MODES: &[(&str, &str)] = &[("auto", "Sync with system"), ("dark", "Dark"), ("light", "Light")];
+pub const DARK_THEMES: &[(&str, &str)] = &[("dark", "Dark"), ("mediumDark", "Medium Dark")];
+pub const LIGHT_THEMES: &[(&str, &str)] = &[("mediumLight", "Medium Light"), ("light", "Light")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
 const BLACK_OUT: &[(&str, &str)] = &[("accurate", "Output All Blacks Accurately"), ("rich", "Output All Blacks as Rich Black")];
 
@@ -261,6 +265,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Brightness",
         choice(&[("dark", "Dark"), ("mediumDark", "Medium Dark"), ("mediumLight", "Medium Light"), ("light", "Light")])
     ),
+    p!("appearanceMode", "User Interface", "", "Appearance Mode", choice(APPEARANCE_MODES)),
+    p!("darkTheme", "User Interface", "", "Dark Theme", choice(DARK_THEMES)),
+    p!("lightTheme", "User Interface", "", "Light Theme", choice(LIGHT_THEMES)),
     p!(
         "canvasColor",
         "User Interface",
@@ -425,6 +432,17 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
     }
 }
 
+/// The appearance mode (`dark` or `light`) a brightness belongs to, and its theme preference key.
+pub fn brightness_family(id: &str) -> Option<(&'static str, &'static str)> {
+    if DARK_THEMES.iter().any(|(v, _)| *v == id) {
+        Some(("dark", "darkTheme"))
+    } else if LIGHT_THEMES.iter().any(|(v, _)| *v == id) {
+        Some(("light", "lightTheme"))
+    } else {
+        None
+    }
+}
+
 /// `x` (`None`: not a number) as the value of number preference `key` in `min..=max`.
 fn in_range(key: &str, x: Option<f64>, min: f64, max: f64) -> std::result::Result<Value, String> {
     match x {
@@ -439,14 +457,57 @@ impl Prefs {
         serde_json::to_value(self).unwrap_or(Value::Null)
     }
 
-    /// Set several validated values at once; on any error nothing changes.
+    /// Set several validated values at once; on any error nothing changes. The legacy
+    /// `uiBrightness` also selects its appearance mode and theme slot, unless the same call sets
+    /// those explicitly (as the Preferences dialog does).
     pub fn set_values(&mut self, values: &Map<String, Value>) -> std::result::Result<(), String> {
         let mut obj = self.to_json();
         for (k, v) in values {
             obj[k.as_str()] = if PREF_GROUPS.contains(&k.as_str()) { validate_group(k, &obj[k.as_str()], v)? } else { validate(k, v)? };
         }
+        if values.contains_key("uiBrightness")
+            && let Some(b) = obj.get("uiBrightness").and_then(Value::as_str)
+            && let Some((mode, slot)) = brightness_family(b)
+        {
+            let b = b.to_string();
+            if !values.contains_key("appearanceMode") {
+                obj["appearanceMode"] = json!(mode);
+            }
+            if !values.contains_key(slot) {
+                obj[slot] = json!(b);
+            }
+        }
         *self = serde_json::from_value(obj).map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    /// Show brightness `id` (`dark`, `mediumDark`, `mediumLight`, `light`): the UI Brightness menu
+    /// fixes the appearance mode to its family and stores it as that family's theme.
+    pub fn select_brightness(&mut self, id: &str) -> std::result::Result<(), String> {
+        let (mode, _) = brightness_family(id).ok_or_else(|| format!("unknown brightness `{id}`"))?;
+        self.ui_brightness = id.to_string();
+        self.appearance_mode = mode.to_string();
+        if mode == "dark" {
+            self.dark_theme = id.to_string();
+        } else {
+            self.light_theme = id.to_string();
+        }
+        Ok(())
+    }
+
+    /// Preferences as saved (`to_json`), read leniently: unknown keys are ignored and missing ones
+    /// take their defaults. Files saved before appearance modes had only `uiBrightness`: they keep
+    /// that brightness as a fixed Dark or Light mode instead of switching to another look.
+    pub fn from_saved(mut v: Value) -> Prefs {
+        if let Some(o) = v.as_object_mut()
+            && !o.contains_key("appearanceMode")
+            && let Some(b) = o.get("uiBrightness").and_then(Value::as_str).map(str::to_string)
+            && let Some((mode, slot)) = brightness_family(&b)
+        {
+            o.insert("appearanceMode".into(), json!(mode));
+            o.insert(slot.into(), json!(b));
+        }
+        serde_json::from_value(v).unwrap_or_default()
     }
 
     /// The folders the app reads (fonts, plug-ins) or writes (Data Recovery copies, the Templates

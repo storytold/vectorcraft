@@ -3897,6 +3897,12 @@ axis	Both	Ambos
 	Constrain	Restringir
 	Free Transform	Transformación libre
 	Perspective Distort	Distorsión de perspectiva
+	Appearance Mode	Modo de apariencia
+	Dark Theme	Tema oscuro
+	Light Theme	Tema claro
+	Sync with system	Sincronizar con el sistema
+	Active	Activo
+	Next Appearance Mode	Siguiente modo de apariencia
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` es la referencia a un paso {r}, que solo `run` y `command_batch` resuelven
 @msg	`ids` must be an array of object ids, not {v}	`ids` debe ser una lista de identificadores de objeto, no {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: el resultado del paso {i} no tiene ese valor (escriba $$ para un $ literal)
@@ -3932,6 +3938,9 @@ axis	Both	Ambos
 	Duplication	Duplicación
 	Interpolation	Interpolación
 @msg	Imported library {name}	Biblioteca {name} importada
+@msg	appearance parameters must be an object	los parámetros de apariencia deben ser un objeto
+@msg	mode must be auto|dark|light	mode debe ser auto|dark|light
+@msg	unknown brightness `{id}`	brillo desconocido `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Textura

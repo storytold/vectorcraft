@@ -273,7 +273,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{collapsed?: bool} collapse the dock's Properties | Layers | Libraries group to icons (true), expand it (false) or toggle (omitted), as the double arrow at the top of the dock does; returns the new state",
     ),
-    ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
+    (
+        "window.brightness",
+        "UI Brightness",
+        "",
+        "{brightness: dark|mediumDark|mediumLight|light} show that brightness: fixes the appearance mode to its family (Dark or Light) and keeps it as that mode's theme",
+    ),
+    (
+        "window.appearanceMode",
+        "Next Appearance Mode",
+        "",
+        "{mode?: auto|dark|light} set the appearance mode (auto follows the system's light or dark appearance with the light and dark themes); without `mode` cycles Auto, Light, Dark, as the app bar's appearance button does → the new mode",
+    ),
     ("window.workspace", "Workspace", "", "{name} switch workspace (Essentials, Essentials Classic, Painting, …)"),
     ("window.workspace.reset", "Reset Essentials", "", "{} reset the current workspace"),
     ("window.workspace.new", "New Workspace…", "", "{name?} save the current layout"),
@@ -1151,14 +1162,23 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             }
         }
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
-            Some(b) => {
+            Some(b) => app.session.prefs.select_brightness(b.id()).map(|()| {
                 app.ui.brightness = b;
-                app.session.prefs.ui_brightness = b.id().into();
                 app.canvas.key = None;
-                Ok(json!(b.id()))
-            }
+                json!(b.id())
+            }),
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
+        "window.appearanceMode" => {
+            if !p.is_object() {
+                Err("appearance parameters must be an object".into())
+            } else {
+                match p.get("mode") {
+                    Some(v) if !v.is_string() => Err("mode must be auto|dark|light".into()),
+                    _ => crate::prefs_dialog::set_appearance_mode(app, s("mode").as_deref()),
+                }
+            }
+        }
         "window.newWindow" => Err("multiple windows land with M11.5".into()),
         "tool.select" => match s("tool") {
             Some(t) if vectorcraft_tools::tool_info(&t).is_some() => {

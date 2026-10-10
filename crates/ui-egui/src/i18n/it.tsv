@@ -3897,6 +3897,12 @@ axis	Both	Entrambi
 	Constrain	Vincola
 	Free Transform	Trasformazione libera
 	Perspective Distort	Distorsione prospettica
+	Appearance Mode	Modalità aspetto
+	Dark Theme	Tema scuro
+	Light Theme	Tema chiaro
+	Sync with system	Sincronizza con il sistema
+	Active	Attivo
+	Next Appearance Mode	Modalità aspetto successiva
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` è il riferimento al passaggio {r}, che solo `run` e `command_batch` risolvono
 @msg	`ids` must be an array of object ids, not {v}	`ids` deve essere un elenco di ID oggetto, non {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: il risultato del passaggio {i} non ha questo valore (scrivi $$ per un $ letterale)
@@ -3932,6 +3938,9 @@ axis	Both	Entrambi
 	Duplication	Duplicazione
 	Interpolation	Interpolazione
 @msg	Imported library {name}	Libreria {name} importata
+@msg	appearance parameters must be an object	i parametri dell'aspetto devono essere un oggetto
+@msg	mode must be auto|dark|light	mode deve essere auto|dark|light
+@msg	unknown brightness `{id}`	luminosità sconosciuta `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Texture

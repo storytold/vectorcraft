@@ -6,7 +6,9 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{
+    APPEARANCE_MODES, DARK_THEMES, GPU_PREFERENCES, LIGHT_THEMES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind,
+};
 
 use crate::state::Dialog;
 use crate::theme::{self, Brightness, Tokens};
@@ -55,10 +57,10 @@ pub fn snapshot(app: &mut VectorcraftApp) {
 
 /// Restore engine prefs from `UiState` after the host loaded saved UI state.
 pub fn restore(app: &mut VectorcraftApp) {
-    let mut p: Prefs = serde_json::from_value(app.ui.engine_prefs.clone()).unwrap_or_default();
+    let mut p = Prefs::from_saved(app.ui.engine_prefs.clone());
     if app.ui.engine_prefs.is_null() {
-        // Older preference files: keep the saved brightness.
-        p.ui_brightness = app.ui.brightness.id().into();
+        // Older preference files: keep the saved brightness (as a fixed Dark or Light mode).
+        let _ = p.select_brightness(app.ui.brightness.id());
     }
     // Older preference files kept the interface language with the UI state; English was the
     // default there, so only another language is carried over (onto an unset preference).
@@ -100,14 +102,52 @@ fn canvas_color(key: &str) -> Option<egui::Color32> {
     }
 }
 
+/// The brightness the appearance preferences show: the light or dark theme for the mode, Sync
+/// with system following `system` (Dark when the system doesn't say).
+pub(crate) fn selected_brightness(p: &Prefs, system: Option<egui::Theme>) -> Brightness {
+    let light = match p.appearance_mode.as_str() {
+        "light" => true,
+        "auto" => system == Some(egui::Theme::Light),
+        _ => false,
+    };
+    let (id, fallback) = if light { (&p.light_theme, Brightness::Light) } else { (&p.dark_theme, Brightness::MediumDark) };
+    Brightness::parse(id).filter(|b| Tokens::for_brightness(*b).dark != light).unwrap_or(fallback)
+}
+
+/// The system's light or dark appearance: the desktop app's service first (it also covers Linux
+/// desktops whose windowing doesn't report it), then what egui reports.
+pub(crate) fn system_theme(app: &VectorcraftApp, ctx: &egui::Context) -> Option<egui::Theme> {
+    app.services.system_theme.as_ref().and_then(|read| read(ctx)).or_else(|| ctx.system_theme())
+}
+
+/// The appearance button and `window.appearanceMode` without a mode: Sync with system, then Light,
+/// then Dark, then back. The light and dark theme choices stay as they are.
+pub(crate) fn next_appearance_mode(mode: &str) -> &'static str {
+    match mode {
+        "auto" => "light",
+        "light" => "dark",
+        _ => "auto",
+    }
+}
+
+/// Set the appearance mode (`None`: the next one); [`apply_runtime`] shows it from the next frame.
+pub(crate) fn set_appearance_mode(app: &mut VectorcraftApp, mode: Option<&str>) -> Result<Value, String> {
+    let mode = mode.unwrap_or_else(|| next_appearance_mode(&app.session.prefs.appearance_mode)).to_string();
+    app.run("prefs.set", json!({"key": "appearanceMode", "value": mode}))?;
+    Ok(json!(app.session.prefs.appearance_mode))
+}
+
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
 pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let p = &app.session.prefs;
-    if let Some(b) = Brightness::parse(&p.ui_brightness)
-        && b != app.ui.brightness
-    {
+    // Appearance Mode: reading the system's appearance is a load (no polling); the desktop app's
+    // service asks for a frame when it changes, and egui does on its own theme events.
+    let system = system_theme(app, ctx);
+    ctx.data_mut(|m| m.insert_temp(egui::Id::new(SYSTEM_THEME_ID), system));
+    let b = selected_brightness(&app.session.prefs, system);
+    if b != app.ui.brightness {
         app.ui.brightness = b;
     }
+    let p = &app.session.prefs;
     let want = Applied {
         brightness: app.ui.brightness,
         canvas: canvas_color(&p.canvas_color),
@@ -165,9 +205,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     for c in PREF_CATEGORIES {
                         let sel = *c == cat;
-                        let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
-                        let b = egui::Button::selectable(sel, text).frame_when_inactive(false).min_size(egui::vec2(184.0, 24.0));
-                        if ui.add(b).clicked() {
+                        if category_button(ui, tl!(*c), sel, &t).clicked() {
                             d.fields.insert("__category".into(), json!(c));
                         }
                     }
@@ -224,6 +262,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Selected categories keep the app accent even when egui switches its light/dark style.
+fn category_button(ui: &mut egui::Ui, label: &str, selected: bool, t: &Tokens) -> egui::Response {
+    let text = egui::RichText::new(label).size(12.5).color(if selected { egui::Color32::WHITE } else { t.text });
+    let button = egui::Button::selectable(selected, text).min_size(egui::vec2(184.0, 24.0));
+    ui.add(if selected { button.fill(t.accent_strong).stroke(egui::Stroke::NONE) } else { button })
+}
+
 fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
     let t = Tokens::get(ui.ctx());
     let mut section = "";
@@ -238,7 +283,14 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
         bool_row(ui, d, "__smartGuides", UI_FIELDS[0].2);
         ui.add_space(4.0);
     }
+    if cat == "User Interface" {
+        appearance_rows(ui, d);
+    }
     for sp in specs {
+        // Shown by `appearance_rows`; the legacy single brightness isn't shown.
+        if APPEARANCE_KEYS.contains(&sp.key) {
+            continue;
+        }
         if sp.section != section {
             section = sp.section;
             if !section.is_empty() {
@@ -346,6 +398,171 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 });
             }
         }
+    }
+}
+
+/// User Interface preferences the appearance block shows instead of the generic rows.
+const APPEARANCE_KEYS: &[&str] = &["uiBrightness", "appearanceMode", "darkTheme", "lightTheme"];
+
+/// User Interface › Appearance: the mode, then the light and dark themes side by side, each with a
+/// preview of the editor in it. The card the mode shows now is outlined.
+fn appearance_rows(ui: &mut egui::Ui, d: &mut Dialog) {
+    let mode = d.str("appearanceMode");
+    labeled(ui, "Appearance Mode", |ui| {
+        let cur = APPEARANCE_MODES.iter().find(|(v, _)| *v == mode).map_or(tl!("Dark"), |(_, label)| tl!(*label));
+        let labels: Vec<&str> = APPEARANCE_MODES.iter().map(|(_, label)| tl!(*label)).collect();
+        if let Some(i) = widgets::dropdown(ui, "appearanceMode", cur, &labels, 260.0)
+            && let Some((v, _)) = APPEARANCE_MODES.get(i)
+        {
+            d.fields.insert("appearanceMode".into(), json!(v));
+        }
+    });
+    ui.add_space(6.0);
+    let system = ui.ctx().data(|m| m.get_temp::<Option<egui::Theme>>(egui::Id::new(SYSTEM_THEME_ID))).flatten().or_else(|| ui.ctx().system_theme());
+    let mode = d.str("appearanceMode");
+    let light_active = mode == "light" || (mode == "auto" && system == Some(egui::Theme::Light));
+    let gap = 10.0;
+    let width = ((ui.available_width() - gap) / 2.0).floor().max(180.0);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        theme_card(ui, d, "lightTheme", "Light Theme", LIGHT_THEMES, light_active, width);
+        theme_card(ui, d, "darkTheme", "Dark Theme", DARK_THEMES, !light_active, width);
+    });
+    ui.add_space(10.0);
+}
+
+/// The id under which [`apply_runtime`] leaves the system appearance for the dialog.
+const SYSTEM_THEME_ID: &str = "vc-system-theme";
+
+fn theme_card(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str, options: &[(&str, &str)], active: bool, width: f32) {
+    let t = Tokens::get(ui.ctx());
+    let Some((first, _)) = options.first() else { return };
+    let cur = d.str(key);
+    let shown = options.iter().map(|(v, _)| *v).find(|v| *v == cur).unwrap_or(first);
+    egui::Frame::NONE
+        .fill(t.panel_darker)
+        .stroke(egui::Stroke::new(if active { 1.5 } else { 1.0 }, if active { t.accent } else { t.divider }))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                let inner = width - 16.0;
+                ui.set_width(inner);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(tl!(title)).font(theme::semibold(12.5)).color(t.text_strong));
+                    if active {
+                        ui.label(egui::RichText::new(tl!("Active")).size(11.0).color(t.accent));
+                    }
+                });
+                ui.add_space(2.0);
+                theme_preview(ui, Brightness::parse(shown).unwrap_or_default(), inner);
+                ui.add_space(4.0);
+                for (v, label) in options {
+                    if ui.radio(*v == shown, tl!(*label)).clicked() {
+                        d.fields.insert(key.into(), json!(v));
+                    }
+                }
+            });
+        });
+}
+
+/// A small VectorCraft window in brightness `b`'s colours: the app bar with its search box, the
+/// document tab, the two-column Tools panel, an artboard with selected art on the canvas, the
+/// panel icon column, the Properties | Layers | Libraries dock and the status bar.
+fn theme_preview(ui: &mut egui::Ui, b: Brightness, width: f32) {
+    use egui::{Rect, pos2, vec2};
+    let p = Tokens::for_brightness(b);
+    let height = (width * 0.56).round().clamp(96.0, 150.0);
+    let (rect, _) = ui.allocate_exact_size(vec2(width, height), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    let bar = |x: f32, y: f32, w: f32, h: f32| Rect::from_min_size(pos2(x, y), vec2(w, h));
+    painter.rect_filled(rect, 3.0, p.panel);
+    let (l, top, r, bottom) = (rect.left(), rect.top(), rect.right(), rect.bottom());
+    // App bar: the brand mark, menus, the search box and the workspace switcher.
+    let app_bar = bar(l, top, width, 12.0);
+    painter.rect_filled(app_bar, egui::CornerRadius { nw: 3, ne: 3, sw: 0, se: 0 }, p.app_bar);
+    painter.rect_filled(bar(l + 4.0, top + 3.0, 6.0, 6.0), 1.5, p.accent);
+    for (i, w) in [9.0, 8.0, 11.0, 8.0, 10.0].into_iter().enumerate() {
+        painter.rect_filled(bar(l + 14.0 + i as f32 * 13.0, top + 5.0, w, 2.0), 1.0, p.text_dim);
+    }
+    painter.rect_filled(bar(r - width * 0.44, top + 3.0, width * 0.22, 6.0), 3.0, p.input);
+    painter.rect_filled(bar(r - width * 0.19, top + 3.5, width * 0.15, 5.0), 1.0, p.panel);
+    // Status bar.
+    let status = bar(l, bottom - 7.0, width, 7.0);
+    painter.rect_filled(status, egui::CornerRadius { nw: 0, ne: 0, sw: 3, se: 3 }, p.panel_darker);
+    painter.rect_filled(bar(l + 4.0, bottom - 4.5, 14.0, 2.0), 1.0, p.text_dim);
+    // Tools: two columns of tools under their group labels, the Selection tool active.
+    let tools = Rect::from_min_max(pos2(l, app_bar.bottom()), pos2(l + 20.0, status.top()));
+    painter.rect_filled(tools, 0.0, p.panel);
+    let mut y = tools.top() + 4.0;
+    for group in 0..3 {
+        painter.rect_filled(bar(l + 6.0, y, 8.0, 1.5), 0.5, p.text_disabled);
+        y += 4.0;
+        for row in 0..2 {
+            if y + 5.0 > tools.bottom() - 2.0 {
+                break;
+            }
+            for col in 0..2 {
+                let cell = bar(l + 3.0 + col as f32 * 8.0, y, 6.0, 5.0);
+                if group == 0 && row == 0 && col == 0 {
+                    painter.rect_filled(cell.expand(1.0), 1.0, p.tool_active);
+                }
+                painter.rect_filled(cell.shrink(1.0), 0.5, p.icon);
+            }
+            y += 8.0;
+        }
+        y += 2.0;
+    }
+    // The dock: Properties | Layers | Libraries, then labelled fields; the icon column before it.
+    let dock_w = (width * 0.3).round();
+    let dock = Rect::from_min_max(pos2(r - dock_w, app_bar.bottom()), pos2(r, status.top()));
+    let icons = Rect::from_min_max(pos2(dock.left() - 11.0, dock.top()), pos2(dock.left(), dock.bottom()));
+    painter.rect_filled(icons, 0.0, p.panel_darker);
+    for i in 0..6 {
+        let cy = icons.top() + 6.0 + i as f32 * 9.0;
+        if cy + 4.0 < icons.bottom() {
+            painter.rect_filled(bar(icons.left() + 3.0, cy, 5.0, 5.0), 1.0, p.icon);
+        }
+    }
+    painter.rect_filled(dock, 0.0, p.panel);
+    let tabs = bar(dock.left(), dock.top(), dock_w, 9.0);
+    painter.rect_filled(tabs, 0.0, p.tab_strip);
+    painter.rect_filled(bar(dock.left(), dock.top(), dock_w * 0.38, 9.0), 0.0, p.panel);
+    painter.rect_filled(bar(dock.left() + 3.0, dock.top() + 3.5, dock_w * 0.28, 2.0), 1.0, p.text_strong);
+    painter.rect_filled(bar(dock.left() + dock_w * 0.45, dock.top() + 3.5, dock_w * 0.2, 2.0), 1.0, p.text_dim);
+    painter.rect_filled(bar(dock.left() + dock_w * 0.72, dock.top() + 3.5, dock_w * 0.22, 2.0), 1.0, p.text_dim);
+    let mut y = tabs.bottom() + 5.0;
+    while y + 6.0 < dock.bottom() - 2.0 {
+        painter.rect_filled(bar(dock.left() + 3.0, y + 2.0, dock_w * 0.22, 2.0), 1.0, p.text_dim);
+        let field = bar(dock.left() + dock_w * 0.32, y, dock_w * 0.6, 6.0);
+        painter.rect_filled(field, 1.0, p.input);
+        painter.rect_stroke(field, 1.0, egui::Stroke::new(0.5, p.input_border), egui::StrokeKind::Inside);
+        y += 10.0;
+    }
+    // The canvas: the document tab, then an artboard with a selected shape on the pasteboard.
+    let canvas = Rect::from_min_max(pos2(tools.right(), app_bar.bottom()), pos2(icons.left(), status.top()));
+    painter.rect_filled(canvas, 0.0, p.pasteboard);
+    let tab_strip = bar(canvas.left(), canvas.top(), canvas.width(), 7.0);
+    painter.rect_filled(tab_strip, 0.0, p.tab_strip);
+    painter.rect_filled(bar(canvas.left(), canvas.top(), canvas.width().min(36.0), 7.0), 0.0, p.panel);
+    painter.rect_filled(bar(canvas.left() + 4.0, canvas.top() + 2.5, canvas.width().min(36.0) - 10.0, 2.0), 1.0, p.text);
+    for x in [canvas.left(), icons.left(), dock.left()] {
+        painter.vline(x, app_bar.bottom()..=status.top(), egui::Stroke::new(1.0, p.border));
+    }
+    let area = Rect::from_min_max(pos2(canvas.left(), tab_strip.bottom()), canvas.max);
+    let h = (area.height() - 10.0).max(10.0);
+    let board = Rect::from_center_size(area.center(), vec2((h * 0.78).min(area.width() - 10.0), h));
+    painter.rect_filled(board.translate(vec2(1.0, 1.5)), 0.0, egui::Color32::from_black_alpha(60));
+    painter.rect_filled(board, 0.0, egui::Color32::WHITE);
+    let sun = board.center() + vec2(0.0, board.height() * 0.08);
+    let rad = board.width() * 0.24;
+    painter.circle_filled(sun, rad, p.accent);
+    painter.rect_filled(Rect::from_min_max(pos2(board.left(), sun.y + rad * 0.45), board.max), 0.0, p.accent_strong.gamma_multiply(0.55));
+    let sel = Rect::from_center_size(sun, vec2(rad * 2.0, rad * 2.0)).expand(1.5);
+    painter.rect_stroke(sel, 0.0, egui::Stroke::new(1.0, p.selection), egui::StrokeKind::Middle);
+    for c in [sel.left_top(), sel.right_top(), sel.left_bottom(), sel.right_bottom()] {
+        painter.rect_filled(Rect::from_center_size(c, vec2(3.0, 3.0)), 0.0, egui::Color32::WHITE);
+        painter.rect_stroke(Rect::from_center_size(c, vec2(3.0, 3.0)), 0.0, egui::Stroke::new(0.8, p.selection), egui::StrokeKind::Middle);
     }
 }
 
@@ -569,6 +786,172 @@ mod tests {
             restore(&mut a);
             assert_eq!(a.session.prefs.gpu_preference, read, "{saved}");
         }
+    }
+
+    fn prefs_with(mode: &str, dark: &str, light: &str) -> Prefs {
+        Prefs { appearance_mode: mode.into(), dark_theme: dark.into(), light_theme: light.into(), ..Prefs::default() }
+    }
+
+    /// Appearance Mode: Dark and Light show their saved theme whatever the system says; Sync with
+    /// system follows it, and shows Dark when it says nothing.
+    #[test]
+    fn appearance_resolves_both_saved_themes_and_follows_system() {
+        use egui::Theme::{Dark, Light};
+        let p = prefs_with("auto", "mediumDark", "light");
+        assert_eq!(selected_brightness(&p, Some(Dark)), Brightness::MediumDark);
+        assert_eq!(selected_brightness(&p, Some(Light)), Brightness::Light);
+        assert_eq!(selected_brightness(&p, None), Brightness::MediumDark, "no system answer: Dark");
+        let p = prefs_with("auto", "dark", "mediumLight");
+        assert_eq!(selected_brightness(&p, Some(Dark)), Brightness::Dark);
+        assert_eq!(selected_brightness(&p, Some(Light)), Brightness::MediumLight);
+        assert_eq!(selected_brightness(&prefs_with("dark", "dark", "mediumLight"), Some(Light)), Brightness::Dark);
+        assert_eq!(selected_brightness(&prefs_with("light", "dark", "mediumLight"), Some(Dark)), Brightness::MediumLight);
+        // A theme from the wrong family (hand-edited file) shows the family's default.
+        assert_eq!(selected_brightness(&prefs_with("light", "dark", "dark"), None), Brightness::Light);
+        // New users keep Medium Dark.
+        assert_eq!(selected_brightness(&Prefs::default(), Some(Light)), Brightness::MediumDark);
+    }
+
+    /// Sync with system reads the desktop app's service (Linux portal) where egui reports nothing,
+    /// and a change shows on the next frame.
+    #[test]
+    fn auto_follows_the_system_theme_service() {
+        let system = std::sync::Arc::new(std::sync::Mutex::new(Some(egui::Theme::Light)));
+        let read = system.clone();
+        let mut a = app();
+        a.services.system_theme = Some(Box::new(move |_| *read.lock().unwrap()));
+        let ctx = egui::Context::default();
+        a.run("prefs.set", json!({"key": "appearanceMode", "value": "auto"})).unwrap();
+        apply_runtime(&mut a, &ctx);
+        assert_eq!(a.ui.brightness, Brightness::Light);
+        assert!(!Tokens::get(&ctx).dark);
+        assert_eq!(ctx.theme(), egui::Theme::Light, "egui's own style follows");
+        *system.lock().unwrap() = Some(egui::Theme::Dark);
+        apply_runtime(&mut a, &ctx);
+        assert_eq!(a.ui.brightness, Brightness::MediumDark);
+        assert!(Tokens::get(&ctx).dark);
+        *system.lock().unwrap() = None;
+        apply_runtime(&mut a, &ctx);
+        assert_eq!(a.ui.brightness, Brightness::MediumDark, "no answer: Dark");
+    }
+
+    /// The app bar's appearance button (`window.appearanceMode` without a mode) goes Sync with
+    /// system, Light, Dark and round again, keeping both theme choices.
+    #[test]
+    fn appearance_button_cycles_modes_without_losing_theme_choices() {
+        let mut a = app();
+        a.services.system_theme = Some(Box::new(|_| Some(egui::Theme::Dark)));
+        let ctx = egui::Context::default();
+        a.run("prefs.set", json!({"values": {"darkTheme": "dark", "lightTheme": "mediumLight"}})).unwrap();
+        for (mode, shown) in [("auto", Brightness::Dark), ("light", Brightness::MediumLight), ("dark", Brightness::Dark), ("auto", Brightness::Dark)]
+        {
+            assert_eq!(a.run("window.appearanceMode", json!({})).unwrap(), json!(mode));
+            apply_runtime(&mut a, &ctx);
+            assert_eq!(a.session.prefs.appearance_mode, mode);
+            assert_eq!(a.ui.brightness, shown, "{mode}");
+            assert_eq!((a.session.prefs.dark_theme.as_str(), a.session.prefs.light_theme.as_str()), ("dark", "mediumLight"));
+        }
+        assert_eq!(a.run("window.appearanceMode", json!({"mode": "light"})).unwrap(), json!("light"));
+        assert!(a.run("window.appearanceMode", json!({"mode": "sepia"})).is_err());
+        assert_eq!(a.session.prefs.appearance_mode, "light");
+        assert!(a.run("window.appearanceMode", json!({"mode": 42})).is_err());
+        assert!(a.run("window.appearanceMode", json!([])).is_err());
+        assert_eq!(a.session.prefs.appearance_mode, "light");
+    }
+
+    /// UI Brightness (menu, `ui.set {brightness}`) shows that brightness and fixes the mode to its
+    /// family, keeping the other family's theme.
+    #[test]
+    fn ui_brightness_menu_fixes_the_mode_to_its_family() {
+        let mut a = app();
+        let ctx = egui::Context::default();
+        a.run("window.appearanceMode", json!({"mode": "auto"})).unwrap();
+        a.run("window.brightness", json!({"brightness": "mediumLight"})).unwrap();
+        apply_runtime(&mut a, &ctx);
+        assert_eq!(a.ui.brightness, Brightness::MediumLight);
+        assert_eq!((a.session.prefs.appearance_mode.as_str(), a.session.prefs.light_theme.as_str()), ("light", "mediumLight"));
+        a.run("window.brightness", json!({"brightness": "dark"})).unwrap();
+        apply_runtime(&mut a, &ctx);
+        assert_eq!(a.ui.brightness, Brightness::Dark);
+        let p = &a.session.prefs;
+        assert_eq!((p.appearance_mode.as_str(), p.dark_theme.as_str(), p.light_theme.as_str()), ("dark", "dark", "mediumLight"));
+    }
+
+    /// Preferences saved before appearance modes (only `uiBrightness`) load as that brightness in
+    /// a fixed mode, not Sync with system.
+    #[test]
+    fn saved_single_brightness_loads_as_a_fixed_mode() {
+        let mut a = app();
+        a.ui.engine_prefs = json!({"uiBrightness": "light", "gridlineEvery": 50});
+        restore(&mut a);
+        apply_runtime(&mut a, &egui::Context::default());
+        assert_eq!((a.session.prefs.appearance_mode.as_str(), a.session.prefs.light_theme.as_str()), ("light", "light"));
+        assert_eq!(a.ui.brightness, Brightness::Light);
+        assert_eq!(a.session.prefs.gridline_every, 50.0);
+    }
+
+    /// User Interface shows the mode above the light and dark theme cards (the one showing marked
+    /// Active), and OK saves what they pick.
+    #[test]
+    fn appearance_block_shows_the_theme_cards_and_ok_saves_them() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>, positions: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => {
+                    out.push(t.galley.text().to_string());
+                    positions.push((t.galley.text().to_string(), t.pos));
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out, positions)),
+                _ => {}
+            }
+        }
+        let mut a = app();
+        open(&mut a, Some("User Interface"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut shown = vec![];
+        let mut positions = vec![];
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+            out.textures_delta.clear();
+            shown.clear();
+            positions.clear();
+            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown, &mut positions));
+        }
+        for want in ["Appearance Mode:", "Light Theme", "Dark Theme", "Active", "Medium Dark", "Medium Light"] {
+            assert!(shown.iter().any(|t| t == want), "{want}: {shown:?}");
+        }
+        assert!(!shown.iter().any(|t| t.starts_with("Brightness")), "the legacy row is hidden: {shown:?}");
+        let at = |label| positions.iter().find(|(text, _)| text == label).map(|(_, pos)| *pos).unwrap();
+        assert!(at("Light Theme").x < at("Dark Theme").x, "cards sit side by side");
+        assert!(at("Medium Dark").y > at("Dark Theme").y + 50.0, "options follow the preview vertically");
+        assert!(at("Medium Light").y > at("Light Theme").y + 50.0, "options follow the preview vertically");
+        let d = a.ui.dialog.as_mut().unwrap();
+        d.fields.insert("appearanceMode".into(), json!("auto"));
+        d.fields.insert("lightTheme".into(), json!("mediumLight"));
+        confirm(&mut a).unwrap();
+        assert_eq!((a.session.prefs.appearance_mode.as_str(), a.session.prefs.light_theme.as_str()), ("auto", "mediumLight"));
+        assert_eq!(a.ui.engine_prefs["appearanceMode"], json!("auto"));
+    }
+
+    /// The selected category has a painted accent row even when the pointer is idle.
+    #[test]
+    fn selected_preferences_category_paints_accent() {
+        fn has_accent(shape: &egui::Shape, accent: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Rect(rect) => rect.fill == accent,
+                egui::Shape::Vec(shapes) => shapes.iter().any(|shape| has_accent(shape, accent)),
+                _ => false,
+            }
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Brightness::MediumDark);
+        let tokens = Tokens::for_brightness(Brightness::MediumDark);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            category_button(ui, "User Interface", true, &tokens);
+        });
+        output.textures_delta.clear();
+        assert!(output.shapes.iter().any(|clipped| has_accent(&clipped.shape, tokens.accent_strong)));
     }
 
     #[test]

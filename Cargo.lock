@@ -4346,6 +4346,7 @@ dependencies = [
  "winit",
  "winresource",
  "winsafe",
+ "zbus",
 ]
 
 [[package]]

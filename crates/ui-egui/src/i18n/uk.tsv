@@ -3880,6 +3880,12 @@ axis	Both	Обидві
 	Perspective Distort	Спотворення перспективи
 	Artboard	Монтажна область
 	Exit	Вийти
+	Appearance Mode	Режим оформлення
+	Dark Theme	Темна тема
+	Light Theme	Світла тема
+	Sync with system	Як у системі
+	Active	Активна
+	Next Appearance Mode	Наступний режим оформлення
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
@@ -3915,6 +3921,9 @@ axis	Both	Обидві
 	Duplication	Дублюванням
 	Interpolation	Інтерполяцією
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
+@msg	appearance parameters must be an object	параметри вигляду мають бути об'єктом
+@msg	mode must be auto|dark|light	mode має бути auto|dark|light
+@msg	unknown brightness `{id}`	невідома яскравість `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Текстура

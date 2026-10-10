@@ -3908,6 +3908,12 @@ axis	Both	Les deux
 	Insert Inline Symbol	Insérer un symbole dans le texte
 	ICF Top/Right	ICF haut/droite
 	ICF Bottom/Left	ICF bas/gauche
+	Appearance Mode	Mode d’apparence
+	Dark Theme	Thème sombre
+	Light Theme	Thème clair
+	Sync with system	Synchroniser avec le système
+	Active	Actif
+	Next Appearance Mode	Mode d’apparence suivant
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
 @msg	`ids` must be an array of object ids, not {v}	`ids` doit être une liste d’identifiants d’objet, pas {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}` : le résultat de l’étape {i} n’a pas cette valeur (écrivez $$ pour un $ littéral)
@@ -3943,6 +3949,9 @@ axis	Both	Les deux
 	Duplication	Duplication
 	Interpolation	Interpolation
 @msg	Imported library {name}	Bibliothèque {name} importée
+@msg	appearance parameters must be an object	les paramètres d'apparence doivent être un objet
+@msg	mode must be auto|dark|light	mode doit valoir auto|dark|light
+@msg	unknown brightness `{id}`	luminosité inconnue `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Texture

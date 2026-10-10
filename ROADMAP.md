@@ -98,6 +98,7 @@ When a task lands, update this section, the parity table and "Shipped so far" in
 grade by behaviour against `plan/illustrator/`, not by whether a menu item exists.
 
 ## Shipped so far
+- **Appearance:** opt-in system appearance, separate light/dark brightness choices and vector-workspace previews; preserves the Medium Dark default and migrates existing saved brightness. Standardises the Craft apps with [PhotoCraft #1981](https://github.com/storytold/photocraft/pull/1981).
 
 - **Architecture:** 19+ crates with enforced layering (`cargo xtask layers`). Every action is a command (~400 engine + ~50 UI). Undo is unlimited via structural sharing. `command.batch` runs several commands as one transaction.
 - **Automation:**

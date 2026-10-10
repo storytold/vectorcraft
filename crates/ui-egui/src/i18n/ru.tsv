@@ -3895,6 +3895,12 @@ axis	Both	Оба
 	Perspective Distort	Искажение перспективы
 	Artboard	Монтажная область
 	Exit	Выйти
+	Appearance Mode	Режим оформления
+	Dark Theme	Тёмная тема
+	Light Theme	Светлая тема
+	Sync with system	Как в системе
+	Active	Активна
+	Next Appearance Mode	Следующий режим оформления
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — это ссылка на шаг {r}, которую разрешают только `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` должен быть массивом идентификаторов объектов, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
@@ -3930,6 +3936,9 @@ axis	Both	Оба
 	Duplication	Дублированием
 	Interpolation	Интерполяцией
 @msg	Imported library {name}	Импортирована библиотека {name}
+@msg	appearance parameters must be an object	параметры оформления должны быть объектом
+@msg	mode must be auto|dark|light	mode должен быть auto|dark|light
+@msg	unknown brightness `{id}`	неизвестная яркость `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Текстура

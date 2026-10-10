@@ -3871,6 +3871,12 @@ theme	Appearance	外観
 @msg	no user workspace `{from}`	ユーザーワークスペース `{from}` が見つかりません
 @msg	unknown workspace (one of {_1})	不明なワークスペースです ({_1} のいずれかを指定してください)
 @msg	workspace name can't be empty	ワークスペース名を入力してください
+	Appearance Mode	外観モード
+	Dark Theme	ダークテーマ
+	Light Theme	ライトテーマ
+	Sync with system	システムに合わせる
+	Active	使用中
+	Next Appearance Mode	次の外観モード
 @msg	No fonts are missing in this document	このドキュメントには見つからないフォントはありません
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft は他のアプリやシステムのフォルダーを検索しません: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
@@ -3924,6 +3930,9 @@ theme	Appearance	外観
 	Duplication	複製
 	Interpolation	補間
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
+@msg	appearance parameters must be an object	外観のパラメーターはオブジェクトである必要があります
+@msg	mode must be auto|dark|light	mode は auto|dark|light のいずれかである必要があります
+@msg	unknown brightness `{id}`	不明な明るさ `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	テクスチャ

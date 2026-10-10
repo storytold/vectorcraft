@@ -21,6 +21,7 @@ compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinar
 #[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
 compile_error!("the win7 target requires --no-default-features --features windows7");
 
+mod appearance;
 mod clipboard;
 mod control_server;
 #[cfg(feature = "wgpu")]
@@ -345,6 +346,8 @@ fn services(parent: Parent) -> Services {
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
+        // Appearance Mode › Sync with system: the desktop portal's colour scheme (Linux).
+        system_theme: appearance::service(),
         ..Default::default()
     }
 }

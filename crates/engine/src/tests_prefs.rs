@@ -705,3 +705,50 @@ fn hyphenation_exceptions_preference_reaches_the_hyphenator() {
     set_pref(&mut s, "hyphenationExceptions", json!(""));
     assert!(vectorcraft_text::hyphenation_exceptions().is_empty());
 }
+
+/// Appearance modes: new users keep Medium Dark (following the system is opt-in), and files saved
+/// with only the single brightness keep it as a fixed Dark or Light mode.
+#[test]
+fn appearance_defaults_and_legacy_brightness_migrate() {
+    let p = Prefs::default();
+    assert_eq!((p.appearance_mode.as_str(), p.dark_theme.as_str(), p.light_theme.as_str()), ("dark", "mediumDark", "light"));
+    for (saved, mode, dark, light) in
+        [("dark", "dark", "dark", "light"), ("mediumDark", "dark", "mediumDark", "light"), ("mediumLight", "light", "mediumDark", "mediumLight")]
+    {
+        let p = Prefs::from_saved(json!({"uiBrightness": saved, "gridlineEvery": 50}));
+        assert_eq!((p.appearance_mode.as_str(), p.dark_theme.as_str(), p.light_theme.as_str()), (mode, dark, light), "{saved}");
+        assert_eq!(p.gridline_every, 50.0);
+    }
+    // Saved by this version: the mode is what was chosen, whatever the legacy brightness says.
+    let p = Prefs::from_saved(json!({"uiBrightness": "light", "appearanceMode": "auto"}));
+    assert_eq!(p.appearance_mode, "auto");
+    // Garbage reads as the defaults.
+    assert_eq!(Prefs::from_saved(json!("nope")), Prefs::default());
+    assert_eq!(Prefs::from_saved(json!({"uiBrightness": 3})).appearance_mode, "dark");
+}
+
+#[test]
+fn appearance_choices_validate_and_legacy_brightness_still_selects() {
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"values": {"appearanceMode": "auto", "darkTheme": "dark", "lightTheme": "mediumLight"}})).unwrap();
+    assert_eq!((s.prefs.appearance_mode.as_str(), s.prefs.dark_theme.as_str(), s.prefs.light_theme.as_str()), ("auto", "dark", "mediumLight"));
+    let restarted = Prefs::from_saved(s.prefs.to_json());
+    assert_eq!(restarted, s.prefs);
+    // A dark brightness isn't a light theme, and the reverse.
+    assert!(s.execute("prefs.set", &json!({"key": "darkTheme", "value": "light"})).is_err());
+    assert!(s.execute("prefs.set", &json!({"key": "lightTheme", "value": "mediumDark"})).is_err());
+    assert!(s.execute("prefs.set", &json!({"key": "appearanceMode", "value": "system"})).is_err());
+    // Old clients setting the single brightness select it, keeping the other family's choice.
+    s.execute("prefs.set", &json!({"key": "uiBrightness", "value": "mediumDark"})).unwrap();
+    assert_eq!((s.prefs.appearance_mode.as_str(), s.prefs.dark_theme.as_str(), s.prefs.light_theme.as_str()), ("dark", "mediumDark", "mediumLight"));
+    s.execute("prefs.set", &json!({"key": "uiBrightness", "value": "Light"})).unwrap();
+    assert_eq!((s.prefs.appearance_mode.as_str(), s.prefs.dark_theme.as_str(), s.prefs.light_theme.as_str()), ("light", "mediumDark", "light"));
+    // Explicit appearance values in the same call win (the Preferences dialog sends them all).
+    s.execute("prefs.set", &json!({"values": {"uiBrightness": "dark", "appearanceMode": "auto", "darkTheme": "mediumDark"}})).unwrap();
+    assert_eq!((s.prefs.appearance_mode.as_str(), s.prefs.dark_theme.as_str()), ("auto", "mediumDark"));
+    // The UI Brightness menu fixes the mode to the brightness's family.
+    let mut p = s.prefs.clone();
+    p.select_brightness("mediumLight").unwrap();
+    assert_eq!((p.appearance_mode.as_str(), p.light_theme.as_str(), p.ui_brightness.as_str()), ("light", "mediumLight", "mediumLight"));
+    assert!(p.select_brightness("purple").is_err());
+}
