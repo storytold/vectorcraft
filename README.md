@@ -198,11 +198,13 @@ For the experimental, unsupported 64-bit Windows 7 build, see [Windows 7 instruc
 
 ## Status
 
-VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) covers what ships today, the
-milestones, and honest time-to-parity estimates.
+VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) has the stage, the numbers by dimension
+and what's next; [`docs/target-app-parity.md`](docs/target-app-parity.md) the full parity assessment and
+[`docs/gaps.md`](docs/gaps.md) the ranked list of what's missing.
 
-**Where we are (2026-10-10):** roughly 69–75% of Illustrator's features exist and work, and about 40–55% of
-"a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
+**Where we are (2026-10-10): alpha.** About 88% of Illustrator 2026's menu items, tools, effects and formats exist
+(92.5% of menu items do something), feature depth is ~75%, and we estimate ~50% "ready for real work": everyday
+vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
 files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats, PSD out and PSD/PSB in as their merged image, Print, Package).
 Affinity documents (`.af` from Affinity 3, `.afdesign`, `.afpub` and, by their content, `.afphoto` from Affinity 1 and 2) open
@@ -213,21 +215,23 @@ doesn't write Affinity files. Current `.af` validation includes 33 pinned files,
 and every-board SVG/PDF/PSD export, with fixes for Affinity 3 artboards, source-backed JPEGs and text runs.
 [Scope and limits](crates/affinity/README.md); [source audit and remaining gaps](docs/affinity-validation.md).
 The interface
-speaks English, German, Japanese, Traditional and Simplified Chinese, Spanish, French, Italian, Russian and Ukrainian (and Czech and Brazilian Portuguese in the menus).
-The scores are
-self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
+speaks English, German, Japanese, Traditional and Simplified Chinese, Spanish, French, Italian, Russian and Ukrainian (and Czech and Brazilian Portuguese in the menus);
+[localization-parity.md](docs/localization-parity.md) has the details.
+The scores are self-assessed from our code against Illustrator's public documentation;
+[target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.
 
 **What's missing:**
+- reliable exchange of Illustrator's own `.ai` files (layer structure in real files; Illustrator's editing data isn't written);
+- an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials;
-- the Photoshop-style raster effects (Effect Gallery);
+- most of the Photoshop-style raster effects (20 of 57) and the Effect Gallery;
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
-- an interaction-fidelity pass covering every tool's modifiers and small behaviours;
-- packaging for Windows and Linux.
+- generative AI features.
 
-**Where we're going:** next is the interaction-fidelity pass alongside the raster-effects package, then 3D and
-advanced type, then hardening and packaging for 1.0. The prioritized list is in
-[Where we're lacking](ROADMAP.md#where-were-lacking-in-priority-order).
+**Where we're going:** next is the interaction-fidelity pass, `.ai` files from real users and start-up stability,
+alongside the raster-effects package; then type, the Illustrator 2026 additions and 3D. The ranked list is in
+[`docs/gaps.md`](docs/gaps.md).
 
 **Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
