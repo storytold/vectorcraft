@@ -912,6 +912,14 @@ impl Leave {
         Self { at, shift: shift.then_some(Keep::Square), angles: &[] }
     }
 
+    /// An anchor dragged from `at` (Direct Selection): Shift keeps the move at 45° steps round
+    /// it, sliding along that way into line with the nearest target (#886). No construction
+    /// guides through it, and the base matches [`crate::bbox::move_delta`] (0°) so the
+    /// constrained direction is unchanged.
+    pub fn anchor_drag(at: Point) -> Self {
+        Self { at, shift: Some(Keep::Angle { step: 45.0, base: 0.0 }), angles: &[] }
+    }
+
     /// Where Shift puts `p`: none without it.
     fn constrained(&self, p: Point) -> Option<Point> {
         let v = p - self.at;

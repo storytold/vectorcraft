@@ -3,7 +3,7 @@
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
 //! path's anchors on that segment, drag to move selected anchors (the one pressed on snaps to
 //! anchors, segments and Smart Guides, or with them off Snap to Point; Shift keeps the move at 45°
-//! steps), drag a direction handle to
+//! steps and still snaps along that line), drag a direction handle to
 //! reshape (Shift keeps it at 45° steps round its anchor, Alt moves it alone; smart guides snap
 //! it), marquee to select anchors (Shift-drag toggles them: the selected ones inside are
 //! deselected, the others selected), drag a corner widget of any path (a star, a pen path) to round its corners
@@ -32,7 +32,7 @@ use vectorcraft_geom::{Anchor, PathData, Point, Rect};
 
 use crate::bbox::move_delta;
 use crate::corners::{self, CornerDrag, over_widget};
-use crate::guides::{HandleSnap, PointSnap, Targets};
+use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::MeshEdit;
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
@@ -428,13 +428,19 @@ impl Tool for DirectSelectionTool {
                     self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
                 }
                 let mut d = move_delta(start, p, ev.mods.shift);
-                // The grabbed anchor snaps and the others follow it; Shift keeps the angle instead.
+                // The grabbed anchor snaps and the others follow it; with Shift it stays on
+                // the constrained line and slides along it into line with the nearest
+                // target (#886).
                 self.guides.clear();
-                if !ev.mods.shift
-                    && let Some(snap) = &self.anchor_snap
-                {
-                    let (q, guides) = snap.snap(cx, grab + d);
-                    (d, self.guides) = (q - grab, guides);
+                if let Some(snap) = &self.anchor_snap {
+                    if ev.mods.shift {
+                        let leave = Leave::anchor_drag(grab);
+                        let (q, guides) = snap.snap_from(cx, grab + (p - start), Some(&leave));
+                        (d, self.guides) = (q - grab, guides);
+                    } else {
+                        let (q, guides) = snap.snap(cx, grab + d);
+                        (d, self.guides) = (q - grab, guides);
+                    }
                 }
                 out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
                 out
@@ -1022,10 +1028,18 @@ mod tests {
         // In line with B's own bottom-left corner, which stays put.
         let (v, labels) = drag(&mut t, &c, (300.0, 300.0), (303.0, 330.0), none);
         assert_eq!((v, labels), (json!({"dx": 0.0, "dy": 30.0}), vec!["align".to_string()]));
-        // Shift keeps the move at 45° steps, unsnapped.
+        // Shift keeps the move at 45° steps and still snaps along that line (#886):
+        // the same drag lands on A's corner.
         let (v, labels) = drag(&mut t, &c, (300.0, 300.0), (203.0, 199.0), Mods { shift: true, ..none });
-        let s = move_delta(Point::new(300.0, 300.0), Point::new(203.0, 199.0), true);
-        assert_eq!((v, labels), (json!({"dx": s.x, "dy": s.y}), vec![]));
+        let (dx, dy) = (v["dx"].as_f64().unwrap_or(f64::NAN), v["dy"].as_f64().unwrap_or(f64::NAN));
+        assert!((dx + 100.0).abs() < 1e-9 && (dy + 100.0).abs() < 1e-9, "{v:?}");
+        assert_eq!(labels, vec!["anchor".to_string()]);
+        // Shift with nothing to snap to keeps the constrained direction, guideless.
+        let (v, labels) = drag(&mut t, &c, (300.0, 300.0), (310.0, 335.0), Mods { shift: true, ..none });
+        let s = move_delta(Point::new(300.0, 300.0), Point::new(310.0, 335.0), true);
+        let (dx, dy) = (v["dx"].as_f64().unwrap_or(f64::NAN), v["dy"].as_f64().unwrap_or(f64::NAN));
+        assert!((dx - s.x).abs() < 1e-9 && (dy - s.y).abs() < 1e-9, "{v:?} vs {s:?}");
+        assert_eq!(labels, Vec::<String>::new());
         // Two anchors: the one pressed on (B's top-right) lands on A's corner.
         let two = anchors_of(b, &[(0, 0), (0, 1)]);
         let c = cx(&d, &two, &p);
