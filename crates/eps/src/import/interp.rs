@@ -481,7 +481,23 @@ impl<'a> Interp<'a> {
     // ---------- operators ----------
 
     pub fn op(&mut self, op: Op) -> Res {
-        self.op_inner(op).map_err(|e| match e {
+        // Recursive operators use small helpers. Data dispatch returns before graphics run,
+        // so nested execution does not retain the large frame of unrelated data operators.
+        let result = match op {
+            Op::Exec => self.exec_op(),
+            Op::If => self.if_op(),
+            Op::IfElse => self.if_else_op(),
+            Op::For => self.for_op(),
+            Op::Repeat => self.repeat_op(),
+            Op::Loop => self.loop_op(),
+            Op::Forall => self.forall(),
+            Op::Stopped => self.stopped_op(),
+            Op::Exit => Err(PsError::Exit),
+            Op::Stop => Err(PsError::Stop),
+            Op::Quit => Err(PsError::Quit),
+            _ => self.op_inner(op).and_then(|graphics| if graphics { self.graphics_op(op) } else { Ok(()) }),
+        };
+        result.map_err(|e| match e {
             PsError::Ps(name, at) => {
                 // The innermost operator raised it (`exec` running a procedure doesn't).
                 self.fault.get_or_insert(Fault { op: Some(op.name()), procs: vec![] });
@@ -491,7 +507,101 @@ impl<'a> Interp<'a> {
         })
     }
 
-    fn op_inner(&mut self, op: Op) -> Res {
+    fn exec_op(&mut self) -> Res {
+        let o = self.pop()?;
+        self.call(o)?;
+        Ok(())
+    }
+
+    fn if_op(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        if self.pop_bool()? {
+            self.call(p)?;
+        }
+        Ok(())
+    }
+
+    fn if_else_op(&mut self) -> Res {
+        let (no, yes) = (self.pop_proc()?, self.pop_proc()?);
+        let pick = if self.pop_bool()? { yes } else { no };
+        self.call(pick)?;
+        Ok(())
+    }
+
+    fn for_op(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
+        match (&init, &inc, &limit) {
+            (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
+                let (mut i, d, l) = (*i0, *d, *l);
+                while (d >= 0 && i <= l) || (d < 0 && i >= l) {
+                    self.push(Obj::Int(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
+                    if d == 0 {
+                        self.tick()?;
+                    }
+                }
+            }
+            _ => {
+                let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
+                let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
+                let mut k = 0.0;
+                loop {
+                    let i = i0 + d * k;
+                    if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
+                        break;
+                    }
+                    self.push(Obj::Real(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    k += 1.0;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn repeat_op(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        let n = self.pop_int()?;
+        if n < 0 {
+            return ps_err("rangecheck", "");
+        }
+        for _ in 0..n {
+            if !self.body(&p)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn loop_op(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        while self.body(&p)? {}
+        Ok(())
+    }
+
+    fn stopped_op(&mut self) -> Res {
+        let p = self.pop()?;
+        let depth = self.depth;
+        match self.call(p) {
+            Ok(()) => self.push(Obj::Bool(false))?,
+            Err(PsError::Ps(..) | PsError::Stop | PsError::Exit) => {
+                self.depth = depth;
+                self.fault = None;
+                self.push(Obj::Bool(true))?;
+            }
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    }
+
+    /// Data operators never call the graphics handler from this large frame.
+    fn op_inner(&mut self, op: Op) -> Res<bool> {
         use Op::*;
         match op {
             Pop => {
@@ -693,89 +803,6 @@ impl<'a> Interp<'a> {
             True => self.push(Obj::Bool(true))?,
             False => self.push(Obj::Bool(false))?,
             Null => self.push(Obj::Null)?,
-            Exec => {
-                let o = self.pop()?;
-                self.call(o)?;
-            }
-            If => {
-                let p = self.pop_proc()?;
-                if self.pop_bool()? {
-                    self.call(p)?;
-                }
-            }
-            IfElse => {
-                let (no, yes) = (self.pop_proc()?, self.pop_proc()?);
-                let pick = if self.pop_bool()? { yes } else { no };
-                self.call(pick)?;
-            }
-            For => {
-                let p = self.pop_proc()?;
-                let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
-                match (&init, &inc, &limit) {
-                    (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
-                        let (mut i, d, l) = (*i0, *d, *l);
-                        while (d >= 0 && i <= l) || (d < 0 && i >= l) {
-                            self.push(Obj::Int(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
-                            if d == 0 {
-                                self.tick()?;
-                            }
-                        }
-                    }
-                    _ => {
-                        let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
-                        let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
-                        let mut k = 0.0;
-                        loop {
-                            let i = i0 + d * k;
-                            if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
-                                break;
-                            }
-                            self.push(Obj::Real(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            k += 1.0;
-                        }
-                    }
-                }
-            }
-            Repeat => {
-                let p = self.pop_proc()?;
-                let n = self.pop_int()?;
-                if n < 0 {
-                    return ps_err("rangecheck", "");
-                }
-                for _ in 0..n {
-                    if !self.body(&p)? {
-                        break;
-                    }
-                }
-            }
-            Loop => {
-                let p = self.pop_proc()?;
-                while self.body(&p)? {}
-            }
-            Exit => return Err(PsError::Exit),
-            Forall => self.forall()?,
-            Stopped => {
-                let p = self.pop()?;
-                let depth = self.depth;
-                match self.call(p) {
-                    Ok(()) => self.push(Obj::Bool(false))?,
-                    Err(PsError::Ps(..) | PsError::Stop | PsError::Exit) => {
-                        self.depth = depth;
-                        self.fault = None;
-                        self.push(Obj::Bool(true))?;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-            Stop => return Err(PsError::Stop),
-            Quit => return Err(PsError::Quit),
             CountExecStack => self.push(Obj::Int(i64::from(self.depth) + 1))?,
             Type => {
                 let o = self.pop()?;
@@ -1135,9 +1162,9 @@ impl<'a> Interp<'a> {
                 self.pop()?;
                 self.push(Obj::dict(Dict::new()))?;
             }
-            _ => self.graphics_op(op)?,
+            _ => return Ok(true),
         }
-        Ok(())
+        Ok(false)
     }
 
     /// The objects above the topmost mark, which is removed.
