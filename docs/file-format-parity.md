@@ -308,6 +308,15 @@ Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors,
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296) |
 
+## PDF form gradients
+
+PDF export's linear and radial gradients stay aligned inside transparency groups, opacity masks,
+PDF layers and overprinting art. The original synthetic tests in
+`crates/pdf/tests/gradient_forms.rs` check the output with macOS Quartz and an import/render
+round trip. The three Quartz checks fail on main `65adb7b21` and pass with the form-space fix;
+translated layer bounds also have a regression for the current writer's layer-box repair.
+Stop opacity on translated artboards remains outside this regression coverage.
+
 ## PDF editable imports
 
 - [x] Place from bytes or unlinked paths, and PDF clipboard paste, keep the selected page's live text. Synthetic two-page regressions in `crates/engine/src/cmd/fileio/tests_pdffidelity.rs` cover both sources, page selection and explicit outlines. The single-page importer honors the same text choice as Open; existing PDF fallback rules are unchanged.

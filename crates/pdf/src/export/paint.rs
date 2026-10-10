@@ -351,7 +351,7 @@ impl Exporter<'_> {
         let cell = Rect::new(0.0, 0.0, pw, ph);
         let tiles = def.instances_in(Affine::IDENTITY, cell);
         let mut sb = s.stream_builder();
-        let mut cs = sb.surface();
+        let mut cs = Surface::stream(sb.surface());
         let reaches_out = tiles.iter().any(|t| t.visual_bounds().is_some_and(|b| cell.intersect(b) != b));
         let clip = reaches_out.then(|| to_path(&cs, &cell.to_path(0.1))).flatten();
         if let Some(c) = &clip {

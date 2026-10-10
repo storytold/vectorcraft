@@ -5,6 +5,13 @@
 ## Feature submission evidence
 
 **Feature evidence last updated:** 2026-11-02.
+
+**PDF form gradients — 2026-11-08:** original synthetic Quartz checks reproduce the placement, direction and nested
+stop-opacity failures on main `65adb7b21` and pass with the rebased fix. The import/render round trip
+also passes; a translated-layer regression covers the interaction with the upstream layer-box
+repair (`crates/pdf/tests/gradient_forms.rs`). Stop opacity on translated artboards remains outside
+this coverage. No ranked gap or estimate is closed by this narrow export fix.
+
 | 2026-11-06 | minor | Opening a file that takes longer than 0.4 s shows a progress window: the file name, a moving bar (reading reports no steps), how many more files wait, Cancel (Esc; the file doesn't open) and Continue in Background (`file.cancelOpen`, `file.openInBackground`); it never opens over another dialog or progress window (part of #5930); scores and estimates unchanged |
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 

@@ -6643,6 +6643,8 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "md-5",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
  "roxmltree 0.21.2",
  "serde",
  "serde_json",
