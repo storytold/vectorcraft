@@ -31,6 +31,52 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     if !tip.is_empty() { resp.on_hover_text(tl!(tip)) } else { resp }
 }
 
+/// Width from which a dragged-wide docked panel (the icon column, the Tools panel) shows each
+/// item's name beside its icon.
+pub const LABELS_MIN: f32 = 110.0;
+
+/// A full-width row of a wide icon strip: the icon in a square cell at the left, `label` (translated)
+/// beside it. `resp` is the row's response, made by the caller; `selected` draws the pressed well.
+pub fn paint_icon_row(ui: &mut Ui, resp: Response, icon: &str, label: &str, selected: bool) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let rect = resp.rect;
+    let bg = if selected {
+        t.tool_active
+    } else if resp.hovered() {
+        t.hover
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(3), bg);
+    let cell = Rect::from_min_size(rect.min, Vec2::splat(rect.height()));
+    icons::paint(ui, icon, cell.shrink((cell.width() * 0.2).round()), if selected { t.text } else { t.icon });
+    // Clipped to the row: a long name never runs under the neighbouring panel.
+    ui.painter().with_clip_rect(rect).text(
+        pos2(cell.right() + 4.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        tl!(label),
+        egui::FontId::proportional(12.0),
+        if selected { t.text_strong } else { t.text },
+    );
+    resp
+}
+
+/// A handle along the inner edge of a docked panel (`panel` is its rectangle; `on_left` says which
+/// edge): while it is dragged, the width the pointer asks for. Added after the panel's contents so
+/// it wins the edge from the buttons beside it.
+pub fn width_grip(ui: &mut Ui, id: egui::Id, panel: Rect, on_left: bool) -> Option<f32> {
+    const GRIP: f32 = 5.0;
+    let x = if on_left { panel.left() } else { panel.right() - GRIP };
+    let rect = Rect::from_min_size(pos2(x, panel.top()), vec2(GRIP, panel.height()));
+    let resp = ui.interact(rect, id, Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+    if resp.hovered() || resp.dragged() {
+        ui.painter().rect_filled(rect, 0.0, Tokens::get(ui.ctx()).hover);
+    }
+    let p = ui.input(|i| i.pointer.interact_pos()).filter(|_| resp.dragged())?;
+    let w = if on_left { panel.right() - p.x } else { p.x - panel.left() };
+    w.is_finite().then_some(w)
+}
+
 /// Small flat text button (Quick Actions style).
 pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     let t = Tokens::get(ui.ctx());

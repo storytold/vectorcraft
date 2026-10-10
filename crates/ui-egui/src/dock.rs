@@ -11,6 +11,10 @@ use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, floating, icons, panels, widgets};
 
 const ICON_COL: f32 = 38.0;
+/// Widest the icon column can be dragged to (custom branch).
+const ICON_COL_MAX: f32 = 240.0;
+/// A drag that ends narrower than the icons plus this many points puts the column back to icons.
+const ICON_COL_SNAP: f32 = 14.0;
 /// Height of the strip along the top of a dock column that carries its double arrow.
 const HEADER: f32 = 14.0;
 /// The tabbed group's width until the dock has been laid out (its default size).
@@ -21,6 +25,13 @@ const FLYOUT_TOP: f32 = 110.0;
 /// Where the icon column's left edge was drawn last (egui temp memory, one frame old).
 fn column_left_id() -> egui::Id {
     egui::Id::new("dock-icon-column-left")
+}
+
+/// The icon column's width: [`ICON_COL`], or what the user dragged it to (its left edge). From
+/// [`widgets::LABELS_MIN`] on, each icon shows its panel's name beside it.
+pub(crate) fn column_width(ui: &crate::state::UiState) -> f32 {
+    let w = ui.icon_column_width;
+    if w.is_finite() && w > ICON_COL { w.min(ICON_COL_MAX) } else { ICON_COL }
 }
 
 /// Collapse the tabbed group to icons or expand it again (`window.collapseDock`). Expanding while
@@ -58,12 +69,15 @@ fn toggle(app: &mut VectorcraftApp, collapsed: bool) {
 }
 
 /// One icon of the column: a click pops its panel out (or puts it away); dragged out of the
-/// column (`column`), the panel floats.
-fn panel_icon(app: &mut VectorcraftApp, ui: &mut Ui, id: &'static str, label: &str, icon: &str, column: Rect) {
+/// column (`column`), the panel floats. `named`: a full-width row with the panel's name beside the
+/// icon (the column was dragged wide).
+fn panel_icon(app: &mut VectorcraftApp, ui: &mut Ui, id: &'static str, label: &str, icon: &str, column: Rect, named: bool) {
     let open = app.ui.open_panel.as_deref() == Some(id);
     // Its own id: the icons below it move up when it floats, and mustn't take over its drag.
-    let (_, rect) = ui.allocate_space(vec2(30.0, 30.0));
-    let resp = widgets::paint_icon_button(ui, ui.interact(rect, ui.id().with(("panel-icon", id)), Sense::click_and_drag()), icon, label, open);
+    let size = if named { vec2(ui.available_width(), 30.0) } else { vec2(30.0, 30.0) };
+    let (_, rect) = ui.allocate_space(size);
+    let resp = ui.interact(rect, ui.id().with(("panel-icon", id)), Sense::click_and_drag());
+    let resp = if named { widgets::paint_icon_row(ui, resp, icon, label, open) } else { widgets::paint_icon_button(ui, resp, icon, label, open) };
     if resp.clicked() {
         app.ui.open_panel = if open { None } else { Some(id.to_string()) };
     }
@@ -105,9 +119,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // collapsed group's panels head it, under the « that expands them again. Floating panels leave
     // it.
     let collapsed = app.ui.dock_collapsed && shown.is_some();
+    let width = column_width(&app.ui);
+    let named = width >= widgets::LABELS_MIN;
     let column = egui::Panel::right("icon_column")
         .resizable(false)
-        .exact_size(ICON_COL)
+        .exact_size(width)
         .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.5, t.border)))
         .show(ui, |ui| {
             let bounds = ui.max_rect();
@@ -122,7 +138,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         for tab in DockTab::ALL {
                             let (id, label, icon) = tab.info();
                             if floating::group_of(&app.ui, id).is_none() {
-                                panel_icon(app, ui, id, label, icon, bounds);
+                                panel_icon(app, ui, id, label, icon, bounds, named);
                             }
                         }
                     }
@@ -140,11 +156,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                                 ui.painter()
                                     .line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.divider));
                             }
-                            panel_icon(app, ui, id, label, icon, bounds);
+                            panel_icon(app, ui, id, label, icon, bounds, named);
                         }
                     }
                 });
             });
+            // Dragging the column's left edge widens it (custom branch): icons only, or names too.
+            let grip = ui.id().with("icon-column-grip");
+            if let Some(w) = widgets::width_grip(ui, grip, bounds, true) {
+                app.ui.icon_column_width = if w < ICON_COL + ICON_COL_SNAP { 0.0 } else { w.min(ICON_COL_MAX) };
+            }
         });
     let column = column.response.rect;
     let dock = group.map_or(column, |g| g.union(column));
@@ -222,7 +243,7 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let column = if app.ui.dock && app.ui.screen_mode < 3 {
         ctx.data(|d| d.get_temp::<f32>(column_left_id()))
             .filter(|x| x.is_finite() && *x > screen.left() && *x <= screen.right())
-            .unwrap_or_else(|| screen.right() - ICON_COL - if app.ui.dock_collapsed { 0.0 } else { DOCK_WIDTH })
+            .unwrap_or_else(|| screen.right() - column_width(&app.ui) - if app.ui.dock_collapsed { 0.0 } else { DOCK_WIDTH })
     } else {
         screen.right()
     };
@@ -269,8 +290,9 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // flyout themselves, on release), nor one on a foreground layer (the flyout itself, a dialog, a palette) or a modal dialog's
     // backdrop, nor one that closes a popup (a panel menu, a dropdown the flyout opened).
     if open && app.session.prefs.auto_collapse_icon_panels && !egui::Popup::is_any_open(ctx) {
+        let width = column_width(&app.ui);
         let away = |p: egui::Pos2| {
-            !(column..=column + ICON_COL).contains(&p.x)
+            !(column..=column + width).contains(&p.x)
                 && ctx.layer_id_at(p).is_none_or(|l| l.order != egui::Order::Foreground && l != crate::dialogs::modal::backdrop())
         };
         if ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.interact_pos()).flatten()).is_some_and(away) {
@@ -462,6 +484,51 @@ mod tests {
         assert!(!h.app.ui.dock_collapsed, "the « expands the dock again");
         assert!(expanded(h.column_left()), "the group is back: {}", h.column_left());
         assert_eq!(h.icons().len(), icon_panel_count());
+    }
+
+    /// A press at `from`, dragged through `via` (one frame each), then released at the last point.
+    fn drag(h: &mut Harness, from: egui::Pos2, via: &[egui::Pos2]) {
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        h.frame(vec![egui::Event::PointerMoved(from), b(from, true)]);
+        for p in via {
+            h.frame(vec![egui::Event::PointerMoved(*p)]);
+        }
+        h.frame(vec![b(via.last().copied().unwrap_or(from), false)]);
+        h.settle();
+    }
+
+    /// Custom branch: dragging the column's left edge widens it until it names its panels, and
+    /// dragging it back makes it icons only again.
+    #[test]
+    fn dragging_the_column_edge_widens_it_and_names_the_panels() {
+        let mut h = Harness::new();
+        assert_eq!(column_width(&h.app.ui), ICON_COL);
+        let left = h.column_left();
+        let right = left + ICON_COL;
+        drag(&mut h, egui::pos2(left + 2.0, 500.0), &[egui::pos2(left - 60.0, 500.0), egui::pos2(left - 130.0, 500.0)]);
+        assert!(h.app.ui.icon_column_width >= widgets::LABELS_MIN, "wide enough for names: {}", h.app.ui.icon_column_width);
+        assert!(h.column_left() < left - 100.0, "the column grew towards the canvas: {} vs {left}", h.column_left());
+        assert!(column_width(&h.app.ui) <= ICON_COL_MAX);
+        // Its rows span the column: a press far from the icon still pops the panel out.
+        let row = egui::pos2(h.column_left() + 120.0, 21.0);
+        h.click(row);
+        assert!(h.app.ui.open_panel.is_some(), "a click on a row's name opens its panel");
+        // Back to icons.
+        let grab = egui::pos2(h.column_left() + 2.0, 500.0);
+        drag(&mut h, grab, &[egui::pos2(right - 60.0, 500.0), egui::pos2(right - 20.0, 500.0)]);
+        assert_eq!(h.app.ui.icon_column_width, 0.0);
+        assert_eq!(column_width(&h.app.ui), ICON_COL);
+    }
+
+    #[test]
+    fn an_unusable_saved_column_width_is_reset() {
+        for bad in [f32::NAN, f32::INFINITY, -5.0] {
+            let ui = crate::state::UiState { icon_column_width: bad, toolbar_width: bad, ..Default::default() }.sanitized();
+            assert_eq!((ui.icon_column_width, ui.toolbar_width), (0.0, 0.0));
+        }
+        // Wider than the column can be: clamped where it is used.
+        let ui = crate::state::UiState { icon_column_width: 5000.0, ..Default::default() };
+        assert_eq!(column_width(&ui), ICON_COL_MAX);
     }
 
     #[test]

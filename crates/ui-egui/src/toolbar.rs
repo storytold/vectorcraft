@@ -14,6 +14,10 @@ use crate::{VectorcraftApp, icons, widgets};
 
 const PITCH: f32 = 30.0;
 const WIDTH: f32 = 48.0;
+/// Widest the docked panel can be dragged to (custom branch).
+const WIDE_MAX: f32 = 260.0;
+/// A drag that ends narrower than the panel's own width plus this many points puts it back.
+const SNAP: f32 = 14.0;
 /// Seconds a press on a tool group's button is held before its flyout opens.
 const LONG_PRESS: f64 = 0.35;
 /// Width of the grab bar down a flyout's right side: dragging it tears the flyout off.
@@ -89,9 +93,12 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // The user's choice alone: a window too short for the tools scrolls them.
-    let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    let w = if cols == 2 { 76.0 } else { WIDTH };
+    // The user's choice alone: a window too short for the tools scrolls them. Docked and dragged
+    // wide (the panel's right edge), it is one column of rows with each tool's name (custom branch).
+    let docked = app.ui.toolbar_pos.is_none();
+    let labeled = docked && app.ui.toolbar_width >= widgets::LABELS_MIN;
+    let cols = if app.ui.toolbar_double && !labeled { 2 } else { 1 };
+    let w = if docked { width(&app.ui, cols) } else { natural_width(cols) };
     // Where the panel docks: along the window's left edge, under the bars.
     let edge = ui.available_rect_before_wrap();
     ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
@@ -99,7 +106,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border));
     match app.ui.toolbar_pos {
         None => {
-            egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(frame).show(ui, |ui| body(app, ui, cols, None));
+            egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(frame).show(ui, |ui| body(app, ui, cols, None, labeled));
         }
         Some(pos) => {
             // Floating, kept inside the window, its tools scrolling when they don't fit under it.
@@ -113,7 +120,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 flyout_frame(&t, false).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).show(ui, |ui| {
                     ui.set_width(w);
                     ui.set_max_height(screen.bottom() - at.y - 12.0);
-                    body(app, ui, cols, Some(at));
+                    body(app, ui, cols, Some(at), false);
                 });
             });
         }
@@ -124,8 +131,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     flyout(app, ui.ctx());
 }
 
-/// The Tools panel's contents, docked or floating at `floating`.
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
+/// The panel's own width: one column of 36 point buttons, or two.
+fn natural_width(cols: usize) -> f32 {
+    if cols == 2 { 76.0 } else { WIDTH }
+}
+
+/// The docked panel's width: its own, or what the user dragged its right edge to.
+fn width(ui: &crate::state::UiState, cols: usize) -> f32 {
+    let natural = natural_width(cols);
+    let w = ui.toolbar_width;
+    if w.is_finite() && w > natural { w.min(WIDE_MAX) } else { natural }
+}
+
+/// The Tools panel's contents, docked or floating at `floating`. `labeled`: one row per tool with
+/// its name beside the icon.
+fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>, labeled: bool) {
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
     let bounds = ui.max_rect();
@@ -177,9 +197,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
                 // A long name is cut to its first four characters in the single column.
                 let cat = tl!(cat);
-                let label =
-                    if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
-                ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
+                if labeled {
+                    // Wide enough for the whole name, which then starts at the rows' left edge.
+                    let at = r.left_center() + vec2(8.0, 2.0);
+                    ui.painter().text(at, egui::Align2::LEFT_CENTER, cat.to_string(), egui::FontId::proportional(11.0), t.text_dim);
+                } else {
+                    let label = if cols == 1 && cat.chars().count() > 6 {
+                        format!("{}...", cat.chars().take(4).collect::<String>())
+                    } else {
+                        cat.to_string()
+                    };
+                    ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
+                }
             }
             // One row = `cols` slots (a category label always starts a new row).
             let mut row = vec![i];
@@ -188,7 +217,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             }
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                if cols == 1 {
+                if labeled {
+                    ui.add_space(4.0);
+                } else if cols == 1 {
                     ui.add_space((WIDTH - 36.0) / 2.0);
                 } else {
                     ui.add_space(2.0);
@@ -202,20 +233,33 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     };
                     let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
-                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
+                    // Labeled: the row spans the panel and the icon keeps a 36 point cell at its left.
+                    let size = if labeled { vec2((ui.available_width() - 4.0).max(36.0), PITCH - 1.0) } else { vec2(36.0, PITCH - 1.0) };
+                    let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                    let cell = egui::Rect::from_min_size(rect.min, vec2(36.0, rect.height()));
+                    let well = if labeled { rect } else { egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5)) };
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
                     } else if resp.hovered() {
                         ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
                     }
-                    let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
+                    let ir = egui::Rect::from_center_size(cell.center(), vec2(18.0, 18.0));
                     icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
                     if slot.len() > 1 {
-                        let c = rect.center() + vec2(12.5, 10.0);
+                        let c = cell.center() + vec2(12.5, 10.0);
                         ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
                     }
-                    let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
+                    if labeled {
+                        // Clipped to the row: a long name never runs under the canvas.
+                        ui.painter().with_clip_rect(rect).text(
+                            pos2(cell.right() + 2.0, rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            tl!(shown.label),
+                            egui::FontId::proportional(12.0),
+                            if is_active { t.text_strong } else { t.text },
+                        );
+                    }
+                    let press = if slot.len() > 1 { flyout_press(ui, &resp, cell) } else { None };
                     let alt = ui.input(|inp| inp.modifiers.alt);
                     if press.is_some() {
                         if is_floating(app, slot[0]) {
@@ -255,6 +299,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         ui.add_space(8.0);
         bottom_controls(app, ui, &t);
     });
+    // Dragging the docked panel's right edge widens it (custom branch): icons only, or names too.
+    if floating.is_none() {
+        let grip = ui.id().with("toolbar-grip");
+        if let Some(w) = widgets::width_grip(ui, grip, bounds, false) {
+            app.ui.toolbar_width = if w < natural_width(cols) + SNAP { 0.0 } else { w.min(WIDE_MAX) };
+        }
+    }
 }
 
 /// How a press on a tool group's button opens its flyout.
@@ -1111,6 +1162,49 @@ pub(crate) mod tests {
         lefts.sort_unstable();
         lefts.dedup();
         lefts.len()
+    }
+
+    /// The full-width tool rows of the last frame (a labeled panel), top to bottom.
+    fn wide_rows(ctx: &egui::Context) -> Vec<egui::Rect> {
+        let mut r: Vec<egui::Rect> = ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.rect.height() == PITCH - 1.0 && w.rect.width() > 100.0)
+                .map(|w| w.rect)
+                .collect()
+        });
+        r.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        // A row's layout also registers a rect a few points wider than the button: one per row.
+        r.dedup_by(|a, b| a.top() == b.top());
+        r
+    }
+
+    /// Custom branch: dragging the docked panel's right edge widens it into one row per tool with
+    /// its name, and dragging it back gives the icons only.
+    #[test]
+    fn dragging_the_right_edge_widens_the_toolbar_into_named_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0, vec![]);
+        assert_eq!(width(&app.ui, 1), WIDTH);
+        assert!(wide_rows(&ctx).is_empty(), "icons only to begin with");
+        drag(&mut app, &ctx, 1.0, pos2(WIDTH - 2.0, 400.0), &[pos2(120.0, 400.0), pos2(200.0, 400.0)]);
+        assert!(app.ui.toolbar_width >= widgets::LABELS_MIN, "wide enough for names: {}", app.ui.toolbar_width);
+        frame(&mut app, &ctx, 3.0, vec![]);
+        let rows = wide_rows(&ctx);
+        assert!(rows.len() > 10, "one row per tool slot: {}", rows.len());
+        // Anywhere on a row picks its tool, not only its icon: the second row is Direct Selection.
+        click(&mut app, &ctx, 4.0, pos2(rows[1].right() - 10.0, rows[1].center().y), PointerButton::Primary);
+        assert_eq!(app.session.tool_id(), "directSelection");
+        // Dragged back, it is icons only again.
+        let edge = app.ui.toolbar_width;
+        drag(&mut app, &ctx, 6.0, pos2(edge - 2.0, 400.0), &[pos2(60.0, 400.0), pos2(30.0, 400.0)]);
+        assert_eq!(app.ui.toolbar_width, 0.0);
+        frame(&mut app, &ctx, 8.0, vec![]);
+        assert!(wide_rows(&ctx).is_empty());
     }
 
     #[test]

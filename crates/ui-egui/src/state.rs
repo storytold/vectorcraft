@@ -259,6 +259,14 @@ pub struct UiState {
     pub control_bar: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Width the user dragged the docked Tools panel to (its right edge). Wide enough, it shows each
+    /// tool's name beside its icon; 0 is the panel's own width (custom branch).
+    #[serde(default)]
+    pub toolbar_width: f32,
+    /// Width the user dragged the icon column to (its left edge). Wide enough, it shows each panel's
+    /// name beside its icon; 0 is icons only (custom branch).
+    #[serde(default)]
+    pub icon_column_width: f32,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
@@ -483,6 +491,12 @@ impl UiState {
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
         FloatingPanels::sanitize(&mut self.floating_panels, &mut self.toolbar_pos);
+        // Dragged widths that aren't numbers (a hand-edited preferences file) give the default back.
+        for w in [&mut self.toolbar_width, &mut self.icon_column_width] {
+            if !w.is_finite() || *w < 0.0 {
+                *w = 0.0;
+            }
+        }
         // Overrides that can't fire (modifier-only chords recorded by older versions, #487) give
         // the default back.
         self.shortcut_overrides.retain(|_, c| c.is_empty() || crate::shortcut_editor::normalize(c).is_some());
@@ -501,6 +515,8 @@ impl Default for UiState {
             control_bar: false,
             toolbar: true,
             toolbar_double: false,
+            toolbar_width: 0.0,
+            icon_column_width: 0.0,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
