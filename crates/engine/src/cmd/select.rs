@@ -19,7 +19,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             all
         ),
-        cmd!("select.allOnArtboard", "All on Active Artboard", ["Select"], Some("Cmd+Alt+A"), "{artboard?: index}", has_doc, all_on_artboard),
+        cmd!(
+            "select.allOnArtboard",
+            "All on Active Artboard",
+            ["Select"],
+            Some("Cmd+Alt+A"),
+            "{artboard?: index (0-based; the app passes the active one; default: the first)}",
+            has_doc,
+            all_on_artboard
+        ),
         cmd!("select.none", "Deselect", ["Select"], Some("Cmd+Shift+A"), "{}", has_doc, none),
         cmd!("select.reselect", "Reselect", ["Select"], Some("Cmd+6"), "{}", has_doc, reselect),
         cmd!("select.inverse", "Inverse", ["Select"], None, "{}", has_doc, inverse),

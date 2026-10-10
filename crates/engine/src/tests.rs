@@ -391,6 +391,37 @@ fn align_left() {
     assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 0.0);
 }
 
+/// Align to Artboard aligns to artboard `artboard` (the app passes the active one). Without it, or
+/// with one the document doesn't have, it aligns to the artboard under the center of the
+/// selection, or to the first artboard when no artboard is there. Align to Selection does not use
+/// `artboard`.
+#[test]
+fn align_to_artboard_uses_the_artboard_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let a = rect(&mut s, boards[1].x0 + 10.0, boards[1].y0 + 10.0, 20.0, 20.0);
+    let b = rect(&mut s, boards[1].x0 + 50.0, boards[1].y0 + 40.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let x0 = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    s.execute("object.align", &json!({"horizontal": "left", "to": "artboard", "artboard": 2})).unwrap();
+    assert_eq!((x0(&s, a), x0(&s, b)), (boards[2].x0, boards[2].x0), "the left edges are on artboard 2's");
+    for (p, left) in [
+        (json!({"horizontal": "left", "to": "artboard"}), boards[1].x0),
+        (json!({"horizontal": "left", "to": "artboard", "artboard": 9}), boards[1].x0),
+        (json!({"horizontal": "left", "to": "selection", "artboard": 2}), boards[1].x0 + 10.0),
+    ] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.align", &p).unwrap();
+        assert_eq!((x0(&s, a), x0(&s, b)), (left, left), "{p}");
+    }
+    // A selection whose center is on no artboard aligns to the first.
+    let c = rect(&mut s, boards[1].x0 + 10.0, boards[1].y1 + 50.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.align", &json!({"horizontal": "left", "to": "artboard"})).unwrap();
+    assert_eq!(x0(&s, c), boards[0].x0, "off every artboard: the first");
+}
+
 /// #541: with the Selection tool, a click on one object of the selection makes it the key object:
 /// aligning to the key moves the others to it, Distribute Spacing spaces them from it, and a click
 /// on the key again lets it go.
