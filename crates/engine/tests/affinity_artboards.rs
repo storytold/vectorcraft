@@ -145,3 +145,42 @@ fn several_spreads_preserve_each_board_and_leave_room_between_spreads() {
     assert_eq!(loaded.doc.artboards[0].rect, Rect::new(0.0, 0.0, 100.0, 60.0));
     assert_eq!(loaded.doc.artboards[1].rect, Rect::new(136.0, 0.0, 236.0, 60.0));
 }
+
+/// Coordinate fields use setProps rather than the drag tool's artboard.move command.
+#[test]
+fn coordinate_edits_move_imported_clipping_groups_and_undo_together() {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+    use vectorcraft_geom::Vec2;
+
+    for current in [false, true] {
+        let child = shape(20, "Oversized", false, false, [-10.0, -10.0, 110.0, 70.0], IDENTITY, vec![]);
+        let mut first = shape(10, "First", true, false, [0.0, 0.0, 100.0, 60.0], IDENTITY, vec![child]);
+        if current {
+            let F::Def(_, _, fields) = &mut first else { panic!() };
+            fields.retain(|(t, _)| *t != tag(b"ABEn"));
+            fields.push(field(b"phrp", F::Def(18, vec![tag(b"aprp")], vec![])));
+        }
+        let second = shape(30, "Second", true, false, [0.0, 0.0, 40.0, 60.0], [1.0, 0.0, 200.0, 0.0, 1.0, 0.0], vec![]);
+        let loaded = vectorcraft_engine::cmd::fileio::load("synthetic.af", &document(vec![vec![first, second]], 72.0, Method::Zstd)).unwrap();
+        let mut s = Session::new();
+        s.add_document(loaded.doc, None);
+        let before = s.doc().unwrap().doc.clone();
+        let first_bounds = find(&before.layers, "First").unwrap().geometric_bounds().unwrap();
+        let second_node = find(&before.layers, "Second").unwrap().clone();
+        let child_bounds = find(&before.layers, "First").unwrap().children().unwrap()[1].geometric_bounds().unwrap();
+        let delta = Vec2::new(13.0, -7.0);
+        s.execute("artboard.setProps", &json!({"index": 0, "x": 13, "y": -7, "moveArt": true})).unwrap();
+        let after = s.doc().unwrap().doc.clone();
+        assert_eq!(after.artboards[0].rect, before.artboards[0].rect + delta);
+        let first = find(&after.layers, "First").unwrap();
+        assert_eq!(first.geometric_bounds().unwrap(), first_bounds + delta);
+        assert_eq!(first.children().unwrap()[1].geometric_bounds().unwrap(), child_bounds + delta);
+        assert_eq!(find(&after.layers, "Second").unwrap(), &second_node);
+        assert_eq!(after.artboards[1], before.artboards[1]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *after);
+    }
+}

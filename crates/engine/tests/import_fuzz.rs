@@ -1,12 +1,14 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
+//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions).
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! faces).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -943,6 +945,19 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
         out.push((name, b));
     }
     out[0].1 = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out[0].1, (300.0, 150.0));
+    // A layered PSD with transparency (as VectorCraft exports it), and a PackBits PSB by hand.
+    let mut s = rich_session();
+    let r = s.execute("document.export", &json!({"format": "psd", "ppi": 2})).unwrap();
+    out.push(("a.psd", vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()));
+    let mut psb = b"8BPS\0\x02\0\0\0\0\0\0\0\x04\0\0\0\x02\0\0\0\x03\0\x08\0\x03".to_vec();
+    psb.extend([0; 8]);
+    psb.extend(10u64.to_be_bytes());
+    psb.extend(2u64.to_be_bytes());
+    psb.extend((-1i16).to_be_bytes());
+    psb.extend([0, 1]);
+    psb.extend((0..8).flat_map(|_| 2u32.to_be_bytes()));
+    psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
+    out.push(("a.psb", psb));
     out
 }
 
@@ -952,7 +967,7 @@ proptest! {
     /// Mutated image headers (resolution metadata, chunk and segment lengths) never crash reading
     /// their resolution or placing them.
     #[test]
-    fn mutated_images_place_without_panics(which in 0usize..4, cut in 0usize..400, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
+    fn mutated_images_place_without_panics(which in 0usize..6, cut in 0usize..4000, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
         let (name, mut bytes) = raster_samples().swap_remove(which);
         for (at, b) in edits {
             if let Some(x) = bytes.get_mut(at) {
@@ -1689,12 +1704,69 @@ fn text_document_text() -> String {
         .to_string()
 }
 
+/// The text document of area type threaded through two frames and of type on a path, as an
+/// editing copy keeps it (frames on the canvas, y down).
+fn frames_document_text() -> String {
+    let area = |x0: f64, x1: f64| {
+        let (y0, y1) = (8201.5, 8221.5);
+        let corners = [(x0, y0), (x0, y1), (x1, y1), (x1, y0), (x0, y0)];
+        let segments: Vec<String> = corners.windows(2).map(|w| format!("{0} {1} {0} {1} {2} {3} {2} {3}", w[0].0, w[0].1, w[1].0, w[1].1)).collect();
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 /7 18 >> >> >>", segments.join(" "))
+    };
+    let path = "<< /0 << /0 [ 0 0 ] /1 << /0 [ 8151.5 8171.5 8151.5 8171.5 8191.5 8161.5 8191.5 8171.5 8191.5 8171.5 8211.5 8181.5 8231.5 8171.5 8231.5 8171.5 ] >> /2 << /0 2 /6 [ 0.5 2.0 ] >> >> >>";
+    let story = |text: &str, frames: &str, style: &str| {
+        let n = text.chars().count() - text.matches('\\').count();
+        format!(
+            "<< /0 << /0 ({text}) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 2 /1 4 /2 6 >> /6 0 >> >> /1 {n} >> ] >> \
+             /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << {style} >> >> >> /1 {n} >> ] >> >> /1 << /0 [ {frames} ] >> >>"
+        )
+    };
+    format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {} {} {path} ] >> >>\n/1 << /1 [ {} {} ] /2 << /1 12.0 >> >>\n",
+        area(8151.5, 8201.5),
+        area(8211.5, 8241.5),
+        story(
+            "A story in two frames\\rand more\\r",
+            "<< /0 0 >> << /0 1 >>",
+            "/1 9.0 /8 50 /53 << /99 /CAITextPaint /0 << /0 1 /1 [ 1.0 1.0 0.0 0.0 ] >> >>"
+        ),
+        story("On a path\\r", "<< /0 2 >>", "/1 8.0"),
+    )
+}
+
+/// The text objects of [`frames_document_text`]: story 0 in its two frames, story 1 in its one (a
+/// text object names its frame among its story's).
+const FRAME_OBJECTS: &str = "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n1 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n0 /FrameIndex ,\n1 /StoryIndex ,\n;\n";
+
+/// The fuzzed fixture, as it is, reads as area type in two threaded frames and type on a path.
+#[test]
+fn the_frames_fixture_reads_as_threaded_area_type_and_type_on_a_path() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.eps", &text_eps_of(&frames_document_text(), FRAME_OBJECTS)).unwrap();
+    let mut kinds = vec![];
+    l.doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            kinds.push(match t.kind {
+                vectorcraft_doc::TextKind::Area { .. } => "area",
+                vectorcraft_doc::TextKind::OnPath { .. } => "path",
+                _ => "point",
+            });
+        }
+    });
+    assert_eq!(kinds, ["area", "area", "path"], "{:?}", l.warnings);
+    assert_eq!(l.doc.text_threads.len(), 1);
+}
+
 /// An EPS with a hidden text object whose story is in `document`.
 fn text_eps(document: &str) -> Vec<u8> {
+    text_eps_of(document, "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n")
+}
+
+/// An EPS with the text `objects` on a hidden layer, their stories in `document`.
+fn text_eps_of(document: &str, objects: &str) -> Vec<u8> {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     let editing = format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
-         %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nLB\n%AI5_EndLayer--\n\
+         %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n{objects}LB\n%AI5_EndLayer--\n\
          %AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
         lines.join("\n")
     );
@@ -1710,6 +1782,15 @@ proptest! {
         let text = mutate_text(&text_document_text(), cut, &edits);
         let bytes = text_eps(&text);
         survive("mutated EPS text document", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// The same for area type threaded through frames and type on a path, opened as a document
+    /// (its threads flow).
+    #[test]
+    fn eps_text_frames_never_panic(cut in 0usize..2_500, edits in prop::collection::vec((0usize..2_500, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '<', '>', '\\', 'e', '1', '2'])), 0..12)) {
+        let text = mutate_text(&frames_document_text(), cut, &edits);
+        let bytes = text_eps_of(&text, FRAME_OBJECTS);
+        survive("mutated EPS text frames", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
     }
 
     /// An Illustrator EPS whose editing data is damaged or hostile: read as its layers, or as its page.
@@ -1731,7 +1812,7 @@ proptest! {
                 *x = b;
             }
         }
-        survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![]).0))?;
+        survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false).0))?;
     }
 }
 
@@ -1886,9 +1967,13 @@ proptest! {
     fn ai_hostile_editing_data_never_panics(tokens in prop::collection::vec(arb_ai_token(), 0..80)) {
         use vectorcraft_testkit::ai;
         let data = ai::editing_data(200.0, 100.0, &format!("%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n{}\nLB\n", tokens.join(" ")));
-        survive("hostile editing data", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![]).0))?;
+        survive("hostile editing data", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false).0))?;
+        survive("hostile editing data, type as outlines", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], true).0))?;
         let eps = ai::eps(data.as_bytes(), ai::page_ps());
         survive("hostile editing data in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+        // An EPS whose page is its art's box, not its artboard: what prints outside it is compared too.
+        let boxed = ai::eps(data.replace("%AI3_Cropmarks: 0 0 200 100", "%AI3_Cropmarks: -50 -50 300 200").as_bytes(), ai::page_ps());
+        survive("hostile editing data in an EPS of its art's box", || vectorcraft_engine::cmd::fileio::load("x.eps", &boxed).ok().map(|l| l.doc))?;
     }
 
     /// The testkit's sample damaged, as it is and compressed, in EPS and `.ai` files.
@@ -1909,5 +1994,129 @@ proptest! {
             let file = ai::eps(&bytes, ai::page_ps());
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.eps", &file).ok().map(|l| l.doc))?;
         }
+    }
+}
+
+// ---------- font files a folder search reads ----------
+
+/// A small font file holding what a folder search reads: an outline table's tag, the `name` and
+/// `OS/2` tables of the bundled Source Sans 3 renamed "Findme Sans 3", and an `fvar` table with a
+/// weight axis and three named instances (named by name ids 2, 1 and 4).
+fn search_font() -> Vec<u8> {
+    let font = vectorcraft_testkit::fonts::renamed("Findme Sans 3");
+    let be32 = |at: usize| u32::from_be_bytes(font[at..at + 4].try_into().unwrap()) as usize;
+    let table = |tag: &[u8; 4]| {
+        let n = u16::from_be_bytes([font[4], font[5]]) as usize;
+        let r = (0..n).map(|i| 12 + 16 * i).find(|&r| &font[r..r + 4] == tag).unwrap();
+        font[be32(r + 8)..be32(r + 8) + be32(r + 12)].to_vec()
+    };
+    // fvar 1.0: the axis array at 16, one axis of 20 bytes, three instances of 8.
+    let mut fvar = vec![];
+    for v in [1u16, 0, 16, 2, 1, 20, 3, 8] {
+        fvar.extend(v.to_be_bytes());
+    }
+    fvar.extend(b"wght");
+    for v in [100i32, 400, 900] {
+        fvar.extend((v << 16).to_be_bytes());
+    }
+    fvar.extend([0, 0, 1, 0]);
+    for (name, weight) in [(2u16, 300i32), (1, 600), (4, 900)] {
+        fvar.extend(name.to_be_bytes());
+        fvar.extend(0u16.to_be_bytes());
+        fvar.extend((weight << 16).to_be_bytes());
+    }
+    let tables: [(&[u8; 4], Vec<u8>); 4] = [(b"OS/2", table(b"OS/2")), (b"fvar", fvar), (b"glyf", vec![0; 4]), (b"name", table(b"name"))];
+    let mut out = 0x0001_0000_u32.to_be_bytes().to_vec();
+    for v in [tables.len() as u16, 0, 0, 0] {
+        out.extend(v.to_be_bytes());
+    }
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in &tables {
+        out.extend(*tag);
+        for v in [0, offset as u32, data.len() as u32] {
+            out.extend(v.to_be_bytes());
+        }
+        offset += data.len().next_multiple_of(4);
+    }
+    for (_, data) in &tables {
+        out.extend(data);
+        out.resize(out.len().next_multiple_of(4), 0);
+    }
+    out
+}
+
+/// `font` as a collection of `faces % 5` faces that all read it, whose header gives `faces` as the
+/// count.
+fn search_collection(font: &[u8], faces: u32) -> Vec<u8> {
+    let k = (faces % 5) as usize;
+    let base = 12 + 4 * k;
+    let mut out = b"ttcf".to_vec();
+    out.extend(0x0001_0000_u32.to_be_bytes());
+    out.extend(faces.to_be_bytes());
+    for _ in 0..k {
+        out.extend((base as u32).to_be_bytes());
+    }
+    // The tables' offsets count from the start of the collection.
+    let mut f = font.to_vec();
+    let n = u16::from_be_bytes([f[4], f[5]]) as usize;
+    for i in 0..n {
+        let at = 12 + 16 * i + 8;
+        let offset = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) + base as u32;
+        f[at..at + 4].copy_from_slice(&offset.to_be_bytes());
+    }
+    out.extend(f);
+    out
+}
+
+/// The fonts a search for "Findme Sans 3" looks for: the face, and a style of the family as if the
+/// family were installed.
+fn findme_wanted() -> vectorcraft_text::WantedFonts {
+    use vectorcraft_text::WantedFont;
+    vectorcraft_text::WantedFonts::new(&[
+        WantedFont { family: "Findme Sans 3".into(), style: "Regular".into(), installed: None },
+        WantedFont { family: "FINDME SANS 3".into(), style: "Black".into(), installed: Some("Findme Sans 3".into()) },
+        WantedFont { family: "SourceSans3-Regular".into(), style: "Bold".into(), installed: None },
+    ])
+}
+
+/// Whether reading `bytes` as a font file a search reads panics.
+fn search_reads(what: &str, bytes: &[u8]) -> Result<Vec<usize>, TestCaseError> {
+    let path = vectorcraft_testkit::temp_dir("font-search-fuzz").join(format!("{:?}.ttc", std::thread::current().id()));
+    std::fs::write(&path, bytes).unwrap();
+    catch_quiet(|| findme_wanted().provided_by(&path)).map_err(|e| TestCaseError::fail(format!("{what}: a search reading the file panicked: {e}")))
+}
+
+/// The samples the fuzz properties mutate reach the matching: each provides the face it names.
+#[test]
+fn the_search_font_samples_are_read_whole() {
+    let font = search_font();
+    assert_eq!(search_reads("font", &font).unwrap(), [0, 2]);
+    assert_eq!(search_reads("collection", &search_collection(&font, 3)).unwrap(), [0, 2]);
+    // Two faces, and a header that gives seven.
+    assert_eq!(search_reads("collection claiming more faces", &search_collection(&font, 7)).unwrap(), [0, 2]);
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn font_files_a_search_reads_never_panic(
+        faces in prop::option::of(any::<u32>()),
+        cut in prop::option::of(0usize..12_000),
+        edits in prop::collection::vec((0usize..12_000, any::<u8>()), 0..12),
+    ) {
+        let font = search_font();
+        let mut bytes = match faces {
+            Some(n) => search_collection(&font, n),
+            None => font,
+        };
+        for (at, b) in edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        search_reads("mutated font file", &bytes)?;
     }
 }

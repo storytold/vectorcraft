@@ -32,6 +32,74 @@ Other clients use the same command in their JSON config:
 
 For a live session, start the app first: `cargo run --release -p vectorcraft -- --control 7979`.
 
+### From an installed release
+
+The release packages ship `vectorcraft-cli` alongside the desktop app, so no build is needed:
+
+| Install | CLI |
+|---|---|
+| Windows (MSI) | `C:\Program Files\VectorCraft\vectorcraft-cli.exe` by default (wherever you installed it otherwise), not on `PATH` |
+| Linux (deb, rpm) | `/usr/bin/vectorcraft-cli` |
+| macOS | the separate `vectorcraft-cli-<version>-macos-<arch>.zip` release asset (the `.app` holds only the desktop app) |
+
+```sh
+# Windows, default install folder
+claude mcp add vectorcraft -- "C:\Program Files\VectorCraft\vectorcraft-cli.exe" mcp
+# Linux, or macOS with the CLI unzipped onto PATH
+claude mcp add vectorcraft -- vectorcraft-cli mcp
+```
+
+## Confining file access
+
+```sh
+vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project/out
+```
+
+```json
+{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli",
+  "args": ["mcp", "--automation-read-root", "/work/project", "--automation-write-root", "/work/project/out"]}}}
+```
+
+The two flags (PhotoCraft and the other Craft apps take the same ones, so one client config works across
+the suite) keep the agent to the folders you give it:
+
+- Every file a command reads must lie inside the **read root**: `open_file`, `file.place`, relinking and
+  updating links, the images an SVG links to, swatch library, graphic style library and colour-profile loads, plug-ins,
+  `file.newFromTemplate`, preset imports, the folders `text.findFontFiles` searches.
+- Every file a command writes must lie inside the **write root**: `save_file`, `export`, the save and
+  export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
+  library and preset saves to a path.
+- Read and write access are separate. Give the same folder twice for both; a root left out grants none
+  of its access (with only `--automation-read-root`, nothing can be written to disk, though `export` and
+  the save commands without a path still return the bytes). Without either flag nothing changes.
+- A path is made absolute against the server's working directory, then its links are followed: a file
+  (or folder) link that leads out of a root is outside it. For a file that doesn't exist yet, its nearest
+  existing folder's links are followed and the rest must be plain names, so `..` below a folder that
+  doesn't exist is refused, as is a link that leads nowhere (writing through it would create its target).
+  The result is compared with the root by whole folder names: `/work2/x` is not inside `/work`. On
+  Windows case is ignored, UNC paths (`\\server\share\…`) are resolved like drive-letter ones, and
+  device names (`CON`, `NUL`, `COM1`…) are refused.
+- A refused path is an ordinary tool error the agent can read and correct, for example
+  `automation path rejected: outside the write root /work/project/out: /etc/x.png` or
+  `automation filesystem access is not granted: write authority is absent: /work/project/out/x.png`.
+  Links in an opened document that point outside the read root show as missing.
+- The preferences that move folders the app reads or writes on its own (`fontsFolder`,
+  `pluginsFolder`, `recoveryFolder`, `templatesFolder`) can only be set inside the roots. The app's own folders
+  (preferences, Data Recovery, the User Defined library folders, VectorCraft's Fonts folder) are not
+  confined: no agent names a path there.
+- The roots must be existing folders; a missing one stops the server with an error. Each flag is
+  given once (`--flag <dir>` or `--flag=<dir>`).
+
+The flags confine the headless server and imply `--headless`; `--connect` with them is an error, since
+the server would otherwise talk to an app that isn't confined. A running app confines itself: start it
+with the same flags, `vectorcraft --control 7979 --automation-read-root <dir> --automation-write-root
+<dir>`, and connect as usual (see [Control protocol](control-protocol.md#confining-file-access)). The
+server then writes nothing itself: `screenshot {path}` asks the app to write the file.
+
+The checks hold for every thread of the server process. A path is checked, then opened: another program
+that swaps a link in between can still win that race, so the roots keep an agent to the files it was
+given rather than guarding against other software on the computer.
+
 ## Protocol
 
 Newline-delimited JSON-RPC 2.0 on stdio. The revision is **`2025-06-18`**; `2025-03-26` and `2024-11-05` are
@@ -167,7 +235,7 @@ The older names below remain listed because existing workflows use them.
 |---|---|
 | `command_list` | Optional `filter`, `enabled_only`; returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend |
-| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true); returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step; failures set `isError` |
+| `command_batch` | `steps: [{id, params?}]`, optional `stop_on_error` (default true); returns `completed`, `failed`, `results: [{ok, result\|error}]`. Each edit has its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below) |
 | `doc_inspect` | Optional `depth`, `childLimit`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024); inline PNG of the first artboard without editing it. Artboards too large to render within the allocation bound return a tool error |
 | `ui_inspect`, `ui_screenshot` | Connected desktop state/window capture; tool errors in headless mode |
@@ -206,8 +274,8 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `type_text` | `{text}` | Remote only. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
-| `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). |
-| `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`, `.dxf`, `.emf`, `.wmf`, PNG, JPEG, GIF, WebP, TIFF, BMP (an image opens as a document of its pixel size). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). `run_command document.formats` lists the formats. |
+| `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). With `path` the backend (the headless session or the app) writes the PNG there too. |
+| `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`, `.dxf`, `.emf`, `.wmf`, PNG, JPEG, GIF, WebP, TIFF, BMP, PSD/PSB (an image opens as a document of its pixel size; a Photoshop file as its merged image). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF writes one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based); the other formats write one artboard. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
 | `add_text` | `{text, x?, y?, width?, height?, path?, mode?, pathEffect?, size?, font?, color?}` | Point type at (x, y); area type with `width`/`height`; or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`). |
@@ -412,11 +480,26 @@ An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it c
 colour), groups as they were nested, compound paths, clipping groups, object names, hidden and locked objects, fills and
 strokes (spot colours as spot swatches), linear and radial gradients, opacity, blend modes, isolation and knockout,
 embedded images with their alpha channel, guides, and every artboard where it is. An object with several fills or
-strokes, effects or a brush comes in as its drawn look (a group named after it). Type that shows is the page's, in its
-text object's place; hidden point type is made from the file's text document. A file whose editing data has symbols,
+strokes, effects or a brush comes in as its drawn look (a group named after it). Type is made from the file's text
+document, whole and editable: point type, area type (a story in several frames as threaded type) and type on a path,
+with its fonts, size, leading, tracking, scaling, baseline shift, fill and stroke (grey, RGB or CMYK), alignment,
+indents and paragraph spacing. Where the text document can't say, type that shows is the page's, in its text object's
+place. A file whose editing data has symbols,
 pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
 different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
-groups open ungrouped), with a warning saying why.
+groups open ungrouped), with a warning saying why. Layers look different when they draw an object the page doesn't (or
+miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. With
+`textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines.
+
+The document then has what the file's page doesn't print: hidden objects and layers, layers that don't print, guides and
+the art outside the artboards, as the app that wrote the file shows them. Exports and `artboard.fitToArt` leave out the
+hidden art, the guides and template layers; an EPS's artboard is the file's artboard, not the page's bounding box. A
+print pipeline that wants only what the page prints opens the file with `editingData: false` (default `true`):
+an EPS as its page, a `.ai` file from its PDF content (a `.ai` saved without PDF compatibility then can't be opened).
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/label.eps","editingData":false}}}
+```
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
@@ -437,8 +520,10 @@ CMYK too.
 
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
 reader (see EPS and PostScript import). An `.ai` saved without PDF compatibility (its PDF part is only a placeholder
-page) opens from its editing data alone: its type is made from the file's text document where it can be (point type), and
-what can't be is left out with a warning; without editing data it says it can't be opened.
+page) opens from its editing data alone: its type is made from the file's text document where it can be (point type,
+area type and type on a path), and what can't be is left out with a warning; so is non-native art (the content of a
+placed PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data); without editing data
+it says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -555,6 +640,16 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`,
 `file.exportForScreens` and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
 (`vectorcraft-cli --help` lists them).
+
+A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
+`$N` or `$N.path` takes that value from the result of step `N` (counting from 0, in the order they ran; `run --in`'s
+open isn't a step), and `$last…` from the step before. A path goes into objects by key and arrays by index:
+`"$1.id"`, `"$2.ids.0"`, `"$last.ids[0]"`. A string starting with `$$` stands for one `$` (`"$$1.99"` is `$1.99`). A
+reference that names no value fails the step, so a command never runs with one left in it:
+
+```sh
+vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
+```
 
 ## Transparency and opacity masks
 
@@ -802,9 +897,11 @@ groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in
 as the color it shows and leaves gradients out; CSS writes custom properties); without `path`
 it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
-dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
-as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
-swatches and keeps their color groups. A file in the user library folder, or a file with the
+dataBase64?, name?}` loads a `.vcswatches`, `.gpl`, swatch exchange (`.ase`) or color book (`.acb`) file, or another
+document's swatches, as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global,
+spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
+CMYK or Lab colors named with the book's prefix and suffix ("PANTONE 185 C"), as spot colors unless the book marks
+them as process colors; `.acb` files are read, never written. A file in the user library folder, or a file with the
 same extension and bytes as one there, loads as that User Defined library (category `user`).
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
@@ -1201,6 +1298,26 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 {"name":"run_command","arguments":{"command":"path.moveAnchors","params":{"dx":0,"dy":40}}}
 ```
 
+## Editing a path with the Curvature tool
+
+The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
+is one undo step and leaves the anchor it edited direct-selected (the tool's current point):
+`path.curvatureEdit {id, subpath?, op, …}` answers `{anchor}`. `op: "move"` with `anchor`, `x`, `y` moves a point and
+re-curves only its two segments: a smooth point turns along the line through its neighbours, and the neighbours'
+handles keep their directions (their lengths scale with the chord), so the segments beyond don't change.
+`op: "insert"` with `segment`, `t` adds a smooth point there without changing the shape (with `x`, `y` it is then
+moved there: the tool's click-and-drag on a segment). `op: "extend"` with `x`, `y` goes on from the `end` (default)
+or the `start` of an open subpath, and `op: "close"` closes it from that end; `from` says how the old end bends into
+the new segment: `"keep"` (default) keeps its curve, `"smooth"` curves it through its neighbours (a point the tool
+placed), `"corner"` leaves it without handles. Alt-click or double-click toggles a point with `path.convertAnchor`, and
+Backspace/Delete removes the current point with `path.removeAnchor`.
+
+```json
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"move","anchor":2,"x":260,"y":140}}}
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","end":"end","x":550,"y":120}}}
+{"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"extend","x":650,"y":60,"from":"smooth"}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on
@@ -1291,6 +1408,19 @@ dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"radius":5}}}
 ```
 
+The same command sets the rest of a live shape's properties, as the Properties and Transform panels show them. A
+polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counterclockwise, its first vertex straight up
+at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
+which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
+length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. Each call is
+one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+```
+
 ## Use Preview Bounds
 
 With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
@@ -1351,8 +1481,10 @@ painted when the art covers at least half of it — while raster effects and pat
 their own Anti-aliasing option),
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
 control channel's `ui.drag` scrubs), `showHomeScreen` (on by default: the Home screen while no document is open;
-off, an empty window, and the Home button or `app.home` still shows the screen) and `autoCollapseIconPanels` (off by
-default: on, a click away from a panel popped out of the icon column puts it away).
+off, an empty window, and the Home button or `app.home` still shows the screen), `autoCollapseIconPanels` (off by
+default: on, a click away from a panel popped out of the icon column puts it away) and `displayPrintSize` (off by
+default: View › Actual Size / `view.actualSize` is one document point per screen point; on, one document inch fills
+96 screen points, an inch at the system's reference density whatever the display scaling).
 
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
@@ -1424,9 +1556,14 @@ Not read yet: Spacing Guides (the tools draw none).
   type's frame, type on a path's path — within `selectionTolerance`; a click among the glyphs, between the lines or
   inside the frame selects nothing. Off, anywhere in the type's bounds selects it. Marquee selection is unchanged, and
   the Type tools (a click among the characters edits them) and the Eyedropper (`eyedropper`) are not affected.
+- `fontNamesInEnglish` (on by default): Preferences › Type › Show Font Names in English. Off, the Character panel and
+  Type → Font menus label a family by its native-language name when the font has one. `text.fontList` and
+  `text.setStyle {font}` always use the English (canonical) family name; a document may still name a font by any of
+  its aliases (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeSizeIncrement":4,"trackingIncrement":50}}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"fontNamesInEnglish","value":false}}}
 {"name":"run_command","arguments":{"command":"type.step","params":{"attribute":"tracking","by":-2}}}
 ```
 
@@ -1553,7 +1690,7 @@ passed straight back to `file.new`. Print presets and sizes without `units` star
 
 `file.place` puts another file's art into the active document as one undo step without touching the clipboard:
 a raster image at 100% of its physical size (the resolution its file declares, else 72 ppi; linked to its `path`
-unless `link: false`), an SVG as one group, a PDF/.ai page as one clipped group, with the images, symbols, patterns
+unless `link: false`; a Photoshop document as its merged image), an SVG as one group, a PDF/.ai page as one clipped group, with the images, symbols, patterns
 and swatches it uses. A VectorCraft document read from `path` is a placed document: one locked object showing its
 artboard `page` (or, with `crop: "bounding"`, its art's bounds), linked to the file and read again when it changes
 (see Linked images), and vectors in every output; with `link: false` (or from `dataBase64`) it is an editable copy
@@ -1672,7 +1809,8 @@ the preview instead of the pixels, plus the path relative to the saved file. `do
 the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
 (so a folder moved with its links still opens): the result lists `missingLinks` (their images show the preview),
 `modifiedLinks` (left as they were; read again only with the preference `updateLinks: "automatically"`, then they are
-in `updatedLinks`), each as `{name, path, ids}`. `links.check` reports every link's `status` (`ok`, `modified`,
+in `updatedLinks`), each as `{name, path, ids}`. The desktop app also checks the active document's links when its window
+comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
 file system (the web), linked images show their previews.
@@ -1831,7 +1969,9 @@ bounds; `clip` puts it in a clip group of the old bounds when it is larger). The
 unsaved one is an error) into `folder/name` (default name `<document> Folder`): `<document>.vectorcraft`, its linked
 files in `Links/` (relinked: the packaged document points at the copies; the open one doesn't change), the fonts its
 type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in `skippedFonts` instead) and
-`<document> Report.txt`. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
+`<document> Report.txt`. A placed `.vectorcraft` document is packaged with its own linked files and fonts, relinked to
+the copies (each file copied once); one that can't be read is copied as it is, and a cycle of placed documents or one
+past the nesting limit stops there, each with a line in `warnings` and the report. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
 result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
 
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
@@ -2149,7 +2289,13 @@ show) is the flat render. `maxEditability: true` turns layers and sublayers into
 named as the Layers panel names it (text objects by their text); layers with a clipping mask, an opacity mask, an
 appearance of their own or knockout stay one pixel layer. Hidden layers and objects are left out unless
 `hiddenLayers: true` writes them as hidden layers. `layers: false` writes one flat image, on white where nothing is
-drawn. Files are at most 30000 pixels a side; PSD files don't open in VectorCraft.
+drawn. Files are at most 30000 pixels a side.
+
+Photoshop documents (`.psd`, and `.psb`, the large document format) open and place as their merged image, the
+flattened picture every Photoshop file carries (layers aren't read): Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
+(converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
+A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
+again when it changes); Multichannel files are refused.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"maxEditability":true}}}
@@ -2549,20 +2695,70 @@ the fonts CoreText's font manager lists outside them, such as those apps and fon
 folders; Linux and BSD: `/usr/share/fonts`,
 `/usr/local/share/fonts`, `~/.fonts` and the XDG data folders' `fonts`, `~/.local/share/fonts` among them, and in a
 Flatpak sandbox the host's fonts). Faces without outlines VectorCraft draws (no `glyf`, `CFF`, `CFF2` or `VARC` table, such
-as bitmap-only fonts) are left out. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+as bitmap-only fonts) are left out. The scan also reads the folder the `fontsFolder` preference names (Preferences › Type ›
+Additional Fonts Folder) with its subfolders and, in the desktop app and `vectorcraft-cli`, VectorCraft's own `Fonts` folder
+next to the preferences: `~/Library/Application Support/VectorCraft/Fonts` on macOS, `%APPDATA%\VectorCraft\Fonts` on
+Windows, and `$XDG_CONFIG_HOME/vectorcraft/Fonts` or `~/.config/vectorcraft/Fonts` on Linux and BSD. `text.addFontFiles`
+copies fonts into that folder. The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
 by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
-lists every family available, the installed ones included, as the font menus do: without the system's hidden
-families, whose names start with "." (macOS's ".SF NS", ".LastResort"), which still resolve when a document names
-them. With `family` it gives that family's styles (upright by weight, then italics) and fails when the family isn't
-available. `text.rescanFonts` (Character panel menu ›
-Refresh Font List) scans the font folders again, for fonts installed or removed since the app started: type set in a
-font that became available redraws in it, without editing the document. The app does so by itself when its window
-comes to the front and a font folder changed meanwhile.
+lists every family available, the installed ones included, each by its English (canonical) name — the same string
+`text.setStyle {font}` and documents use — without the system's hidden families, whose names start with "."
+(macOS's ".SF NS", ".LastResort"), which still resolve when a document names them. Preferences › Type › Show Font
+Names in English (`fontNamesInEnglish`) only changes the UI menu labels, not this list. With `family` it gives that
+family's styles (upright by weight, then italics) and fails when the family isn't available. `text.rescanFonts`
+(Character panel menu › Refresh Font List) scans the font folders again, for fonts installed or removed since the app
+started: type set in a font that became available redraws in it, without editing the document. The app does so by
+itself when its window comes to the front and a font folder changed meanwhile.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
+
+`text.missingFonts` lists the fonts that the active document's type uses, in its layers and its symbols, and that aren't
+available as named: `{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or
+`substitute`, as in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
+longer than 256 bytes are left out. `fontsNextToDocument` is the `Fonts` folder next to the saved document
+(File › Package writes it), when there is one and a search may start there. `text.findFontFiles {folder}` looks for
+the fonts' files in an absolute folder and its subfolders on separate threads and returns at once with
+`state: "searching"` and an `id`; `fonts: [{family, style?}]` names other fonts to look for. `text.findFontFiles {}`
+returns the last search's state with the files found so far for each font: `searching`, `done`, `stopped` (with
+`stopped`: `stop`, `time` or `limit`) or `failed` (with `error`); before the first search it returns
+`{state: "idle", fonts: []}`, without an `id`. `{stop: true}` stops the search. A search reads the table directories
+and the `name`, `fvar` and `OS/2` tables of `.ttf`, `.otf`, `.ttc` and `.otc` files and, on macOS, of suitcase fonts
+(extensionless or `.suit` files whose fonts are in their resource fork), and it lists a file for a font only when adding
+the file makes the font resolve exactly as `text.fonts` resolves it. It ends after `maxSeconds` (60 by default, 1 to
+600), at its limits on the entries listed (10,000,000), the folders waiting to be listed (1,000,000), the font files
+read (10,000) and the files kept (1,000), or once every font has a file. Folders more than 64 levels below the picked
+one are skipped and counted in `skipped`. A search does not read a font file larger than 256 MB, which
+`text.addFontFiles` does not copy, or a suitcase font whose resource fork is larger than 8 MB.
+
+A search does not enter app and media library packages (`.app`, `.bundle`, `.framework`, `.photoslibrary` and the like),
+folders named `Program Files` (also `Program Files (x86)` and `Program Files (Arm)`), `ProgramData`, `$Recycle.Bin` or
+`System Volume Information`, the system's folders at the root of a volume (a macOS, Linux, BSD or Windows root, told by
+the folders it holds), the `Shared` and `Public` folders in `Users`, a home folder's `Library`, `AppData`,
+`Applications` and `snap` folders and the folders in it whose names start with a dot, the app data folders in a
+`Library` folder (`Application Support`, `Containers`, `Group Containers`, `Caches`, `Preferences`), or the folders the
+environment names for apps and the system (such as `APPDATA`, `LOCALAPPDATA`, `ProgramFiles`, `SystemRoot` and
+`XDG_CONFIG_HOME`), and a search of a folder inside one of them fails. The walk also skips other hidden folders and
+folders whose contents are in the cloud, and it follows no links; a picked folder may be one of those, and a picked path
+that goes through a link is searched at its target. Programs installed in other folders, such as a folder on another
+drive, are searched as any other folder is.
+
+`text.addFontFiles {files}` copies files that the session's last search found into VectorCraft's `Fonts` folder, then
+scans the fonts again, and type set in them redraws. It copies only regular `.ttf`, `.otf`, `.ttc`, `.otc`, `.woff`
+and `.woff2` files and suitcase fonts (with their resource fork), at most 256 MB a file and 1 GB in all, and lists any
+other file in `skipped`. It never replaces a file: a file with the same contents is kept (`kept`), and when another
+file has the name, the copy gets a number (`Name 2.otf`). Copy only fonts you own or are licensed to install. `command.batch` returns before a search ends; later requests over MCP or the control channel poll
+`text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
+folder and no folder search.
+
+```json
+{"name":"run_command","arguments":{"command":"text.missingFonts","params":{}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{"folder":"/Users/me/Downloads"}}}
+{"name":"run_command","arguments":{"command":"text.findFontFiles","params":{}}}
+{"name":"run_command","arguments":{"command":"text.addFontFiles","params":{"files":["/Users/me/Downloads/Example/Example-Regular.otf"]}}}
 ```
 
 ## Tool options
@@ -2572,11 +2768,26 @@ active tool, `tool` names another one, and `{}` just reads them; the result is t
 tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
-polygon sides and star points. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+polygon sides and star points, and the Flare Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
 intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+```
+
+`tool.options {tool}` opens what double-clicking the tool's button opens (its params doc lists every tool), in the
+desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`): `diameter` and `pathLength` (pt),
+`opacity`, `brightness`, `growth`, `fuzziness`, `longest`, `rayFuzziness` and `largest` (%), `rays`, `rings`,
+`direction` (°), and `raysOn` and `ringsOn` (the Rays and Rings checkboxes; off, the flare has none). OK keeps them
+(`tool.setOption {tool: "flare", values}`) and the next flare dragged out uses them; a click with the tool opens the
+same dialog, and its OK also draws a flare there. The Artboard tool's are the active artboard's Artboard Options
+(dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's), a graph tool's
+the selected graph's Graph Type (an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
+`symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
+Magic Wand tool's its panel.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
 ```
 
 ## Perspective grid

@@ -13,6 +13,34 @@ its request line is rejected first. At most 16 connections are served at once; f
 line and are closed. Clients that get an error reply should reconnect. The port has no authentication,
 so only enable it while you use it. Transport: `apps/vectorcraft/src/control_server.rs`.
 
+## Confining file access
+
+```sh
+vectorcraft --control 7979 --automation-read-root /work/project --automation-write-root /work/project/out
+```
+
+`--automation-read-root <dir>` and `--automation-write-root <dir>` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` /
+`VECTORCRAFT_AUTOMATION_WRITE_ROOT`; `--flag=<dir>` works too) confine what the control channel reads and
+writes, with the same flags as `vectorcraft-cli mcp` and the other Craft apps. Every path a request reads
+(open, place, relink, library and profile loads, plug-ins…) must lie inside the read root, every path it
+writes (save, export, package, captures, library saves…) inside the write root; anything else is an
+ordinary error reply. Paths are made absolute against the app's working directory, links are followed
+(for a file that doesn't exist yet, its folder's), and the comparison is by whole folder names (`/work2` is
+not inside `/work`), ignoring case on Windows; `..` below a folder that doesn't exist, a link that leads
+nowhere and Windows device names are refused. A root left out grants none of its access. The roots must be
+existing folders, or the app doesn't start; without `--control` they are ignored. See `docs/mcp.md`
+› Confining file access for the details.
+
+What is confined: the requests themselves, the frames that carry input they inject (`ui.click`, `ui.key`,
+`ui.text`…, so a menu item an agent clicks is confined too), the background saves and exports they start,
+and window captures. The person at the keyboard is not: files opened from the command line, Finder or a
+file dialog, and everything done with the mouse and keyboard, work as usual. The preferences that move
+folders the app reads or writes on its own (Additional Fonts Folder, Additional Plug-ins Folder, Data
+Recovery's folder, the Templates folder) can only be pointed inside the roots by automation. The app's own folders
+(preferences, Data Recovery, the library folders, VectorCraft's Fonts folder) are not confined, since no
+agent names a path there. A path is checked, then opened: another program that swaps in a link between
+the two can still win that race.
+
 | Method | Params | |
 |---|---|---|
 | `engine.execute` | `{command, params}` | run any engine or UI command (see `engine.commands`) |
@@ -27,8 +55,8 @@ so only enable it while you use it. Transport: `apps/vectorcraft/src/control_ser
 | `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?}` | |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
-| `ui.screenshot` | `{path?}` | capture the window (PNG). Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
-| `ui.render` | `{path?, scale?}` | render the artboard headlessly (PNG) |
+| `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
+| `ui.render` | `{path?, scale?, data?}` | render the artboard headlessly (PNG): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.resize` / `ui.focus` | | |
 | `app.open` / `app.save` / `app.export` / `app.quit` | `{path}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
 | `app.export` with `useArtboards` | `{path, useArtboards: true, range? \| artboards?, …}` | Export As: PNG, JPEG and WebP write one file per chosen artboard (default all; SVG does so for a `range`), `<path stem>-<artboard>.<ext>`, and return `{path, files: [path…]}`; a PDF keeps them as pages of `path`. `useArtboards: false` covers the bounds of the visible art. The menu's Export As… is `file.exportAs`: the `exportAs` dialog (`format`, `useArtboards`, `all`, `range`), then a save dialog and the format's options: `pngOptions` / `jpgOptions` / `webpOptions`, `svgOptions`, or `savePdf` for a PDF with Use Artboards |
@@ -102,6 +130,9 @@ effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setPara
 `effect.apply`. Choosing an effect that the list already has returns `{"pending": "effectExists"}` and opens the
 `effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
 value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.
+The Transform effect's dialog (`effect.dialog {effect: "distort.transform"}`) has Transform Each's controls: sliders
+for `scaleH`, `scaleV` (%) and `moveH`, `moveV` (pt), an angle dial for `rotate`, then `copies`, `reflectX`,
+`reflectY`, `reference` (0–8, the 9-point grid) and `random` (each object varies its own way, the same on every redraw).
 
 Plug-in dialogs: `engine.execute {command: "plugin.dialog", params: {id}}` (Object › Plug-ins) runs an object filter
 plug-in at once when it takes no parameters, else opens the `plugin` dialog: one field per declared parameter (named
@@ -373,7 +404,30 @@ Missing linked files: `app.open` of a document whose linked images' files can't 
 folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it (the images keep their preview), with
 `applyToAll` the rest too. The next missing file is asked about after each answer; `ui.dialog.cancel` stops asking.
 Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
-`confirm` dialog whose `ui.dialog.confirm` runs `links.update`.
+`confirm` dialog whose `ui.dialog.confirm` runs `links.update`. The same happens when the app's window comes back to
+the front and a linked file of the active document changed meanwhile (asked once per change of a file); with
+`"automatically"` the files are read again at once, with `"manually"` the Links panel shows them as modified.
+
+Missing fonts: once the missing linked file questions are answered, or at once when there are none, `app.open` of a
+document whose type uses fonts that aren't available (`text.missingFonts`) opens the `missingFonts` dialog, one document
+at a time, and so does `links.editOriginal` of a placed document. When another dialog takes its place (Import PDF for a
+file opened next, for example), the dialog opens again once that one closes. Fields: `document` (the document's uid),
+`fonts` (`[{family, style, status, resolved}]`), `fontsNextToDocument` (the `Fonts` folder next to the document, or
+empty), `state` (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`, `found`
+(`text.findFontFiles`'s `fonts`, with the files found), `searched`, `skipped`, `unreadable`, `stopped`, `error` and
+`chosen` (the files to add; a font's first file is chosen when the search finds it). Its buttons are Find Fonts and
+Close, with Search Fonts Folder, Find in Folder… and, once files are found, Add Fonts in the dialog.
+`ui.dialog.set {field: "discard", value: true}` then `ui.dialog.confirm` is Find Fonts: the dialog closes and Type ›
+Find Font opens (dialog `findFont`) with the first missing font selected. `ui.dialog.set {field: "searchFolder",
+value}` then `ui.dialog.confirm` searches that folder (`text.findFontFiles`), keeps the dialog open and clears
+`searchFolder`, also when the search doesn't start. The fields change as frames draw the dialog; `text.findFontFiles
+{}` reports the search directly. `ui.dialog.confirm` without `discard` or `searchFolder` is Add Fonts: it copies the
+files in `chosen` (`text.addFontFiles`) and closes the dialog. `ui.dialog.cancel` (Close) closes it and stops its
+search. After Find Fonts or Close, the dialog doesn't open again for that open.
+`ui.missingFontsDialog {folder?}` opens the dialog for the active document, searching `folder` when given.
+`ui.findFontsInFolder {folder?}` (Find in Folder… in Type › Find Font…, shown when the document misses fonts) asks for a
+folder, then opens the dialog searching it. The web shows a status line instead of the dialog, and both commands are
+disabled there.
 
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
 dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,

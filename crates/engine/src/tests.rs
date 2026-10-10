@@ -149,6 +149,18 @@ fn select_same_fill() {
     let r = s.execute("select.same.fillColor", &json!({})).unwrap();
     assert_eq!(r["count"], 2);
     assert!(!s.doc().unwrap().selection.contains(a));
+    // Reselect after Deselect repeats it from the same reference object (#903).
+    let blue = s.doc().unwrap().selection.objects.clone();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, blue);
+    // With its reference object gone, it fails as Select Same does, and selects nothing.
+    s.execute("select.none", &json!({})).unwrap();
+    for id in &blue {
+        s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert!(s.execute("select.reselect", &json!({})).is_err());
+    assert!(s.doc().unwrap().selection.objects.is_empty());
 }
 
 #[test]
@@ -852,4 +864,31 @@ fn new_layers_and_sublayers_are_numbered_together() {
     assert_eq!(name(&s, &layer), "Layer 3", "after the sublayer, not a repeat of it");
     let sub = s.execute("layer.newSublayer", &json!({})).unwrap();
     assert_eq!(name(&s, &sub), "Layer 4", "the art doesn't count");
+}
+
+/// #785: objects given are used as given (a value that isn't an object id fails, never the
+/// selection instead), and `text.setRangeStyle` works on the selected type object without `id`.
+#[test]
+fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
+    let mut s = session();
+    let first = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "first", "size": 30})).unwrap()["id"].clone();
+    s.execute("text.create", &json!({"x": 10, "y": 140, "text": "second", "size": 30})).unwrap();
+    for bad in [
+        json!({"id": "$1.id", "size": 60}),
+        json!({"id": 2.5, "size": 60}),
+        json!({"ids": [first.clone(), "$1.id"], "size": 60}),
+        json!({"ids": 3, "size": 60}),
+    ] {
+        assert!(s.execute("text.setStyle", &bad).is_err(), "{bad}");
+    }
+    // Another kind of id (an effect's) is still not an object id.
+    let sel = s.doc().unwrap().selection.objects.clone();
+    assert!(s.execute("effect.apply", &json!({"id": "stylize.dropShadow"})).is_ok());
+    assert_eq!(s.doc().unwrap().selection.objects, sel);
+    // The selected type object (the second) is styled when no id is given.
+    let r = s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "style": "Bold"})).unwrap();
+    assert_ne!(r["id"], first);
+    s.execute("select.all", &json!({})).unwrap();
+    assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
+    assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
 }

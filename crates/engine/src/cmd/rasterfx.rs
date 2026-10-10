@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_color::Paint;
+use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, ColorMode, Document, Effect, ImageBlob, ImageObject, Node, NodeId, NodeKind, RasterColorModel, StrokeLayer,
@@ -217,16 +217,53 @@ pub(crate) fn raster_fx(n: &Node) -> Vec<RasterFx> {
 /// Remove the raster effects of `n` (its own and its fills' and strokes') and, with `members`, of
 /// everything inside it.
 pub(crate) fn strip_raster(n: &mut Node, members: bool) {
-    let keep = |e: &Effect| !effects::is_raster(&e.id);
+    retain_effects(n, members, &|e| !effects::is_raster(&e.id));
+}
+
+/// Keep the effects of `n` (its own and its fills' and strokes') that `keep` accepts and, with
+/// `members`, of everything inside it.
+fn retain_effects(n: &mut Node, members: bool, keep: &dyn Fn(&Effect) -> bool) {
     n.appearance.effects.retain(keep);
     for it in &mut n.appearance.items {
         it.effects_mut().retain(keep);
     }
     if members {
         for c in n.children_mut().into_iter().flatten() {
-            strip_raster(Arc::make_mut(c), true);
+            retain_effects(Arc::make_mut(c), true, keep);
         }
     }
+}
+
+/// The blend mode raster effect `e` paints with (`None`: not a raster effect, or one without).
+fn effect_mode(e: &Effect) -> Option<BlendMode> {
+    effects::raster_effects(std::slice::from_ref(e)).first().and_then(RasterFx::mode)
+}
+
+/// The images of the shadows and outer glows of `n`, one per blend mode they use (in the order
+/// the modes first come), each composited with its mode: rendered alone, over nothing, they can't
+/// blend with the art below the object, so the image does.
+fn below_images(d: &mut Document, n: &Node) -> Option<Vec<Node>> {
+    let mut modes: Vec<BlendMode> = vec![];
+    for mode in raster_fx(n).iter().filter_map(RasterFx::mode) {
+        if !modes.contains(&mode) {
+            modes.push(mode);
+        }
+    }
+    if modes.len() < 2 {
+        let mut image = raster_image(d, n, true, false)?;
+        image.blend = modes.first().copied().unwrap_or_default();
+        return Some(vec![image]);
+    }
+    modes
+        .into_iter()
+        .map(|mode| {
+            let mut only = n.clone();
+            retain_effects(&mut only, false, &|e| effect_mode(e).is_none_or(|m| m == mode));
+            let mut image = raster_image(d, &only, true, false)?;
+            image.blend = mode;
+            Some(image)
+        })
+        .collect()
 }
 
 /// The raster effects of `n` (its own, its fills' and strokes') as an embedded image of `d`
@@ -405,15 +442,18 @@ fn walk(out: &mut Document, n: &Node, which: Which) -> Option<Node> {
         return Some(walk(out, &g, which).unwrap_or(g));
     }
     // An image that can't be made leaves the object as it is (the writer reports its effects).
-    let image = raster_image(out, n, below, false)?;
     let mut v = n.clone();
     strip_raster(&mut v, false);
     let mut m = if below {
+        let images = below_images(out, n)?;
         let mut m = walk(out, &v, which).unwrap_or(v);
-        put_below(out, &mut m, image);
+        // Each goes in first: the last one put is the lowest.
+        for image in images.into_iter().rev() {
+            put_below(out, &mut m, image);
+        }
         m
     } else {
-        replace_with_image(v, image)
+        replace_with_image(v, raster_image(out, n, false, false)?)
     };
     walk_mask(out, &mut m, which);
     Some(m)

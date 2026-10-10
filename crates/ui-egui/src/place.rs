@@ -348,14 +348,19 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 p["link"] = json!(!embed);
                 run(app, &p).map(|_| ())
             }
-            DropTarget::Open => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
-                if let Some(path) = &path {
-                    io::note_recent(app, path);
-                }
-            }),
+            DropTarget::Open => match path.as_deref() {
+                Some(path) if app.services.read.is_some() => io::open_path(app, path).map(|_| ()),
+                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
+                    if let Some(path) = &path {
+                        io::note_recent(app, path);
+                    }
+                }),
+            },
         };
-        if let Err(e) = r {
-            app.status(if target == DropTarget::Open { format!("Couldn't open {name}: {e}") } else { format!("Couldn't place {name}: {e}") });
+        match r {
+            Err(e) if target == DropTarget::Open => io::report_open_error(app, &name, &e),
+            Err(e) => app.status(format!("Couldn't place {name}: {e}")),
+            Ok(()) => {}
         }
     }
 }

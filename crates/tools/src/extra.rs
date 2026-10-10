@@ -1,8 +1,9 @@
 //! Flare, Reshape, Shaper and Graph tools.
 //!
 //! Flare: drag sets the centre and its size (click without dragging opens the Flare Tool Options),
-//! then a click sets the end point of the rings. Reshape: drag a point of a selected path; the
-//! engine's `path.reshape` adds an anchor there if needed and moves the neighbourhood smoothly.
+//! then a click sets the end point of the rings; the rest comes from the tool's options (the Flare
+//! Tool Options, which last). Reshape: drag a point of a selected path; the engine's
+//! `path.reshape` adds an anchor there if needed and moves the neighbourhood smoothly.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Vec2};
@@ -15,13 +16,35 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "flare" => Box::new(FlareTool::default()),
         "reshape" => Box::new(ReshapeTool::default()),
         "shaper" => Box::new(ShaperTool::default()),
-        id if vectorcraft_doc::GraphKind::parse(id).is_some() && id.ends_with("Graph") => Box::new(GraphTool::new(id)),
+        id if is_graph_tool(id) => Box::new(GraphTool::new(id)),
         _ => return None,
     })
 }
 
+/// Whether `id` is one of the graph tools (`columnGraph`, `pieGraph`…).
+pub fn is_graph_tool(id: &str) -> bool {
+    id.ends_with("Graph") && vectorcraft_doc::GraphKind::parse(id).is_some()
+}
+
+/// The Flare Tool Options as `shape.flare` takes them: (key, default, least, most). The diameter
+/// and the rings' path length are in points, the counts whole, the direction in degrees, the
+/// rest percentages.
+pub const FLARE_OPTIONS: [(&str, f64, f64, f64); 12] = [
+    ("diameter", 100.0, 0.0, 1000.0),
+    ("opacity", 50.0, 0.0, 100.0),
+    ("brightness", 30.0, 0.0, 100.0),
+    ("growth", 20.0, 0.0, 300.0),
+    ("fuzziness", 50.0, 0.0, 100.0),
+    ("rays", 15.0, 0.0, 50.0),
+    ("longest", 300.0, 0.0, 1000.0),
+    ("rayFuzziness", 100.0, 0.0, 100.0),
+    ("pathLength", 300.0, 0.0, 1000.0),
+    ("rings", 10.0, 0.0, 50.0),
+    ("largest", 50.0, 0.0, 250.0),
+    ("direction", 45.0, 0.0, 360.0),
+];
+
 /// Flare Tool: centre drag, then a click for the rings' end point.
-#[derive(Default)]
 pub struct FlareTool {
     /// Pressed at (centre) and the current drag point.
     drag: Option<(Point, Point)>,
@@ -29,14 +52,62 @@ pub struct FlareTool {
     placed: Option<(Point, f64)>,
     hover: Point,
     began: bool,
-    /// Ray count changed with ↑/↓ during the gesture (None = the command's default, 15).
+    /// Ray count changed with ↑/↓ during the gesture (None = the options' count).
     rays: Option<u64>,
+    /// The options' values, in [`FLARE_OPTIONS`] order.
+    values: [f64; 12],
+    /// Whether the flare has rays and rings (the options' Rays and Rings checkboxes).
+    rays_on: bool,
+    rings_on: bool,
+}
+
+impl Default for FlareTool {
+    fn default() -> Self {
+        Self {
+            drag: None,
+            placed: None,
+            hover: Point::ZERO,
+            began: false,
+            rays: None,
+            values: FLARE_OPTIONS.map(|(_, default, _, _)| default),
+            rays_on: true,
+            rings_on: true,
+        }
+    }
+}
+
+/// Whether Flare Tool Options value `key` is a count (whole).
+fn is_count(key: &str) -> bool {
+    matches!(key, "rays" | "rings")
+}
+
+/// Flare Tool Options value `x` of `key` as JSON: a count as a whole number.
+fn option_json(key: &str, x: f64) -> Value {
+    if is_count(key) { json!(x as u64) } else { json!(x) }
+}
+
+/// `shape.flare`'s params for a flare at `c` drawn with the Flare Tool Options `o` (as the tool
+/// reports them, [`Tool::options`]): with Rays or Rings off it has none.
+pub fn flare_params(o: &Value, c: Point) -> Value {
+    let mut v = json!({ "cx": c.x, "cy": c.y });
+    for (key, default, ..) in FLARE_OPTIONS {
+        v[key] = o.get(key).cloned().unwrap_or_else(|| option_json(key, default));
+    }
+    for (on, key) in [("raysOn", "rays"), ("ringsOn", "rings")] {
+        if o.get(on).and_then(Value::as_bool) == Some(false) {
+            v[key] = json!(0);
+        }
+    }
+    v
 }
 
 impl FlareTool {
+    /// `shape.flare`'s params: the options, with the dragged centre and diameter, the ray count
+    /// ↑/↓ chose and the rings' end point once clicked.
     fn params(&self, c: Point, diameter: f64, end: Option<Point>) -> Value {
-        let mut v = json!({ "cx": c.x, "cy": c.y, "diameter": diameter.max(1.0) });
-        if let Some(r) = self.rays {
+        let mut v = flare_params(&self.options(), c);
+        v["diameter"] = json!(diameter.max(1.0));
+        if let Some(r) = self.rays.filter(|_| self.rays_on) {
             v["rays"] = json!(r);
         }
         if let Some(e) = end {
@@ -60,6 +131,7 @@ impl Tool for FlareTool {
             PointerKind::Down => {
                 if self.placed.is_none() {
                     self.drag = Some((ev.pos, ev.pos));
+                    self.rays = None;
                 }
                 vec![]
             }
@@ -106,8 +178,8 @@ impl Tool for FlareTool {
     }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         // ↑/↓ while drawing add/remove rays.
-        if matches!(key, ToolKey::Up | ToolKey::Down) && self.began {
-            let r = self.rays.unwrap_or(15);
+        if matches!(key, ToolKey::Up | ToolKey::Down) && self.began && self.rays_on {
+            let r = self.rays.unwrap_or_else(|| self.options()["rays"].as_u64().unwrap_or(0));
             self.rays = Some(if key == ToolKey::Up { (r + 1).min(50) } else { r.saturating_sub(1) });
             let preview = match (self.drag, self.placed) {
                 (Some((c, p)), _) => self.params(c, 2.0 * p.distance(c), None),
@@ -126,7 +198,7 @@ impl Tool for FlareTool {
         vec![]
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        // Switching away after the centre drag keeps the flare with its default rings.
+        // Switching away after the centre drag keeps the flare with the rings its options give.
         self.drag = None;
         if self.placed.take().is_some() && std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![] }
     }
@@ -141,6 +213,24 @@ impl Tool for FlareTool {
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Crosshair
+    }
+    fn options(&self) -> Value {
+        let mut v = json!({ "raysOn": self.rays_on, "ringsOn": self.rings_on });
+        for ((key, ..), x) in FLARE_OPTIONS.iter().zip(self.values) {
+            v[*key] = option_json(key, x);
+        }
+        v
+    }
+    fn set_option(&mut self, key: &str, v: &Value) {
+        match key {
+            "raysOn" => self.rays_on = v.as_bool().unwrap_or(true),
+            "ringsOn" => self.rings_on = v.as_bool().unwrap_or(true),
+            _ => {
+                let Some((slot, (_, default, lo, hi))) = self.values.iter_mut().zip(FLARE_OPTIONS).find(|(_, (k, ..))| *k == key) else { return };
+                let x = v.as_f64().filter(|x| x.is_finite()).unwrap_or(default).clamp(lo, hi);
+                *slot = if is_count(key) { x.round() } else { x };
+            }
+        }
     }
 }
 
@@ -377,6 +467,28 @@ impl Tool for GraphTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Flare Tool Options: kept within their ranges, and what the next drag draws with.
+    #[test]
+    fn flare_options_last_and_draw_the_next_flare() {
+        let mut t = FlareTool::default();
+        assert_eq!(t.options()["rays"], json!(15));
+        for (k, v) in [("diameter", json!(5000)), ("rays", json!(7.6)), ("opacity", json!("x")), ("ringsOn", json!(false)), ("nope", json!(1))] {
+            t.set_option(k, &v);
+        }
+        let o = t.options();
+        assert_eq!(
+            (o["diameter"].as_f64(), o["rays"].as_u64(), o["opacity"].as_f64(), o["ringsOn"].as_bool()),
+            (Some(1000.0), Some(8), Some(50.0), Some(false))
+        );
+        assert!(o.get("nope").is_none());
+        // A drag sets the centre and diameter; the options give the rest, rings off.
+        let p = t.params(Point::new(10.0, 20.0), 40.0, None);
+        assert_eq!((p["cx"].as_f64(), p["diameter"].as_f64(), p["rays"].as_u64(), p["rings"].as_u64()), (Some(10.0), Some(40.0), Some(8), Some(0)));
+        assert_eq!(p["longest"].as_f64(), Some(300.0));
+        t.set_option("raysOn", &json!(false));
+        assert_eq!(t.params(Point::ZERO, 1.0, None)["rays"].as_u64(), Some(0));
+    }
 
     #[test]
     fn create_covers_both() {

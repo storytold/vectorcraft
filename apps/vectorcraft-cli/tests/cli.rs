@@ -83,6 +83,58 @@ fn mcp_headless_over_stdio() {
     assert_eq!(replies[3]["result"]["content"][0]["type"], "image");
 }
 
+/// `mcp --automation-read-root` / `--automation-write-root` (#832): the flags are checked before the
+/// server starts, and the process then reads and writes only inside its roots.
+#[test]
+fn mcp_automation_roots() {
+    let base = tmp("roots");
+    for d in ["in", "out", "outside"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="20" height="10"/></svg>"#;
+    std::fs::write(base.join("in/a.svg"), svg).unwrap();
+    std::fs::write(base.join("outside/b.svg"), svg).unwrap();
+    let dir = |d: &str| base.join(d).to_string_lossy().into_owned();
+    let fails = |args: &[&str], why: &str| {
+        let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success() && err.contains(why), "{args:?}: {err}");
+    };
+    fails(&["mcp", "--automation-read-root", &dir("missing")], "cannot open the automation read root");
+    fails(&["mcp", "--automation-read-root", &dir("in"), "--automation-read-root", &dir("out")], "given twice");
+    fails(&["mcp", "--automation-write-root"], "needs a folder");
+    fails(&["mcp", "--connect", "127.0.0.1:1", &format!("--automation-write-root={}", dir("out"))], "a running app enforces its own roots");
+
+    let mut child = Command::new(BIN)
+        .args(["mcp", "--automation-read-root", &dir("in"), &format!("--automation-write-root={}", dir("out"))])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let call = |id: u64, name: &str, args: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":args}});
+    let file = |d: &str, f: &str| base.join(d).join(f).to_string_lossy().into_owned();
+    {
+        let mut stdin = child.stdin.take().unwrap();
+        for m in [
+            call(1, "open_file", json!({"path": file("in", "a.svg")})),
+            call(2, "open_file", json!({"path": file("outside", "b.svg")})),
+            call(3, "export", json!({"path": file("out", "a.png")})),
+            call(4, "export", json!({"path": file("in", "a.png")})),
+            call(5, "save_file", json!({"path": file("outside", "a.vectorcraft")})),
+        ] {
+            writeln!(stdin, "{m}").unwrap();
+        }
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    let replies: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    let errors: Vec<bool> = replies.iter().map(|r| r["result"]["isError"] == true).collect();
+    assert_eq!(errors, [false, true, false, true, true], "{replies:?}");
+    assert!(replies[1]["result"]["content"][0]["text"].as_str().unwrap().contains("outside the read root"));
+    assert!(base.join("out/a.png").is_file() && !base.join("in/a.png").exists() && !base.join("outside/a.vectorcraft").exists());
+}
+
 /// End-to-end protocol sweep over stdio against the compiled binary. The in-process
 /// tests drive `Server::handle_line` directly, so the binary's own wiring (argument
 /// parsing, logger install, stdout pollution, notification order) is untested: this

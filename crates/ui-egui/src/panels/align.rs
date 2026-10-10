@@ -52,6 +52,26 @@ pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
     ("dc-dist-right", "Horizontal Distribute Right", "horizontal", "right"),
 ];
 
+/// The six align buttons of the Control bar and the Properties panel, `size` points square.
+/// They align to what the Align panel's Align To says (the key object while there is one), as
+/// its own buttons do (#789).
+pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
+    let n = selection_len(app);
+    let to = align_to(app, ui.ctx());
+    for (icon, tip, axis, v) in [
+        ("align-start-vertical", "Horizontal Align Left", "horizontal", "left"),
+        ("align-center-vertical", "Horizontal Align Center", "horizontal", "center"),
+        ("align-end-vertical", "Horizontal Align Right", "horizontal", "right"),
+        ("align-start-horizontal", "Vertical Align Top", "vertical", "top"),
+        ("align-center-horizontal", "Vertical Align Center", "vertical", "center"),
+        ("align-end-horizontal", "Vertical Align Bottom", "vertical", "bottom"),
+    ] {
+        if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
+            app.run("object.align", align_params(json!({axis: v}), to, n)).ok();
+        }
+    }
+}
+
 /// Whether the selection has a key object.
 fn has_key(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| st.selection.key.is_some())
@@ -182,5 +202,36 @@ mod tests {
         assert_eq!(align_to(&app, &ctx), AlignTo::Key);
         app.run("select.key", json!({})).unwrap();
         assert_eq!(align_to(&app, &ctx), AlignTo::Selection, "no key: the choice again");
+    }
+
+    /// #789: the Control bar's and the Properties panel's align buttons follow Align To too.
+    #[test]
+    fn the_other_align_buttons_align_to_the_align_to_choice() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let b = app.run("shape.rectangle", json!({"x": 80, "y": 50, "width": 30, "height": 30})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "align-to", AlignTo::Artboard);
+        // One frame finds the first button (Horizontal Align Right is third); the next clicks it.
+        let at = std::cell::Cell::new(egui::Pos2::ZERO);
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+                ui.horizontal(|ui| {
+                    at.set(ui.cursor().min);
+                    align_buttons(app, ui, 24.0);
+                });
+            });
+            out.textures_delta.clear();
+        };
+        frame(&mut app, vec![]);
+        let right = at.get() + egui::vec2(2.0 * (24.0 + ctx.global_style().spacing.item_spacing.x) + 12.0, 12.0);
+        let press = |pressed| egui::Event::PointerButton { pos: right, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(right), press(true)]);
+        frame(&mut app, vec![press(false)]);
+        let st = app.session.active().unwrap();
+        let x1 = |id: &serde_json::Value| st.doc.bounds_of(&[vectorcraft_doc::NodeId(id.as_u64().unwrap())], false).unwrap().x1;
+        assert_eq!((x1(&a), x1(&b)), (200.0, 200.0), "both to the artboard's right edge");
     }
 }

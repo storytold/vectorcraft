@@ -27,8 +27,8 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
-pub(crate) use read::slot_of;
 pub use read::{Structure, read};
+pub(crate) use read::{slot_frame, slot_of};
 
 #[cfg(test)]
 mod tests;

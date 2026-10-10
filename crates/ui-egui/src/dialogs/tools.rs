@@ -26,12 +26,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             Ok(v) => Dialog::new("command", json!({"__command": "graph.setData", "__label": "Graph Data", "csv": v["csv"]})),
             Err(_) => return,
         },
-        // Flare Tool Options (Center / Halo / Rays / Rings), applied through the generic command dialog.
-        "flare" => Dialog::new(
-            "command",
-            json!({"__command": "shape.flare", "__label": "Flare Tool Options", "cx": x, "cy": y, "diameter": 100, "opacity": 50, "brightness": 30,
-                "growth": 20, "fuzziness": 50, "rays": 15, "longest": 300, "rayFuzziness": 100, "pathLength": 300, "rings": 10, "largest": 50, "direction": 45}),
-        ),
+        // A Flare tool click: the Flare Tool Options, with the tool's values; OK draws a flare there.
+        "flare" => {
+            super::flare_options::open(app, Some(vectorcraft_geom::Point::new(x, y)));
+            return;
+        }
         "rotate" | "reflect" | "scale" | "shear" | "artboardOptions" => {
             let mut base = match kind {
                 "rotate" => json!({"angle": 0}),

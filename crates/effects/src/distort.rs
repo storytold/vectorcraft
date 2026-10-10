@@ -102,25 +102,42 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value) -> PathData {
     PathData::new(subs)
 }
 
-/// Transform effect (scale, move, rotate, reflect about the centre, plus copies).
-pub fn transform(path: &PathData, b: Rect, p: &Value) -> PathData {
-    let sx = num(p, "scaleH", 100.0) / 100.0;
-    let sy = num(p, "scaleV", 100.0) / 100.0;
-    let (rx, ry) = (if flag(p, "reflectX", false) { -1.0 } else { 1.0 }, if flag(p, "reflectY", false) { -1.0 } else { 1.0 });
-    let c = b.center().to_vec2();
-    // Reflect X mirrors across the horizontal axis (flips x coordinates in Illustrator's dialog).
-    let m = Affine::translate(Vec2::new(num(p, "moveH", 0.0), num(p, "moveV", 0.0)) + c)
-        * Affine::rotate(-num(p, "rotate", 0.0).to_radians())
-        * Affine::scale_non_uniform(sx * rx, sy * ry)
-        * Affine::translate(-c);
+/// Largest scale (%) and move (pt) the Transform effect takes.
+const MAX_SCALE: f64 = 100_000.0;
+const MAX_MOVE: f64 = 1.0e7;
+/// The Transform effect's copies stop before one reaches further than this (pt) from the origin.
+const MAX_REACH: f64 = 1.0e9;
+
+/// Transform effect: scale, rotate and reflect about reference point `reference` of the bounds
+/// (the 9-point grid, 4 = centre), then move; `copies` more times, each from the last. With
+/// `random`, each scale goes a random share of the way from 100 % to its value and each move and
+/// the angle a share of theirs, drawn from `seed` (the object's), so an object keeps its result
+/// on every redraw while each object varies its own way.
+pub fn transform(path: &PathData, b: Rect, p: &Value, seed: u64) -> PathData {
+    let random = flag(p, "random", false);
+    // The share (0..1) of value `k` applied.
+    let share = |k: u64| if random { (noise(seed, k, 0, 0) + 1.0) / 2.0 } else { 1.0 };
+    let scale = |key: &str, k: u64| 1.0 + (num(p, key, 100.0).clamp(-MAX_SCALE, MAX_SCALE) / 100.0 - 1.0) * share(k);
+    let moved = |key: &str, k: u64| num(p, key, 0.0).clamp(-MAX_MOVE, MAX_MOVE) * share(k);
+    let reflect = |key: &str| if flag(p, key, false) { -1.0 } else { 1.0 };
+    let o = vectorcraft_geom::reference_point(b, num(p, "reference", 4.0).clamp(0.0, 8.0) as usize).to_vec2();
+    // Reflect X flips the x coordinates (left to right), Reflect Y the y coordinates.
+    let m = Affine::translate(Vec2::new(moved("moveH", 2), moved("moveV", 3)) + o)
+        * Affine::rotate(-(num(p, "rotate", 0.0) * share(4)).to_radians())
+        * Affine::scale_non_uniform(scale("scaleH", 0) * reflect("reflectX"), scale("scaleV", 1) * reflect("reflectY"))
+        * Affine::translate(-o);
     let copies = num(p, "copies", 0.0).clamp(0.0, 1000.0) as usize;
     if copies == 0 {
         return path.transformed(m);
     }
+    let within = |r: Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_REACH);
     let mut out = path.clone();
     let mut cur = path.clone();
     for _ in 0..copies {
         cur = cur.transformed(m);
+        if !cur.bounds().is_some_and(within) {
+            break;
+        }
         out.subpaths.extend(cur.subpaths.iter().cloned());
     }
     out

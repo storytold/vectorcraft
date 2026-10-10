@@ -246,8 +246,9 @@ fn candidates(s: &Session, f: impl Fn(&Node) -> bool) -> Result<Vec<NodeId>> {
 
 fn finish_same(s: &mut Session, cmd: &str, ids: Vec<NodeId>) -> Result<Value> {
     let n = ids.len();
+    let from = s.doc()?.selection.objects.clone();
     s.select(|_, sel| sel.set(ids))?;
-    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), json!({})));
+    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), json!({}), from));
     Ok(json!({ "count": n }))
 }
 

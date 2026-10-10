@@ -367,6 +367,25 @@ fn art_past_the_scan_limit_of_shown_layers_stays_shown() {
     assert!(r.warnings.iter().any(|w| w.contains("went to its page's layer")), "{:?}", r.warnings);
 }
 
+/// Art reaching past the page keeps a clip to it in a plain PDF (as viewers show it), but not in
+/// a PDF-compatible `.ai`, whose art crossing the artboard edge opens whole and editable (#646).
+#[test]
+fn art_past_the_page_is_clipped_in_a_pdf_but_not_in_an_ai_file() {
+    for ai in [false, true] {
+        let page = PdfPage {
+            entries: if ai { "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into() } else { String::new() },
+            ..PdfPage::new(100.0, 100.0, "0 0 100 100 re W n 1 0 0 rg 50 50 200 200 re f")
+        };
+        let r = import_with_report(&pdf_with_catalog(&[page], &[], "", None), &ImportOptions::default()).unwrap();
+        let mut clips = 0;
+        r.document.walk(|n| clips += usize::from(matches!(n.kind, NodeKind::Group { clip: true, .. })));
+        let past = r.warnings.iter().any(|w| w == crate::import::PAST_PAGE_NOTE);
+        assert_eq!((clips, past), if ai { (0, false) } else { (1, true) }, "ai: {ai}: {:?}", r.warnings);
+        let art = r.document.art_bounds().unwrap();
+        assert_eq!(art.x1 > 100.5, ai, "ai: {ai}: {art:?}");
+    }
+}
+
 /// The editor's private data of a `.ai` is its `AIPrivateData` streams, joined in order.
 #[test]
 fn an_ai_files_private_data_is_its_streams_joined() {

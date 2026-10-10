@@ -214,7 +214,25 @@ fn structured_junk() {
         ("path.freehand", json!({"points": [[0, 0]]})),
         ("path.freehand", json!({"points": [[0, 0], [0, 0], [0, 0], [0, 0]]})),
         ("path.freehand", json!({"points": [[1e308, 1e308], [-1e308, 0]], "fidelity": 0})),
+        ("path.freehand", json!({"points": [[0, 0, -5], [10, 0, 1e308], [20, 0, "x"], [30, 0, null], [40, 0, 0.5]], "style": "brush"})),
+        ("path.freehand", json!({"points": [[0, 0, 0.2], [0, 0, 0.9], [0, 0, 0.1]]})),
+        (
+            "path.freehand",
+            json!({"points": [{"x": 0, "y": 0, "pressure": 2}, {"x": 1e308, "y": 0, "pressure": -1}], "extend": {"id": 2, "end": "start"}}),
+        ),
+        ("brush.freehand", json!({"points": [[0, 0, 0], [50, 50, 1]], "brush": "3 pt. Round"})),
+        ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": ["pressure", "random", "nope"]}})),
+        ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": "pressure", "variation": [1e308, -1e308, 1e308]}})),
+        (
+            "brush.options",
+            json!({"name": "3 pt. Round", "params": {"modes": ["pressure", "pressure", "pressure"], "variation": [1e308, 1e308, 1e308], "size": 1e308, "angle": -1e308}}),
+        ),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
+        ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
+        ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),
+        ("path.curvatureEdit", json!({"id": 2, "subpath": 7, "op": "extend", "x": 1e308, "y": -1e308, "from": "smooth"})),
+        ("path.curvatureEdit", json!({"id": 2, "op": "insert", "segment": 99, "t": -5, "x": 1})),
+        ("path.curvatureEdit", json!({"id": 2, "op": "close", "end": "start", "from": "corner"})),
         ("path.knife", json!({"points": [[0, 0], [1e9, 1e9]]})),
         ("path.eraseRegion", json!({"points": [[100, 80]], "size": 0})),
         ("path.eraseRegion", json!({"points": [[100, 80], [101, 80]], "size": 1e9})),
@@ -260,6 +278,10 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "blur.radial", "params": {"amount": 1e308, "method": 5, "quality": "best"}})),
         ("effect.apply", json!({"effect": "blur.smart", "params": {"radius": 1e308, "threshold": -1e308, "quality": null}})),
         ("effect.apply", json!({"effect": "sharpen.unsharpMask", "params": {"amount": -1, "radius": "1e999", "threshold": 1e308}})),
+        ("effect.apply", json!({"effect": "pixelate.colorHalftone", "params": {"maxRadius": 1e308, "channel1": "1e999", "channel4": null}})),
+        ("effect.apply", json!({"effect": "pixelate.crystallize", "params": {"cellSize": -1e308}})),
+        ("effect.apply", json!({"effect": "pixelate.mezzotint", "params": {"type": 5}})),
+        ("effect.apply", json!({"effect": "pixelate.pointillize", "params": {"cellSize": "NaN"}})),
         ("effect.apply", json!({"effect": "no.such.effect"})),
         ("effect.remove", json!({"index": 99})),
         ("effect.setParams", json!({"index": 0, "params": null})),
@@ -371,6 +393,37 @@ fn area_options_fit_junk() {
                     }
                     if let Err(e) = check_session(&s) {
                         failures.push(format!("text.areaOptions {p} [{size} pt]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live polygon's Polygon Properties with junk values (the fixtures have no polygon), drawn
+/// plain, scaled unevenly and flattened to nothing: never a panic, and the document stays sound.
+#[test]
+fn polygon_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"makeSidesEqual": true}), json!({"sides": u64::MAX, "sideLength": 1e-300, "makeSidesEqual": true})];
+    for key in ["polygonRadius", "sideLength", "polygonAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for scale in [None, Some((300.0, 20.0)), Some((1e-300, 100.0))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = s.execute("shape.polygon", &json!({"cx": 100, "cy": 100, "radius": 40, "sides": 7, "rotation": 10})) else { continue };
+            if let Some((sx, sy)) = scale {
+                let _ = s.execute("object.scale", &json!({"sx": sx, "sy": sy}));
+            }
+            match catch_quiet(|| s.execute("object.setLiveShape", p)) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{scale:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
                     }
                 }
             }

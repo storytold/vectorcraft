@@ -88,7 +88,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
     }
     ctx.flush();
     let mut pm = Pixmap::new(w, h);
-    ctx.render(&mut pm, &mut r.resources);
+    ctx.render_with(&mut pm, &mut r.resources, r.raster);
     pm
 }
 

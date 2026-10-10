@@ -95,6 +95,43 @@ fn dragged_stops(origin: &[GradientStop], i: usize, offset: f32, copy: bool, ove
 
 // ---------- shared edits ----------
 
+/// The Type row: Linear, Radial and Freeform for the paint behind the active proxy (one of them
+/// lit when it is a gradient). The Gradient panel's and the Properties panel's.
+pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let kind = current(app).map(|g| g.gradient.kind);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Type:"));
+        for (k, icon, tip) in [
+            (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
+            (GradientKind::Radial, "dc-grad-radial", tl!("Radial Gradient")),
+            (GradientKind::Freeform, "dc-grad-freeform", tl!("Freeform Gradient")),
+        ] {
+            if widgets::icon_button(ui, icon, tip, kind == Some(k), 24.0).clicked() {
+                edit(app, json!({"kind": k.label().to_lowercase()}), Live::Released);
+            }
+        }
+    });
+}
+
+/// Set how the Gradient tool adds the points of the freeform gradient behind the active proxy.
+fn set_draw_mode(app: &mut VectorcraftApp, mode: FreeformMode) {
+    edit(app, json!({ "mode": mode.label().to_lowercase() }), Live::Released);
+}
+
+/// The Properties panel's Draw row for a freeform gradient: Points and Lines as radio buttons.
+pub(crate) fn draw_radios(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(g) = current(app).filter(|g| g.gradient.kind == GradientKind::Freeform) else { return };
+    let mode = shown_points(&g).mode;
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Draw:"));
+        for (m, label) in [(FreeformMode::Points, tl!("Points")), (FreeformMode::Lines, tl!("Lines"))] {
+            if widgets::radio(ui, label, mode == m, true) && mode != m {
+                set_draw_mode(app, m);
+            }
+        }
+    });
+}
+
 /// The gradient behind the active proxy.
 fn current(app: &VectorcraftApp) -> Option<GradientPaint> {
     match active_paint(app) {
@@ -184,18 +221,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space(4.0);
         ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                widgets::dim_label(ui, tl!("Type:"));
-                for (k, icon, tip) in [
-                    (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
-                    (GradientKind::Radial, "dc-grad-radial", tl!("Radial Gradient")),
-                    (GradientKind::Freeform, "dc-grad-freeform", tl!("Freeform Gradient")),
-                ] {
-                    if widgets::icon_button(ui, icon, tip, is_grad && kind == k, 24.0).clicked() {
-                        edit(app, json!({"kind": k.label().to_lowercase()}), Live::Released);
-                    }
-                }
-            });
+            type_row(app, ui);
             if widgets::flat_button(ui, tl!("Edit Gradient"), 96.0).clicked() {
                 app.select_tool("gradient");
             }
@@ -297,7 +323,7 @@ fn freeform_section(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
             (FreeformMode::Lines, "spline", tl!("Lines: clicks add points joined by a line")),
         ] {
             if widgets::icon_button(ui, icon, tip, mode == m, 24.0).clicked() && mode != m {
-                edit(app, json!({ "mode": m.label().to_lowercase() }), Live::Released);
+                set_draw_mode(app, m);
             }
         }
     });

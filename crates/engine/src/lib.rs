@@ -7,8 +7,10 @@
 #![forbid(unsafe_code)]
 
 pub mod cmd;
+pub mod file_access;
 pub mod guard;
 pub mod inspect;
+pub mod steps;
 mod tooling;
 pub mod units;
 
@@ -125,8 +127,9 @@ pub struct DocState {
     pub undo_group: Option<UndoGroup>,
     /// For Object → Transform → Transform Again (⌘D).
     pub last_transform: Option<(Affine, bool)>,
-    /// Selection saved by Select → Reselect.
-    pub last_selection_cmd: Option<(String, Value)>,
+    /// What Select → Reselect repeats: the last selection command, its params and the objects
+    /// selected when it ran (a Same command's reference objects).
+    pub last_selection_cmd: Option<(String, Value, Vec<NodeId>)>,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
@@ -872,6 +875,15 @@ pub struct Session {
     pub(crate) plane_widget_press: bool,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
+    /// The last search for the files of missing fonts (`text.findFontFiles`), until another
+    /// starts; dropping it stops it.
+    pub(crate) font_search: Option<cmd::fontfiles::FontSearch>,
+    /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
+    /// Tests set it.
+    pub search_rules: Option<cmd::findfiles::Rules>,
+    /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
+    /// it.
+    pub search_threads: Option<usize>,
 }
 
 impl Default for Session {
@@ -924,6 +936,9 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             ruler_guide: None,
+            font_search: None,
+            search_rules: None,
+            search_threads: None,
         }
     }
 
@@ -1469,6 +1484,8 @@ mod tests_flatpreview;
 mod tests_flatten;
 #[cfg(test)]
 mod tests_focal;
+#[cfg(test)]
+mod tests_fontfiles;
 #[cfg(test)]
 mod tests_fontlist;
 #[cfg(test)]

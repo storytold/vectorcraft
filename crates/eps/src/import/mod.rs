@@ -166,8 +166,15 @@ fn reason(e: &PsError, fault: Option<&Fault>) -> String {
     }
 }
 
-/// Read an EPS or PostScript file (its first page).
+/// Read an EPS or PostScript file (its first page), an Illustrator EPS through the editing copy of
+/// its art when it carries one (see `native`).
 pub fn import(bytes: &[u8]) -> Result<Imported, String> {
+    import_with(bytes, true)
+}
+
+/// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
+/// (else what its page prints, as any EPS).
+pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {
     let (ps, _) = crate::sections(bytes).ok_or("the file's preview header points outside the file")?;
     if !ps.starts_with(b"%!") {
         return Err("this is not a PostScript file".into());
@@ -189,7 +196,8 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) => return Ok(native::layered(ps, finish(out))),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out))),
+        (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
     };

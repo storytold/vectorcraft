@@ -215,9 +215,9 @@ fn unitized(mut ap: Appearance, from: Option<Rect>) -> Appearance {
 /// The appearance a new or redefined style takes from `n`: its own. A group without fills or
 /// strokes of its own lends those of its topmost painted object, and type its characters' fill
 /// and stroke. Placed gradients come relative to the unit box (from the bounds of the object
-/// they're on).
+/// they're on). The pen pressure of strokes stays with their own path.
 pub(crate) fn captured(n: &Node) -> Appearance {
-    let mut ap = n.appearance.clone();
+    let mut ap = n.appearance.clone().without_pressure();
     if !ap.items.is_empty() {
         return unitized(ap, n.geometric_bounds());
     }

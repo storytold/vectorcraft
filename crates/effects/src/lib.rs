@@ -6,7 +6,8 @@
 //! - **Geometry effects** (Distort & Transform, Path, Convert to Shape, Round Corners, Scribble,
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, and the
-//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Unsharp Mask) are described by
+//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize,
+//!   Unsharp Mask and Glowing Edges) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
 //! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
@@ -27,7 +28,8 @@
 //!   renderer and the exporters.
 //!
 //! Everything is deterministic: "random" effects (Roughen, Tweak, Scribble) use a seeded hash
-//! noise (`seed` parameter, default 0).
+//! noise (`seed` parameter, default 0); the random Pixelate filters hash their pattern's cells,
+//! anchored at the object's centre.
 #![forbid(unsafe_code)]
 
 mod adjust;
@@ -125,6 +127,9 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
         "stylize.dropShadow" => always(&["x", "y", "blur"]),
         "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
+        "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
+        "pixelate.colorHalftone" => always(&["maxRadius"]),
+        "pixelate.crystallize" | "pixelate.pointillize" => always(&["cellSize"]),
         _ => Lengths::default(),
     }
 }
@@ -138,6 +143,7 @@ const STYLIZE: &[&str] = &["Effect", "Stylize"];
 const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
+const PIXELATE: &[&str] = &["Effect", "Pixelate"];
 const PATHFINDER: &[&str] = &["Effect", "Pathfinder"];
 const PLUGINS: &[&str] = &["Effect", "Plug-ins"];
 const ADJUST: &[&str] = &["Effect", "Color Adjustments"];
@@ -206,8 +212,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.transform",
             "Transform…",
             DT,
-            "{scaleH: % (100), scaleV: % (100), moveH: pt (0), moveV: pt (0), rotate: deg (0), copies: int (0), reflectX: bool, reflectY: bool}",
-            json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false}),
+            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise), copies: 0..1000 (0; each copy transforms the last again), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw)}",
+            json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false, "reference": 4, "random": false}),
         ),
         g(
             "distort.tweak",
@@ -289,6 +295,41 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             SHARPEN,
             "{amount: % 1..500 (50), radius: pt 0.1..250 (1; σ of the blur edges are found against), threshold: levels 0..255 (0; smaller differences are left alone)}",
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
+        ),
+        r(
+            "stylize.glowingEdges",
+            "Glowing Edges…",
+            STYLIZE,
+            "{edgeWidth: pt 1..14 (2), edgeBrightness: 0..20 (6), smoothness: pt 1..15 (5)} finds alpha-weighted Sobel edges and draws bright coloured outlines on black",
+            json!({"edgeWidth": 2.0, "edgeBrightness": 6.0, "smoothness": 5.0}),
+        ),
+        r(
+            "pixelate.colorHalftone",
+            "Color Halftone…",
+            PIXELATE,
+            "{maxRadius: pt 4..127 (8; the radius of a dot at full strength, which fills its square cell), channel1: screen angle deg -360..360 (108), channel2: deg (162), channel3: deg (90), channel4: deg (45)} screens each colour channel (red, green, blue: channels 1 to 3; in CMYK documents cyan, magenta, yellow, black: 1 to 4) at its angle into dots whose area follows the channel's mean over their cell",
+            json!({"maxRadius": 8.0, "channel1": 108.0, "channel2": 162.0, "channel3": 90.0, "channel4": 45.0}),
+        ),
+        r(
+            "pixelate.crystallize",
+            "Crystallize…",
+            PIXELATE,
+            "{cellSize: pt 3..300 (10)} redraws the object as polygon crystals of solid colour around random points about cellSize apart",
+            json!({"cellSize": 10.0}),
+        ),
+        r(
+            "pixelate.mezzotint",
+            "Mezzotint…",
+            PIXELATE,
+            "{type: \"fineDots\"|\"mediumDots\"|\"grainyDots\"|\"coarseDots\"|\"shortLines\"|\"mediumLines\"|\"longLines\"|\"shortStrokes\"|\"mediumStrokes\"|\"longStrokes\" (\"fineDots\")} turns each colour channel fully on or off against a random pattern of dots, lines or strokes: fully saturated colours",
+            json!({"type": "fineDots"}),
+        ),
+        r(
+            "pixelate.pointillize",
+            "Pointillize…",
+            PIXELATE,
+            "{cellSize: pt 3..300 (5)} redraws the object as randomly placed dots of its colours on a white canvas",
+            json!({"cellSize": 5.0}),
         ),
     ];
     v.extend([
@@ -481,6 +522,9 @@ pub struct GeomContext<'a> {
     pub stroke: Option<&'a StrokeLayer>,
     /// The object's fill rule (inside and outside alignment).
     pub rule: FillRule,
+    /// The seed of the Transform effect's Random: the object's id, so each object varies its own
+    /// way and keeps its result on every redraw.
+    pub seed: u64,
 }
 
 impl<'a> GeomContext<'a> {
@@ -490,7 +534,7 @@ impl<'a> GeomContext<'a> {
             NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,
             _ => FillRule::NonZero,
         };
-        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule }
+        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule, seed: n.id.0 }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
@@ -543,7 +587,7 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
         "distort.freeDistort" => distort::free_distort(path, b, p),
         "distort.puckerBloat" => distort::pucker_bloat(path, b, num(p, "amount", 0.0)),
         "distort.roughen" => distort::roughen(path, b, p),
-        "distort.transform" => distort::transform(path, b, p),
+        "distort.transform" => distort::transform(path, b, p, ctx.seed),
         "distort.tweak" => distort::tweak(path, b, p),
         "distort.twist" => distort::twist(path, b, num(p, "angle", 10.0)),
         "distort.zigZag" => distort::zig_zag(path, b, p),

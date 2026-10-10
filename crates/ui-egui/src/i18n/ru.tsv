@@ -10,10 +10,40 @@
 # tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	Glowing Edges…	Светящиеся края…
+	Glowing Edges	Светящиеся края
+	Edge Width	Ширина края
+	Edge Brightness	Яркость края
+	Smoothness	Сглаживание
 	Radial Blur…	Радиальное размытие…
 	Smart Blur…	Умное размытие…
 	Sharpen	Резкость
 	Unsharp Mask…	Нерезкая маска…
+	Pixelate	Пикселизация
+	Color Halftone…	Цветные полутона…
+	Crystallize…	Кристаллизация…
+	Mezzotint…	Меццо-тинто…
+	Pointillize…	Пуантилизм…
+	Color Halftone	Цветные полутона
+	Crystallize	Кристаллизация
+	Mezzotint	Меццо-тинто
+	Pointillize	Пуантилизм
+	Max. Radius	Макс. радиус
+	Channel 1	Канал 1
+	Channel 2	Канал 2
+	Channel 3	Канал 3
+	Channel 4	Канал 4
+	Cell Size	Размер ячейки
+	Fine Dots	Мелкие точки
+	Medium Dots	Средние точки
+	Grainy Dots	Зернистые точки
+	Coarse Dots	Крупные точки
+	Short Lines	Короткие линии
+	Medium Lines	Средние линии
+	Long Lines	Длинные линии
+	Short Strokes	Короткие штрихи
+	Medium Strokes	Средние штрихи
+	Long Strokes	Длинные штрихи
 	Radial Blur	Радиальное размытие
 	Smart Blur	Умное размытие
 	Unsharp Mask	Нерезкая маска
@@ -221,6 +251,8 @@
 	Auto-Collapse Iconic Panels	Автоматически сворачивать значки панелей
 	Ellipse Properties:	Свойства эллипса:
 	Invert Pie	Инвертировать сектор
+	Side Length:	Длина стороны:
+	Make Sides Equal	Выровнять стороны
 	Pie End Angle:	Конечный угол сектора:
 	Pie Start Angle:	Начальный угол сектора:
 	Show Tool Group Labels	Показывать названия групп инструментов
@@ -679,6 +711,7 @@
 	Divide Vertically Into	Разделить по вертикали на
 	Do Not Move	Не перемещать
 	Do you want to save the changes you made to “{name}”?	Сохранить изменения, внесённые в «{name}»?
+	Can't open “{name}”.	Не удаётся открыть «{name}».
 	Document	Документ
 	Document Color Mode	Цветовой режим документа
 	Document Info	Сведения о документе
@@ -979,6 +1012,20 @@
 	Flare	Блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
+	Halo	Ореол
+	Rays	Лучи
+	Rings	Кольца
+	Diameter:	Диаметр:
+	Brightness:	Яркость:
+	Growth:	Рост:
+	Fuzziness:	Размытие:
+	Number:	Количество:
+	Longest:	Самый длинный:
+	Path:	Контур:
+	Largest:	Самое большое:
+	Direction:	Направление:
+	Symbolism Tools Options	Параметры инструментов символов
+	Symbol Set Density:	Плотность набора символов:
 	Flat Image	Плоское изображение
 	Flat Logo	Плоский логотип
 	Flatness:	Плоскостность:
@@ -1490,6 +1537,8 @@
 	Monospaced	Моноширинный
 	More	Больше
 	More Pathfinder options	Дополнительные параметры обработки контуров
+	More Align options	Дополнительные параметры выравнивания
+	More Paragraph options	Дополнительные параметры абзаца
 	More Settings	Дополнительные настройки
 	Move	Переместить
 	Move All Objects	Переместить все объекты
@@ -1533,6 +1582,27 @@
 	New Art Has Basic Appearance	Новый рисунок имеет основное оформление
 	New Artboard	Новая монтажная область
 	New Bristle Brush	Новая щетинная кисть
+	Calligraphic Brush Options	Параметры каллиграфической кисти
+	Bristle Brush Options	Параметры щетинной кисти
+	Roundness:	Округлость:
+	Fixed	Фиксированный
+	Pressure	Нажим
+	Shape:	Форма:
+	Bristle Length:	Длина щетинок:
+	Bristle Density:	Плотность щетинок:
+	Bristle Thickness:	Толщина щетинок:
+	Paint Opacity:	Непрозрачность краски:
+	Stiffness:	Жёсткость:
+	Round Point	Круглая заострённая
+	Flat Point	Плоская заострённая
+	Round Blunt	Круглая тупая
+	Flat Blunt	Плоская тупая
+	Round Curve	Круглая изогнутая
+	Flat Curve	Плоская изогнутая
+	Round Angle	Круглая скошенная
+	Flat Angle	Плоская скошенная
+	Round Fan	Круглая веерная
+	Flat Fan	Плоская веерная
 	New Brush…	Новая кисть…
 	New Calligraphic Brush	Новая каллиграфическая кисть
 	New Character Style	Новый стиль символа
@@ -2058,6 +2128,25 @@
 	Reflect…	Отразить…
 	Refresh	Обновить
 	Refresh Font List	Обновить список шрифтов
+	Missing Fonts	Отсутствующие шрифты
+	Missing Fonts Dialog	Диалоговое окно «Отсутствующие шрифты»
+	These fonts aren't available. Their text shows in another font.	Эти шрифты недоступны. Их текст отображается другим шрифтом.
+	Search Fonts Folder	Искать в папке Fonts
+	Find in Folder…	Найти в папке…
+	Find Fonts in Folder…	Найти шрифты в папке…
+	Find Font Files	Найти файлы шрифтов
+	Add Font Files	Добавить файлы шрифтов
+	Add Fonts	Добавить шрифты
+	Find Fonts	Найти шрифты
+	Stop	Остановить
+	Searching…	Поиск…
+	Not found	Не найдено
+	{folders} folder(s) and {files} file(s) searched	Просмотрено папок: {folders}, файлов: {files}
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, например папки других приложений и системы и скрытые папки
+	{count} folder(s) or file(s) couldn't be read	Не удалось прочитать папок или файлов: {count}
+	The search stopped at its limit: search a smaller folder.	Поиск остановился на пределе: выберите папку поменьше.
+	Copy only fonts you own or are licensed to install.	Копируйте только шрифты, которые принадлежат вам или которые вы вправе устанавливать по лицензии.
+	VectorCraft copies the fonts to {folder}.	VectorCraft копирует шрифты в {folder}.
 	Registered Trademark Symbol	Символ зарегистрированного товарного знака
 	Registration marks	Метки совмещения
 	Registry name:	Имя в реестре:
@@ -2536,6 +2625,9 @@
 	Smart Guides (⌘U)	Умные направляющие (⌘U)
 	Smart Punctuation…	Умная пунктуация…
 	Smooth	Сгладить
+	Corner	Угол
+	Relative	Относительно
+	Absolute	Абсолютно
 	Smooth Color	Сглаженный цвет
 	Smooth Tool	Инструмент «Сглаживание»
 	Snap Curves To Lines	Привязывать кривые к линиям
@@ -3166,6 +3258,7 @@ axis	Both	Оба
 @msg	its editing data is for a different page	его данные для редактирования относятся к другой странице
 @msg	its layers use {_1}, which aren't read yet	его слои используют {_1}, что пока не читается
 @msg	its page has text, and its layers have no text objects to put it in	на его странице есть текст, а на слоях нет текстовых объектов, куда его поместить
+@msg	its type is to come in as outlines, which only its page has	его текст должен прийти в виде контуров, а они есть только на его странице
 @msg	the art on them differs from the page's in {_1}% of it	изображение на слоях отличается от изображения на странице на {_1} % площади
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
@@ -3320,6 +3413,7 @@ axis	Both	Оба
 @msg	cannot distort a zero-size bounding box	нельзя исказить ограничительную рамку нулевого размера
 @msg	cannot read PDF: {0}	не удалось прочитать PDF: {0}
 @msg	cannot split an open path at its end point	нельзя разделить открытый контур в его конечной точке
+@msg	closing needs three anchors	для замыкания нужны три опорные точки
 @msg	check an asset to export	отметьте ресурс для экспорта
 @msg	choice must be "merge" or "add", not `{choice}`	choice должно быть "merge" или "add", а не `{choice}`
 @msg	choose a direction to divide in	выберите направление для разделения
@@ -3386,6 +3480,8 @@ axis	Both	Оба
 @msg	no blend options	нет параметров перехода
 @msg	no bounds	нет границ
 @msg	no brush named `{name}`	нет кисти с именем `{name}`
+@msg	no brush selected	кисть не выбрана
+@msg	this kind of brush has no options dialog yet	у кисти этого типа пока нет окна параметров
 @msg	no catalog	нет каталога
 @msg	no changes since the last save	нет изменений с момента последнего сохранения
 @msg	no clock to keep a heartbeat by	нет часов для поддержания сигнала
@@ -3709,6 +3805,24 @@ axis	Both	Оба
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
+@msg	No fonts are missing in this document	В этом документе нет отсутствующих шрифтов
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не ищет в папках других приложений и системы: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не ищет в папках Shared и Public внутри Users: {path}
+@msg	{path} is not a folder	{path} не является папкой
+@msg	the search couldn't start: try again in a moment	не удалось начать поиск: повторите попытку чуть позже
+@msg	searching a folder isn't available on the web	поиск в папке недоступен в веб-версии
+@msg	every search thread stopped on an internal error (please report this bug)	все потоки поиска остановились из-за внутренней ошибки (сообщите об этой ошибке)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папка Fonts VectorCraft здесь не задана: её задают настольное приложение и vectorcraft-cli
+@msg	choose the font files to add	выберите файлы шрифтов для добавления
+@msg	{n} font file(s) are now in {folder}	Файлов шрифтов теперь в {folder}: {n}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлов шрифтов теперь в {folder}: {n}; не удалось добавить {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	здесь недоступно шрифтов: {n}; их текст отображается другим шрифтом
+@msg	not a file	не файл
+@msg	not a font file	не файл шрифта
+@msg	that document is no longer open	этот документ больше не открыт
+@msg	larger than 256 MB	больше 256 МБ
+@msg	the files come to more than 1 GB: add fewer at a time	файлы занимают больше 1 ГБ: добавляйте меньше за раз
+@msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -3737,3 +3851,27 @@ axis	Both	Оба
 	Sync with system	Как в системе
 	Active	Активна
 	Next Appearance Mode	Следующий режим оформления
+@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — это ссылка на шаг {r}, которую разрешают только `run` и `command_batch`
+@msg	`ids` must be an array of object ids, not {v}	`ids` должен быть массивом идентификаторов объектов, а не {v}
+@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
+@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед этим шагом нет шага {i} (шаги считаются с 0; чтобы написать сам $, введите $$)
+@msg	object ids are non-negative integers, not {v}	идентификаторы объектов — неотрицательные целые числа, а не {v}
+@msg	automation filesystem access is not granted: read authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на чтение: {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на запись: {path}
+@msg	automation path rejected: outside the read root {root}: {path}	путь автоматизации отклонён: вне корневой папки для чтения {root}: {path}
+@msg	automation path rejected: outside the write root {root}: {path}	путь автоматизации отклонён: вне корневой папки для записи {root}: {path}
+@msg	automation path rejected: path is empty	путь автоматизации отклонён: путь пуст
+@msg	automation path rejected: a link that leads nowhere: {path}	путь автоматизации отклонён: ссылка, которая никуда не ведёт: {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	путь автоматизации отклонён: не удаётся определить {path}: {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	путь автоматизации отклонён: переход вверх (..) из несуществующей папки: {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	путь автоматизации отклонён: зарезервированные имена устройств недопустимы: {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Файлы PSD в режиме «Многоканальный» не читаются: сохраните его в режиме RGB, CMYK или «Градации серого»
+@msg	not a PSD file	это не документ PSD
+@msg	the PSD file has an unknown colour mode ({m})	у файла PSD неизвестный цветовой режим ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	данные изображения файла PSD используют неизвестное сжатие ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
+@msg	zipped 32-bit PSD image data with prediction can't be read	32-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
+@msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
+@msg	the PSD file is cut short	файл PSD обрезан
+@msg	the PSD file's header is damaged	заголовок файла PSD повреждён
+@msg	the PSD file's image data can't be read: {e}	не удаётся прочитать данные изображения файла PSD: {e}

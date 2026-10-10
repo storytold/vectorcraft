@@ -137,6 +137,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("type.recentFont15", "Recent Font 15", "", "{} apply the 15. most recently used font"),
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
+    (
+        "ui.missingFontsDialog",
+        "Missing Fonts Dialog",
+        "",
+        "{folder?} open Missing Fonts (dialog `missingFonts`) for the fonts the active document uses that aren't available (text.missingFonts); with folder, it looks for their files there at once (text.findFontFiles). An error when no font is missing. Opening a document whose fonts are missing shows it after the missing linked file questions (dialog `missingLinks`). Disabled on the web",
+    ),
+    (
+        "ui.findFontsInFolder",
+        "Find Fonts in Folder…",
+        "",
+        "{folder?} Type › Find Font's Find in Folder…: asks for a folder (or takes folder), then opens Missing Fonts looking there for the files of the fonts the active document misses (text.findFontFiles). Disabled where there is no folder picker (the web)",
+    ),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
     (
         "file.export.svg",
@@ -193,7 +205,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.zoomOut", "Zoom Out", "Cmd+-", "{}"),
     ("view.fitArtboard", "Fit Artboard in Window", "Cmd+0", "{}"),
     ("view.fitAll", "Fit All in Window", "Cmd+Alt+0", "{}"),
-    ("view.actualSize", "Actual Size", "Cmd+1", "{}"),
+    (
+        "view.actualSize",
+        "Actual Size",
+        "Cmd+1",
+        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling)",
+    ),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
     (
         "view.goToArtboard",
@@ -337,6 +354,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
     ),
     (
+        "ui.brushOptions",
+        "Brush Options…",
+        "",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens: Calligraphic (dialog `brushOptions`, fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation) or Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness); OK runs brush.options. Other brush types: error",
+    ),
+    (
         "ui.graphicStyleOptions",
         "Graphic Style Options…",
         "",
@@ -346,7 +369,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, closeWithin and editWithin (px, 0 is off), size (pt); OK runs tool.setOption {tool, values})",
+        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height; OK runs artboard.setProps), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x and y, draws one there with them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, closeWithin and editWithin (px, 0 is off), size (pt); OK runs tool.setOption {tool, values})",
     ),
     (
         "ui.colorGuideOptions",
@@ -376,7 +399,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.swatchLibrary.other",
         "Other Library…",
         "",
-        "{path?} (default: pick a file) load a .vcswatches, .gpl or .ase library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
+        "{path?} (default: pick a file) load a .vcswatches, .gpl, .ase or .acb (color book) library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
     ),
     (
         "ui.saveSwatchLibrary",
@@ -883,13 +906,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         "file.reveal" => io::reveal(app),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
-            Some(path) => io::open_path(app, &path),
+            Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
         "type.findFont" => {
             crate::find_font::open(app);
             Ok(Value::Null)
         }
+        "ui.missingFontsDialog" => crate::dialogs::missing_fonts::open_command(app, s("folder")),
+        "ui.findFontsInFolder" => crate::dialogs::missing_fonts::find_in_folder_command(app, s("folder")),
         "file.clearRecent" => {
             app.ui.recent_files.clear();
             Ok(Value::Null)
@@ -1212,6 +1237,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
+        "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         "ui.colorGuideOptions" => {
             crate::dialogs::color_guide_options::open(app);
@@ -1873,8 +1899,11 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.cropImage" => selected_image(app, |_| true),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
+        "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.brushOptions" => crate::dialogs::brush_options::available(app),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
@@ -1917,7 +1946,13 @@ fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObj
     })
 }
 
+/// The in-window and native menu tree. `english_names` is Preferences › Type › Show Font Names in
+/// English (the Type → Font labels follow it; tests use the default `true`).
 pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
+    menu_tree_named(true)
+}
+
+pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
     vec![
         (
@@ -2265,7 +2300,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
         (
             "Type",
             vec![
-                sub("Font", font_items()),
+                sub("Font", font_items(english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
                 sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
                 c("Bold", "type.bold"),
@@ -2738,7 +2773,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
     }
     let mut clicked: Option<(String, Value)> = None;
-    let tree = menu_tree();
+    let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
@@ -2960,6 +2995,14 @@ fn to_field(ctx: &egui::Context, field: egui::Id, e: egui::Event) {
 }
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
+/// Object › Graph › Type… or Data… (`id`): its dialog, with the selected graph's current values
+/// (the command's query).
+pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
+    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
+    let (label, fields) = if id == "graph.setData" { ("Graph Data", json!({"csv": v["csv"]})) } else { ("Graph Type", v) };
+    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+}
+
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
@@ -3003,12 +3046,8 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
     // Object → Graph → Type… / Data…: dialogs with the selected graph's current values.
     if matches!(id, "graph.setType" | "graph.setData") && p.as_object().is_none_or(|o| o.is_empty()) {
-        match app.session.execute(id, &json!({})) {
-            Ok(v) => {
-                let (label, fields) = if id == "graph.setData" { ("Graph Data", json!({"csv": v["csv"]})) } else { ("Graph Type", v) };
-                let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
-            }
-            Err(e) => app.status(e.to_string()),
+        if let Err(e) = graph_dialog(app, id) {
+            app.status(e);
         }
         return;
     }
@@ -3139,7 +3178,7 @@ pub struct MenuEntry {
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    for (title, items) in menu_tree() {
+    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
         flatten(app, vec![title.to_string()], &items, &mut out);
     }
     out
@@ -3243,39 +3282,51 @@ fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
 }
 
 /// Type → Font: one item per available family, the installed fonts included. Built again only when
-/// the fonts change (the menu tree is built every frame); labels are interned once each, so
-/// rebuilding doesn't allocate forever.
-fn font_items() -> Vec<Item> {
+/// the fonts or Show Font Names in English change (the menu tree is built every frame); labels are
+/// interned once each, so rebuilding doesn't allocate forever. The command still sets the English
+/// family name ([`vectorcraft_text::FontDb::canonical`]).
+fn font_items(english_names: bool) -> Vec<Item> {
     static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
-    static ITEMS: std::sync::Mutex<(u64, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, Vec::new()));
+    static ITEMS: std::sync::Mutex<(u64, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, Vec::new()));
     let db = vectorcraft_text::FontDb::global();
     // Read first: fonts that load meanwhile make the next frame build the list again.
     let generation = db.generation();
     let fams = db.menu_family_list();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
-    if items.0 != generation {
+    if items.0 != generation || items.1 != english_names {
         let list = fams
             .iter()
             .map(|f| {
-                let label: &'static str = match names.get(f.as_str()) {
+                let english = f.as_str();
+                let shown = db.family_display_name(english, english_names);
+                let label: &'static str = match names.get(shown.as_str()) {
                     Some(n) => n,
                     None => {
-                        let n: &'static str = Box::leak(f.clone().into_boxed_str());
+                        let n: &'static str = Box::leak(shown.into_boxed_str());
                         names.insert(n);
                         n
                     }
                 };
-                cp(label, "text.setStyle", json!({ "font": label }))
+                let font: &'static str = match names.get(english) {
+                    Some(n) => n,
+                    None => {
+                        let n: &'static str = Box::leak(english.to_string().into_boxed_str());
+                        names.insert(n);
+                        n
+                    }
+                };
+                cp(label, "text.setStyle", json!({ "font": font }))
             })
             .collect();
-        *items = (generation, list);
+        *items = (generation, english_names, list);
     }
-    items.1.clone()
+    items.2.clone()
 }
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
-const RASTER_MENUS: [(&str, &[&str]); 2] = [("Blur", &["Effect", "Blur"]), ("Sharpen", &["Effect", "Sharpen"])];
+const RASTER_MENUS: [(&str, &[&str]); 3] =
+    [("Blur", &["Effect", "Blur"]), ("Pixelate", &["Effect", "Pixelate"]), ("Sharpen", &["Effect", "Sharpen"])];
 
 /// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.
 fn effect_menu() -> Vec<Item> {

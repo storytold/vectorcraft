@@ -1,6 +1,7 @@
 //! Object → Transform → Transform Each: scale, move and rotate every selected object about its own
 //! reference point, with reflection, randomness, Scale Corners and Scale Strokes & Effects
-//! (`object.transformEach`), previewed live on the canvas.
+//! (`object.transformEach`), previewed live on the canvas. Its Scale and Move sliders, Rotate dial
+//! and reflection, reference point and Random options are the Transform effect's too.
 //!
 //! Fields: `scaleH`, `scaleV` (%), `moveH`, `moveV` (pt), `rotate` (°), `reflectX`, `reflectY`,
 //! `random`, `reference` (0..8, the 9-point grid), `copy`, `corners`, `strokes` (default: the
@@ -12,6 +13,7 @@ use super::transform::{add_scale_options, scale_options, with_scale_options};
 use super::{DialogSpec, form};
 use crate::VectorcraftApp;
 use crate::state::Dialog;
+use crate::theme::Tokens;
 use crate::widgets;
 
 /// The dialog kind of Transform Each.
@@ -37,51 +39,71 @@ fn params(d: &Dialog) -> Value {
     })
 }
 
-/// A labelled number row of the field grid: `key` shown with `suffix` (a distance in `units` for
-/// "pt").
-fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix: &str, units: vectorcraft_doc::Unit) {
-    widgets::dim_label(ui, label);
-    if suffix == "pt" {
-        form::length(ui, d, key, units, 90.0);
-    } else if let Some(n) = widgets::plain_field(ui, ("te", key), d.f64(key, 0.0), suffix, 2, 90.0) {
-        d.fields.insert(key.into(), json!(n));
+/// Width of the label column and the value fields of [`sections`].
+const LABEL_W: f32 = 72.0;
+const FIELD_W: f32 = 70.0;
+/// Largest scale (%) the fields take (as `object.transformEach` and the Transform effect).
+const MAX_SCALE: f64 = 100_000.0;
+
+/// The Scale, Move and Rotate sections of Transform Each and the Transform effect: sliders for
+/// `scaleH` and `scaleV` (rails 0–200 %) and for `moveH` and `moveV` (rails ±1000 pt, fields in
+/// `units`), and an angle dial for `rotate` (counter-clockwise). The fields take values past the
+/// rails.
+pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit) {
+    let rail = Tokens::get(ui.ctx()).input_border;
+    let track = move |_| rail;
+    let axes = |h, v| [(h, tl!("Horizontal:")), (v, tl!("Vertical:"))];
+    widgets::subheader(ui, tl!("Scale"));
+    for (key, label) in axes("scaleH", "scaleV") {
+        widgets::label_row(ui, label, LABEL_W, |ui| {
+            form::slider_rail(ui, d, key, 0.0..=200.0, &track);
+            if let Some(n) = widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W) {
+                d.fields.insert(key.into(), json!(n));
+            }
+        });
     }
-    ui.end_row();
+    widgets::subheader(ui, tl!("Move"));
+    for (key, label) in axes("moveH", "moveV") {
+        widgets::label_row(ui, label, LABEL_W, |ui| {
+            form::slider_rail(ui, d, key, -1000.0..=1000.0, &track);
+            form::length(ui, d, key, units, FIELD_W);
+        });
+    }
+    widgets::subheader(ui, tl!("Rotate"));
+    widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
+        let angle = d.f64("rotate", 0.0);
+        let dialed = widgets::angle_dial(ui, "te-dial", angle, 28.0);
+        if let Some(a) = widgets::plain_field(ui, ("te", "rotate"), angle, "°", 2, FIELD_W).or(dialed) {
+            d.fields.insert("rotate".into(), json!(a));
+        }
+    });
+}
+
+/// The Reflect X, Reflect Y, reference point and Random options of Transform Each and the
+/// Transform effect.
+pub(super) fn reflect_options(ui: &mut egui::Ui, d: &mut Dialog) {
+    form::check(ui, d, "reflectX", tl!("Reflect X"));
+    form::check(ui, d, "reflectY", tl!("Reflect Y"));
+    ui.horizontal(|ui| {
+        let cur = d.f64("reference", 4.0).clamp(0.0, 8.0) as usize;
+        if let Some(i) = widgets::reference_point(ui, cur) {
+            d.fields.insert("reference".into(), json!(i));
+        }
+        widgets::dim_label(ui, tl!("Reference Point"));
+    });
+    form::check(ui, d, "random", tl!("Random"));
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let units = app.session.general_unit();
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            egui::Grid::new("te-grid").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                for (head, rows) in [
-                    (tl!("Scale"), [("scaleH", tl!("Horizontal:"), "%"), ("scaleV", tl!("Vertical:"), "%")].as_slice()),
-                    (tl!("Move"), &[("moveH", tl!("Horizontal:"), "pt"), ("moveV", tl!("Vertical:"), "pt")]),
-                    (tl!("Rotate"), &[("rotate", tl!("Angle:"), "°")]),
-                ] {
-                    widgets::subheader(ui, head);
-                    ui.end_row();
-                    for (key, label, suffix) in rows {
-                        number(ui, d, key, label, suffix, units);
-                    }
-                }
-            });
-        });
+        ui.vertical(|ui| sections(ui, d, units));
         ui.add_space(16.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Options"));
             ui.add_space(4.0);
             scale_options(app, ui, d);
-            form::check(ui, d, "reflectX", tl!("Reflect X"));
-            form::check(ui, d, "reflectY", tl!("Reflect Y"));
-            ui.horizontal(|ui| {
-                let cur = d.f64("reference", 4.0).clamp(0.0, 8.0) as usize;
-                if let Some(i) = widgets::reference_point(ui, cur) {
-                    d.fields.insert("reference".into(), json!(i));
-                }
-                widgets::dim_label(ui, tl!("Reference Point"));
-            });
-            form::check(ui, d, "random", tl!("Random"));
+            reflect_options(ui, d);
             form::check(ui, d, "copy", tl!("Copy"));
         });
     });

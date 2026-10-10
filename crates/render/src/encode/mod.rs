@@ -86,8 +86,8 @@ impl RasterExportOptions {
         self.ppi / 72.0
     }
 
-    /// What the renderer draws for `format`: template layers left out, over the background
-    /// (white for a JPEG or a flat PSD without one).
+    /// What the renderer draws for `format`: template layers and guides left out, over the background
+    /// (white for a JPEG or a flat PSD without one), composited in floating point.
     pub fn render_options(&self, format: RasterFormat) -> RenderOptions {
         let flat = format == RasterFormat::Jpeg || (format == RasterFormat::Psd && !self.psd.layers);
         let background = self.background.or(flat.then_some([255; 3]));
@@ -95,6 +95,8 @@ impl RasterExportOptions {
             background: background.map(|[r, g, b]| [r, g, b, 255]),
             skip_templates: true,
             anti_alias: self.anti_alias,
+            // Opaque art stays exactly opaque where translucent edges cross it (#787).
+            precise: true,
             ..Default::default()
         }
     }
@@ -193,7 +195,7 @@ fn drawn_bounds(n: &Node) -> Option<Rect> {
     }
     match &n.kind {
         NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
+        NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds(c)))
         }
         _ if fx::has_fx(n) => fx::visual_bounds(n),

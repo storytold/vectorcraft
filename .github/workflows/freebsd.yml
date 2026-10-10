@@ -29,10 +29,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The optional craft-fonts build input (Japanese fonts), so the tests that need it run here
       # rather than skip. Pinned; bump deliberately (craftrules standards/fonts.md).
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
           ref: abb83316d96aa59c1cf64784289e378fe9fa5695
@@ -67,10 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Japanese UI/document fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR in the VM).
       # Bump the commit deliberately; see craftrules standards/fonts.md.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
           ref: abb83316d96aa59c1cf64784289e378fe9fa5695
@@ -97,7 +97,7 @@ jobs:
             for want in '/bin/vectorcraft$' '/bin/vectorcraft-cli$' '/share/applications/.*\.desktop$' '/share/icons/hicolor/' '/share/doc/vectorcraft/NOTICE$' '/share/doc/vectorcraft/OFL-.*\.txt$'; do
               grep -Eq "$want" /var/tmp/contents.txt || { echo "missing from the package: $want"; exit 1; }
             done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: freebsd-package
           path: dist/release/*

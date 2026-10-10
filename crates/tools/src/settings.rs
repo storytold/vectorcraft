@@ -14,7 +14,8 @@ type Row = (&'static [&'static str], Option<&'static str>, &'static [&'static st
 /// The Liquify tools.
 pub const LIQUIFY: &[&str] = &["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
 
-const SYMBOLISM: &[&str] =
+/// The Symbolism tools.
+pub const SYMBOLISM: &[&str] =
     &["symbolSprayer", "symbolShifter", "symbolScruncher", "symbolSizer", "symbolSpinner", "symbolStainer", "symbolScreener", "symbolStyler"];
 
 const ROWS: &[Row] = &[
@@ -35,6 +36,27 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
+    // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
+    (
+        &["flare"],
+        None,
+        &[
+            "diameter",
+            "opacity",
+            "brightness",
+            "growth",
+            "fuzziness",
+            "raysOn",
+            "rays",
+            "longest",
+            "rayFuzziness",
+            "ringsOn",
+            "pathLength",
+            "rings",
+            "largest",
+            "direction",
+        ],
+    ),
 ];
 
 /// The stores `tool`'s persistent options live in, each with the option keys it holds.

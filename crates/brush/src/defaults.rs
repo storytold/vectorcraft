@@ -132,7 +132,7 @@ fn diamond_tile() -> Node {
 }
 
 fn calli(name: &str, angle: f64, roundness: f64, size: f64) -> Brush {
-    Brush { name: name.into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, variation: [0.0; 3] }) }
+    Brush { name: name.into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, ..Default::default() }) }
 }
 
 /// The default library.

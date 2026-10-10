@@ -60,12 +60,12 @@ pub(crate) mod skip {
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, SavedProfile, StrokeAlign,
-    StrokeLayer, WidthProfile,
+    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset, SavedProfile,
+    StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use corners::LiveCorners;
-pub use graph::{GraphKind, GraphSpec};
+pub use graph::{GraphKind, GraphSpec, SeriesPaint};
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
@@ -960,8 +960,12 @@ impl Document {
                 if c.is_layer() {
                     collect(c, rect, all, out);
                 } else if let Some(b) = c.geometric_bounds()
-                    && rect.contains(Point::new(b.x0, b.y0))
-                    && rect.contains(Point::new(b.x1, b.y1))
+                    // Inside it, edges included: art flush with the right or bottom edge is on it too
+                    // (`Rect::contains` leaves those out, #890).
+                    && b.x0 >= rect.x0
+                    && b.y0 >= rect.y0
+                    && b.x1 <= rect.x1
+                    && b.y1 <= rect.y1
                 {
                     out.push(c.id);
                 }
@@ -1174,6 +1178,10 @@ mod tests {
         let wide = Rect::new(-1.0, -1.0, 40.0, 15.0);
         assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 15.0, 15.0), false), vec![a]);
         assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 25.0, 15.0), false), vec![a], "b only half inside");
+        // Flush with the artboard's edges counts as inside: the right and bottom ones too (#890).
+        for board in [Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(-5.0, 0.0, 10.0, 15.0), Rect::new(0.0, -5.0, 15.0, 10.0)] {
+            assert_eq!(d.art_on_artboard(board, false), vec![a], "{board:?}");
+        }
         d.node_mut(a).unwrap().locked = true;
         assert_eq!(d.art_on_artboard(wide, false), vec![b]);
         // Move Locked and Hidden Artwork with Artboard (#394): hidden art stays too, unless on.

@@ -1,5 +1,6 @@
-//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Sharpen › Unsharp
-//! Mask): filters over the pixels of an object rendered alone, premultiplied RGBA8.
+//! Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate › Color
+//! Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, and Stylize › Glowing
+//! Edges): filters over premultiplied RGBA8 pixels.
 //!
 //! - Every distance is in document units (points) and becomes pixels through the raster's
 //!   [`PixelSpace::px`], so an effect looks the same at any zoom and at any Document Raster Effects
@@ -9,6 +10,8 @@
 //! - Beyond the raster's edges is transparency.
 
 mod blur;
+mod edges;
+mod pixelate;
 mod sharpen;
 
 use serde_json::Value;
@@ -16,8 +19,19 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::util::{num, text};
 
+pub use pixelate::{MEZZOTINT_TYPES, Mezzotint};
+
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 3] = ["blur.radial", "blur.smart", "sharpen.unsharpMask"];
+pub const PIXEL_EFFECTS: [&str; 8] = [
+    "blur.radial",
+    "blur.smart",
+    "pixelate.colorHalftone",
+    "pixelate.crystallize",
+    "pixelate.mezzotint",
+    "pixelate.pointillize",
+    "sharpen.unsharpMask",
+    "stylize.glowingEdges",
+];
 
 /// A Photoshop-style raster effect with its parameters read and clamped to their ranges. Lengths
 /// are in document units.
@@ -33,6 +47,33 @@ pub enum PixelFx {
     /// Sharpen › Unsharp Mask: colours pushed away from a Gaussian blur of σ = `radius` by `amount`
     /// (1 = 100 %), where they differ from it by at least `threshold` levels.
     UnsharpMask { amount: f64, radius: f64, threshold: f64 },
+    /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
+    GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
+    /// Pixelate › Color Halftone: each colour channel screened at its angle (`angles`° of channels
+    /// 1 to 4) into dots of up to `max_radius`, whose area follows the channel's strength.
+    ColorHalftone { max_radius: f64, angles: [f64; 4] },
+    /// Pixelate › Crystallize: polygons of solid colour around random points about `cell` apart.
+    Crystallize { cell: f64 },
+    /// Pixelate › Mezzotint: every colour channel fully on or off against a random pattern.
+    Mezzotint { kind: Mezzotint },
+    /// Pixelate › Pointillize: random dots about `cell` across of the object's colours on a white
+    /// canvas.
+    Pointillize { cell: f64 },
+}
+
+/// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
+/// screens each channel, Mezzotint thresholds each).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Channels {
+    /// Red, green and blue light.
+    #[default]
+    Rgb,
+    /// Screen colours of a CMYK document: treated as its cyan, magenta, yellow and black inks.
+    Cmyk,
+    /// The complemented C, M and Y inks (a CMYK document drawn ink plane by ink plane).
+    CmyPlane,
+    /// The complemented K ink, as a grey.
+    KPlane,
 }
 
 /// Where a raster's pixels lie in the document.
@@ -43,8 +84,11 @@ pub struct PixelSpace {
     pub to_doc: Affine,
     /// The size of a pixel in document units.
     pub px: f64,
-    /// The object's centre (document coordinates): where Radial Blur blurs around.
+    /// The object's centre (document coordinates): where Radial Blur blurs around, and where the
+    /// Pixelate filters' patterns are anchored (so they move with the object).
     pub center: Point,
+    /// What the colour channels hold.
+    pub channels: Channels,
 }
 
 /// Effect `id`'s parameters `p` (defaults merged in) as a [`PixelFx`]; `None` for other effects.
@@ -69,6 +113,19 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 1.0).clamp(0.1, 250.0),
             threshold: num(p, "threshold", 0.0).clamp(0.0, 255.0),
         },
+        "stylize.glowingEdges" => PixelFx::GlowingEdges {
+            width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
+            brightness: num(p, "edgeBrightness", 6.0).clamp(0.0, 20.0),
+            smoothness: num(p, "smoothness", 5.0).clamp(1.0, 15.0),
+        },
+        "pixelate.colorHalftone" => PixelFx::ColorHalftone {
+            max_radius: num(p, "maxRadius", 8.0).clamp(4.0, 127.0),
+            angles: [("channel1", 108.0), ("channel2", 162.0), ("channel3", 90.0), ("channel4", 45.0)]
+                .map(|(k, d)| num(p, k, d).clamp(-360.0, 360.0)),
+        },
+        "pixelate.crystallize" => PixelFx::Crystallize { cell: num(p, "cellSize", 10.0).clamp(3.0, 300.0) },
+        "pixelate.mezzotint" => PixelFx::Mezzotint { kind: Mezzotint::parse(text(p, "type", "fineDots")) },
+        "pixelate.pointillize" => PixelFx::Pointillize { cell: num(p, "cellSize", 5.0).clamp(3.0, 300.0) },
         _ => return None,
     })
 }
@@ -85,6 +142,10 @@ impl PixelFx {
             PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::UnsharpMask { .. } => 0.0,
+            PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
+            PixelFx::ColorHalftone { .. } | PixelFx::Mezzotint { .. } => 0.0,
+            // A crystal's or dot's point inside the object reaches out by up to its cell.
+            PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } => 1.5 * cell,
         }
     }
 
@@ -95,6 +156,13 @@ impl PixelFx {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, .. } => Some(radius),
             PixelFx::UnsharpMask { radius, .. } => Some(3.0 * radius),
+            PixelFx::GlowingEdges { width, smoothness, .. } => Some(width.max(smoothness * 3.0)),
+            // The cells around the pixel's, and the cells around theirs.
+            PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
+            PixelFx::Crystallize { cell } => Some(1.5 * cell),
+            PixelFx::Mezzotint { .. } => Some(0.0),
+            // The dots' points, and the softened colour around them.
+            PixelFx::Pointillize { cell } => Some(2.5 * cell),
         }
     }
 
@@ -107,6 +175,11 @@ impl PixelFx {
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
             PixelFx::SmartBlur { radius, threshold, samples } => blur::smart(px, w, h, to_px(radius), threshold, samples),
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
+            PixelFx::GlowingEdges { width, brightness, smoothness } => edges::glow(px, w, h, to_px(width), brightness, to_px(smoothness)),
+            PixelFx::ColorHalftone { max_radius, angles } => pixelate::color_halftone(px, w, h, space, max_radius, angles),
+            PixelFx::Crystallize { cell } => pixelate::crystallize(px, w, h, space, cell),
+            PixelFx::Mezzotint { kind } => pixelate::mezzotint(px, w, h, space, kind),
+            PixelFx::Pointillize { cell } => pixelate::pointillize(px, w, h, space, cell),
         }
     }
 }

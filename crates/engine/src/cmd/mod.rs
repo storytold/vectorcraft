@@ -22,7 +22,9 @@ mod effectcmd;
 pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
+pub mod findfiles;
 pub mod flatten;
+pub mod fontfiles;
 mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
@@ -223,6 +225,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(inline::specs());
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
+        v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
@@ -363,13 +366,23 @@ pub fn color_value(v: &Value) -> Option<Color> {
 
 /// Objects a command targets: explicit `ids` param or the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    if let Some(ids) = ids_param(p, "ids") {
-        return Ok(ids);
+    // Objects given are used as given: a value that isn't an object id fails rather than the
+    // command acting on the selection instead (#785).
+    let object_id = |v: &Value| v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")));
+    match p.get("ids").filter(|v| !v.is_null()) {
+        Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
+        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
+        None => {}
     }
-    if let Some(id) = id_param(p, "id") {
-        return Ok(vec![id]);
+    match p.get("id").filter(|v| !v.is_null()) {
+        Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
+        // A step reference a batch couldn't resolve (other strings are other ids, such as an
+        // effect's).
+        Some(Value::String(r)) if r.starts_with('$') => {
+            Err(EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
+        }
+        _ => Ok(s.doc()?.selection.objects.clone()),
     }
-    Ok(s.doc()?.selection.objects.clone())
 }
 
 pub(crate) fn ok() -> Result<Value> {

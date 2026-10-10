@@ -223,3 +223,311 @@ fn the_document_info_report_has_every_category() {
     let face = vectorcraft_text::FontDb::global().face("Source Sans 3", "Regular").unwrap();
     assert!(face.embeddable() && face.path().is_none());
 }
+
+/// A professional handoff: the poster links to a reusable illustration, whose
+/// own artwork links to a raster asset. Both dependency levels must travel.
+fn poster_with_placed_document(dir: &Folder) -> Session {
+    let image = dir.file("art/photo.png");
+    write(&image, &png(600, 300, RED));
+    let mut part = session();
+    place(&mut part, &image);
+    let part_path = dir.file("art/part.vectorcraft");
+    save(&mut part, &part_path);
+
+    let mut poster = session();
+    let placed = run(&mut poster, "file.place", json!({ "path": part_path, "link": true }));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut poster, &dir.file("poster.vectorcraft"));
+    poster
+}
+
+/// Every link must point to a packaged copy, including links inside a linked
+/// VectorCraft file. Validate after original assets have been removed.
+fn verify_portable_nested_package(folder: &std::path::Path) {
+    let main = folder.join("poster.vectorcraft");
+    let part = folder.join("Links/part.vectorcraft");
+    let image = folder.join("Links/photo.png");
+    assert!(main.is_file() && part.is_file() && image.is_file());
+
+    let mut parent = session();
+    let opened = open(&mut parent, &main.to_string_lossy());
+    assert_eq!(opened["missingLinks"], json!([]), "main package has broken links: {opened}");
+    let mut targets = Vec::new();
+    parent.doc().unwrap().doc.visit_placed(|_, p| targets.push(p.link.clone()));
+    assert_eq!(targets.len(), 1);
+    let link = &targets[0];
+    assert_eq!(link.relative.as_deref(), Some("Links/part.vectorcraft"));
+    let packaged_part = std::fs::read(&part).unwrap();
+    let expected_hash = vectorcraft_doc::links::hash_bytes(&packaged_part);
+    assert_eq!(link.hash.as_deref(), Some(expected_hash.as_str()));
+    let mut nested = session();
+    let opened = open(&mut nested, &part.to_string_lossy());
+    assert_eq!(opened["missingLinks"], json!([]), "nested document has broken links: {opened}");
+    let mut img_links = Vec::new();
+    nested.doc().unwrap().doc.visit_images(|_, im| img_links.extend(im.link.clone()));
+    assert_eq!(img_links.len(), 1);
+    assert_eq!(img_links[0].relative.as_deref(), Some("photo.png"));
+    assert_eq!(std::fs::read(&image).unwrap(), png(600, 300, RED));
+}
+
+#[test]
+fn package_recursively_relinks_placed_documents_and_their_images() {
+    let dir = Folder::new("package-placed");
+    let mut s = poster_with_placed_document(&dir);
+    let out = dir.file("delivery");
+    let result = run(&mut s, "file.package", json!({ "folder": out }));
+    assert_eq!((result["links"].as_u64(), result["missingLinks"].clone()), (Some(2), json!([])), "{result}");
+    let folder = dir.0.join("delivery/poster Folder");
+    // The package must work on a second computer without the source tree.
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    verify_portable_nested_package(&folder);
+}
+
+#[test]
+fn zipped_package_recursively_relinks_without_absolute_creator_paths() {
+    let dir = Folder::new("package-placed-zip");
+    let mut s = poster_with_placed_document(&dir);
+    let result = run(&mut s, "file.package", json!({}));
+    assert_eq!(result["links"], 2, "{result}");
+    let bytes = vectorcraft_format::base64_decode(result["dataBase64"].as_str().unwrap()).unwrap();
+    let archive = unzip(&bytes);
+    let extraction = dir.file("extracted");
+    for (name, bytes) in archive {
+        write(&format!("{extraction}/{name}"), &bytes);
+    }
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    verify_portable_nested_package(&dir.0.join("extracted/poster Folder"));
+}
+
+#[test]
+fn package_keeps_distinct_linked_documents_with_colliding_file_names() {
+    let dir = Folder::new("package-collisions");
+    let mut poster = session();
+    for (number, color) in [(1, RED), (2, BLUE)] {
+        let image = dir.file(&format!("art{number}/picture.png"));
+        write(&image, &png(300, 300, color));
+        let mut part = session();
+        place(&mut part, &image);
+        let name = dir.file(&format!("art{number}/part.vectorcraft"));
+        save(&mut part, &name);
+        run(&mut poster, "file.place", json!({ "path": name, "link": true }));
+    }
+    save(&mut poster, &dir.file("poster.vectorcraft"));
+    let result = run(&mut poster, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 4, "{result}");
+    assert_eq!(result["missingLinks"], json!([]));
+    let folder = dir.0.join("delivery/poster Folder");
+    let packaged: Vec<_> =
+        result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.ends_with(".vectorcraft")).collect();
+    assert_eq!(packaged.len(), 3, "both nested documents must be retained: {packaged:?}");
+    std::fs::remove_dir_all(dir.0.join("art1")).unwrap();
+    std::fs::remove_dir_all(dir.0.join("art2")).unwrap();
+    let mut check = session();
+    assert_eq!(open(&mut check, &folder.join("poster.vectorcraft").to_string_lossy())["missingLinks"], json!([]));
+    for name in packaged.into_iter().filter(|n| n.starts_with("Links/")) {
+        let mut inner = session();
+        let result = open(&mut inner, &folder.join(name).to_string_lossy());
+        assert_eq!(result["missingLinks"], json!([]), "{name}: {result}");
+    }
+}
+
+#[test]
+fn package_finds_nested_assets_after_the_source_tree_moves() {
+    let dir = Folder::new("package-moved-nested");
+    let _original = poster_with_placed_document(&dir);
+    let moved = dir.0.join("moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    std::fs::rename(dir.0.join("art"), moved.join("art")).unwrap();
+    std::fs::rename(dir.0.join("poster.vectorcraft"), moved.join("poster.vectorcraft")).unwrap();
+    // The file paths embedded in both documents still point to the old location.
+    // Opening the parent repairs its direct link, but the child must resolve
+    // the image from the folder where it was actually found.
+    let mut opened = session();
+    open(&mut opened, &moved.join("poster.vectorcraft").to_string_lossy());
+    let result = run(&mut opened, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["missingLinks"], json!([]), "moved file's nested link wasn't found: {result}");
+    std::fs::remove_dir_all(moved.join("art")).unwrap();
+    verify_portable_nested_package(&dir.0.join("delivery/poster Folder"));
+}
+
+#[test]
+fn identical_stale_paths_in_different_nested_documents_keep_separate_assets() {
+    let dir = Folder::new("package-stale-paths");
+    let mut poster = session();
+    for (number, color) in [(1, RED), (2, BLUE)] {
+        let image = dir.file(&format!("art{number}/photo.png"));
+        write(&image, &png(300, 300, color));
+        let mut part = session();
+        place(&mut part, &image);
+        let name = dir.file(&format!("art{number}/part.vectorcraft"));
+        save(&mut part, &name);
+
+        // Two otherwise independent linked documents have the *same* obsolete
+        // absolute image path. Their relative paths identify different files.
+        let mut saved = vectorcraft_format::load(&std::fs::read(&name).unwrap()).unwrap();
+        saved.update_links(|link| {
+            link.path = "/old-computer/illustrations/photo.png".into();
+            link.relative = Some("photo.png".into());
+        });
+        write(&name, &vectorcraft_format::save_file(&saved));
+        run(&mut poster, "file.place", json!({ "path": name, "link": true }));
+    }
+    save(&mut poster, &dir.file("poster.vectorcraft"));
+    let result = run(&mut poster, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 4, "both images and both documents must be copied: {result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    let folder = dir.0.join("delivery/poster Folder");
+    std::fs::remove_dir_all(dir.0.join("art1")).unwrap();
+    std::fs::remove_dir_all(dir.0.join("art2")).unwrap();
+
+    let mut actual = Vec::new();
+    for filename in result["files"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|name| name.ends_with(".png")) {
+        actual.push(std::fs::read(folder.join(filename)).unwrap());
+    }
+    assert_eq!(actual.len(), 2, "stale source paths must not cause asset deduplication");
+    assert_ne!(actual[0], actual[1], "different original illustrations must keep different pixels");
+    for filename in result["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|name| name.starts_with("Links/") && name.ends_with(".vectorcraft"))
+    {
+        let mut nested = session();
+        let opened = open(&mut nested, &folder.join(filename).to_string_lossy());
+        assert_eq!(opened["missingLinks"], json!([]), "{filename}: {opened}");
+    }
+}
+
+#[test]
+fn packaging_nested_files_preserves_embedded_preview_pdf_and_compression() {
+    let dir = Folder::new("package-native-extras");
+    let mut parent = poster_with_placed_document(&dir);
+    let source = dir.file("art/part.vectorcraft");
+    let original = std::fs::read(&source).unwrap();
+    let doc = vectorcraft_format::load(&original).unwrap();
+    let preview = png(8, 8, BLUE);
+    let pdf = b"%PDF-1.7\n%Embedded client preview\n".to_vec();
+    let mut opts = vectorcraft_format::SaveOptions::for_doc(&doc);
+    opts.preview = Some(preview.clone());
+    opts.pdf = Some(pdf.clone());
+    opts.compress = true;
+    write(&source, &vectorcraft_format::save_with(&doc, &opts).unwrap());
+
+    let result = run(&mut parent, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    let packaged = std::fs::read(dir.0.join("delivery/poster Folder/Links/part.vectorcraft")).unwrap();
+    assert!(packaged.starts_with(&[0x1f, 0x8b]), "compression must be preserved");
+    assert_eq!(vectorcraft_format::preview(&packaged), Some(preview));
+    assert_eq!(vectorcraft_format::pdf_content(&packaged), Some(pdf));
+    let nested = vectorcraft_format::load(&packaged).unwrap();
+    let mut images = Vec::new();
+    nested.visit_images(|_, image| images.push(image.link.clone()));
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].as_ref().unwrap().relative.as_deref(), Some("photo.png"));
+}
+
+/// The report keeps the packaged document's sections as they were, then gives each placed
+/// document's own, headed by its file, instead of nesting them inside the parent's list.
+#[test]
+fn the_report_lists_a_placed_documents_links_in_a_section_of_its_own() {
+    let dir = Folder::new("package-report-sections");
+    let mut parent = poster_with_placed_document(&dir);
+    run(&mut parent, "file.package", json!({ "folder": dir.file("delivery"), "copyFonts": false }));
+    let report = std::fs::read_to_string(dir.0.join("delivery/poster Folder/poster Report.txt")).unwrap();
+    let lines: Vec<&str> = report.lines().collect();
+    let sections: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| **l == "LINKED FILES").map(|(i, _)| i).collect();
+    let [poster, part] = sections[..] else { panic!("two link sections: {report}") };
+    assert!(lines[poster + 1].ends_with("→ Links/part.vectorcraft"), "the packaged document's section as before: {report}");
+    assert!(lines[part + 1].starts_with("Document: ") && lines[part + 1].ends_with("part.vectorcraft"), "{report}");
+    assert!(lines[part + 2].ends_with("→ Links/photo.png"), "{report}");
+}
+
+/// A damaged or newer-format linked native file is still an asset worth delivering.
+/// Package must preserve the exact bytes instead of failing the entire handoff.
+#[test]
+fn unreadable_placed_document_is_copied_unchanged_with_warning() {
+    let dir = Folder::new("package-unreadable-placed");
+    let mut parent = poster_with_placed_document(&dir);
+    let damaged = dir.file("art/part.vectorcraft");
+    let bytes = b"not a parseable VectorCraft file".to_vec();
+    write(&damaged, &bytes);
+
+    let result = run(&mut parent, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 1, "{result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    let warnings = result["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 1, "{result}");
+    assert!(warnings[0].as_str().unwrap().contains("unreadable linked document"), "{result}");
+
+    let packaged = dir.0.join("delivery/poster Folder");
+    assert_eq!(std::fs::read(packaged.join("Links/part.vectorcraft")).unwrap(), bytes);
+    let report = std::fs::read_to_string(packaged.join("poster Report.txt")).unwrap();
+    assert!(report.lines().any(|line| line == "LINKED FILES"), "{report}");
+    assert!(report.contains("copied unchanged") && report.contains("its own links were not collected"), "{report}");
+}
+
+#[test]
+fn circular_placed_links_copy_each_document_once_and_warn() {
+    let dir = Folder::new("package-placed-cycle");
+    let source = dir.file("root.vectorcraft");
+    let child_path = dir.file("child.vectorcraft");
+
+    let mut root = session();
+    save(&mut root, &source);
+    let mut child = session();
+    run(&mut child, "file.place", json!({ "path": source, "link": true }));
+    save(&mut child, &child_path);
+    run(&mut root, "file.place", json!({ "path": child_path, "link": true }));
+    save(&mut root, &source);
+
+    let result = run(&mut root, "file.package", json!({ "folder": dir.file("delivery") }));
+    assert_eq!(result["links"], 1, "the root must not be copied a second time: {result}");
+    assert_eq!(result["missingLinks"], json!([]), "{result}");
+    assert!(result["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("circular placed-document link")), "{result}");
+    let packaged = dir.0.join("delivery/root Folder");
+    let root_doc = vectorcraft_format::load(&std::fs::read(packaged.join("root.vectorcraft")).unwrap()).unwrap();
+    let child_doc = vectorcraft_format::load(&std::fs::read(packaged.join("Links/child.vectorcraft")).unwrap()).unwrap();
+    let mut direct = Vec::new();
+    root_doc.visit_placed(|_, p| direct.push(p.link.relative.clone()));
+    assert_eq!(direct, [Some("Links/child.vectorcraft".into())]);
+    let mut back = Vec::new();
+    child_doc.visit_placed(|_, p| {
+        back.push((p.link.relative.clone(), p.link.hash.clone(), p.link.size));
+    });
+    assert_eq!(back, [(Some("../root.vectorcraft".into()), None, None)]);
+    let report = std::fs::read_to_string(packaged.join("root Report.txt")).unwrap();
+    assert!(report.lines().any(|line| line == "LINKED FILES"), "{report}");
+    assert!(report.contains("stopped following the cycle"), "{report}");
+}
+
+#[test]
+fn nesting_limit_copies_boundary_file_and_reports_uncollected_links() {
+    let dir = Folder::new("package-placed-depth-limit");
+    let mut deepest = session();
+    let mut next = dir.file("leaf.vectorcraft");
+    save(&mut deepest, &next);
+
+    let mut root = None;
+    for depth in (0..=vectorcraft_doc::placed_document::MAX_DEPTH).rev() {
+        let mut current = session();
+        run(&mut current, "file.place", json!({ "path": next, "link": true }));
+        let name = dir.file(&format!("level{depth}.vectorcraft"));
+        save(&mut current, &name);
+        next = name;
+        if depth == 0 {
+            root = Some(current);
+        }
+    }
+
+    let mut root = root.unwrap();
+    let result = run(&mut root, "file.package", json!({ "folder": dir.file("delivery") }));
+    let expected_links = vectorcraft_doc::placed_document::MAX_DEPTH + 1;
+    assert_eq!(result["links"].as_u64(), Some(expected_links as u64), "{result}");
+    assert!(result["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("nesting limit reached")), "{result}");
+    let folder = dir.0.join("delivery/level0 Folder");
+    let packaged = std::fs::read(folder.join("Links/leaf.vectorcraft")).unwrap();
+    assert_eq!(packaged, std::fs::read(dir.file("leaf.vectorcraft")).unwrap());
+    let report = std::fs::read_to_string(folder.join("level0 Report.txt")).unwrap();
+    assert!(report.contains("nesting limit reached"), "{report}");
+}

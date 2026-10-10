@@ -128,6 +128,20 @@ impl Selection {
         }
         self.target = Some(id);
     }
+    /// Shift-clicking `id`'s target circle: it (a layer: its art) joins the selection, or leaves it
+    /// when it is all selected already. Several objects are then selected, none targeted.
+    pub fn toggle_target(&mut self, doc: &Document, id: NodeId) {
+        let ids = match doc.node(id) {
+            Some(n) if n.is_layer() => n.layer_art(true),
+            _ => vec![id],
+        };
+        if ids.iter().all(|i| self.contains(*i)) {
+            ids.iter().for_each(|i| self.remove(*i));
+        } else {
+            ids.into_iter().for_each(|i| self.add(i));
+        }
+        self.target = None;
+    }
     /// What appearance and transparency edits act on: the targeted object, group or layer, else
     /// the selected objects.
     pub fn subjects(&self) -> &[NodeId] {

@@ -52,6 +52,13 @@ impl RasterFx {
     pub fn is_below(&self) -> bool {
         matches!(self, RasterFx::DropShadow { .. } | RasterFx::OuterGlow { .. })
     }
+    /// The blend mode it paints with (shadows and glows).
+    pub fn mode(&self) -> Option<BlendMode> {
+        match self {
+            RasterFx::DropShadow { mode, .. } | RasterFx::OuterGlow { mode, .. } | RasterFx::InnerGlow { mode, .. } => Some(*mode),
+            _ => None,
+        }
+    }
     /// How far this effect reaches beyond `bounds`, what it paints around (Radial Blur reaches
     /// further around larger objects).
     pub fn outset(&self, bounds: Rect) -> f64 {

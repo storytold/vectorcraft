@@ -14,6 +14,7 @@
 # Brazilian Portuguese computing vocabulary (arquivo, camada, caminho, preenchimento, traçado,
 # pincel, amostra, mesa de trabalho ...), following common desktop-software conventions (commands
 # in the infinitive, menus as nouns); no proprietary localisation resource, string table or product
+	Glowing Edges…	Bordas brilhantes…
 # UI was consulted or copied; add entries the same way. Product and technology names (VectorCraft,
 # ArtCraft, SVG, OpenType, CMYK, Lab ...) stay in Latin letters; the trailing "…" of dialog
 # commands is kept.
@@ -635,6 +636,7 @@
 	Divide Slices…	Dividir Fatias…
 	Divide Vertically Into	Dividir Verticalmente Em
 	Do you want to save the changes you made to “{name}”?	Deseja salvar as alterações feitas em “{name}”?
+	Can't open “{name}”.	Não é possível abrir “{name}”.
 	Document	Documento
 	Document Color Mode	Modo de Cor do Documento
 	Document Info	Informações do Documento
@@ -1312,6 +1314,8 @@
 	Monochrome images	Imagens monocromáticas
 	More	Mais
 	More Pathfinder options	Mais opções de Localizador de Caminhos
+	More Align options	Mais opções de alinhamento
+	More Paragraph options	Mais opções de parágrafo
 	More Settings	Mais Configurações
 	Move	Mover
 	Move Anchors	Mover Âncoras
@@ -1819,6 +1823,25 @@
 	Reflect…	Espelhar…
 	Refresh	Atualizar
 	Refresh Font List	Atualizar Lista de Fontes
+	Missing Fonts	Fontes Ausentes
+	Missing Fonts Dialog	Diálogo de Fontes Ausentes
+	These fonts aren't available. Their text shows in another font.	Estas fontes não estão disponíveis. O texto delas aparece em outra fonte.
+	Search Fonts Folder	Pesquisar na Pasta Fonts
+	Find in Folder…	Localizar em uma Pasta…
+	Find Fonts in Folder…	Localizar Fontes em uma Pasta…
+	Find Font Files	Localizar Arquivos de Fontes
+	Add Font Files	Adicionar Arquivos de Fontes
+	Add Fonts	Adicionar Fontes
+	Find Fonts	Localizar Fontes
+	Stop	Parar
+	Searching…	Pesquisando…
+	Not found	Não encontrado
+	{folders} folder(s) and {files} file(s) searched	{folders} pasta(s) e {files} arquivo(s) pesquisados
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} pasta(s) ignorada(s), como as de outros aplicativos e do sistema e as ocultas
+	{count} folder(s) or file(s) couldn't be read	{count} pasta(s) ou arquivo(s) não puderam ser lidos
+	The search stopped at its limit: search a smaller folder.	A pesquisa parou no limite: pesquise uma pasta menor.
+	Copy only fonts you own or are licensed to install.	Copie apenas fontes que sejam suas ou que você tenha licença para instalar.
+	VectorCraft copies the fonts to {folder}.	O VectorCraft copia as fontes para {folder}.
 	Registered Trademark Symbol	Símbolo de Marca Registrada
 	Registry name:	Nome do registro:
 	Release	Liberar
@@ -2696,3 +2719,8 @@
 	Sync with system	Sincronizar com o sistema
 	Active	Ativo
 	Next Appearance Mode	Próximo Modo de Aparência
+	Pixelate	Pixelizar
+	Color Halftone…	Meio-Tom Colorido…
+	Crystallize…	Cristalizar…
+	Mezzotint…	Meia-Tinta…
+	Pointillize…	Pontilhar…

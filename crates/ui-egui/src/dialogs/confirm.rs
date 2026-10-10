@@ -36,6 +36,17 @@ pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str,
     app.ui.dialog = Some(Dialog::new(KIND, fields));
 }
 
+/// The dialog kind of a message with a Close button only ([`tell`]).
+pub const MESSAGE: &str = "message";
+
+pub(super) const MESSAGE_SPEC: DialogSpec = DialogSpec { ok: None, ..SPEC };
+
+/// Tell the user `message` (with an optional `detail` line), both in the UI language, in a dialog
+/// they close.
+pub fn tell(app: &mut VectorcraftApp, message: &str, detail: &str) {
+    app.ui.dialog = Some(Dialog::new(MESSAGE, json!({"message": message, "detail": detail})));
+}
+
 /// Closes before running, so a dialog the command opens stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let params = d.fields.get("__params").cloned().unwrap_or_else(|| json!({}));

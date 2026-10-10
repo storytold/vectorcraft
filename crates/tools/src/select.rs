@@ -71,6 +71,8 @@ pub struct SelectionTool {
     targets: Option<Targets>,
     moving: Option<MoveSnap>,
     guide: GuideEdit,
+    /// Smart Guides: the centre or anchor under the pointer, and its label ([`Self::hover_point`]).
+    hover: Option<(Point, &'static str)>,
 }
 
 /// Snapping for the selection moved as a whole, its targets gathered when the move begins: View →
@@ -163,9 +165,35 @@ fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
     in_rotate_zone(b.rect, lp, tol, cx.tol(18.0)).map(|_| BoxHit::Rotate)
 }
 
+/// How near (screen points) the pointer must come to an object's centre or anchor for Smart Guides
+/// to label it while hovering.
+const HOVER_REACH: f64 = 6.0;
+
 impl SelectionTool {
     fn drag_threshold(cx: &ToolContext) -> f64 {
         cx.tol(3.0)
+    }
+
+    /// With Smart Guides on, the anchor or the centre of an object near `p` (the one under the
+    /// pointer, else a selected one) and its label, "anchor" or "center", as Illustrator shows
+    /// them while hovering (#812). A press there grabs the object by that point.
+    fn hover_point(cx: &ToolContext, p: Point) -> Option<(Point, &'static str)> {
+        if !cx.smart_guides {
+            return None;
+        }
+        let reach = cx.tol(HOVER_REACH);
+        let under = hit_test(cx.doc, p, cx.hit_options()).map(|h| h.top_object(cx.isolation));
+        let nearest = |points: &mut dyn Iterator<Item = Point>| {
+            points.filter(|q| q.distance(p) <= reach).min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
+        };
+        under.into_iter().chain(cx.selection.objects.iter().copied()).find_map(|id| {
+            let n = cx.doc.node(id)?;
+            let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
+            anchor.map(|q| (q, "anchor")).or_else(|| {
+                let c = cx.doc.bounds_of(&[id], cx.preview_bounds)?.center();
+                (c.distance(p) <= reach).then_some((c, "center"))
+            })
+        })
     }
 }
 
@@ -188,6 +216,11 @@ impl Tool for SelectionTool {
         }
         let p = ev.pos;
         let m = ev.mods;
+        // A press near the hovered centre or anchor grabs the object by it.
+        let grab = self.hover.take().map(|(q, _)| q).filter(|q| q.distance(p) <= cx.tol(HOVER_REACH)).unwrap_or(p);
+        if matches!(ev.kind, PointerKind::Move) && matches!(self.state, State::Idle) {
+            self.hover = Self::hover_point(cx, p);
+        }
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
@@ -278,7 +311,7 @@ impl Tool for SelectionTool {
                         } else if cx.selection.objects.len() > 1 && !m.cmd && !m.alt {
                             key = Some(top);
                         }
-                        self.state = State::Moving { start: p, began: false, deselect, key };
+                        self.state = State::Moving { start: grab, began: false, deselect, key };
                         out
                     }
                     None => {
@@ -397,6 +430,12 @@ impl Tool for SelectionTool {
         }
         o.extend(self.guides.iter().cloned());
         o.extend(self.guide.overlays(cx));
+        if let (Some((q, label)), State::Idle) = (self.hover, &self.state) {
+            let style = crate::guides::GuideStyle::of(cx);
+            if style.labels {
+                o.push(Overlay::Label { p: q, text: label.into(), color: style.color });
+            }
+        }
         if let Some((p, t)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: t.clone() });
         }
@@ -481,6 +520,39 @@ mod tests {
 
     fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
         PointerEvent::new(kind, x, y)
+    }
+
+    /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
+    /// press there grabs the object by that point.
+    #[test]
+    fn hovering_labels_the_centre_and_anchors_and_a_press_grabs_by_them() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let label = |t: &SelectionTool| {
+            t.overlays(&cx).iter().find_map(|o| match o {
+                Overlay::Label { p, text, .. } => Some((*p, text.clone())),
+                _ => None,
+            })
+        };
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Move, 152.0, 151.0));
+        assert_eq!(label(&t), Some((Point::new(150.0, 150.0), "center".to_string())));
+        t.pointer(&cx, &ev(PointerKind::Move, 102.0, 101.0));
+        assert_eq!(label(&t), Some((Point::new(100.0, 100.0), "anchor".to_string())));
+        t.pointer(&cx, &ev(PointerKind::Move, 130.0, 170.0));
+        assert_eq!(label(&t), None, "away from both");
+        // Grabbed by its centre, the object's centre follows the pointer.
+        t.pointer(&cx, &ev(PointerKind::Move, 152.0, 151.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 152.0, 151.0));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 250.0, 250.0));
+        assert!(a.iter().any(|a| matches!(a, Action::Preview(_, v) if v["matrix"][4] == 100.0 && v["matrix"][5] == 100.0)), "{a:?}");
+        // With Smart Guides off, nothing is labelled.
+        let off = ToolContext { smart_guides: false, ..cx };
+        let mut t = SelectionTool::default();
+        t.pointer(&off, &ev(PointerKind::Move, 152.0, 151.0));
+        assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Label { .. })));
     }
 
     #[test]

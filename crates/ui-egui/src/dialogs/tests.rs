@@ -168,7 +168,15 @@ fn effect_preview_is_kept_as_one_undo_step() {
 
 #[test]
 fn raster_filter_dialogs_preview_and_apply() {
-    for (effect, key, value) in [("blur.radial", "method", "zoom"), ("blur.smart", "quality", "high"), ("sharpen.unsharpMask", "amount", "120")] {
+    for (effect, key, value) in [
+        ("blur.radial", "method", "zoom"),
+        ("blur.smart", "quality", "high"),
+        ("sharpen.unsharpMask", "amount", "120"),
+        ("pixelate.colorHalftone", "channel1", "30"),
+        ("pixelate.crystallize", "cellSize", "20"),
+        ("pixelate.mezzotint", "type", "longLines"),
+        ("pixelate.pointillize", "cellSize", "12"),
+    ] {
         let mut app = app();
         let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
         app.run("select.all", json!({})).unwrap();
@@ -188,6 +196,13 @@ fn raster_filter_dialogs_preview_and_apply() {
     let ranks: Vec<usize> = ["radius", "threshold", "quality"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
     assert_eq!(super::effect::doc_rank(doc, "nope"), usize::MAX);
+    let doc = vectorcraft_effects::effect_info("pixelate.colorHalftone").unwrap().params;
+    let ranks: Vec<usize> = ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
+    // Labels as the dialogs show them.
+    assert_eq!(super::form::humanize("maxRadius"), "Max. Radius:");
+    assert_eq!(super::form::humanize("channel3"), "Channel 3:");
+    assert_eq!(super::form::humanize("cellSize"), "Cell Size:");
 }
 
 #[test]
@@ -234,6 +249,8 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.swatchOptions", json!({"name": "White"})),
         ("ui.colorPicker", json!({})),
         ("ui.graphicStyleOptions", json!({})),
+        ("ui.brushOptions", json!({"name": "3 pt. Round"})),
+        ("ui.brushOptions", json!({"name": "Bristle Round"})),
         ("ui.colorGuideOptions", json!({})),
         ("ui.colorBalanceDialog", json!({})),
         ("ui.saturateDialog", json!({})),
@@ -369,6 +386,22 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     assert!(app.ui.dialog.is_none());
     let after = bounds(&app);
     assert!((after.x0 - before.x0 - 15.0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} → {after:?}");
+    // Transform Each, then the Transform effect: Scale › Horizontal, a plain number, comes first.
+    let before = bounds(&app);
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("50".into())]);
+    frame(&mut app, vec![enter()]);
+    assert!(app.ui.dialog.is_none());
+    let after = bounds(&app);
+    assert!((after.width() - before.width() / 2.0).abs() < 1e-6 && (after.height() - before.height()).abs() < 1e-6, "{before:?} → {after:?}");
+    app.run("effect.dialog", json!({"effect": "distort.transform"})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("50".into())]);
+    frame(&mut app, vec![enter()]);
+    assert!(app.ui.dialog.is_none());
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert_eq!(node.appearance.effects.last().map(|e| e.params["scaleH"].clone()), Some(json!(50.0)));
 }
 
 /// #793: Artboard Options lists its fields as Name, Width, Height, not by key.
@@ -380,4 +413,74 @@ fn artboard_options_lists_name_then_width_and_height() {
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
     let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in {text}"));
     assert!(at("Name") < at("Width") && at("Width") < at("Height"), "{text}");
+}
+
+#[test]
+fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_again() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.transform"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    for s in [
+        "Transform",
+        "Scale",
+        "Move",
+        "Rotate",
+        "Horizontal:",
+        "Vertical:",
+        "Angle:",
+        "Copies:",
+        "Reflect X",
+        "Reflect Y",
+        "Reference Point",
+        "Random",
+        "Preview",
+    ] {
+        assert!(text.lines().any(|l| l == s), "{s} in {text}");
+    }
+    assert!(app.session.in_interaction(), "the preview runs");
+    let effect = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].clone();
+    // The reference point and Random update the preview.
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("moveH", json!(30)), ("copies", json!(3)), ("reference", json!(8))] {
+        d.fields.insert(k.into(), v);
+    }
+    frame(&mut app, Default::default());
+    assert_eq!((effect(&app).params["reference"].clone(), effect(&app).params["copies"].clone()), (json!(8), json!(3)));
+    app.ui.dialog.as_mut().unwrap().fields.insert("random".into(), json!(true));
+    frame(&mut app, Default::default());
+    assert_eq!(effect(&app).params["random"], json!(true));
+    confirm(&mut app).unwrap();
+    assert!(!app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects.len(), 1);
+    // Editing it from the Appearance panel shows the same values.
+    app.run("effect.dialog", json!({"effect": "distort.transform", "index": 0})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.f64("reference", 4.0), d.f64("copies", 0.0), d.f64("moveH", 0.0), d.bool("random")), (8.0, 3.0, 30.0, true));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.lines().any(|l| l == "Reference Point"), "{text}");
+}
+
+#[test]
+fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
+    for move_art in [false, true] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("artboard");
+        app.session.set_tool_option("moveArt", &json!(move_art));
+        crate::dialogs::artboard_options::open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("x".into(), json!(50));
+        // Draw the dialog once and confirm through its registry, as the OK button does.
+        frame(&mut app, Default::default());
+        let before = app.session.doc().unwrap().doc.clone();
+        super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect.x0, 50.0);
+        assert_eq!(
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0,
+            if move_art { 60.0 } else { 10.0 }
+        );
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(*app.session.doc().unwrap().doc, *before);
+    }
 }

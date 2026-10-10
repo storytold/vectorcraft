@@ -9,6 +9,7 @@
 # back to English. Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name,
 # language names, OpenType, the built-in workspace names and the bracketed perspective grid preset
 # names.
+	Glowing Edges…	Zářící okraje…
 	About VectorCraft	O aplikaci VectorCraft
 	Align to Path	Zarovnat k cestě
 	Cut Path at Selected Anchor Points	Rozdělit cestu ve vybraných kotevních bodech
@@ -657,3 +658,8 @@
 	Sync with system	Podle systému
 	Active	Aktivní
 	Next Appearance Mode	Další režim vzhledu
+	Pixelate	Pixelizace
+	Color Halftone…	Barevný polotón…
+	Crystallize…	Krystalizace…
+	Mezzotint…	Mezzotinta…
+	Pointillize…	Pointilismus…

@@ -74,17 +74,18 @@ impl Libraries {
         self.dir.as_deref()
     }
 
-    /// Set the library folder and read its libraries (unreadable files are skipped).
+    /// Set the library folder and read its libraries (unreadable files are skipped). The folder
+    /// is the app's own: automation roots don't apply to it ([`crate::file_access`]).
     pub fn set_dir(&mut self, dir: Option<String>) {
         self.dir = dir;
         self.libs.clear();
         if let Some(dir) = self.dir.clone() {
             for path in library_paths(&dir) {
                 let id = stem_of(&path);
-                let lib = super::fileio::file_stamp(&path)
-                    .filter(|(len, _)| *len <= MAX_FILE)
-                    .and_then(|_| super::fileio::read_file(&path).ok())
-                    .and_then(|b| serde_json::from_slice::<Library>(&b).ok());
+                let lib = crate::file_access::unconfined(|| {
+                    super::fileio::file_stamp(&path).filter(|(len, _)| *len <= MAX_FILE).and_then(|_| super::fileio::read_file(&path).ok())
+                })
+                .and_then(|b| serde_json::from_slice::<Library>(&b).ok());
                 if let Some(mut lib) = lib {
                     lib.cap();
                     self.libs.push((id, lib));
@@ -149,14 +150,17 @@ impl Libraries {
         Some(std::path::Path::new(dir).join(format!("{id}.{LIBRARY_EXT}")).to_string_lossy().into_owned())
     }
 
-    /// Write library `id` to its file (nothing to do without a folder).
+    /// Write library `id` to its file (nothing to do without a folder). The folder is the app's
+    /// own and ids are safe file names: automation roots don't apply ([`crate::file_access`]).
     fn save(&self, id: &str) -> Result<()> {
         let (Some(path), Some(lib)) = (self.path(id), self.get(id)) else { return Ok(()) };
-        if let Some(dir) = self.dir.as_deref() {
-            super::fileio::create_dir(dir)?;
-        }
         let bytes = serde_json::to_vec(lib).map_err(|e| EngineError::Other(e.to_string()))?;
-        super::fileio::write_file(&path, &bytes)
+        crate::file_access::unconfined(|| {
+            if let Some(dir) = self.dir.as_deref() {
+                super::fileio::create_dir(dir)?;
+            }
+            super::fileio::write_file(&path, &bytes)
+        })
     }
 
     /// Change library `id` with `f` and save it; on a failed save the change is undone.

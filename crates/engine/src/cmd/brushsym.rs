@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change}, newName?} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size]; pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest)}, newName?} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
         ),

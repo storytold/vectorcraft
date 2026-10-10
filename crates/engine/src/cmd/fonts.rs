@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Font List",
             [],
             None,
-            "{family?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), as the font menus list them (without the system's hidden families, whose names start with a dot; they still resolve by name); with family: {family, styles: [names]} (upright styles by weight, then italics; an error when the family isn't available)",
+            "{family?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names]} (upright styles by weight, then italics; an error when the family isn't available)",
             always,
             font_list
         ),

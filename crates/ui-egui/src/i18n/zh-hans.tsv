@@ -9,6 +9,11 @@
 # proprietary localisation resource, string table or product UI may be copied. Product and
 # technology names stay in Latin letters. Full-width punctuation (，。：“”) in sentences, half-width
 # parentheses.
+	Glowing Edges…	发光边缘…
+	Glowing Edges	发光边缘
+	Edge Width	边缘宽度
+	Edge Brightness	边缘亮度
+	Smoothness	平滑度
 
 	  — missing	  — 缺失
 	 to search every command	以搜索所有命令
@@ -206,6 +211,8 @@
 	Auto-Collapse Iconic Panels	自动折叠图标面板
 	Ellipse Properties:	椭圆属性：
 	Invert Pie	反转扇形
+	Side Length:	边长：
+	Make Sides Equal	使各边等长
 	Pie End Angle:	扇形终止角度：
 	Pie Start Angle:	扇形起始角度：
 	Show Tool Group Labels	显示工具组标签
@@ -661,6 +668,7 @@
 	Divide Vertically Into	垂直分割为
 	Do Not Move	不移动
 	Do you want to save the changes you made to “{name}”?	要存储对“{name}”所做的更改吗？
+	Can't open “{name}”.	无法打开“{name}”。
 	Document	文档
 	Document Color Mode	文档颜色模式
 	Document Info	文档信息
@@ -959,6 +967,20 @@
 	Flare	光晕
 	Flare Tool	光晕工具
 	Flare Tool Options	光晕工具选项
+	Halo	光晕
+	Rays	射线
+	Rings	光环
+	Diameter:	直径：
+	Brightness:	亮度：
+	Growth:	增大：
+	Fuzziness:	模糊度：
+	Number:	数量：
+	Longest:	最长：
+	Path:	路径：
+	Largest:	最大：
+	Direction:	方向：
+	Symbolism Tools Options	符号工具选项
+	Symbol Set Density:	符号组密度：
 	Flat Image	平面图像
 	Flatness:	平滑度：
 	Flatten Transparency	拼合透明度
@@ -1450,6 +1472,8 @@
 	Monochrome images	单色图像
 	More	较多
 	More Pathfinder options	更多路径查找器选项
+	More Align options	更多对齐选项
+	More Paragraph options	更多段落选项
 	More Settings	更多设置
 	Move	移动
 	Move All Objects	移动所有对象
@@ -1493,6 +1517,27 @@
 	New Artboard	新建画板
 	Exit	退出
 	New Bristle Brush	新建鬃毛画笔
+	Calligraphic Brush Options	书法画笔选项
+	Bristle Brush Options	鬃毛画笔选项
+	Roundness:	圆度：
+	Fixed	固定
+	Pressure	压力
+	Shape:	形状：
+	Bristle Length:	鬃毛长度：
+	Bristle Density:	鬃毛密度：
+	Bristle Thickness:	鬃毛粗细：
+	Paint Opacity:	上色不透明度：
+	Stiffness:	硬度：
+	Round Point	圆尖头
+	Flat Point	扁尖头
+	Round Blunt	圆钝头
+	Flat Blunt	扁钝头
+	Round Curve	圆弯头
+	Flat Curve	扁弯头
+	Round Angle	圆斜头
+	Flat Angle	扁斜头
+	Round Fan	圆扇头
+	Flat Fan	扁扇头
 	New Brush…	新建画笔…
 	New Calligraphic Brush	新建书法画笔
 	New Character Style	新建字符样式
@@ -2016,6 +2061,25 @@
 	Reflect…	镜像…
 	Refresh	刷新
 	Refresh Font List	刷新字体列表
+	Missing Fonts	缺失的字体
+	Missing Fonts Dialog	缺失的字体对话框
+	These fonts aren't available. Their text shows in another font.	这些字体不可用。其文字以其他字体显示。
+	Search Fonts Folder	搜索 Fonts 文件夹
+	Find in Folder…	在文件夹中查找…
+	Find Fonts in Folder…	在文件夹中查找字体…
+	Find Font Files	查找字体文件
+	Add Font Files	添加字体文件
+	Add Fonts	添加字体
+	Find Fonts	查找字体
+	Stop	停止
+	Searching…	正在搜索…
+	Not found	未找到
+	{folders} folder(s) and {files} file(s) searched	已搜索 {folders} 个文件夹、{files} 个文件
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	已跳过 {count} 个文件夹，例如其他应用程序和系统的文件夹，以及隐藏的文件夹
+	{count} folder(s) or file(s) couldn't be read	有 {count} 个文件夹或文件无法读取
+	The search stopped at its limit: search a smaller folder.	搜索已达上限而停止：请搜索较小的文件夹。
+	Copy only fonts you own or are licensed to install.	只复制您拥有或已获得安装许可的字体。
+	VectorCraft copies the fonts to {folder}.	VectorCraft 会将字体复制到 {folder}。
 	Registered Trademark Symbol	注册商标符号
 	Registration marks	对位标记
 	Registry name:	登录名称：
@@ -2457,6 +2521,9 @@
 	Smart Guides (⌘U)	智能参考线 (⌘U)
 	Smart Punctuation…	智能标点…
 	Smooth	平滑
+	Corner	尖角
+	Relative	相对
+	Absolute	绝对
 	Smooth Color	平滑颜色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	将曲线对齐到直线
@@ -3401,6 +3468,31 @@ axis	Both	两者
 	Smart Blur…	智能模糊…
 	Sharpen	锐化
 	Unsharp Mask…	反锐化遮罩…
+	Pixelate	像素化
+	Color Halftone…	彩色半调…
+	Crystallize…	晶格化…
+	Mezzotint…	铜版雕刻…
+	Pointillize…	点彩…
+	Color Halftone	彩色半调
+	Crystallize	晶格化
+	Mezzotint	铜版雕刻
+	Pointillize	点彩
+	Max. Radius	最大半径
+	Channel 1	色版 1
+	Channel 2	色版 2
+	Channel 3	色版 3
+	Channel 4	色版 4
+	Cell Size	单元格大小
+	Fine Dots	细点
+	Medium Dots	中等点
+	Grainy Dots	颗粒点
+	Coarse Dots	粗点
+	Short Lines	短线
+	Medium Lines	中等线
+	Long Lines	长线
+	Short Strokes	短笔画
+	Medium Strokes	中等笔画
+	Long Strokes	长笔画
 	Radial Blur	径向模糊
 	Smart Blur	智能模糊
 	Unsharp Mask	反锐化遮罩

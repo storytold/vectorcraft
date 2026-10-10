@@ -510,6 +510,38 @@ impl Prefs {
         serde_json::from_value(v).unwrap_or_default()
     }
 
+    /// The folders the app reads (fonts, plug-ins) or writes (Data Recovery copies, the Templates
+    /// folder it makes for its dialogs) on its own, with the access each needs.
+    fn folders_mut(&mut self) -> [(&mut String, crate::file_access::Access); 4] {
+        use crate::file_access::Access;
+        [
+            (&mut self.fonts_folder, Access::Read),
+            (&mut self.plugins_folder, Access::Read),
+            (&mut self.recovery_folder, Access::Write),
+            (&mut self.templates_folder, Access::Write),
+        ]
+    }
+
+    /// Put back the folders `next` sets in place of these preferences' that the automation roots
+    /// in force refuse: automation may only point them inside its roots ([`crate::file_access`]).
+    /// → why each was refused. Nothing is refused without roots, nor a folder cleared or kept.
+    fn keep_folders(&self, next: &mut Prefs) -> Vec<String> {
+        let Some(roots) = crate::file_access::current() else { return vec![] };
+        let mut before = self.clone();
+        let mut refused = vec![];
+        for ((old, _), (new, access)) in before.folders_mut().into_iter().zip(next.folders_mut()) {
+            let folder = new.trim();
+            if folder.is_empty() || folder == old.trim() {
+                continue;
+            }
+            if let Err(e) = roots.check(folder, access) {
+                refused.push(e);
+                *new = old.clone();
+            }
+        }
+        refused
+    }
+
     /// Values of one category (`None` = all) reset to defaults.
     pub fn reset(&mut self, category: Option<&str>) {
         let d = Prefs::default().to_json();
@@ -531,7 +563,12 @@ impl Prefs {
 impl Session {
     /// Replace the preferences and push the ones with engine-side consumers into open documents
     /// and the renderer (grid, history depth, render threads).
-    pub fn apply_prefs(&mut self, p: Prefs) {
+    pub fn apply_prefs(&mut self, mut p: Prefs) {
+        // However they are set (a dialog driven by automation too), the folders stay inside the
+        // automation roots in force: a refused one keeps its value.
+        for e in self.prefs.keep_folders(&mut p) {
+            log::warn!("{e}");
+        }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
@@ -615,6 +652,9 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad("prefs.set", e))?;
+    if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
+        return Err(EngineError::Other(e));
+    }
     s.apply_prefs(next);
     // Units ▸ General is also the open document's units (as Document Setup sets them).
     if values.contains_key("unitsGeneral") && s.active().is_some() {

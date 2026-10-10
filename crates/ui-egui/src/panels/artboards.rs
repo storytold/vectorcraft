@@ -30,6 +30,11 @@ pub(crate) fn scale_art(app: &VectorcraftApp) -> bool {
     app.session.tool_id() == "artboard" && app.session.tool_options()["scaleArt"].as_bool().unwrap_or(false)
 }
 
+/// Whether position edits take their art along, matching the Artboard tool's move option.
+pub(crate) fn move_art(app: &VectorcraftApp) -> bool {
+    app.session.tool_id() == "artboard" && app.session.tool_options()["moveArt"].as_bool().unwrap_or(true)
+}
+
 /// The active artboard (of `n`).
 pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
     app.view().map_or(0, |v| v.artboard).min(n.saturating_sub(1))

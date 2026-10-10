@@ -216,8 +216,20 @@ fn none(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn reselect(s: &mut Session, _: &Value) -> Result<Value> {
-    let Some((c, p)) = s.doc()?.last_selection_cmd.clone() else { return ok() };
-    s.execute(&c, &p)
+    let st = s.doc()?;
+    let Some((c, p, from)) = st.last_selection_cmd.clone() else { return ok() };
+    // After Deselect, a Same command takes its reference again from the objects that were selected
+    // when it ran, those still there (#903).
+    let from: Vec<NodeId> = from.into_iter().filter(|id| st.doc.node(*id).is_some()).collect();
+    let restore = st.selection.objects.is_empty() && !from.is_empty();
+    if restore {
+        s.select(|_, sel| sel.set(from))?;
+    }
+    let r = s.execute(&c, &p);
+    if restore && r.is_err() {
+        s.select(|_, sel| sel.clear())?;
+    }
+    r
 }
 
 fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
@@ -401,8 +413,9 @@ fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &No
     for l in st.doc.layers.iter().filter(|l| l.visible && !l.locked) {
         visit(&st.doc, l, &f, &mut ids);
     }
+    let from = st.selection.objects.clone();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
-    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone()));
+    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone(), from));
     Ok(json!({ "count": ids.len() }))
 }
 

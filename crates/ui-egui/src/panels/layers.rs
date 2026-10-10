@@ -664,7 +664,7 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     }
     let m = ui.input(|i| i.modifiers);
     if tresp.clicked() {
-        out.actions.push(("layer.target".into(), json!({"id": n.id.0})));
+        out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if sq_resp.clicked() {
         out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if resp.clicked() {
@@ -1239,6 +1239,13 @@ mod tests {
         }
         let st = app.session.active().unwrap();
         assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(a), vec![a]));
+        // Shift-clicking another object's circle adds it to the selection (#901), and again takes
+        // it out; nothing is targeted meanwhile.
+        click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.selection.target, st.selection.objects.clone()), (None, vec![a, b]));
+        click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
     }
 
     #[test]

@@ -318,6 +318,7 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
+/// Nothing targeted is not an edit.
 pub(crate) fn edit_items(
     s: &mut Session,
     ids: &[NodeId],
@@ -325,18 +326,35 @@ pub(crate) fn edit_items(
     cmd: &str,
     label: &str,
     fill: bool,
+    f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
+) -> Result<()> {
+    edit_items_then(s, ids, item, cmd, label, fill, f, |_, _| Ok(()))
+}
+
+/// [`edit_items`], then `after` on the ids `f` changed, inside the same undo step.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn edit_items_then(
+    s: &mut Session,
+    ids: &[NodeId],
+    item: ItemTarget,
+    cmd: &str,
+    label: &str,
+    fill: bool,
     mut f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
+    mut after: impl FnMut(&mut vectorcraft_doc::Document, &[NodeId]) -> Result<()>,
 ) -> Result<()> {
     if ids.is_empty() {
         return Ok(());
     }
     s.edit(label, |d, _| {
+        let mut changed = Vec::new();
         for id in ids {
             let Some(n) = d.node_mut(*id) else { continue };
             let index = item.resolve(&n.appearance, fill, cmd)?;
             f(n, index)?;
+            changed.push(*id);
         }
-        Ok(())
+        after(d, &changed)
     })
 }
 

@@ -63,12 +63,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         label(ui, tl!("Corner:"));
         ui.vertical(|ui| {
             for k in CornerKind::ALL {
-                let name = match k {
-                    CornerKind::Round => tl!("Round"),
-                    CornerKind::InvertedRound => tl!("Inverted Round"),
-                    CornerKind::Chamfer => tl!("Chamfer"),
-                };
-                if widgets::radio(ui, name, Some(k) == current, true) {
+                if widgets::radio(ui, kind_label(k), Some(k) == current, true) {
                     d.fields.insert("kind".into(), json!(k));
                 }
             }
@@ -79,6 +74,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
     });
     false
+}
+
+/// A corner kind's name, in the UI language.
+pub(crate) fn kind_label(k: CornerKind) -> &'static str {
+    match k {
+        CornerKind::Round => tl!("Round"),
+        CornerKind::InvertedRound => tl!("Inverted Round"),
+        CornerKind::Chamfer => tl!("Chamfer"),
+    }
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {

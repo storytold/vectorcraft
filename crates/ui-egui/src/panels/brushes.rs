@@ -1,14 +1,16 @@
 //! Brushes panel: the document's brush library with rendered stroke previews. Clicking a brush
-//! applies it to the selected paths (and makes it the Paintbrush's current brush).
+//! applies it to the selected paths (and makes it the Paintbrush's current brush); double-clicking
+//! one opens its Brush Options.
 
 use std::collections::HashMap;
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, Document, Node, color::Color, color::Paint};
+use vectorcraft_doc::{Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::dialogs::brush_options;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
@@ -26,14 +28,17 @@ pub fn brushes(app: &mut VectorcraftApp) -> (Vec<(String, String)>, Option<Strin
 }
 
 /// A stroke preview for brush definition `def`, rendered at `size` and cached by the definition's
-/// JSON.
+/// JSON. The stroke goes from light to heavy pen pressure and back, so pressure-sensitive brushes
+/// show how they vary.
 fn preview(ui: &Ui, def: &Value, size: egui::Vec2) -> Option<egui::TextureHandle> {
     widgets::doc_preview(ui, &format!("brush:{def}"), size, |w, h| {
         let mut doc = Document::new(w, h);
         doc.unknown.insert("brushes".into(), json!([def]));
         let name = def["name"].as_str()?.to_string();
         let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
-        ap.stroke_mut()?.brush = Some(name);
+        let st = ap.stroke_mut()?;
+        st.brush = Some(name);
+        st.pressure = Some(PressureProfile::sample());
         // A gentle S-curve across the swatch.
         let mut bp = vectorcraft_geom::BezPath::new();
         let (x0, x1) = (h * 0.5, w - h * 0.5);
@@ -68,6 +73,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let defs: HashMap<String, Value> =
         list.iter().filter_map(|(n, _)| app.run("brush.get", json!({"name": n})).ok().map(|v| (n.clone(), v))).collect();
     let mut clicked: Option<String> = None;
+    let mut options: Option<String> = None;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
@@ -83,6 +89,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if group.is_empty() {
                 continue;
             }
+            let has_options = brush_options::TYPES.contains(&ty);
             let row = |ui: &mut Ui, name: &str, size: egui::Vec2, label: bool| -> egui::Response {
                 let (r, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
                 // Dragged onto a path, the brush is applied to it.
@@ -112,18 +119,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 resp.on_hover_text(name)
             };
+            // A click applies the brush; the second click of a double-click opens its options.
+            let mut pick = |resp: egui::Response, name: &String| {
+                if resp.double_clicked() && has_options {
+                    options = Some(name.clone());
+                } else if resp.clicked() {
+                    clicked = Some(name.clone());
+                }
+            };
             if list_view {
                 for (name, _) in group {
-                    if row(ui, name, vec2(ui.available_width(), 26.0), true).clicked() {
-                        clicked = Some(name.clone());
-                    }
+                    pick(row(ui, name, vec2(ui.available_width(), 26.0), true), name);
                 }
             } else {
                 ui.horizontal_wrapped(|ui| {
                     for (name, _) in group {
-                        if row(ui, name, vec2(64.0, 28.0), false).clicked() {
-                            clicked = Some(name.clone());
-                        }
+                        pick(row(ui, name, vec2(64.0, 28.0), false), name);
                     }
                 });
             }
@@ -145,6 +156,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             app.run("brush.setCurrent", json!({"name": name})).ok();
         }
+    }
+    if let Some(name) = options
+        && let Err(e) = app.run("ui.brushOptions", json!({ "name": name }))
+    {
+        app.status(e);
     }
     let has_brush = sel_brush.is_some();
     let target = sel_brush.clone().or(current.clone());
@@ -204,6 +220,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Expand Brush Strokes"), sel.is_some(), false) {
         app.run("object.expandBrush", json!({})).ok();
     }
+    // On the selected path's brush, else the current one, as the other items.
+    if menu_item(ui, tl!("Brush Options…"), brush_options::available(app), false)
+        && let Err(e) = app.run("ui.brushOptions", json!({}))
+    {
+        app.status(e);
+    }
     ui.separator();
     let mut hidden: Vec<String> = pstate(ui.ctx(), "br-hidden");
     for (ty, label) in KINDS {
@@ -244,6 +266,48 @@ mod tests {
 
     fn button(at: Pos2, pressed: bool) -> egui::Event {
         egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    /// #852: double-clicking a brush opens its Brush Options; OK changes the brush (and strokes
+    /// painted with it). A single click only applies the brush.
+    #[test]
+    fn double_clicking_a_brush_opens_its_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        let clicks = |at: Pos2, n: usize| -> Vec<egui::Event> {
+            std::iter::once(egui::Event::PointerMoved(at)).chain((0..n).flat_map(|_| [button(at, true), button(at, false)])).collect()
+        };
+        let at_time = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let raw = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 600.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+        };
+        at_time(&mut app, 0.0, vec![]);
+        let (list, _) = brushes(&mut app);
+        let first = list[0].0.clone();
+        assert_eq!(list[0].1, "calligraphic");
+        // The first tile, clicked once: it becomes current, no dialog.
+        let tile = pos2(36.0, 16.0);
+        at_time(&mut app, 1.0, clicks(tile, 1));
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(brushes(&mut app).1.as_deref(), Some(first.as_str()));
+        // Double-clicked: Calligraphic Brush Options on that brush.
+        at_time(&mut app, 3.0, clicks(tile, 2));
+        let d = app.ui.dialog.as_mut().expect("Brush Options opened");
+        assert_eq!((d.kind.as_str(), d.str("name"), d.str("sizeMode")), (crate::dialogs::brush_options::KIND, first.clone(), "fixed".into()));
+        d.fields.insert("sizeMode".into(), json!("pressure"));
+        d.fields.insert("sizeVariation".into(), json!(2));
+        d.fields.insert("name".into(), json!("Pressure Round"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let def = app.run("brush.get", json!({"name": "Pressure Round"})).unwrap();
+        assert_eq!((def["modes"].clone(), def["variation"][2].clone()), (json!(["fixed", "fixed", "pressure"]), json!(2.0)));
+        assert_eq!(brushes(&mut app).1.as_deref(), Some("Pressure Round"), "renamed, still current");
     }
 
     #[test]

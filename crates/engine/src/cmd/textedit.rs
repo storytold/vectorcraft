@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -420,7 +420,14 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
 
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setRangeStyle";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    // The type object given, else the one selected (#785).
+    let id = match p.get("id").filter(|v| !v.is_null()) {
+        Some(v) => v.as_u64().map(NodeId).ok_or_else(|| bad(C, format!("`id` must be an object id, not {v}")))?,
+        None => match super::typecmd::text_targets(s, &json!({}), C)?.as_slice() {
+            [one] => *one,
+            _ => return Err(bad(C, "missing `id`: give one, or select one type object")),
+        },
+    };
     let change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));

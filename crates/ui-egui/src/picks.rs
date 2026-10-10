@@ -2,9 +2,10 @@
 //!
 //! The app asks for a path where it needs one (Open, Save As, Export, Place, Relink, presets…)
 //! and goes on with it at once, so a dialog shown on the UI thread holds the window until it
-//! closes. On Windows and macOS the dialog runs the window's events meanwhile; on Linux nothing
-//! does, so a Wayland compositor finds the window not answering and offers to kill it. There the
-//! host shows dialogs on another thread ([`Services::start_pick`]): asking returns no path for now,
+//! closes. On Windows the dialog runs the window's events meanwhile; on Linux nothing does, so a
+//! Wayland compositor finds the window not answering and offers to kill it, and on macOS they
+//! re-enter the window's event handler, which crashed the app when the panel was resized (#867).
+//! There the host shows dialogs on another thread ([`Services::start_pick`]): asking returns no path for now,
 //! and when the dialog answers, what asked (the command, the dialog's OK, a panel's button: the
 //! *entry*) runs again and gets the picked path at once.
 

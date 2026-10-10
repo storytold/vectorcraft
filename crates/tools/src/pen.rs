@@ -27,7 +27,7 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{BezPath, Point};
 
 use crate::direct::hit_handle;
-use crate::draw2::AnchorTool;
+use crate::draw2::{AnchorTool, editable_paths};
 use crate::guides::{DrawSnap, Leave};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -120,15 +120,6 @@ fn alt_converts(cx: &ToolContext, p: Point, m: Mods) -> bool {
         && (hit_handle(cx, p, point).is_some()
             || crate::draw2::anchor_in(cx, editable_paths(cx), p, point).is_some()
             || crate::draw2::segment_in(cx, editable_paths(cx), p, cx.pick_tol()).is_some())
-}
-
-/// The selected paths the pen edits (not guides, nor locked or hidden ones).
-fn editable_paths<'a>(cx: &'a ToolContext) -> impl Iterator<Item = NodeId> + 'a {
-    cx.selection
-        .objects
-        .iter()
-        .copied()
-        .filter(|&id| cx.doc.is_editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
 }
 
 /// Preview the outgoing handle of anchor `ai` of subpath `si` at `h`, the incoming one left alone.

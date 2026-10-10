@@ -293,6 +293,129 @@ impl WidthProfile {
     }
 }
 
+/// Pen pressure recorded along a stroke (the Paintbrush with a graphics tablet): (position 0..1
+/// along the path, pressure 0..1) samples in order, positions measured as a [`WidthProfile`]'s
+/// are. Calligraphic brushes with Pressure variation read it; everything else ignores it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PressureProfile {
+    pub points: Vec<(f64, f64)>,
+}
+
+impl PressureProfile {
+    /// The pressure of a stroke drawn without one (a mouse, or a path the brush was applied to):
+    /// half way, so a Pressure brush draws its own value there.
+    pub const MID: f64 = 0.5;
+    /// The most samples a stroke keeps (after simplifying them).
+    pub const MAX_POINTS: usize = 512;
+    /// How far (in pressure) simplifying may move the recorded curve.
+    const TOLERANCE: f64 = 0.01;
+
+    /// The pressure at `t` (0..1), linear between samples; [`Self::MID`] without any.
+    pub fn at(&self, t: f64) -> f64 {
+        let p = &self.points;
+        let (Some(first), Some(last)) = (p.first(), p.last()) else { return Self::MID };
+        let v = if t <= first.0 {
+            first.1
+        } else {
+            p.windows(2)
+                .find_map(|w| match w {
+                    [a, b] if t <= b.0 => Some(a.1 + (b.1 - a.1) * ((t - a.0) / (b.0 - a.0).max(1e-9)).clamp(0.0, 1.0)),
+                    _ => None,
+                })
+                .unwrap_or(last.1)
+        };
+        if v.is_finite() { v.clamp(0.0, 1.0) } else { Self::MID }
+    }
+
+    /// A profile from (position, pressure) samples in order along the stroke: values are clamped
+    /// into 0..1 (non-finite ones dropped), the curve is simplified to within 1 % and kept to
+    /// [`Self::MAX_POINTS`]. `None` without a sample.
+    pub fn from_samples(samples: impl IntoIterator<Item = (f64, f64)>) -> Option<Self> {
+        let pts: Vec<(f64, f64)> =
+            samples.into_iter().filter(|(t, p)| t.is_finite() && p.is_finite()).map(|(t, p)| (t.clamp(0.0, 1.0), p.clamp(0.0, 1.0))).collect();
+        if pts.is_empty() {
+            return None;
+        }
+        // Simplifying is quadratic at worst: a huge stroke is thinned evenly first.
+        let mut pts = thin(pts, 16 * Self::MAX_POINTS);
+        // Positions only ever go forward.
+        let mut prev = 0.0;
+        for p in &mut pts {
+            p.0 = p.0.max(prev);
+            prev = p.0;
+        }
+        let keep = simplify_1d(&pts, Self::TOLERANCE);
+        let pts = thin(pts.iter().zip(keep).filter(|(_, k)| *k).map(|(p, _)| *p).collect(), Self::MAX_POINTS);
+        let round = |v: f64| (v * 1e4).round() / 1e4;
+        Some(Self { points: pts.into_iter().map(|(t, p)| (round(t), round(p))).collect() })
+    }
+
+    /// The pressure of a path `old_len` long (`old`; None: drawn without pressure) continued at its
+    /// end by a stroke `added_len` long (`added`). None when neither has pressure.
+    pub fn extended(old: Option<&Self>, old_len: f64, added: Option<&Self>, added_len: f64) -> Option<Self> {
+        if old.is_none() && added.is_none() {
+            return None;
+        }
+        let (old_len, added_len) = (old_len.max(0.0), added_len.max(0.0));
+        let total = old_len + added_len;
+        if !total.is_finite() || total <= 1e-9 {
+            return old.or(added).cloned();
+        }
+        let flat = Self { points: vec![(0.0, Self::MID), (1.0, Self::MID)] };
+        let (old, added) = (old.unwrap_or(&flat), added.unwrap_or(&flat));
+        let o = old_len / total;
+        let old_pts = old.points.iter().map(|&(t, p)| (t * o, p));
+        Self::from_samples(old_pts.chain(added.points.iter().map(|&(u, p)| (o + u * (1.0 - o), p))))
+    }
+
+    /// The pressure of the path reversed.
+    pub fn reversed(&self) -> Self {
+        Self { points: self.points.iter().rev().map(|&(t, p)| (1.0 - t, p)).collect() }
+    }
+
+    /// A light–heavy–light stroke, for previews of pressure-sensitive brushes.
+    pub fn sample() -> Self {
+        Self { points: vec![(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)] }
+    }
+}
+
+/// At most `max` of `pts`, evenly spread (the ends kept).
+fn thin(pts: Vec<(f64, f64)>, max: usize) -> Vec<(f64, f64)> {
+    let n = pts.len();
+    if n <= max || max < 2 {
+        return pts;
+    }
+    (0..max).filter_map(|i| pts.get(i * (n - 1) / (max - 1)).copied()).collect()
+}
+
+/// Douglas–Peucker over a function sampled at `pts`: which samples to keep so the polyline through
+/// them stays within `tol` (vertically) of every sample. The ends are always kept.
+fn simplify_1d(pts: &[(f64, f64)], tol: f64) -> Vec<bool> {
+    let mut keep = vec![false; pts.len()];
+    let Some(last) = pts.len().checked_sub(1) else { return keep };
+    for i in [0, last] {
+        if let Some(k) = keep.get_mut(i) {
+            *k = true;
+        }
+    }
+    let mut stack = vec![(0, last)];
+    while let Some((i, j)) = stack.pop() {
+        let (Some(&a), Some(&b)) = (pts.get(i), pts.get(j)) else { continue };
+        let line = |t: f64| if b.0 - a.0 > 1e-12 { a.1 + (b.1 - a.1) * (t - a.0) / (b.0 - a.0) } else { (a.1 + b.1) / 2.0 };
+        let far = (i + 1..j).filter_map(|k| pts.get(k).map(|q| (k, (q.1 - line(q.0)).abs()))).max_by(|x, y| x.1.total_cmp(&y.1));
+        if let Some((k, d)) = far
+            && d > tol
+        {
+            if let Some(f) = keep.get_mut(k) {
+                *f = true;
+            }
+            stack.push((i, k));
+            stack.push((k, j));
+        }
+    }
+    keep
+}
+
 /// A width profile saved to the Profile list under a name (Add to Profiles), kept with the
 /// preferences.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -386,6 +509,11 @@ pub struct StrokeLayer {
     /// How a gradient paint maps onto the stroke (within, along or across it).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub gradient_mode: StrokeGradientMode,
+    /// The pen pressure the stroke was drawn with (Paintbrush with a tablet): pressure-sensitive
+    /// brushes vary with it. It belongs to this path's shape, so appearances copied to other
+    /// art leave it behind ([`Appearance::without_pressure`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressure: Option<PressureProfile>,
 }
 
 /// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
@@ -456,6 +584,7 @@ impl StrokeLayer {
             arrow_align: ArrowAlign::Extend,
             overprint: false,
             gradient_mode: StrokeGradientMode::Within,
+            pressure: None,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
@@ -639,6 +768,15 @@ impl Appearance {
     }
     pub fn stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
         self.items.iter_mut().rev().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
+    }
+    /// This appearance for other art: the pen pressure its strokes were drawn with stays with them.
+    pub fn without_pressure(mut self) -> Self {
+        for it in &mut self.items {
+            if let AppearanceItem::Stroke(s) = it {
+                s.pressure = None;
+            }
+        }
+        self
     }
     pub fn fill_paint(&self) -> Paint {
         self.fill().map(|f| f.paint.clone()).unwrap_or(Paint::None)
@@ -1101,6 +1239,58 @@ mod tests {
         a.set_stroke(Paint::solid(Color::WHITE));
         assert_eq!(a.items.len(), 2);
         assert!(matches!(a.items[0], AppearanceItem::Fill(_)));
+    }
+
+    /// #852: pen pressure is kept simplified along the stroke and read back by position.
+    #[test]
+    fn pressure_profile_samples_simplify_and_interpolate() {
+        // A steady ramp keeps only its ends; a bump keeps its peak.
+        let ramp = PressureProfile::from_samples((0..=100).map(|i| (i as f64 / 100.0, i as f64 / 100.0))).unwrap();
+        assert_eq!(ramp.points, vec![(0.0, 0.0), (1.0, 1.0)]);
+        assert!((ramp.at(0.25) - 0.25).abs() < 1e-9);
+        let bump = PressureProfile::from_samples([(0.0, 0.2), (0.3, 0.2), (0.5, 0.9), (0.7, 0.2), (1.0, 0.2)]).unwrap();
+        assert!(bump.points.contains(&(0.5, 0.9)) && (bump.at(0.4) - 0.55).abs() < 1e-9, "{bump:?}");
+        // Junk is clamped or dropped; positions never go back; nothing at all is no profile.
+        let junk = PressureProfile::from_samples([(f64::NAN, 0.5), (0.5, 7.0), (0.2, -1.0), (2.0, f64::INFINITY)]).unwrap();
+        assert_eq!(junk.points, vec![(0.5, 1.0), (0.5, 0.0)]);
+        assert!(PressureProfile::from_samples([(f64::NAN, 0.5)]).is_none());
+        assert_eq!(PressureProfile::default().at(0.3), PressureProfile::MID);
+        // A long noisy stroke stays bounded.
+        let noisy = PressureProfile::from_samples((0..1_000_000).map(|i| (i as f64 / 1e6, (i % 2) as f64))).unwrap();
+        assert!(noisy.points.len() <= PressureProfile::MAX_POINTS);
+        // Out-of-order points (a hand-edited file) still read within 0..1.
+        let odd = PressureProfile { points: vec![(1.0, 5.0), (0.0, -3.0)] };
+        assert!((0.0..=1.0).contains(&odd.at(0.5)));
+    }
+
+    #[test]
+    fn pressure_profile_extends_and_reverses() {
+        let old = PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] };
+        let added = PressureProfile { points: vec![(0.0, 1.0), (1.0, 0.0)] };
+        // A 30 pt path continued by 10 pt: its ramp fills the first three quarters.
+        let joined = PressureProfile::extended(Some(&old), 30.0, Some(&added), 10.0).unwrap();
+        assert!((joined.at(0.75) - 1.0).abs() < 1e-9 && (joined.at(0.375) - 0.5).abs() < 1e-9 && joined.at(1.0) == 0.0, "{joined:?}");
+        // A side without pressure is half way.
+        let half = PressureProfile::extended(None, 10.0, Some(&added), 10.0).unwrap();
+        assert_eq!(half.at(0.25), PressureProfile::MID);
+        assert!(PressureProfile::extended(None, 10.0, None, 10.0).is_none());
+        assert_eq!(PressureProfile::extended(Some(&old), 0.0, None, f64::NAN), Some(old.clone()));
+        assert_eq!(old.reversed().points, vec![(0.0, 1.0), (1.0, 0.0)]);
+    }
+
+    /// Strokes saved before pen pressure load as they were, and are written without it.
+    #[test]
+    fn strokes_without_pressure_round_trip_unchanged() {
+        let json = serde_json::to_value(StrokeLayer::new(Paint::None, 2.0)).unwrap();
+        assert!(json.get("pressure").is_none());
+        let st: StrokeLayer = serde_json::from_value(json).unwrap();
+        assert_eq!(st.pressure, None);
+        let pressed = StrokeLayer { pressure: Some(PressureProfile::sample()), ..st };
+        let back: StrokeLayer = serde_json::from_value(serde_json::to_value(&pressed).unwrap()).unwrap();
+        assert_eq!(back, pressed);
+        let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
+        ap.stroke_mut().unwrap().pressure = Some(PressureProfile::sample());
+        assert_eq!(ap.without_pressure().stroke().unwrap().pressure, None);
     }
 
     #[test]

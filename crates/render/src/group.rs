@@ -137,7 +137,7 @@ impl Renderer {
     fn flatten(&mut self, ctx: &mut RenderContext, r: Region) -> Arc<Pixmap> {
         ctx.flush();
         let mut all = Pixmap::new(ctx.width(), ctx.height());
-        ctx.render(&mut all, &mut self.resources);
+        ctx.render_with(&mut all, &mut self.resources, self.raster);
         ctx.reset();
         let crop = if (r.x, r.y, r.w, r.h) == (0, 0, all.width(), all.height()) {
             None
@@ -171,7 +171,7 @@ impl Renderer {
         (self.nested, self.backdrop, self.clip_paths) = outer;
         ctx.flush();
         let mut pm = Pixmap::new(r.w, r.h);
-        ctx.render(&mut pm, &mut self.resources);
+        ctx.render_with(&mut pm, &mut self.resources, self.raster);
         pm
     }
 

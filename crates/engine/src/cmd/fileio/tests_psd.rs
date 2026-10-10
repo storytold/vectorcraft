@@ -77,7 +77,7 @@ fn psd_is_listed_with_its_options_and_writes_one_file_per_artboard() {
     let psd = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "psd").unwrap().clone();
     assert_eq!(
         (psd["label"].as_str(), psd["write"].as_bool(), psd["read"].as_bool(), psd["raster"].as_bool()),
-        (Some("PSD"), Some(true), Some(false), Some(true))
+        (Some("PSD"), Some(true), Some(true), Some(true))
     );
     for k in ["colorModel", "layers", "maxEditability", "hiddenLayers", "embedIcc", "ppi", "antiAlias", "background"] {
         assert!(psd["options"].get(k).is_some(), "psd takes {k}");

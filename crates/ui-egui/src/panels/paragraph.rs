@@ -60,6 +60,24 @@ fn shown_alignment(justify: Justify, rtl: bool) -> Justify {
     }
 }
 
+/// The seven alignment buttons, `size` points square, the one of `para`'s alignment on (the
+/// Paragraph panel's and the Properties panel's).
+pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32) {
+    let shown = shown_alignment(para.justify, resolved_rtl(app, para));
+    for (j, icon, tip, id) in ALIGNMENTS {
+        if widgets::icon_button(ui, icon, tip, shown == j, size).clicked() {
+            para_cmd(app, "text.setStyle", json!({"justify": id}));
+        }
+    }
+}
+
+/// The Hyphenate checkbox of `para`'s paragraphs.
+pub fn hyphenate_check(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle) {
+    if widgets::check(ui, tl!("Hyphenate"), para.hyphenate, true) {
+        format(app, json!({"hyphenate": !para.hyphenate}));
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((_, para)) = text_style(app) else {
@@ -67,14 +85,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let rtl = resolved_rtl(app, &para);
-    let shown = shown_alignment(para.justify, rtl);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
-        for (j, icon, tip, id) in ALIGNMENTS {
-            if widgets::icon_button(ui, icon, tip, shown == j, 28.0).clicked() {
-                para_cmd(app, "text.setStyle", json!({"justify": id}));
-            }
-        }
+        alignment_buttons(app, ui, &para, 28.0);
         // Paragraph direction, with the Middle Eastern (Indic) options.
         if app.session.prefs.show_indic_options {
             ui.add_space(6.0);
@@ -127,9 +140,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if pstate::<bool>(ui.ctx(), "pa-hide-options") {
         return;
     }
-    if widgets::check(ui, tl!("Hyphenate"), para.hyphenate, true) {
-        format(app, json!({"hyphenate": !para.hyphenate}));
-    }
+    hyphenate_check(app, ui, &para);
     // Japanese composition: how punctuation is spaced (JLREQ 3.1), with the East Asian options.
     if app.session.prefs.show_east_asian_options {
         ui.horizontal(|ui| {

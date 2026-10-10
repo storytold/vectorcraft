@@ -174,6 +174,61 @@ impl LiveShape {
         spread(radii, *sides as usize);
         spread(kinds, *sides as usize);
     }
+    /// A polygon's radius in the document, centre to vertex: its own radius by the mean scale of
+    /// `xf` (exact while its sides are equal). None for other shapes.
+    pub fn polygon_radius(&self) -> Option<f64> {
+        let LiveShape::Polygon { radius, xf, .. } = self else { return None };
+        Some(radius * xf.determinant().abs().sqrt())
+    }
+    /// A polygon's angle: the counterclockwise degrees in [0, 360) its first vertex is turned by
+    /// from straight up (the Rotate field's sense). None for other shapes.
+    pub fn polygon_angle(&self) -> Option<f64> {
+        let LiveShape::Polygon { .. } = self else { return None };
+        // No −0° or 360° from rounding: a polygon drawn upright reads 0°.
+        let a = (-self.angle_deg()).rem_euclid(360.0);
+        Some(if a > 360.0 - 1e-9 { 0.0 } else { a + 0.0 })
+    }
+    /// Whether a polygon's sides are all as long: `xf` scales it evenly and doesn't shear it. True
+    /// for other shapes.
+    pub fn polygon_sides_equal(&self) -> bool {
+        let LiveShape::Polygon { xf, .. } = self else { return true };
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        let (sx, sy) = (a.hypot(b), c.hypot(d));
+        (sx - sy).abs() <= 1e-9 * sx.max(sy) && (a * c + b * d).abs() <= 1e-9 * sx * sy
+    }
+    /// Give a polygon the document radius `r` (centre to vertex, see [`LiveShape::polygon_radius`]).
+    pub fn set_polygon_radius(&mut self, r: f64) {
+        let LiveShape::Polygon { radius, xf, .. } = self else { return };
+        let k = xf.determinant().abs().sqrt();
+        if k > 1e-12 && r.is_finite() {
+            *radius = r.max(0.0) / k;
+        }
+    }
+    /// The document radius that makes a polygon's sides `side` long (with its sides equal).
+    pub fn polygon_radius_for_side(&self, side: f64) -> Option<f64> {
+        let LiveShape::Polygon { sides, .. } = self else { return None };
+        Some(side / (2.0 * (std::f64::consts::PI / f64::from((*sides).max(3))).sin()))
+    }
+    /// Turn a polygon about its centre to `angle` (degrees, as [`LiveShape::polygon_angle`]).
+    pub fn set_polygon_angle(&mut self, angle: f64) {
+        let Some(now) = self.polygon_angle() else { return };
+        if let LiveShape::Polygon { xf, .. } = self
+            && angle.is_finite()
+        {
+            let centre = *xf * Point::ZERO;
+            *xf = Affine::rotate_about((now - angle).to_radians(), centre) * *xf;
+        }
+    }
+    /// Make a polygon's sides equal (Make Sides Equal): drop the uneven scale and the shear from
+    /// `xf`, keeping its centre, angle, reflection and [`LiveShape::polygon_radius`].
+    pub fn make_sides_equal(&mut self) {
+        let Some(r) = self.polygon_radius() else { return };
+        let LiveShape::Polygon { radius, xf, .. } = self else { return };
+        let [a, b, _, _, e, f] = xf.as_coeffs();
+        let flip = if xf.determinant() < 0.0 { Affine::FLIP_Y } else { Affine::IDENTITY };
+        *xf = Affine::translate((e, f)) * Affine::rotate(b.atan2(a)) * flip;
+        *radius = r;
+    }
     /// Apply `a` to the shape. True when the shape is no longer `a` applied to the old path, so
     /// the caller must regenerate the path with [`LiveShape::to_path`].
     ///
@@ -253,7 +308,7 @@ impl LiveShape {
         radii.iter_mut().for_each(|r| *r /= k);
         true
     }
-    /// Rotation angle of the live shape in degrees (shown in the Properties panel).
+    /// Rotation angle of the live shape in degrees, clockwise on the page (y points down).
     pub fn angle_deg(&self) -> f64 {
         match self {
             LiveShape::Rectangle { xf, .. } | LiveShape::Ellipse { xf, .. } | LiveShape::Polygon { xf, .. } => {
@@ -473,6 +528,10 @@ pub struct Node {
     /// Graph object: the group's children are generated from this spec (Object → Graph).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Index of the graph series this generated group belongs to. Axes, the legend and other
+    /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series_index: Option<u32>,
     /// Editable Shaper composition; the original art is retained in its source child.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
@@ -540,6 +599,7 @@ impl Node {
             trace: None,
             wrap: None,
             graph: None,
+            series_index: None,
             shaper: None,
             kind,
             graphic_style: None,
@@ -1355,6 +1415,34 @@ mod tests {
         assert_eq!((json["shape"].as_str(), json.get("kinds")), (Some("path"), None));
         assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), path);
         assert_eq!(path.label(), "Path");
+    }
+
+    #[test]
+    fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        // A hexagon of radius 10 at (50, 50), drawn 2× and turned 30° clockwise on the page.
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale(2.0);
+        let mut p = LiveShape::Polygon { radius: 10.0, sides: 6, xf, radii: vec![], kinds: vec![] };
+        assert!(close(p.polygon_radius().unwrap(), 20.0) && close(p.polygon_angle().unwrap(), 330.0) && p.polygon_sides_equal());
+        p.set_polygon_angle(45.0);
+        assert!(close(p.polygon_angle().unwrap(), 45.0));
+        let centre = p.to_path().bounds().unwrap().center();
+        assert!(close(centre.x, 50.0) && close(centre.y, 50.0), "turned about its centre: {centre:?}");
+        p.set_polygon_radius(30.0);
+        assert!(close(p.polygon_radius().unwrap(), 30.0));
+        // A hexagon's side is as long as its radius.
+        assert!(close(p.polygon_radius_for_side(12.0).unwrap(), 12.0));
+        // Stretched, its sides differ; Make Sides Equal keeps its centre, angle and mean radius.
+        p.transform(Affine::scale_non_uniform(2.0, 1.0));
+        assert!(!p.polygon_sides_equal());
+        let (r, a) = (p.polygon_radius().unwrap(), p.polygon_angle().unwrap());
+        p.make_sides_equal();
+        assert!(p.polygon_sides_equal() && close(p.polygon_radius().unwrap(), r) && close(p.polygon_angle().unwrap(), a));
+        let LiveShape::Polygon { xf, .. } = &p else { panic!("polygon") };
+        assert_eq!(*xf * Point::ZERO, Point::new(100.0, 50.0));
+        // Other shapes have none of it.
+        let e = LiveShape::Ellipse { w: 1.0, h: 1.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
+        assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
     }
 
     /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.

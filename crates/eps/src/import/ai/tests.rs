@@ -329,6 +329,18 @@ fn sections_it_skips() {
     assert_eq!(art(&doc).len(), 1);
 }
 
+/// Non-native art (a placed PDF's content) keeps its PDF as ASCII85 in comment lines after
+/// `/Data ,`. ASCII85 has `_`, so a line may start with `%_`, which otherwise reads as hidden
+/// tokens, and a `(` in it would swallow the rest of the layer (a letterhead saved by Illustrator
+/// 28 wouldn't open: "it ends inside a layer"). The art is left out with a note.
+#[test]
+fn non_native_art_is_skipped_with_its_ascii85_data() {
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
+    let s = read_ok(&layer(&format!("{foreign}{}", rect_path(0.0, 0.0, 1.0, 1.0) + "f\n")));
+    assert_eq!(art(&s.doc).len(), 1);
+    assert!(s.warnings.iter().any(|w| w == read::NON_NATIVE_ART), "{:?}", s.warnings);
+}
+
 #[test]
 fn cmyk_documents() {
     let doc = read_ok(&format!("%AI9_ColorModel: 2\n{}", layer(""))).doc;

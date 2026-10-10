@@ -961,6 +961,21 @@ mod tests {
         }
     }
 
+    /// Preferences › Type › Show Font Names in English (#394): OK on the dialog stores the flag the
+    /// font menus read (Character panel, Type → Font).
+    #[test]
+    fn show_font_names_in_english_dialog_ok_stores_the_flag() {
+        let mut a = app();
+        assert!(a.session.prefs.font_names_in_english);
+        open(&mut a, Some("Type"));
+        assert_eq!(a.ui.dialog.as_ref().unwrap().str("__category"), "Type");
+        a.ui.dialog.as_mut().unwrap().fields.insert("fontNamesInEnglish".into(), json!(false));
+        confirm(&mut a).unwrap();
+        assert!(a.ui.dialog.is_none());
+        assert!(!a.session.prefs.font_names_in_english);
+        assert!(!crate::font_menu::MenuLook::of(&a).english_names);
+    }
+
     /// Preferences › Hyphenation › Exceptions (#394): OK on the dialog pushes the list into the
     /// hyphenator the same way `prefs.set` does (no need to drive the live Preferences window).
     #[test]

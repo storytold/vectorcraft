@@ -96,7 +96,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_batch",
             "Run several commands",
-            "Run steps in order; each edit is its own undo step. Returns completed, failed and results. Stops on the first error by default.",
+            "Run steps in order; each edit is its own undo step. A param string that is exactly \"$N.path\" (N: 0-based step index) or \"$last.path\" takes that value from an earlier step's result, e.g. {\"id\":\"$1.id\"}; \"$$\" starts a literal \"$\". Returns completed, failed and results. Stops on the first error by default.",
             obj(
                 json!({"steps": {"type":"array", "items":obj(json!({"id":string("Command id"),"params":{"type":"object"}}), &["id"])}, "stop_on_error":{"type":"boolean", "default":true}}),
                 &["steps"],
@@ -649,43 +649,50 @@ fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 
 fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let path = a.get("path").and_then(Value::as_str);
-    if a.get("window").and_then(Value::as_bool) == Some(true) {
-        need_ui(b, "screenshot {window:true}")?;
-        // The app writes the capture to disk (loopback: same machine), then we read it back.
-        let tmp;
-        let target = match path {
-            Some(p) => p,
-            None => {
-                tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
-                &tmp
-            }
-        };
-        let r = b.call("ui.screenshot", json!({"path": target}))?;
-        let png = std::fs::read(target).map_err(|e| format!("read {target}: {e}"))?;
-        if path.is_none() {
-            std::fs::remove_file(target).ok();
-        }
-        return Ok(image_result(&png, json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": path})));
-    }
-    let mut p = json!({});
-    for k in ["scale", "artboard"] {
-        if let Some(v) = a.get(k) {
-            p[k] = v.clone();
-        }
-    }
-    let r = b.call("ui.render", p)?;
-    let b64 = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
+    let window = a.get("window").and_then(Value::as_bool) == Some(true);
+    // The backend writes the file, where its automation roots allow, and sends the image back too
+    // (`data`): this process writes nothing.
+    let mut p = json!({"data": true});
     if let Some(path) = path {
-        let png = vectorcraft_format::base64_decode(b64).ok_or("renderer returned bad base64")?;
-        std::fs::write(path, png).map_err(|e| format!("write {path}: {e}"))?;
+        p["path"] = json!(path);
     }
-    Ok(ToolResult {
-        content: vec![
-            json!({"type": "image", "data": b64, "mimeType": "image/png"}),
-            json!({"type": "text", "text": json!({"width": r.get("width"), "height": r.get("height"), "path": path}).to_string()}),
-        ],
-        is_error: false,
-    })
+    let r = if window {
+        need_ui(b, "screenshot {window:true}")?;
+        b.call("ui.screenshot", p)?
+    } else {
+        for k in ["scale", "artboard"] {
+            if let Some(v) = a.get(k) {
+                p[k] = v.clone();
+            }
+        }
+        b.call("ui.render", p)?
+    };
+    let png = match r.get("pngBase64").and_then(Value::as_str) {
+        Some(b64) => vectorcraft_format::base64_decode(b64).ok_or("the backend returned bad base64")?,
+        // An app from before `data` wrote the file without sending the image: read it back
+        // (loopback: the same machine).
+        None => match path {
+            Some(path) => std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?,
+            None if window => return old_window_capture(b),
+            None => return Err("the renderer returned no image".into()),
+        },
+    };
+    let info = if window {
+        json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": path})
+    } else {
+        json!({"width": r.get("width"), "height": r.get("height"), "path": path})
+    };
+    Ok(image_result(&png, info))
+}
+
+/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file.
+fn old_window_capture(b: &mut dyn Backend) -> Result<ToolResult, String> {
+    let tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
+    let r = b.call("ui.screenshot", json!({"path": tmp}))?;
+    let png = std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?;
+    // Best effort: a temporary file left behind is harmless.
+    std::fs::remove_file(&tmp).ok();
+    Ok(image_result(&png, json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": Value::Null})))
 }
 
 fn image_result(png: &[u8], info: Value) -> ToolResult {
@@ -899,6 +906,8 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
         Some(v) => v.as_bool().ok_or("`stop_on_error` must be a boolean")?,
     };
     let (mut completed, mut failed, mut results) = (0, 0, Vec::new());
+    // Each step's result (null for a failed one), for later steps' `"$N.path"` references.
+    let mut values: Vec<Value> = vec![];
     for step in steps {
         let result = vectorcraft_engine::guard::catch_panic(|| {
             let args = step.as_object().ok_or("each step must be an object")?;
@@ -908,7 +917,7 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
             let id = req_str(args, "id")?;
             let params = match args.get("params") {
                 None | Some(Value::Null) => json!({}),
-                Some(v @ Value::Object(_)) => v.clone(),
+                Some(v @ Value::Object(_)) => vectorcraft_engine::steps::resolve(v, &values)?,
                 Some(_) => return Err("`params` must be an object".into()),
             };
             b.call("engine.execute", json!({"command":id,"params":params}))
@@ -917,10 +926,12 @@ fn command_batch(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
         match result {
             Ok(v) => {
                 completed += 1;
+                values.push(v.clone());
                 results.push(json!({"ok":true,"result":v}));
             }
             Err(e) => {
                 failed += 1;
+                values.push(Value::Null);
                 results.push(json!({"ok":false,"error":e}));
                 if stop {
                     break;

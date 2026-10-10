@@ -13,10 +13,40 @@
 # tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	Glowing Edges…	Bords lumineux…
+	Glowing Edges	Bords lumineux
+	Edge Width	Largeur du bord
+	Edge Brightness	Luminosité du bord
+	Smoothness	Lissage
 	Radial Blur…	Flou radial…
 	Smart Blur…	Flou intelligent…
 	Sharpen	Netteté
 	Unsharp Mask…	Masque de netteté…
+	Pixelate	Pixellisation
+	Color Halftone…	Demi-teintes couleur…
+	Crystallize…	Cristalliser…
+	Mezzotint…	Manière noire…
+	Pointillize…	Pointillisme…
+	Color Halftone	Demi-teintes couleur
+	Crystallize	Cristalliser
+	Mezzotint	Manière noire
+	Pointillize	Pointillisme
+	Max. Radius	Rayon max.
+	Channel 1	Couche 1
+	Channel 2	Couche 2
+	Channel 3	Couche 3
+	Channel 4	Couche 4
+	Cell Size	Taille de cellule
+	Fine Dots	Points fins
+	Medium Dots	Points moyens
+	Grainy Dots	Points granuleux
+	Coarse Dots	Gros points
+	Short Lines	Lignes courtes
+	Medium Lines	Lignes moyennes
+	Long Lines	Lignes longues
+	Short Strokes	Traits courts
+	Medium Strokes	Traits moyens
+	Long Strokes	Traits longs
 	Radial Blur	Flou radial
 	Smart Blur	Flou intelligent
 	Unsharp Mask	Masque de netteté
@@ -224,6 +254,8 @@
 	Auto-Collapse Iconic Panels	Réduire automatiquement les panneaux en icônes
 	Ellipse Properties:	Propriétés de l’ellipse :
 	Invert Pie	Inverser le secteur
+	Side Length:	Longueur du côté :
+	Make Sides Equal	Égaliser les côtés
 	Pie End Angle:	Angle de fin du secteur :
 	Pie Start Angle:	Angle de début du secteur :
 	Show Tool Group Labels	Afficher les libellés des groupes d'outils
@@ -683,6 +715,7 @@
 	Divide Vertically Into	Diviser verticalement en
 	Do Not Move	Ne pas déplacer
 	Do you want to save the changes you made to “{name}”?	Voulez-vous enregistrer les modifications apportées à « {name} » ?
+	Can't open “{name}”.	Impossible d’ouvrir « {name} ».
 	Document	Document
 	Document Color Mode	Mode colorimétrique du document
 	Document Info	Informations sur le document
@@ -981,6 +1014,20 @@
 	Flare	Halo
 	Flare Tool	Outil Halo
 	Flare Tool Options	Options de l’outil Halo
+	Halo	Halo
+	Rays	Rayons
+	Rings	Anneaux
+	Diameter:	Diamètre :
+	Brightness:	Luminosité :
+	Growth:	Croissance :
+	Fuzziness:	Flou :
+	Number:	Nombre :
+	Longest:	Le plus long :
+	Path:	Tracé :
+	Largest:	Le plus grand :
+	Direction:	Direction :
+	Symbolism Tools Options	Options des outils de symbole
+	Symbol Set Density:	Densité du jeu de symboles :
 	Flat Image	Image aplatie
 	Flat Logo	Logo en aplats
 	Flatness:	Planéité :
@@ -1491,6 +1538,8 @@
 	Monospaced	À chasse fixe
 	More	Plus
 	More Pathfinder options	Plus d’options Pathfinder
+	More Align options	Plus d’options d’alignement
+	More Paragraph options	Plus d’options de paragraphe
 	More Settings	Plus de réglages
 	Move	Déplacer
 	Move All Objects	Déplacer tous les objets
@@ -1534,6 +1583,27 @@
 	New Art Has Basic Appearance	Aspect de base pour les nouvelles illustrations
 	New Artboard	Nouveau plan de travail
 	New Bristle Brush	Nouvelle forme Soies
+	Calligraphic Brush Options	Options de forme calligraphique
+	Bristle Brush Options	Options de forme Soies
+	Roundness:	Arrondi :
+	Fixed	Fixe
+	Pressure	Pression
+	Shape:	Forme :
+	Bristle Length:	Longueur des soies :
+	Bristle Density:	Densité des soies :
+	Bristle Thickness:	Épaisseur des soies :
+	Paint Opacity:	Opacité de la peinture :
+	Stiffness:	Rigidité :
+	Round Point	Pointe ronde
+	Flat Point	Pointe plate
+	Round Blunt	Rond émoussé
+	Flat Blunt	Plat émoussé
+	Round Curve	Rond incurvé
+	Flat Curve	Plat incurvé
+	Round Angle	Rond biseauté
+	Flat Angle	Plat biseauté
+	Round Fan	Éventail rond
+	Flat Fan	Éventail plat
 	New Brush…	Nouvelle forme…
 	New Calligraphic Brush	Nouvelle forme calligraphique
 	New Character Style	Nouveau style de caractère
@@ -2059,6 +2129,25 @@
 	Reflect…	Miroir…
 	Refresh	Actualiser
 	Refresh Font List	Actualiser la liste des polices
+	Missing Fonts	Polices manquantes
+	Missing Fonts Dialog	Boîte de dialogue Polices manquantes
+	These fonts aren't available. Their text shows in another font.	Ces polices ne sont pas disponibles. Leur texte s’affiche dans une autre police.
+	Search Fonts Folder	Rechercher dans le dossier Fonts
+	Find in Folder…	Rechercher dans un dossier…
+	Find Fonts in Folder…	Rechercher des polices dans un dossier…
+	Find Font Files	Rechercher des fichiers de polices
+	Add Font Files	Ajouter des fichiers de polices
+	Add Fonts	Ajouter les polices
+	Find Fonts	Rechercher les polices
+	Stop	Arrêter
+	Searching…	Recherche…
+	Not found	Introuvable
+	{folders} folder(s) and {files} file(s) searched	{folders} dossier(s) et {files} fichier(s) parcourus
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} dossier(s) ignoré(s), comme ceux d’autres apps et du système et les dossiers masqués
+	{count} folder(s) or file(s) couldn't be read	{count} dossier(s) ou fichier(s) illisible(s)
+	The search stopped at its limit: search a smaller folder.	La recherche s’est arrêtée à sa limite : recherchez dans un dossier plus petit.
+	Copy only fonts you own or are licensed to install.	Ne copiez que des polices qui vous appartiennent ou dont la licence vous autorise l’installation.
+	VectorCraft copies the fonts to {folder}.	VectorCraft copie les polices dans {folder}.
 	Registered Trademark Symbol	Symbole de marque déposée
 	Registration marks	Repères de montage
 	Registry name:	Nom du registre :
@@ -2537,6 +2626,9 @@
 	Smart Guides (⌘U)	Repères commandés (⌘U)
 	Smart Punctuation…	Ponctuation typographique…
 	Smooth	Lisser
+	Corner	Angle
+	Relative	Relatif
+	Absolute	Absolu
 	Smooth Color	Couleur lissée
 	Smooth Tool	Outil Arrondi
 	Snap Curves To Lines	Aimanter les courbes aux lignes
@@ -3167,6 +3259,7 @@ axis	Both	Les deux
 @msg	its editing data is for a different page	ses données de modification concernent une autre page
 @msg	its layers use {_1}, which aren't read yet	ses calques utilisent {_1}, qui ne sont pas encore lus
 @msg	its page has text, and its layers have no text objects to put it in	sa page contient du texte, et ses calques n’ont aucun objet texte où le mettre
+@msg	its type is to come in as outlines, which only its page has	son texte doit être importé sous forme de contours vectorisés, que seule sa page contient
 @msg	the art on them differs from the page's in {_1}% of it	le dessin des calques diffère de celui de la page sur {_1} % de sa surface
 @msg	`to` must be "corner" or "smooth"	`to` doit être "corner" ou "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Les fichiers BMP sont en RVB ou en niveaux de gris : colorModel rgb ou gray
@@ -3321,6 +3414,7 @@ axis	Both	Les deux
 @msg	cannot distort a zero-size bounding box	impossible de déformer un cadre de sélection de taille nulle
 @msg	cannot read PDF: {0}	impossible de lire le PDF : {0}
 @msg	cannot split an open path at its end point	impossible de scinder un tracé ouvert à son extrémité
+@msg	closing needs three anchors	la fermeture nécessite trois points d’ancrage
 @msg	check an asset to export	cochez une ressource à exporter
 @msg	choice must be "merge" or "add", not `{choice}`	choice doit valoir "merge" ou "add", pas `{choice}`
 @msg	choose a direction to divide in	choisissez une direction de division
@@ -3387,6 +3481,8 @@ axis	Both	Les deux
 @msg	no blend options	aucune option de dégradé de formes
 @msg	no bounds	aucune limite
 @msg	no brush named `{name}`	aucune forme nommée `{name}`
+@msg	no brush selected	aucune forme sélectionnée
+@msg	this kind of brush has no options dialog yet	ce type de forme n’a pas encore de boîte de dialogue d’options
 @msg	no catalog	aucun catalogue
 @msg	no changes since the last save	aucune modification depuis le dernier enregistrement
 @msg	no clock to keep a heartbeat by	aucune horloge pour entretenir le signal d’activité
@@ -3710,6 +3806,24 @@ axis	Both	Les deux
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ce fichier a été enregistré sans compatibilité PDF et ses données d’édition sont illisibles ({why})
+@msg	No fonts are missing in this document	Aucune police ne manque dans ce document
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft ne recherche pas dans les dossiers d’autres apps ni du système : {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft ne recherche pas dans les dossiers Shared et Public de Users : {path}
+@msg	{path} is not a folder	{path} n’est pas un dossier
+@msg	the search couldn't start: try again in a moment	la recherche n’a pas pu démarrer : réessayez dans un instant
+@msg	searching a folder isn't available on the web	la recherche dans un dossier n’est pas disponible sur le web
+@msg	every search thread stopped on an internal error (please report this bug)	tous les fils de recherche se sont arrêtés sur une erreur interne (veuillez signaler ce bogue)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Le dossier Fonts de VectorCraft n’est pas défini ici : l’application de bureau et vectorcraft-cli le définissent
+@msg	choose the font files to add	choisissez les fichiers de polices à ajouter
+@msg	{n} font file(s) are now in {folder}	{n} fichier(s) de polices se trouvent maintenant dans {folder}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} fichier(s) de polices se trouvent maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	{n} police(s) indisponible(s) ici : leur texte s’affiche dans une autre police
+@msg	not a file	n’est pas un fichier
+@msg	not a font file	n’est pas un fichier de police
+@msg	that document is no longer open	ce document n’est plus ouvert
+@msg	larger than 256 MB	plus de 256 Mo
+@msg	the files come to more than 1 GB: add fewer at a time	les fichiers dépassent 1 Go : ajoutez-en moins à la fois
+@msg	every numbered name for it is taken in the Fonts folder	tous les noms numérotés pour ce fichier sont déjà pris dans le dossier Fonts
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -3750,3 +3864,27 @@ axis	Both	Les deux
 	Sync with system	Synchroniser avec le système
 	Active	Actif
 	Next Appearance Mode	Mode d’apparence suivant
+@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
+@msg	`ids` must be an array of object ids, not {v}	`ids` doit être une liste d’identifiants d’objet, pas {v}
+@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}` : le résultat de l’étape {i} n’a pas cette valeur (écrivez $$ pour un $ littéral)
+@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}` : il n’y a pas d’étape {i} avant celle-ci (les étapes sont comptées à partir de 0 ; écrivez $$ pour un $ littéral)
+@msg	object ids are non-negative integers, not {v}	les identifiants d’objet sont des entiers positifs ou nuls, pas {v}
+@msg	automation filesystem access is not granted: read authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation de lecture : {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
+@msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
+@msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
+@msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
+@msg	automation path rejected: a link that leads nowhere: {path}	chemin d’automatisation refusé : un lien qui ne mène nulle part : {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	chemin d’automatisation refusé : impossible de résoudre {path} : {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	chemin d’automatisation refusé : remonte (..) depuis un dossier qui n’existe pas : {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	chemin d’automatisation refusé : les noms de périphériques réservés ne sont pas autorisés : {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Les fichiers PSD en mode Multicouche ne peuvent pas être lus : enregistrez-le en mode RVB, CMJN ou Niveaux de gris
+@msg	not a PSD file	ce n'est pas un document PSD
+@msg	the PSD file has an unknown colour mode ({m})	le fichier PSD a un mode colorimétrique inconnu ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	les données d'image du fichier PSD utilisent une compression inconnue ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
+@msg	zipped 32-bit PSD image data with prediction can't be read	les données d'image PSD 32 bits compressées en ZIP avec prédiction ne peuvent pas être lues
+@msg	{depth}-bit PSD files in this colour mode can't be read	les fichiers PSD {depth} bits dans ce mode colorimétrique ne peuvent pas être lus
+@msg	the PSD file is cut short	le fichier PSD est tronqué
+@msg	the PSD file's header is damaged	l'en-tête du fichier PSD est endommagé
+@msg	the PSD file's image data can't be read: {e}	les données d'image du fichier PSD ne peuvent pas être lues : {e}

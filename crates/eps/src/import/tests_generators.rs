@@ -897,6 +897,99 @@ fn hostile_patterns_glyphs_and_shadings_end() {
     assert_eq!(objects(&r.document).len(), 1);
 }
 
+/// The stops of the gradient `body` draws, after asserting it came in cleanly as one gradient.
+fn stitch_stops(body: &str) -> Vec<f32> {
+    let r = read(body);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let o = objects(&r.document);
+    let [node] = o.as_slice() else { panic!("{o:?}") };
+    let Some(Paint::Gradient(g)) = fill(node) else { panic!("{node:?}") };
+    g.gradient.stops.iter().map(|s| s.offset).collect()
+}
+
+/// A gradient stitched from linear pieces keeps their bounds as its stops up to the cap, and is
+/// sampled past it. The cap is on the pieces; a well-formed stitch has one more piece than bounds.
+#[test]
+fn gradients_stitched_from_linear_pieces_keep_or_sample_their_stops() {
+    // `bounds` interior bounds at i / (bounds + 1), with one linear piece more than that.
+    let stitched = |bounds: usize| {
+        let pieces = bounds + 1;
+        format!(
+            "/F << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> def \
+             << /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function << /FunctionType 3 /Domain [0 1] \
+             /Functions [ {pieces} {{ F }} repeat ] /Bounds [ 1 1 {bounds} {{ {pieces} div }} for ] >> >> shfill"
+        )
+    };
+    // A few pieces: the bounds are kept exactly as stops (three bounds -> five stops with the ends).
+    assert_eq!(stitch_stops(&stitched(3)), vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+    // At the cap (1024 bounds, 1025 pieces) the 1024 bounds and the two ends are all kept.
+    assert_eq!(stitch_stops(&stitched(1024)).len(), 1026);
+    // One past it (1025 bounds, 1026 pieces) the function is sampled instead.
+    assert_eq!(stitch_stops(&stitched(1025)).len(), 33);
+}
+
+/// A malformed stitching function with a single piece but thousands of bounds is sampled, not
+/// turned into thousands of stops. This is the one case the stop-count `.filter` catches on its
+/// own: the one piece is under the Functions-length guard, so only the bound count is out of range.
+#[test]
+fn a_stitching_function_with_one_piece_but_many_bounds_is_sampled() {
+    let stops = stitch_stops(
+        "/F << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> def \
+         << /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function << /FunctionType 3 /Domain [0 1] \
+         /Functions [ F ] /Bounds [ 1 1 2000 { 2001 div } for ] >> >> shfill",
+    );
+    // Base keeps all 2000 bounds (2002 stops); the fix samples.
+    assert_eq!(stops.len(), 33);
+}
+
+/// A short `Bounds` with a `Functions` array one past the cap is sampled: without the length
+/// guard each of the ~1000 stops would read through the whole array to find its piece.
+#[test]
+fn a_gradient_with_a_functions_array_past_the_cap_is_sampled() {
+    let stops = stitch_stops(
+        "/F << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> def \
+         << /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function << /FunctionType 3 /Domain [0 1] \
+         /Functions [ 1026 { F } repeat ] /Bounds [ 1 1 1000 { 1001 div } for ] >> >> shfill",
+    );
+    // Base keeps the 1000 bounds (1002 stops); the fix samples.
+    assert_eq!(stops.len(), 33);
+}
+
+/// A stitching function (type 3) whose `Functions` array holds the function itself must not
+/// recurse without end: `linear_points` (depth- and visit-bounded) and `eval` (depth-bounded)
+/// both stop, so the shading raises an error instead of overflowing the stack (an abort
+/// `vectorcraft_engine::guard` can't catch, and on wasm there is no net at all).
+#[test]
+fn a_stitching_function_that_refers_to_itself_is_rejected_not_crashed() {
+    let r = read(
+        "0 0 10 10 rectfill \
+         /F 5 dict def F /FunctionType 3 put F /Domain [0 1] put F /Bounds [] put F /Encode [0 1] put F /Functions [ F ] put \
+         << /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function F >> shfill",
+    );
+    // Not an abort: the reader stops at the error, keeps the rectangle drawn before it, and leaves
+    // the rest of the program unread (see `import`: what follows the error is left out).
+    assert_eq!(objects(&r.document).len(), 1);
+    assert!(r.warnings.iter().any(|w| w.contains("read up to an error") && w.contains("Function")), "{:?}", r.warnings);
+}
+
+/// A stitching function need not point at itself to blow up: a `Functions` array of 1025
+/// references to a child that holds 1025 references to a child ... is a tree of 1025^levels nodes
+/// though it is tiny in memory (the children are shared). The shared visit counter stops
+/// `linear_points` after about 2 * (MAX_STITCH_STOPS + 1) nodes, so it is sampled at once instead
+/// of being walked; on the unmodified reader this explores ~1025^3 nodes.
+#[test]
+fn a_deeply_shared_stitching_function_is_sampled_not_walked() {
+    // leaf (linear) <- mid2[1025 leaf] <- mid1[1025 mid2] <- top[1025 mid1] (1000 bounds).
+    let stops = stitch_stops(
+        "/leaf << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> def \
+         /mid2 << /FunctionType 3 /Domain [0 1] /Bounds [] /Functions [ 1025 { leaf } repeat ] >> def \
+         /mid1 << /FunctionType 3 /Domain [0 1] /Bounds [] /Functions [ 1025 { mid2 } repeat ] >> def \
+         /top  << /FunctionType 3 /Domain [0 1] /Bounds [ 1 1 1000 { 1001 div } for ] /Functions [ 1025 { mid1 } repeat ] >> def \
+         << /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function top >> shfill",
+    );
+    assert_eq!(stops.len(), 33);
+}
+
 /// Executable strings and keys other than names (#474): `cvx` makes a string executable, and
 /// running it runs its text (PLRM 3rd ed. §3.3.1, `cvx`, `exec`); `load` takes any key (§8.2).
 /// A program closes its shading dictionaries with an executable string (`>>` at Level 2 and up,

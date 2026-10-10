@@ -110,6 +110,7 @@ fn install(_: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn load_path(path: &str) -> Result<Plugin> {
+    crate::file_access::check_read(path).map_err(EngineError::Other)?;
     registry::load_file(std::path::Path::new(path), vectorcraft_plugins::Limits::default()).map_err(err)
 }
 
@@ -137,7 +138,11 @@ pub(crate) fn sync_prefs(s: &Session) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn load_folder(folder: &str) -> Value {
-    match registry::load_folder(std::path::Path::new(folder)) {
+    if let Err(e) = crate::file_access::check_read(folder) {
+        return json!({"folder": folder, "error": e});
+    }
+    // A file in it may be a link to one elsewhere.
+    match registry::load_folder_where(std::path::Path::new(folder), |f| crate::file_access::check_read(&f.to_string_lossy())) {
         Ok(r) => {
             json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>()})
         }

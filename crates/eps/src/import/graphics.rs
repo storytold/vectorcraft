@@ -34,6 +34,9 @@ const MAX_PATH: usize = 1 << 20;
 const MAX_DRAWN: usize = 1 << 24;
 /// Samples taken of a shading function that isn't a plain interpolation.
 const SHADING_SAMPLES: usize = 32;
+/// Most bounds of a stitched linear function that become a gradient's stops: past it, the
+/// function is sampled like any other (each stop evaluates the whole function).
+const MAX_STITCH_STOPS: usize = 1024;
 
 pub(super) const FAR_AWAY: &str = "objects far outside the page were left out";
 pub(super) const TOO_MUCH: &str = "the file draws more than VectorCraft reads: the rest was left out";
@@ -1007,8 +1010,10 @@ impl Interp<'_> {
         let domain = nums(get("Domain"));
         let (d0, d1) = (domain.first().copied().unwrap_or(0.0), domain.get(1).copied().unwrap_or(1.0));
         let f = get("Function").ok_or(PsError::Ps("undefined", "Function".into()))?;
-        // Where the colour changes: the ends, and the bounds of stitched linear functions.
-        let ts: Vec<f64> = match linear_points(&f) {
+        // Where the colour changes: the ends, and the bounds of stitched linear functions (unless
+        // there are too many).
+        let mut visits = 0;
+        let ts: Vec<f64> = match linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS) {
             Some(mut pts) => {
                 pts.retain(|t| (d0.min(d1)..=d0.max(d1)).contains(t));
                 pts.iter().map(|t| if d1 != d0 { (t - d0) / (d1 - d0) } else { 0.0 }).chain([0.0, 1.0]).collect()
@@ -1085,16 +1090,21 @@ impl Interp<'_> {
                 Ok(c0.iter().zip(&c1).map(|(a, b)| a + x * (b - a)).collect())
             }
             Some(3.0) => {
-                let fs = get("Functions").and_then(|o| o.items().map(|i| i.to_vec())).unwrap_or_default();
+                // Read the pieces through the borrow and clone only the one we recurse into: a
+                // `Functions` array of millions (shared, or reached again through a cycle) must
+                // not be copied on every call and at every live recursion level.
+                let functions = get("Functions");
+                let fs = functions.as_ref().and_then(Obj::items);
+                let n = fs.map_or(0, Shared::len);
                 let bounds = nums(get("Bounds"));
                 let encode = nums(get("Encode"));
                 let (lo, hi) = (domain.first().copied().unwrap_or(0.0), domain.get(1).copied().unwrap_or(1.0));
-                let k = bounds.iter().take_while(|b| t >= **b).count().min(fs.len().saturating_sub(1));
+                let k = bounds.iter().take_while(|b| t >= **b).count().min(n.saturating_sub(1));
                 let a = if k == 0 { lo } else { bounds.get(k - 1).copied().unwrap_or(lo) };
                 let b = bounds.get(k).copied().unwrap_or(hi);
                 let (e0, e1) = (encode.get(2 * k).copied().unwrap_or(0.0), encode.get(2 * k + 1).copied().unwrap_or(1.0));
                 let u = if b != a { e0 + (t - a) / (b - a) * (e1 - e0) } else { e0 };
-                let g = fs.get(k).cloned().ok_or(PsError::Ps("rangecheck", "Functions".into()))?;
+                let g = fs.and_then(|fs| fs.get(k)).ok_or(PsError::Ps("rangecheck", "Functions".into()))?;
                 self.eval(&g, &[u], depth + 1)
             }
             _ => {
@@ -1621,16 +1631,34 @@ fn is_mesh(sh: &DictRef) -> bool {
 }
 
 /// Where a stitched function of linear interpolations changes slope (its bounds), when it is
-/// one; `None` for functions that must be sampled.
-fn linear_points(f: &Obj) -> Option<Vec<f64>> {
+/// one; `None` for functions that must be sampled. `depth` bounds the nesting the same way
+/// [`Interp::eval`] does (`> 8`) and `visits` (shared by the whole recursion, incremented on
+/// every call) bounds the total nodes looked at. Both are needed: the depth limit alone stops a
+/// function that refers to itself in a cycle, but not one that fans out through shared children
+/// (1025 references to a child a few levels deep is 1025^levels nodes without the visit cap). A
+/// well-formed stitch of linear pieces is one level, at most `MAX_STITCH_STOPS + 1` pieces, so it
+/// costs at most `MAX_STITCH_STOPS + 2` visits and is never cut off.
+fn linear_points(f: &Obj, depth: u32, visits: &mut usize) -> Option<Vec<f64>> {
+    *visits += 1;
+    if depth > 8 || *visits > 2 * (MAX_STITCH_STOPS + 1) {
+        return None;
+    }
     let Obj::Dict(d) = f else { return None };
     let d = d.borrow();
     let num = |k: &str| d.get(&Key::name(k)).and_then(Obj::as_num);
     match num("FunctionType")? {
         2.0 if num("N").unwrap_or(1.0) == 1.0 => Some(vec![]),
         3.0 => {
-            let fs = d.get(&Key::name("Functions"))?.items()?.to_vec();
-            if !fs.iter().all(|g| linear_points(g).is_some_and(|p| p.is_empty())) {
+            let items = d.get(&Key::name("Functions"))?.items()?;
+            // More pieces than the stop cap allows: sample the function instead (tested before
+            // `to_vec`, so a huge `Functions` array is not copied only to be rejected). Each stop
+            // runs [`Interp::eval`], which reads one piece, so a short `Bounds` with a huge
+            // `Functions` would still be O(stops * Functions) to find each piece without this.
+            if items.len() > MAX_STITCH_STOPS + 1 {
+                return None;
+            }
+            let fs = items.to_vec();
+            if !fs.iter().all(|g| linear_points(g, depth + 1, visits).is_some_and(|p| p.is_empty())) {
                 return None;
             }
             d.get(&Key::name("Bounds"))?.items().map(|i| i.borrow().iter().filter_map(Obj::as_num).collect())

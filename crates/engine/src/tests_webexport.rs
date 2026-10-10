@@ -285,9 +285,16 @@ fn image_size_region_and_metadata() {
     assert_eq!(size(&mut s, json!({"width": 80})), (80, 60));
     assert_eq!(size(&mut s, json!({"height": 15})), (20, 15));
     assert_eq!(size(&mut s, json!({"percent": 150})), (60, 45));
+    // The dialog's fields send decimal numbers: rounded to whole pixels.
+    assert_eq!(size(&mut s, json!({"width": 80.0})), (80, 60));
+    assert_eq!(size(&mut s, json!({"height": 14.6})), (20, 15));
     for bad in [
         json!({"percent": 0}),
         json!({"width": 0}),
+        json!({"width": 0.2}),
+        json!({"width": -5}),
+        json!({"height": 1e300}),
+        json!({"height": "tall"}),
         json!({"format": "bmp"}),
         json!({"colors": "many"}),
         json!({"matte": "plaid"}),

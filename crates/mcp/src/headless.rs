@@ -1,6 +1,9 @@
 //! An in-process engine session that answers the control-channel methods itself.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
+use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_engine::{Session, UiRequest, ViewInfo};
 use vectorcraft_geom::Point;
 use vectorcraft_render::Renderer;
@@ -14,6 +17,9 @@ pub struct Headless {
     pub renderer: Renderer,
     /// View state handed to tools (zoom 1, smart guides on).
     pub view: ViewInfo,
+    /// The folders its methods may read and write (`--automation-read-root`,
+    /// `--automation-write-root`); `None`: anywhere.
+    roots: Option<Arc<AutomationRoots>>,
 }
 
 impl Default for Headless {
@@ -93,7 +99,13 @@ fn shortcut_matches(shortcut: &str, key: &str, mods: Mods) -> bool {
 impl Headless {
     /// A session with no document (the first `file.new` / `app.open` creates one).
     pub fn new() -> Self {
-        Self { session: Session::new(), renderer: Renderer::new(), view: ViewInfo::default() }
+        Self { session: Session::new(), renderer: Renderer::new(), view: ViewInfo::default(), roots: None }
+    }
+
+    /// Confine the files every method reads and writes to `roots` ([`file_access`]).
+    pub fn with_automation_roots(mut self, roots: Option<Arc<AutomationRoots>>) -> Self {
+        self.roots = roots;
+        self
     }
 
     /// A session with a fresh default (Letter) document, ready to draw into.
@@ -227,13 +239,20 @@ impl Headless {
         vectorcraft_render::raster_size(r, scale)?;
         let img = self.renderer.render_region(&doc, r, scale, true);
         let png = img.to_png()?;
+        let mut out = json!({"width": img.width, "height": img.height});
         match s(p, "path") {
             Some(path) => {
-                std::fs::write(path, &png).map_err(|e| format!("write {path}: {e}"))?;
-                Ok(json!({"path": path, "width": img.width, "height": img.height}))
+                file_access::check_write(path)?;
+                vectorcraft_format::write_atomic(std::path::Path::new(path), &png).map_err(|e| format!("write {path}: {e}"))?;
+                out["path"] = json!(path);
+                // `data: true` asks for the image as well as the file.
+                if p.get("data").and_then(Value::as_bool) == Some(true) {
+                    out["pngBase64"] = json!(vectorcraft_format::base64_encode(&png));
+                }
             }
-            None => Ok(json!({"width": img.width, "height": img.height, "pngBase64": vectorcraft_format::base64_encode(&png)})),
+            None => out["pngBase64"] = json!(vectorcraft_format::base64_encode(&png)),
         }
+        Ok(out)
     }
 
     /// `app.open {path}`: any readable file as a new active document (`document.open`).
@@ -260,7 +279,22 @@ impl Headless {
 
 impl Backend for Headless {
     fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
-        let p = &params;
+        let roots = self.roots.clone();
+        file_access::confine(roots.as_ref(), || self.answer(method, &params))
+    }
+
+    fn has_ui(&self) -> bool {
+        false
+    }
+
+    fn describe(&self) -> String {
+        "headless".into()
+    }
+}
+
+impl Headless {
+    /// One control-channel method ([`Backend::call`]).
+    fn answer(&mut self, method: &str, p: &Value) -> Result<Value, String> {
         match method {
             "engine.execute" | "ui.menu.invoke" | "command" => {
                 let id = s(p, "command").or(s(p, "id")).ok_or("missing `command`")?.to_string();
@@ -288,13 +322,5 @@ impl Backend for Headless {
             }
             other => Err(format!("unknown method `{other}`")),
         }
-    }
-
-    fn has_ui(&self) -> bool {
-        false
-    }
-
-    fn describe(&self) -> String {
-        "headless".into()
     }
 }

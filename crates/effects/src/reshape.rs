@@ -197,14 +197,15 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 }
 
 /// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
-/// its reference box.
+/// its reference box and the art's seed (a random Transform moves the pieces together).
 pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
+    let seed = art.id.0;
     for e in fx {
         let Some(bounds) = art.geometric_bounds() else { break };
         let params = merged_params(&e.id, &e.params);
         for_each_leaf(art, &mut |leaf| {
             let Some((path, rule)) = leaf_geometry(leaf) else { return };
-            let out = apply_one(&e.id, &params, &path, bounds, &GeomContext::of(leaf));
+            let out = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) });
             set_geometry(leaf, out, rule);
         });
     }

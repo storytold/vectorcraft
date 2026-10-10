@@ -280,23 +280,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                     return;
                 }
-                // Align buttons.
-                for (icon, tip, p) in [
-                    ("align-start-vertical", "Horizontal Align Left", json!({"horizontal": "left"})),
-                    ("align-center-vertical", "Horizontal Align Center", json!({"horizontal": "center"})),
-                    ("align-end-vertical", "Horizontal Align Right", json!({"horizontal": "right"})),
-                    ("align-start-horizontal", "Vertical Align Top", json!({"vertical": "top"})),
-                    ("align-center-horizontal", "Vertical Align Center", json!({"vertical": "center"})),
-                    ("align-end-horizontal", "Vertical Align Bottom", json!({"vertical": "bottom"})),
-                ] {
-                    if widgets::icon_button(ui, icon, tl!(tip), false, 24.0).clicked() {
-                        let mut p = p;
-                        if sel.len() == 1 {
-                            p["to"] = json!("artboard");
-                        }
-                        app.run("object.align", p).ok();
-                    }
-                }
+                crate::panels::align::align_buttons(app, ui, 24.0);
                 ui.separator();
                 // The Transform link opens the whole Transform panel (reference point, rotate,
                 // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.

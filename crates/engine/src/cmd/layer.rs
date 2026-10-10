@@ -135,11 +135,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index, name?, x?, y?, width?, height?, scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale)} → null, or with scaleArt {scaled: the art scaled}",
+            "{index, name?, x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale)} → null, or with scaleArt {scaled: the art scaled}",
             has_doc,
             artboard_set
         ),
-        cmd!("artboard.fitToArt", "Fit to Artwork Bounds", ["Object", "Artboards"], None, "{index?}", has_doc, artboard_fit_art),
+        cmd!(
+            "artboard.fitToArt",
+            "Fit to Artwork Bounds",
+            ["Object", "Artboards"],
+            None,
+            "{index?} the artboard fits the art that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count)",
+            has_doc,
+            artboard_fit_art
+        ),
         cmd!("artboard.fitToSelection", "Fit to Selected Art", ["Object", "Artboards"], None, "{index?}", has_selection, artboard_fit_sel),
         cmd!(
             "layer.clippingMask.toggle",
@@ -155,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Target",
             [],
             None,
-            "{id} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
+            "{id, add?: bool (Shift-click: the item joins the selection, or leaves it when all selected; nothing is targeted)} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
             has_doc,
             target
         ),
@@ -354,7 +362,11 @@ fn target(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let layer = n.is_layer();
     let rows = st.layer_rows.clone();
-    s.select(|d, sel| sel.set_target(d, id))?;
+    if p.get("add").and_then(Value::as_bool).unwrap_or(false) {
+        s.select(|d, sel| sel.toggle_target(d, id))?;
+    } else {
+        s.select(|d, sel| sel.set_target(d, id))?;
+    }
     let st = s.doc_mut()?;
     // Targeting doesn't change which rows are highlighted.
     st.layer_rows = rows;
@@ -759,8 +771,13 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     // Artboard gathers it) and its guides from the old rectangle onto the new one.
     let scale_art = bool_or(p, "scaleArt", false);
     let fit = if scale_art && resized { rect_map(was, now) } else { None };
-    let art = if fit.is_some() {
-        // Locked and hidden art too? Noted in the journal, so a replay scales the same objects
+    // Position fields honor Move Artwork independently of Scale Artwork. A resize still
+    // leaves the art alone unless scaling was requested. Fit-to-art callers keep the default.
+    let delta = now.origin() - was.origin();
+    let moving = !resized && bool_or(p, "moveArt", false) && delta != vectorcraft_geom::Vec2::ZERO;
+    let transform = fit.or_else(|| moving.then(|| Affine::translate(delta)));
+    let art = if transform.is_some() {
+        // Locked and hidden art too? Noted in the journal, so a replay transforms the same objects
         // whatever the preference is then.
         let all = bool_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard);
         s.note_journal("lockedAndHidden", json!(all));
@@ -780,7 +797,7 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             a.name = n.to_string();
         }
         let id = a.id;
-        if let Some(xf) = fit {
+        if let Some(xf) = transform {
             d.map_artboard_guides(id, xf);
             for id in &art {
                 if let Some(n) = d.node_mut(*id) {
@@ -789,14 +806,14 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
             }
         } else if !resized {
             // Moved (not resized), it takes its guides along.
-            d.move_artboard_guides(id, now.origin() - was.origin());
+            d.move_artboard_guides(id, delta);
         }
         Ok(())
     })?;
     if !scale_art {
         return ok();
     }
-    Ok(json!({ "scaled": art.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(json!({ "scaled": if fit.is_some() { art.iter().map(|i| i.0).collect::<Vec<_>>() } else { vec![] } }))
 }
 
 /// The map taking artboard rectangle `from` onto `to`, each side scaled by its own ratio. None
@@ -810,9 +827,11 @@ fn rect_map(from: Rect, to: Rect) -> Option<Affine> {
     xf.is_finite().then_some(xf)
 }
 
+/// The artboard fits the art that exports draw: hidden objects and layers, guides and template
+/// layers don't count.
 fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let b = s.doc()?.doc.art_bounds().ok_or_else(|| EngineError::Other("no artwork".into()))?;
+    let b = vectorcraft_render::encode::art_bounds(&s.doc()?.doc).ok_or_else(|| EngineError::Other("no artwork".into()))?;
     s.execute("artboard.setProps", &json!({"index": i, "x": b.x0, "y": b.y0, "width": b.width(), "height": b.height()}))
 }
 

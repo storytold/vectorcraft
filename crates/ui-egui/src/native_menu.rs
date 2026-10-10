@@ -413,7 +413,7 @@ fn take_submenu(bar: &mut MenuBar, command: &str) -> Option<Node> {
 
 /// VectorCraft's menus as a Mac menu bar, as they show now.
 pub fn layout(app: &VectorcraftApp) -> Layout {
-    mac_layout(&from_tree(app, &menus::menu_tree()), crate::i18n::current())
+    mac_layout(&from_tree(app, &menus::menu_tree_named(app.session.prefs.font_names_in_english)), crate::i18n::current())
 }
 
 // ----------------------------------------------------------------------------- the app's side

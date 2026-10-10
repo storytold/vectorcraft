@@ -197,6 +197,68 @@ fn curvature_click_first_point_closes() {
     assert_eq!(p.anchor_count(), 3);
 }
 
+/// The Curvature tool edits a path another tool drew (#798), one undo step per edit, keeping its
+/// shape except where edited.
+#[test]
+fn curvature_edits_any_selected_path() {
+    let mut s = session();
+    let v = view();
+    let anchors = json!([
+        {"x": 100, "y": 300},
+        {"x": 200, "y": 200, "in": [160, 210], "out": [260, 185]},
+        {"x": 350, "y": 280, "in": [320, 230], "out": [380, 330]},
+        {"x": 450, "y": 350, "in": [420, 360], "out": [480, 300]},
+        {"x": 550, "y": 260, "in": [520, 290]}
+    ]);
+    let id = NodeId(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("curvature", v).unwrap();
+    let before = path(&s, id).subpaths[0].clone();
+    // Drag a point: only its two segments change.
+    assert_eq!(gesture(&mut s, &[(350.0, 280.0), (360.0, 320.0), (370.0, 340.0)], Mods::default()), 1);
+    let sp = path(&s, id).subpaths[0].clone();
+    assert_eq!(sp.anchors[2].p, Point::new(370.0, 340.0));
+    assert_eq!((sp.segment(0), sp.segment(3)), (before.segment(0), before.segment(3)));
+    assert_eq!(s.doc().unwrap().selection.anchors.get(&id).map(|a| a.len()), Some(1), "the point is current");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0], before);
+    // Alt-click toggles it, Delete removes the current point: one step each.
+    let (alt, steps) = (Mods { alt: true, ..Default::default() }, undo_steps(&s));
+    assert_eq!(gesture(&mut s, &[(200.0, 200.0)], alt), 1);
+    assert!(!path(&s, id).subpaths[0].anchors[1].has_out());
+    s.tool_key(ToolKey::Delete, Mods::default(), v).unwrap();
+    assert_eq!(path(&s, id).anchor_count(), 4);
+    assert_eq!(undo_steps(&s), steps + 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0], before);
+    // A press on a segment adds a point, the drag moving it: one step.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let on = kurbo::ParamCurve::eval(&before.segment(3), 0.5);
+    assert_eq!(gesture(&mut s, &[(on.x, on.y), (on.x, on.y + 20.0), (on.x, on.y + 30.0)], Mods::default()), 1);
+    let sp = path(&s, id).subpaths[0].clone();
+    assert_eq!(sp.anchors.len(), 6);
+    assert_eq!(sp.anchors[4].p, Point::new(on.x, on.y + 30.0));
+    assert_eq!((sp.segment(0), sp.segment(1), sp.segment(2)), (before.segment(0), before.segment(1), before.segment(2)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A click on an end, then two more: the path goes on, its old segments unchanged.
+    let steps = undo_steps(&s);
+    for (x, y) in [(550.0, 260.0), (650.0, 300.0), (720.0, 220.0)] {
+        gesture(&mut s, &[(x, y)], Mods::default());
+    }
+    assert_eq!(undo_steps(&s), steps + 2, "selecting the end is no step");
+    let sp = path(&s, id).subpaths[0].clone();
+    assert_eq!(sp.anchors.len(), 7);
+    assert!((0..4).all(|i| sp.segment(i) == before.segment(i)));
+    assert_eq!(sp.anchors[6].p, Point::new(720.0, 220.0));
+    // The other end closes it; Esc and a click away start a new path.
+    gesture(&mut s, &[(100.0, 300.0)], Mods::default());
+    assert!(path(&s, id).is_closed());
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    gesture(&mut s, &[(700.0, 550.0)], Mods::default());
+    assert_eq!(paths(&s).len(), 2);
+}
+
 #[test]
 fn add_and_delete_anchor_tools() {
     let mut s = session();

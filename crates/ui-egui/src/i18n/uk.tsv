@@ -10,11 +10,41 @@
 # Coverage: every menu string, tl! literal, plural, status and error message (enforced in tests).
 # Product, language, built-in workspace and perspective preset names follow MENU_KEEP_AS_IS.
 # Keep placeholders, ellipses and leading/trailing spaces of fragments when editing.
+	Glowing Edges…	Сяйливі краї…
+	Glowing Edges	Сяйливі краї
+	Edge Width	Ширина краю
+	Edge Brightness	Яскравість краю
+	Smoothness	Згладжування
 
 	Radial Blur…	Радіальне розмиття…
 	Smart Blur…	Розумне розмиття…
 	Sharpen	Різкість
 	Unsharp Mask…	Нерізка маска…
+	Pixelate	Пікселізація
+	Color Halftone…	Кольорові півтони…
+	Crystallize…	Кристалізація…
+	Mezzotint…	Меццо-тинто…
+	Pointillize…	Пуантилізм…
+	Color Halftone	Кольорові півтони
+	Crystallize	Кристалізація
+	Mezzotint	Меццо-тинто
+	Pointillize	Пуантилізм
+	Max. Radius	Макс. радіус
+	Channel 1	Канал 1
+	Channel 2	Канал 2
+	Channel 3	Канал 3
+	Channel 4	Канал 4
+	Cell Size	Розмір комірки
+	Fine Dots	Дрібні точки
+	Medium Dots	Середні точки
+	Grainy Dots	Зернисті точки
+	Coarse Dots	Великі точки
+	Short Lines	Короткі лінії
+	Medium Lines	Середні лінії
+	Long Lines	Довгі лінії
+	Short Strokes	Короткі штрихи
+	Medium Strokes	Середні штрихи
+	Long Strokes	Довгі штрихи
 	Radial Blur	Радіальне розмиття
 	Smart Blur	Розумне розмиття
 	Unsharp Mask	Нерізка маска
@@ -217,6 +247,8 @@
 	Auto-Collapse Iconic Panels	Автоматично згортати значки панелей
 	Ellipse Properties:	Властивості еліпса:
 	Invert Pie	Інвертувати сектор
+	Side Length:	Довжина сторони:
+	Make Sides Equal	Вирівняти сторони
 	Pie End Angle:	Кінцевий кут сектора:
 	Pie Start Angle:	Початковий кут сектора:
 	Show Tool Group Labels	Показувати назви груп інструментів
@@ -675,6 +707,7 @@
 	Divide Vertically Into	Розділити по вертикалі на
 	Do Not Move	Не переміщати
 	Do you want to save the changes you made to “{name}”?	Зберегти зміни, внесені до «{name}»?
+	Can't open “{name}”.	Не вдається відкрити «{name}».
 	Document	Документ
 	Document Color Mode	Колірний режим документа
 	Document Info	Відомості про документ
@@ -975,6 +1008,20 @@
 	Flare	Відблиск
 	Flare Tool	Інструмент «Відблиск»
 	Flare Tool Options	Параметри інструменту «Відблиск»
+	Halo	Ореол
+	Rays	Промені
+	Rings	Кільця
+	Diameter:	Діаметр:
+	Brightness:	Яскравість:
+	Growth:	Зростання:
+	Fuzziness:	Розмиття:
+	Number:	Кількість:
+	Longest:	Найдовший:
+	Path:	Контур:
+	Largest:	Найбільше:
+	Direction:	Напрямок:
+	Symbolism Tools Options	Параметри інструментів символів
+	Symbol Set Density:	Щільність набору символів:
 	Flat Image	Плоске зображення
 	Flat Logo	Плоский логотип
 	Flatness:	Площинність:
@@ -1486,6 +1533,8 @@
 	Monospaced	Моноширинний
 	More	Більше
 	More Pathfinder options	Додаткові параметри обробки контурів
+	More Align options	Додаткові параметри вирівнювання
+	More Paragraph options	Додаткові параметри абзацу
 	More Settings	Додаткові налаштування
 	Move	Перемістити
 	Move All Objects	Перемістити всі об’єкти
@@ -1529,6 +1578,27 @@
 	New Art Has Basic Appearance	Новий малюнок має основне оформлення
 	New Artboard	Нова монтажна область
 	New Bristle Brush	Новий щетинний пензель
+	Calligraphic Brush Options	Параметри каліграфічного пензля
+	Bristle Brush Options	Параметри щетинного пензля
+	Roundness:	Округлість:
+	Fixed	Фіксований
+	Pressure	Натиск
+	Shape:	Форма:
+	Bristle Length:	Довжина щетинок:
+	Bristle Density:	Щільність щетинок:
+	Bristle Thickness:	Товщина щетинок:
+	Paint Opacity:	Непрозорість фарби:
+	Stiffness:	Жорсткість:
+	Round Point	Кругла загострена
+	Flat Point	Пласка загострена
+	Round Blunt	Кругла тупа
+	Flat Blunt	Пласка тупа
+	Round Curve	Кругла вигнута
+	Flat Curve	Пласка вигнута
+	Round Angle	Кругла скошена
+	Flat Angle	Пласка скошена
+	Round Fan	Кругла віялова
+	Flat Fan	Пласка віялова
 	New Brush…	Новий пензель…
 	New Calligraphic Brush	Новий каліграфічний пензель
 	New Character Style	Новий стиль символу
@@ -2054,6 +2124,25 @@
 	Reflect…	Відобразити…
 	Refresh	Оновити
 	Refresh Font List	Оновити список шрифтів
+	Missing Fonts	Відсутні шрифти
+	Missing Fonts Dialog	Діалогове вікно «Відсутні шрифти»
+	These fonts aren't available. Their text shows in another font.	Ці шрифти недоступні. Їхній текст показано іншим шрифтом.
+	Search Fonts Folder	Шукати в папці Fonts
+	Find in Folder…	Знайти в папці…
+	Find Fonts in Folder…	Знайти шрифти в папці…
+	Find Font Files	Знайти файли шрифтів
+	Add Font Files	Додати файли шрифтів
+	Add Fonts	Додати шрифти
+	Find Fonts	Знайти шрифти
+	Stop	Зупинити
+	Searching…	Пошук…
+	Not found	Не знайдено
+	{folders} folder(s) and {files} file(s) searched	Переглянуто папок: {folders}, файлів: {files}
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, зокрема папки інших програм і системи та приховані папки
+	{count} folder(s) or file(s) couldn't be read	Не вдалося прочитати папок або файлів: {count}
+	The search stopped at its limit: search a smaller folder.	Пошук зупинився на межі: виберіть меншу папку.
+	Copy only fonts you own or are licensed to install.	Копіюйте лише шрифти, які належать вам або які ви маєте право встановлювати за ліцензією.
+	VectorCraft copies the fonts to {folder}.	VectorCraft копіює шрифти в {folder}.
 	Registered Trademark Symbol	Символ зареєстрованого товарного знаку
 	Registration marks	Мітки поєднання
 	Registry name:	Ім’я у реєстрі:
@@ -2532,6 +2621,9 @@
 	Smart Guides (⌘U)	Розумні напрямні (⌘U)
 	Smart Punctuation…	Розумна пунктуація…
 	Smooth	Згладити
+	Corner	Кут
+	Relative	Відносно
+	Absolute	Абсолютно
 	Smooth Color	Згладжений колір
 	Smooth Tool	Інструмент «Згладжування»
 	Snap Curves To Lines	Прив’язувати криві до ліній
@@ -3153,6 +3245,7 @@ axis	Both	Обидві
 @msg	its editing data is for a different page	його дані для редагування відносяться до іншої сторінки
 @msg	its layers use {_1}, which aren't read yet	його шари використовують {_1}, що поки не читається
 @msg	its page has text, and its layers have no text objects to put it in	на його сторінці є текст, а на шарах немає текстових об’єктів, куди його помістити
+@msg	its type is to come in as outlines, which only its page has	його текст має прийти у вигляді контурів, а вони є лише на його сторінці
 @msg	the art on them differs from the page's in {_1}% of it	зображення на шарах відрізняється від зображення на сторінці на {_1} % площі
 @msg	`to` must be "corner" or "smooth"	`to` має бути "corner" або "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Файли BMP бувають RGB або у відтінках сірого: colorModel rgb або gray
@@ -3307,6 +3400,7 @@ axis	Both	Обидві
 @msg	cannot distort a zero-size bounding box	не можна спотворити обмежувальну рамку нульового розміру
 @msg	cannot read PDF: {0}	не вдалося прочитати PDF: {0}
 @msg	cannot split an open path at its end point	не можна розділити відкритий контур у його кінцевій точці
+@msg	closing needs three anchors	для замикання потрібні три опорні точки
 @msg	check an asset to export	позначте ресурс для експорту
 @msg	choice must be "merge" or "add", not `{choice}`	choice має бути "merge" або "add", а не `{choice}`
 @msg	choose a direction to divide in	виберіть напрямок для поділу
@@ -3373,6 +3467,8 @@ axis	Both	Обидві
 @msg	no blend options	немає параметрів переходу
 @msg	no bounds	немає кордонів
 @msg	no brush named `{name}`	немає пензля з ім’ям `{name}`
+@msg	no brush selected	пензель не вибрано
+@msg	this kind of brush has no options dialog yet	пензель цього типу ще не має вікна параметрів
 @msg	no catalog	немає каталогу
 @msg	no changes since the last save	немає змін з моменту останнього збереження
 @msg	no clock to keep a heartbeat by	немає годинника для підтримки сигналу
@@ -3696,6 +3792,24 @@ axis	Both	Обидві
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})
+@msg	No fonts are missing in this document	У цьому документі немає відсутніх шрифтів
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не шукає в папках інших програм і системи: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не шукає в папках Shared і Public у Users: {path}
+@msg	{path} is not a folder	{path} не є папкою
+@msg	the search couldn't start: try again in a moment	не вдалося почати пошук: спробуйте ще раз за мить
+@msg	searching a folder isn't available on the web	пошук у папці недоступний у веб-версії
+@msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts VectorCraft тут не задано: її задають настільна програма та vectorcraft-cli
+@msg	choose the font files to add	виберіть файли шрифтів для додавання
+@msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	тут недоступно шрифтів: {n}; їхній текст показано іншим шрифтом
+@msg	not a file	не файл
+@msg	not a font file	не файл шрифту
+@msg	that document is no longer open	цей документ більше не відкрито
+@msg	larger than 256 MB	більше 256 МБ
+@msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
+@msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -3722,3 +3836,27 @@ axis	Both	Обидві
 	Sync with system	Як у системі
 	Active	Активна
 	Next Appearance Mode	Наступний режим оформлення
+@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
+@msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
+@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
+@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед цим кроком немає кроку {i} (кроки рахуються з 0; щоб написати сам $, введіть $$)
+@msg	object ids are non-negative integers, not {v}	ідентифікатори об’єктів — невід’ємні цілі числа, а не {v}
+@msg	automation filesystem access is not granted: read authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на читання: {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на запис: {path}
+@msg	automation path rejected: outside the read root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для читання {root}: {path}
+@msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
+@msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній
+@msg	automation path rejected: a link that leads nowhere: {path}	шлях автоматизації відхилено: посилання, яке нікуди не веде: {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	шлях автоматизації відхилено: не вдається визначити {path}: {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	шлях автоматизації відхилено: перехід угору (..) з папки, якої не існує: {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	шлях автоматизації відхилено: зарезервовані імена пристроїв не дозволені: {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Файли PSD у режимі «Багатоканальний» не читаються: збережіть його в режимі RGB, CMYK або «Відтінки сірого»
+@msg	not a PSD file	це не документ PSD
+@msg	the PSD file has an unknown colour mode ({m})	файл PSD має невідомий колірний режим ({m})
+@msg	the PSD file's image data uses an unknown compression ({m})	дані зображення файлу PSD використовують невідоме стиснення ({m})
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
+@msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
+@msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
+@msg	the PSD file is cut short	файл PSD обрізаний
+@msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
+@msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}

@@ -16,7 +16,7 @@ fn stroke(w: f64) -> StrokeLayer {
 }
 
 fn calli(angle: f64, roundness: f64, size: f64) -> Brush {
-    Brush { name: "c".into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, variation: [0.0; 3] }) }
+    Brush { name: "c".into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, ..Default::default() }) }
 }
 
 fn bounds(nodes: &[Node]) -> Rect {
@@ -333,4 +333,117 @@ fn expand_keeps_fill_and_adds_pieces() {
     assert!(near(b.x0, 8.5, 0.05) && near(b.x1, 91.5, 0.05), "{b:?}");
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
     assert!(expand(&d, &plain).is_none());
+}
+
+/// A Calligraphic brush (round nib) whose size follows the pen pressure by `var` either way.
+fn pressure_calli(size: f64, var: f64) -> Brush {
+    let c = Calligraphic {
+        size,
+        variation: [0.0, 0.0, var],
+        modes: Some([Variation::Fixed, Variation::Fixed, Variation::Pressure]),
+        ..Default::default()
+    };
+    Brush { name: "p".into(), kind: BrushKind::Calligraphic(c) }
+}
+
+/// The stroke's half-width (largest |y|) among outline points with x in `x0..x1`.
+fn half_width(nodes: &[Node], x0: f64, x1: f64) -> f64 {
+    let mut pts = vec![];
+    for n in nodes {
+        all_points(n, &mut pts);
+    }
+    pts.iter().filter(|p| p.x >= x0 && p.x <= x1).map(|p| p.y.abs()).fold(0.0, f64::max)
+}
+
+fn pressed(points: Vec<(f64, f64)>) -> StrokeLayer {
+    StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) }
+}
+
+/// #852: with Size on Pressure the nib goes from size − variation at the lightest pressure to
+/// size + variation at the heaviest, along the stroke where the pen pressed.
+#[test]
+fn pressure_maps_to_size_along_the_stroke() {
+    let b = pressure_calli(10.0, 4.0);
+    let light_to_heavy = pressed(vec![(0.0, 0.0), (1.0, 1.0)]);
+    let out = stroke_pieces(&b, &line(0.0, 0.0, 100.0, 0.0), &light_to_heavy);
+    // Lightest: 6 pt (half 3); heaviest: 14 pt (half 7); in between the pressure there.
+    assert!(near(half_width(&out, 0.5, 1.5), 3.0, 0.1), "{}", half_width(&out, 0.5, 1.5));
+    assert!(near(half_width(&out, 98.5, 99.5), 7.0, 0.1), "{}", half_width(&out, 98.5, 99.5));
+    assert!(near(half_width(&out, 49.5, 50.5), 5.0, 0.1), "{}", half_width(&out, 49.5, 50.5));
+    // The stroke weight scales it.
+    let heavy = StrokeLayer { width: 2.0, ..light_to_heavy };
+    let out = stroke_pieces(&b, &line(0.0, 0.0, 100.0, 0.0), &heavy);
+    assert!(near(half_width(&out, 98.5, 99.5), 14.0, 0.2));
+    // No pressure recorded (a mouse, or a path the brush was applied to): the size itself.
+    let out = stroke_pieces(&b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
+    assert!(near(bounds(&out).height(), 10.0, 0.05), "{:?}", bounds(&out));
+    // Kept within the valid range: 2 ± 4 never goes below nothing.
+    let out = stroke_pieces(&pressure_calli(2.0, 4.0), &line(0.0, 0.0, 100.0, 0.0), &pressed(vec![(0.0, 0.0), (1.0, 0.0)]));
+    assert!(!out.is_empty() && bounds(&out).height() < 0.2, "{:?}", bounds(&out));
+}
+
+/// Angle and roundness follow the pressure the same way, clamped to their ranges.
+#[test]
+fn pressure_varies_angle_and_roundness() {
+    let c = |modes| Calligraphic { angle: 0.0, roundness: 60.0, size: 10.0, variation: [90.0, 60.0, 0.0], modes: Some(modes) };
+    let horizontal = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |c: Calligraphic, p: f64| {
+        let b = Brush { name: "a".into(), kind: BrushKind::Calligraphic(c) };
+        bounds(&stroke_pieces(&b, &horizontal, &pressed(vec![(0.0, p), (1.0, p)]))).height()
+    };
+    use Variation::{Fixed, Pressure};
+    // Angle 0 ± 90: heavy pressure stands the flat nib up across the stroke.
+    assert!(near(draw(c([Pressure, Fixed, Fixed]), 0.5), 6.0, 0.05));
+    assert!(near(draw(c([Pressure, Fixed, Fixed]), 1.0), 10.0, 0.05));
+    // Roundness 60 ± 60, kept within 1..100: light is a hairline, heavy is round.
+    let vertical = Calligraphic { angle: 90.0, ..c([Fixed, Pressure, Fixed]) };
+    let wide = |p| {
+        let b = Brush { name: "r".into(), kind: BrushKind::Calligraphic(vertical.clone()) };
+        bounds(&stroke_pieces(&b, &line(0.0, 0.0, 0.0, 100.0), &pressed(vec![(0.0, p), (1.0, p)]))).width()
+    };
+    assert!(near(wide(0.0), 0.1, 0.05), "{}", wide(0.0));
+    assert!(near(wide(1.0), 10.0, 0.05), "{}", wide(1.0));
+}
+
+/// Brushes saved before the variation modes keep their look: a variation means Random, none
+/// means Fixed, and they are written back without modes.
+#[test]
+fn brushes_without_modes_vary_randomly_as_before() {
+    let old: Brush = serde_json::from_value(serde_json::json!({"name": "x", "type": "calligraphic", "size": 8, "variation": [0, 0, 3]})).unwrap();
+    let BrushKind::Calligraphic(c) = &old.kind else { panic!() };
+    assert_eq!(c.modes, None);
+    assert_eq!(c.modes(), [Variation::Fixed, Variation::Fixed, Variation::Random]);
+    assert!(!c.uses_pressure());
+    assert!(serde_json::to_value(&old).unwrap().get("modes").is_none(), "written back as it was");
+    // The same strokes as the brush with its modes spelled out.
+    let explicit = Brush {
+        kind: BrushKind::Calligraphic(Calligraphic { modes: Some([Variation::Fixed, Variation::Fixed, Variation::Random]), ..c.clone() }),
+        ..old.clone()
+    };
+    let bp = preview_path(120.0, 24.0);
+    assert_eq!(stroke_pieces(&old, &bp, &stroke(1.0)), stroke_pieces(&explicit, &bp, &stroke(1.0)));
+    // Fixed ignores the variation; Random still draws a different size per stroke.
+    let fixed = Brush { kind: BrushKind::Calligraphic(Calligraphic { modes: Some([Variation::Fixed; 3]), ..c.clone() }), ..old.clone() };
+    assert!(near(bounds(&stroke_pieces(&fixed, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0))).height(), 8.0, 0.05));
+    // Recorded pressure changes nothing for a brush that doesn't use it.
+    assert_eq!(stroke_pieces(&old, &bp, &stroke(1.0)), stroke_pieces(&old, &bp, &pressed(vec![(0.0, 0.0), (1.0, 1.0)])));
+    // Modes are saved by name.
+    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure"]));
+    assert!(Variation::ALL.iter().all(|v| Variation::parse(v.id()) == Some(*v)));
+}
+
+/// Junk definitions and pressure never panic and never draw non-finite art.
+#[test]
+fn junk_pressure_brushes_draw_finite_art() {
+    let bp = preview_path(120.0, 24.0);
+    for (size, var) in [(1e308, 1e308), (-1e308, 1e308), (0.0, -1e308), (f64::MAX, f64::MAX)] {
+        for profile in [vec![], vec![(0.0, 2.0), (0.0, -1.0), (5.0, 0.5)], vec![(1.0, 1.0), (0.0, 0.0)]] {
+            let out = stroke_pieces(&pressure_calli(size, var), &bp, &pressed(profile));
+            let mut pts = vec![];
+            for n in &out {
+                all_points(n, &mut pts);
+            }
+            assert!(pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{size} {var}");
+        }
+    }
 }

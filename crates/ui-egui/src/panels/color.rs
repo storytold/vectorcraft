@@ -496,7 +496,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (Some(c), _) => components(mode, &c),
         (None, _) => vec![0.0; mode.labels().len()],
     };
-    super::recent_colors_row(app, ui);
+    let recent = super::recent_colors_row(app, ui);
     widgets::divider(ui);
     // An edit of the active colour with its displayed components (`new`), or a colour clicked with
     // Alt held for the inactive proxy (`behind`).
@@ -585,6 +585,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             *new = Some((c, phase, components(mode, &c)));
         }
     };
+    // A recent colour, like the chips, recolours the selected gradient stop (or point).
+    if let Some(c) = recent {
+        pick(c, Live::Released, &mut new);
+    }
     // None / Black / White chips and the hex field.
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -691,12 +695,23 @@ mod tests {
     /// Run the panel for one frame with `events` and `modifiers`; returns the spectrum's rect (when
     /// the options are shown) and the panel's height.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: egui::Modifiers) -> (Option<Rect>, f32) {
+        frame_with(app, ctx, events, modifiers, "color-spectrum")
+    }
+
+    /// [`frame`] returning the rect of the panel's widget `id` instead of the spectrum's.
+    fn frame_with(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        modifiers: egui::Modifiers,
+        id: impl std::hash::Hash + std::fmt::Debug,
+    ) -> (Option<Rect>, f32) {
         let mut out = (None, 0.0);
         let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
         let input = egui::RawInput { events, ..Default::default() };
         let mut full = ctx.run_ui(input, |ui| {
             show(app, ui);
-            out = (ctx.read_response(ui.id().with("color-spectrum")).map(|r| r.rect), ui.min_rect().height());
+            out = (ctx.read_response(ui.id().with(&id)).map(|r| r.rect), ui.min_rect().height());
         });
         full.textures_delta.clear();
         out
@@ -710,6 +725,27 @@ mod tests {
         frame(app, ctx, vec![egui::Event::PointerMoved(pos), button(true)], modifiers);
         frame(app, ctx, vec![button(false)], modifiers);
         frame(app, ctx, vec![], egui::Modifiers::NONE);
+    }
+
+    #[test]
+    fn a_recent_colour_recolours_the_selected_gradient_stop() {
+        // #835: it replaced the whole gradient with the colour.
+        let mut app = app();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+        app.select_tool("gradient");
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let red = app.session.recent_colors.iter().position(|c| c.to_hex() == "#ff0000").expect("red is a recent colour");
+        let ctx = egui::Context::default();
+        let none = egui::Modifiers::NONE;
+        let chip = frame_with(&mut app, &ctx, vec![], none, ("recent", red)).0.expect("the chip is drawn").center();
+        let button = |pressed| egui::Event::PointerButton { pos: chip, button: egui::PointerButton::Primary, pressed, modifiers: none };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(chip), button(true)], none);
+        frame(&mut app, &ctx, vec![button(false)], none);
+        let Paint::Gradient(g) = crate::panels::current_paints(&app).0 else { panic!("still a gradient") };
+        let hex: Vec<String> = g.gradient.stops.iter().map(|s| s.color.to_hex()).collect();
+        assert_eq!(hex, ["#ffffff", "#ff0000"]);
     }
 
     fn paints_hex(app: &VectorcraftApp) -> (String, String) {

@@ -1,5 +1,6 @@
 //! Type → Find Font…: the fonts the document uses (missing ones marked), Find (select the text
-//! using a font), and Change / Change All to another installed font.
+//! using a font), Change / Change All to another installed font, and Find in Folder… (the missing
+//! fonts' files, in the Missing Fonts dialog: `ui.findFontsInFolder`).
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -11,7 +12,19 @@ use crate::{VectorcraftApp, font_menu};
 
 /// Open the dialog.
 pub fn open(app: &mut VectorcraftApp) {
-    app.ui.dialog = Some(Dialog::new("findFont", json!({ "selected": 0, "family": "Source Sans 3", "style": "", "selectionOnly": false })));
+    open_at(app, 0);
+}
+
+/// Open the dialog on the first font the document misses, to replace it (Missing Fonts' Find
+/// Fonts).
+pub fn open_on_missing(app: &mut VectorcraftApp) {
+    let first = fonts(app).iter().position(|f| matches!(f["status"].as_str(), Some("missing" | "substitute")));
+    open_at(app, first.unwrap_or(0));
+}
+
+/// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen.
+fn open_at(app: &mut VectorcraftApp, selected: usize) {
+    app.ui.dialog = Some(Dialog::new("findFont", json!({ "selected": selected, "family": "Source Sans 3", "style": "", "selectionOnly": false })));
 }
 
 fn fonts(app: &mut VectorcraftApp) -> Vec<Value> {
@@ -35,7 +48,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let list = fonts(app);
     let sample = font_menu::sample_text(app);
+    // Find in Folder… shows when the document misses fonts, fonts used only in its symbols included.
+    let offer_folder = crate::picks::can(app, &crate::picks::PickRequest::Folder)
+        && app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
     let mut close = false;
+    let mut find_in_folder = false;
     let mut act: Option<&str> = None;
     crate::dialogs::modal::show(ctx, tl!("Find Font"), egui::Id::new("dialog-find-font"), -40.0, 22, |ui: &mut Ui| {
         ui.set_width(380.0);
@@ -57,6 +74,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             });
         });
+        // The missing fonts' files, looked for in a folder (the Missing Fonts dialog).
+        if offer_folder {
+            ui.add_space(6.0);
+            find_in_folder = ui.button(tl!("Find in Folder…")).clicked();
+        }
         ui.add_space(10.0);
         widgets::subheader(ui, tl!("Replace With Font"));
         let fam = d.str("family");
@@ -113,11 +135,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else if app.ui.dialog.is_some() {
         app.ui.dialog = Some(d);
     }
+    // Missing Fonts takes the dialog's place, searching the folder picked.
+    if find_in_folder && let Err(e) = app.run("ui.findFontsInFolder", json!({})) {
+        app.ui.status = e;
+    }
 }
 
 /// What a Find Font row says after the font's name (`text.fonts` row): a missing family, a style
 /// standing in for another, characters the font lacks; and the colour to flag it with.
-fn font_note(f: &Value) -> (String, Option<egui::Color32>) {
+pub(crate) fn font_note(f: &Value) -> (String, Option<egui::Color32>) {
     let lacking = f["missingGlyphs"].as_u64().unwrap_or(0);
     let glyphs =
         if lacking > 0 { crate::i18n::fmt(tl!("  — {n} characters from another font"), &[("n", &lacking.to_string())]) } else { String::new() };
@@ -154,6 +180,33 @@ mod tests {
         assert_eq!(from["missing"], true);
         change(&mut app, &d, &from, true).unwrap();
         assert_eq!(fonts(&mut app)[0]["family"], "Source Sans 3");
+    }
+
+    #[test]
+    fn find_in_folder_puts_the_missing_fonts_dialog_in_find_fonts_place() {
+        let dir = std::fs::canonicalize(vectorcraft_testkit::temp_dir("find-font-folder")).unwrap();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.search_rules = Some(vectorcraft_engine::cmd::findfiles::Rules { user_content: vec![dir.clone()], ..Default::default() });
+        app.session.search_threads = Some(1);
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        assert!(!crate::menus::enabled(&app, "ui.findFontsInFolder"), "no folder picker (the web)");
+        let picked = dir.to_string_lossy().into_owned();
+        app.services.pick_folder = Some(Box::new(move || Some(picked.clone())));
+        assert!(crate::menus::enabled(&app, "ui.findFontsInFolder"));
+        // Nothing missing: no button, and no folder is asked for.
+        open(&mut app);
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert!(text.contains("Fonts in Document") && !text.contains("Find in Folder…"), "{text}");
+        assert_eq!(app.run("ui.findFontsInFolder", json!({})).err().as_deref(), Some("No fonts are missing in this document"));
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert!(text.contains("Find in Folder…"), "{text}");
+        app.run("ui.findFontsInFolder", json!({})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), d.str("folder")), (crate::dialogs::missing_fonts::KIND, dir.to_string_lossy().into_owned()));
+        assert_eq!(d.fields["fonts"][0]["family"], "Missing Family");
+        assert!(app.ui.dialog_search.is_some());
+        crate::dialogs::cancel(&mut app);
     }
 
     #[test]

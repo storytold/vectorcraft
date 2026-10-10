@@ -4,7 +4,7 @@ members = ["crates/*", "apps/*", "xtask"]
 default-members = ["crates/*", "apps/vectorcraft", "apps/vectorcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -54,7 +54,7 @@ wasmi = { version = "2.0.0", default-features = false, features = ["std", "valid
 wat = "1.228"
 
 # rendering / formats
-vello_cpu = "0.2"
+vello_cpu = { version = "0.2", features = ["f32_pipeline"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
 usvg = "0.48"
 krilla = "0.8"

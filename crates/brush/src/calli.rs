@@ -4,13 +4,21 @@
 //! in the directions normal to the path. For nib axes `u`, `v` with semi-axes `a`, `b` the
 //! support point in direction `d` is `(a²(u·d)u + b²(v·d)v) / √(a²(u·d)² + b²(v·d)²)`, so the
 //! stroke's local width across direction `n` is `2·√(a²(u·n)² + b²(v·n)²)`.
+//!
+//! A Calligraphic brush with Pressure variation changes its nib along the stroke with the pen
+//! pressure recorded on it (`StrokeLayer::pressure`): the sweep is sampled densely and each
+//! sample takes the nib for the pressure there.
 
 use vectorcraft_color::Paint;
-use vectorcraft_doc::Node;
+use vectorcraft_doc::{Node, PressureProfile, StrokeLayer};
 use vectorcraft_geom::{BezPath, PathData, Point, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{Bristle, BristleShape, Calligraphic, filled, tolerance};
+use crate::{Bristle, BristleShape, Calligraphic, Variation, filled, tolerance};
+
+/// The most pieces a varying nib cuts one segment of a subpath into, and about how many samples
+/// it takes along a whole subpath.
+const MAX_STEPS: f64 = 1024.0;
 
 /// An elliptical nib.
 #[derive(Clone, Copy, Debug)]
@@ -43,39 +51,53 @@ fn rot(base: Vec2, angle: f64) -> Vec2 {
     base * angle.cos() + normal(base) * angle.sin()
 }
 
-/// Samples (point, tangent) along a track, with extra tangents fanned in at corners so the
-/// outer edge of the sweep follows the nib around the corner.
-fn samples(t: &Track) -> Vec<(Point, Vec2)> {
+/// Samples (point, tangent, fraction of the track's length) along a track, with extra tangents
+/// fanned in at corners so the outer edge of the sweep follows the nib around the corner. `step`
+/// (for a nib that varies along the track): segments are cut into pieces at most that long.
+fn samples(t: &Track, step: Option<f64>) -> Vec<(Point, Vec2, f64)> {
     let mut out = vec![];
     let n = t.segments();
+    let len = t.len().max(1e-12);
     for i in 0..=n {
         let p = t.verts[i];
+        let f = t.cum[i] / len;
         if t.corner[i] {
             let (a, b) = t.in_out(i);
             let turn = a.cross(b).atan2(a.dot(b));
             let steps = (turn.abs() / 10f64.to_radians()).ceil().max(1.0) as usize;
             for k in 0..=steps {
-                out.push((p, rot(a, turn * k as f64 / steps as f64)));
+                out.push((p, rot(a, turn * k as f64 / steps as f64), f));
             }
         } else {
-            out.push((p, t.tangents[i]));
+            out.push((p, t.tangents[i], f));
+        }
+        if let Some(step) = step
+            && i < n
+        {
+            let seg = t.cum[i + 1] - t.cum[i];
+            let pieces = (seg / step).ceil().clamp(1.0, MAX_STEPS) as usize;
+            for k in 1..pieces {
+                let u = k as f64 / pieces as f64;
+                out.push((p.lerp(t.verts[i + 1], u), t.dirs[i], (t.cum[i] + seg * u) / len));
+            }
         }
     }
     out
 }
 
-/// The swept outline of `nib` along `t` as closed subpaths.
-pub(crate) fn sweep(t: &Track, nib: &Nib) -> Vec<SubPath> {
-    let s = samples(t);
-    let left: Vec<Point> = s.iter().map(|(p, tg)| *p + nib.support(normal(*tg))).collect();
-    let right: Vec<Point> = s.iter().map(|(p, tg)| *p + nib.support(-normal(*tg))).collect();
+/// The swept outline along `t` of the nib `nib(f)` (`f`: the fraction of the track's length) as
+/// closed subpaths. `step`: how often a varying nib is sampled (None: a constant nib).
+pub(crate) fn sweep(t: &Track, nib: &dyn Fn(f64) -> Nib, step: Option<f64>) -> Vec<SubPath> {
+    let s = samples(t, step);
+    let left: Vec<Point> = s.iter().map(|(p, tg, f)| *p + nib(*f).support(normal(*tg))).collect();
+    let right: Vec<Point> = s.iter().map(|(p, tg, f)| *p + nib(*f).support(-normal(*tg))).collect();
     if t.closed {
         let mut r = right;
         r.reverse();
         return vec![SubPath::polyline(&left, true), SubPath::polyline(&r, true)];
     }
-    let cap = |p: Point, tg: Vec2, from: f64, to: f64, out: &mut Vec<Point>| {
-        let steps = 16;
+    let cap = |(p, tg, f): (Point, Vec2, f64), from: f64, to: f64, out: &mut Vec<Point>| {
+        let (steps, nib) = (16, nib(f));
         for k in 1..steps {
             let ang = from + (to - from) * k as f64 / steps as f64;
             out.push(p + nib.support(rot(tg, ang)));
@@ -83,31 +105,66 @@ pub(crate) fn sweep(t: &Track, nib: &Nib) -> Vec<SubPath> {
     };
     let half = std::f64::consts::FRAC_PI_2;
     let mut poly = left.clone();
-    let (Some(&(pe, te)), Some(&(ps, ts))) = (s.last(), s.first()) else { return Vec::new() };
-    cap(pe, te, half, -half, &mut poly);
+    let (Some(&end), Some(&start)) = (s.last(), s.first()) else { return Vec::new() };
+    cap(end, half, -half, &mut poly);
     poly.extend(right.iter().rev());
-    cap(ps, ts, -half, -3.0 * half, &mut poly);
+    cap(start, -half, -3.0 * half, &mut poly);
     vec![SubPath::polyline(&poly, true)]
 }
 
-fn randomized(c: &Calligraphic, rng: &mut Rng) -> (f64, f64, f64) {
-    let [va, vr, vs] = c.variation;
-    let angle = c.angle + rng.range(-va, va);
-    let round = (c.roundness + rng.range(-vr, vr)).clamp(1.0, 100.0);
-    let size = (c.size + rng.range(-vs, vs)).max(0.05);
-    (angle, round, size)
+/// The stroke's angle, roundness and size: Random ones drawn for this stroke (from `rng`), the
+/// others the brush's values.
+fn randomized(c: &Calligraphic, rng: &mut Rng) -> [f64; 3] {
+    let mut out = [c.angle, c.roundness, c.size];
+    for ((v, var), mode) in out.iter_mut().zip(c.variation).zip(c.modes()) {
+        // Every value draws, so a stroke's random values stay the same whatever the other modes.
+        let r = rng.range(-var, var);
+        if mode == Variation::Random {
+            *v += r;
+        }
+    }
+    let [angle, round, size] = out;
+    [angle, round.clamp(1.0, 100.0), size.max(0.05)]
 }
 
-pub(crate) fn calligraphic(c: &Calligraphic, bp: &BezPath, weight: f64, paint: &Paint, name: &str) -> Vec<Node> {
+/// The nib's angle, roundness and size at pen pressure `p` (0..1): each Pressure value goes from
+/// the brush's value less its variation (lightest) to the value plus the variation (heaviest),
+/// kept within its range; the others are `base`'s.
+fn pressured(c: &Calligraphic, base: [f64; 3], p: f64) -> [f64; 3] {
+    let values = [c.angle, c.roundness, c.size];
+    let mut out = base;
+    for (i, (v, mode)) in out.iter_mut().zip(c.modes()).enumerate() {
+        let (Some(&value), Some(&var), Some(&(lo, hi))) = (values.get(i), c.variation.get(i), Calligraphic::RANGES.get(i)) else { continue };
+        if mode == Variation::Pressure {
+            let x = value + var * (2.0 * p.clamp(0.0, 1.0) - 1.0);
+            *v = if x.is_finite() { x.clamp(lo, hi) } else { value.clamp(lo, hi) };
+        }
+    }
+    let [angle, round, size] = out;
+    [angle, round.clamp(1.0, 100.0), size.max(0.05)]
+}
+
+pub(crate) fn calligraphic(c: &Calligraphic, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let mut rng = Rng::new(seed_of(bp, name));
-    let (angle, round, size) = randomized(c, &mut rng);
-    let size = size * weight;
-    let nib = Nib::new(angle, round / 100.0, size);
-    let subs: Vec<SubPath> = tracks(bp, tolerance(size)).iter().flat_map(|t| sweep(t, &nib)).collect();
+    let base = randomized(c, &mut rng);
+    let subs: Vec<SubPath> = if c.uses_pressure() {
+        let pressure = stroke.pressure.as_ref();
+        let nib = |f: f64| {
+            let [angle, round, size] = pressured(c, base, pressure.map_or(PressureProfile::MID, |p| p.at(f)));
+            Nib::new(angle, round / 100.0, size * weight)
+        };
+        // Flattened for the largest nib the pressure gives.
+        let size = pressured(c, base, 0.0)[2].max(pressured(c, base, 1.0)[2]) * weight;
+        tracks(bp, tolerance(size)).iter().flat_map(|t| sweep(t, &nib, Some((t.len() / MAX_STEPS).max(0.25)))).collect()
+    } else {
+        let [angle, round, size] = base;
+        let nib = Nib::new(angle, round / 100.0, size * weight);
+        tracks(bp, tolerance(size * weight)).iter().flat_map(|t| sweep(t, &|_| nib, None)).collect()
+    };
     if subs.is_empty() {
         return vec![];
     }
-    vec![filled(PathData::new(subs), paint)]
+    vec![filled(PathData::new(subs), &stroke.paint)]
 }
 
 /// Offset a track sideways by `d` (a polyline following it).
@@ -165,7 +222,7 @@ pub(crate) fn bristle(b: &Bristle, bp: &BezPath, weight: f64, paint: &Paint, nam
             let Some(sp) = offset_track(&t, off, t0.min(l * 0.3), t1.min(l * 0.3)) else { continue };
             let w = thick * (0.6 + 0.4 * edge) * rng.range(0.8, 1.2);
             let nib = Nib::new(0.0, 1.0, w);
-            let subs: Vec<SubPath> = tracks(&sp, tolerance(w)).iter().flat_map(|tt| sweep(tt, &nib)).collect();
+            let subs: Vec<SubPath> = tracks(&sp, tolerance(w)).iter().flat_map(|tt| sweep(tt, &|_| nib, None)).collect();
             if subs.is_empty() {
                 continue;
             }

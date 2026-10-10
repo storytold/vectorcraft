@@ -169,6 +169,11 @@ Graphics Processor** and restart. If a graphics processor can't show the window,
 next one. To pick one when starting the app, set `WGPU_POWER_PREF=high` (or `low`), or `WGPU_ADAPTER_NAME` to part of
 its name, such as `WGPU_ADAPTER_NAME=nvidia` (see [`docs/development.md`](docs/development.md#desktop-graphics-processor)).
 
+On native Wayland, winit 0.30 does not deliver dropped files. To open an SVG, use File › Open;
+to place artwork in the current document, copy and paste the file in a file manager; or run
+under XWayland (`WAYLAND_DISPLAY= vectorcraft`) for file drag-and-drop
+(see [`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
+
 On Linux under KDE Plasma 6.3 or later with Wayland, a drawing tablet's pen moves the cursor but VectorCraft doesn't
 respond to it yet (#491). Start the app under XWayland instead: `WAYLAND_DISPLAY= vectorcraft` (see
 [`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
@@ -179,6 +184,12 @@ Register the MCP server with Claude Code:
 
 ```sh
 claude mcp add vectorcraft -- /path/to/vectorcraft-cli mcp
+```
+
+To keep an agent to one project's files, give it folders to read and write (the same flags as PhotoCraft):
+
+```sh
+claude mcp add vectorcraft -- /path/to/vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project
 ```
 
 The details are in [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`](docs/control-protocol.md).

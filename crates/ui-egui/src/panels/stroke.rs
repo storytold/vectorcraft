@@ -378,18 +378,21 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     out
 }
 
-/// Draw a width profile's silhouette (its points; None: the plain bar) into `r`.
+/// Draw a width profile's silhouette (its points; None: the plain bar) into `r`. A profile made
+/// with the Width tool can be many times the stroke's weight: the silhouette is scaled to fit `r`
+/// by its widest point, and clipped to it (#909).
 pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color: Color32) {
     let n = 32;
     let half = r.height() / 2.0 - 1.0;
+    let widths: Vec<(f64, f64)> = (0..=n).map(|i| points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, i as f64 / n as f64))).collect();
+    let widest = widths.iter().map(|(l, rr)| l.max(*rr)).filter(|w| w.is_finite()).fold(1.0, f64::max);
     let mut top = vec![];
     let mut bot = vec![];
-    for i in 0..=n {
-        let tt = i as f64 / n as f64;
-        let (l, rr) = points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, tt));
-        let x = r.left() + tt as f32 * r.width();
-        top.push(pos2(x, r.center().y - l as f32 * half));
-        bot.push(pos2(x, r.center().y + rr as f32 * half));
+    for (i, (l, rr)) in widths.iter().enumerate() {
+        let x = r.left() + i as f32 / n as f32 * r.width();
+        let side = |w: f64| if w.is_finite() { (w / widest).clamp(0.0, 1.0) as f32 * half } else { 0.0 };
+        top.push(pos2(x, r.center().y - side(*l)));
+        bot.push(pos2(x, r.center().y + side(*rr)));
     }
     let mut mesh = egui::Mesh::default();
     for i in 0..=n {
@@ -401,7 +404,7 @@ pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color
         mesh.add_triangle(a, a + 1, a + 2);
         mesh.add_triangle(a + 1, a + 3, a + 2);
     }
-    ui.painter().add(egui::Shape::mesh(mesh));
+    ui.painter().with_clip_rect(r).add(egui::Shape::mesh(mesh));
 }
 
 /// The Profile dropdown (Stroke panel, Control bar): the stroke's own silhouette on the button
@@ -488,6 +491,33 @@ mod tests {
         assert_eq!(dash_pattern(&[Some(5.0), None, None, Some(9.0), None, None]), vec![5.0, 5.0]);
         assert!(dash_pattern(&[None; 6]).is_empty());
         assert!(dash_pattern(&[Some(0.0), Some(0.0), None, None, None, None]).is_empty());
+    }
+
+    /// #909: a profile many times the stroke's weight (made with the Width tool) draws inside its
+    /// box, scaled by its widest point, and the plain bar keeps its look.
+    #[test]
+    fn wide_profiles_fit_their_preview() {
+        let ctx = egui::Context::default();
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let drawn = |points: Option<&[(f64, f64, f64)]>| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| paint_profile(ui, r, points, Color32::WHITE));
+            out.textures_delta.clear();
+            out.shapes
+                .into_iter()
+                .filter_map(|c| match c.shape {
+                    egui::Shape::Mesh(m) => Some((c.clip_rect, m.vertices.iter().map(|v| v.pos).collect::<Vec<_>>())),
+                    _ => None,
+                })
+                .next()
+                .unwrap()
+        };
+        let (clip, wide) = drawn(Some(&[(0.0, 1.0, 1.0), (0.5, 10.0, 10.0), (1.0, 1.0, 1.0)]));
+        assert!(clip.min.y >= r.min.y - 0.5 && clip.max.y <= r.max.y + 0.5, "{clip:?}");
+        assert!(wide.iter().all(|p| p.y >= r.top() && p.y <= r.bottom()), "{wide:?}");
+        let middle = wide.iter().map(|p| (p.y - r.center().y).abs()).fold(0.0, f32::max);
+        assert!((middle - (r.height() / 2.0 - 1.0)).abs() < 1e-3, "the widest point fills the box ({middle})");
+        let (_, plain) = drawn(None);
+        assert!(plain.iter().all(|p| (p.y - r.center().y).abs() <= 0.35 * (r.height() / 2.0 - 1.0) + 1e-3));
     }
 
     #[test]

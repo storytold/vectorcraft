@@ -51,6 +51,20 @@ fn effect_menu_has_a_vector_effects_section() {
 }
 
 #[test]
+fn effect_menu_lists_the_pixelate_filters_between_blur_and_sharpen() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let pixelate: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Pixelate"]).collect();
+    let labels: Vec<&str> = pixelate.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Color Halftone…", "Crystallize…", "Mezzotint…", "Pointillize…"]);
+    assert!(pixelate.iter().all(|e| e.command.as_deref() == Some("effect.dialog")));
+    let raster: Vec<&str> =
+        entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
+    let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
+    assert!(at("Blur") < at("Pixelate") && at("Pixelate") < at("Sharpen"));
+}
+
+#[test]
 fn library_submenus_are_disabled_placeholders() {
     let app = app();
     let entries = menus::menu_entries(&app);

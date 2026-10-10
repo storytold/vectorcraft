@@ -1,7 +1,7 @@
 //! Brushes and symbols: commands, tools, rendering and persistence.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -191,6 +191,110 @@ fn paintbrush_tool_uses_the_current_brush() {
     let id = s.doc().unwrap().selection.objects[0];
     assert_eq!(brush_of(&s, id).as_deref(), Some("Dots"));
     assert!(s.execute("brush.setCurrent", &json!({"name": "Nope"})).is_err());
+}
+
+/// A Size: Pressure variant of "3 pt. Round" (3 ± 3 pt).
+fn pressure_round(s: &mut Session) {
+    let params = json!({"variation": [0, 0, 3], "modes": ["fixed", "fixed", "pressure"]});
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+}
+
+fn pressure_of(s: &Session, id: NodeId) -> Option<vectorcraft_doc::PressureProfile> {
+    node(s, id).appearance.stroke().and_then(|st| st.pressure.clone())
+}
+
+/// #852: the Paintbrush records the pen pressure on the stroke, the brush draws it, and it lasts
+/// through saving and every export; a mouse stroke records none.
+#[test]
+fn paintbrush_records_pen_pressure_on_the_stroke() {
+    let mut s = session();
+    pressure_round(&mut s);
+    s.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    let strokes = |s: &mut Session, y: f64, pressure: [f32; 4]| {
+        let kinds = [PointerKind::Down, PointerKind::Drag, PointerKind::Drag, PointerKind::Up];
+        for ((k, x), p) in kinds.into_iter().zip([20.0, 120.0, 220.0, 320.0]).zip(pressure) {
+            s.pointer(&PointerEvent { pressure: p, ..PointerEvent::new(k, x, y) }, v).unwrap();
+        }
+        let id = s.doc().unwrap().selection.objects[0];
+        // Deselected, so the next stroke starts a path of its own.
+        select(s, &[]);
+        id
+    };
+    let pen = strokes(&mut s, 60.0, [0.0, 0.4, 0.8, 1.0]);
+    let p = pressure_of(&s, pen).expect("pressure recorded");
+    assert!(p.at(0.0) < 0.05 && p.at(1.0) > 0.95 && (p.at(0.5) - 0.6).abs() < 0.05, "{p:?}");
+    let mouse = strokes(&mut s, 200.0, [1.0; 4]);
+    assert_eq!(pressure_of(&s, mouse), None, "a mouse presses fully: nothing to record");
+    // Drawn: thin where the pen pressed lightly, 6 pt where it pressed fully.
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let art = |d: &Document, id: NodeId| vectorcraft_brush::node_pieces(d, d.node(id).unwrap()).unwrap();
+    let heavy_end = vectorcraft_brush::pieces_bounds(&art(&doc, pen)).unwrap();
+    assert!((heavy_end.height() - 6.0).abs() < 0.3, "{heavy_end:?}");
+    let even = vectorcraft_brush::pieces_bounds(&art(&doc, mouse)).unwrap();
+    assert!((even.height() - 3.0).abs() < 0.1, "no pressure draws the size itself: {even:?}");
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(pen).unwrap().appearance.stroke().unwrap().pressure, Some(p));
+    // SVG and PDF draw the brush through the same stroke code: without the pressure they differ.
+    let mut flat = doc.clone();
+    flat.node_mut(pen).unwrap().appearance.stroke_mut().unwrap().pressure = None;
+    assert_ne!(vectorcraft_svg::export(&doc, &Default::default()), vectorcraft_svg::export(&flat, &Default::default()));
+    let pdf = |d: &Document| {
+        vectorcraft_pdf::export(d, &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() }).unwrap()
+    };
+    assert_ne!(pdf(&doc), pdf(&flat));
+}
+
+/// Continuing a pressure stroke keeps its pressure where it was and adds the new stroke's after it.
+#[test]
+fn continuing_a_stroke_joins_its_pressure() {
+    let mut s = session();
+    let r = s.execute("path.freehand", &json!({"points": [[0, 50, 0], [100, 50, 1]], "style": "brush"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("path.freehand", &json!({"points": [[100, 50, 1], [200, 50, 0]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();
+    let p = pressure_of(&s, id).unwrap();
+    assert!(p.at(0.0) < 0.05 && (p.at(0.5) - 1.0).abs() < 0.05 && p.at(1.0) < 0.05, "{p:?}");
+    // Continued at its start: the new stroke comes first, running backwards from where it joined.
+    let r = s.execute("path.freehand", &json!({"points": [[0, 150], [100, 150]], "style": "brush"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("path.freehand", &json!({"points": [[0, 150, 1], [-100, 150, 0]], "style": "brush", "extend": {"id": id.0, "end": "start"}})).unwrap();
+    let p = pressure_of(&s, id).unwrap();
+    assert!(p.at(0.0) < 0.05 && (p.at(0.5) - 1.0).abs() < 0.05, "{p:?}");
+    assert_eq!(p.at(1.0), vectorcraft_doc::PressureProfile::MID, "the old part had no pressure");
+}
+
+/// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.
+#[test]
+fn pressure_stays_with_its_own_path() {
+    let mut s = session();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    let r = s.execute("brush.freehand", &json!({"points": [[0, 50, 0.2], [100, 50, 0.9]], "style": "brush", "brush": "3 pt. Round"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    assert!(pressure_of(&s, id).is_some());
+    select(&mut s, &[id]);
+    s.execute("graphicStyle.new", &json!({"name": "Inked"})).unwrap();
+    let style = s.doc().unwrap().doc.graphic_style("Inked").unwrap().appearance.clone();
+    assert!(style.stroke().is_some_and(|st| st.pressure.is_none()));
+    let other = rect(&mut s, 10.0, 100.0, 50.0, 50.0);
+    assert_eq!(pressure_of(&s, other), None, "new art takes the look, not the pressure");
+    pressure_round(&mut s);
+    assert!(pressure_of(&s, id).is_some(), "editing the brush keeps the strokes' pressure");
+}
+
+/// Brush Options sets the variation modes; bad modes are refused, never a panic.
+#[test]
+fn brush_options_set_variation_modes() {
+    let mut s = session();
+    pressure_round(&mut s);
+    let b = s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap();
+    assert_eq!(b["modes"], json!(["fixed", "fixed", "pressure"]));
+    assert_eq!(b["variation"], json!([0.0, 0.0, 3.0]));
+    for bad in [json!({"modes": ["fixed", "fixed", "tilt"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})] {
+        assert!(s.execute("brush.options", &json!({"name": "3 pt. Round", "params": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap(), b, "a refused edit changes nothing");
 }
 
 // ---------- symbols ----------

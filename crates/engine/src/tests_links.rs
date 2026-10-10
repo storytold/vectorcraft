@@ -127,6 +127,36 @@ fn a_placed_link_records_the_file_and_the_document_saves_only_a_preview() {
     assert_eq!(saved["images"][&im.key]["proxy"], Value::Null, "an embedded image shows it too");
 }
 
+/// A flat `w`×`h` Photoshop document of one colour (raw RGB, no layers).
+fn psd(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+    let mut f = b"8BPS\0\x01\0\0\0\0\0\0\0\x03".to_vec();
+    f.extend(h.to_be_bytes());
+    f.extend(w.to_be_bytes());
+    f.extend([0, 8, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    for v in rgb {
+        f.extend(std::iter::repeat_n(v, (w * h) as usize));
+    }
+    f
+}
+
+/// #918: a Photoshop document placed linked shows its merged image, and updates when it changes.
+#[test]
+fn a_linked_photoshop_document_places_and_updates() {
+    let dir = Folder::new("psd");
+    let pic = dir.file("art/photo.psd");
+    write(&pic, &psd(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let link = image(&s, id).link.unwrap();
+    assert_eq!(link.path, pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    write(&pic, &psd(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (400, 400));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");

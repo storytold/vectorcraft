@@ -108,3 +108,52 @@ fn an_ai_file_saved_without_its_pdf_part_opens_from_its_editing_data() {
     let e = open(&mut s, "plain.ai", &ai::ai(b"", PLACEHOLDER), json!({})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
 }
+
+#[test]
+fn editing_data_false_opens_only_what_the_page_prints() {
+    let mut s = Session::new();
+    for (name, file) in [("art.eps", ai::eps(&ai::sample_data(), ai::page_ps())), ("art.ai", ai::ai(&compressed(&ai::sample_data()), ai::page_pdf()))]
+    {
+        let r = open(&mut s, name, &file, json!({"editingData": false})).unwrap();
+        let layers = &s.doc().unwrap().doc.layers;
+        assert_eq!(layers.len(), 1, "{name}: {r}");
+        assert_ne!(names(layers), ["Art"], "{name}: the page's layer");
+    }
+    let e = open(&mut s, "art.eps", &ai::eps(&ai::sample_data(), ai::page_ps()), json!({"editingData": "no"})).unwrap_err().to_string();
+    assert!(e.contains("editingData must be true or false"), "{e}");
+    // A file that is only its editing data can't open without it.
+    let e = open(&mut s, "art.ai", &ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER), json!({"editingData": false})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+}
+
+#[test]
+fn fit_to_artwork_bounds_leaves_out_the_hidden_art_and_guides_the_editing_data_has() {
+    // A shown square; a hidden one and a long guide far from it, which the page doesn't draw.
+    let art =
+        format!("0 g\n{}f\n1 Xw\n{}f\n0 Xw\n-500 20 m\n700 20 L\n(N) *\n", ai::rect(10.0, 10.0, 50.0, 50.0), ai::rect(150.0, 60.0, 190.0, 95.0));
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &art));
+    let mut s = Session::new();
+    let r = open(&mut s, "fit.eps", &ai::eps(data.as_bytes(), "0 setgray 10 10 40 40 rectfill\n"), json!({})).unwrap();
+    let layer = &s.doc().unwrap().doc.layers[0];
+    let kids = layer.children().unwrap();
+    assert_eq!(kids.len(), 3, "{r}");
+    assert!(!kids[1].visible && matches!(kids[2].kind, NodeKind::Path { guide: true, .. }));
+    s.execute("artboard.fitToArt", &json!({})).unwrap();
+    // The square, 50 to 90 down the 100-point page.
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect, vectorcraft_geom::Rect::new(10.0, 50.0, 50.0, 90.0));
+}
+
+#[test]
+fn type_asked_for_as_outlines_opens_a_file_whose_type_shows_from_its_pdf_part() {
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 g\n{}f\n{text}", ai::rect(10.0, 10.0, 50.0, 50.0))));
+    let file = ai::ai(&compressed(data.as_bytes()), "0 g 10 10 40 40 re f BT /F1 12 Tf 100 50 Td (Hi) Tj ET");
+    let mut s = Session::new();
+    // As type, the page's type goes into the text object of the layers.
+    let r = open(&mut s, "type.ai", &file, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    // As outlines, only the PDF part has them.
+    let r = open(&mut s, "type.ai", &file, json!({"textAs": "outlines"})).unwrap();
+    assert!(r["warnings"].to_string().contains("outlines"), "{r}");
+    assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+}

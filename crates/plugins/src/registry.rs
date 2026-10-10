@@ -95,6 +95,13 @@ pub struct FolderReport {
 /// reported and skipped; the others still load.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
+    load_folder_where(dir, |_| Ok(()))
+}
+
+/// [`load_folder`], loading only the files `allow` accepts; the others are reported as failed
+/// with its reason.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_folder_where(dir: &std::path::Path, allow: impl Fn(&std::path::Path) -> std::result::Result<(), String>) -> Result<FolderReport> {
     let rd = std::fs::read_dir(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
     let mut files: Vec<std::path::PathBuf> =
         rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm"))).collect();
@@ -102,6 +109,10 @@ pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     files.truncate(1000);
     let mut report = FolderReport::default();
     for f in files {
+        if let Err(why) = allow(&f) {
+            report.failed.push((f.display().to_string(), why));
+            continue;
+        }
         match load_file(&f, Limits::default()) {
             Ok(p) => report.loaded.push(install(p).id().to_string()),
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),

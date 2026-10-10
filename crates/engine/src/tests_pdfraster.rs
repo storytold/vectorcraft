@@ -150,3 +150,35 @@ fn live_objects_and_single_fills_and_strokes_keep_their_raster_effects() {
         assert_eq!(pieces, 2, "item {item}: one piece per fill and stroke");
     }
 }
+
+#[test]
+fn shadows_and_glows_keep_their_blend_modes() {
+    // #827: a red Screen glow over grey can't darken it, as Normal would.
+    let glow = Effect {
+        id: "stylize.outerGlow".into(),
+        params: json!({"mode": "screen", "color": "#ff0000", "opacity": 100.0, "blur": 20.0}),
+        visible: true,
+    };
+    let mut d = Document::new(200.0, 200.0);
+    let back = rect(&mut d, Rect::new(0.0, 0.0, 200.0, 200.0), Color::rgb(0.5, 0.5, 0.5));
+    add(&mut d, back);
+    let dot = rect(&mut d, Rect::new(70.0, 70.0, 130.0, 130.0), Color::rgb(0.12, 0.12, 0.12));
+    add(&mut d, with(dot, glow.clone()));
+    assert_written("screen glow", &d);
+    let r = crate::cmd::rasterfx::export_pdf_with_report(&d, &Default::default()).unwrap();
+    let back = render(&vectorcraft_pdf::import(&r.bytes).unwrap());
+    for x in [133, 138, 145] {
+        let i = (100 * back.width as usize + x) * 4;
+        let (red, green, blue) = (back.pixels[i], back.pixels[i + 1], back.pixels[i + 2]);
+        assert!(red > green && green >= 124 && blue >= 124, "x {x}: {:?}", (red, green, blue));
+    }
+
+    // A Multiply shadow and the Screen glow: an image each, composited with its mode.
+    let mut d = Document::new(200.0, 200.0);
+    let dot = rect(&mut d, Rect::new(70.0, 70.0, 130.0, 130.0), Color::rgb(0.12, 0.12, 0.12));
+    add(&mut d, with(with(dot, shadow()), glow));
+    let flat = crate::flatten_raster_effects(&d).unwrap();
+    let modes: Vec<_> =
+        flat.layers[0].children().unwrap()[0].children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Image(_))).map(|c| c.blend).collect();
+    assert_eq!(modes, [vectorcraft_color::BlendMode::Multiply, vectorcraft_color::BlendMode::Screen]);
+}

@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 default = ["wgpu", "accessibility"]
-wgpu = ["eframe/wgpu"]
+wgpu = ["eframe/wgpu", "dep:winsafe"]
 accessibility = ["eframe/accesskit"]
 # Build with --no-default-features --features windows7 and the win7 Rust target.
 windows7 = ["eframe/glow"]
@@ -42,6 +42,10 @@ zbus = "=5.19.0"
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { workspace = true }
+# Which GPU drives which display (EnumDisplayDevices, src/gpu.rs), so the window is drawn on the
+# GPU that shows it: drawing on a GPU without a monitor reset the display driver. Safe wrappers over
+# Win32 (MIT); the `user` feature is User32.dll only. Only the wgpu renderer chooses an adapter.
+winsafe = { version = "0.0.29", default-features = false, features = ["user"], optional = true }
 
 # DirectWrite's system font collection (src/system_fonts.rs): fonts that font services such as
 # Adobe Fonts load in place (#579). MIT OR Apache-2.0, already in the build through accesskit.

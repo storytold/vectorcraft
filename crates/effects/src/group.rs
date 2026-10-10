@@ -320,6 +320,17 @@ mod tests {
     }
 
     #[test]
+    fn a_random_transform_on_a_group_moves_its_members_together() {
+        let mut g = group_with("distort.transform");
+        g.appearance.effects[0].params = serde_json::json!({"moveH": 100, "moveV": 100, "random": true});
+        let art = evaluate_container(&g).unwrap();
+        let corner = |i: usize| art.children().and_then(|c| c.get(i)).and_then(|n| n.geometric_bounds()).map(|b| (b.x0, b.y0)).unwrap();
+        let (a, b) = (corner(0), corner(1));
+        assert!(a.0 > 0.0 && a.0 < 100.0, "moved by a share of the value: {a:?}");
+        assert!((b.0 - a.0 - 5.0).abs() < 1e-9 && (b.1 - a.1).abs() < 1e-9, "{a:?} {b:?}");
+    }
+
+    #[test]
     fn hidden_effect_or_plain_group_is_untouched() {
         let mut g = group_with("pathfinder.add");
         g.appearance.effects[0].visible = false;

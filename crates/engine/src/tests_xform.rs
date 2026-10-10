@@ -371,6 +371,52 @@ fn artboard_set_props_scales_art_only_when_asked_and_resized() {
     assert!(s.execute("artboard.setProps", &json!({"index": 9, "width": 10, "scaleArt": true})).is_err());
 }
 
+/// Move Artwork is independent of scaling and takes only fully contained art and board guides.
+#[test]
+fn coordinate_moves_honor_move_art_and_keep_resize_behavior() {
+    let mut s = session();
+    let inside = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    let partly = rect(&mut s, 700.0, 500.0, 200.0, 200.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 400, "artboard": 0})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 400})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    for scale in [false, true] {
+        let out = s.execute("artboard.setProps", &json!({"index": 0, "x": 30, "y": -10, "moveArt": true, "scaleArt": scale})).unwrap();
+        assert_eq!(bounds(&s, inside), Rect::new(130.0, 90.0, 330.0, 190.0));
+        assert_eq!(bounds(&s, partly), Rect::new(700.0, 500.0, 900.0, 700.0));
+        assert_eq!(stroke_width(&s, inside), 4.0);
+        assert_eq!(guide_positions(&s), vec![430.0, 400.0]);
+        assert_eq!(out, if scale { json!({"scaled": []}) } else { Value::Null });
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+    }
+    for p in [json!({"index": 0, "x": 30, "moveArt": false}), json!({"index": 0, "x": 30, "width": 400, "moveArt": true})] {
+        s.execute("artboard.setProps", &p).unwrap();
+        assert_eq!(bounds(&s, inside), Rect::new(100.0, 100.0, 300.0, 200.0));
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+#[test]
+fn coordinate_moves_journal_the_locked_art_preference() {
+    let mut s = session();
+    let locked = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "x": 30, "moveArt": true})).unwrap();
+    assert_eq!(bounds(&s, locked), Rect::new(100.0, 100.0, 300.0, 200.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    s.execute("artboard.setProps", &json!({"index": 0, "x": 30, "moveArt": true})).unwrap();
+    assert_eq!(bounds(&s, locked), Rect::new(130.0, 100.0, 330.0, 200.0));
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(p["lockedAndHidden"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = false;
+    s.execute(&id, &p).unwrap();
+    assert_eq!(bounds(&s, locked), Rect::new(130.0, 100.0, 330.0, 200.0));
+}
+
 /// Locked and hidden art scales only with Move Locked and Hidden Artwork with Artboard, as it
 /// moves only with it.
 #[test]

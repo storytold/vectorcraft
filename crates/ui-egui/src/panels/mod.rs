@@ -48,6 +48,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{LiveCorners, Node, StrokeLayer};
 use vectorcraft_engine::inspect::StrokeMixed;
+use vectorcraft_geom::shapes::CornerKind;
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
@@ -61,13 +62,15 @@ pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
 /// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
 /// (the Direct-Selected ones, else every corner), blank when they differ.
 pub(crate) fn corner_radius(app: &VectorcraftApp, n: &Node) -> Option<f64> {
-    let partial = app.session.active().and_then(|d| d.selection.partial(n.id));
-    let corners = LiveCorners::of(n)?;
-    corners.style(&corners.picked(partial)).0
+    corner_style(app, n).0
 }
 
-/// The Corner Radius field of a live rectangle's or polygon's properties: [`corner_radius`],
-/// which a new value sets on those corners.
+/// The radius and kind of the corners [`corner_radius`] reads, each None when they differ.
+pub(crate) fn corner_style(app: &VectorcraftApp, n: &Node) -> (Option<f64>, Option<CornerKind>) {
+    let partial = app.session.active().and_then(|d| d.selection.partial(n.id));
+    LiveCorners::of(n).map_or((None, None), |c| c.style(&c.picked(partial)))
+}
+
 /// The width of a panel's number fields: the Transform fields', two to a row beside the reference
 /// point, their labels and the W/H link, so every field in the panel is as wide (#696). Measured
 /// from the full row, before its widgets.
@@ -77,15 +80,21 @@ pub(crate) fn field_width(ui: &Ui) -> f32 {
     ((ui.available_width() - AROUND) / 2.0).clamp(60.0, 110.0)
 }
 
+/// The Corner Radius field of a live rectangle's properties: [`corner_radius`], which a new value
+/// sets on those corners.
 pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str) {
-    let units = app.session.general_unit();
     let fw = field_width(ui);
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Corner Radius:"));
-        if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), units, fw) {
-            app.run("object.setLiveShape", json!({"radius": r})).ok();
-        }
+        corner_radius_field(app, ui, n, id, fw);
     });
+}
+
+/// [`corner_radius_row`]'s field, `width` wide.
+pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: impl std::hash::Hash + std::fmt::Debug, width: f32) {
+    if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), app.session.general_unit(), width) {
+        app.run("object.setLiveShape", json!({"radius": r})).ok();
+    }
 }
 
 /// Number of selected objects.
@@ -412,8 +421,8 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
 }
 
 /// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
-/// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
-pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// command feeds); returns the one clicked, for the caller to apply.
+pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, "Recent Colors");
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
@@ -430,9 +439,7 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             chosen = Some(*c);
         }
     }
-    if let Some(c) = chosen {
-        apply_click(app, ui, json!({"color": color_json(&c)}));
-    }
+    chosen
 }
 
 /// A colour as command JSON, keeping its model.

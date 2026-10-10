@@ -1,6 +1,7 @@
 //! Image resolution metadata (pixels per inch): PNG `pHYs`, JPEG JFIF density or EXIF, TIFF and
-//! WebP EXIF resolution tags, BMP pixels per metre. Place sizes an image by it (72 ppi when the file
-//! has none); images converted to PNG on import keep it as a `pHYs` chunk.
+//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo. Place
+//! sizes an image by it (72 ppi when the file has none); images converted to PNG on import keep it
+//! as a `pHYs` chunk.
 
 const INCH_M: f64 = 0.0254;
 const INCH_CM: f64 = 2.54;
@@ -18,6 +19,8 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
         webp(bytes)
     } else if bytes.starts_with(b"BM") {
         bmp(bytes)
+    } else if super::psdread::is_psd(bytes) {
+        super::psdread::resolution(bytes)
     } else {
         None
     };

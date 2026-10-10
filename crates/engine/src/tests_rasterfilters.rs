@@ -1,6 +1,7 @@
-//! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Sharpen ›
-//! Unsharp Mask): applied and edited as commands, listed in the catalogue, drawn on the canvas,
-//! and written to PDF and SVG as images of the effected object.
+//! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Pixelate ›
+//! Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask): applied and
+//! edited as commands, listed in the catalogue, drawn on the canvas, and written to PDF and SVG
+//! as images of the effected object.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -15,6 +16,10 @@ const EFFECTS: [(&str, &str); 3] = [
     ("blur.smart", r#"{"radius": 8, "threshold": 100}"#),
     ("sharpen.unsharpMask", r#"{"amount": 300, "radius": 3}"#),
 ];
+
+/// Effect › Pixelate, at their defaults.
+const PIXELATE: [(&str, &str); 4] =
+    [("pixelate.colorHalftone", "{}"), ("pixelate.crystallize", "{}"), ("pixelate.mezzotint", "{}"), ("pixelate.pointillize", "{}")];
 
 /// A group of a red square and a darker red stripe across it; returns the group's id.
 fn striped() -> (Session, u64) {
@@ -52,6 +57,10 @@ fn listed_applied_edited_and_undone() {
     let menus: Vec<Value> =
         EFFECTS.iter().map(|(id, _)| list["catalog"].as_array().unwrap().iter().find(|e| e["id"] == *id).unwrap()["menu"].clone()).collect();
     assert_eq!(menus, [json!(["Effect", "Blur"]), json!(["Effect", "Blur"]), json!(["Effect", "Sharpen"])]);
+    for (id, _) in PIXELATE {
+        let e = list["catalog"].as_array().unwrap().iter().find(|e| e["id"] == id).unwrap_or_else(|| panic!("{id} listed"));
+        assert_eq!((&e["raster"], &e["menu"]), (&json!(true), &json!(["Effect", "Pixelate"])), "{id}");
+    }
     // Junk parameters are stored as given and read clamped; the canvas still draws.
     for (id, _) in EFFECTS {
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": {"amount": 1e308, "radius": -1e308, "threshold": "x", "quality": 7}}))
@@ -71,7 +80,7 @@ fn listed_applied_edited_and_undone() {
 
 #[test]
 fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
-    for (id, params) in EFFECTS {
+    for (id, params) in EFFECTS.into_iter().chain(PIXELATE) {
         let (mut s, g) = striped();
         let plain = render(&s);
         let params: Value = serde_json::from_str(params).unwrap();
@@ -100,7 +109,7 @@ fn spin_blur_reaches_past_the_corners() {
 
 #[test]
 fn pdf_and_svg_write_the_effected_object_as_an_image() {
-    for (id, params) in EFFECTS {
+    for (id, params) in EFFECTS.into_iter().chain(PIXELATE) {
         let (mut s, g) = striped();
         let params: Value = serde_json::from_str(params).unwrap();
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();

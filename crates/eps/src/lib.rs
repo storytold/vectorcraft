@@ -34,7 +34,7 @@ mod ps;
 mod scene;
 mod tiff;
 
-pub use import::{Imported, ai_alone, family_style, import, is_loss, layered_ai};
+pub use import::{Imported, ai_alone, family_style, import, import_with, is_loss, layered_ai};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;

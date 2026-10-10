@@ -185,7 +185,10 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
     }
     // A placed document's file opens here, in a new tab: saving it updates this document.
     if !reveal && info["document"] == true {
-        app.run("document.open", json!({ "path": path }))?;
+        let opened = app.run("document.open", json!({ "path": path }))?;
+        // Its missing fonts are asked about as for a document opened with File › Open.
+        crate::dialogs::missing_fonts::after_open(app, &opened);
+        crate::dialogs::settle(app);
         return Ok(json!({ "path": path }));
     }
     if reveal { crate::io::reveal_path(app, &path) } else { crate::io::open_in_app(app, &path) }?;

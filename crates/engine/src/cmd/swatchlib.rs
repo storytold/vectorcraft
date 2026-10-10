@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl or .ase (swatch exchange) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl, .ase (swatch exchange) or .acb (color book, read only) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
             always,
             load
         ),
@@ -130,7 +130,7 @@ impl LibraryFile for SwatchLibrary {
 }
 
 /// The extensions of library files [`palette_io::read_bytes`] reads.
-pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl", "ase"];
+pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl", "ase", "acb"];
 
 /// A library file the save commands write ([`Libraries::write`]).
 pub(crate) enum FileData {
@@ -151,13 +151,14 @@ impl<L: LibraryFile> Libraries<L> {
         self.rescan();
     }
 
-    /// Re-read the library files of the user library folder (unreadable ones are skipped).
+    /// Re-read the library files of the user library folder (unreadable ones are skipped). The
+    /// folder is the app's own: automation roots don't apply to it ([`crate::file_access`]).
     pub fn rescan(&mut self) {
         self.extra.retain(|e| e.info.category != "user");
         let Some(dir) = self.user_dir.clone() else { return };
         for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
-            let Some(lib) = read_file(&path).ok().and_then(|b| L::read(&b, stem(&file)).ok()) else { continue };
+            let Some(lib) = crate::file_access::unconfined(|| read_file(&path)).ok().and_then(|b| L::read(&b, stem(&file)).ok()) else { continue };
             let info = LibraryInfo { id: format!("user/{file}"), name: lib.name().to_string(), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
@@ -183,9 +184,10 @@ impl<L: LibraryFile> Libraries<L> {
     /// The User Defined library whose file has the extension of file name `file` and holds `bytes`.
     fn user_file(&self, file: &str, bytes: &[u8]) -> Option<&Extra<L>> {
         let ext = extension(file);
-        self.extra
-            .iter()
-            .find(|e| e.info.category == "user" && e.path.as_deref().is_some_and(|p| extension(p) == ext && read_file(p).is_ok_and(|b| b == bytes)))
+        self.extra.iter().find(|e| {
+            e.info.category == "user"
+                && e.path.as_deref().is_some_and(|p| extension(p) == ext && crate::file_access::unconfined(|| read_file(p)).is_ok_and(|b| b == bytes))
+        })
     }
 
     /// Write library file `data` as the save commands do: into the user library folder as
@@ -203,8 +205,8 @@ impl<L: LibraryFile> Libraries<L> {
                 .to_string();
             let file = library_file_name(name, ext);
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
-            create_dir(&dir)?;
-            write_file(&path, bytes)?;
+            // The app's own folder, under a name made safe: no root applies.
+            crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_file(&path, bytes)))?;
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
@@ -277,11 +279,11 @@ impl<L: LibraryFile> Libraries<L> {
         let (user_id, written) = match self.user_file(&file, &bytes).map(|e| e.info.id.clone()) {
             Some(same) => (same, None),
             None => {
-                create_dir(&dir)?;
                 let mut taken: HashSet<String> = library_files(&dir, L::EXTS).iter().map(|p| file_name(p).to_lowercase()).collect();
                 let file = free_name(&file, &mut taken);
                 let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
-                write_new_file(&path, &bytes)?;
+                // The app's own folder, under a name made safe: no root applies.
+                crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_new_file(&path, &bytes)))?;
                 self.rescan();
                 (format!("user/{file}"), Some(path))
             }

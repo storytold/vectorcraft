@@ -90,12 +90,19 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen =
         d.fields.get("screen").and_then(Value::as_array).and_then(|a| Some(egui::pos2(a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32)));
     let chip = Point::new(d.f64("x", 0.0), d.f64("y", 0.0));
-    let pos = screen.unwrap_or_else(|| {
-        app.canvas_rect.zip(app.view().copied()).map_or(ctx.content_rect().center(), |(r, v)| Xf::new(r, &v).to_screen(chip) + vec2(14.0, 14.0))
+    let area = egui::Id::new("gradient-stop-popover");
+    let size = ctx.memory(|m| m.area_rect(area)).map_or(POPOVER_SIZE, |r| r.size());
+    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.view().copied()) {
+        Some((canvas, v)) => {
+            let xf = Xf::new(canvas, &v);
+            let at = xf.to_screen(chip);
+            selection_on_screen(app, &xf).map_or(at + vec2(14.0, 14.0), |art| beside_art(at, art, size, canvas))
+        }
+        None => ctx.content_rect().center(),
     });
     let swatches = d.str("tab") == "swatches";
     let mut tab = None;
-    let resp = egui::Area::new(egui::Id::new("gradient-stop-popover"))
+    let resp = egui::Area::new(area)
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
         .constrain(true)
@@ -148,6 +155,34 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if frame > opened && resp.clicked_elsewhere() && !ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
         app.ui.dialog = None;
     }
+}
+
+/// The popover's size before it has been drawn.
+const POPOVER_SIZE: egui::Vec2 = vec2(272.0, 360.0);
+
+/// The selected art's box on the screen.
+fn selection_on_screen(app: &VectorcraftApp, xf: &Xf) -> Option<egui::Rect> {
+    let st = app.session.active()?;
+    let b = st.doc.bounds_of(&st.selection.objects, false)?;
+    Some(egui::Rect::from_points(&xf.quad(b)))
+}
+
+/// Where the popover opened from a stop's chip at `chip` goes: beside the selected `art` on the
+/// first side of it with room for a popover of `size` in `room` (right, left, below, above), so
+/// the art it recolours stays in view (#862); else beside the chip.
+fn beside_art(chip: egui::Pos2, art: egui::Rect, size: egui::Vec2, room: egui::Rect) -> egui::Pos2 {
+    const GAP: f32 = 12.0;
+    let x = (chip.x - size.x / 2.0).clamp(room.left(), (room.right() - size.x).max(room.left()));
+    let y = (chip.y - size.y / 2.0).clamp(room.top(), (room.bottom() - size.y).max(room.top()));
+    [
+        egui::pos2(art.right() + GAP, y),
+        egui::pos2(art.left() - GAP - size.x, y),
+        egui::pos2(x, art.bottom() + GAP),
+        egui::pos2(x, art.top() - GAP - size.y),
+    ]
+    .into_iter()
+    .find(|p| room.contains_rect(egui::Rect::from_min_size(*p, size)))
+    .unwrap_or(chip + vec2(14.0, 14.0))
 }
 
 /// Document swatches as tiles: a click gives the stop (or point) that colour.
@@ -246,6 +281,28 @@ mod tests {
         app.select_tool("gradient");
         app.run("gradient.selectStop", json!({"index": 1})).unwrap();
         app
+    }
+
+    /// #862: the popover goes beside the art, on the first side with room, not over it.
+    #[test]
+    fn the_popover_goes_beside_the_art_it_edits() {
+        let room = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1200.0, 800.0));
+        let size = egui::vec2(272.0, 360.0);
+        let place = |art: egui::Rect| egui::Rect::from_min_size(beside_art(art.center(), art, size, room), size);
+        // Room on the right.
+        let art = egui::Rect::from_min_max(egui::pos2(300.0, 300.0), egui::pos2(500.0, 450.0));
+        assert!(place(art).left() > art.right() && room.contains_rect(place(art)));
+        // Against the right edge: on the left.
+        let art = egui::Rect::from_min_max(egui::pos2(900.0, 300.0), egui::pos2(1150.0, 450.0));
+        assert!(place(art).right() < art.left());
+        // As wide as the room: below it, or above it near the bottom.
+        let art = egui::Rect::from_min_max(egui::pos2(100.0, 20.0), egui::pos2(1100.0, 300.0));
+        assert!(place(art).top() > art.bottom());
+        let art = egui::Rect::from_min_max(egui::pos2(100.0, 420.0), egui::pos2(1100.0, 780.0));
+        assert!(place(art).bottom() < art.top());
+        // Nowhere to go: beside the chip, as before.
+        let art = room.shrink(10.0);
+        assert_eq!(beside_art(art.center(), art, size, room), art.center() + egui::vec2(14.0, 14.0));
     }
 
     fn stops(app: &VectorcraftApp) -> Vec<GradientStop> {

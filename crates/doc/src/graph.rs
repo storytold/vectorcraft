@@ -64,12 +64,29 @@ impl GraphKind {
     }
 }
 
+/// The fill and stroke captured from one series' generated marks. An absent paint keeps whatever
+/// the generator draws for that part (greyscale for a series fill, the part's own stroke otherwise).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SeriesPaint {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill: Option<vectorcraft_color::Paint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<vectorcraft_color::Paint>,
+    /// Stroke weight in points, kept with [`Self::stroke`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke_width: Option<f64>,
+}
+
 /// Graph data and options. `rows` are categories (one per row of the Graph Data window), each
 /// holding one value per series; `series` are the legend labels (the first row of the window).
 /// Scatter graphs read each series as (y, x) column pairs, like Illustrator.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GraphSpec {
+    /// Paint taken from the series' marks (Group Selection). One entry per series index; missing
+    /// entries keep the generator's own fill and stroke.
+    pub series_paints: Vec<SeriesPaint>,
     pub kind: GraphKind,
     /// The plot rectangle (the area the graph tool dragged), document points.
     pub rect: Rect,
@@ -97,6 +114,7 @@ pub struct GraphSpec {
 impl Default for GraphSpec {
     fn default() -> Self {
         Self {
+            series_paints: vec![],
             kind: GraphKind::Column,
             rect: Rect::new(0.0, 0.0, 200.0, 150.0),
             series: vec![],

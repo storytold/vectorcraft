@@ -6,7 +6,7 @@ use std::sync::Arc;
 use kurbo::{ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
 use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops as po;
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…], fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
             has_doc,
             freehand
         ),
@@ -35,6 +35,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{points: [{x, y, corner?}], closed?, id?} create (or with id: replace) a path curving through the points → {id}",
             has_doc,
             curvature
+        ),
+        cmd!(
+            "path.curvatureEdit",
+            "Curvature",
+            [],
+            None,
+            "{id, subpath?, op: \"move\"|\"insert\"|\"extend\"|\"close\", anchor?, segment?, t?, end?: \"start\"|\"end\", from?: \"keep\"|\"smooth\"|\"corner\", x?, y?} edit a path as the Curvature tool does, its shape kept elsewhere; the anchor edited becomes the direct-selected one → {anchor}. move: anchor to x, y, re-curving only its two segments; insert: a smooth anchor at t on segment, the shape unchanged (with x, y: then moved there); extend: an open subpath goes on from its end (default) or start to a new end at x, y; close: an open subpath closes from that end. The old end bends into the new segment as from says: keep its curve (default), smooth through its neighbours, or a corner",
+            has_doc,
+            curvature_edit
         ),
         cmd!(
             "path.removeAnchor",
@@ -142,20 +151,51 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// `[[x,y]…]` or `[{x,y}…]`; non-finite points are dropped.
 fn points_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Point>> {
+    Ok(samples_param(p, key, cmd)?.into_iter().map(|(pt, _)| pt).collect())
+}
+
+/// [`points_param`] with each point's pen pressure, if it has one: `[[x,y,pressure]…]` or
+/// `[{x,y,pressure}…]` (0..1).
+fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f64>)>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
-    let pts: Vec<Point> = a
+    let pts: Vec<(Point, Option<f64>)> = a
         .iter()
         .filter_map(|v| match v {
-            Value::Array(xy) => Some(Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?)),
-            Value::Object(_) => Some(Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?)),
+            Value::Array(xy) => Some((Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?), xy.get(2).and_then(Value::as_f64))),
+            Value::Object(_) => Some((Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?), v.get("pressure").and_then(Value::as_f64))),
             _ => None,
         })
-        .filter(|p| p.x.is_finite() && p.y.is_finite())
+        .filter(|(p, _)| p.x.is_finite() && p.y.is_finite())
         .collect();
     if pts.is_empty() {
         return Err(bad(cmd, "need at least one point"));
     }
     Ok(pts)
+}
+
+/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
+/// its samples has one; samples without one count as full pressure, as a pen event without one.
+fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<PressureProfile> {
+    if samples.iter().all(|(_, p)| p.is_none()) {
+        return None;
+    }
+    let mut at = 0.0;
+    let mut prev: Option<Point> = None;
+    let along: Vec<(f64, f64)> = samples
+        .iter()
+        .map(|(pt, p)| {
+            at += prev.map_or(0.0, |q| q.distance(*pt));
+            prev = Some(*pt);
+            (at, p.unwrap_or(1.0))
+        })
+        .collect();
+    PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+}
+
+/// The length of a subpath.
+fn subpath_len(sp: &SubPath) -> f64 {
+    use kurbo::ParamCurveArclen;
+    PathData::single(sp.clone()).to_bezpath().segments().map(|s| s.arclen(0.01)).sum()
 }
 
 fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
@@ -492,7 +532,9 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
 
 fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.freehand";
-    let mut pts = points_param(p, "points", C)?;
+    let samples = samples_param(p, "points", C)?;
+    let pressure = stroke_pressure(&samples);
+    let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
     let tol = f64_or(p, "fidelity", 1.5).clamp(0.05, 100.0);
     let closed = bool_or(p, "closed", false);
     let brush = str_param(p, "style") == Some("brush");
@@ -502,6 +544,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
         let si = pd.subpaths.iter().rposition(|s| !s.closed && !s.anchors.is_empty()).ok_or_else(|| bad(C, "path has no open end"))?;
         let mut sp = pd.subpaths[si].clone();
+        let old_len = subpath_len(&sp);
         if at_start {
             sp.reverse();
         }
@@ -538,12 +581,24 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
         }
+        // The path's pressure (in the direction it is continued in) followed by the stroke's.
+        let old_pressure = s.doc()?.doc.node(id).and_then(|n| n.appearance.stroke()).and_then(|st| st.pressure.clone());
+        let joined = (old_pressure.is_some() || pressure.is_some()).then(|| {
+            let old = old_pressure.map(|p| if at_start { p.reversed() } else { p });
+            let total = subpath_len(&sp);
+            PressureProfile::extended(old.as_ref(), old_len, pressure.as_ref(), total - old_len)
+        });
         s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
-            let path = path_mut(d, id)?;
-            if at_start && !sp.closed {
+            let reverse = at_start && !sp.closed;
+            if reverse {
                 sp.reverse();
             }
-            path.subpaths[si] = sp;
+            path_mut(d, id)?.subpaths[si] = sp;
+            if let Some(joined) = joined
+                && let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut())
+            {
+                st.pressure = if reverse { joined.map(|p| p.reversed()) } else { joined };
+            }
             sel.set([id]);
             Ok(())
         })?;
@@ -554,7 +609,10 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let sp = fit_freehand(&pts, tol, closed);
     let fill = if bool_or(p, "fill", false) { s.paint.fill.clone() } else { Paint::None };
-    let look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    let mut look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    if let Some(st) = look.appearance.stroke_mut() {
+        st.pressure = pressure;
+    }
     add_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None)
 }
 
@@ -591,6 +649,76 @@ fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
         ap.set_stroke(Paint::solid(Color::BLACK));
     }
     add_look(s, "Curvature", path_kind(PathData::single(sp)), look, None)
+}
+
+/// An edit `path.curvatureEdit` makes.
+enum CurvatureOp {
+    Move(usize, Point),
+    Insert(usize, f64, Option<Point>),
+    Extend(Point),
+    Close,
+}
+
+fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
+    use vectorcraft_tools::draw2::{EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move};
+    const C: &str = "path.curvatureEdit";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let at = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
+        (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Some(Point::new(x, y)),
+        (None, None) => None,
+        _ => return Err(bad(C, "x and y must be finite numbers")),
+    };
+    let to = || at.ok_or_else(|| bad(C, "missing x, y"));
+    let start = match str_param(p, "end") {
+        None | Some("end") => false,
+        Some("start") => true,
+        Some(e) => return Err(bad(C, format!("unknown end {e:?}"))),
+    };
+    let how = match str_param(p, "from") {
+        None => EndCurve::Keep,
+        Some(f) => EndCurve::parse(f).ok_or_else(|| bad(C, format!("unknown from {f:?}")))?,
+    };
+    let op = match str_param(p, "op") {
+        Some("move") => CurvatureOp::Move(usize_req(p, "anchor", C)?, to()?),
+        Some("insert") => CurvatureOp::Insert(usize_req(p, "segment", C)?, f64_or(p, "t", 0.5), at),
+        Some("extend") => CurvatureOp::Extend(to()?),
+        Some("close") => CurvatureOp::Close,
+        Some(o) => return Err(bad(C, format!("unknown op {o:?}"))),
+        None => return Err(bad(C, "missing op")),
+    };
+    let anchor = s.edit("Curvature", |d, sel| {
+        let path = path_mut(d, id)?;
+        let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
+        if matches!(op, CurvatureOp::Extend(_) | CurvatureOp::Close) && sp.closed {
+            return Err(EngineError::Other("path is already closed".into()));
+        }
+        let ai = match op {
+            CurvatureOp::Move(ai, q) => curvature_move(sp, ai, q).then_some(ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?,
+            CurvatureOp::Insert(seg, t, q) => {
+                let ai = curvature_insert(sp, seg, t).ok_or_else(|| EngineError::Other("no such segment".into()))?;
+                if let Some(q) = q {
+                    curvature_move(sp, ai, q);
+                }
+                ai
+            }
+            CurvatureOp::Extend(q) => {
+                curvature_extend(sp, start, q, how);
+                if start { 0 } else { sp.anchors.len() - 1 }
+            }
+            CurvatureOp::Close => {
+                if sp.anchors.len() < 3 {
+                    return Err(EngineError::Other("closing needs three anchors".into()));
+                }
+                curvature_close(sp, start, how);
+                if start { sp.anchors.len() - 1 } else { 0 }
+            }
+        };
+        sel.set([id]);
+        sel.anchors.insert(id, [(si, ai)].into());
+        Ok(ai)
+    })?;
+    Ok(json!({ "anchor": anchor }))
 }
 
 // ---------- anchor tools ----------

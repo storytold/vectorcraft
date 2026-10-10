@@ -17,6 +17,11 @@
 # commands is kept. Full-width punctuation (，。：) inside sentences; half-width parentheses and
 # the " · " separators as in the English. Terms shared with PhotoCraft use the same words as its
 # zh-hant catalog (圖層, 選取, 偏好設定, 混合模式 ...), so the two apps read alike.
+	Glowing Edges…	發光邊緣…
+	Glowing Edges	發光邊緣
+	Edge Width	邊緣寬度
+	Edge Brightness	邊緣亮度
+	Smoothness	平滑度
 
 	  — missing	  — 遺失
 	 to search every command	 以搜尋所有指令
@@ -217,6 +222,8 @@
 	Auto-Collapse Iconic Panels	自動收合圖示面板
 	Ellipse Properties:	橢圓屬性：
 	Invert Pie	反轉扇形
+	Side Length:	邊長：
+	Make Sides Equal	使各邊等長
 	Pie End Angle:	扇形終止角度：
 	Pie Start Angle:	扇形起始角度：
 	Show Tool Group Labels	顯示工具組標籤
@@ -679,6 +686,7 @@
 	Divide Vertically Into	垂直分割為
 	Do Not Move	不移動
 	Do you want to save the changes you made to “{name}”?	要儲存對「{name}」所做的變更嗎？
+	Can't open “{name}”.	無法開啟「{name}」。
 	Document	文件
 	Document Color Mode	文件色彩模式
 	Document Info	文件資訊
@@ -982,6 +990,20 @@
 	Flare	光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
+	Halo	光暈
+	Rays	射線
+	Rings	光環
+	Diameter:	直徑：
+	Brightness:	亮度：
+	Growth:	增大：
+	Fuzziness:	模糊度：
+	Number:	數量：
+	Longest:	最長：
+	Path:	路徑：
+	Largest:	最大：
+	Direction:	方向：
+	Symbolism Tools Options	符號工具選項
+	Symbol Set Density:	符號組密度：
 	Flat Image	平面影像
 	Flatness:	平滑度：
 	Flatten Artwork	將圖稿平面化
@@ -1492,6 +1514,8 @@
 	Monospaced	等寬
 	More	更多
 	More Pathfinder options	更多路徑管理員選項
+	More Align options	更多對齊選項
+	More Paragraph options	更多段落選項
 	More Settings	更多設定
 	Move	移動
 	Move All Objects	移動所有物件
@@ -1537,6 +1561,27 @@
 	Artboard	工作區域
 	Exit	結束
 	New Bristle Brush	新增鬃毛筆刷
+	Calligraphic Brush Options	書法筆刷選項
+	Bristle Brush Options	鬃毛筆刷選項
+	Roundness:	圓度：
+	Fixed	固定
+	Pressure	壓力
+	Shape:	形狀：
+	Bristle Length:	鬃毛長度：
+	Bristle Density:	鬃毛密度：
+	Bristle Thickness:	鬃毛粗細：
+	Paint Opacity:	上色不透明度：
+	Stiffness:	硬度：
+	Round Point	圓尖頭
+	Flat Point	扁尖頭
+	Round Blunt	圓鈍頭
+	Flat Blunt	扁鈍頭
+	Round Curve	圓彎頭
+	Flat Curve	扁彎頭
+	Round Angle	圓斜頭
+	Flat Angle	扁斜頭
+	Round Fan	圓扇頭
+	Flat Fan	扁扇頭
 	New Brush…	新增筆刷…
 	New Calligraphic Brush	新增書法筆刷
 	New Character Style	新增字元樣式
@@ -2065,6 +2110,25 @@
 	Reflect…	鏡射…
 	Refresh	重新整理
 	Refresh Font List	重新整理字體清單
+	Missing Fonts	遺失的字體
+	Missing Fonts Dialog	遺失的字體對話框
+	These fonts aren't available. Their text shows in another font.	這些字體無法使用。其文字以其他字體顯示。
+	Search Fonts Folder	搜尋 Fonts 資料夾
+	Find in Folder…	在資料夾中尋找…
+	Find Fonts in Folder…	在資料夾中尋找字體…
+	Find Font Files	尋找字體檔案
+	Add Font Files	新增字體檔案
+	Add Fonts	新增字體
+	Find Fonts	尋找字體
+	Stop	停止
+	Searching…	搜尋中…
+	Not found	找不到
+	{folders} folder(s) and {files} file(s) searched	已搜尋 {folders} 個資料夾、{files} 個檔案
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	已略過 {count} 個資料夾，例如其他應用程式和系統的資料夾，以及隱藏的資料夾
+	{count} folder(s) or file(s) couldn't be read	有 {count} 個資料夾或檔案無法讀取
+	The search stopped at its limit: search a smaller folder.	搜尋已達上限而停止：請搜尋較小的資料夾。
+	Copy only fonts you own or are licensed to install.	只複製您擁有或已取得安裝授權的字體。
+	VectorCraft copies the fonts to {folder}.	VectorCraft 會將字體複製到 {folder}。
 	Registered Trademark Symbol	註冊商標符號
 	Registration marks	對位標記
 	Registry name:	登錄名稱：
@@ -2543,6 +2607,9 @@
 	Smart Guides (⌘U)	智慧型參考線 (⌘U)
 	Smart Punctuation…	智慧型標點…
 	Smooth	平滑
+	Corner	角點
+	Relative	相對
+	Absolute	絕對
 	Smooth Color	平滑顏色
 	Smooth Tool	平滑工具
 	Snap Curves To Lines	將曲線靠齊線條
@@ -3179,6 +3246,31 @@ axis	Both	兩者
 	Smart Blur…	智慧型模糊…
 	Sharpen	銳利化
 	Unsharp Mask…	反銳利化遮罩…
+	Pixelate	像素化
+	Color Halftone…	彩色半色調…
+	Crystallize…	結晶化…
+	Mezzotint…	網線銅版…
+	Pointillize…	點描…
+	Color Halftone	彩色半色調
+	Crystallize	結晶化
+	Mezzotint	網線銅版
+	Pointillize	點描
+	Max. Radius	最大半徑
+	Channel 1	色版 1
+	Channel 2	色版 2
+	Channel 3	色版 3
+	Channel 4	色版 4
+	Cell Size	單元大小
+	Fine Dots	細點
+	Medium Dots	中等點
+	Grainy Dots	顆粒點
+	Coarse Dots	粗點
+	Short Lines	短線
+	Medium Lines	中等線
+	Long Lines	長線
+	Short Strokes	短筆畫
+	Medium Strokes	中等筆畫
+	Long Strokes	長筆畫
 	Radial Blur	放射狀模糊
 	Smart Blur	智慧型模糊
 	Unsharp Mask	反銳利化遮罩

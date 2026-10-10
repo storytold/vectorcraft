@@ -129,3 +129,21 @@ fn conventions_resources_and_versioned_results() {
     rpc(&mut s, "initialize", json!({"protocolVersion":"2025-06-18"}));
     assert!(rpc(&mut s, "tools/list", json!({}))["result"].get("resultType").is_none());
 }
+
+/// #785: a batch step can use an earlier step's result (`"$N.path"`); a reference to nothing
+/// fails that step.
+#[test]
+fn batch_steps_refer_to_earlier_results() {
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let steps = json!([
+        {"id":"text.create","params":{"x":10,"y":60,"text":"plain and bold words","size":30}},
+        {"id":"shape.rectangle","params":{"x":0,"y":0,"width":20,"height":20}},
+        {"id":"text.setRangeStyle","params":{"id":"$0.id","start":10,"end":14,"style":"Bold"}},
+        {"id":"text.setRangeStyle","params":{"id":"$9.id","start":0,"end":1,"style":"Bold"}}
+    ]);
+    let r = call(&mut s, "command_batch", json!({"steps":steps,"stop_on_error":false}));
+    let p = payload(&r);
+    assert_eq!((p["completed"].clone(), p["failed"].clone()), (json!(3), json!(1)), "{p}");
+    assert_eq!(p["results"][2]["result"]["id"], p["results"][0]["result"]["id"], "the text, not the selected rectangle");
+    assert!(p["results"][3]["error"].as_str().unwrap().contains("$9.id"), "{p}");
+}

@@ -14,8 +14,10 @@
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
-//! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?}`
-//! - `ui.render {path?, scale?}`: render the active artboard headlessly (PNG)
+//! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
+//!   comes back as `pngBase64` as well)
+//! - `ui.render {path?, scale?, data?}`: render the active artboard headlessly (PNG; without a path,
+//!   or with `data: true`, as `pngBase64`)
 //! - `app.open {path}` (any readable format) / `app.save {path?, svg?: {…SVG options}}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
@@ -47,7 +49,12 @@ impl ControlRequest {
 
 pub enum Outcome {
     Done(Value),
-    Screenshot { path: Option<String> },
+    /// A window capture, answered once a frame was presented: written to `path`, the PNG sent
+    /// back too with `data`.
+    Screenshot {
+        path: Option<String>,
+        data: bool,
+    },
 }
 
 fn ok(v: Value) -> Outcome {
@@ -301,11 +308,15 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ok(Value::Null)
         }
         "ui.screenshot" => {
+            // Refused now rather than once the frame comes (it is checked again then).
+            if let Some(Err(e)) = s("path").map(vectorcraft_engine::file_access::check_write) {
+                return err(e);
+            }
             if p.get("focus").and_then(Value::as_bool).unwrap_or(true) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             ctx.request_repaint();
-            Outcome::Screenshot { path: s("path").map(str::to_string) }
+            Outcome::Screenshot { path: s("path").map(str::to_string), data: p.get("data").and_then(Value::as_bool) == Some(true) }
         }
         "ui.render" => {
             let Some(st) = app.session.active() else { return err("no document") };
@@ -320,12 +331,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 Ok(png) => png,
                 Err(e) => return err(e),
             };
+            let data = p.get("data").and_then(Value::as_bool) == Some(true);
             match s("path") {
                 Some(path) => match app.services.write.as_mut() {
-                    Some(w) => wrap(w(path, &png).map(|_| json!({"path": path, "width": img.width, "height": img.height}))),
+                    Some(w) => wrap(
+                        w(path, &png)
+                            .map(|_| with_data(json!({"path": path, "width": img.width, "height": img.height}), data.then_some(png.as_slice()))),
+                    ),
                     None => err("no writer"),
                 },
-                None => ok(json!({"width": img.width, "height": img.height, "pngBase64": vectorcraft_format::base64_encode(&png)})),
+                None => ok(with_data(json!({"width": img.width, "height": img.height}), Some(&png))),
             }
         }
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
@@ -335,28 +350,41 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             // No save dialog for an agent: the bytes come back, as in headless mode.
             None => wrap(app.run("document.export", p.clone())),
         },
-        "app.quit" => {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            ok(Value::Null)
-        }
+        // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
+        // about; otherwise null, and the host closes the window (#830).
+        "app.quit" => wrap(app.run("app.quit", json!({}))),
         other => err(format!("unknown method `{other}`")),
     }
 }
 
-pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path: Option<&str>) -> Value {
+/// `result` with the PNG as `pngBase64` when there is one.
+fn with_data(mut result: Value, png: Option<&[u8]>) -> Value {
+    if let Some(png) = png {
+        result["pngBase64"] = json!(vectorcraft_format::base64_encode(png));
+    }
+    result
+}
+
+/// The reply to `ui.screenshot`: the window capture `image` written to `path`, and sent back as
+/// `pngBase64` with `data`.
+pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path: Option<&str>, data: bool) -> Value {
     let [w, h] = image.size;
-    let Some(path) = path else {
+    if path.is_none() && !data {
         return json!({"ok": true, "result": {"width": w, "height": h}});
-    };
+    }
     let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
     let img = vectorcraft_render::Rendered { width: w as u32, height: h as u32, pixels: rgba };
     let png = match img.to_png() {
         Ok(png) => png,
         Err(e) => return json!({"ok": false, "error": e}),
     };
+    let data = data.then_some(png.as_slice());
+    let Some(path) = path else {
+        return json!({"ok": true, "result": with_data(json!({"width": w, "height": h}), data)});
+    };
     match app.services.write.as_mut() {
         Some(wr) => match wr(path, &png) {
-            Ok(()) => json!({"ok": true, "result": {"path": path, "width": w, "height": h}}),
+            Ok(()) => json!({"ok": true, "result": with_data(json!({"path": path, "width": w, "height": h}), data)}),
             Err(e) => json!({"ok": false, "error": e}),
         },
         None => json!({"ok": false, "error": "no writer configured"}),

@@ -34,6 +34,7 @@ pub mod pdf;
 mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
+pub mod psdread;
 mod save;
 mod screens;
 mod svg;
@@ -82,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), textAs?: text (default: point type per line, lines wrapped in a frame as area type where they lay out the same, in the file's fonts by name; missing ones are listed in warnings) | outlines (glyph paths), layers?: true (default: optional content groups become layers with their visibility, print state and lock — art that is off comes in as a hidden layer; other art goes to a layer per page) | false (one layer per page, without the art that is off; Save then asks for a name), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does, grays? as there; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK), DXF: dxf?: {layout?: \"Model\" (default) | a paper layout's name (document.dxfInfo lists them), unit?, scale? (the ratio: 1 unit of the art = scale drawing units; default: the drawing at 1:1 in its own unit), fit?: false (scale to fit an artboard of fitTo?: [612, 792], turned to the art's orientation), scaleLineweights?: false (lineweights scale with the art), center?: true (false: the drawing's origin on the artboard's bottom-left corner; fitted art's bottom-left corner), mergeLayers?: false (all art on one layer)} → {index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, ASCII .dxf (each DXF layer with art a layer; blocks symbols; what can't come in is listed in warnings), PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its size at the resolution it declares, as file.place sizes it; 72 ppi, 1 px = 1 pt, when it declares none), .emf/.wmf (one artboard, the picture's frame; records VectorCraft doesn't read are skipped with one warning), .eps and PostScript .ai (one artboard, the bounding box: an EPS file VectorCraft wrote restores the document it carries, restored: true; other files are read by a PostScript interpreter — paths, colours and spot inks, clips, gradients, images, type in the fonts named — and come in as their TIFF preview, with a warning, when their PostScript can't be read). A PDF/.ai/.ait or SVG saved with Preserve Editing restores the native document it carries (restored: true; a PDF only when no pages are picked), unless the file was changed elsewhere since or the data can't be read: then its artwork is imported and the first warning says why. Templates (native templates, .ait) open as a new untitled document; a restored .ai keeps its path (Save writes .ai again). Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update). An SVG's <image> files (relative links from the SVG's folder) stay linked, SVG files become art, missing ones a placeholder in their box (a warning and missingLinks)",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), textAs?: text (default: point type per line, lines wrapped in a frame as area type where they lay out the same, in the file's fonts by name; missing ones are listed in warnings) | outlines (glyph paths), layers?: true (default: optional content groups become layers with their visibility, print state and lock — art that is off comes in as a hidden layer; other art goes to a layer per page) | false (one layer per page, without the art that is off; Save then asks for a name), editingData?: true (default: an EPS or .ai that carries its editor's own copy of the art opens from it, with its layers, hidden objects, guides, artboards and the art outside them; a .ai whose type shows opens from its PDF part with textAs: outlines) | false (only what its page or PDF part prints, for print pipelines; a .ai saved without PDF compatibility then can't be opened), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does, grays? as there; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK), DXF: dxf?: {layout?: \"Model\" (default) | a paper layout's name (document.dxfInfo lists them), unit?, scale? (the ratio: 1 unit of the art = scale drawing units; default: the drawing at 1:1 in its own unit), fit?: false (scale to fit an artboard of fitTo?: [612, 792], turned to the art's orientation), scaleLineweights?: false (lineweights scale with the art), center?: true (false: the drawing's origin on the artboard's bottom-left corner; fitted art's bottom-left corner), mergeLayers?: false (all art on one layer)} → {index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, ASCII .dxf (each DXF layer with art a layer; blocks symbols; what can't come in is listed in warnings), PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its size at the resolution it declares, as file.place sizes it; 72 ppi, 1 px = 1 pt, when it declares none), .emf/.wmf (one artboard, the picture's frame; records VectorCraft doesn't read are skipped with one warning), .eps and PostScript .ai (one artboard, the bounding box: an EPS file VectorCraft wrote restores the document it carries, restored: true; other files are read by a PostScript interpreter — paths, colours and spot inks, clips, gradients, images, type in the fonts named — and come in as their TIFF preview, with a warning, when their PostScript can't be read). A PDF/.ai/.ait or SVG saved with Preserve Editing restores the native document it carries (restored: true; a PDF only when no pages are picked), unless the file was changed elsewhere since or the data can't be read: then its artwork is imported and the first warning says why. Templates (native templates, .ait) open as a new untitled document; a restored .ai keeps its path (Save writes .ai again). Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update). An SVG's <image> files (relative links from the SVG's folder) stay linked, SVG files become art, missing ones a placeholder in their box (a warning and missingLinks)",
             always,
             load::open
         ),
@@ -558,10 +559,12 @@ pub const FORMATS: &[Format] = &[
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
-    Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: false, write: true, raster: true, options: PSD_OPTIONS },
+    Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: true, write: true, raster: true, options: PSD_OPTIONS },
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
     reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
+    // Photoshop's large document format: read like a PSD (its merged image), never written.
+    reader("psb", "PSB", &["psb"], "image/x-psb", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -581,6 +584,8 @@ pub const OPEN_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "psd",
+    "psb",
     "vctemplate",
     "dxf",
     "emf",
@@ -590,6 +595,11 @@ pub const OPEN_EXTS: &[&str] = &[
     "afdesign",
     "afpub",
 ];
+
+/// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
+/// documents belong to raster editors, so Finder and file managers don't offer a vector app for
+/// them (File › Open and Place still read them).
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -623,6 +633,8 @@ pub const PLACE_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "psd",
+    "psb",
     "vctemplate",
     "dxf",
     "emf",
@@ -708,20 +720,39 @@ fn formats(_: &mut Session, _: &Value) -> Result<Value> {
 }
 
 // ---------- the file system (none on the web, where commands take and return bytes) ----------
+//
+// Every path a command reads or writes goes through these, which check it against the automation
+// roots in force ([`crate::file_access`]): a path outside them is an error (`file_stamp` and
+// `file_created`: no file), as is any path once roots are in force without its kind of access.
+
+/// `path` checked for reading against the automation roots in force.
+#[cfg(not(target_arch = "wasm32"))]
+fn may_read(path: &str) -> Result<()> {
+    crate::file_access::check_read(path).map_err(EngineError::Other)
+}
+
+/// `path` checked for writing against the automation roots in force.
+#[cfg(not(target_arch = "wasm32"))]
+fn may_write(path: &str) -> Result<()> {
+    crate::file_access::check_write(path).map_err(EngineError::Other)
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
+    may_read(path)?;
     std::fs::read(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
+    may_write(path)?;
     // Never a half-written file: see [`write_atomic`].
     write_atomic(std::path::Path::new(path), bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
+    may_write(path)?;
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
@@ -730,6 +761,7 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
     use std::io::Write as _;
+    may_write(path)?;
     let err = |e: std::io::Error| EngineError::Other(format!("{path}: {e}"));
     let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(path).map_err(err)?;
     let written = f.write_all(bytes).and_then(|()| f.sync_all());
@@ -742,17 +774,20 @@ pub(crate) fn write_new_file(path: &str, bytes: &[u8]) -> Result<()> {
 }
 
 /// A file's size (bytes) and modification time (ms since the Unix epoch, when the file system
-/// keeps one); `None` when there is no file at `path`.
+/// keeps one); `None` when there is no file at `path` (or automation may not read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
+    may_read(path).ok()?;
     let m = std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file)?;
     let modified = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     Some((m.len(), modified))
 }
 
-/// When the file at `path` was created (ms since the Unix epoch), when the file system keeps it.
+/// When the file at `path` was created (ms since the Unix epoch), when the file system keeps it
+/// (and automation may read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_created(path: &str) -> Option<u64> {
+    may_read(path).ok()?;
     let t = std::fs::metadata(path).ok()?.created().ok()?;
     t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
 }
@@ -956,6 +991,8 @@ mod tests_tiffbmp;
 mod tests_pdfx;
 #[cfg(test)]
 mod tests_psd;
+#[cfg(test)]
+mod tests_psdread;
 
 #[cfg(test)]
 mod tests_epsimport;

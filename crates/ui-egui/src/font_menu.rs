@@ -38,6 +38,8 @@ pub enum FontPick {
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
     pub samples: bool,
+    /// Preferences › Type › Show Font Names in English (on by default).
+    pub english_names: bool,
     /// Row height in points (Font Preview Size).
     pub row: f32,
     /// The starred families.
@@ -45,9 +47,9 @@ pub struct MenuLook<'a> {
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, medium rows, no favourites.
+    /// Samples on, English names, medium rows, no favourites.
     fn default() -> Self {
-        Self { samples: true, row: ROW, favorites: &[] }
+        Self { samples: true, english_names: true, row: ROW, favorites: &[] }
     }
 }
 
@@ -58,7 +60,12 @@ impl<'a> MenuLook<'a> {
             "large" => 32.0,
             _ => ROW,
         };
-        Self { samples: app.session.prefs.font_preview, row, favorites: &app.ui.favorite_fonts }
+        Self {
+            samples: app.session.prefs.font_preview,
+            english_names: app.session.prefs.font_names_in_english,
+            row,
+            favorites: &app.ui.favorite_fonts,
+        }
     }
 }
 
@@ -124,9 +131,9 @@ impl Row {
     }
 }
 
-/// What the rows were listed for: the query, the script, kind and favourites filters, the
-/// expanded families, the favourites and the font list's generation.
-type RowsKey = (String, usize, Option<FontClass>, bool, Vec<String>, Vec<String>, u64);
+/// What the rows were listed for: the query, the script, kind and favourites filters, Show Font
+/// Names in English, the expanded families, the favourites and the font list's generation.
+type RowsKey = (String, usize, Option<FontClass>, bool, bool, Vec<String>, Vec<String>, u64);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -254,10 +261,12 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
     let current = current.as_str();
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
     // The generation is read first: fonts that load meanwhile make the next frame list them.
-    let key: RowsKey = (query.clone(), st.script, st.class, st.favorites_only, st.expanded.clone(), look.favorites.to_vec(), db.generation());
+    let key: RowsKey =
+        (query.clone(), st.script, st.class, st.favorites_only, look.english_names, st.expanded.clone(), look.favorites.to_vec(), db.generation());
     if st.rows_key.as_ref() != Some(&key) {
         let wanted = |f: &str| {
-            if !(query.is_empty() || f.to_lowercase().contains(&query)) {
+            let label = db.family_display_name(f, look.english_names);
+            if !(query.is_empty() || f.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)) {
                 return false;
             }
             if st.favorites_only && !favorite(f) {
@@ -382,7 +391,11 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
             let indent = if row.style().is_some() { DISCLOSURE + 12.0 } else { DISCLOSURE };
             let name_w = rect.width() * NAME_SHARE;
             let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
-            let name = row.style().unwrap_or(row.family());
+            // Family rows follow Show Font Names in English; style rows keep the style name (#394).
+            let name = match row {
+                Row::Style(_, style) => style.clone(),
+                Row::Family(f) => db.family_display_name(f, look.english_names),
+            };
             ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
             let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
             if !look.samples {

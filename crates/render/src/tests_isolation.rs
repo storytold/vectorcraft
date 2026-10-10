@@ -218,3 +218,30 @@ fn copying_the_backdrop_changes_nothing_without_blending() {
     let worst = a.iter().zip(&b).map(|(x, y)| (*x as i32 - *y as i32).abs()).max().unwrap();
     assert!(worst <= 1, "differs by {worst}/255");
 }
+
+/// Isolation mode (#833): the art around the isolated group draws at half opacity, above it as
+/// well as below; the group's own art as usual.
+#[test]
+fn isolation_mode_dims_the_art_around_the_isolated_group() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let below = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 40.0), [0.0, 0.0, 0.0]);
+    let inside = rect(&mut d, Rect::new(60.0, 60.0, 100.0, 100.0), [0.0, 0.0, 0.0]);
+    let above = rect(&mut d, Rect::new(60.0, 0.0, 100.0, 40.0), [0.0, 0.0, 0.0]);
+    let g = group(&mut d, vec![inside], 1.0, Blend::Normal, false);
+    let gid = g.id;
+    for n in [below, g, above] {
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let alpha = |img: &Rendered, x: usize, y: usize| img.pixels[(y * 100 + x) * 4 + 3];
+    let plain = render(&d);
+    let isolated = |id| render_with(&mut Renderer::new(), &d, &RenderOptions { isolated: Some(id), ..Default::default() });
+    let dimmed = isolated(gid);
+    assert_eq!(alpha(&dimmed, 80, 80), 255, "the isolated group's art");
+    for (x, y) in [(20, 20), (80, 20)] {
+        assert_eq!(alpha(&plain, x, y), 255);
+        assert!((120..=135).contains(&alpha(&dimmed, x, y)), "({x}, {y}): {}", alpha(&dimmed, x, y));
+    }
+    // An object that isn't in the document dims nothing.
+    assert_eq!(isolated(NodeId(u64::MAX)).pixels, plain.pixels);
+}

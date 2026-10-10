@@ -141,22 +141,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.end_row();
         ui.label(egui::RichText::new(tl!("Leader:")).color(t.text));
-        let mut leader = stops.get(sel).map(|s| s.leader.clone()).unwrap_or_default();
-        if ui.add_enabled(stops.get(sel).is_some(), egui::TextEdit::singleline(&mut leader).desired_width(90.0)).lost_focus()
-            && let Some(s) = stops.get_mut(sel)
-            && s.leader != leader
-        {
+        // The fields keep what is typed until Enter or a click away commits it (#924).
+        let leader = stops.get(sel).map(|s| s.leader.clone()).unwrap_or_default();
+        let typed = ui.add_enabled_ui(stops.get(sel).is_some(), |ui| widgets::exact_text_field(ui, "tabs-leader", &leader, 90.0)).inner;
+        if let (Some(leader), Some(s)) = (typed, stops.get_mut(sel)) {
+            // Up to eight characters repeat in the leader.
             s.leader = leader.chars().take(8).collect();
             apply(app, &stops);
         }
         ui.end_row();
         ui.label(egui::RichText::new(tl!("Align On:")).color(t.text));
         let decimal = stops.get(sel).is_some_and(|s| s.align == TabAlign::Decimal);
-        let mut on = stops.get(sel).map(|s| s.align_on.to_string()).unwrap_or_else(|| ".".into());
-        if ui.add_enabled(decimal, egui::TextEdit::singleline(&mut on).desired_width(30.0)).lost_focus()
-            && let (Some(s), Some(c)) = (stops.get_mut(sel), on.chars().next())
-            && s.align_on != c
-        {
+        let on = stops.get(sel).map(|s| s.align_on.to_string()).unwrap_or_else(|| ".".into());
+        let typed = ui.add_enabled_ui(decimal, |ui| widgets::exact_text_field(ui, "tabs-align-on", &on, 30.0)).inner;
+        if let (Some(c), Some(s)) = (typed.and_then(|t| t.chars().next()), stops.get_mut(sel)) {
             s.align_on = c;
             apply(app, &stops);
         }
@@ -303,6 +301,62 @@ mod tests {
         // The stops survive a JSON round trip through the panel's encoding.
         let back: Vec<serde_json::Value> = stops_json(&stops).as_array().unwrap().clone();
         assert_eq!(back[1]["align"], json!("decimal"));
+    }
+
+    /// #924: Leader and Align On keep what is typed, frame after frame, until Enter applies it
+    /// (spaces kept, eight characters at most).
+    #[test]
+    fn leader_and_align_on_keep_what_is_typed_until_enter() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50, "align": "decimal"}]})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 400.0));
+        // One frame with `events` → the texts painted and where.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let click = |at| {
+            [true, false].map(|pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            })
+        };
+        let stop = |app: &VectorcraftApp| current(app).unwrap().1[0].clone();
+        for (label, typed, want) in [("Leader:", [". ", "_", "123456789"], ". _12345"), ("Align On:", [",", "", ""], ",")] {
+            let texts = frame(&mut app, vec![]);
+            let r = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {texts:?}")).1;
+            let at = egui::pos2(r.right() + 30.0, r.center().y);
+            let [down, up] = click(at);
+            frame(&mut app, vec![egui::Event::PointerMoved(at), down]);
+            frame(&mut app, vec![up]);
+            // Select what is there, then type in pieces over several frames.
+            frame(
+                &mut app,
+                vec![egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND }],
+            );
+            for piece in typed.iter().filter(|p| !p.is_empty()) {
+                frame(&mut app, vec![egui::Event::Text(piece.to_string())]);
+                frame(&mut app, vec![]);
+            }
+            frame(&mut app, vec![key(egui::Key::Enter)]);
+            frame(&mut app, vec![]);
+            let s = stop(&app);
+            let got = if label == "Leader:" { s.leader } else { s.align_on.to_string() };
+            assert_eq!(got, want, "{label}");
+        }
     }
 
     /// Position Panel Above Text floats the panel over the text, its ruler's 0 on the frame's left

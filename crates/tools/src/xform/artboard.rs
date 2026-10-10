@@ -346,7 +346,10 @@ impl Tool for ArtboardTool {
         for h in Handle::ALL {
             o.push(Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 });
         }
-        o.push(Overlay::Label { p: Point::new(r.x0, r.y0 - cx.tol(14.0)), text: format!("{:02} - {}", self.active + 1, ab.name), color: BLUE });
+        // Where the canvas names the other artboards: on the top edge, flush with the left one
+        // (labels are drawn 8 px right of and 14 px above their point).
+        let at = Point::new(r.x0 - cx.tol(8.0), r.y0 - cx.tol(4.0));
+        o.push(Overlay::Label { p: at, text: format!("{:02} - {}", self.active + 1, ab.name), color: BLUE });
         if let (Some(Drag::Resize { began: true, .. }), true) = (self.drag, cx.measurement_labels) {
             o.push(Overlay::Measure {
                 p: Point::new(r.x1, r.y1) + Vec2::new(cx.tol(12.0), cx.tol(12.0)),

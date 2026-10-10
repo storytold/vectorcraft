@@ -15,7 +15,7 @@ use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath};
 use crate::{Action, Tool, ToolContext};
 
 pub use anchor::AnchorTool;
-pub use curvature::CurvatureTool;
+pub use curvature::{CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move};
 pub use family::FamilyTool;
 pub use gesture::GestureTool;
 
@@ -92,6 +92,15 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
     }
     v.retain(|id| cx.doc.is_editable(*id));
     v
+}
+
+/// The selected paths the Pen and the Curvature tool edit (not guides, nor locked or hidden ones).
+pub(crate) fn editable_paths<'a>(cx: &'a ToolContext) -> impl Iterator<Item = NodeId> + 'a {
+    cx.selection
+        .objects
+        .iter()
+        .copied()
+        .filter(|&id| cx.doc.is_editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
 }
 
 /// Nearest anchor within `tol`: (path, subpath, anchor).

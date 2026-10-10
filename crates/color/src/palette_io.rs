@@ -1,7 +1,8 @@
 //! Swatch library files: the native `.vcswatches` JSON (colour models, global, spot, gradients
 //! and colour groups exactly), `.gpl` palettes (8-bit RGB; colour groups as `# Group:` comment
 //! headers), swatch exchange `.ase` files (binary: solid colors in their own model, global, spot
-//! and process colors, color groups) and CSS custom properties (written only).
+//! and process colors, color groups), color books `.acb` (read only: the books a user owns, such
+//! as a Pantone book) and CSS custom properties (written only).
 
 use std::collections::{HashMap, HashSet};
 
@@ -79,6 +80,8 @@ const ASE_MAX_ENTRIES: usize = 100_000;
 /// The most UTF-16 code units of a name that are kept.
 const ASE_MAX_NAME: usize = 1024;
 const ASE_CUT_SHORT: &str = "the swatch exchange file is cut short";
+const ACB_SIGNATURE: &[u8] = b"8BCB";
+const ACB_CUT_SHORT: &str = "the color book is cut short";
 
 /// Write `lib` in `format` → the file's bytes. Pattern swatches (their tiles live in a document)
 /// and None are left out; `.gpl` keeps solid colours only, as 8-bit RGB, and `.ase` keeps solid
@@ -326,6 +329,9 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<SwatchLibrary, String> {
     if bytes.starts_with(ASE_SIGNATURE) {
         return read_ase(bytes, name);
     }
+    if bytes.starts_with(ACB_SIGNATURE) {
+        return read_acb(bytes, name).map_err(|e| if e == ASE_CUT_SHORT { ACB_CUT_SHORT.into() } else { e });
+    }
     read(&String::from_utf8_lossy(bytes), name)
 }
 
@@ -333,6 +339,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<SwatchLibrary, String> {
 /// [`read_bytes`] reads it, with the invalid bytes replaced (its first KiB is enough).
 pub fn sniff_bytes(bytes: &[u8]) -> bool {
     bytes.starts_with(ASE_SIGNATURE)
+        || bytes.starts_with(ACB_SIGNATURE)
         || std::str::from_utf8(bytes).is_ok_and(sniff)
         || sniff(&String::from_utf8_lossy(bytes.get(..1024).unwrap_or(bytes)))
 }
@@ -427,6 +434,67 @@ fn read_ase(bytes: &[u8], fallback: &str) -> Result<SwatchLibrary, String> {
     Ok(lib)
 }
 
+/// `.acb` (a color book, read only), from public descriptions of the format: after the signature
+/// come, big-endian, a `u16` version (1) and book id, the title, prefix, suffix and description
+/// as strings, a `u16` color count, page size and page selector offset, a `u16` color space (0
+/// RGB, 2 CMYK, 7 Lab) and the colors: each a name, a six-character catalog code and its
+/// components as bytes. RGB runs from 0 to 255, CMYK ink is stored inverted (255 is no ink), Lab
+/// lightness is 0 to 255 for 0 to 100 and a and b are offset by 128. A string is a `u32` count of
+/// UTF-16 code units, then the units; a `$$$/key=Text` string means `Text`, and `^R`, `^C` stand
+/// for ® and ©. An optional `spflspot` or `spflproc` at the end says whether the colors are spot
+/// or process colors (a book without it is a spot color book).
+///
+/// The book's colors are named with its prefix and suffix ("PANTONE 185 C"); colors without a
+/// name (the padding of a book's pages) are left out. A version other than 1, a color space other
+/// than those three or more than [`ASE_MAX_ENTRIES`] colors is an error.
+fn read_acb(bytes: &[u8], fallback: &str) -> Result<SwatchLibrary, String> {
+    let mut data = AseData(bytes);
+    data.bytes(ACB_SIGNATURE.len())?;
+    let version = data.u16()?;
+    if version != 1 {
+        return Err(format!("color book version {version} isn't supported (only 1)"));
+    }
+    let _book_id = data.u16()?;
+    let [title, prefix, suffix, _description] = [data.acb_string()?, data.acb_string()?, data.acb_string()?, data.acb_string()?];
+    let count = usize::from(data.u16()?);
+    if count > ASE_MAX_ENTRIES {
+        return Err(format!("the color book holds more than {ASE_MAX_ENTRIES} colors"));
+    }
+    let (_page_size, _page_offset) = (data.u16()?, data.u16()?);
+    let space = data.u16()?;
+    let mut colors = Vec::with_capacity(count);
+    for _ in 0..count {
+        let name = data.acb_string()?;
+        let _code = data.bytes(6)?;
+        let color = match space {
+            0 => {
+                let [r, g, b] = data.array::<3>()?;
+                Color::rgb8(r, g, b)
+            }
+            2 => {
+                let ink = |v: u8| f32::from(255 - v) / 255.0;
+                let [c, m, y, k] = data.array::<4>()?;
+                Color::cmyk(ink(c), ink(m), ink(y), ink(k))
+            }
+            7 => {
+                let [l, a, b] = data.array::<3>()?;
+                Color::lab(f32::from(l) * 100.0 / 255.0, f32::from(a) - 128.0, f32::from(b) - 128.0)
+            }
+            other => return Err(format!("color books in color space {other} aren't supported (only RGB, CMYK and Lab)")),
+        };
+        colors.push((name, color));
+    }
+    // Spot colors unless the book says process ones.
+    let spot = data.0.windows(8).last() != Some(b"spflproc".as_slice());
+    let mut lib = SwatchLibrary { name: if title.is_empty() { fallback.into() } else { title }, ..Default::default() };
+    let mut names = UniqueNames::default();
+    for (name, color) in colors.into_iter().filter(|(n, _)| !n.trim().is_empty()) {
+        let name = names.unique(format!("{prefix}{name}{suffix}").trim().to_string());
+        lib.swatches.push(Swatch { name, paint: Paint::solid(color), global: spot, spot });
+    }
+    Ok(lib)
+}
+
 /// The swatch of an `.ase` color block, `None` for a model other than RGB, CMYK, Lab and Gray.
 /// Components are clamped to their ranges.
 fn ase_swatch(body: &mut AseData) -> Result<Option<Swatch>, String> {
@@ -503,6 +571,20 @@ impl<'a> AseData<'a> {
         let v = f32::from_be_bytes(self.array()?);
         Ok(if v.is_finite() { v } else { 0.0 })
     }
+    /// A color book string ([`read_acb`]): a `u32` count of UTF-16 code units, then the units,
+    /// with `$$$/key=Text` read as `Text` and `^R`, `^C` as ®, ©; at most [`ASE_MAX_NAME`] units
+    /// are kept.
+    fn acb_string(&mut self) -> Result<String, String> {
+        let n = usize::try_from(self.u32()?).unwrap_or(usize::MAX);
+        let (units, _) = self.bytes(n.checked_mul(2).ok_or(ASE_CUT_SHORT)?)?.as_chunks::<2>();
+        let units: Vec<u16> = units.iter().take(ASE_MAX_NAME).map(|u| u16::from_be_bytes(*u)).take_while(|&u| u != 0).collect();
+        let s = String::from_utf16_lossy(&units);
+        let s = match s.strip_prefix("$$$/") {
+            Some(key) => key.split_once('=').map_or("", |(_, text)| text).to_string(),
+            None => s,
+        };
+        Ok(s.replace("^R", "®").replace("^C", "©"))
+    }
     /// A name up to its terminating zero, trimmed. A block that ends before it has no name.
     fn name(&mut self) -> Result<String, String> {
         if self.0.is_empty() {
@@ -552,6 +634,68 @@ mod tests {
     use super::*;
     use crate::{Gradient, GradientPaint, GradientStop};
     use proptest::prelude::*;
+
+    /// A color book's string: a `u32` count of UTF-16 code units, then the units.
+    fn acb_str(out: &mut Vec<u8>, s: &str) {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        out.extend((units.len() as u32).to_be_bytes());
+        units.iter().for_each(|u| out.extend(u.to_be_bytes()));
+    }
+
+    /// A color book in `space` (0 RGB, 2 CMYK, 7 Lab) with `colors` (name, components) and an
+    /// optional spot/process marker.
+    fn acb(space: u16, colors: &[(&str, &[u8])], marker: &[u8]) -> Vec<u8> {
+        let mut b = b"8BCB".to_vec();
+        b.extend(1u16.to_be_bytes());
+        b.extend(3000u16.to_be_bytes());
+        for s in ["$$$/colorbook/Test/title=Test Book^R", "TEST ", " C", "a book"] {
+            acb_str(&mut b, s);
+        }
+        b.extend((colors.len() as u16).to_be_bytes());
+        b.extend(7u16.to_be_bytes());
+        b.extend(0u16.to_be_bytes());
+        b.extend(space.to_be_bytes());
+        for (name, comps) in colors {
+            acb_str(&mut b, name);
+            b.extend(b"TST001");
+            b.extend(*comps);
+        }
+        b.extend(marker);
+        b
+    }
+
+    /// #831: color books (`.acb`) are read: their colors in RGB, CMYK or Lab, named with the book's
+    /// prefix and suffix, spot unless the book says process; page padding is left out.
+    #[test]
+    fn color_books_are_read() {
+        let lib = read_bytes(&acb(0, &[("185", &[228, 0, 43]), ("", &[0, 0, 0]), ("Red 032", &[239, 51, 64])], b"spflspot"), "fallback").unwrap();
+        assert_eq!(lib.name, "Test Book®");
+        let names: Vec<&str> = lib.swatches.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["TEST 185 C", "TEST Red 032 C"]);
+        assert!(lib.swatches.iter().all(|s| s.spot && s.global));
+        assert_eq!(lib.swatches[0].paint.color(), Some(Color::rgb8(228, 0, 43)));
+        // CMYK ink is stored inverted; a book marked process gives process colors.
+        let lib = read_bytes(&acb(2, &[("Cyan", &[0, 255, 255, 255])], b"spflproc"), "x").unwrap();
+        assert_eq!(lib.swatches[0].paint.color(), Some(Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+        assert!(!lib.swatches[0].spot && !lib.swatches[0].global);
+        // Lab: lightness 0..255 for 0..100, a and b offset by 128; no marker: spot.
+        let lib = read_bytes(&acb(7, &[("Grey", &[255, 128, 128])], b""), "x").unwrap();
+        assert_eq!(lib.swatches[0].paint.color(), Some(Color::lab(100.0, 0.0, 0.0)));
+        assert!(lib.swatches[0].spot);
+        assert!(sniff_bytes(&acb(0, &[], b"")));
+        // Unsupported versions and color spaces, and short files, are errors.
+        let mut v2 = acb(0, &[], b"");
+        v2[5] = 2;
+        assert!(read_bytes(&v2, "x").is_err());
+        assert!(read_bytes(&acb(1, &[("x", &[1, 2, 3])], b""), "x").is_err());
+        let full = acb(0, &[("185", &[228, 0, 43])], b"");
+        for cut in 4..full.len() {
+            assert!(read_bytes(&full[..cut], "x").is_err(), "{cut} bytes");
+        }
+        let mut huge = b"8BCB\0\x01\0\x01".to_vec();
+        huge.extend(u32::MAX.to_be_bytes());
+        assert!(read_bytes(&huge, "x").is_err(), "a string longer than the file");
+    }
 
     fn sample() -> SwatchLibrary {
         let grad = Paint::Gradient(Box::new(GradientPaint::new(Gradient {

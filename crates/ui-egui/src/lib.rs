@@ -62,6 +62,8 @@ mod tests_adjust;
 #[cfg(test)]
 mod tests_aisave;
 #[cfg(test)]
+mod tests_automation;
+#[cfg(test)]
 mod tests_background;
 #[cfg(test)]
 mod tests_clipboard;
@@ -149,6 +151,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
@@ -300,6 +303,8 @@ pub struct CacheKey {
     pub pixel: Option<[i64; 4]>,
     /// Images sampled smoothly ([`vectorcraft_render::RenderOptions::smooth_images`]).
     pub smooth_images: bool,
+    /// Isolation mode's group or layer ([`vectorcraft_render::RenderOptions::isolated`]).
+    pub isolated: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -324,8 +329,8 @@ pub struct VectorcraftApp {
     /// moves ([`native_menu::sync`]).
     run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
-    /// (token, path, reply, deadline ms): a window that isn't presented never delivers its frame.
-    pending_screenshots: Vec<(u64, Option<String>, Sender<ControlResponse>, f64)>,
+    /// Window captures asked for and not answered yet.
+    pending_screenshots: Vec<PendingScreenshot>,
     queued_screenshots: Vec<(u64, f64, u32)>,
     screenshot_token: u64,
     /// Synthetic input events (from the control channel) injected one step per frame.
@@ -373,6 +378,12 @@ pub struct VectorcraftApp {
     /// The look for fonts installed or removed while the app was in the background, running
     /// ([`Self::refresh_installed_fonts`]): whether they were.
     font_check: Option<std::sync::mpsc::Receiver<bool>>,
+    /// The window came back to the front: check the active document's linked files next frame
+    /// ([`dialogs::missing_links::after_focus`]).
+    pub(crate) links_check: bool,
+    /// The changed linked files already offered for update (path, size and modification time), so
+    /// coming back to the window doesn't ask about the same change twice.
+    pub(crate) links_asked: std::collections::HashSet<dialogs::missing_links::FileStamp>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -391,6 +402,25 @@ pub struct VectorcraftApp {
     /// A numeric field is being scrubbed: the document's edits meanwhile are one undo step
     /// ([`scrub::begin_frame`]).
     scrub_group: bool,
+    /// The folders control requests, and the input they inject, may read and write
+    /// (`--automation-read-root`, `--automation-write-root`); `None`: anywhere. See
+    /// [`Self::with_automation_roots`].
+    automation_roots: Option<Arc<AutomationRoots>>,
+    /// This frame carries input the control channel injected ([`Self::raw_input_hook`]): it runs
+    /// confined to [`Self::automation_roots`].
+    synthetic_frame: bool,
+}
+
+/// A window capture asked for through the control channel (`ui.screenshot`), answered once a
+/// frame is presented; a window that isn't presented never delivers one, hence the deadline.
+struct PendingScreenshot {
+    token: u64,
+    path: Option<String>,
+    /// Send the PNG back as `pngBase64`.
+    data: bool,
+    reply: Sender<ControlResponse>,
+    /// When to give up (ms, as [`now_ms`]).
+    deadline: f64,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -451,6 +481,8 @@ impl VectorcraftApp {
             clipboard_probe: None,
             picks: picks::Picks::default(),
             font_check: None,
+            links_check: false,
+            links_asked: Default::default(),
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -459,11 +491,40 @@ impl VectorcraftApp {
             ime_marked: None,
             ime_discard: false,
             scrub_group: false,
+            automation_roots: None,
+            synthetic_frame: false,
         }
     }
 
     pub fn with_control(mut self, rx: Receiver<ControlRequest>) -> Self {
         self.control_rx = Some(rx);
+        self
+    }
+
+    /// Confine what the control channel does to `roots` (#832): its requests, the input it
+    /// injects (in the frames that carry it) and the saves and exports they start read and write
+    /// only inside them ([`file_access`]). The host's file services check every path they're given
+    /// against the roots in force, and so does the engine; outside those scopes the person at the
+    /// keyboard works as usual.
+    pub fn with_automation_roots(mut self, roots: Option<Arc<AutomationRoots>>) -> Self {
+        let Some(roots) = roots else { return self };
+        self.automation_roots = Some(roots);
+        let s = &mut self.services;
+        if let Some(read) = s.read.take() {
+            s.read = Some(Box::new(move |p: &str| file_access::check_read(p).and_then(|()| read(p))));
+        }
+        if let Some(mut write) = s.write.take() {
+            s.write = Some(Box::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
+        }
+        if let Some(write) = s.write_shared.take() {
+            s.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
+        }
+        // Edit Original and Show in Folder hand a file to another app: only one automation may read.
+        for service in [&mut s.open_file, &mut s.reveal] {
+            if let Some(mut open) = service.take() {
+                *service = Some(Box::new(move |p: &str| file_access::check_read(p).and_then(|()| open(p))));
+            }
+        }
         self
     }
 
@@ -624,18 +685,19 @@ impl VectorcraftApp {
         while let Ok(req) = rx.try_recv() {
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
-            let outcome = vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))
+            let roots = self.automation_roots.clone();
+            let outcome = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)))
                 .unwrap_or_else(|msg| control::err(format!("internal error: {msg} (please report this bug)")));
             match outcome {
                 control::Outcome::Done(v) => {
                     let _ = reply.send(v);
                 }
-                control::Outcome::Screenshot { path } => {
+                control::Outcome::Screenshot { path, data } => {
                     self.screenshot_token += 1;
                     let token = self.screenshot_token;
                     let settle = ctx.global_style().animation_time as f64 * 2000.0 + 80.0;
                     self.queued_screenshots.push((token, now_ms() + settle, 0));
-                    self.pending_screenshots.push((token, path, reply, now_ms() + settle + 8000.0));
+                    self.pending_screenshots.push(PendingScreenshot { token, path, data, reply, deadline: now_ms() + settle + 8000.0 });
                 }
             }
         }
@@ -676,17 +738,18 @@ impl VectorcraftApp {
                 .collect()
         });
         for (token, image) in events {
-            if let Some(i) = self.pending_screenshots.iter().position(|(t, ..)| *t == token) {
-                let (_, path, reply, _) = self.pending_screenshots.remove(i);
-                let _ = reply.send(control::save_screenshot(self, &image, path.as_deref()));
+            if let Some(i) = self.pending_screenshots.iter().position(|p| p.token == token) {
+                let p = self.pending_screenshots.remove(i);
+                let roots = self.automation_roots.clone();
+                let _ = p.reply.send(file_access::confine(roots.as_ref(), || control::save_screenshot(self, &image, p.path.as_deref(), p.data)));
             }
         }
         let now = now_ms();
-        self.pending_screenshots.retain(|(_, _, reply, deadline)| {
-            if now < *deadline {
+        self.pending_screenshots.retain(|p| {
+            if now < p.deadline {
                 return true;
             }
-            let _ = reply.send(serde_json::json!({
+            let _ = p.reply.send(serde_json::json!({
                 "ok": false,
                 "error": "no frame was presented (screen locked, window minimized or fully covered); ui.render still renders the artboard"
             }));
@@ -711,7 +774,7 @@ impl VectorcraftApp {
             self.services.inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
         for (name, bytes) in arrived {
             if let Err(e) = io::open_bytes(self, &name, &bytes, None) {
-                self.status(format!("Couldn't open {name}: {e}"));
+                io::report_open_error(self, &name, &e);
             }
         }
         place::drain(self);
@@ -787,7 +850,8 @@ impl VectorcraftApp {
     /// Per-frame logic before layout (control channel, shortcuts, inbox). A bug that panics costs
     /// one frame and shows an error, instead of closing the app with unsaved work.
     pub fn logic(&mut self, ctx: &egui::Context) {
-        if let Err(msg) = vectorcraft_engine::guard::catch_panic(|| self.logic_frame(ctx)) {
+        let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
+        if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.logic_frame(ctx))) {
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -832,6 +896,9 @@ impl VectorcraftApp {
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
         self.poll_font_check(ctx);
+        if std::mem::take(&mut self.links_check) {
+            dialogs::missing_links::after_focus(self);
+        }
         picks::poll(self, ctx);
         background::poll(self);
         if !self.background.jobs.is_empty() {
@@ -893,11 +960,20 @@ impl VectorcraftApp {
         for f in dropped {
             let path = Some(f.path().to_string_lossy().to_string()).filter(|s| !s.is_empty());
             let name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
-            let target = self.drop_target(&name, pos, shift);
-            // A file placed by its path is read by the engine.
-            let bytes = if path.is_some() && target != place::DropTarget::Open { Ok(vec![]) } else { f.bytes() };
+            // Native file drops usually carry a path. Use the same file reader as File → Open
+            // (and File → Place), even if the drop handle can't supply the bytes itself.
+            let bytes = if path.is_some() && self.services.read.is_some() { Ok(vec![]) } else { f.bytes() };
             match bytes {
-                Ok(b) => files.push((target, (name, path, b))),
+                Ok(bytes) => {
+                    // A backend may give bytes without a path or extension. Sniff their format
+                    // before deciding: an SVG opens as a document, a raster image is placed.
+                    let target = if path.is_none() && fileio::detect(&name, &bytes).is_none_or(|f| !f.raster) {
+                        place::DropTarget::Open
+                    } else {
+                        self.drop_target(&name, pos, shift)
+                    };
+                    files.push((target, (name, path, bytes)));
+                }
                 Err(e) => self.status(format!("Couldn't read {name}: {e}")),
             }
         }
@@ -956,10 +1032,14 @@ impl VectorcraftApp {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
                 egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
-                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(),
+                egui::Event::WindowFocused(true) => {
+                    self.refresh_installed_fonts();
+                    self.links_check = true;
+                }
                 _ => {}
             }
         }
+        self.synthetic_frame = !self.synthetic.is_empty();
         let Some(first) = self.synthetic.first() else {
             if std::mem::take(&mut self.synthetic_modifiers) {
                 raw.events.push(egui::Event::ModifiersChanged(self.host_modifiers));
@@ -1002,7 +1082,8 @@ impl VectorcraftApp {
 
     /// Lay out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        if let Err(msg) = vectorcraft_engine::guard::catch_panic(|| self.ui_frame(ui)) {
+        let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
+        if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.ui_frame(ui))) {
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }

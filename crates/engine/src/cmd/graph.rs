@@ -5,6 +5,7 @@
 //! the spec. Editing the data or the type regenerates them in place, keeping any move/scale the
 //! user applied to the graph since it was generated.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -131,11 +132,26 @@ fn fmt_value(v: f64) -> String {
 
 // ---------- generation ----------
 
-/// Series colours: black, then greys (Illustrator's graphs start in greyscale too).
-fn series_paint(i: usize) -> Paint {
+/// Series colours: black, then greys (graphs start in greyscale).
+fn default_series_color(i: usize) -> Color {
     const LEVELS: [f32; 8] = [0.0, 0.55, 0.8, 0.3, 0.68, 0.15, 0.9, 0.42];
     let l = LEVELS[i % LEVELS.len()];
-    Paint::solid(Color::rgb(l, l, l))
+    Color::rgb(l, l, l)
+}
+
+fn default_series_paint(i: usize) -> Paint {
+    Paint::solid(default_series_color(i))
+}
+
+/// Fill and stroke for one generated mark of series `i`. A stored fill is used only where the
+/// generator paints with the series colour (`series_fill`). A stored stroke replaces that part's
+/// own stroke, so a column's stroke stays a stroke and a line's markers do not repaint its line.
+fn series_marks(g: &GraphSpec, i: usize, series_fill: bool, stroke: Paint, width: f64) -> (Paint, Paint, f64) {
+    let slot = g.series_paints.get(i);
+    let fill = if series_fill { slot.and_then(|p| p.fill.clone()).unwrap_or_else(|| default_series_paint(i)) } else { Paint::None };
+    let stroke = slot.and_then(|p| p.stroke.clone()).unwrap_or(stroke);
+    let width = if slot.is_some_and(|p| p.stroke.is_some()) { slot.and_then(|p| p.stroke_width).unwrap_or(width) } else { width };
+    (fill, stroke, width)
 }
 
 const LABEL_SIZE: f64 = 9.0;
@@ -177,6 +193,14 @@ impl Gen<'_> {
         g.name = Some(name.into());
         Arc::new(g)
     }
+    /// A series group. Empty series are omitted by the caller; the index is stored on the group
+    /// so later paint edits find the series without counting siblings.
+    fn series(&mut self, name: &str, index: usize, children: Vec<Arc<Node>>) -> Arc<Node> {
+        let mut g = Node::group(self.d.alloc_id(), children);
+        g.name = Some(name.into());
+        g.series_index = u32::try_from(index).ok();
+        Arc::new(g)
+    }
 }
 
 fn polyline(pts: &[Point], closed: bool) -> PathData {
@@ -200,6 +224,7 @@ fn marker(p: Point, s: f64) -> PathData {
 
 /// Build the graph's children.
 fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
+    let mark = |i: usize, series_fill: bool, stroke: Paint, width: f64| series_marks(g, i, series_fill, stroke, width);
     let mut b = Gen { d, out: vec![] };
     let r = g.rect;
     let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
@@ -231,7 +256,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     bp.line_to(centre + vectorcraft_geom::Vec2::new(a0.cos(), a0.sin()) * rad);
                     arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
                     bp.close_path();
-                    let n = b.path(PathData::from_bezpath(&bp), series_paint(s), Paint::solid(Color::WHITE), 0.5);
+                    let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.5);
+                    let n = b.path(PathData::from_bezpath(&bp), fill, stroke, w);
                     items.push(n);
                     a0 += sweep;
                 }
@@ -268,9 +294,11 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
             b.out.push(ax);
             for (s, items) in series.iter_mut().enumerate() {
                 let pts: Vec<Point> = (0..ncat).map(|c| at(c, val(c, s))).collect();
-                items.push(b.path(polyline(&pts, true), Paint::None, series_paint(s), 1.0));
+                let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
+                items.push(b.path(polyline(&pts, true), fill, stroke, w));
                 for p in pts {
-                    items.push(b.path(marker(p, 4.0), series_paint(s), Paint::None, 0.0));
+                    let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                    items.push(b.path(marker(p, 4.0), fill, stroke, w));
                 }
             }
         }
@@ -359,11 +387,13 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     let pts: Vec<Point> =
                         (0..ncat).map(|c| Point::new(r.x0 + (val(c, s + 1) - xl) / (xh - xl) * r.width(), vpos(val(c, s)))).collect();
                     if g.connect_points && pts.len() > 1 {
-                        series[si].push(b.path(polyline(&pts, false), Paint::None, series_paint(si), 1.0));
+                        let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
+                        series[si].push(b.path(polyline(&pts, false), fill, stroke, w));
                     }
                     if g.mark_points {
                         for p in &pts {
-                            series[si].push(b.path(marker(*p, 5.0), series_paint(si), Paint::None, 0.0));
+                            let (fill, stroke, w) = mark(si, true, Paint::None, 0.0);
+                            series[si].push(b.path(marker(*p, 5.0), fill, stroke, w));
                         }
                     }
                 }
@@ -385,7 +415,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                             } else {
                                 Rect::new(a, v0.min(v1), a + bar, v0.max(v1))
                             };
-                            items.push(b.path(shapes::rectangle(rect), series_paint(s), Paint::None, 0.0));
+                            let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                            items.push(b.path(shapes::rectangle(rect), fill, stroke, w));
                         }
                     }
                 }
@@ -405,7 +436,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                             } else {
                                 Rect::new(a, v0.min(v1), a + bar, v0.max(v1))
                             };
-                            items.push(b.path(shapes::rectangle(rect), series_paint(s), Paint::solid(Color::WHITE), 0.25));
+                            let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
+                            items.push(b.path(shapes::rectangle(rect), fill, stroke, w));
                         }
                     }
                 }
@@ -413,11 +445,13 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     for (s, items) in series.iter_mut().enumerate() {
                         let pts: Vec<Point> = (0..ncat).map(|c| Point::new(cat_mid(c), vpos(val(c, s)))).collect();
                         if g.connect_points && pts.len() > 1 {
-                            items.push(b.path(polyline(&pts, false), Paint::None, series_paint(s), 1.0));
+                            let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
+                            items.push(b.path(polyline(&pts, false), fill, stroke, w));
                         }
                         if g.mark_points {
                             for p in &pts {
-                                items.push(b.path(marker(*p, 5.0), series_paint(s), Paint::None, 0.0));
+                                let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+                                items.push(b.path(marker(*p, 5.0), fill, stroke, w));
                             }
                         }
                     }
@@ -429,7 +463,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                         let above: Vec<f64> = (0..ncat).map(|c| below[c] + val(c, s)).collect();
                         let mut pts: Vec<Point> = (0..ncat).map(|c| Point::new(cat_mid(c), vpos(above[c]))).collect();
                         pts.extend((0..ncat).rev().map(|c| Point::new(cat_mid(c), vpos(below[c]))));
-                        items.push(b.path(polyline(&pts, true), series_paint(s), Paint::solid(Color::WHITE), 0.25));
+                        let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
+                        items.push(b.path(polyline(&pts, true), fill, stroke, w));
                         below = above;
                     }
                 }
@@ -448,16 +483,18 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 continue;
             }
             let y = r.y0 + s as f64 * (LABEL_SIZE * 1.8);
-            items.push(b.path(shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), series_paint(s), Paint::None, 0.0));
+            let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
+            items.push(b.path(shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), fill, stroke, w));
             labels.push(b.text(Point::new(x + 12.0, y + 7.5), &label, Justify::Left));
         }
     }
     for (s, items) in series.into_iter().enumerate() {
-        if !items.is_empty() {
-            let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
-            let grp = b.group(&name, items);
-            b.out.push(grp);
+        if items.is_empty() {
+            continue;
         }
+        let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
+        let grp = b.series(&name, s, items);
+        b.out.push(grp);
     }
     if !labels.is_empty() {
         let grp = b.group("Legend", labels);
@@ -540,6 +577,91 @@ fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
 }
 
+/// Where a node inside a graph's generated series art belongs: the graph, the series group and
+/// the series index stored on that group.
+#[derive(Clone, Copy)]
+struct SeriesRef {
+    graph: NodeId,
+    group: NodeId,
+    index: usize,
+}
+
+/// Every node in a graph's series groups (the groups too), found in one pass over the document.
+/// Axes, the legend and groups whose index is past the graph's series (the index comes from the
+/// file) are left out.
+fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
+    let mut out = HashMap::new();
+    doc.walk(|n| {
+        let Some(spec) = n.graph.as_deref() else { return };
+        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        for group in n.children().into_iter().flatten() {
+            let Some(index) = group.series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
+            let r = SeriesRef { graph: n.id, group: group.id, index };
+            group.walk(&mut |m| {
+                out.insert(m.id, r);
+            });
+        }
+    });
+    out
+}
+
+/// Group Selection on a graph series targets its constituent marks and legend swatch, not a
+/// group-level appearance which the generated art does not inherit. Other ids pass through.
+pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let members = series_members(doc);
+    if members.is_empty() {
+        return ids.to_vec();
+    }
+    let mut out = Vec::new();
+    for id in ids {
+        match members.get(id).filter(|r| r.group == *id).and_then(|_| doc.node(*id)) {
+            Some(group) => group.walk(&mut |m| {
+                if matches!(m.kind, NodeKind::Path { .. }) {
+                    out.push(m.id);
+                }
+            }),
+            None => out.push(*id),
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Copy the paint just applied to generated series art into that series' fill or stroke. Called
+/// inside the same document edit, so the visible paint and future regeneration undo together.
+/// Gradients, patterns and swatch links are kept as [`Paint`], not reduced to a solid colour.
+pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bool) {
+    let members = series_members(doc);
+    if members.is_empty() {
+        return;
+    }
+    let captures: Vec<_> = ids
+        .iter()
+        .filter_map(|id| {
+            let r = members.get(id)?;
+            let node = doc.node(*id)?;
+            let paint = node.appearance.paint_at(None, fill)?.clone();
+            let width = (!fill).then(|| node.appearance.stroke_width());
+            Some((r.graph, r.index, paint, width))
+        })
+        .collect();
+    for (graph, index, paint, width) in captures {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.graph.as_deref_mut()) else { continue };
+        // `index` is below the graph's series count (`series_members`).
+        if spec.series_paints.len() <= index {
+            spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
+        }
+        let Some(slot) = spec.series_paints.get_mut(index) else { continue };
+        if fill {
+            slot.fill = Some(paint);
+        } else {
+            slot.stroke = Some(paint);
+            slot.stroke_width = width;
+        }
+    }
+}
+
 fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
     let id = target(s, p, "graph.setData")?;
     let mut spec = spec_of(s, id)?;
@@ -592,7 +714,8 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use vectorcraft_doc::NodeKind;
+    use vectorcraft_color::Paint;
+    use vectorcraft_doc::{GraphKind, GraphSpec, NodeKind};
 
     use crate::{NodeId, Session};
 
@@ -607,6 +730,11 @@ mod tests {
 
     fn group<'a>(n: &'a vectorcraft_doc::Node, name: &str) -> &'a vectorcraft_doc::Node {
         n.children().unwrap().iter().find(|c| c.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("no {name}"))
+    }
+
+    /// The generated group stored for series `index`, not a sibling that happens to share its name.
+    fn series(n: &vectorcraft_doc::Node, index: u32) -> &vectorcraft_doc::Node {
+        n.children().unwrap().iter().find(|c| c.series_index == Some(index)).unwrap_or_else(|| panic!("no series {index}"))
     }
 
     #[test]
@@ -660,6 +788,228 @@ mod tests {
         s.execute("select.set", &json!({"ids": [bar.0]})).unwrap();
         assert!(s.execute("graph.setData", &json!({})).is_ok());
         assert!(matches!(n.kind, NodeKind::Group { .. }));
+    }
+
+    #[test]
+    fn group_selection_paint_becomes_the_series_colour_and_survives_regeneration() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        for ty in GraphKind::ALL {
+            let id = graph(&mut s, ty.id());
+            let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+            s.execute("paint.setFill", &json!({"ids": [series_id.0], "color": "#ff0000"})).unwrap();
+            let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+            let restored: GraphSpec = serde_json::from_value(serde_json::to_value(&spec).unwrap()).unwrap();
+            assert_eq!(spec, restored);
+            let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+            assert_eq!(spec.series_paints.first().and_then(|p| p.fill.clone()), Some(red.clone()), "{ty:?}");
+            let selected_group = group(s.doc().unwrap().doc.node(id).unwrap(), "2024");
+            assert!(selected_group.children().unwrap().iter().all(|n| n.appearance.fill_paint() == red), "{ty:?}");
+            s.execute("graph.setData", &json!({"rows": [[2, 3], [4, 5]]})).unwrap();
+            s.execute("graph.setType", &json!({"type": "line"})).unwrap();
+            let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap();
+            assert_eq!(spec.series_paints.first().and_then(|p| p.fill.clone()), Some(red.clone()), "{ty:?}");
+            let series = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap();
+            assert!(series.iter().any(|n| n.appearance.fill_paint() == red), "{ty:?}");
+        }
+    }
+
+    #[test]
+    fn painting_a_series_is_one_undoable_edit() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.execute("paint.setFill", &json!({"ids": [series_id.0], "color": "#e8573f"})).unwrap();
+        assert_eq!(
+            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(),
+            "#e8573f"
+        );
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints.is_empty());
+        assert_eq!(
+            group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].appearance.fill_paint().color(),
+            Some(super::default_series_color(0))
+        );
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(
+            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(),
+            "#e8573f"
+        );
+    }
+
+    #[test]
+    fn painting_one_bar_sets_the_colour_used_by_the_whole_series_on_rebuild() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let bar = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].id;
+        s.execute("paint.setFill", &json!({"ids": [bar.0], "color": "#12ab34"})).unwrap();
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        let green = vectorcraft_color::Color::rgb(18.0 / 255.0, 171.0 / 255.0, 52.0 / 255.0);
+        assert_eq!(node.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color), Some(green));
+        assert!(group(node, "2024").children().unwrap().iter().all(|n| n.appearance.fill_paint().color() == Some(green)));
+    }
+
+    /// A series index read from a file past the graph's series is not a series: painting its art
+    /// paints the art alone and stores nothing (no allocation sized by the file).
+    #[test]
+    fn a_series_index_past_the_graphs_series_is_ignored() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.edit("Junk", |d, _| {
+            d.node_mut(series_id).unwrap().series_index = Some(u32::MAX);
+            Ok(())
+        })
+        .unwrap();
+        let bar = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0].id;
+        s.execute("paint.setFill", &json!({"ids": [bar.0, series_id.0], "color": "#12ab34"})).unwrap();
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.graph.as_ref().unwrap().series_paints.is_empty());
+        assert_eq!(group(node, "2024").children().unwrap()[0].appearance.fill_paint().color().map(|c| c.to_hex()), Some("#12ab34".into()));
+    }
+
+    #[test]
+    fn painting_a_line_series_stroke_sets_its_persistent_colour() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "line");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.execute("paint.setStroke", &json!({"ids": [series_id.0], "color": "#3751c8"})).unwrap();
+        let blue = vectorcraft_color::Color::rgb(55.0 / 255.0, 81.0 / 255.0, 200.0 / 255.0);
+        assert_eq!(
+            s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].stroke.as_ref().and_then(Paint::color),
+            Some(blue)
+        );
+        assert!(s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints[0].fill.is_none());
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        assert!(
+            group(s.doc().unwrap().doc.node(id).unwrap(), "2024")
+                .children()
+                .unwrap()
+                .iter()
+                .any(|n| n.appearance.stroke_paint().color() == Some(blue))
+        );
+    }
+
+    #[test]
+    fn series_colours_survive_native_save_open_and_export() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let first = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        let second = group(s.doc().unwrap().doc.node(id).unwrap(), "2025").id;
+        s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#f00"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [second.0], "color": "#008080"})).unwrap();
+        let dir = vectorcraft_testkit::temp_dir("graph-palette");
+        let path = dir.join("palette.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let paints = &s.doc().unwrap().doc.node(id).unwrap().graph.as_ref().unwrap().series_paints;
+        assert_eq!(paints.iter().map(|p| p.fill.as_ref().and_then(Paint::color).unwrap().to_hex()).collect::<Vec<_>>(), vec!["#ff0000", "#008080"]);
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[3, 4, 5]]})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        let swatch = group(n, "2025").children().unwrap().last().unwrap();
+        assert_eq!(swatch.appearance.fill_paint().color().unwrap().to_hex(), "#008080");
+        let third = group(n, "Series 3").children().unwrap().first().unwrap();
+        assert_eq!(third.appearance.fill_paint().color().unwrap().to_hex(), "#cccccc");
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["text"].as_str().unwrap();
+        assert!(svg.contains("#ff0000") && svg.contains("#008080"));
+        let png = dir.join("palette.png");
+        s.execute("document.export", &json!({"format": "png", "path": png})).unwrap();
+        let pixels = image::open(&png).unwrap().to_rgba8();
+        assert!(pixels.pixels().any(|p| p.0 == [255, 0, 0, 255]));
+        assert!(pixels.pixels().any(|p| p.0 == [0, 128, 128, 255]));
+        let old: GraphSpec = serde_json::from_value(json!({"rows": [[1.0]]})).unwrap();
+        assert!(old.series_paints.is_empty(), "older files keep the greyscale default");
+    }
+
+    #[test]
+    fn a_column_stroke_stays_a_stroke_and_a_marker_fill_does_not_recolour_its_line() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.execute("paint.setStroke", &json!({"ids": [series_id.0], "color": "#0000ff"})).unwrap();
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+        assert_eq!(spec.series_paints[0].stroke, Some(blue.clone()));
+        assert!(spec.series_paints[0].fill.is_none());
+        let bar = &group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0];
+        assert_eq!(bar.appearance.fill_paint().color(), Some(super::default_series_color(0)));
+        assert_eq!(bar.appearance.stroke_paint(), blue);
+
+        let id = graph(&mut s, "line");
+        let marker = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[1].id;
+        s.execute("paint.setFill", &json!({"ids": [marker.0], "color": "#ff0000"})).unwrap();
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        assert!(spec.series_paints[0].stroke.is_none());
+        let series = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap();
+        assert_eq!(series[0].appearance.stroke_paint().color(), Some(super::default_series_color(0)));
+        assert_eq!(series[1].appearance.fill_paint().color(), Some(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn a_gradient_fill_survives_regeneration() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let series_id = group(s.doc().unwrap().doc.node(id).unwrap(), "2024").id;
+        s.execute(
+            "paint.setFill",
+            &json!({"ids": [series_id.0], "gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}}),
+        )
+        .unwrap();
+        s.execute("graph.setData", &json!({"rows": [[2, 3], [4, 5]]})).unwrap();
+        let spec = s.doc().unwrap().doc.node(id).unwrap().graph.as_deref().unwrap().clone();
+        assert!(matches!(spec.series_paints[0].fill, Some(Paint::Gradient(_))));
+        let bar = &group(s.doc().unwrap().doc.node(id).unwrap(), "2024").children().unwrap()[0];
+        assert!(matches!(bar.appearance.fill_paint(), Paint::Gradient(_)));
+    }
+
+    #[test]
+    fn a_series_named_legend_keeps_its_own_index_and_an_empty_series_is_omitted() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let csv = ",Legend,Axes\nQ1,3,2\nQ2,5,4";
+        let id = NodeId(s.execute("graph.create", &json!({"type": "column", "x": 0, "y": 0, "csv": csv})).unwrap()["id"].as_u64().unwrap());
+        let legend_id = {
+            let n = s.doc().unwrap().doc.node(id).unwrap();
+            let legend = series(n, 0);
+            assert_eq!(legend.name.as_deref(), Some("Legend"));
+            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Legend") && c.series_index.is_none()));
+            assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Axes") && c.series_index.is_none()));
+            legend.id
+        };
+        s.execute("paint.setFill", &json!({"ids": [legend_id.0], "color": "#ff0000"})).unwrap();
+        s.execute("graph.setData", &json!({"csv": csv})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        assert_eq!(n.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#ff0000");
+        assert!(n.graph.as_ref().unwrap().series_paints.get(1).is_none_or(|p| p.fill.is_none()));
+        assert_eq!(series(n, 0).children().unwrap()[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+        assert_eq!(series(n, 1).name.as_deref(), Some("Axes"));
+        assert_ne!(series(n, 1).children().unwrap()[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+
+        let id = graph(&mut s, "pie");
+        s.execute("graph.setType", &json!({"id": id.0, "legend": false})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",Keep,Drop\nQ1,4,0\nQ2,2,0"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(n.children().unwrap().iter().any(|c| c.name.as_deref() == Some("Keep")));
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Drop")));
+        let keep = group(n, "Keep").id;
+        s.execute("paint.setFill", &json!({"ids": [keep.0], "color": "#00ff00"})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[8, 0], [1, 0]]})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        assert_eq!(group(n, "Keep").series_index, Some(0));
+        assert_eq!(n.graph.as_ref().unwrap().series_paints[0].fill.as_ref().and_then(Paint::color).unwrap().to_hex(), "#00ff00");
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Drop")));
     }
 
     #[test]

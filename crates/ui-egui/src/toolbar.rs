@@ -312,8 +312,10 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::menus::invoke(app, &id, json!({}));
             Ok(json!({ "dialog": dialog }))
         }
-        "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
-        "gradient" => app.run("window.panel", json!({ "panel": "gradient" })),
+        // The Gradient and Magic Wand tools: their panels.
+        "gradient" | "magicWand" if app.ui.open_panel.as_deref() == Some(tool) => Ok(json!({ "open": tool })),
+        "gradient" | "magicWand" => app.run("window.panel", json!({ "panel": tool })),
+        "artboard" => crate::dialogs::artboard_options::open(app),
         "eyedropper" => {
             crate::dialogs::eyedropper::open(app);
             Ok(json!({ "dialog": crate::dialogs::eyedropper::KIND }))
@@ -326,12 +328,18 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::perspective_options::open(app);
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
+        // The Flare tool: its options, which draw the next flare (OK draws none).
+        "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
         // The Liquify tools: their Tool Options (the Global Brush Dimensions and the tool's own).
         _ if vectorcraft_tools::settings::LIQUIFY.contains(&tool) => crate::dialogs::liquify::open(app, tool),
         // The freehand tools: their Tool Options (Fidelity, fill, the tolerances, the brush size).
         _ if crate::dialogs::freehand::TOOLS.contains(&tool) => crate::dialogs::freehand::open(app, tool),
+        // The Symbolism tools: the brush they share.
+        _ if vectorcraft_tools::settings::SYMBOLISM.contains(&tool) => Ok(crate::dialogs::symbolism_options::open(app, tool)),
+        // The graph tools: Graph Type for the selected graph.
+        _ if vectorcraft_tools::extra::is_graph_tool(tool) => crate::menus::graph_dialog(app, "graph.setType"),
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }
@@ -813,6 +821,38 @@ pub(crate) mod tests {
             frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
         }
         assert_eq!(frame_in(&mut app, &ctx, 8.0, vec![], 500.0)[0], tools[0]);
+    }
+
+    /// #812: double-clicking the Artboard tool opens Artboard Options of the active artboard, a
+    /// graph tool Graph Type for the selected graph, and the Magic Wand tool its panel.
+    #[test]
+    fn more_tools_open_their_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        // Without the Artboard tool, the window's artboard.
+        assert_eq!(open_options(&mut app, "artboard").unwrap()["dialog"], "artboardOptions");
+        let d = app.ui.dialog.take().unwrap();
+        assert_eq!((d.f64("index", 9.0), d.f64("width", 0.0), d.str("name")), (0.0, 300.0, "Artboard 1".to_string()));
+        // With it, its active artboard.
+        app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 50})).unwrap();
+        app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+        app.run("tool.setOption", json!({"key": "active", "value": 1})).unwrap();
+        open_options(&mut app, "artboard").unwrap();
+        let d = app.ui.dialog.take().unwrap();
+        assert_eq!((d.f64("index", 9.0), d.f64("x", 0.0), d.f64("width", 0.0)), (1.0, 400.0, 100.0));
+        // Graph Type needs a selected graph.
+        app.run("select.set", json!({"ids": []})).unwrap();
+        assert!(open_options(&mut app, "pieGraph").is_err());
+        assert!(app.ui.dialog.is_none());
+        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150})).unwrap();
+        assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "command");
+        let d = app.ui.dialog.take().unwrap();
+        assert_eq!((d.str("__command"), d.str("type")), ("graph.setType".to_string(), "column".to_string()));
+        // The Magic Wand panel opens, and stays open on a second double-click.
+        open_options(&mut app, "magicWand").unwrap();
+        assert_eq!(app.ui.open_panel.as_deref(), Some("magicWand"));
+        assert_eq!(open_options(&mut app, "magicWand").unwrap()["open"], "magicWand");
+        assert_eq!(app.ui.open_panel.as_deref(), Some("magicWand"));
     }
 
     /// A double-click at `at`, `time` seconds in (a second apart from the last).

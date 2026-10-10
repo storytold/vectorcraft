@@ -172,6 +172,47 @@ fn transform_copies_and_move() {
 }
 
 #[test]
+fn transform_scales_and_rotates_about_its_reference_point() {
+    // Bottom right (8) stays put while the square halves; the top left (0) while it rotates.
+    let r = run("distort.transform", json!({"scaleH": 50, "scaleV": 50, "reference": 8}), &square()).bounds().unwrap();
+    assert!(close(r.x0, 50.0, 1e-9) && close(r.y0, 50.0, 1e-9) && close(r.x1, 100.0, 1e-9) && close(r.y1, 100.0, 1e-9), "{r:?}");
+    let r = run("distort.transform", json!({"rotate": 90, "reference": 0}), &square()).bounds().unwrap();
+    assert!(close(r.x0, 0.0, 1e-9) && close(r.x1, 100.0, 1e-9) && close(r.y0, -100.0, 1e-9) && close(r.y1, 0.0, 1e-9), "{r:?}");
+    // Reflect X about the right edge's middle (5): a mirrored copy beside the original.
+    let out = run("distort.transform", json!({"reflectX": true, "reference": 5, "copies": 1}), &square());
+    assert_eq!(out.bounds().map(|b| (b.x0.round(), b.x1.round())), Some((0.0, 200.0)));
+    // A point off the grid clamps to it.
+    assert_eq!(run("distort.transform", json!({"scaleH": 50, "reference": 99}), &square()).bounds().map(|b| b.x0), Some(50.0));
+}
+
+#[test]
+fn random_transform_is_stable_per_object_and_within_the_values() {
+    let b = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let bounds = |params: Value, seed| {
+        apply_geometry_with(&[fx("distort.transform", params)], &square(), b, &GeomContext { seed, ..Default::default() }).bounds().unwrap()
+    };
+    let random = |seed| bounds(json!({"scaleH": 50, "moveH": 40, "random": true}), seed);
+    let first = random(7);
+    assert_eq!(random(7), first, "the same object always gets the same result");
+    assert_ne!(random(8), first, "another object varies its own way");
+    for seed in 0..50 {
+        let r = random(seed);
+        // Scale between 100 % and 50 %, move between 0 and 40 pt.
+        assert!(r.width() >= 50.0 - 1e-9 && r.width() <= 100.0 + 1e-9, "{r:?}");
+        assert!(r.center().x >= 50.0 - 1e-9 && r.center().x <= 90.0 + 1e-9, "{r:?}");
+    }
+    // Without Random the values apply in full whatever the seed.
+    let r = bounds(json!({"scaleH": 50, "moveH": 40}), 3);
+    assert!(close(r.width(), 50.0, 1e-9) && close(r.center().x, 90.0, 1e-9), "{r:?}");
+}
+
+#[test]
+fn transform_copies_stop_before_they_overflow() {
+    let out = run("distort.transform", json!({"scaleH": 100000, "scaleV": 100000, "copies": 1000}), &square());
+    assert!(all_finite(&out) && out.subpaths.len() < 10, "{}", out.subpaths.len());
+}
+
+#[test]
 fn pucker_bloat_moves_anchors_in_opposite_directions() {
     let bloat = run("distort.puckerBloat", json!({"amount": 50}), &square());
     let a = bloat.subpaths[0].anchors[0].p;

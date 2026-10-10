@@ -78,7 +78,12 @@ pub(crate) const TEXT_SLOT: &str = "\u{0}text";
 
 /// Is `name` that of a text slot, and which story is it of?
 pub(crate) fn slot_of(name: Option<&str>) -> Option<Option<u32>> {
-    name?.strip_prefix(TEXT_SLOT).map(|rest| rest.parse().ok())
+    name?.strip_prefix(TEXT_SLOT).map(|rest| rest.split(':').next().and_then(|s| s.parse().ok()))
+}
+
+/// Which of its story's frames a text slot named `name` is (0 when it doesn't say).
+pub(crate) fn slot_frame(name: Option<&str>) -> usize {
+    name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
 /// Read the structure of the editing data `data`.
@@ -310,6 +315,9 @@ const SKIPPED: &[(&str, &str)] = &[
     ("BeginEncoding", "EndEncoding"),
     ("Alternate_Content", "End_Versioned_Content"),
 ];
+
+/// The note for a `/ForeignObject`, art the editor shows but doesn't edit.
+pub const NON_NATIVE_ART: &str = "non-native art (a placed PDF's content) is left out: VectorCraft doesn't draw it from the editing data yet";
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
 /// `BeginSymbol`); DSC comments (`%%BeginProlog`) keep their `%`.
@@ -645,8 +653,13 @@ impl<'a> Reader<'a> {
             "," => {
                 if let Some(Frame { kind: Kind::Obj(o), base, .. }) = self.frames.last_mut() {
                     obj::add_entry(o, &mut self.stack, *base);
-                    // Binary data in ASCII85 follows, up to its `~>`.
-                    if o.ty == "Binary" && o.entries.last().is_some_and(|(k, _)| k.as_deref() == Some("ASCII85Decode")) {
+                    // Binary data in ASCII85 follows, up to its `~>`: a `/Binary` dictionary's
+                    // (`/ASCII85Decode ,`) or a non-native art object's (`/ForeignObject`'s
+                    // `/Data ,`, the PDF it keeps), in comment lines. ASCII85 has `_`, so a line
+                    // of it may start with `%_` and read as hidden tokens: a `(` there would open
+                    // a string that swallows the rest of the layer.
+                    let key = o.entries.last().and_then(|(k, _)| k.as_deref());
+                    if (o.ty == "Binary" && key == Some("ASCII85Decode")) || (o.ty == "ForeignObject" && key == Some("Data")) {
                         self.lex.skip_past(b"~>");
                     }
                 }
@@ -826,6 +839,9 @@ impl<'a> Reader<'a> {
             "Document" => self.document(&o),
             "AI11Text" => self.text_slot(&o)?,
             "SymbolInstance" => self.unreadable("symbols"),
+            // Art Illustrator shows but doesn't edit (a placed PDF's content): its PDF is kept in
+            // the dictionary, which nothing draws from yet, so the file opens without it.
+            "ForeignObject" => self.warn(NON_NATIVE_ART),
             _ => {}
         }
         Ok(())
@@ -833,10 +849,11 @@ impl<'a> Reader<'a> {
 
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
-        let story = o.nums("StoryIndex").first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
+        let index = |key: &str| o.nums(key).first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
+        let (story, frame) = (index("StoryIndex"), index("FrameIndex").unwrap_or(0));
         let gs = self.gs.clone();
         let mut n = self.new_node(NodeKind::Group { children: vec![], clip: false }, &gs);
-        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}")));
+        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}:{frame}")));
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }

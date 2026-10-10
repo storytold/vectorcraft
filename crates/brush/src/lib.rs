@@ -99,13 +99,69 @@ pub struct Calligraphic {
     pub roundness: f64,
     /// Nib diameter in points.
     pub size: f64,
-    /// Random variation per stroke: angle (°), roundness (%), size (pt).
+    /// How far angle (°), roundness (%) and size (pt) vary each way, as [`Self::modes`] say.
     pub variation: [f64; 3],
+    /// How angle, roundness and size vary. `None` (brushes saved before there were modes): Random
+    /// where the variation is non-zero, else Fixed — see [`Calligraphic::modes`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<[Variation; 3]>,
 }
 
 impl Default for Calligraphic {
     fn default() -> Self {
-        Self { angle: 0.0, roundness: 100.0, size: 3.0, variation: [0.0; 3] }
+        Self { angle: 0.0, roundness: 100.0, size: 3.0, variation: [0.0; 3], modes: None }
+    }
+}
+
+impl Calligraphic {
+    /// The ranges of angle (°), roundness (%) and size (pt), and the most each varies.
+    pub const RANGES: [(f64, f64); 3] = [(-180.0, 180.0), (0.0, 100.0), (0.0, 1296.0)];
+    pub const MAX_VARIATION: [f64; 3] = [180.0, 100.0, 1296.0];
+
+    /// How angle, roundness and size vary.
+    pub fn modes(&self) -> [Variation; 3] {
+        self.modes.unwrap_or_else(|| self.variation.map(|v| if v != 0.0 { Variation::Random } else { Variation::Fixed }))
+    }
+    /// Does the pen's pressure change the nib?
+    pub fn uses_pressure(&self) -> bool {
+        self.modes().contains(&Variation::Pressure)
+    }
+}
+
+/// How a Calligraphic brush's angle, roundness or size varies (Brush Options). Saved by name: new
+/// modes are appended, never renamed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Variation {
+    /// Always the value.
+    #[default]
+    Fixed,
+    /// A random value within the variation either side, new for each stroke.
+    Random,
+    /// From the value less the variation at the lightest pen pressure to the value plus the
+    /// variation at the heaviest.
+    Pressure,
+}
+
+impl Variation {
+    pub const ALL: [Variation; 3] = [Variation::Fixed, Variation::Random, Variation::Pressure];
+    /// The name brush definitions use.
+    pub fn id(self) -> &'static str {
+        match self {
+            Variation::Fixed => "fixed",
+            Variation::Random => "random",
+            Variation::Pressure => "pressure",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Variation::Fixed => "Fixed",
+            Variation::Random => "Random",
+            Variation::Pressure => "Pressure",
+        }
+    }
+    pub fn parse(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|v| v.id() == id)
     }
 }
 
@@ -345,7 +401,7 @@ fn tolerance(scale: f64) -> f64 {
 pub fn stroke_pieces(brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<Node> {
     let w = if stroke.width > 0.0 { stroke.width } else { 1.0 };
     let mut out = match &brush.kind {
-        BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, &stroke.paint, &brush.name),
+        BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
         BrushKind::Art(a) => warp::art(a, bp, w),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, &brush.name),

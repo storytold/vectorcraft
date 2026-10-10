@@ -187,10 +187,6 @@ fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -> Filter {
     })
 }
 
-fn blur_filter(sigma: f64) -> Filter {
-    Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: sigma.max(0.0) as f32, edge_mode: EdgeMode::None })
-}
-
 fn pcolor(ink: Ink, c: &vectorcraft_doc::color::Color) -> peniko::Color {
     let [r, g, b] = ink.rgb(c);
     peniko::Color::new([r, g, b, 1.0])
@@ -495,44 +491,12 @@ impl Renderer {
                 c.pop_layer();
             });
         }
-        // The content itself (blurred / feathered / filtered).
-        let blur: f64 = rfx
-            .iter()
-            .map(|fx| match fx {
-                RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } => radius.max(0.0),
-                _ => 0.0,
-            })
-            .sum();
-        if rfx.iter().any(|fx| matches!(fx, RasterFx::Pixel(_))) {
+        // The content itself (blurred / feathered / filtered), on its pixels: a filter layer's blur
+        // works on a coarser grid tied to the canvas, so the blurred art shifted by up to a pixel
+        // and looked blocky as the view moved by parts of a pixel (#755).
+        let blurs = rfx.iter().any(|fx| matches!(fx, RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } if *radius > 0.0));
+        if blurs || rfx.iter().any(|fx| matches!(fx, RasterFx::Pixel(_))) {
             self.pixel_content(ctx, f, content, rfx, paint);
-        } else if blur > 0.0 {
-            self.with_filters(ctx, f, reach, blur, None, |r, c, fr, _| {
-                let mut layers = 0;
-                for fx in rfx {
-                    match fx {
-                        RasterFx::Feather { radius } if *radius > 0.0 => {
-                            c.set_transform(fr.view);
-                            if let Some((g, rule)) = content.outline {
-                                c.set_fill_rule(fill_rule(rule));
-                                c.push_clip_layer(g);
-                                layers += 1;
-                            }
-                            c.push_layer(None, None, None, None, Some(blur_filter(radius / 2.0)));
-                            layers += 1;
-                        }
-                        RasterFx::GaussianBlur { radius } if *radius > 0.0 => {
-                            c.set_transform(fr.view);
-                            c.push_layer(None, None, None, None, Some(blur_filter(radius / 2.0)));
-                            layers += 1;
-                        }
-                        _ => {}
-                    }
-                }
-                paint(r, c, fr);
-                for _ in 0..layers {
-                    c.pop_layer();
-                }
-            });
         } else {
             paint(self, ctx, f);
         }
@@ -631,7 +595,13 @@ impl Renderer {
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(wu, hu);
         off.render(&mut pm, &mut self.resources);
-        let space = effects::PixelSpace { to_doc, px, center: content.reach.center() };
+        let channels = match f.ink {
+            Ink::Cmy => effects::pixel::Channels::CmyPlane,
+            Ink::K => effects::pixel::Channels::KPlane,
+            Ink::Display if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
+            Ink::Display => effects::pixel::Channels::Rgb,
+        };
+        let space = effects::PixelSpace { to_doc, px, center: content.reach.center(), channels };
         let (wz, hz) = (wu as usize, hu as usize);
         for fx in chain {
             match fx {

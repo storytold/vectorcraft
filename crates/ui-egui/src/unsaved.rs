@@ -206,4 +206,23 @@ mod tests {
         app.run("app.quit", json!({})).unwrap();
         assert_eq!(app.ui.status, "quit");
     }
+
+    #[test]
+    fn the_control_channels_quit_says_when_it_asks_first() {
+        // #830: it answered null at once, before the question.
+        let (mut app, _) = app();
+        let ctx = egui::Context::default();
+        let quit = |app: &mut VectorcraftApp| {
+            let (req, _rx) = crate::control::ControlRequest::new("app.quit", json!({}));
+            let crate::control::Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+            r
+        };
+        new_doc(&mut app, true);
+        assert_eq!(quit(&mut app), json!({"ok": true, "result": {"pending": KIND}}));
+        assert_eq!((pending(&app), app.ui.status.as_str()), (Some(0), ""));
+        app.ui.dialog = None;
+        app.run("file.save", json!({"path": "/docs/saved.vectorcraft"})).unwrap();
+        assert_eq!(quit(&mut app), json!({"ok": true, "result": null}));
+        assert_eq!(app.ui.status, "quit");
+    }
 }

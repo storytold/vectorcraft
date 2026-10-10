@@ -4,6 +4,11 @@
 # Clean-room: menu and feature names follow the names Japanese users of vector illustration
 # software know, written from the meaning of VectorCraft's English labels; no other application's
 # Japanese localisation was copied. Toggles read as their action (「…を表示」「…を隠す」).
+	Glowing Edges…	エッジの光彩…
+	Glowing Edges	エッジの光彩
+	Edge Width	エッジの幅
+	Edge Brightness	エッジの明るさ
+	Smoothness	滑らかさ
 #
 # Coverage: the whole interface — every menu string and every `tl!` literal (`complete_menus`,
 # tested) — and the status and error messages (`@msg` rows at the end, `COMPLETE_MESSAGES`, tested).
@@ -349,6 +354,8 @@
 	Fill & Stroke	塗りと線
 	Fill Color	カラー (塗り)
 	Invert Pie	扇形を反転
+	Side Length:	辺の長さ:
+	Make Sides Equal	辺の長さをそろえる
 	Opacity	不透明度
 	Pie End Angle:	扇形の終了角度:
 	Pie Start Angle:	扇形の開始角度:
@@ -1117,6 +1124,7 @@
 	Divide Slices	スライスを分割
 	Divide Vertically Into	垂直方向に分割
 	Do you want to save the changes you made to “{name}”?	「{name}」への変更を保存しますか？
+	Can't open “{name}”.	「{name}」を開けません。
 	Document	ドキュメント
 	Document Ink Options	ドキュメントのインキオプション
 	Document JSON	ドキュメント JSON
@@ -1634,6 +1642,8 @@
 	Monochrome images	モノクロイメージ
 	More	多く
 	More Pathfinder options	その他のパスファインダーオプション
+	More Align options	その他の整列オプション
+	More Paragraph options	その他の段落オプション
 	More Settings	その他の設定
 	Move	移動
 	Move Anchors	アンカーポイントを移動
@@ -1669,6 +1679,27 @@
 	Artboard	アートボード
 	Exit	終了
 	New Bristle Brush	新規剛毛ブラシ
+	Calligraphic Brush Options	絵筆ブラシオプション
+	Bristle Brush Options	剛毛ブラシオプション
+	Roundness:	真円率:
+	Fixed	固定
+	Pressure	筆圧
+	Shape:	形状:
+	Bristle Length:	毛の長さ:
+	Bristle Density:	毛の密度:
+	Bristle Thickness:	毛の太さ:
+	Paint Opacity:	塗料の不透明度:
+	Stiffness:	硬さ:
+	Round Point	丸・先細
+	Flat Point	平・先細
+	Round Blunt	丸・先丸
+	Flat Blunt	平・先丸
+	Round Curve	丸・カーブ
+	Flat Curve	平・カーブ
+	Round Angle	丸・斜め
+	Flat Angle	平・斜め
+	Round Fan	丸・扇形
+	Flat Fan	平・扇形
 	New Brush…	新規ブラシ…
 	New Calligraphic Brush	新規絵筆ブラシ
 	New Character Style	新規文字スタイル
@@ -2064,6 +2095,25 @@
 	Reflect Y	Y 軸でリフレクト
 	Refresh	更新
 	Refresh Font List	フォントリストを更新
+	Missing Fonts	見つからないフォント
+	Missing Fonts Dialog	見つからないフォントダイアログ
+	These fonts aren't available. Their text shows in another font.	これらのフォントは使用できません。テキストは別のフォントで表示されます。
+	Search Fonts Folder	「Fonts」フォルダーを検索
+	Find in Folder…	フォルダー内を検索…
+	Find Fonts in Folder…	フォルダー内のフォントを検索…
+	Find Font Files	フォントファイルを検索
+	Add Font Files	フォントファイルを追加
+	Add Fonts	フォントを追加
+	Find Fonts	フォントを検索
+	Stop	停止
+	Searching…	検索中…
+	Not found	見つかりません
+	{folders} folder(s) and {files} file(s) searched	{folders} 個のフォルダーと {files} 個のファイルを検索しました
+	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} 個のフォルダーをスキップしました（他のアプリやシステムのフォルダー、隠しフォルダーなど）
+	{count} folder(s) or file(s) couldn't be read	{count} 個のフォルダーまたはファイルを読み込めませんでした
+	The search stopped at its limit: search a smaller folder.	検索は上限で停止しました。より小さなフォルダーを検索してください。
+	Copy only fonts you own or are licensed to install.	所有しているフォント、またはインストールするライセンスがあるフォントだけをコピーしてください。
+	VectorCraft copies the fonts to {folder}.	VectorCraft はフォントを {folder} にコピーします。
 	Registry name:	レジストリ名:
 	Release Compound Shape	複合シェイプを解除
 	Release Opacity Mask	不透明マスクを解除
@@ -2355,6 +2405,9 @@
 	Smart Guides (View → Smart Guides)	スマートガイド (表示 → スマートガイド)
 	Smart Guides (⌘U)	スマートガイド (⌘U)
 	Smooth	スムーズ
+	Corner	コーナー
+	Relative	相対
+	Absolute	絶対
 	Smooth Tool	スムーズツール
 	Snap Curves To Lines	曲線を直線にスナップ
 	View:	表示:
@@ -2806,6 +2859,20 @@
 	Fill: click for swatches, Shift-click for the color mixer	塗り: クリックでスウォッチ、Shift キーを押しながらクリックでカラーミキサー
 	Fit in View	表示に合わせる
 	Flare Tool Options	フレアツールオプション
+	Halo	ハロー
+	Rays	光線
+	Rings	リング
+	Diameter:	直径:
+	Brightness:	明るさ:
+	Growth:	拡大:
+	Fuzziness:	ぼかし:
+	Number:	数:
+	Longest:	最長:
+	Path:	パス:
+	Largest:	最大:
+	Direction:	方向:
+	Symbolism Tools Options	シンボルツールオプション
+	Symbol Set Density:	シンボルセットの密度:
 	Flattener presets	分割・統合プリセット
 	Focal Fill	焦点の塗り
 	Focal Stroke	焦点の線
@@ -3150,6 +3217,31 @@ theme	Appearance	外観
 	Smart Blur…	ぼかし (詳細)…
 	Sharpen	シャープ
 	Unsharp Mask…	アンシャープマスク…
+	Pixelate	ピクセレート
+	Color Halftone…	カラーハーフトーン…
+	Crystallize…	結晶化…
+	Mezzotint…	メゾティント…
+	Pointillize…	点描…
+	Color Halftone	カラーハーフトーン
+	Crystallize	結晶化
+	Mezzotint	メゾティント
+	Pointillize	点描
+	Max. Radius	最大半径
+	Channel 1	チャンネル 1
+	Channel 2	チャンネル 2
+	Channel 3	チャンネル 3
+	Channel 4	チャンネル 4
+	Cell Size	セルの大きさ
+	Fine Dots	細かい点
+	Medium Dots	中程度の点
+	Grainy Dots	粒状の点
+	Coarse Dots	粗い点
+	Short Lines	短い線
+	Medium Lines	中程度の線
+	Long Lines	長い線
+	Short Strokes	短いストローク
+	Medium Strokes	中程度のストローク
+	Long Strokes	長いストローク
 	Radial Blur	ぼかし (放射状)
 	Smart Blur	ぼかし (詳細)
 	Unsharp Mask	アンシャープマスク
@@ -3177,6 +3269,7 @@ theme	Appearance	外観
 @msg	it has more than one artboard	アートボードが複数あります
 @msg	its editing data has no layers	編集データにレイヤーがありません
 @msg	its editing data is damaged	編集データが破損しています
+@msg	its type is to come in as outlines, which only its page has	文字をアウトラインとして読み込む設定ですが、アウトラインはページにしかありません
 @msg	{_1} files	{_1} 個のファイル
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU または WebGL2 に対応したブラウザーが必要です。
 @msg	Loading VectorCraft…	VectorCraft を読み込んでいます…
@@ -3206,6 +3299,8 @@ theme	Appearance	外観
 @msg	Show All Hidden Attributes: nothing is hidden	非表示の属性をすべて表示: 非表示の属性はありません
 @msg	Expand: no brush strokes selected	拡張: ブラシストロークが選択されていません
 @msg	no brush named `{name}`	`{name}` という名前のブラシが見つかりません
+@msg	no brush selected	ブラシが選択されていません
+@msg	this kind of brush has no options dialog yet	この種類のブラシにはまだオプションダイアログがありません
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
 @msg	the art has no bounds	アートに境界がありません
@@ -3248,6 +3343,7 @@ theme	Appearance	外観
 @msg	no saved selections	保存した選択範囲はありません
 @msg	no such artboard	指定されたアートボードが見つかりません
 @msg	cannot split an open path at its end point	オープンパスは端点で分割できません
+@msg	closing needs three anchors	閉じるには 3 つのアンカーポイントが必要です
 @msg	empty brush stroke	ブラシストロークが空です
 @msg	no such anchor	指定されたアンカーポイントが見つかりません
 @msg	no such segment	指定されたセグメントが見つかりません
@@ -3731,3 +3827,45 @@ theme	Appearance	外観
 	Sync with system	システムに合わせる
 	Active	使用中
 	Next Appearance Mode	次の外観モード
+@msg	No fonts are missing in this document	このドキュメントには見つからないフォントはありません
+@msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft は他のアプリやシステムのフォルダーを検索しません: {path}
+@msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft は Users 内の Shared フォルダーと Public フォルダーを検索しません: {path}
+@msg	{path} is not a folder	{path} はフォルダーではありません
+@msg	the search couldn't start: try again in a moment	検索を開始できませんでした: しばらくしてからもう一度お試しください
+@msg	searching a folder isn't available on the web	Web 版ではフォルダーを検索できません
+@msg	every search thread stopped on an internal error (please report this bug)	すべての検索スレッドが内部エラーで停止しました (このバグを報告してください)
+@msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では VectorCraft の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
+@msg	choose the font files to add	追加するフォントファイルを選択してください
+@msg	{n} font file(s) are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
+@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
+@msg	{n} font(s) aren't available here: their text shows in another font	{n} 個のフォントはこの環境では使用できません: テキストは別のフォントで表示されます
+@msg	not a file	ファイルではありません
+@msg	not a font file	フォントファイルではありません
+@msg	that document is no longer open	そのドキュメントはもう開かれていません
+@msg	larger than 256 MB	256 MB を超えています
+@msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください
+@msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
+@msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
+@msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
+@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
+@msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
+@msg	automation filesystem access is not granted: read authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 読み込み権限がありません: {path}
+@msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
+@msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
+@msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
+@msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
+@msg	automation path rejected: a link that leads nowhere: {path}	自動化のパスを拒否しました: リンク先が存在しません: {path}
+@msg	automation path rejected: cannot resolve {path}: {e}	自動化のパスを拒否しました: {path} を解決できません: {e}
+@msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	自動化のパスを拒否しました: 存在しないフォルダーから上の階層 (..) へ移動しています: {path}
+@msg	automation path rejected: reserved device names are not allowed: {path}	自動化のパスを拒否しました: 予約済みのデバイス名は使用できません: {path}
+@msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	マルチチャンネルの PSD ファイルは読み込めません：RGB、CMYK またはグレースケールモードで保存してください
+@msg	not a PSD file	PSD ドキュメントではありません
+@msg	the PSD file has an unknown colour mode ({m})	PSD ファイルのカラーモードが不明です（{m}）
+@msg	the PSD file's image data uses an unknown compression ({m})	PSD ファイルの画像データの圧縮方式が不明です（{m}）
+@msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
+@msg	zipped 32-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 32 bit PSD 画像データは読み込めません
+@msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
+@msg	the PSD file is cut short	PSD ファイルが途中で切れています
+@msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
+@msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}

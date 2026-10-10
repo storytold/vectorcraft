@@ -196,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Shape Properties",
             [],
             None,
-            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n, pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared)",
+            "{id?, ids?, radius?: pt, kind?: \"round\"|\"invertedRound\"|\"chamfer\", corners?: [i…], sides?: n, polygonAngle?: degrees (counterclockwise from its first vertex straight up), polygonRadius?: pt (centre to vertex), sideLength?: pt (sets the radius), makeSidesEqual?: true (a polygon scaled unevenly: drops the uneven scale and shear, keeping its centre, angle and mean radius), pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors without handles between two straight sides): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared; the polygon params apply in that order: sides, makeSidesEqual, polygonAngle, then sideLength or else polygonRadius)",
             has_selection,
             set_live_shape
         ),
@@ -1095,24 +1095,44 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         .transpose()?;
     let radius = p.get("radius").and_then(Value::as_f64);
     let sides = p.get("sides").and_then(Value::as_u64);
-    // An ellipse's pie (Ellipse Properties: Pie Start and End Angle, degrees; Invert Pie swaps them).
-    let angle = |k: &str| -> Result<Option<f64>> {
+    // A number that must be `what` (None when absent).
+    let number = |k: &str, ok: fn(f64) -> bool, what: &str| -> Result<Option<f64>> {
         match p.get(k) {
             None | Some(Value::Null) => Ok(None),
             Some(v) => v
                 .as_f64()
-                .filter(|a| a.is_finite())
-                .map(|a| Some(a.rem_euclid(360.0)))
-                .ok_or_else(|| bad("object.setLiveShape", format!("`{k}` must be an angle in degrees, not {v}"))),
+                .filter(|x| x.is_finite() && ok(*x))
+                .map(Some)
+                .ok_or_else(|| bad("object.setLiveShape", format!("`{k}` must be {what}, not {v}"))),
         }
     };
+    let angle = |k: &str| Ok::<_, EngineError>(number(k, |_| true, "an angle in degrees")?.map(|a| a.rem_euclid(360.0)));
+    let length = |k: &str| number(k, |x| x > 0.0 && x <= crate::MAX_COORD, "a length in points above 0");
+    // An ellipse's pie (Ellipse Properties: Pie Start and End Angle, degrees; Invert Pie swaps them).
     let (pie_start, pie_end) = (angle("pieStart")?, angle("pieEnd")?);
     let invert = p.get("invertPie").and_then(Value::as_bool) == Some(true);
+    // A polygon's Polygon Properties: its angle, radius or side length, Make Sides Equal.
+    let (polygon_angle, polygon_radius, side) = (angle("polygonAngle")?, length("polygonRadius")?, length("sideLength")?);
+    let equal = p.get("makeSidesEqual").and_then(Value::as_bool) == Some(true);
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            if let (Some(l @ LiveShape::Polygon { .. }), Some(n)) = (live.as_mut(), sides) {
-                l.set_sides(n);
+            if let Some(l @ LiveShape::Polygon { .. }) = live.as_mut()
+                && (sides.is_some() || polygon_angle.is_some() || polygon_radius.is_some() || side.is_some() || equal)
+            {
+                if let Some(n) = sides {
+                    l.set_sides(n);
+                }
+                if equal {
+                    l.make_sides_equal();
+                }
+                if let Some(a) = polygon_angle {
+                    l.set_polygon_angle(a);
+                }
+                // A side length sets the radius that gives it (with the new side count).
+                if let Some(r) = side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius) {
+                    l.set_polygon_radius(r);
+                }
                 *path = l.to_path();
             }
             if let Some(l @ LiveShape::Ellipse { .. }) = live.as_mut()

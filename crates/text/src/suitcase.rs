@@ -78,7 +78,7 @@ fn fork_path(path: &Path) -> std::path::PathBuf {
 }
 
 #[cfg(target_os = "macos")]
-fn fork_len(path: &Path) -> u64 {
+pub(crate) fn fork_len(path: &Path) -> u64 {
     std::fs::metadata(fork_path(path)).map_or(0, |m| m.len())
 }
 
@@ -91,7 +91,7 @@ fn read_fork(path: &Path) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn fork_len(_: &Path) -> u64 {
+pub(crate) fn fork_len(_: &Path) -> u64 {
     0
 }
 

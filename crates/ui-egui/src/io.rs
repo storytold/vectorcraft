@@ -97,7 +97,24 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
         return Ok(());
     }
     let path = pick_open(app, &FilePick { filters: fileio::open_filters().collect(), ..Default::default() })?;
-    open_path(app, &path).map(|_| ())
+    open_reporting(app, &path).map(|_| ())
+}
+
+/// A file the user asked to open (File › Open, Open Recent, the Home screen, a drop, the Finder)
+/// couldn't be: say so in a dialog as well as the status bar, which is easily missed (#861).
+pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
+    app.status(format!("Couldn't open {name}: {e}"));
+    let message = crate::i18n::fmt(tl!("Can't open “{name}”."), &[("name", name)]);
+    dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
+}
+
+/// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]).
+pub fn open_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
+    let r = open_path(app, path);
+    if let Err(e) = &r {
+        report_open_error(app, &fileio::file_name(path), e);
+    }
+    r
 }
 
 fn read(app: &VectorcraftApp, path: &str) -> Result<Vec<u8>, String> {
@@ -697,6 +714,24 @@ mod tests {
             ..Default::default()
         };
         (VectorcraftApp::new(Session::new(), services), written)
+    }
+
+    /// #861: a file the user opens that can't be opened is reported in a dialog they close, not
+    /// only in the status bar; a file an agent opens by path only answers with the error.
+    #[test]
+    fn a_file_the_user_cant_open_is_reported_in_a_dialog() {
+        let (mut app, _) = app();
+        app.services.read = Some(Box::new(|_: &str| Err("no such file".into())));
+        assert!(open_reporting(&mut app, "/docs/gone.ai").is_err());
+        let d = app.ui.dialog.take().expect("a dialog says so");
+        assert_eq!(
+            (d.kind.as_str(), d.str("message"), d.str("detail")),
+            (dialogs::confirm::MESSAGE, "Can't open “gone.ai”.".to_string(), "no such file".to_string())
+        );
+        assert!(app.ui.status.contains("gone.ai"));
+        // An agent's `file.open {path}` gets the error back and no dialog.
+        assert!(app.run("file.open", json!({"path": "/docs/gone.ai"})).is_err());
+        assert!(app.ui.dialog.is_none());
     }
 
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {

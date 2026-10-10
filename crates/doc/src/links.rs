@@ -255,6 +255,34 @@ impl Align {
 }
 
 impl Document {
+    /// Rewrite linked file locations in both raster images and placed VectorCraft documents,
+    /// including those inside symbols, patterns and opacity masks. Used to make packages portable.
+    pub fn update_links(&mut self, mut f: impl FnMut(&mut LinkInfo)) {
+        fn walk(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut LinkInfo)) {
+            let n = Arc::make_mut(n);
+            match &mut n.kind {
+                NodeKind::Image(image) => {
+                    if let Some(link) = &mut image.link {
+                        f(link);
+                    }
+                }
+                NodeKind::PlacedDocument(placed) => f(&mut placed.link),
+                _ => {}
+            }
+            if let Some(mask) = &mut n.mask {
+                walk(&mut mask.art, f);
+            }
+            for child in n.children_mut().into_iter().flatten() {
+                walk(child, f);
+            }
+        }
+        let roots =
+            self.layers.iter_mut().chain(self.symbols.iter_mut().map(|s| &mut s.art)).chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        for root in roots {
+            walk(root, &mut f);
+        }
+    }
+
     /// Change every image object (in the layers, symbol definitions and pattern swatches, opacity-mask
     /// art included) for which `pick` holds; only the subtrees holding one are copied.
     pub fn update_images(&mut self, pick: impl Fn(&ImageObject) -> bool, mut f: impl FnMut(&mut ImageObject)) {

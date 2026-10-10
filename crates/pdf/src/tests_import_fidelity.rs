@@ -446,3 +446,21 @@ fn a_stroke_under_a_stretched_transform_stays_a_stroke() {
     let b = objs[0].geometric_bounds().unwrap();
     assert!((b.x0 - 20.0).abs() < 1e-6 && (b.x1 - 80.0).abs() < 1e-6, "{b:?}");
 }
+
+#[test]
+fn art_past_the_page_clip_keeps_the_clip() {
+    // A page-sized clip, then a backdrop far larger than the page and a square on it: the square
+    // needs no clip, the backdrop keeps it, so the art's bounds stay on the page.
+    let r = open_with(&one_page("0 0 100 100 re W n 0 g -500 -500 1100 1100 re f 1 0 0 rg 10 10 20 20 re f", "", &[]), |_| {});
+    let d = &r.document;
+    let art = d.art_bounds().expect("art");
+    assert!(art.x0 >= -0.01 && art.y0 >= -0.01 && art.x1 <= 100.01 && art.y1 <= 100.01, "the art stays on the page: {art:?}");
+    let clips: Vec<Node> = all(d).into_iter().filter(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })).collect();
+    let [c] = clips.as_slice() else { panic!("one clip group, the backdrop's: {clips:?}") };
+    assert_eq!(c.children().map(Vec::len), Some(2), "the clip path and the backdrop");
+    assert!(r.warnings.iter().any(|w| w == crate::import::PAST_PAGE_NOTE), "{:?}", r.warnings);
+    // Art inside the page gets no clip and no warning.
+    let r = open_with(&one_page("0 0 100 100 re W n 1 0 0 rg 10 10 20 20 re f", "", &[]), |_| {});
+    assert!(!all(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })));
+    assert!(!r.warnings.iter().any(|w| w == crate::import::PAST_PAGE_NOTE), "{:?}", r.warnings);
+}

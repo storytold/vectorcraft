@@ -671,6 +671,17 @@ world", "size": 20}),
     assert_eq!((t.first_style().size, t.first_style().fill.color().map(|c| c.to_hex())), (20.0, Some("#00ff00".into())));
 }
 
+/// Preferences › Type › Show Font Names in English (#394): stored and read by the font menus.
+#[test]
+fn show_font_names_in_english_preference_is_stored() {
+    let mut s = Session::new();
+    assert!(s.prefs.font_names_in_english, "on by default");
+    set_pref(&mut s, "fontNamesInEnglish", json!(false));
+    assert!(!s.prefs.font_names_in_english);
+    set_pref(&mut s, "fontNamesInEnglish", json!(true));
+    assert!(s.prefs.font_names_in_english);
+}
+
 /// Preferences › Hyphenation › Exceptions (#394): `prefs.set` pushes the list into the hyphenator
 /// and bumps open documents so type reflows. Parsing of the list is covered in `vectorcraft-text`.
 #[test]

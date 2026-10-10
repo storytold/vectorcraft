@@ -8,7 +8,7 @@ use vectorcraft_geom::Affine;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
 use crate::EngineError;
 
 /// A file read into a document, with its format and non-fatal import notes.
@@ -76,6 +76,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(kind) = vectorcraft_metafile::sniff(bytes) {
         return format(kind.id());
     }
+    if psdread::is_psd(bytes) {
+        return format(if psdread::is_psb(bytes) { "psb" } else { "psd" });
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
@@ -137,11 +140,12 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// layers and hidden objects as they were, and the art outside its artboard (its PDF part has
 /// only what is on the artboards), as an EPS of the editor is read. Anything else as it was.
 fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
-    if opts.pages.is_some() || !opts.layers {
+    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return (doc, warnings);
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
-    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings);
+    let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
+    let (doc, mut warnings) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined);
     // The note that the art outside the artboard is lost is the reason the layers weren't read.
     if warnings.iter().any(|w| w.starts_with("the file's layers weren't read from its editing data")) {
         return (doc, warnings);
@@ -151,10 +155,10 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
 }
 
 /// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
-/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers are
-/// off), an error when it can't be read.
+/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers or the
+/// editing data are off), an error when it can't be read.
 fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
-    if opts.pages.is_some() || !opts.layers {
+    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return None;
     }
     let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
@@ -178,7 +182,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import(bytes).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
+                let r = vectorcraft_eps::import_with(bytes, opts.editing_data).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
         }
@@ -227,6 +231,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // Threaded type read from a file flows through its frames.
+    if !doc.text_threads.is_empty() && !restored {
+        crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
+    }
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
@@ -350,37 +358,50 @@ const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]); CMYK TIFFs with an alpha channel, which
-/// the decoder can't read, become RGBA in the active colour settings' CMYK.
+/// the decoder can't read, become RGBA in the active colour settings' CMYK, as do CMYK Photoshop
+/// documents, whose merged image is read ([`psdread`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
+    let ppi = super::ppi::resolution(bytes);
+    if psdread::is_psd(bytes) {
+        let cms = vectorcraft_color::cms::active();
+        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+    }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
     reader.limits(limits);
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
-    let ppi = super::ppi::resolution(bytes);
     let cmyk = || ImageBlob::new(f.mime, bytes.to_vec()).cmyk().is_some();
-    let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {
-        (bytes.to_vec(), f.mime, reader.into_dimensions().map_err(err)?)
-    } else {
-        let cmyka = || {
-            let cms = vectorcraft_color::cms::active();
-            vectorcraft_doc::cmyk::cmyka_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
-        };
-        let img = match (f.id == "tiff").then(cmyka).flatten() {
-            Some(img) => img,
-            None => reader.decode().map_err(err)?.to_rgba8(),
-        };
-        let size = img.dimensions();
-        let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
-        // The stored PNG keeps the file's resolution.
-        let png = match ppi {
-            Some(r) => super::ppi::with_png_resolution(&png, r),
-            None => png,
-        };
-        (png, "image/png", size)
+    if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {
+        let (width, height) = reader.into_dimensions().map_err(err)?;
+        return stored(bytes.to_vec(), f.mime, (width, height), ppi);
+    }
+    let cmyka = || {
+        let cms = vectorcraft_color::cms::active();
+        vectorcraft_doc::cmyk::cmyka_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
+    let img = match (f.id == "tiff").then(cmyka).flatten() {
+        Some(img) => img,
+        None => reader.decode().map_err(err)?.to_rgba8(),
+    };
+    as_png(img, ppi)
+}
+
+/// `img` stored as a PNG that keeps the file's resolution.
+fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+    let size = img.dimensions();
+    let mut png = Vec::new();
+    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+    let png = match ppi {
+        Some(r) => super::ppi::with_png_resolution(&png, r),
+        None => png,
+    };
+    stored(png, "image/png", size, ppi)
+}
+
+/// An image's encoded `bytes`, `width` × `height` pixels, ready to embed.
+fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: Option<(f64, f64)>) -> Result<RasterImage> {
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
