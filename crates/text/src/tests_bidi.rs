@@ -43,6 +43,26 @@ fn assert_same_shaped_glyphs(left: &TextLayout, right: &TextLayout) {
     }
 }
 
+fn source_clusters(layout: &TextLayout) -> Vec<(usize, usize)> {
+    let mut clusters: Vec<_> = layout.glyphs.iter().map(|glyph| (glyph.byte, glyph.len)).collect();
+    clusters.sort_unstable();
+    clusters.dedup();
+    clusters
+}
+
+fn assert_source_coverage(text: &str, layout: &TextLayout) {
+    for glyph in &layout.glyphs {
+        let end = glyph.byte.checked_add(glyph.len).expect("source cluster end must fit usize");
+        assert!(glyph.len > 0 && text.get(glyph.byte..end).is_some(), "invalid UTF-8 source cluster: {glyph:?}");
+    }
+    let mut covered = 0;
+    for (byte, len) in source_clusters(layout) {
+        assert_eq!(byte, covered, "source clusters must cover {text:?} without gaps or overlaps");
+        covered = byte + len;
+    }
+    assert_eq!(covered, text.len(), "source clusters must cover all of {text:?}");
+}
+
 #[test]
 fn hebrew_and_arabic_are_visually_rtl_with_exact_source_clusters() {
     for s in ["שלום", "مرحبا"] {
@@ -125,9 +145,15 @@ fn arabic_contextual_forms_and_lam_alef_use_the_shaper() {
     let st = arabic_style(&face);
     let pair = "لا";
     let lam_alef = layout(db, &TextObject::point(Point::ZERO, pair, st.clone()));
-    let ligature = lam_alef.glyphs.iter().find(|g| g.byte == 0 && g.len == pair.len());
-    assert!(ligature.is_some(), "lam-alef must retain one cluster spanning both source letters: {lam_alef:?}");
-    assert_ne!(ligature.unwrap().gid, face.glyph_for('ل'), "lam-alef must use a shaped glyph");
+    // Fonts may use a ligature or separate contextual lam/alef glyphs, with component marks.
+    assert_source_coverage(pair, &lam_alef);
+    for glyph in &lam_alef.glyphs {
+        assert!(glyph.rtl, "lam-alef must be RTL: {glyph:?}");
+        assert_eq!(glyph.font_id, face.id());
+        assert_ne!(glyph.gid, 0, "lam-alef must not use a missing glyph");
+        let source = pair.get(glyph.byte..glyph.byte + glyph.len).expect("validated UTF-8 source cluster");
+        assert!(source.chars().all(|c| glyph.gid != face.glyph_for(c)), "lam-alef must use contextual glyphs rather than nominal glyphs: {glyph:?}");
+    }
 
     for s in ["سلام", "שלום سلام"] {
         let l = layout(db, &TextObject::point(Point::ZERO, s, st.clone()));
@@ -156,10 +182,20 @@ fn identical_style_arabic_run_splits_keep_joining_and_source_attribution() {
     let split = layout(db, &split);
     assert!(single.glyphs.iter().any(|glyph| glyph.gid != face.glyph_for('ب')), "single run must exercise contextual beh forms");
     assert_same_shaped_glyphs(&single, &split);
-    assert_eq!(split.glyphs.len(), 2, "beh-beh should remain two source clusters");
+    let beh_len = "ب".len();
+    assert_eq!(source_clusters(&split), [(0, beh_len), (beh_len, beh_len)], "beh-beh should remain two source clusters");
+    for glyph in &single.glyphs {
+        assert_eq!(glyph.run, 0);
+    }
+    // Every component, including zero-advance dots, belongs to its original source run.
     for glyph in &split.glyphs {
-        let expected_run = usize::from(glyph.byte >= "ب".len());
-        assert_eq!(glyph.run, expected_run, "source byte {} belongs to run {expected_run}", glyph.byte);
+        let expected_run = usize::from(glyph.byte >= beh_len);
+        assert_eq!(
+            (glyph.run, glyph.byte, glyph.len),
+            (expected_run, expected_run * beh_len, beh_len),
+            "source byte {} belongs to run {expected_run}",
+            glyph.byte
+        );
     }
 }
 
@@ -178,13 +214,25 @@ fn different_style_arabic_boundary_receives_joining_context() {
         TextRun { text: "ب".into(), style: CharStyle { size: style.size * 1.5, ..style }, inline: None },
     ];
     let split = layout(db, &split);
-    assert_eq!(joined.glyphs.len(), 2);
-    assert_eq!(split.glyphs.len(), 2);
-    for glyph in &joined.glyphs {
-        let actual = split.glyphs.iter().find(|other| other.byte == glyph.byte).expect("same source cluster");
+    let beh_len = "ب".len();
+    let expected_clusters = [(0, beh_len), (beh_len, beh_len)];
+    assert_eq!(source_clusters(&joined), expected_clusters);
+    assert_eq!(source_clusters(&split), expected_clusters);
+    assert!(joined.glyphs.iter().all(|glyph| glyph.rtl));
+    // Compare the full component sequence; a first match by byte can hide or reuse a dot.
+    assert_eq!(split.glyphs.len(), joined.glyphs.len(), "style boundary must retain every component glyph");
+    for (glyph, actual) in joined.glyphs.iter().zip(&split.glyphs) {
         assert_eq!(actual.gid, glyph.gid, "joining form changed at style boundary for byte {}", glyph.byte);
+        assert_eq!(actual.byte, glyph.byte);
         assert_eq!(actual.len, glyph.len);
-        assert_eq!(actual.run, usize::from(glyph.byte >= "ب".len()));
+        assert_eq!(actual.font_id, glyph.font_id);
+        assert_eq!(actual.rtl, glyph.rtl);
+        assert_eq!(glyph.run, 0);
+        assert_eq!(
+            (actual.run, actual.byte, actual.len),
+            (usize::from(glyph.byte >= beh_len), glyph.byte, beh_len),
+            "every component must retain its source run and cluster"
+        );
     }
 }
 
