@@ -391,6 +391,363 @@ fn pen_click_on_a_selected_path_adds_an_anchor_unless_disabled() {
     assert_eq!(d.node(id).unwrap().path_data().unwrap().anchor_count(), 3);
 }
 
+/// Pen interactions exercised through the real preview/commit and undo machinery.
+mod pen_interactions {
+    use super::*;
+    use vectorcraft_geom::{AnchorKind, PathData, Point};
+    use vectorcraft_tools::{Cursor, Mods};
+
+    fn gesture(s: &mut Session, pts: &[(f64, f64)], mods: Mods, v: ViewInfo) {
+        let (first, last) = (pts[0], pts[pts.len() - 1]);
+        s.pointer(&PointerEvent::new(PointerKind::Down, first.0, first.1).with_mods(mods), v).unwrap();
+        for &(x, y) in &pts[1..] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y).with_mods(mods), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, last.0, last.1).with_mods(mods), v).unwrap();
+    }
+
+    fn path(s: &Session, id: NodeId) -> PathData {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone()
+    }
+
+    fn curve() -> (Session, NodeId, ViewInfo) {
+        let mut s = session();
+        let v = ViewInfo::default();
+        s.select_tool("pen", v).unwrap();
+        gesture(&mut s, &[(100.0, 300.0)], Mods::default(), v);
+        gesture(&mut s, &[(213.0, 313.0), (233.0, 333.0), (253.0, 353.0)], Mods::default(), v);
+        let id = s.doc().unwrap().selection.objects[0];
+        assert_eq!(path(&s, id).anchor_count(), 2);
+        (s, id, v)
+    }
+
+    fn nearby_endpoints(zoom: f64) -> (Session, NodeId, ViewInfo) {
+        let mut s = session();
+        let v = ViewInfo { zoom, smart_guides: false, snap_to_point: false, ..ViewInfo::default() };
+        let end_x = 100.0 + 6.0 / zoom;
+        let created = s
+            .execute(
+                "path.create",
+                &json!({"anchors": [
+                    {"x": 100.0, "y": 300.0},
+                    {"x": end_x, "y": 300.0, "in": [end_x, 280.0], "out": [end_x, 320.0]}
+                ]}),
+            )
+            .unwrap();
+        let id = NodeId(created["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("prefs.set", &json!({"key": "selectionTolerance", "value": 8})).unwrap();
+        s.select_tool("pen", v).unwrap();
+        (s, id, v)
+    }
+
+    #[test]
+    fn overlapping_endpoints_convert_the_terminal_anchor_without_closing_and_undo() {
+        for zoom in [0.5, 1.0, 2.0] {
+            for grid in [false, true] {
+                for alt in [false, true] {
+                    let (mut s, id, v) = nearby_endpoints(zoom);
+                    let v = ViewInfo { snap_to_grid: grid, ..v };
+                    let before = path(&s, id);
+                    let last = before.subpaths[0].anchors[1];
+                    gesture(&mut s, &[(last.p.x, last.p.y)], Mods::default(), v);
+                    let steps = s.doc().unwrap().history.undo.len();
+                    let mods = Mods { alt, ..Mods::default() };
+                    assert_eq!(s.cursor(last.p, mods, v), Cursor::PenConvert);
+                    gesture(&mut s, &[(last.p.x, last.p.y)], mods, v);
+                    let converted = path(&s, id);
+                    assert!(!converted.is_closed(), "zoom={zoom}, grid={grid}, alt={alt}");
+                    assert_eq!(converted.anchor_count(), 2);
+                    assert_eq!(converted.subpaths[0].anchors[0], before.subpaths[0].anchors[0]);
+                    let a = converted.subpaths[0].anchors[1];
+                    assert_eq!(a.h_out, a.p);
+                    assert_eq!(a.h_in, if alt { a.p } else { last.h_in });
+                    assert!(!s.in_interaction() && !s.tool_busy());
+                    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+                    s.execute("edit.undo", &json!({})).unwrap();
+                    assert_eq!(path(&s, id), before);
+                    s.execute("edit.redo", &json!({})).unwrap();
+                    assert_eq!(path(&s, id), converted);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn overlapping_endpoints_reverse_from_the_first_anchor_and_undo() {
+        for zoom in [0.5, 1.0, 2.0] {
+            for grid in [false, true] {
+                let (mut s, id, v) = nearby_endpoints(zoom);
+                let v = ViewInfo { snap_to_grid: grid, ..v };
+                let before = path(&s, id);
+                let first = before.subpaths[0].anchors[0].p;
+                let steps = s.doc().unwrap().history.undo.len();
+                assert_eq!(s.cursor(first, Mods::default(), v), Cursor::PenContinue);
+                gesture(&mut s, &[(first.x, first.y)], Mods::default(), v);
+                let reversed = path(&s, id);
+                assert_eq!(reversed.subpaths[0].anchors[0].p, before.subpaths[0].anchors[1].p);
+                assert_eq!(reversed.subpaths[0].anchors[1].p, first);
+                assert!(!reversed.is_closed());
+                assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(path(&s, id), before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(path(&s, id), reversed);
+                gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
+                let extended = path(&s, id);
+                assert_eq!(extended.anchor_count(), 3);
+                assert_eq!(extended.subpaths[0].anchors[..2], reversed.subpaths[0].anchors);
+                assert!(!s.in_interaction() && !s.tool_busy());
+                assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+            }
+        }
+    }
+
+    /// #544: snapping and the configured pick radius must not steal a terminal-anchor press.
+    #[test]
+    fn terminal_conversion_keeps_the_curve_and_is_undoable() {
+        let (mut s, id, v) = curve();
+        let before = path(&s, id);
+        let steps = s.doc().unwrap().history.undo.len();
+        s.execute("prefs.set", &json!({"key": "selectionTolerance", "value": 8})).unwrap();
+        let v = ViewInfo { zoom: 2.0, snap_to_grid: true, ..v };
+        let pos = Point::new(213.0, 316.0); // Six screen pixels from the anchor.
+        assert_eq!(s.cursor(pos, Mods::default(), v), Cursor::PenConvert);
+        gesture(&mut s, &[(pos.x, pos.y)], Mods::default(), v);
+        let converted = path(&s, id);
+        let last = converted.subpaths[0].anchors[1];
+        assert_eq!(last.p, Point::new(213.0, 313.0));
+        assert_eq!(last.h_in, before.subpaths[0].anchors[1].h_in);
+        assert_eq!(last.h_out, last.p);
+        assert_eq!(last.kind, AnchorKind::Corner);
+        assert_eq!(converted.to_bezpath(), before.to_bezpath(), "the completed curve is untouched");
+        assert_eq!(converted.anchor_count(), 2);
+        assert!(!s.in_interaction());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(path(&s, id), before);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(path(&s, id), converted);
+        gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
+        let extended = path(&s, id);
+        assert_eq!(extended.anchor_count(), 3);
+        assert_eq!(extended.subpaths[0].anchors[..2], converted.subpaths[0].anchors);
+        assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn terminal_handle_drag_keeps_the_incoming_handle_and_shift_constraint() {
+        let (mut s, id, v) = curve();
+        let before = path(&s, id);
+        let steps = s.doc().unwrap().history.undo.len();
+        let shift = Mods { shift: true, ..Mods::default() };
+        gesture(&mut s, &[(213.0, 313.0), (223.0, 323.0), (233.0, 343.0), (243.0, 353.0)], shift, v);
+        let moved = path(&s, id);
+        let last = moved.subpaths[0].anchors[1];
+        assert_eq!(last.h_in, before.subpaths[0].anchors[1].h_in);
+        assert_eq!(last.h_out, last.p + vectorcraft_geom::constrain_angle(Point::new(243.0, 353.0) - last.p, 45.0));
+        assert_eq!(moved.to_bezpath(), before.to_bezpath());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "all previews are one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(path(&s, id), before);
+    }
+
+    /// #516: the last anchor honors Alt's Anchor Point behavior, and drawing continues afterwards.
+    #[test]
+    fn alt_on_the_terminal_anchor_converts_both_handles_and_resumes() {
+        let (mut s, id, v) = curve();
+        let alt = Mods { alt: true, ..Mods::default() };
+        gesture(&mut s, &[(213.0, 313.0), (243.0, 343.0), (243.0, 353.0)], alt, v);
+        let last = path(&s, id).subpaths[0].anchors[1];
+        assert_eq!(last.kind, AnchorKind::Smooth);
+        assert_eq!(last.h_in, Point::new(183.0, 273.0));
+        assert_eq!(last.h_out, Point::new(243.0, 353.0));
+        gesture(&mut s, &[(213.0, 313.0)], alt, v);
+        let last = path(&s, id).subpaths[0].anchors[1];
+        assert_eq!((last.h_in, last.h_out), (last.p, last.p));
+        gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
+        assert_eq!(path(&s, id).anchor_count(), 3);
+        assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn modifiers_on_a_subsequent_anchor_keep_the_retracted_terminal_curve() {
+        let (mut s, id, v) = curve();
+        let v = ViewInfo { smart_guides: false, snap_to_point: false, ..v };
+        gesture(&mut s, &[(213.0, 313.0)], Mods::default(), v);
+        let before = path(&s, id);
+        let steps = s.doc().unwrap().history.undo.len();
+        let alt = Mods { alt: true, ..Mods::default() };
+        for (kind, x, y, mods) in [
+            (PointerKind::Down, 310.0, 430.0, Mods::default()),
+            (PointerKind::Drag, 340.0, 450.0, Mods::default()),
+            (PointerKind::Drag, 370.0, 480.0, alt),
+            (PointerKind::Drag, 380.0, 500.0, Mods { space: true, ..alt }),
+            (PointerKind::Drag, 380.0, 490.0, Mods { shift: true, ..alt }),
+            (PointerKind::Up, 380.0, 490.0, Mods::default()),
+        ] {
+            s.pointer(&PointerEvent::new(kind, x, y).with_mods(mods), v).unwrap();
+        }
+        let extended = path(&s, id);
+        assert_eq!(extended.anchor_count(), 3);
+        assert_eq!(extended.subpaths[0].anchors[..2], before.subpaths[0].anchors);
+        let a = extended.subpaths[0].anchors[2];
+        assert_eq!(a.p, Point::new(320.0, 450.0));
+        assert_eq!(a.h_in, Point::new(290.0, 430.0), "Alt freezes the incoming handle and Space translates it");
+        assert_eq!(a.h_out, a.p + vectorcraft_geom::constrain_angle(Point::new(380.0, 490.0) - a.p, 45.0));
+        assert_eq!(a.kind, AnchorKind::Corner);
+        assert!(!s.in_interaction());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(path(&s, id), before);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(path(&s, id), extended);
+    }
+
+    #[test]
+    fn cancelling_a_pen_preview_restores_the_curve_without_a_history_step() {
+        for kind in ["place", "handle", "close", "alt"] {
+            let (mut s, id, v) = curve();
+            let before = path(&s, id);
+            let steps = s.doc().unwrap().history.undo.len();
+            let at = match kind {
+                "place" => (300.0, 400.0),
+                "close" => (100.0, 300.0),
+                _ => (213.0, 313.0),
+            };
+            let mods = Mods { alt: kind == "alt", ..Mods::default() };
+            s.pointer(&PointerEvent::new(PointerKind::Down, at.0, at.1).with_mods(mods), v).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Drag, at.0 + 25.0, at.1 + 40.0).with_mods(mods), v).unwrap();
+            assert_ne!(path(&s, id), before);
+            s.cancel_interaction().unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Up, at.0 + 25.0, at.1 + 40.0), v).unwrap();
+            assert_eq!(path(&s, id), before, "{kind}");
+            assert!(!s.in_interaction());
+            assert!(!s.tool_busy());
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+            // Closing ends drawing; resuming from the terminal end still edits the same path.
+            if kind == "close" {
+                gesture(&mut s, &[(213.0, 313.0)], Mods::default(), v);
+            }
+            gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
+            assert_eq!(path(&s, id).anchor_count(), 3);
+            assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn ending_the_first_anchor_drag_keeps_one_undoable_path() {
+        for key in [Some(ToolKey::Escape), Some(ToolKey::Enter), None] {
+            let mut s = session();
+            let v = ViewInfo::default();
+            s.select_tool("pen", v).unwrap();
+            let steps = s.doc().unwrap().history.undo.len();
+            s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 140.0, 320.0), v).unwrap();
+            let id = s.doc().unwrap().selection.objects[0];
+            let preview = path(&s, id);
+            match key {
+                Some(k) => {
+                    s.tool_key(k, Mods::default(), v).unwrap();
+                }
+                None => {
+                    s.select_tool("selection", v).unwrap();
+                }
+            }
+            assert!(!s.in_interaction());
+            assert!(!s.tool_busy());
+            assert_eq!(path(&s, id), preview);
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+            if key.is_some() {
+                s.pointer(&PointerEvent::new(PointerKind::Up, 140.0, 320.0), v).unwrap();
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert!(s.doc().unwrap().doc.node(id).is_none());
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(path(&s, id), preview);
+            s.select_tool("pen", v).unwrap();
+            gesture(&mut s, &[(500.0, 500.0)], Mods::default(), v);
+            assert_eq!(path(&s, id), preview);
+            assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+        }
+    }
+
+    /// #516: ending a drag must keep the preview as one undo step, with no transaction left open.
+    #[test]
+    fn ending_a_pen_drag_finishes_its_transaction() {
+        for kind in ["place", "handle", "close", "alt"] {
+            for key in [Some(ToolKey::Escape), Some(ToolKey::Enter), None] {
+                let (mut s, id, v) = curve();
+                let before = path(&s, id);
+                let steps = s.doc().unwrap().history.undo.len();
+                let at = match kind {
+                    "place" => (300.0, 400.0),
+                    "close" => (100.0, 300.0),
+                    _ => (213.0, 313.0),
+                };
+                let mods = Mods { alt: kind == "alt", ..Mods::default() };
+                s.pointer(&PointerEvent::new(PointerKind::Down, at.0, at.1).with_mods(mods), v).unwrap();
+                s.pointer(&PointerEvent::new(PointerKind::Drag, at.0 + 25.0, at.1 + 40.0).with_mods(mods), v).unwrap();
+                let preview = path(&s, id);
+                assert!(s.in_interaction());
+                match key {
+                    Some(k) => {
+                        s.tool_key(k, Mods::default(), v).unwrap();
+                    }
+                    None => {
+                        s.select_tool("selection", v).unwrap();
+                    }
+                }
+                assert!(!s.in_interaction(), "{kind}, {key:?}");
+                assert!(!s.tool_busy());
+                assert_eq!(path(&s, id), preview);
+                assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+                if key.is_some() {
+                    // A delayed button release after Enter/Escape must not re-open or re-commit.
+                    s.pointer(&PointerEvent::new(PointerKind::Up, at.0 + 25.0, at.1 + 40.0), v).unwrap();
+                    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+                }
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(path(&s, id), before);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(path(&s, id), preview);
+                s.select_tool("pen", v).unwrap();
+                gesture(&mut s, &[(500.0, 500.0)], Mods::default(), v);
+                assert_eq!(path(&s, id), preview, "the ended path stays as it was");
+                assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2, "a new path starts");
+            }
+        }
+    }
+
+    #[test]
+    fn shift_click_closes_an_oblique_path_before_constraining_a_new_point() {
+        let (mut s, id, v) = curve();
+        let shift = Mods { shift: true, ..Mods::default() };
+        assert_eq!(s.cursor(Point::new(100.0, 300.0), shift, v), Cursor::PenClose);
+        gesture(&mut s, &[(100.0, 300.0)], shift, v);
+        assert!(path(&s, id).is_closed());
+        assert_eq!(path(&s, id).anchor_count(), 2);
+    }
+
+    #[test]
+    fn an_ended_path_resumes_from_either_end_with_grid_snapping() {
+        for first in [false, true] {
+            let (mut s, id, v) = curve();
+            let before = path(&s, id);
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            let v = ViewInfo { snap_to_grid: true, ..v };
+            let end = before.subpaths[0].anchors[usize::from(!first)].p;
+            assert_eq!(s.cursor(end, Mods::default(), v), Cursor::PenContinue);
+            gesture(&mut s, &[(end.x, end.y)], Mods::default(), v);
+            gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
+            let resumed = path(&s, id);
+            assert_eq!(resumed.anchor_count(), 3);
+            assert_eq!(resumed.subpaths[0].anchors[1].p, end);
+            assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        }
+    }
+}
+
 #[test]
 fn direct_selection_moves_one_anchor() {
     let mut s = session();
