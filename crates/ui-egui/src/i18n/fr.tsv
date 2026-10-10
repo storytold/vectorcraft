@@ -3000,6 +3000,7 @@
 	Untitled	Sans titre
 	Update Link	Mettre à jour le lien
 	Update Links	Mettre à jour les liens
+	Update Changed Links	Mettre à jour les liens modifiés
 	Update Modified Links	Mettre à jour les liens modifiés
 	Updated {} image(s)	{} image(s) mise(s) à jour
 	UPPERCASE	MAJUSCULES
@@ -3135,6 +3136,7 @@
 	{count} linked file(s) not found	{count} fichier(s) lié(s) introuvable(s)
 	fonts not copied: {fonts}	polices non copiées : {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} image(s) liée(s) modifiée(s) depuis l’enregistrement de ce document. Afficher les nouvelles versions ?
+	{count} linked image(s) changed on disk. Show the new versions?	{count} image(s) liée(s) modifiée(s) sur le disque. Afficher les nouvelles versions ?
 	{count} more rules: Export writes every one.	{count} règles de plus : Exporter les écrit toutes.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objets sans nom omis : nommez-les ou activez Objets sans nom dans le menu du panneau.
 	{effect} is already applied	{effect} est déjà appliqué
@@ -3785,6 +3787,7 @@ axis	Both	Les deux
 @msg	{_1} is already used by {_2}	{_1} est déjà utilisé par {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} fichier(s) lié(s) illisible(s) ici : leurs aperçus sont affichés
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} image(s) liée(s) modifiée(s) sur le disque : Mettre à jour les liens affiche les nouvelles versions
+@msg	Updated {_1} linked file(s) changed on disk	{_1} fichier(s) lié(s) modifié(s) sur le disque mis à jour
 @msg	{_1}: not saved, so not closed	{_1} : non enregistré, donc non fermé
 @msg	{bpp}-bit bitmaps can't be read	impossible de lire les images bitmap en {bpp} bits
 @msg	{command} didn't create an object	{command} n’a créé aucun objet

@@ -2668,6 +2668,7 @@
 	Unshift	シフトを戻す
 	Update Link	リンクを更新
 	Update Links	リンクを更新
+	Update Changed Links	変更されたリンクを更新
 	Update Modified Links	変更されたリンクを更新
 	Use 	メニュー 
 	Use Artboards	アートボードを使用
@@ -2777,6 +2778,7 @@
 	{count} linked file(s) not found	リンクファイルが {count} 個見つかりません
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	保存後に {count} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
+	{count} linked image(s) changed on disk. Show the new versions?	{count} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
 	{count} more rules: Export writes every one.	ほかに {count} 個のルールがあります。書き出しにはすべて含まれます。
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	名前のないオブジェクト {count} 個を除外しました。名前を付けるか、パネルメニューで「名前のないオブジェクト」をオンにしてください。
 	{effect} is already applied	{effect} はすでに適用されています
@@ -3719,6 +3721,7 @@ theme	Appearance	外観
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
 @msg	{_1} linked file(s) can't be read here: their previews show	この環境では {_1} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
+@msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
 @msg	Packaged {n} file(s) in {folder}{note}	{n} 個のファイルを {folder} にパッケージしました{note}
 @msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}

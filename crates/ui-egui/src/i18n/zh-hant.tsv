@@ -2984,6 +2984,9 @@
 	Untitled	未命名
 	Update Link	更新連結
 	Update Links	更新連結
+	Update Changed Links	更新已變更的連結
+	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 個連結影像已在磁碟上變更。要顯示新版本嗎？
+@msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 個在磁碟上變更的連結檔案
 	Update Modified Links	更新已修改的連結
 	Updated {} image(s)	已更新 {} 張影像
 	UPPERCASE	全部大寫

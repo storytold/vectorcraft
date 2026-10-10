@@ -758,6 +758,47 @@ impl VectorcraftApp {
     }
 
     /// Show a transient status message.
+    /// Linked files another app changed while their document is open: every two seconds, and as
+    /// soon as the window comes back to the front, stamp the active document's linked files on a
+    /// worker thread and act on the changed ones as Preferences › File Handling › Update Links
+    /// says ([`vectorcraft_engine::link_watch`]). No look starts while a dialog is open, so an
+    /// Ask When Modified question never goes unseen.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn tick_link_updates(&mut self, ctx: &egui::Context, now: f64) {
+        if let Some(r) = self.session.poll_link_scan() {
+            match r {
+                Ok(r) => {
+                    let n = |k: &str| r[k].as_array().map_or(0, Vec::len);
+                    if n("updated") > 0 {
+                        self.status(format!("Updated {} linked file(s) changed on disk", n("updated")));
+                    }
+                    if n("ask") > 0 {
+                        dialogs::missing_links::ask_update_changed(self, r["ask"].as_array().cloned().unwrap_or_default());
+                    }
+                    if n("modified") > 0 {
+                        self.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", n("modified")));
+                    }
+                }
+                Err(e) => self.status(e.to_string()),
+            }
+        }
+        let (last_key, focus_key) = (egui::Id::new("linkWatch.lastScan"), egui::Id::new("linkWatch.focused"));
+        let focused = ctx.input(|i| i.focused);
+        let was_focused: bool = ctx.data(|d| d.get_temp(focus_key)).unwrap_or(focused);
+        ctx.data_mut(|d| d.insert_temp(focus_key, focused));
+        let has_links = self.session.active().is_some_and(|d| !vectorcraft_engine::link_watch::linked_files(&d.doc).is_empty());
+        if self.ui.dialog.is_some() || !has_links {
+            return;
+        }
+        let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);
+        if now - last >= 2.0 || (focused && !was_focused) {
+            ctx.data_mut(|d| d.insert_temp(last_key, now));
+            self.session.start_link_scan();
+        }
+        let wait = if self.session.link_scan.is_some() { 100 } else { 2000 };
+        ctx.request_repaint_after(std::time::Duration::from_millis(wait));
+    }
+
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
     }
@@ -894,6 +935,8 @@ impl VectorcraftApp {
         }
         picks::poll(self, ctx);
         background::poll(self);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.tick_link_updates(ctx, now);
         if !self.background.jobs.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));

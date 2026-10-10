@@ -61,6 +61,16 @@ fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>) {
 
 /// With Update Links: Ask When Modified, offer to read the modified linked files `ids` again.
 fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
+    ask(app, ids, tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"));
+}
+
+/// The same offer for linked files another app changed while the document is open
+/// ([`vectorcraft_engine::link_watch`]).
+pub(crate) fn ask_update_changed(app: &mut VectorcraftApp, ids: Vec<Value>) {
+    ask(app, ids, tl!("{count} linked image(s) changed on disk. Show the new versions?"));
+}
+
+fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, question: &str) {
     if ids.is_empty() {
         return;
     }
@@ -68,10 +78,7 @@ fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
         app.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", ids.len()));
         return;
     }
-    let detail = crate::i18n::fmt(
-        tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"),
-        &[("count", &ids.len().to_string())],
-    );
+    let detail = crate::i18n::fmt(question, &[("count", &ids.len().to_string())]);
     super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
 }
 

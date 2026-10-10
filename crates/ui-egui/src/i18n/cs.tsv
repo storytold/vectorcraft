@@ -516,6 +516,9 @@
 	Layers	Vrstvy
 	Libraries	Knihovny
 	Links	Propojení
+	{count} linked image(s) changed on disk. Show the new versions?	Na disku se změnilo {count} propojených obrázků. Zobrazit nové verze?
+	Update Changed Links	Aktualizovat změněná propojení
+@msg	Updated {_1} linked file(s) changed on disk	Aktualizováno propojených souborů změněných na disku: {_1}
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
 	Pattern Options	Možnosti vzorku
