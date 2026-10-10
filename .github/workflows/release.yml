@@ -280,8 +280,6 @@ jobs:
           path: dist/release/*.flatpak
           if-no-files-found: error
 
-
-
   linux-riscv64:
     name: Linux riscv64
     needs: version
@@ -291,8 +289,9 @@ jobs:
       VECTORCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
     steps:
       - uses: actions/checkout@v7
-      - name: Check out craft-fonts
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Japanese UI/document fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR on the build
+      # step). Bump the commit deliberately; see craftrules standards/fonts.md.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: storytold/craft-fonts
           ref: abb83316d96aa59c1cf64784289e378fe9fa5695
@@ -327,8 +326,10 @@ jobs:
           if command -v qemu-riscv64 >/dev/null 2>&1 && ! command -v qemu-riscv64-static >/dev/null 2>&1; then
             sudo ln -s "$(command -v qemu-riscv64)" /usr/local/bin/qemu-riscv64-static
           fi
-      - name: Build and package
+      - name: Build and package (tar.gz)
         env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
           CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-L/usr/riscv64-linux-gnu/lib -C link-arg=-L/usr/lib/riscv64-linux-gnu"
           PKG_CONFIG_SYSROOT_DIR: /
@@ -338,9 +339,7 @@ jobs:
           CROSS_TARGET: riscv64gc-unknown-linux-gnu
           CROSS_COMPILE: riscv64-linux-gnu-
           EMULATOR: qemu-riscv64-static
-        run: |
-          export CRAFT_FONTS_DIR="$PWD/craft-fonts" CRAFT_FONTS_REQUIRED=1
-          packaging/linux/package.sh --formats "tar"
+        run: packaging/linux/package.sh --formats "tar"
       - name: Smoke test CLI under QEMU
         run: |
           tar -xzf dist/release/*.tar.gz

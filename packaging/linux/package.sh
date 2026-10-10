@@ -43,7 +43,7 @@ BASENAME="vectorcraft-$VERSION-linux-$ARCH"
 echo "==> VectorCraft $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
-    if [ -n "${CROSS_TARGET:-}" ]; then
+  if [ -n "${CROSS_TARGET:-}" ]; then
     (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli --target "$CROSS_TARGET")
   else
     (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli)
