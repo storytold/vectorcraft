@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 The authoritative parity assessment. [`ROADMAP.md`](../ROADMAP.md) summarizes it; [`gaps.md`](gaps.md) is
 the work list made from it. Deep areas have their own checklists: [UI and interaction](ui-parity.md),
@@ -13,7 +13,8 @@ the work list made from it. Deep areas have their own checklists: [UI and intera
 |---|---|---|
 | **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 347 of 375 items wired (92.5%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 20 of 57 (35%), 3D 0 of 4; blended by the area weights below |
 | **Feature depth** (each area scored by behaviour, weighted) | **~75%** | estimated, area table below |
-| **Ready for real work** (could a professional replace Illustrator on real projects?) | **~50%** (45–55%) | estimated, see [Ready for real work](#ready-for-real-work) |
+| **Ready for real work, mainstream illustrator** | **~65%** (60–70%) | estimated, see [Ready for real work](#ready-for-real-work) |
+| **Ready for real work, full Illustrator** (decides the stage) | **~55%** (50–60%) | estimated |
 | **Remaining to beta** | **~170–270 h** one agent | estimated, [gaps.md](gaps.md) beta list |
 | **Remaining to full parity** | **~360–590 h** one agent · ~95–165 h wall clock with 4–6 agents | estimated, sum of the area table + fidelity pass + hardening |
 
@@ -105,24 +106,62 @@ documents) moved other rows up.
 
 ## Ready for real work
 
-**~50% (45–55%), estimated.** Depth (~75%) is discounted for what a professional hits on day one:
+Two numbers, because the professionals who use VectorCraft mostly live in a subset of Illustrator:
 
-- **Illustrator's own files.** `.ai` and EPS open by reading their PDF/PostScript and the structure of the
-  editing data, which is good for simple files but in user reports flattens or misgroups layers (#951: 109
-  layers instead of 14; #868), loses guides (#779), and brings live effects, brushes and symbols in as their
-  drawn look. VectorCraft can't write Illustrator's editing data (undocumented): its PDF-compatible `.ai`
-  opens in Illustrator as plain art. For someone exchanging files with Illustrator users, this alone blocks
-  switching.
-- **Interaction fidelity ~50%.** The pen, direct selection, smart guides and snapping are deep (see
-  [ui-parity.md](ui-parity.md)), but there has never been a side-by-side session, and users keep finding
-  small differences (#991 Shift+arrow steps in Stroke, #975 Curvature tool modifiers, #955 magnetic move, #973
-  rotation snap angle).
-- **Stability on real machines.** The code never panics by design, yet users report the app not launching or
-  hanging on some Windows 11 and Linux setups (#858, #964 — fixed the day of this review, #620, #575).
-  There is no field record and no real-world file corpus yet.
+| | Value | Kind |
+|---|---|---|
+| **Mainstream illustrator** (pen, shape and path editing, type, colour, gradients and swatches, artboards and layers, live effects and appearance, SVG/PDF/PNG export, opening their own `.ai` files) | **~65%** (60–70%) | estimated |
+| **Full Illustrator** (every area, including 3D, the Effect Gallery, CJK composition, scripting, generative AI) | **~55%** (50–60%) | estimated; decides the stage |
+
+Both start from feature depth over the areas concerned: **~83%** over the 16 mainstream areas (weight 83 of
+105: selection, drawing, path operations, colour, strokes, appearance, live effects, type core, symbols and
+blends, layers and artboards, view, guides, file formats, Export for Screens, UI chrome, print), **~75%** over
+all of them. Each is then discounted by about ×0.9 for interaction fidelity, ×0.92 for stability on real
+machines and ×0.92 for Illustrator-file exchange (83 × 0.9 × 0.92 × 0.92 ≈ 63; 75 × the same ≈ 57). The
+dimensions a typical illustrator rarely hits (plug-in ecosystem, generative AI, pen tilt, languages beyond
+their own) are **not** in either number; they cost the full-parity hours, not readiness.
+
+The discounts, with the evidence:
+
+- **Illustrator's own files (×0.92).** `.ai` and EPS open as editable art by reading their PDF/PostScript and the
+  structure of the editing data. Users do open legacy files a lot: 28 of the 350 issues (8%, ~22 people) are
+  about `.ai`/EPS, the most common single format theme. 20 of the 28 are fixed (often the same day). The 8 open
+  ones are about structure, not missing art: layers flattened or multiplied (#951: 109 layers instead of 14;
+  #868), guides lost (#779), slower opening (#758), live effects, brushes and symbols as their drawn look
+  (#637). VectorCraft can't write Illustrator's editing data (undocumented), so its `.ai` opens in Illustrator
+  as plain art. That blocks beta (the main-format rule) for people who hand files back to Illustrator users,
+  but it doesn't stop someone opening and reworking their own archive.
+- **Interaction fidelity (×0.9).** Pen, Direct Selection, smart guides and snapping are deep
+  ([ui-parity.md](ui-parity.md)), and there has never been a side-by-side session. The issue tracker says the
+  details mostly hold: 79 issues are about core drawing (pen, paths, selection, snapping, transform), 68 of them
+  (86%) closed, 11 open (#991, #975, #955, #973 among them). One practitioner wrote "0 learning curve from
+  pretty heavy AI use over last 20+ years" (#541).
+- **Stability on real machines (×0.92).** The code never panics by design, and the main platform (macOS) starts
+  reliably, but 26 issues mention a crash, freeze or failed launch (8 open: #858, #964 fixed the day of this
+  review, #620, #818, #905 on Windows 7, #834). There is no field record and no real-world file corpus yet.
 - **Performance unverified.** Budgets (`vectorcraft-cli perf`) haven't been run on an idle machine since
-  2026-10-01; the last loaded run missed the 16 ms frame budget at 50k paths.
-- **Missing subsystems** a minority need daily: 3D, the Effect Gallery, CJK vertical composition, scripting.
+  2026-10-01; the last loaded run missed the 16 ms frame budget at 50k paths. Not discounted separately: no
+  user has reported slowness in mainstream work beyond #575 (Linux AppImage) and #758 (`.ai` open time).
+- **Missing subsystems** a minority need daily (3D, the Effect Gallery, CJK vertical composition, scripting)
+  pull the full number below the mainstream one.
+
+### User sentiment (measured 2026-10-10)
+
+All 350 issues and 964 issue comments on GitHub (Discussions are off), authors other than the maintainers:
+
+- **Praise:** 17 issue threads from 15 people ("Great work on this. It's kind of amazing" #954; "really great
+  job" #841; "I really love this project" #620; "0 learning curve from pretty heavy AI use over last 20+ years"
+  #541).
+- **"Replacing Illustrator" reports:** none found in the tracker. Praise is for the app as it is, not reports
+  of having switched on paid work. Owner reports from practitioners outside GitHub aren't counted here.
+- **Themes of the 350 issues:** core drawing 79 (11 open), import/export 59 (17 open), launch/crash/platform/
+  performance 51 (12 open), UI chrome and layers 46 (10 open), type 28 (4 open), colour 12 (5 open), other and
+  requests 75 (24 open). 35 are titled as feature requests. The open set is mostly core-path bugs and
+  file-exchange problems, not niche features.
+
+**Stage: alpha.** All six core workflows pass the core-workflow gate end to end on macOS with save and reopen
+([roadmap.md › Alpha gate](roadmap.md#alpha-gate)); file exchange with Illustrator users is partial, which is
+what keeps it from beta, not from alpha.
 
 ## By dimension
 
@@ -346,6 +385,8 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Second look at ready for real work at the owner's request: 50% → 55% full Illustrator, and a new mainstream-illustrator figure of 65%. Why: the old 25-point discount was a judgement with no breakdown. Now each discount is written down and checked against the tracker: 86% of 79 core-drawing issues closed, 20 of 28 `.ai`/EPS issues fixed and the open ones about structure, praise from 15 people, no reports of switching; dimensions a typical illustrator rarely hits are taken out of readiness. Feature breadth, depth and hours unchanged |
+| 2026-10-10 | minor | Stage checked against the core-workflow gate: passes, stays alpha |
 | 2026-10-10 | major | Full re-measure against Illustrator 2026 30.x from code counts, open issues and public docs; added breadth/depth/ready-for-real-work numbers, generative-AI row, calibration from PR timestamps; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file |
 | 2026-10-05 | major | (in ROADMAP.md) M3 and M4 rows re-derived after the paint and files milestones |
 | 2026-10-02 | major | (in ROADMAP.md) First 22-area weighted estimate |

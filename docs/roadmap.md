@@ -1,12 +1,28 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (moved the milestone table and direction here from ROADMAP.md; added Current focus) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (added the Alpha gate table; earlier the same day: moved the milestone table and direction here from ROADMAP.md, added Current focus) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.md) and
 [target-app-parity.md](target-app-parity.md); the ranked work list is [gaps.md](gaps.md). Hours are Opus 5.5
 agent wall-clock hours, one agent. There is no `cargo xtask scorecard` or `cargo xtask parity` in this repo yet
 (the clean-room rule rules out a menu dump of Illustrator as an oracle; a checklist built from Illustrator's
 public menu documentation would be allowed).
+
+## Alpha gate
+
+The core-workflow gate from craftrules' progress-docs standard: what a typical professional does with
+Illustrator every day, checked end to end on the main platform (macOS) with save and reopen in the native
+`.vectorcraft` format (lossless, property-tested round trips in `crates/format/tests/prop_format.rs`).
+Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so VectorCraft passes and stays alpha.
+
+| Core workflow | Works end to end? | Evidence | Hours to pass |
+|---|---|---|---|
+| Draw and edit paths precisely: Pen, Curvature, Direct Selection on anchors and handles, smart guides and snapping, Pathfinder | yes | `crates/tools/src/pen.rs`, `direct.rs`, `guides.rs` and their tests; 10 exact Pathfinder booleans; [ui-parity.md](ui-parity.md). Shape Builder misses regions in some files (#937, #893), Pathfinder covers the same results | 0 |
+| Paint and style: fills and strokes, global and spot swatches, gradients, Appearance, transparency, graphic styles | yes | M3 done (92 tasks); area scores 92–97% in [target-app-parity.md](target-app-parity.md#feature-areas) | 0 |
+| Set type: point and area type, Character and Paragraph styles, threading, outlines | yes | type core 80%; styles, threading, Create Outlines and font matching tested ([type-parity.md](type-parity.md)); hyphenation and justification options missing (not blocking) | 0 |
+| Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; ghost borders in some Asset Export output (#983) | 0 |
+| Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
+| Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951, #868) and lose guides (#779); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
 
 ## Current focus
 
@@ -63,4 +79,5 @@ After placed documents (File › Place of a `.vectorcraft` file, linked), M4.14�
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Added the Alpha gate table (core-workflow gate): all six workflows work end to end, `.ai` exchange partial but not blocking; stage stays alpha |
 | 2026-10-10 | major | Created from ROADMAP.md's milestone table and "Where we're going"; added Current focus and the beta list |

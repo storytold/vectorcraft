@@ -1,8 +1,8 @@
 # VectorCraft Roadmap
 
-**Stage: alpha** · next: beta, ~25 points (ready for real work ~50% → ~75%) and ~170–270 h away
+**Stage: alpha** · next: beta, ~20 points (ready for real work ~55% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (full re-measure against Illustrator 2026 30.x; restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (ready for real work re-examined: 55% full, 65% mainstream; core-workflow gate applied: stays alpha; earlier the same day: full re-measure against Illustrator 2026 30.x, restructured to the craftrules progress-docs standard, detail moved to `docs/`) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -13,7 +13,10 @@ and the work list in [`docs/gaps.md`](docs/gaps.md).
 type, SVG/PDF/EPS, print, export) and feature depth is ~75%, but a professional can't yet switch: Illustrator's
 own `.ai` files open with a wrong layer structure in real cases and can't be saved back with Illustrator's
 editing data, the interaction details have never been checked side by side, and some machines fail to start the
-app. Beta needs those closed (the beta list in [gaps.md](docs/gaps.md)).
+app. Beta needs those closed (the beta list in [gaps.md](docs/gaps.md)). It passes the core-workflow
+gate: all six core workflows (path drawing and editing, paint and style, type, layers/artboards/export, print
+production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without
+blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 ## Headline numbers
 
@@ -21,7 +24,8 @@ app. Beta needs those closed (the beta list in [gaps.md](docs/gaps.md)).
 |---|---|---|
 | **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 347/375 wired (92.5%), tools 89/92, Illustrator effects 44/50, Photoshop effects 20/57, 3D 0/4 |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
-| **Ready for real work** | **~50%** (45–55%) | estimated |
+| **Ready for real work, mainstream illustrator** (paths, type, colour, artboards, effects, SVG/PDF/PNG, their own `.ai`) | **~65%** (60–70%) | estimated |
+| **Ready for real work, full Illustrator** (decides the stage) | **~55%** (50–60%) | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
 
@@ -129,6 +133,8 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | Ready for real work re-examined against the issue tracker and user feedback: 50% → 55% (full), 65% mainstream added; see target-app-parity.md |
+| 2026-10-10 | minor | Applied the core-workflow gate (docs/roadmap.md › Alpha gate): passes, stage stays alpha |
 | 2026-10-10 | major | Re-measured against Illustrator 2026 (30.x) from code counts, 71 open issues and public docs; stage set to alpha; moved the parity estimate, honest assessment and "Shipped so far" to `docs/target-app-parity.md`, the gap list to `docs/gaps.md`, milestones to `docs/roadmap.md`, the `.ai` scope to `docs/file-format-parity.md` |
 | 2026-10-05 | major | Honest assessment by dimension and the prioritized gap list |
 | 2026-10-02 | major | First 22-area weighted parity estimate |

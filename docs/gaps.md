@@ -35,6 +35,9 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 18 | [G18 Generative AI features](#g18-generative-ai-features) | 30–60 | no | — |
 | 19 | [G19 Accessibility](#g19-accessibility) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 
+**Alpha blockers:** none. Every core workflow passes the [alpha gate](roadmap.md#alpha-gate); G9 is the only
+partial one, and it blocks beta, not alpha.
+
 **To beta:** G1, G9, G10, G11, G12, the corpus and QA part of G8, the type-core part of G4, macOS pen pressure
 from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall clock with 4–6 agents.
 
@@ -55,9 +58,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   lines (#779), open speed on large files (#758), legacy `.ai` without the prolog, live effects, brushes, symbols
   and pattern fills as live objects (#637). Writing Illustrator's own editing data is out of scope
   (undocumented); Save As `.ai` stays PDF-compatible.
-- **Evidence:** the issues above; no real-file `.ai` corpus (users' files may be used locally, never committed).
-- **Impact:** blocks anyone who exchanges files with Illustrator users. This is the main-format gap that keeps
-  the stage at alpha.
+- **Evidence:** the issues above; 28 of the 350 issues are about `.ai`/EPS (about 22 people, the most common single
+  format theme), 20 fixed, and the 8 open ones are about structure (layers, guides, speed, live objects), not missing
+  art. No real-file `.ai` corpus (users' files may be used locally, never committed).
+- **Impact:** blocks anyone who hands files back to Illustrator users. Opening and reworking their own archive
+  works, with layer cleanup in some files. This is the main-format gap that keeps the stage at alpha.
 - **Estimate:** 10–20 h with users' files to test against.
 
 ## G10 Launch and stability on real machines
@@ -196,4 +201,6 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
+| 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |
 | 2026-10-10 | major | Moved from the ROADMAP's "Where we're lacking"; kept ids G1–G8, added G9–G19 (file formats, stability, bugs, preferences, 30.x additions, pen hardware, performance, localization, ecosystem, AI, accessibility) and re-ranked |
