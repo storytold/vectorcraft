@@ -122,8 +122,6 @@ mod tests {
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
     }
 
-    /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
-    /// value axis on the side picked.
     /// #1000: the Object menu must expose its parameters instead of creating the hard-coded
     /// 10 × 10 grid, and OK must pass the edited values to the engine command.
     #[test]
@@ -147,6 +145,8 @@ mod tests {
         assert!(app.ui.dialog.is_none());
     }
 
+    /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
+    /// value axis on the side picked.
     #[test]
     fn graph_type_value_axis_is_a_dropdown_of_its_sides() {
         let doc = vectorcraft_engine::find_command("graph.setType").unwrap().params;
