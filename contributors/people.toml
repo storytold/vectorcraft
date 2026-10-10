@@ -45,3 +45,7 @@ sync_github_name = false
 real_name = "Ahmed Moussa"
 display_name = "Ahmed Moussa"
 sync_github_name = true
+
+[people.vbasky]
+real_name = "Vikram Bhaskaran"
+sync_github_name = false
