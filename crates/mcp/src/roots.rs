@@ -216,10 +216,15 @@ pub fn check_command(roots: &FileRoots, id: &str, params: &serde_json::Map<Strin
         ("file.saveCopy", &["path"], false),
         ("file.saveAsTemplate", &["path"], false),
         ("document.export", &["path"], false),
+        ("document.exportPdf", &["path"], false),
+        ("document.exportEps", &["path"], false),
+        ("document.exportDxf", &["path"], false),
         ("document.exportSelection", &["path"], false),
         ("document.exportForOffice", &["path"], false),
         ("document.exportForScreens", &["folder"], false),
         ("document.exportForWeb", &["path"], false),
+        ("assets.export", &["folder"], false),
+        ("links.unembed", &["path"], false),
         ("file.package", &["folder"], false),
         ("file.print", &["path"], false),
         ("css.export", &["path"], false),
@@ -451,6 +456,28 @@ mod tests {
         // Unrelated commands (`path` as an object id, paint, …) pass through untouched.
         assert!(check_command(&roots, "text.createInPath", &params(&[("path", "12")])).is_ok());
         assert!(check_command(&roots, "object.group", &params(&[])).is_ok());
+    }
+
+    #[test]
+    fn dedicated_exporters_stay_under_the_write_root() {
+        let (base, roots) = confined_tree("dedicated-exporters");
+        let inside = base.join("inside/new/output").to_string_lossy().to_string();
+        for (id, key) in [
+            ("document.exportPdf", "path"),
+            ("document.exportEps", "path"),
+            ("document.exportDxf", "path"),
+            ("assets.export", "folder"),
+            ("links.unembed", "path"),
+        ] {
+            let error = check_command(&roots, id, &params(&[(key, "/etc/vectorcraft-output")])).unwrap_err();
+            assert!(error.contains("outside --automation-write-root"), "{id}: {error}");
+            assert!(check_command(&roots, id, &params(&[(key, &inside)])).is_ok(), "{id}");
+            assert!(check_command(&roots, id, &params(&[])).is_ok(), "{id}: inline export");
+            let read_only = FileRoots::new(Some(&base.join("inside").to_string_lossy()), None).unwrap();
+            assert!(check_command(&read_only, id, &params(&[(key, &inside)])).is_err(), "{id}: missing write root");
+            let batch = serde_json::json!({"commands": [{"command": id, "params": {(key): "/etc/vectorcraft-output"}}]});
+            assert!(check_command(&roots, "command.batch", batch.as_object().unwrap()).is_err(), "{id}: nested batch");
+        }
     }
 
     #[test]

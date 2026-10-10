@@ -58,6 +58,27 @@ fn confined_export_writes_inside_and_refuses_outside() {
 }
 
 #[test]
+fn confined_dedicated_exporters_are_rejected_before_dispatch() {
+    let (inside, outside) = tree("dedicated-exporters");
+    let roots = roots(&inside);
+    for (id, key) in [
+        ("document.exportPdf", "path"),
+        ("document.exportEps", "path"),
+        ("document.exportDxf", "path"),
+        ("assets.export", "folder"),
+        ("links.unembed", "path"),
+    ] {
+        let target = outside.join(id);
+        for tool in ["command_run", "run_command", "invoke_menu"] {
+            let command_key = if tool == "command_run" { "id" } else { "command" };
+            let err = err_text(&call(&roots, tool, json!({(command_key): id, "params": {(key): target.to_string_lossy()}})));
+            assert!(err.contains("outside --automation-write-root"), "{id} via {tool}: {err}");
+            assert!(!target.exists(), "{id} via {tool}");
+        }
+    }
+}
+
+#[test]
 fn confined_save_without_a_path_is_rejected() {
     let (inside, _) = tree("save-pathless");
     let roots = roots(&inside);
