@@ -66,7 +66,7 @@ pub use appearance::{
 };
 pub use assets::ExportAsset;
 pub use corners::LiveCorners;
-pub use graph::{GraphKind, GraphSpec, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, SeriesPaint, TickLength, ValueAxisSide};
+pub use graph::{GraphDesign, GraphKind, GraphSpec, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, SeriesPaint, TickLength, ValueAxisSide};
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
@@ -560,6 +560,9 @@ pub struct Document {
     pub text_threads: Vec<Vec<NodeId>>,
     #[serde(default)]
     pub symbols: Vec<Symbol>,
+    /// Object › Graph › Design…: art graphs can draw as markers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graph_designs: Vec<GraphDesign>,
     #[serde(default)]
     pub guides: Vec<Guide>,
     /// View → New View… (up to 25, like Illustrator).
@@ -700,6 +703,7 @@ impl Document {
             para_styles: vec![],
             text_threads: vec![],
             symbols: vec![],
+            graph_designs: vec![],
             guides: vec![],
             views: vec![],
             saved_selections: vec![],

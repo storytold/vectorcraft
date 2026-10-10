@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (M7: accurate character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (M12: graph designs and marker designs) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.md) and
 [target-app-parity.md](target-app-parity.md); the ranked work list is [gaps.md](gaps.md). Hours are Opus 5.5
@@ -59,7 +59,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | M9 | Live effects (+ 3D & Materials) | 🟡 2D effects done incl. Effect → Pathfinder, Color Adjustments and Document Raster Effects Settings; initial Revolve only; SVG Filters, remaining raster effects and 3D pending | 81–130 |
 | M10 | Brushes, symbols, patterns, Repeat | 🟡 pattern swatches (5 tile types, Pattern Options, editing mode, SVG `<pattern>`/PDF export) and live Repeat (radial/grid/mirror) done; brushes/symbols in progress | 23–37 |
 | M11 | Artboards & views (artboard panel/tool with Move Artwork for X/Y fields and Artboard Options, Trim View, middle-button pan, print tiling and the status bar's artboard navigator done; multiple windows, presentation polish) | 🟡 | 15–25 |
-| M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (13 presets, 18 ms/1k² image; the Flat Logo mode places edges to a fraction of a pixel, restores sharp corners, snaps lines and circles, and refuses gradients), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, group-selected series colours persist through regenerate/save/open) done; graph Design/Column/Marker designs pending | 6–10 |
+| M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (13 presets, 18 ms/1k² image; the Flat Logo mode places edges to a fraction of a pixel, restores sharp corners, snaps lines and circles, and refuses gradients), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, group-selected series colours persist through regenerate/save/open) done; Graph Design and Marker designs done; graph Column designs pending | 6–10 |
 | M13 | Automation (Actions ✅ record/playback, persisted; variables, scripting, batch) | 🟡 | 18–27 |
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor (chords with Shift and a punctuation key fire as typed), workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs, menus that scroll when longer than the window and macOS native menu dismissal done (M14.8); an experimental, unsupported Windows 7 x64 portable OpenGL build (not verified by maintainers); accessibility and broader Windows/Linux packaging/QA pending | 18–28 |
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance) | ⬜ | 60–90 |
@@ -79,6 +79,7 @@ After placed documents (File › Place of a `.vectorcraft` file, linked), M4.14�
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | M12: Object › Graph › Design… and Marker… (graph designs, marker designs); column designs remain. Scores/hours unchanged. |
 | 2026-10-10 | minor | M7: document-point character sizes, leading and baseline shift, and resettable horizontal stretching after object/group scaling (#1034). Optional group font-size preservation remains separate; scores/hours unchanged. |
 | 2026-10-10 | minor | M9 row from main: initial Revolve |
 | 2026-10-10 | minor | Added the Alpha gate table (core-workflow gate): all six workflows work end to end, `.ai` exchange partial but not blocking; stage stays alpha |

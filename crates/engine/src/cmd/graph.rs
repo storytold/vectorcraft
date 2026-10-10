@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, TickLength, ValueAxisSide,
+    Appearance, CharStyle, Document, GraphDesign, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, TickLength, ValueAxisSide,
 };
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, shapes};
 
@@ -46,6 +46,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
+        ),
+        cmd!(
+            "graph.design",
+            "Design…",
+            ["Object", "Graph"],
+            None,
+            "{save?: name (the selected art becomes a graph design; put a rectangle at the back to set the size it draws at), paste?: name (a copy of the design's art into the document, selected, to edit and save again), delete?: name (graphs drawing it go back to their default marks)}; no params → {designs: [names]}",
+            has_doc,
+            design
+        ),
+        cmd!(
+            "graph.marker",
+            "Marker…",
+            ["Object", "Graph"],
+            None,
+            "{id?, seriesIndexes?: [index], design?: name|null} draw the data points and legend swatch of the series selected with Group Selection (or listed, or every series) with a graph design, scaled so its backmost object fills the default marker's square; null = the default marker. Line, scatter and radar series. No design → {designs: [names], design: the selected series' design or null}",
+            has_selection,
+            set_marker
         ),
     ]
 }
@@ -294,6 +312,13 @@ impl Gen<'_> {
         g.name = Some(name.into());
         Arc::new(g)
     }
+    /// A data point's marker filling `cell`: the series' marker design, else the default square in the series' paint.
+    fn marker(&mut self, design: Option<&Arc<Node>>, cell: Rect, (fill, stroke, w): (Paint, Paint, f64)) -> Arc<Node> {
+        match design.and_then(|a| fit_design(self.d, a, cell)) {
+            Some(n) => n,
+            None => self.path(shapes::rectangle(cell), fill, stroke, w),
+        }
+    }
     /// A series group. Empty series are omitted by the caller; the index is stored on the group
     /// so later paint edits find the series without counting siblings.
     fn series(&mut self, name: &str, index: usize, children: Vec<Arc<Node>>) -> Arc<Node> {
@@ -324,13 +349,52 @@ fn polyline(pts: &[Point], closed: bool) -> PathData {
     PathData::from_bezpath(&bp)
 }
 
-fn marker(p: Point, s: f64) -> PathData {
-    shapes::rectangle(Rect::from_center_size(p, (s, s)))
+/// Most objects a graph's marker designs may add (each data point and legend swatch draws a copy of its design).
+const MARKER_BUDGET: usize = 200_000;
+
+/// Each series' marker design art, when the document has the design.
+fn marker_designs(d: &Document, g: &GraphSpec) -> Vec<Option<Arc<Node>>> {
+    let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+    (0..nser)
+        .map(|s| {
+            let name = g.series_markers.get(s)?.as_deref()?;
+            d.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone())
+        })
+        .collect()
+}
+
+/// How many objects the marker designs `designs` add to graph `g`: a copy per data point and legend swatch.
+fn marker_cost(g: &GraphSpec, designs: &[Option<Arc<Node>>]) -> usize {
+    let points = g.rows.len().min(vectorcraft_doc::MAX_GRAPH_CATEGORIES) + 1;
+    designs.iter().flatten().map(|a| a.count().saturating_mul(points)).fold(0, usize::saturating_add)
+}
+
+/// Graph design `art` scaled into `cell` (Object › Graph › Marker): its backmost object, the rectangle a design is
+/// drawn around, fills the cell (the whole art does when the design is a single object), strokes scaling with it.
+/// Fresh ids. `None` for art with no area.
+fn fit_design(d: &mut Document, art: &Node, cell: Rect) -> Option<Arc<Node>> {
+    let usable = |b: &Rect| b.width() > 1e-9 && b.height() > 1e-9 && b.width().is_finite() && b.height().is_finite();
+    let group = matches!(art.kind, NodeKind::Group { .. });
+    let backmost = art.children().filter(|_| group).and_then(|c| c.first()).and_then(|c| c.geometric_bounds()).filter(usable);
+    let frame = backmost.or_else(|| art.geometric_bounds().filter(usable))?;
+    let a = Affine::translate(cell.origin().to_vec2())
+        * Affine::scale_non_uniform(cell.width() / frame.width(), cell.height() / frame.height())
+        * Affine::translate(-frame.origin().to_vec2());
+    // Strokes, effects and pattern tiles scale with the art.
+    let art = super::place::transformed(art.clone(), a);
+    Some(Arc::new(d.reid(&art)))
 }
 
 /// Build the graph's children.
 fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let mark = |i: usize, series_fill: bool, stroke: Paint, width: f64| series_marks(g, i, series_fill, stroke, width);
+    // Each series' marker design (Object › Graph › Marker), when the document has it; default squares for all
+    // when the designs would draw more than MARKER_BUDGET objects.
+    let mut designs = marker_designs(d, g);
+    if marker_cost(g, &designs) > MARKER_BUDGET {
+        designs.clear();
+    }
+    let design = |s: usize| designs.get(s).and_then(Option::as_ref);
     let mut b = Gen { d, out: vec![] };
     let r = g.rect;
     let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
@@ -411,8 +475,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
                 if g.mark_points {
                     for p in pts {
-                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                        items.push(b.path(marker(p, 4.0), fill, stroke, w));
+                        let paint = mark(s, true, Paint::None, 0.0);
+                        items.push(b.marker(design(s), Rect::from_center_size(p, (4.0, 4.0)), paint));
                     }
                 }
             }
@@ -652,8 +716,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     }
                     if g.mark_points {
                         for p in pts.iter().flatten() {
-                            let (fill, stroke, w) = mark(si, true, Paint::None, 0.0);
-                            series[si].push(b.path(marker(*p, 5.0), fill, stroke, w));
+                            let paint = mark(si, true, Paint::None, 0.0);
+                            let n = b.marker(design(si), Rect::from_center_size(*p, (5.0, 5.0)), paint);
+                            series[si].push(n);
                         }
                     }
                 }
@@ -741,8 +806,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
                 if g.mark_points {
                     for p in pts.iter().flatten() {
-                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                        let n = b.path(marker(*p, 5.0), fill, stroke, w);
+                        let paint = mark(s, true, Paint::None, 0.0);
+                        let n = b.marker(design(s), Rect::from_center_size(*p, (5.0, 5.0)), paint);
                         if let Some(items) = series.get_mut(s) {
                             items.push(n);
                         }
@@ -762,8 +827,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 continue;
             }
             let y = r.y0 + s as f64 * (LABEL_SIZE * 1.8);
-            let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-            items.push(b.path(shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), fill, stroke, w));
+            // Series drawn with markers show their marker design in the legend.
+            let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(s) == GraphKind::Line;
+            let paint = mark(s, true, Paint::None, 0.0);
+            items.push(b.marker(design(s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint));
             labels.push(b.text(Point::new(x + 12.0, y + 7.5), &label, Justify::Left));
         }
     }
@@ -901,13 +968,16 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     }
     let mut out = Vec::new();
     for id in ids {
-        match members.get(id).filter(|r| r.group == *id).and_then(|_| doc.node(*id)) {
-            Some(group) => group.walk(&mut |m| {
-                if matches!(m.kind, NodeKind::Path { .. }) {
-                    out.push(m.id);
+        // The series' own marks: the art of a marker design inside it keeps the design's paint (painting it would
+        // last only until the graph is drawn again), so edit the design to change it.
+        match members.get(id) {
+            Some(r) if r.group == *id => {
+                if let Some(group) = doc.node(*id) {
+                    out.extend(group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id));
                 }
-            }),
-            None => out.push(*id),
+            }
+            Some(r) if doc.parent_of(*id) != Some(r.group) => {}
+            _ => out.push(*id),
         }
     }
     out.sort_unstable();
@@ -926,7 +996,8 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
     let captures: Vec<_> = ids
         .iter()
         .filter_map(|id| {
-            let r = members.get(id)?;
+            // Only a series' own marks set its paint, not the art of a marker design.
+            let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
             let node = doc.node(*id)?;
             let paint = node.appearance.paint_at(None, fill)?.clone();
             let width = (!fill).then(|| node.appearance.stroke_width());
@@ -964,25 +1035,14 @@ fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "graph.setType";
-    let id = target(s, p, C)?;
-    let mut spec = spec_of(s, id)?;
-    // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
-    // Selection). Anything else selected, the graph itself for one, is the whole graph.
-    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
-    // A file's list of right-axis series, kept to series the graph has, at most once each.
-    spec.right_series.retain(|i| *i < count);
-    spec.right_series.sort_unstable();
-    spec.right_series.dedup();
-    let picked: Vec<usize> = match p.get("seriesIndexes") {
+/// The series a command on graph `id` (of `count` series) applies to: `seriesIndexes`, else, with no `id` param, a
+/// selection made only of this graph's series (Group Selection). Empty: the whole graph.
+fn picked_series(s: &Session, p: &Value, id: NodeId, count: usize, cmd: &str) -> Result<Vec<usize>> {
+    Ok(match p.get("seriesIndexes") {
         Some(v) => {
-            let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(C, "`seriesIndexes` is a non-empty list of series indexes"))?;
-            if str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
-                return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
-            }
+            let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`seriesIndexes` is a non-empty list of series indexes"))?;
             a.iter()
-                .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(C, format!("no series {i}"))))
+                .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(cmd, format!("no series {i}"))))
                 .collect::<Result<_>>()?
         }
         None if p.get("id").is_none() => {
@@ -995,7 +1055,167 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             out
         }
         None => vec![],
+    })
+}
+
+/// Select the series groups `indexes` of graph `id` (they are new nodes after a regeneration).
+fn reselect_series(d: &Document, sel: &mut vectorcraft_doc::Selection, id: NodeId, indexes: &[u32]) {
+    let groups: Vec<NodeId> = d
+        .node(id)
+        .and_then(Node::children)
+        .into_iter()
+        .flatten()
+        .filter(|c| c.series_index.is_some_and(|i| indexes.contains(&i)))
+        .map(|c| c.id)
+        .collect();
+    sel.set(groups);
+}
+
+/// The document's graph design names, in order.
+fn design_names(d: &Document) -> Vec<String> {
+    d.graph_designs.iter().map(|x| x.name.clone()).collect()
+}
+
+/// Regenerate the graphs whose series use design `name` (it was added or removed).
+fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
+    let mut ids = vec![];
+    d.walk(|n| {
+        if n.graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| m == name)) {
+            ids.push(n.id);
+        }
+    });
+    for id in ids {
+        if let Some(spec) = d.node(id).and_then(|n| n.graph.as_deref().cloned()) {
+            regenerate(d, id, spec)?;
+        }
+    }
+    Ok(())
+}
+
+fn design(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "graph.design";
+    for key in ["save", "paste", "delete"] {
+        if p.get(key).is_some_and(|v| !v.is_string()) {
+            return Err(bad(C, format!("`{key}` is a design name")));
+        }
+    }
+    if let Some(name) = str_param(p, "save") {
+        let name = GraphDesign::clean_name(name).ok_or_else(|| bad(C, "a design needs a name"))?;
+        if s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
+            return Err(bad(C, format!("there is already a design named `{name}`")));
+        }
+        if s.doc()?.doc.graph_designs.len() >= GraphDesign::MAX {
+            return Err(bad(C, format!("a document keeps at most {} graph designs", GraphDesign::MAX)));
+        }
+        let art = super::brushsym::selection_art(s, p)?.ok_or_else(|| bad(C, "select the art for the design"))?;
+        if art.count() > GraphDesign::MAX_NODES {
+            return Err(bad(C, format!("a design holds at most {} objects", GraphDesign::MAX_NODES)));
+        }
+        // A graph saved as a design is kept as the art it draws.
+        let art = GraphDesign::plain_art(&art);
+        let saved = name.clone();
+        s.edit("Graph Design", |d, _| {
+            let art = d.reid(&art);
+            d.graph_designs.push(GraphDesign { name: saved.clone(), art: Arc::new(art) });
+            refresh_graphs_using(d, &saved)
+        })?;
+        return Ok(json!({ "name": name }));
+    }
+    if let Some(name) = str_param(p, "paste") {
+        let art = s
+            .doc()?
+            .doc
+            .graph_designs
+            .iter()
+            .find(|x| x.name == name)
+            .map(|x| x.art.clone())
+            .ok_or_else(|| bad(C, format!("no design named `{name}`")))?;
+        let parent = s.doc()?.insertion_parent();
+        let id = s.edit("Paste Design", |d, sel| {
+            let n = d.reid(&art);
+            let id = n.id;
+            d.insert(parent, usize::MAX, n)?;
+            sel.set([id]);
+            Ok(id)
+        })?;
+        return Ok(json!({ "id": id.0 }));
+    }
+    if let Some(name) = str_param(p, "delete") {
+        if !s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
+            return Err(bad(C, format!("no design named `{name}`")));
+        }
+        let name = name.to_string();
+        s.edit("Delete Design", |d, _| {
+            d.graph_designs.retain(|x| x.name != name);
+            refresh_graphs_using(d, &name)
+        })?;
+        return ok();
+    }
+    Ok(json!({ "designs": design_names(&s.doc()?.doc) }))
+}
+
+fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "graph.marker";
+    let id = target(s, p, C)?;
+    let mut spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    let picked = picked_series(s, p, id, count, C)?;
+    let names = design_names(&s.doc()?.doc);
+    let Some(v) = p.get("design") else {
+        // The design the picked series (all of them with none picked) share, or null.
+        let all: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked };
+        // A design deleted since doesn't count: those series draw the default marker.
+        let used: Vec<Option<&String>> =
+            all.iter().map(|i| spec.series_markers.get(*i).and_then(Option::as_ref).filter(|n| names.contains(n))).collect();
+        let shared = used.first().copied().flatten().filter(|d| used.iter().all(|x| *x == Some(*d)));
+        return Ok(json!({ "designs": names, "design": shared }));
     };
+    let design = match v {
+        Value::Null => None,
+        Value::String(n) if names.contains(n) => Some(n.clone()),
+        Value::String(n) => return Err(bad(C, format!("no design named `{n}`"))),
+        _ => return Err(bad(C, "`design` is a design name, or null for the default marker")),
+    };
+    let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
+    let targets: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked };
+    spec.series_markers.truncate(count);
+    spec.series_markers.resize(count, None);
+    for i in targets {
+        if let Some(m) = spec.series_markers.get_mut(i) {
+            *m = design.clone();
+        }
+    }
+    while spec.series_markers.last().is_some_and(Option::is_none) {
+        spec.series_markers.pop();
+    }
+    if marker_cost(&spec, &marker_designs(&s.doc()?.doc, &spec)) > MARKER_BUDGET {
+        return Err(bad(C, "the design is too big to draw at every data point of this graph"));
+    }
+    s.edit("Graph Marker", |d, sel| {
+        regenerate(d, id, spec)?;
+        if !reselect.is_empty() {
+            reselect_series(d, sel, id, &reselect);
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
+fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "graph.setType";
+    let id = target(s, p, C)?;
+    let mut spec = spec_of(s, id)?;
+    // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
+    // Selection). Anything else selected, the graph itself for one, is the whole graph.
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    // A file's list of right-axis series, kept to series the graph has, at most once each.
+    spec.right_series.retain(|i| *i < count);
+    spec.right_series.sort_unstable();
+    spec.right_series.dedup();
+    if p.get("seriesIndexes").is_some() && str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
+        return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
+    }
+    let picked = picked_series(s, p, id, count, C)?;
     let keys = [
         "type",
         "seriesIndexes",
@@ -1133,15 +1353,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Graph Type", |d, sel| {
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {
-            let groups: Vec<NodeId> = d
-                .node(id)
-                .and_then(Node::children)
-                .into_iter()
-                .flatten()
-                .filter(|c| c.series_index.is_some_and(|i| reselect.contains(&i)))
-                .map(|c| c.id)
-                .collect();
-            sel.set(groups);
+            reselect_series(d, sel, id, &reselect);
         }
         if let Some(n) = d.node_mut(id)
             && n.name.as_deref().is_some_and(|nm| nm.ends_with(" Graph"))
@@ -2272,5 +2484,254 @@ mod tests {
             .collect();
         assert!(ticks.len() <= 10_000 && ticks.len() >= 5000, "{}", ticks.len());
         assert!(ticks.iter().copied().fold(f64::MIN, f64::max) > 199.0, "the last category is ticked");
+    }
+
+    /// A graph design: a 10 × 10 rectangle at the back and a 20-wide ellipse over it, saved as `name`.
+    fn save_design(s: &mut Session, name: &str) {
+        let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let e = s.execute("shape.ellipse", &json!({"x": 595, "y": 600, "width": 20, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r, e]})).unwrap();
+        s.execute("graph.design", &json!({"save": name})).unwrap();
+    }
+
+    /// The marks of series `index` (legend swatch last) and their bounds.
+    fn series_parts(s: &Session, id: NodeId, index: u32) -> Vec<vectorcraft_doc::Node> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        series(&n, index).children().unwrap().iter().map(|c| (**c).clone()).collect()
+    }
+
+    #[test]
+    fn a_marker_design_draws_each_data_point_sized_by_its_backmost_object() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!(["Pill"]));
+        let id = graph(&mut s, "line");
+        let before = series_parts(&s, id, 1);
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        s.execute("select.set", &json!({"ids": [grp.0]})).unwrap();
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        let after = series_parts(&s, id, 1);
+        assert_eq!(after.len(), before.len(), "a line, three markers and the swatch");
+        for (old, new) in before.iter().zip(&after).skip(1) {
+            let (o, n) = (old.geometric_bounds().unwrap(), new.geometric_bounds().unwrap());
+            assert!(matches!(new.kind, NodeKind::Group { .. }), "the design's art");
+            // The 10-point rectangle fills the marker's square, the 20-wide ellipse twice as wide.
+            assert!((n.center() - o.center()).hypot() < 1e-6, "{o:?} {n:?}");
+            assert!((n.width() - 2.0 * o.width()).abs() < 1e-6 && (n.height() - o.height()).abs() < 1e-6, "{o:?} {n:?}");
+        }
+        // The series stays selected; the other series keeps its squares; the query names the design.
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [grp]);
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        assert_eq!(s.execute("graph.marker", &json!({})).unwrap()["design"], "Pill");
+        assert_eq!(spec(&s, id).series_markers, [None, Some("Pill".to_string())]);
+        // Back to the default square.
+        s.execute("graph.marker", &json!({"design": null})).unwrap();
+        assert!(spec(&s, id).series_markers.is_empty());
+        assert!(series_parts(&s, id, 1).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        assert!(s.execute("graph.marker", &json!({"design": "Nope"})).is_err());
+        assert!(s.execute("graph.marker", &json!({"design": 3})).is_err());
+    }
+
+    #[test]
+    fn marker_designs_apply_to_markers_not_to_columns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        // Every series (none picked): the line series' markers and swatch; the columns and their swatch stay.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        let line = series_parts(&s, id, 1);
+        assert!(line.iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })), "markers and swatch");
+        let swatch = line.last().unwrap().geometric_bounds().unwrap();
+        assert!((swatch.width() - 16.0).abs() < 1e-6 && (swatch.height() - 8.0).abs() < 1e-6, "{swatch:?}");
+        // Scatter and radar graphs draw them too.
+        for ty in ["scatter", "radar"] {
+            let g = graph(&mut s, ty);
+            s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+            s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+            assert!(series_parts(&s, g, 0).iter().any(|n| matches!(n.kind, NodeKind::Group { .. })), "{ty}");
+        }
+    }
+
+    #[test]
+    fn graph_designs_are_saved_pasted_and_deleted() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "nothing selected");
+        save_design(&mut s, "Pill");
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "the name is taken");
+        assert!(s.execute("graph.design", &json!({"save": "  "})).is_err(), "no name");
+        // Paste Design: a copy of the art, selected, with ids of its own.
+        let pasted = NodeId(s.execute("graph.design", &json!({"paste": "Pill"})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [pasted]);
+        let art = s.doc().unwrap().doc.graph_designs[0].art.clone();
+        let copy = s.doc().unwrap().doc.node(pasted).unwrap().clone();
+        assert_ne!(copy.id, art.id);
+        assert_eq!(copy.geometric_bounds(), art.geometric_bounds());
+        assert!(s.execute("graph.design", &json!({"paste": "Nope"})).is_err());
+        // Deleting a design draws its graphs' default markers again; undo brings both back.
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Pill"})).unwrap();
+        assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(series_parts(&s, id, 0).iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })));
+        assert!(s.execute("graph.design", &json!({"delete": "Nope"})).is_err());
+    }
+
+    #[test]
+    fn designs_and_markers_survive_save_and_open() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"seriesIndexes": [0], "design": "Pill"})).unwrap();
+        let path = vectorcraft_testkit::temp_dir("graph-designs").join("designs.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!(["Pill"]));
+        assert_eq!(spec(&s, id).series_markers, [Some("Pill".to_string())]);
+        assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("seriesMarkers").is_none());
+        // A design whose art has no area draws the default square.
+        let g = GraphSpec { kind: GraphKind::Line, series_markers: vec![Some("Dot".into())], ..GraphSpec::default() };
+        let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+        let dot = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Dot".into(), art: std::sync::Arc::new(dot) });
+        let art = super::generate(&mut d, &g);
+        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+    }
+
+    #[test]
+    fn a_graph_saved_as_a_design_is_plain_art_even_as_its_own_marker() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.design", &json!({"save": "Chart"})).unwrap();
+        let art = s.doc().unwrap().doc.graph_designs[1].art.clone();
+        let mut graphs = 0;
+        art.walk(&mut |n| graphs += usize::from(n.graph.is_some() || n.series_index.is_some()));
+        assert_eq!(graphs, 0, "no graph inside a design");
+        // The graph drawn with itself as a marker, then the design it used deleted: still one graph to edit.
+        s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Chart"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Pill"})).unwrap();
+        let mut found = 0;
+        s.doc().unwrap().doc.walk(|n| found += usize::from(n.graph.is_some()));
+        assert_eq!(found, 1);
+        // A deleted design reads as none in the query, so the dialog opens on the default marker.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.marker", &json!({"seriesIndexes": [0], "design": null})).unwrap();
+        let v = s.execute("graph.marker", &json!({"seriesIndexes": [1, 0]})).unwrap();
+        assert!(v["design"].is_null(), "{v}");
+    }
+
+    #[test]
+    fn designs_too_big_for_a_graph_are_refused_and_drawn_as_squares() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        // 1,500 objects at each of 200 points is past the budget.
+        let ids: Vec<u64> = (0..1500)
+            .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        s.execute("graph.design", &json!({"save": "Big"})).unwrap();
+        let rows: Vec<Vec<f64>> = (0..200).map(|i| vec![i as f64]).collect();
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "line", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        assert!(s.execute("graph.marker", &json!({"id": id.0, "design": "Big"})).is_err());
+        assert!(spec(&s, id).series_markers.is_empty());
+        // A file asking for it anyway draws the default squares.
+        let mut g = spec(&s, id);
+        g.series_markers = vec![Some("Big".into())];
+        let mut d = (*s.doc().unwrap().doc).clone();
+        let art = super::generate(&mut d, &g);
+        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        // Too many objects for one design.
+        let ids: Vec<u64> = (0..2001)
+            .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Huge"})).is_err());
+    }
+
+    #[test]
+    fn a_files_designs_are_tidied() {
+        let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+        let art = |d: &mut vectorcraft_doc::Document| std::sync::Arc::new(vectorcraft_doc::Node::group(d.alloc_id(), vec![]));
+        let mut graphy = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        graphy.graph = Some(Box::new(GraphSpec::default()));
+        for name in ["  A\u{7}  ", "A", "", "   ", &"x".repeat(100)] {
+            let a = art(&mut d);
+            d.graph_designs.push(vectorcraft_doc::GraphDesign { name: name.into(), art: a });
+        }
+        d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "G".into(), art: std::sync::Arc::new(graphy) });
+        d.tidy_graph_designs();
+        let names: Vec<_> = d.graph_designs.iter().map(|x| x.name.clone()).collect();
+        assert_eq!(names, ["A".to_string(), "x".repeat(64), "G".to_string()]);
+        assert!(d.graph_designs[2].art.graph.is_none());
+    }
+
+    #[test]
+    fn painting_a_series_drawn_with_a_design_leaves_the_design_alone() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+        s.execute("paint.setFill", &json!({"ids": [grp.0], "color": "#f00"})).unwrap();
+        // The design's paths keep the design's paint, before and after the graph is drawn again.
+        let design_fill = |s: &Session| {
+            let parts = series_parts(s, id, 0);
+            let mut fills = vec![];
+            parts[1].walk(&mut |n| {
+                if let NodeKind::Path { .. } = n.kind {
+                    fills.push(n.appearance.fill_paint().color().map(|c| c.to_hex()));
+                }
+            });
+            fills
+        };
+        let painted = design_fill(&s);
+        assert!(!painted.contains(&Some("#ff0000".into())), "{painted:?}");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+        assert_eq!(design_fill(&s), painted);
+    }
+
+    #[test]
+    fn graph_design_params_are_names() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        for p in [json!({"save": 5}), json!({"paste": null}), json!({"delete": ["a"]})] {
+            assert!(s.execute("graph.design", &p).is_err(), "{p}");
+        }
+    }
+
+    #[test]
+    fn document_wide_passes_see_design_art() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [r], "color": "#123456"})).unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        s.execute("graph.design", &json!({"save": "Blue"})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mut seen = false;
+        s.doc().unwrap().doc.visit_paints(&mut |p| seen |= p.color().is_some_and(|c| c.to_hex() == "#123456"));
+        assert!(seen, "the colour is used by the design");
     }
 }
