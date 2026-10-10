@@ -320,6 +320,21 @@ type Catalog = HashMap<String, CatalogFamily>;
 /// The installed faces' (family, style) by normalized PostScript name ([`norm`]).
 type PostScriptNames = HashMap<String, (String, String)>;
 
+/// Successful generic fallback body reads only; catalog/name scans are not counted.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct FallbackTestIo {
+    pub probes: Vec<(PathBuf, char)>,
+    pub full_reads: Vec<(PathBuf, char, usize)>,
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+struct FallbackTestMissBarrier {
+    c: char,
+    reached: std::sync::mpsc::Sender<()>,
+    resume: std::sync::mpsc::Receiver<()>,
+}
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
@@ -350,6 +365,10 @@ pub struct FontDb {
     /// What the last scan read, to tell when fonts were installed or removed since.
     #[cfg(not(target_arch = "wasm32"))]
     stamp: Mutex<Option<ScanStamp>>,
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    fallback_test_io: Option<Mutex<FallbackTestIo>>,
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    fallback_test_miss_barrier: Mutex<Option<FallbackTestMissBarrier>>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.
@@ -388,6 +407,7 @@ fn modified(path: &Path) -> Option<std::time::SystemTime> {
 #[derive(Default)]
 struct SysFallback {
     enabled: bool,
+    rescan_epoch: u64,
     misses: std::collections::HashSet<char>,
 }
 
@@ -1087,6 +1107,210 @@ fn provides(w: &WantedFont, faces: &[FaceStyle]) -> bool {
     faces.iter().find(|f| f.keys.legacy.iter().any(|(family, _)| *family == key)).is_some_and(|f| styled(&f.family))
 }
 
+/// Live coverage of a font file. Only a definite negative avoids the ordinary full read.
+/// No bytes or metadata survive this call, so equal-metadata replacements are probed afresh.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn file_font_coverage(path: &Path, c: char) -> Option<bool> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    probe_font_coverage(&mut file, len, c)
+}
+
+/// Read just the directories and cmap tables, never outlines or names. A negative requires
+/// every physical face to be understood; caps and unsupported structures return `None`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn probe_font_coverage<R: std::io::Read + std::io::Seek>(file: &mut R, file_len: u64, c: char) -> Option<bool> {
+    use skrifa::raw::TableProvider;
+    use std::io::SeekFrom;
+
+    const MAX_FACES: u32 = 256;
+    const MAX_TABLES: usize = 256;
+    const MAX_CMAP: u32 = 1 << 20;
+    const MAX_READ: usize = 4 << 20;
+    let mut remaining = MAX_READ;
+    let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
+        if offset.checked_add(u64::try_from(len).ok()?)? > file_len {
+            return None;
+        }
+        remaining = remaining.checked_sub(len)?;
+        let mut bytes = vec![0; len];
+        file.seek(SeekFrom::Start(offset)).ok()?;
+        file.read_exact(&mut bytes).ok()?;
+        Some(bytes)
+    };
+    let head = read_at(0, 12)?;
+    let starts = if head.starts_with(b"ttcf") {
+        let version = probe_u32(&head, 4)?;
+        if !matches!(version, 0x0001_0000 | 0x0002_0000) {
+            return None;
+        }
+        let n = probe_u32(&head, 8)?;
+        if n == 0 || n > MAX_FACES {
+            return None;
+        }
+        let offsets = read_at(12, usize::try_from(n).ok()?.checked_mul(4)?)?;
+        let header_len = 12 + u64::from(n) * 4;
+        let header_len = if version == 0x0002_0000 {
+            let dsig = read_at(header_len, 12)?;
+            let tag = probe_u32(&dsig, 0)?;
+            let len = probe_u32(&dsig, 4)?;
+            let offset = probe_u32(&dsig, 8)?;
+            if tag != 0 && tag != u32::from_be_bytes(*b"DSIG") {
+                return None;
+            }
+            if u64::from(offset).checked_add(u64::from(len))? > file_len {
+                return None;
+            }
+            header_len + 12
+        } else {
+            header_len
+        };
+        let starts: Vec<u32> = offsets.as_chunks::<4>().0.iter().map(|b| u32::from_be_bytes(*b)).collect();
+        if starts.iter().any(|s| u64::from(*s) < header_len || !s.is_multiple_of(4)) {
+            return None;
+        }
+        starts
+    } else {
+        vec![0]
+    };
+    for start in starts {
+        let dir = if start == 0 { head.clone() } else { read_at(u64::from(start), 12)? };
+        if !matches!(probe_u32(&dir, 0)?, 0x0001_0000 | 0x4f54_544f) {
+            return None;
+        }
+        let n = usize::from(probe_u16(&dir, 4)?);
+        if n == 0 || n > MAX_TABLES {
+            return None;
+        }
+        let records = read_at(u64::from(start) + 12, n.checked_mul(16)?)?;
+        let mut previous: Option<&[u8]> = None;
+        let mut cmap = None;
+        for record in records.as_chunks::<16>().0 {
+            let tag = record.get(..4)?;
+            // FontRef searches the original directory; duplicates/unsorted tags are ambiguous.
+            if previous.is_some_and(|p| p >= tag) {
+                return None;
+            }
+            previous = Some(tag);
+            let (offset, len) = (probe_u32(record, 8)?, probe_u32(record, 12)?);
+            if u64::from(offset).checked_add(u64::from(len))? > file_len {
+                return None;
+            }
+            if tag == b"cmap" {
+                if len > MAX_CMAP {
+                    return None;
+                }
+                cmap = Some((offset, len));
+            }
+        }
+        let (offset, len) = cmap?;
+        let data = read_at(u64::from(offset), usize::try_from(len).ok()?)?;
+        supported_probe_cmap(&data)?;
+        // Keep every encoding record/subtable verbatim, including Windows symbol mappings.
+        let compact = sfnt_of(&[(b"cmap", &data)])?;
+        let font = skrifa::FontRef::new(&compact).ok()?;
+        font.cmap().ok()?;
+        if font.charmap().map(c).is_some() {
+            return Some(true);
+        }
+    }
+    Some(false)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn probe_u16(data: &[u8], at: usize) -> Option<u16> {
+    Some(u16::from_be_bytes(data.get(at..at.checked_add(2)?)?.try_into().ok()?))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn probe_u32(data: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_be_bytes(data.get(at..at.checked_add(4)?)?.try_into().ok()?))
+}
+
+/// Initially support the well-bounded Unicode/symbol format 4 and 12 structures only.
+/// Validate their ranges before trusting a negative; other formats take the original path.
+#[cfg(not(target_arch = "wasm32"))]
+fn supported_probe_cmap(data: &[u8]) -> Option<()> {
+    if probe_u16(data, 0)? != 0 {
+        return None;
+    }
+    let n = usize::from(probe_u16(data, 2)?);
+    let header_len = 4 + n.checked_mul(8)?;
+    if n == 0 || n > 256 || header_len > data.len() {
+        return None;
+    }
+    for i in 0..n {
+        let record = 4 + i * 8;
+        let (platform, encoding) = (probe_u16(data, record)?, probe_u16(data, record + 2)?);
+        if !matches!((platform, encoding), (0, 0..=6) | (3, 0 | 1 | 10)) {
+            return None;
+        }
+        let offset = usize::try_from(probe_u32(data, record + 4)?).ok()?;
+        if offset < header_len {
+            return None;
+        }
+        let sub = data.get(offset..)?;
+        match probe_u16(sub, 0)? {
+            4 => {
+                let len = usize::from(probe_u16(sub, 2)?);
+                let sub = sub.get(..len)?;
+                let seg_x2 = usize::from(probe_u16(sub, 6)?);
+                if seg_x2 == 0 || !seg_x2.is_multiple_of(2) || !len.is_multiple_of(2) || 16 + seg_x2 * 4 > len {
+                    return None;
+                }
+                let segments = seg_x2 / 2;
+                if probe_u16(sub, 14 + seg_x2)? != 0 {
+                    return None;
+                }
+                let mut previous_end = None;
+                for s in 0..segments {
+                    let end = probe_u16(sub, 14 + s * 2)?;
+                    let start = probe_u16(sub, 16 + seg_x2 + s * 2)?;
+                    if start > end || previous_end.is_some_and(|p| start <= p) {
+                        return None;
+                    }
+                    previous_end = Some(end);
+                    let range_at = 16 + seg_x2 * 3 + s * 2;
+                    let range = usize::from(probe_u16(sub, range_at)?);
+                    if range != 0 {
+                        let first = range_at.checked_add(range)?;
+                        let last = first.checked_add(usize::from(end - start) * 2)?.checked_add(2)?;
+                        if !range.is_multiple_of(2) || first < 16 + seg_x2 * 4 || last > len {
+                            return None;
+                        }
+                    }
+                }
+                if previous_end != Some(u16::MAX) {
+                    return None;
+                }
+            }
+            12 => {
+                if probe_u16(sub, 2)? != 0 {
+                    return None;
+                }
+                let len = usize::try_from(probe_u32(sub, 4)?).ok()?;
+                let sub = sub.get(..len)?;
+                let groups = usize::try_from(probe_u32(sub, 12)?).ok()?;
+                if 16_usize.checked_add(groups.checked_mul(12)?)? > len {
+                    return None;
+                }
+                let mut previous_end = None;
+                for g in 0..groups {
+                    let at = 16 + g * 12;
+                    let (start, end) = (probe_u32(sub, at)?, probe_u32(sub, at + 4)?);
+                    if start > end || end > 0x10ffff || previous_end.is_some_and(|p| start <= p) {
+                        return None;
+                    }
+                    probe_u32(sub, at + 8)?.checked_add(end - start)?;
+                    previous_end = Some(end);
+                }
+            }
+            _ => return None,
+        }
+    }
+    Some(())
+}
+
 /// A font file holding `tables` (tag, data), sorted by tag as table directories are.
 #[cfg(any(test, not(target_arch = "wasm32")))]
 pub(crate) fn sfnt_of(tables: &[(&[u8; 4], &[u8])]) -> Option<Vec<u8>> {
@@ -1383,6 +1607,57 @@ fn style_italic(style: &str) -> bool {
 /// [`FontDb::menu_family_list`], with the [`FontDb::family_list`] it was built from.
 type MenuFamilies = (Arc<[String]>, Arc<[String]>);
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+impl FontDb {
+    /// Exercise the real fixed-path catalog and fallback without bundled or installed fonts.
+    pub(crate) fn for_fallback_test(paths: Vec<PathBuf>) -> Self {
+        Self {
+            faces: RwLock::new(Vec::new()),
+            outlines: Mutex::new(HashMap::new()),
+            catalog: RwLock::new(Catalog::new()),
+            postscript: RwLock::new(PostScriptNames::new()),
+            font_paths: FontPaths::Fixed(paths),
+            aliases: RwLock::new(HashMap::new()),
+            cataloged: std::sync::OnceLock::new(),
+            version_scanned: RwLock::new(std::collections::HashSet::new()),
+            family_cache: Mutex::new(None),
+            menu_cache: Mutex::new(None),
+            generation: AtomicU64::new(0),
+            sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
+            stamp: Mutex::new(None),
+            fallback_test_io: Some(Mutex::new(FallbackTestIo::default())),
+            fallback_test_miss_barrier: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn fallback_test_io(&self) -> FallbackTestIo {
+        let io = self.fallback_test_io.as_ref().expect("only the isolated test database records I/O");
+        io.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Pause one matching lookup after its sweep, with no database lock held while waiting.
+    pub(crate) fn pause_next_fallback_miss_for_test(&self, c: char) -> (std::sync::mpsc::Receiver<()>, std::sync::mpsc::Sender<()>) {
+        let (reached_tx, reached_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let mut pending = self.fallback_test_miss_barrier.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(pending.is_none(), "only one miss barrier per database");
+        *pending = Some(FallbackTestMissBarrier { c, reached: reached_tx, resume: resume_rx });
+        (reached_rx, resume_tx)
+    }
+
+    fn wait_for_fallback_test_miss(&self, c: char) {
+        let barrier = {
+            let mut pending = self.fallback_test_miss_barrier.lock().unwrap_or_else(|e| e.into_inner());
+            if pending.as_ref().is_some_and(|p| p.c == c) { pending.take() } else { None }
+        };
+        if let Some(barrier) = barrier {
+            barrier.reached.send(()).expect("the test is waiting for the completed sweep");
+            barrier.resume.recv_timeout(std::time::Duration::from_secs(10)).expect("the test must release the lookup");
+        }
+    }
+}
+
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,
     /// read with their subfolders, and font files).
@@ -1421,6 +1696,10 @@ impl FontDb {
             sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
             #[cfg(not(target_arch = "wasm32"))]
             stamp: Mutex::new(None),
+            #[cfg(all(test, not(target_arch = "wasm32")))]
+            fallback_test_io: None,
+            #[cfg(all(test, not(target_arch = "wasm32")))]
+            fallback_test_miss_barrier: Mutex::new(None),
         }
     }
 
@@ -1688,6 +1967,12 @@ impl FontDb {
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
+        // Retry misses after publishing the catalog; older sweeps cannot republish them.
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            sys.rescan_epoch = sys.rescan_epoch.wrapping_add(1);
+            sys.misses.clear();
+        }
         self.changed();
         n
     }
@@ -1954,6 +2239,9 @@ impl FontDb {
                 return false;
             }
         }
+        // Complete the initial scan before capturing its epoch, so first misses can be cached.
+        self.ensure_catalog();
+        let rescan_epoch = self.sys.lock().unwrap_or_else(|e| e.into_inner()).rescan_epoch;
         let covered = |db: &FontDb| db.read_faces().iter().any(|f| f.covers(c));
         for fam in SYSTEM_FALLBACKS {
             if !self.is_loaded(fam) && self.load_cataloged(fam) && covered(self) {
@@ -1967,7 +2255,18 @@ impl FontDb {
             if std::fs::metadata(&p).map(|m| m.len() > 40 << 20).unwrap_or(true) {
                 continue;
             }
+            #[cfg(test)]
+            if let Some(io) = &self.fallback_test_io {
+                io.lock().unwrap_or_else(|e| e.into_inner()).probes.push((p.clone(), c));
+            }
+            if file_font_coverage(&p, c) == Some(false) {
+                continue;
+            }
             for data in font_files(&p) {
+                #[cfg(test)]
+                if let Some(io) = &self.fallback_test_io {
+                    io.lock().unwrap_or_else(|e| e.into_inner()).full_reads.push((p.clone(), c, data.len()));
+                }
                 let hit =
                     enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
                 if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
@@ -1975,7 +2274,12 @@ impl FontDb {
                 }
             }
         }
-        self.sys.lock().unwrap_or_else(|e| e.into_inner()).misses.insert(c);
+        #[cfg(test)]
+        self.wait_for_fallback_test_miss(c);
+        let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+        if sys.rescan_epoch == rescan_epoch {
+            sys.misses.insert(c);
+        }
         false
     }
 
