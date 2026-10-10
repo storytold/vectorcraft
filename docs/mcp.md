@@ -725,6 +725,12 @@ are kept, and selecting an ancestor together with its descendants deletes that s
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 Cut still removes the objects it copied, including a whole compound when a member is selected.
 
+`object.setProps` with `visible: false` or `locked: true` deselects every selected object that is hidden or
+locked after the call: the selected objects it hides or locks, selected objects inside them, and selected objects
+that were already hidden or locked. The key object is cleared when it is one of them, and `edit.undo` selects
+them again with the key object. When the call changes nothing, it records no undo step and still deselects them.
+Other `object.setProps` calls leave the selection unchanged.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
