@@ -159,7 +159,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), artboard?: index (0-based; with to: \"artboard\", the artboard to align to; the app passes the active one; default: the artboard under the center of the selection, else the first), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), artboard?: index (0-based; with to: \"artboard\", the artboard to align to; the app passes the active one; default: the artboard under the center of the selection, else the first), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
             has_selection,
             align
         ),
@@ -168,7 +168,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
             has_multi,
             distribute
         ),
@@ -177,7 +177,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute Spacing",
             ["Window", "Align"],
             None,
-            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{axis: \"horizontal\"|\"vertical\", spacing?: pt (the key object, select.key, stays put and the others are spaced from it), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)}",
             has_multi,
             distribute_spacing
         ),
@@ -1048,6 +1048,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect()
     };
+    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
     // When nothing moves, the document and its undo history stay as they are.
     if moves_nothing(&moves) {
         return ok();
@@ -1055,7 +1056,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Align", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), false);
+                n.transform(Affine::translate(*dv), sc);
             }
         }
         Ok(())
@@ -1102,6 +1103,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
             (*id, if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) })
         })
         .collect();
+    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
     // When nothing moves, the document and its undo history stay as they are.
     if moves_nothing(&moves) {
         return ok();
@@ -1109,7 +1111,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Distribute", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), false);
+                n.transform(Affine::translate(*dv), sc);
             }
         }
         Ok(())
@@ -1153,6 +1155,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let fixed = spacing.and_then(|_| deltas.iter().find(|(id, _)| Some(*id) == key)).map_or(0.0, |k| k.1);
     let moves: Vec<(NodeId, Vec2)> =
         deltas.into_iter().map(|(id, d)| (id, if horiz { Vec2::new(d - fixed, 0.0) } else { Vec2::new(0.0, d - fixed) })).collect();
+    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
     // When nothing moves, the document and its undo history stay as they are.
     if moves_nothing(&moves) {
         return ok();
@@ -1160,7 +1163,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Distribute Spacing", |d, _| {
         for (id, dv) in &moves {
             if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), false);
+                n.transform(Affine::translate(*dv), sc);
             }
         }
         Ok(())
