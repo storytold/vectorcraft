@@ -462,6 +462,8 @@ mod tests_import_pdf;
 mod tests_package;
 #[cfg(test)]
 mod tests_raster_formats;
+#[cfg(test)]
+mod tests_svg_options_range;
 
 #[cfg(test)]
 mod tests_dxf;

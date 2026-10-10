@@ -127,6 +127,11 @@ fn options(d: &Dialog) -> Value {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let opts = options(d);
+    if Mode::of(d) == Mode::Export && d.bool("useArtboards") {
+        let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+        let pick: vectorcraft_engine::cmd::fileio::ArtboardPick = serde_json::from_value(opts.clone()).map_err(|e| e.to_string())?;
+        pick.resolve(n)?;
+    }
     // Remembered for next time, without the document's artboard range.
     let mut last = opts.clone();
     if let Some(o) = last.as_object_mut() {

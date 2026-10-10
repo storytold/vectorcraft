@@ -69,6 +69,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         fonts: Vec::new(),
         shared_images: HashMap::new(),
         layer_nest: 0,
+        non_latin1_names: false,
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -84,11 +85,18 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         w.line("</g>");
     }
 
+    // XML names cannot use character references. Preserve names that Latin-1 cannot encode.
+    let encoding = if opts.encoding == Encoding::Latin1 && w.non_latin1_names {
+        w.warn("Unicode data attribute names require UTF-8; SVG was written in UTF-8");
+        Encoding::Utf8
+    } else {
+        opts.encoding
+    };
     let nl = if opts.minify { "" } else { "\n" };
     let mut out = String::new();
     // A file in neither UTF-8 nor UTF-16 must name its encoding.
-    if !opts.minify || opts.encoding == Encoding::Latin1 {
-        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", opts.encoding.xml_name()));
+    if !opts.minify || encoding == Encoding::Latin1 {
+        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", encoding.xml_name()));
     }
     if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
         out.push_str("<!DOCTYPE svg [");
@@ -133,7 +141,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(&w.indent(1));
         out.push_str(&format!("<desc>{}</desc>{nl}", xml_escape(&doc.metadata.description)));
     }
-    let latin1 = opts.encoding == Encoding::Latin1;
+    let latin1 = encoding == Encoding::Latin1;
     if latin1 {
         latin1_refs(&mut out);
         latin1_refs(&mut w.body);
@@ -149,11 +157,32 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    Output { svg: out, linked: w.linked, warnings: w.warnings, encoding: opts.encoding }
+    Output { svg: out, linked: w.linked, warnings: w.warnings, encoding }
 }
 
-/// Write every character of `s` beyond ISO 8859-1 as a character reference (all of them sit in
-/// attribute values, text or style sheets, where references read as the character).
+/// XML 1.0 literal attribute whitespace is normalized to spaces; references retain the value.
+fn xml_attr_escape(s: &str) -> String {
+    xml_escape(s).replace('\t', "&#9;").replace('\n', "&#10;").replace('\r', "&#13;")
+}
+
+fn valid_xml_value(s: &str) -> bool {
+    s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
+}
+
+/// Namespace-free XML 1.0 NameChar. The fixed `data-` prefix supplies NameStartChar.
+fn xml_name_char(c: char) -> bool {
+    matches!(c,
+        'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '-' | '.' | '\u{b7}' |
+        '\u{c0}'..='\u{d6}' | '\u{d8}'..='\u{f6}' | '\u{f8}'..='\u{2ff}' |
+        '\u{300}'..='\u{37d}' | '\u{37f}'..='\u{1fff}' | '\u{200c}'..='\u{200d}' |
+        '\u{203f}'..='\u{2040}' | '\u{2070}'..='\u{218f}' | '\u{2c00}'..='\u{2fef}' |
+        '\u{3001}'..='\u{d7ff}' | '\u{f900}'..='\u{fdcf}' | '\u{fdf0}'..='\u{fffd}' |
+        '\u{10000}'..='\u{effff}'
+    )
+}
+
+/// Write every character of `s` beyond ISO 8859-1 as a character reference. Called only when
+/// names fit Latin-1, so references occur in values, text or style sheets.
 fn latin1_refs(s: &mut String) {
     if s.chars().all(|c| u32::from(c) < 0x100) {
         return;
@@ -269,6 +298,8 @@ struct Writer<'a> {
     shared_images: HashMap<(String, u32, u32), String>,
     /// Layers being written inside one another (more than one: a sublayer).
     layer_nest: usize,
+    /// An emitted attribute name requires an encoding wider than Latin-1.
+    non_latin1_names: bool,
 }
 
 /// The characters type uses from one face, under one `@font-face` description: the family the
@@ -548,27 +579,43 @@ impl Writer<'_> {
     }
     /// ` id="…"` for a named object, plus ` data-name="…"` with the name itself when the id had to
     /// differ from it (spaces, punctuation, duplicates, the unique prefix).
-    /// The id of `n`'s element (with its name when the id isn't it), a sublayer's mark
-    /// ([`crate::import::SUBLAYER`]), then the object's own data as `data-*` attributes.
-    fn id_attr(&self, n: &Node) -> String {
+    /// The id of `n`'s element (with its name when the id isn't it), then the object's own data
+    /// as `data-*` attributes. Sublayers also retain their import marker.
+    fn id_attr(&mut self, n: &Node) -> String {
         if self.anonymous {
             return String::new();
         }
-        let mut out = match (self.names.get(&n.id), n.name.as_deref()) {
-            (Some(id), Some(name)) if name != id => format!(" id=\"{}\" data-name=\"{}\"", xml_escape(id), xml_escape(name)),
-            (Some(id), _) => format!(" id=\"{}\"", xml_escape(id)),
-            (None, _) => String::new(),
-        };
-        // A sublayer is marked as one, so import makes it a sublayer again, not a group.
+        let mut out = self.names.get(&n.id).map_or_else(String::new, |id| format!(" id=\"{}\"", xml_escape(id)));
+        if let (Some(id), Some(name)) = (self.names.get(&n.id), n.name.as_deref())
+            && name != id
+        {
+            if valid_xml_value(name) {
+                out.push_str(&format!(" data-name=\"{}\"", xml_attr_escape(name)));
+            } else {
+                self.warn("Object names containing invalid XML characters were left out of SVG name attributes");
+            }
+        }
+        // Preserve sublayer identity independently of object data attributes.
         if !out.is_empty() && n.is_layer() && self.layer_nest > 1 {
             out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
         }
+        let mut keys = HashSet::new();
         for (k, v) in n.attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
-            // Names as XML takes them; ours (`name`, `vc-…`) are written by the export itself.
-            let valid = k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && k != "name" && !k.starts_with("vc-");
-            if valid && !k.is_empty() {
-                out.push_str(&format!(" data-{k}=\"{}\"", xml_escape(v)));
+            // Ours (`name`, `vc-…`) are written by the export itself.
+            if k == "name" || k.starts_with("vc-") {
+                continue;
             }
+            if k.is_empty() || !k.chars().all(xml_name_char) || !valid_xml_value(v) {
+                self.warn("Data attributes with invalid XML names or characters were left out of SVG");
+                continue;
+            }
+            // Native data is an ordered list. Keep the first valid value of each key.
+            if !keys.insert(k.as_str()) {
+                self.warn("Repeated data attribute keys were written only once in SVG");
+                continue;
+            }
+            self.non_latin1_names |= k.chars().any(|c| u32::from(c) > 0xff);
+            out.push_str(&format!(" data-{k}=\"{}\"", xml_attr_escape(v)));
         }
         out
     }
@@ -1475,7 +1522,14 @@ impl Writer<'_> {
         self.symbol_nest -= 1;
         (self.xf, self.instance_xf, self.knockout, self.names, self.anonymous) = saved;
         // The symbol's name, when the id had to differ from it, comes back on import.
-        let name = if id == sym.name { String::new() } else { format!(" data-name=\"{}\"", xml_escape(&sym.name)) };
+        let name = if id == sym.name {
+            String::new()
+        } else if valid_xml_value(&sym.name) {
+            format!(" data-name=\"{}\"", xml_attr_escape(&sym.name))
+        } else {
+            self.warn("Symbol names containing invalid XML characters were left out of SVG name attributes");
+            String::new()
+        };
         self.def(1, &format!("<symbol id=\"{id}\"{name} overflow=\"visible\">"));
         self.defs.push_str(&art);
         self.def(1, "</symbol>");
