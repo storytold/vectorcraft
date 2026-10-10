@@ -3921,6 +3921,9 @@ axis	Both	Обидві
 	Duplication	Дублюванням
 	Interpolation	Інтерполяцією
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
+@msg	appearance parameters must be an object	параметри вигляду мають бути об'єктом
+@msg	mode must be auto|dark|light	mode має бути auto|dark|light
+@msg	unknown brightness `{id}`	невідома яскравість `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Текстура

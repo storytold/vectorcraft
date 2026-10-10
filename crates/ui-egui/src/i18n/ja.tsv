@@ -3930,6 +3930,9 @@ theme	Appearance	外観
 	Duplication	複製
 	Interpolation	補間
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
+@msg	appearance parameters must be an object	外観のパラメーターはオブジェクトである必要があります
+@msg	mode must be auto|dark|light	mode は auto|dark|light のいずれかである必要があります
+@msg	unknown brightness `{id}`	不明な明るさ `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	テクスチャ

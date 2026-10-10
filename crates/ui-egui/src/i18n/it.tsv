@@ -3938,6 +3938,9 @@ axis	Both	Entrambi
 	Duplication	Duplicazione
 	Interpolation	Interpolazione
 @msg	Imported library {name}	Libreria {name} importata
+@msg	appearance parameters must be an object	i parametri dell'aspetto devono essere un oggetto
+@msg	mode must be auto|dark|light	mode deve essere auto|dark|light
+@msg	unknown brightness `{id}`	luminosità sconosciuta `{id}`
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Texture	Texture
