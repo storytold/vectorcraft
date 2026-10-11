@@ -105,6 +105,18 @@ The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On 
 - **Dropping files on the window does not work under Wayland:** winit 0.30, which eframe 0.36 runs on, has no Wayland drag and drop ([winit#1881](https://github.com/rust-windowing/winit/issues/1881), added in winit 0.31; [egui#1563](https://github.com/emilk/egui/issues/1563)), so no `dropped_files` arrive. Until eframe moves to winit 0.31: copy the files in the file manager and paste them, use File › Place or Open, or run the app under XWayland, where drops work (`WAYLAND_DISPLAY= vectorcraft`).
 - **Pens and pen displays under Wayland (#491):** winit 0.30 doesn't bind the Wayland tablet protocol (`zwp_tablet_v2`; tablet input arrives in winit 0.31, [winit#4318](https://github.com/rust-windowing/winit/pull/4318), [egui#7731](https://github.com/emilk/egui/pull/7731)). Since Plasma 6.3, KWin no longer turns tablet input into pointer input for such apps ([kwin!6336](https://invent.kde.org/plasma/kwin/-/merge_requests/6336)): the pen moves the compositor's cursor over the window, but the app gets no motion or presses and shows none of its own cursors. Until eframe moves to winit 0.31, either run the app under XWayland, which supports the tablet protocol and hands the pen to X11 apps as a pointer (`WAYLAND_DISPLAY= vectorcraft`, or `env -u WAYLAND_DISPLAY vectorcraft`; for a desktop launcher, put `env WAYLAND_DISPLAY=` before the command in its `Exec=` line), or turn KWin's deprecated emulation back on for the whole session by setting `KWIN_WAYLAND_EMULATE_TABLET=1` in KWin's environment (for example in a file under `~/.config/environment.d/` or in `/etc/environment`) and logging in again. The pen then works as a mouse, without pressure: winit 0.30 reads pen pressure on Windows only (Windows Ink, which reaches the Liquify tools' Use Pressure Pen). Other compositors that don't emulate a pointer for tablets behave the same way.
 
+### NixOS: `nix develop`
+
+NixOS has no `/usr/lib`, so nothing is on `LD_LIBRARY_PATH` and a plain `cargo run` finds none of the libraries the app loads at run time: the Wayland ones winit opens the window through, the EGL loader wgpu renders through, and libdbus-1, which rfd's file dialogs reach xdg-desktop-portal through (a dialog then never appears and the pick returns no path).
+
+```
+ERROR vectorcraft: winit EventLoopError: ... The wayland library could not be loaded
+ERROR eframe::native::run: Exiting because of error: WGPU error: Failed to create surface for any enabled backend: {}
+ERROR rfd::backend::xdg_desktop_portal::portal::libdbus: Can't connect to a portal: libdbus-1.so not found
+```
+
+`nix develop` (the [`flake.nix`](../flake.nix) in the repository root) puts the Wayland, X11, EGL-loader and D-Bus libraries on `LD_LIBRARY_PATH`, so `cargo run --release -p vectorcraft` works from that shell as on any other distribution, file dialogs included, and the XWayland run above works too. `nix run` builds the app and wraps the binary the same way. The Mesa drivers stay the system's, from `/run/opengl-driver` (`hardware.graphics.enable`): that is the driver stack the compositor runs on, and wgpu picks the GL backend through it. The shell deliberately brings no Rust toolchain — the one on `PATH` keeps its build cache, where a second `rustc` would make every build recompile the workspace from scratch; `nix develop .#rust` is there for a machine with no Rust at all.
+
 ## Fonts: craft-fonts (optional build input)
 
 Font files are never committed to this repository. Fonts shared by the Crafting Apps live in
