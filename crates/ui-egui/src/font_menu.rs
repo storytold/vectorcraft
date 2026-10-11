@@ -131,6 +131,13 @@ impl Row {
     }
 }
 
+/// Keep keyboard/pointer focus on the same font after filtering, loading new fonts or
+/// expanding a family's styles. A row index on its own can now name a different font.
+fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Option<usize> {
+    let row = before.get(selected?)?;
+    after.iter().position(|candidate| candidate == row)
+}
+
 /// What the rows were listed for: the query, the script, kind and favourites filters, Show Font
 /// Names in English, the expanded families, the favourites and the font list's generation.
 type RowsKey = (String, usize, Option<FontClass>, bool, bool, Vec<String>, Vec<String>, u64);
@@ -285,6 +292,10 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
                 rows.extend(db.styles(f).into_iter().map(|s| Row::Style(f.clone(), s)));
             }
         }
+        // Filter changes (including un-starring a favourite) may remove rows; expanding
+        // another family or a background font scan can insert rows before the highlight.
+        // Never preview an unrelated family because the old numeric index now points to it.
+        st.highlight = remap_highlight(&st.rows, st.highlight, &rows);
         st.rows = rows.into();
         st.rows_key = Some(key);
     }
@@ -730,4 +741,36 @@ pub(crate) fn sample_text(app: &VectorcraftApp) -> Option<String> {
     }?;
     let line = text.lines().map(str::trim).find(|l| !l.is_empty())?;
     Some(line.chars().take(12).collect())
+}
+
+#[cfg(test)]
+mod highlight_rebuild_tests {
+    use super::{Row, remap_highlight};
+
+    fn family(name: &str) -> Row {
+        Row::Family(name.to_string())
+    }
+
+    #[test]
+    fn keeps_the_same_family_when_other_rows_are_inserted_or_removed() {
+        let before = [family("Alpha"), family("Bravo"), family("Charlie")];
+        assert_eq!(remap_highlight(&before, Some(2), &[family("Bravo"), family("Charlie")]), Some(1));
+        assert_eq!(remap_highlight(&before, Some(2), &[family("Alpha"), family("New"), family("Bravo"), family("Charlie")]), Some(3));
+    }
+
+    #[test]
+    fn clears_the_highlight_when_its_family_is_filtered_out() {
+        let before = [family("Alpha"), family("Bravo"), family("Charlie")];
+        assert_eq!(remap_highlight(&before, Some(1), &[family("Alpha"), family("Charlie")]), None);
+        assert_eq!(remap_highlight(&before, Some(10), &before), None);
+        assert_eq!(remap_highlight(&before, None, &before), None);
+    }
+
+    #[test]
+    fn expanded_style_rows_do_not_retarget_the_highlight() {
+        let before = [family("Alpha"), family("Bravo")];
+        let after = [family("Alpha"), Row::Style("Alpha".into(), "Bold".into()), family("Bravo")];
+        assert_eq!(remap_highlight(&before, Some(1), &after), Some(2));
+        assert_eq!(remap_highlight(&after, Some(1), &before), None);
+    }
 }
