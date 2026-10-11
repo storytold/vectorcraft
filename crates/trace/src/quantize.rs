@@ -376,10 +376,26 @@ fn refine(used: &[Used], mut centers: Vec<[f64; 3]>) -> Vec<[f64; 3]> {
 
 /// Merge 4-connected same-label components smaller than `min_area` pixels into their most common
 /// neighbouring label. Transparent pixels are never relabelled.
+///
+/// A pass can merge a speck into a small region that it merges away later, leaving the speck behind
+/// as a new island of that region's old label (#819: more noise removal gave more paths). Passes
+/// repeat until one changes nothing: each merge joins two components, so they always end.
 pub fn denoise(labels: &mut [u16], w: usize, h: usize, min_area: usize) {
-    if min_area <= 1 || w == 0 || h == 0 {
+    if min_area <= 1 || w == 0 || h == 0 || labels.len() < w.saturating_mul(h) {
         return;
     }
+    // A backstop only: real images settle in a few passes.
+    const MAX_PASSES: usize = 64;
+    for _ in 0..MAX_PASSES {
+        if !denoise_pass(labels, w, h, min_area) {
+            break;
+        }
+    }
+}
+
+/// One [`denoise`] pass over every component; true when it relabelled any.
+fn denoise_pass(labels: &mut [u16], w: usize, h: usize, min_area: usize) -> bool {
+    let mut changed = false;
     let mut seen = vec![false; w * h];
     let mut stack: Vec<usize> = Vec::new();
     let mut comp: Vec<usize> = Vec::new();
@@ -433,6 +449,8 @@ pub fn denoise(labels: &mut [u16], w: usize, h: usize, min_area: usize) {
             for &i in &comp {
                 labels[i] = to;
             }
+            changed = true;
         }
     }
+    changed
 }
