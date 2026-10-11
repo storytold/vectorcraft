@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (G11 and Current focus: #893 fixed, #937 open; M7: accurate character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G11 and Current focus: #893 fixed, #937 open; M7: accurate character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.md) and
 [target-app-parity.md](target-app-parity.md); the ranked work list is [gaps.md](gaps.md). Hours are Opus 5.5
