@@ -219,11 +219,13 @@ fn weighted_stroke(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc:
     Ok(st)
 }
 
-/// The `index` param, checked against the points of `prof`.
+/// The `index` param (none when absent or null), checked against the points of `prof`: a malformed
+/// one is refused like one out of range, never wrapped round or taken as missing.
 fn point_index(p: &Value, prof: &WidthProfile, cmd: &str) -> Result<Option<usize>> {
-    match p.get("index").and_then(Value::as_u64).map(|v| v as usize) {
-        Some(i) if i >= prof.points.len() => Err(bad(cmd, "no such width point")),
-        i => Ok(i),
+    let Some(v) = p.get("index").filter(|v| !v.is_null()) else { return Ok(None) };
+    match point_indices(&json!([v])).and_then(|i| i.first().copied()) {
+        Some(i) if i < prof.points.len() => Ok(Some(i)),
+        _ => Err(bad(cmd, "no such width point")),
     }
 }
 

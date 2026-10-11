@@ -55,6 +55,26 @@ fn invalid_width_point_indices_leave_the_entire_profile_unchanged() {
     assert_eq!(points(&s, id).len(), before.len() - 1);
 }
 
+/// Setting or copying a width point with a malformed `index` is refused like one out of range: it
+/// never adds a point instead, or wraps a huge index round. A null `index` is no index (a new point).
+#[test]
+fn a_malformed_width_point_index_is_refused_by_set_and_copy() {
+    let (mut s, id) = line_session();
+    set(&mut s, json!({"id": id.0, "t": 0.5, "left": 10, "right": 10}));
+    let before = points(&s, id);
+    let history = s.doc().unwrap().history.undo.len();
+    for index in [json!("bad"), json!(-1), json!(1.5), json!([1]), json!(u64::MAX), json!(before.len())] {
+        for cmd in ["stroke.widthPoint.set", "stroke.widthPoint.copy"] {
+            let r = s.execute(cmd, &json!({"id": id.0, "index": index, "t": 0.3, "left": 4, "right": 4}));
+            assert!(r.is_err(), "{cmd} took index {index}");
+            assert_eq!(points(&s, id), before, "{cmd} with index {index}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    set(&mut s, json!({"id": id.0, "index": null, "t": 0.3, "left": 4, "right": 4}));
+    assert_eq!(points(&s, id).len(), before.len() + 1, "a null index adds a point");
+}
+
 #[test]
 fn a_point_moved_onto_another_makes_a_discontinuous_point_that_renders_a_step() {
     let (mut s, id) = line_session();
