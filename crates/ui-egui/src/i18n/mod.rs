@@ -266,6 +266,7 @@ pub fn lang_from_tag(tag: &str) -> Option<Lang> {
 
 /// True when `tag` names the generic `C` / `POSIX` locale (or a variant like `C.UTF-8`), which on
 /// macOS means "no particular language" rather than English: the system language list decides.
+#[cfg(not(target_arch = "wasm32"))]
 fn is_c_locale(tag: &str) -> bool {
     let base = tag.split(['.', '@']).next().unwrap_or("").to_ascii_lowercase();
     matches!(base.as_str(), "c" | "posix")
