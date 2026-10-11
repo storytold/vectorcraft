@@ -115,8 +115,11 @@ pub struct DirectSelectionTool {
     mesh: MeshEdit,
     /// Smart guides of the handle, anchors or objects being dragged.
     guides: Vec<Overlay>,
-    /// What the dragged anchors snap to, gathered when the drag begins.
+    /// What the dragged anchors snap to, gathered when the drag begins (for a path moved whole by
+    /// an anchor, again when Alt turns the copy on or off: whether the original is a target).
     anchor_snap: Option<PointSnap>,
+    /// Whether [`Self::anchor_snap`] was gathered for a copy.
+    snap_for_copy: bool,
     /// What the dragged handle snaps to.
     handle_snap: HandleSnap,
     /// What the objects being moved snap to, gathered when the move begins.
@@ -135,6 +138,7 @@ impl DirectSelectionTool {
             mesh: MeshEdit::default(),
             guides: vec![],
             anchor_snap: None,
+            snap_for_copy: false,
             handle_snap: HandleSnap::default(),
             move_snap: None,
             hover: None,
@@ -380,7 +384,13 @@ impl Tool for DirectSelectionTool {
                     }
                     // A path with all its anchors selected is stored whole (no partial entry).
                     let already = cx.selection.contains(id) && cx.selection.partial(id).is_none_or(|s| s.contains(&(si, ai)));
-                    self.state = State::MoveAnchors { start: p, grab, began: false };
+                    // Paths all selected whole move as objects, held by this anchor, so Alt can turn
+                    // the copy on and off during the drag as with the Selection tool.
+                    self.state = if already && cx.selection.anchors.is_empty() {
+                        State::MoveObject { start: p, grab: Some(grab), began: false }
+                    } else {
+                        State::MoveAnchors { start: p, grab, began: false }
+                    };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))];
                     }
@@ -478,13 +488,16 @@ impl Tool for DirectSelectionTool {
                     }
                     out.push(Action::Begin(if ev.mods.alt { "Copy".into() } else { "Move".into() }));
                     self.state = State::MoveObject { start, grab, began: true };
-                    if grab.is_some() {
-                        // A copy leaves the original behind, so its anchors are targets too.
-                        let stay = if ev.mods.alt { Selection::default() } else { cx.selection.clone() };
-                        self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &stay)));
-                    } else {
+                    self.anchor_snap = None;
+                    if grab.is_none() {
                         self.move_snap = Some(MoveSnap::new(cx));
                     }
+                }
+                if grab.is_some() && (self.anchor_snap.is_none() || self.snap_for_copy != ev.mods.alt) {
+                    // A copy leaves the original behind, so its anchors are targets too.
+                    let stay = if ev.mods.alt { Selection::default() } else { cx.selection.clone() };
+                    self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &stay)));
+                    self.snap_for_copy = ev.mods.alt;
                 }
                 let mut d = move_delta(start, p, ev.mods.shift);
                 self.guides.clear();
@@ -872,7 +885,7 @@ mod tests {
         let mut t = DirectSelectionTool::new(false);
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
-        assert!(matches!(a.as_slice(), [Action::Begin(_), Action::Preview(c, _)] if c == "path.moveAnchors"), "{a:?}");
+        assert!(matches!(a.as_slice(), [Action::Begin(_), Action::Preview(c, _)] if c == "object.transform"), "{a:?}");
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 100.0));
         let shift = Mods { shift: true, ..Default::default() };
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(shift));
@@ -1121,6 +1134,42 @@ mod tests {
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0).with_mods(alt));
         let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0).with_mods(alt));
         assert_eq!(out.first(), Some(&Action::Begin("Copy".into())));
+    }
+
+    /// Dragging a fully selected path by an anchor moves it whole, so Alt pressed or released
+    /// during the drag turns the copy on and off, as with the Selection tool; the anchor pressed
+    /// snaps all along, onto the original only while it is left behind.
+    #[test]
+    fn alt_during_a_drag_by_an_anchor_toggles_the_copy() {
+        let (d, _, b) = two_squares();
+        let p = paint();
+        let (none, alt) = (Mods::default(), Mods { alt: true, ..Default::default() });
+        let mut whole = Selection::default();
+        whole.set([b]);
+        let c = cx(&d, &whole, &p);
+        let mut t = DirectSelectionTool::new(false);
+        let preview = |dx: f64, dy: f64, copy: bool| {
+            Action::Preview(
+                "object.transform".into(),
+                json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": copy}),
+            )
+        };
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0)).is_empty());
+        assert_eq!(
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0)),
+            vec![Action::Begin("Move".into()), preview(-50.0, -50.0, false)]
+        );
+        // Alt down mid-drag: a copy, whose pressed corner can land on the original's top-right one.
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 402.0, 301.0).with_mods(alt)), vec![preview(100.0, 0.0, true)]);
+        // Alt up: a move again, which leaves nothing behind to snap to.
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 402.0, 301.0).with_mods(none)), vec![preview(102.0, 1.0, false)]);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 402.0, 301.0)), vec![Action::Commit]);
+        // With only some anchors selected, the drag still moves just those.
+        let one = anchors_of(b, &[(0, 0)]);
+        let c = cx(&d, &one, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 260.0).with_mods(alt));
+        assert!(matches!(a.last(), Some(Action::Preview(c, _)) if c == "path.moveAnchors"), "{a:?}");
     }
 
     /// A dragged anchor lands on another path's anchor or segment, lines up with the other anchors

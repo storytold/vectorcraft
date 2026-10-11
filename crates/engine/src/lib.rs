@@ -1366,10 +1366,17 @@ impl Session {
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
         let perspective_again = it.perspective_again.take();
+        let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
+        // Alt pressed or released during a move drag turns it into a copy or back: name it for
+        // what it did in the end.
+        match (it.label.as_str(), copy) {
+            ("Move", true) => it.label = "Copy".into(),
+            ("Copy", false) if preview.0 == "object.transform" => it.label = "Move".into(),
+            _ => {}
+        }
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
-            let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
             if let Some(m) = m {
                 st.last_transform = Some((m, copy));
                 st.last_perspective = None;
