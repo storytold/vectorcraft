@@ -557,3 +557,121 @@ fn create_strokes_survives_noise_and_tiny_images() {
         }
     }
 }
+
+/// The 4-connected same-label components of `labels` (transparent pixels left out): each one's size
+/// and whether it touches a pixel of another opaque label.
+fn components(labels: &[u16], w: usize, h: usize) -> Vec<(usize, bool)> {
+    let mut seen = vec![false; w * h];
+    let mut out = vec![];
+    for start in 0..w * h {
+        if seen[start] || labels[start] == TRANSPARENT {
+            continue;
+        }
+        let l = labels[start];
+        let (mut size, mut touches, mut stack) = (0, false, vec![start]);
+        seen[start] = true;
+        while let Some(i) = stack.pop() {
+            size += 1;
+            let (x, y) = (i % w, i / w);
+            let near = [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)];
+            for j in near.into_iter().flatten() {
+                if labels[j] == l {
+                    if !seen[j] {
+                        seen[j] = true;
+                        stack.push(j);
+                    }
+                } else if labels[j] != TRANSPARENT {
+                    touches = true;
+                }
+            }
+        }
+        out.push((size, touches));
+    }
+    out
+}
+
+/// #819: a speck merged into a small region that is itself merged later was left behind as a new
+/// island of the small region's old label.
+#[test]
+fn denoise_leaves_no_island_behind_a_merged_region() {
+    // One row: a 1-pixel speck, a 2-pixel region, then a large one; nothing under 3 pixels may stay.
+    let mut labels = vec![0, 1, 1, 2, 2, 2, 2, 2];
+    denoise(&mut labels, 8, 1, 3);
+    assert_eq!(labels, vec![2; 8]);
+}
+
+/// On noise, Remove Noise leaves no region under the minimum that could be merged, and a larger
+/// minimum never leaves more regions (#819: more noise removal gave more paths).
+#[test]
+fn denoise_merges_every_small_region_and_more_noise_never_means_more_regions() {
+    let (w, h) = (48, 40);
+    let mut seed = 0x2545_f491_u32;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed
+    };
+    for colors in [2u16, 3, 5, 8] {
+        // Blocky noise: random 1-4 pixel runs, so regions of every size touch each other.
+        let mut base = vec![0u16; w * h];
+        let mut i = 0;
+        while i < w * h {
+            let (l, run) = ((next() % u32::from(colors)) as u16, 1 + next() as usize % 4);
+            for p in base.iter_mut().skip(i).take(run) {
+                *p = l;
+            }
+            i += run;
+        }
+        let mut last = usize::MAX;
+        for min_area in [1usize, 2, 4, 8, 16, 32, 64, 128] {
+            let mut labels = base.clone();
+            denoise(&mut labels, w, h, min_area);
+            let comps = components(&labels, w, h);
+            if min_area > 1 {
+                assert!(
+                    comps.iter().all(|&(size, touches)| size >= min_area || !touches),
+                    "{colors} colours, min {min_area}: a region under the minimum is left: {comps:?}"
+                );
+            }
+            assert!(comps.len() <= last, "{colors} colours: min {min_area} leaves {} regions, more than the {last} a smaller one left", comps.len());
+            last = comps.len();
+        }
+    }
+}
+
+/// #819: on noisy scan-like images, raising Noise never gives more paths. Before the fix, these
+/// two went from 70 paths to 126 to 206 as Noise rose from 50 to 200 (and 22 to 25).
+#[test]
+fn more_noise_removal_never_gives_more_paths() {
+    for (seed0, colors) in [(15u32, 2usize), (9, 6)] {
+        let mut seed = seed0.wrapping_mul(0x9e37_79b9) | 1;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        let ink: Vec<[u8; 4]> = (0..colors)
+            .map(|_| {
+                let v = next();
+                [(v & 255) as u8, (v >> 8 & 255) as u8, (v >> 16 & 255) as u8, 255]
+            })
+            .collect();
+        // Diagonal bands of ink with a quarter of the pixels speckled at random.
+        let (w, h) = (121, 101);
+        let px: Vec<[u8; 4]> = (0..w * h)
+            .map(|i| {
+                let band = ((i % w) / 7 + (i / w) / 5) % colors;
+                if next() % 4 == 0 { ink[next() as usize % colors] } else { ink[band] }
+            })
+            .collect();
+        let img = Raster::from_fn(120, 100, |x, y| px[y as usize * w + x as usize]);
+        let mut last = (0, usize::MAX);
+        for noise in [1, 4, 8, 12, 25, 50, 100, 200] {
+            let n = trace(&img, &TraceParams { noise, ..TraceParams::default() }).paths.len();
+            assert!(n <= last.1, "image {seed0}: Noise {noise} gives {n} paths, more than the {} of Noise {}", last.1, last.0);
+            last = (noise, n);
+        }
+    }
+}
