@@ -107,3 +107,26 @@ fn white_background_hides_the_grid_and_paper_tints_the_artboard() {
     let paper = egui::Color32::from_rgb(0xff, 0xee, 0xcc);
     assert!(all.iter().any(|s| matches!(s, egui::Shape::Path(p) if p.fill == paper)), "the artboard shows the paper colour");
 }
+
+/// An artboard's name sits above the artboard's own top-left corner, also when a rotated view
+/// turns that corner away from the corner of its box on screen (#1095).
+#[test]
+fn an_artboard_name_stays_at_its_corner_in_a_rotated_view() {
+    let mut app = app();
+    app.run("artboard.new", json!({})).unwrap();
+    for rotation in [0.0, 60.0, -74.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let (shapes, _, _) = frame(&mut app);
+        let corner = outlines(&shapes, egui::Color32::from_gray(0))[0][0];
+        let mut all = vec![];
+        flatten(&shapes, &mut all);
+        let label = all
+            .iter()
+            .find_map(|s| match s {
+                egui::Shape::Text(t) if t.galley.text().starts_with("01 - ") => Some(t.pos + egui::vec2(0.0, t.galley.size().y + 4.0)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{rotation}°: no name"));
+        assert!((label - corner).length() < 1.0, "{rotation}°: the name ends at {label:?}, the corner is {corner:?}");
+    }
+}
