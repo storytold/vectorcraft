@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, dropShadow?: bool (Add Drop Shadow: a translucent black shadow down and right of the columns, bars, lines and pie wedges), legendAcrossTop?: bool (Add Legend Across Top: the legend in rows above the plot), pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -340,6 +340,31 @@ impl Gen<'_> {
     }
 }
 
+/// Add Drop Shadow: how far the shadow sits down and right of its mark, and how dark it is.
+const SHADOW_OFFSET: f64 = 2.0;
+const SHADOW_OPACITY: f32 = 0.35;
+/// Most marks a graph draws shadows for (each is a copy).
+const SHADOW_BUDGET: usize = 200_000;
+
+/// Mark `n`'s shadow: a black copy moved down and right, its fill and stroke (whichever it has) black.
+fn shadow_of(d: &mut Document, n: &Node) -> Arc<Node> {
+    // Generated marks carry only paint and a stroke width, so that's all a shadow keeps.
+    let mut c = n.clone();
+    c.transform(Affine::translate((SHADOW_OFFSET, SHADOW_OFFSET)), false);
+    let fill = if c.appearance.fill_paint().is_none() { Paint::None } else { Paint::solid(Color::BLACK) };
+    let stroke = if c.appearance.stroke_paint().is_none() { Paint::None } else { Paint::solid(Color::BLACK) };
+    c.appearance = Appearance::basic(fill, stroke, c.appearance.stroke_width());
+    Arc::new(d.reid(&c))
+}
+
+/// How wide label `s` is set (its widest line), without adding it to a document.
+fn label_width(s: &str) -> f64 {
+    let style = CharStyle { size: LABEL_SIZE, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let mut t = TextObject::point(Point::ZERO, &s.replace('|', "\n"), style);
+    refresh_bounds(&mut t);
+    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds().map_or(0.0, |b| b.width())
+}
+
 /// A label with nothing to show (empty, or only `|` line breaks).
 fn blank_label(s: &str) -> bool {
     s.chars().all(|c| c == '|')
@@ -443,6 +468,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Labels drawn over the series: a pie's Legends in Wedges (in the Legend group) and stacked pies' names.
     let mut wedge_labels = vec![];
     let mut on_top = vec![];
+    // Add Drop Shadow: the columns, bars, lines and wedges to cast one.
+    let mut shadowed: Vec<(usize, Arc<Node>)> = vec![];
     match g.kind {
         GraphKind::Pie => {
             // One pie per row, a wedge per series, clockwise from 12 o'clock. Position: side by side at one size
@@ -517,6 +544,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                         0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
                     });
                     let n = b.path(PathData::from_bezpath(&bp), fill, stroke, sw);
+                    shadowed.push((s, n.clone()));
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
@@ -573,7 +601,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 let pts: Vec<Point> = (0..ncat).map(|c| at(c, val(c, s))).collect();
                 if g.connect_points && pts.len() > 1 {
                     let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                    items.push(b.path(polyline(&pts, true), fill, stroke, w));
+                    let n = b.path(polyline(&pts, true), fill, stroke, w);
+                    shadowed.push((s, n.clone()));
+                    items.push(n);
                 }
                 if g.mark_points {
                     for p in pts {
@@ -813,7 +843,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     if g.connect_points {
                         for run in runs(&pts) {
                             let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
-                            series[si].push(b.path(polyline(&run, false), fill, stroke, w));
+                            let n = b.path(polyline(&run, false), fill, stroke, w);
+                            shadowed.push((si, n.clone()));
+                            series[si].push(n);
                         }
                     }
                     if g.mark_points {
@@ -848,6 +880,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     let a = c0 + slot * i as f64 + (slot - bar) / 2.0;
                     let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
                     let n = b.path(shapes::rectangle(bar_rect(a, bar, zero(axis(s)), vpos(axis(s), v))), fill, stroke, w);
+                    shadowed.push((s, n.clone()));
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
@@ -872,6 +905,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     *base += v;
                     let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
                     let n = b.path(shapes::rectangle(bar_rect(a, w, v0, v1)), fill, stroke, sw);
+                    // A segment of 0 has no area to shade.
+                    if v != 0.0 {
+                        shadowed.push((s, n.clone()));
+                    }
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
@@ -901,6 +938,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     for run in runs(&pts) {
                         let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
                         let n = b.path(polyline(&run, false), fill, stroke, w);
+                        shadowed.push((s, n.clone()));
                         if let Some(items) = series.get_mut(s) {
                             items.push(n);
                         }
@@ -921,7 +959,47 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Legend: a swatch + label per series, right of the plot; the swatch joins its series group.
     let legend_series = if g.kind == GraphKind::Scatter { nser.div_ceil(2) } else { nser };
     let mut labels = vec![];
-    if g.legend && !g.series.is_empty() && !(g.kind == GraphKind::Pie && g.pie_legend_in_wedges) {
+    let legend_on = g.legend && !g.series.is_empty() && !(g.kind == GraphKind::Pie && g.pie_legend_in_wedges);
+    if legend_on && g.legend_across_top {
+        // Add Legend Across Top: swatch and label after swatch and label, in rows as wide as the plot, the last row
+        // just above it.
+        let entries: Vec<(usize, String)> = (0..legend_series)
+            .map(|s| (s, if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) }))
+            .filter(|(_, l)| !blank_label(l))
+            .collect();
+        let mut rows: Vec<Vec<(usize, String, f64)>> = vec![vec![]];
+        let mut used = 0.0;
+        for (s, label) in entries {
+            let w = 12.0 + label_width(&label) + 12.0;
+            // The gap after an entry may run past the plot's edge.
+            if used + w - 12.0 > r.width() && rows.last().is_some_and(|row| !row.is_empty()) {
+                rows.push(vec![]);
+                used = 0.0;
+            }
+            used += w;
+            if let Some(row) = rows.last_mut() {
+                row.push((s, label, w));
+            }
+        }
+        let height = |row: &[(usize, String, f64)]| LABEL_SIZE * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
+        // Above the plot and anything drawn over it (radar and stacked-pie labels).
+        let top = b.out.iter().chain(on_top.iter()).filter_map(|n| n.geometric_bounds()).map(|bb| bb.y0).fold(r.y0, f64::min);
+        let mut y = top - 8.0 - rows.iter().map(|row| height(row)).sum::<f64>();
+        for row in &rows {
+            let mut x = r.x0;
+            for (s, label, w) in row {
+                let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(*s) == GraphKind::Line;
+                let paint = mark(*s, true, Paint::None, 0.0);
+                let swatch = b.marker(design(*s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint);
+                if let Some(items) = series.get_mut(*s) {
+                    items.push(swatch);
+                }
+                labels.push(b.label(Point::new(x + 12.0, y + 7.5), label, Justify::Left, false));
+                x += w;
+            }
+            y += height(row);
+        }
+    } else if legend_on {
         let x = right_edge + 14.0;
         // Each row as tall as its label's lines (a `|` in a label starts a new line).
         let mut y = r.y0;
@@ -947,11 +1025,28 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         GraphKind::Line => 2,
         _ => 1,
     };
+    // Add Drop Shadow: a translucent black copy of each column, bar, line and wedge, a little down and right, just
+    // behind the series of its layer (areas, columns, lines), so a layer in front doesn't hide the shadows of the one
+    // behind. Left out past SHADOW_BUDGET marks.
+    if !g.drop_shadow || shadowed.len() > SHADOW_BUDGET {
+        shadowed.clear();
+    }
     let mut series: Vec<(usize, Vec<Arc<Node>>)> = series.into_iter().enumerate().collect();
     series.sort_by_key(|(s, _)| depth(*s));
+    let mut layer = None;
     for (s, items) in series {
         if items.is_empty() {
             continue;
+        }
+        if layer != Some(depth(s)) {
+            layer = Some(depth(s));
+            let copies: Vec<Arc<Node>> = shadowed.iter().filter(|(t, _)| depth(*t) == depth(s)).map(|(_, n)| shadow_of(b.d, n)).collect();
+            if !copies.is_empty() {
+                let mut grp = Node::group(b.d.alloc_id(), copies);
+                grp.name = Some("Drop Shadow".into());
+                grp.opacity = SHADOW_OPACITY;
+                b.out.push(Arc::new(grp));
+            }
         }
         let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
         let grp = b.series(&name, s, items);
@@ -1404,6 +1499,8 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "suffix",
         "rightPrefix",
         "rightSuffix",
+        "dropShadow",
+        "legendAcrossTop",
         "pieLegend",
         "piePosition",
         "pieSort",
@@ -1428,7 +1525,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             "rightTickMarks": spec.right_tick_marks.clamp(1, MAX_TICK_MARKS), "categoryTickLength": spec.category_tick_length.id(),
             "categoryTickMarks": spec.category_tick_marks.clamp(1, MAX_TICK_MARKS), "ticksBetweenLabels": spec.ticks_between_labels,
             "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
-            "rightSuffix": one_line(&spec.right_suffix),
+            "rightSuffix": one_line(&spec.right_suffix), "dropShadow": spec.drop_shadow, "legendAcrossTop": spec.legend_across_top,
         });
         // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
         if let Some(o) = fields.as_object_mut().filter(|_| spec.kind == GraphKind::Pie) {
@@ -1526,6 +1623,8 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
     spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
     spec.legend = bool_or(p, "legend", spec.legend);
+    spec.drop_shadow = bool_or(p, "dropShadow", spec.drop_shadow);
+    spec.legend_across_top = bool_or(p, "legendAcrossTop", spec.legend_across_top);
     // After `legend`, which the Graph Type dialog sends too.
     if let Some(v) = str_param(p, "pieLegend") {
         (spec.legend, spec.pie_legend_in_wedges) = match v.to_ascii_lowercase().as_str() {
@@ -3170,5 +3269,128 @@ mod tests {
             let g = make(&mut s, ty, ",a\nOne|Two|Three,1\nQ2,2\nQ3,3");
             assert!(axis_texts(&s, g).contains(&"One\nTwo\nThree".to_string()), "{ty}");
         }
+    }
+
+    #[test]
+    fn drop_shadows_sit_behind_the_columns_lines_and_wedges() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let kids = n.children().unwrap();
+        let at = kids.iter().position(|c| c.name.as_deref() == Some("Drop Shadow")).unwrap();
+        assert!(kids.iter().position(|c| c.series_index.is_some()).unwrap() > at, "behind the series");
+        let shadow = &kids[at];
+        assert!((shadow.opacity - 0.35).abs() < 1e-6);
+        let copies: Vec<_> = shadow.children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        let cols: Vec<_> = (0..2).flat_map(|i| marks(&s, id, i)).collect();
+        assert_eq!(copies.len(), cols.len(), "one per column, none for the swatches");
+        for c in &cols {
+            assert!(copies.iter().any(|b| (b.x0 - c.x0 - 2.0).abs() < 1e-6 && (b.y0 - c.y0 - 2.0).abs() < 1e-6), "{c:?}");
+        }
+        let black = shadow.children().unwrap().iter().all(|c| c.appearance.fill_paint().color().map(|c| c.to_hex()) == Some("#000000".into()));
+        assert!(black);
+        // Lines cast one too (not their markers); pies one per wedge.
+        let line = graph(&mut s, "line");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(line).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 2, "one per series line");
+        let pie = graph(&mut s, "pie");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(pie).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 5, "the wedges with a value above 0");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["dropShadow"], true);
+        s.execute("graph.setType", &json!({"dropShadow": false})).unwrap();
+        let n = s.doc().unwrap().doc.node(pie).unwrap().clone();
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Drop Shadow")));
+    }
+
+    #[test]
+    fn the_legend_across_top_runs_in_rows_above_the_plot() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let swatch = |s: &Session, i: u32| series_parts(s, id, i).last().unwrap().geometric_bounds().unwrap();
+        let (a, b) = (swatch(&s, 0), swatch(&s, 1));
+        assert!(a.y1 <= 100.0 - 8.0 + 1e-6 && (a.y0 - b.y0).abs() < 1e-6 && b.x0 > a.x1 && (a.x0 - 100.0).abs() < 1e-6, "{a:?} {b:?}");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["legendAcrossTop"], true);
+        // Long labels wrap into rows within the plot's width, the last row just above it.
+        let labels: Vec<String> = (0..6).map(|i| format!("A rather long series name {i}")).collect();
+        let csv = format!(",{}\nQ1,1,2,3,4,5,6", labels.join(","));
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let ys: Vec<f64> = (0..6).map(|i| swatch(&s, i).y0).collect();
+        assert!(ys.windows(2).any(|w| w[1] > w[0]), "a second row: {ys:?}");
+        assert!(ys.iter().all(|y| *y + 8.0 <= 100.0 - 8.0 + 1e-6), "{ys:?}");
+        let xs: Vec<f64> = (0..6).map(|i| swatch(&s, i).x1).collect();
+        assert!(xs.iter().all(|x| *x <= 400.0), "{xs:?}");
+        let path = vectorcraft_testkit::temp_dir("graph-top").join("top.vectorcraft");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert!(g.legend_across_top && g.drop_shadow);
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        assert!(v.get("dropShadow").is_none() && v.get("legendAcrossTop").is_none());
+    }
+
+    #[test]
+    fn each_layer_keeps_its_shadows_just_behind_it() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",a,b,c\nQ1,3,2,1\nQ2,5,,2\nQ3,4,6,3");
+        s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "area"})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [2], "type": "line", "dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let order: Vec<String> =
+            n.children().unwrap().iter().map(|c| c.series_index.map_or_else(|| c.name.clone().unwrap_or_default(), |i| format!("s{i}"))).collect();
+        // Areas cast none; the columns' shadows sit between the area and the columns, the line's between the columns
+        // and the line.
+        let at = |k: &str| order.iter().position(|o| o == k).unwrap();
+        let shadows: Vec<usize> = order.iter().enumerate().filter(|(_, o)| *o == "Drop Shadow").map(|(i, _)| i).collect();
+        assert_eq!(shadows.len(), 2, "{order:?}");
+        assert!(at("s0") < shadows[0] && shadows[0] < at("s1") && at("s1") < shadows[1] && shadows[1] < at("s2"), "{order:?}");
+        // b's blank leaves two columns; a line with a blank casts a shadow per run.
+        let line = make(&mut s, "line", ",a\nQ1,1\nQ2,\nQ3,3\nQ4,4");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(line).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 1, "Q1 alone draws no line; Q3–Q4 one");
+        // Scatter and radar lines cast one too; a stacked segment of 0 doesn't.
+        for (ty, want) in [("scatter", 1), ("radar", 2)] {
+            let g = graph(&mut s, ty);
+            s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+            let n = s.doc().unwrap().doc.node(g).unwrap().clone();
+            assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), want, "{ty}");
+        }
+        let st = make(&mut s, "stackedColumn", ",a,b\nQ1,0,2");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(st).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_legend_across_top_keeps_above_labels_over_the_plot() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "radar", ",a,b\nTop|of|chart,1,2\nQ2,2,3\nQ3,3,1");
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let axes_top = group(&n, "Axes").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.y0).fold(f64::MAX, f64::min);
+        let legend_bottom =
+            group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.y1).fold(f64::MIN, f64::max);
+        assert!(legend_bottom < axes_top, "{legend_bottom} above {axes_top}");
+        // No legend: nothing across the top either.
+        s.execute("graph.setType", &json!({"legend": false})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Legend")));
+        // Labels of a row other than the last stay within the plot's width.
+        let labels: Vec<String> = (0..6).map(|i| format!("A rather long series name {i}")).collect();
+        let col = make(&mut s, "column", &format!(",{}\nQ1,1,2,3,4,5,6", labels.join(",")));
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(col).unwrap().clone();
+        let texts: Vec<_> = group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        let last_row = texts.iter().map(|b| b.y0).fold(f64::MIN, f64::max);
+        assert!(texts.iter().filter(|b| b.y0 < last_row - 1e-6).all(|b| b.x1 <= 400.0 + 1e-6), "{texts:?}");
     }
 }

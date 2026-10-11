@@ -293,6 +293,12 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// Graph Type › Add Drop Shadow (behind columns, bars, lines and pie wedges) and Add Legend Across Top (the
+    /// legend in rows above the plot instead of a column on its right).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub drop_shadow: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub legend_across_top: bool,
     /// Pie graphs: Legends in Wedges (the series labels inside their wedges instead of a legend beside the pies),
     /// Position and Sort.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -408,6 +414,8 @@ impl Default for GraphSpec {
             right_axis_min: None,
             right_axis_max: None,
             series_markers: vec![],
+            drop_shadow: false,
+            legend_across_top: false,
             pie_legend_in_wedges: false,
             pie_position: PiePosition::Even,
             pie_sort: PieSort::None,
