@@ -464,3 +464,12 @@ fn art_past_the_page_clip_keeps_the_clip() {
     assert!(!all(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })));
     assert!(!r.warnings.iter().any(|w| w == crate::import::PAST_PAGE_NOTE), "{:?}", r.warnings);
 }
+
+/// Glyphs closed up by up to half an em (the proportional widths of CJK punctuation) still
+/// continue their line.
+#[test]
+fn glyphs_closed_up_by_half_an_em_stay_one_line() {
+    let t = texts(&open(&one_page("BT /F1 20 Tf 10 40 Td [(T) 400 (i) 450 (g) 0 (h) 0 (t)] TJ ET", HELVETICA, &[])));
+    assert_eq!(t.len(), 1, "one line: {:?}", t.iter().map(|t| t.plain_text()).collect::<Vec<_>>());
+    assert_eq!(t[0].plain_text(), "Tight");
+}
