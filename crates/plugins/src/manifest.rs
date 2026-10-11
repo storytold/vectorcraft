@@ -203,8 +203,17 @@ impl Manifest {
             let resolved = match spec {
                 ParamSpec::Number { min, max, .. } => json!(v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| wrong("a number"))?.clamp(*min, *max)),
                 ParamSpec::Int { min, max, .. } => {
-                    let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| wrong("a number"))?;
-                    json!((f.round().clamp(*min as f64, *max as f64)) as i64)
+                    // Keep JSON integers exact: f64 cannot represent every i64 or its bounds.
+                    let value = if let Some(i) = v.as_i64() {
+                        i.clamp(*min, *max)
+                    } else if v.is_u64() {
+                        // Past i64::MAX, so past any maximum.
+                        *max
+                    } else {
+                        let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| wrong("a number"))?;
+                        (f.round() as i64).clamp(*min, *max)
+                    };
+                    json!(value)
                 }
                 ParamSpec::Bool { .. } => json!(v.as_bool().ok_or_else(|| wrong("true or false"))?),
                 ParamSpec::Choice { options, .. } => {
@@ -301,6 +310,29 @@ mod tests {
         assert!(m.resolve_params(&json!({"mono": 1})).is_err());
         assert!(m.resolve_params(&json!([1, 2])).is_err());
         assert!(m.resolve_params(&Value::Null).is_ok());
+    }
+
+    #[test]
+    fn integer_parameters_preserve_precision_and_exact_bounds() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.generative","name":"Generative Pattern","kind":"filter",
+                "params":{"seed":{"type":"int","min":-9007199254740995,"max":9007199254740995}}}"#,
+        )
+        .unwrap();
+        for (given, expected) in [
+            (json!(9007199254740992_i64), 9007199254740992_i64),
+            (json!(9007199254740993_i64), 9007199254740993_i64),
+            (json!(-9007199254740993_i64), -9007199254740993_i64),
+            (json!(i64::MAX), 9007199254740995_i64),
+            (json!(i64::MIN), -9007199254740995_i64),
+            (json!(u64::MAX), 9007199254740995_i64),
+            (json!(1e30), 9007199254740995_i64),
+            (json!(-1e30), -9007199254740995_i64),
+            (json!(3.6), 4_i64),
+        ] {
+            let resolved = m.resolve_params(&json!({"seed": given})).unwrap();
+            assert_eq!(resolved["seed"], json!(expected), "input: {given}");
+        }
     }
 
     #[test]
