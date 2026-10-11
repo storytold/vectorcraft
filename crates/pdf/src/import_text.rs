@@ -136,6 +136,8 @@ pub(crate) struct TextLine {
     /// The spaces read from gaps between glyphs: their byte offset in the text, and the gap from
     /// the end of the glyph before to the start of the next (points).
     gaps: Vec<(usize, f64)>,
+    /// Each glyph's advance in the file's font (points), with [`Self::baseline`].
+    advances: Vec<f64>,
 }
 
 /// What a finished line of type tells beyond its text object (see [`crate::import_lines`]).
@@ -168,6 +170,7 @@ impl TextLine {
             column: false,
             ink: vec![],
             gaps: vec![],
+            advances: vec![],
         }
     }
 
@@ -228,7 +231,8 @@ impl TextLine {
                 && at.dir.dot(self.at.dir) > 0.9995
                 && (at.slant - self.at.slant).abs() < 1e-3
                 && (at.origin - self.at.origin).dot(self.at.up()).abs() < size * 0.15
-                && gap > -size * 0.3
+                // Proportional widths close CJK marks up by up to half an em.
+                && gap > -size * 0.6
                 && gap < size * 3.0;
             // Or on a curve: turned a little from the glyph before it, and starting about where
             // that one ends.
@@ -263,6 +267,7 @@ impl TextLine {
         self.last = at.origin;
         self.last_dir = at.dir;
         self.baseline.push(at.origin);
+        self.advances.push(advance);
         true
     }
 
@@ -329,6 +334,14 @@ impl TextLine {
         // The glyphs' tops lean along the baseline (+x), up being -y in the type's own space.
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(angle) * Affine::skew(-self.at.slant, 0.0);
         let db = vectorcraft_text::FontDb::global();
+        // Glyphs spaced each their own way (character tightening, optical kerning) keep their
+        // place: each character its own tracking.
+        let own = (self.upright.is_none() && t.para.direction.is_none())
+            .then(|| own_spacing(&t, &self.baseline, &self.advances, path.as_ref(), self.at.dir, self.at.size))
+            .flatten();
+        if let Some(own) = &own {
+            t.runs = tracked_each(std::mem::take(&mut t.runs), own, self.at.size);
+        }
         if let Some(path) = path {
             t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
             t.xf = Affine::IDENTITY;
@@ -358,7 +371,7 @@ impl TextLine {
         let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
         let size = self.at.size;
         let mut bounds = laid.bounds;
-        if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
+        if own.is_none() && chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
             // The spaces read from gaps keep their own place only in text left in the file's order.
             let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
             let gaps: Vec<(usize, f64)> =
@@ -371,6 +384,59 @@ impl TextLine {
         t.cached_bounds = Some(bounds);
         Some((t, self.opacity, facts))
     }
+}
+
+/// The space each glyph of `t` (laid out untracked) leaves after its advance to put the next one
+/// where the file did (points; the last glyph's is the one before it), when that varies by more
+/// than a fiftieth of an em: one tracking value can't place them. Glyph origins are `baseline`,
+/// measured along `path` (type on a path: one curve per glyph) or along `dir`. None when the
+/// glyphs can't be matched to the characters one to one (spaces, ligatures), or when the font
+/// laid out isn't the file's (its advances differ from `advances`): spacing measured against a
+/// stand-in's widths would keep the stand-in's differences once the font is installed.
+fn own_spacing(t: &TextObject, baseline: &[Point], advances: &[f64], path: Option<&BezPath>, dir: Vec2, size: f64) -> Option<Vec<f64>> {
+    let text: String = t.runs.iter().map(|r| r.text.as_str()).collect();
+    let chars = text.chars().count();
+    if chars < 3 || text.contains(' ') || baseline.len() != chars || advances.len() != chars {
+        return None;
+    }
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let advs: Vec<f64> = laid.glyphs.iter().map(|g| g.advance).collect();
+    if advs.len() != chars || advs.iter().zip(advances).any(|(a, b)| (a - b).abs() > size * 0.01) {
+        return None;
+    }
+    let dist: Vec<f64> = match path {
+        Some(bp) => bp.segments().take(chars - 1).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).collect(),
+        None => baseline.windows(2).map(|w| (w[1] - w[0]).dot(dir)).collect(),
+    };
+    if dist.len() != chars - 1 {
+        return None;
+    }
+    let mut extra: Vec<f64> = dist.iter().zip(&advs).map(|(d, a)| d - a).collect();
+    let mean = extra.iter().sum::<f64>() / extra.len() as f64;
+    if extra.iter().all(|e| (e - mean).abs() <= size * 0.02) {
+        return None;
+    }
+    extra.push(*extra.last()?);
+    Some(extra)
+}
+
+/// `runs` with each character's tracking from `own` (points, one per character), characters with
+/// the same tracking kept in one run.
+fn tracked_each(runs: Vec<TextRun>, own: &[f64], size: f64) -> Vec<TextRun> {
+    let em = |pts: f64| (pts / size * 1000.0).clamp(-1000.0, 1000.0).round();
+    let mut out: Vec<TextRun> = vec![];
+    let mut k = 0;
+    for r in runs {
+        for c in r.text.chars() {
+            let style = CharStyle { tracking: own.get(k).map_or(0.0, |e| em(*e)), ..r.style.clone() };
+            k += 1;
+            match out.last_mut() {
+                Some(last) if last.style == style && last.inline == r.inline => last.text.push(c),
+                _ => out.push(TextRun { text: c.to_string(), style, inline: r.inline.clone() }),
+            }
+        }
+    }
+    out
 }
 
 /// The tracking (thousandths of an em) that sets a line of `chars` characters, laid out untracked
