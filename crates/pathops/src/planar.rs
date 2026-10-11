@@ -479,7 +479,24 @@ fn span(sp: &SubPath, u0: f64, u1: f64) -> Option<SubPath> {
     segs_to_subpath(&segs, false)
 }
 
-fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
+/// The planar graph of `shapes` (in the sweep's frame) with its faces walked: what [`build`] makes
+/// Live Paint faces and edges from, and what [`Map::merge`] merges faces in.
+pub(crate) struct Map {
+    edges: Vec<Edge>,
+    around: Vec<Vec<usize>>,
+    slot_of: Vec<usize>,
+    /// Bounded faces: their cycle of half-edges, path and area.
+    faces: Vec<(Vec<usize>, BezPath, f64)>,
+    /// Outer boundaries of connected pieces, and the face each one is a hole in.
+    holes: Vec<(Vec<usize>, BezPath)>,
+    face_holes: Vec<Vec<usize>>,
+    tidy: Tidy,
+    /// The inputs' anchors (sorted by x) and how close results snap back onto them.
+    anchors: Vec<Point>,
+    snap: f64,
+}
+
+pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
     let mut inputs: Vec<(BezPath, usize)> = Vec::new();
     for (i, s) in shapes.iter().enumerate() {
         let mut bp = BezPath::new();
@@ -656,22 +673,89 @@ fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
         }
     }
 
-    let fills: Vec<Fill> = shapes.iter().map(Fill::new).collect();
     // The inputs' anchors, which results land on again up to the sweep's tolerance.
     let snap = 2.0 * eps;
     let mut anchors: Vec<Point> = shapes.iter().flat_map(|s| s.path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
     anchors.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    Some(Map { edges, around, slot_of, faces, holes, face_holes, tidy, anchors, snap })
+}
+
+impl Map {
+    /// The union of the faces that hold `inside` (document points, one per face), traced along the
+    /// map's own edges: those between two merged faces drop out exactly, where a boolean union of
+    /// the faces' outlines can leave them in when its sweep rounds their shared corners apart
+    /// (#893). Outer outlines come out positive, holes negative. None when a point is in no face.
+    pub(crate) fn merge(&self, inside: &[Point]) -> Option<PathData> {
+        let halves = 2 * self.edges.len();
+        // The face on each half-edge's side; holes bound the face around them.
+        let mut face_of: Vec<Option<usize>> = vec![None; halves];
+        for (i, (cycle, ..)) in self.faces.iter().enumerate() {
+            let hole_cycles = self.face_holes.get(i)?.iter().filter_map(|&k| self.holes.get(k)).map(|(c, _)| c);
+            for &h in std::iter::once(cycle).chain(hole_cycles).flatten() {
+                *face_of.get_mut(h)? = Some(i);
+            }
+        }
+        let mut picked = vec![false; self.faces.len()];
+        for &p in inside {
+            let q = SHEAR * p;
+            // The smallest face around it: faces of a piece inside a hole lie within the face around.
+            let (i, _) = self
+                .faces
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, bp, _))| bp.bounding_box().contains(q) && bp.winding(q) != 0)
+                .min_by(|a, b| a.1.2.total_cmp(&b.1.2))?;
+            *picked.get_mut(i)? = true;
+        }
+        let merged = |h: usize| face_of.get(h).copied().flatten().is_some_and(|f| picked.get(f) == Some(&true));
+        let boundary = |h: usize| merged(h) && !merged(twin(h));
+        let mut used = vec![false; halves];
+        let mut subpaths = Vec::new();
+        for start in 0..halves {
+            if !boundary(start) || used.get(start).copied().unwrap_or(true) {
+                continue;
+            }
+            let mut cycle = vec![];
+            let mut h = start;
+            while !used.get(h).copied().unwrap_or(true) {
+                if let Some(u) = used.get_mut(h) {
+                    *u = true;
+                }
+                cycle.push(h);
+                // Turn from the way back as a face walk does, past the edges inside the merged
+                // faces (between two of them, or a line's loose end), to the next boundary edge.
+                let back = twin(h);
+                let list = self.around.get(origin(&self.edges, back)?)?;
+                let k = *self.slot_of.get(back)?;
+                let n = list.len();
+                h = (1..=n).filter_map(|j| list.get((k + n * 2 - j) % n).copied()).find(|&g| boundary(g))?;
+            }
+            if h != start {
+                return None;
+            }
+            let segs: Vec<Seg> = cycle.iter().flat_map(|&h| half_segs(&self.edges, h)).collect();
+            subpaths.push(segs_to_subpath(&tidy_segments(segs, true, &self.tidy), true)?);
+        }
+        (!subpaths.is_empty()).then(|| unshear(PathData::new(subpaths), &self.anchors, self.snap))
+    }
+}
+
+fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
+    let m = map(shapes)?;
+    let Map { edges, around, faces, holes, face_holes, tidy, anchors, snap, .. } = &m;
+    let snap = *snap;
+    let fills: Vec<Fill> = shapes.iter().map(Fill::new).collect();
     let subpath = |cycle: &[usize]| {
-        let segs: Vec<Seg> = cycle.iter().flat_map(|&h| half_segs(&edges, h)).collect();
-        segs_to_subpath(&tidy_segments(segs, true, &tidy), true)
+        let segs: Vec<Seg> = cycle.iter().flat_map(|&h| half_segs(edges, h)).collect();
+        segs_to_subpath(&tidy_segments(segs, true, tidy), true)
     };
     let regions = faces
         .iter()
-        .zip(&face_holes)
+        .zip(face_holes)
         .filter_map(|((cycle, _, _), hs)| {
             let mut subpaths = vec![subpath(cycle)?];
             subpaths.extend(hs.iter().filter_map(|&k| holes.get(k)).filter_map(|(c, _)| subpath(c)));
-            let path = unshear(PathData::new(subpaths), &anchors, snap);
+            let path = unshear(PathData::new(subpaths), anchors, snap);
             let sources =
                 interior_point(&path).map(|p| fills.iter().enumerate().filter(|(_, f)| f.contains(p)).map(|(i, _)| i).collect()).unwrap_or_default();
             Some(Region { path, sources })
@@ -699,13 +783,13 @@ fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
                 return Some((segs, true, source));
             }
             *u = true;
-            segs.extend(half_segs(&edges, h));
-            let v = origin(&edges, twin(h))?;
-            let Some((a, b)) = passes(v) else { return Some((segs, origin(&edges, h0) == Some(v), source)) };
+            segs.extend(half_segs(edges, h));
+            let v = origin(edges, twin(h))?;
+            let Some((a, b)) = passes(v) else { return Some((segs, origin(edges, h0) == Some(v), source)) };
             h = if a == twin(h) { b } else { a };
         }
     };
-    for v in 0..nv {
+    for v in 0..around.len() {
         if passes(v).is_some() {
             continue;
         }
@@ -728,8 +812,8 @@ fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
     let edge_shapes = chains
         .into_iter()
         .filter_map(|(segs, closed, source)| {
-            let sp = segs_to_subpath(&tidy_segments(segs, closed, &tidy), closed)?;
-            Some(Shape::new(unshear(PathData::new(vec![sp]), &anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
+            let sp = segs_to_subpath(&tidy_segments(segs, closed, tidy), closed)?;
+            Some(Shape::new(unshear(PathData::new(vec![sp]), anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
         })
         .collect();
     Some((regions, edge_shapes))
@@ -977,8 +1061,45 @@ mod tests {
             }
         }
         assert_eq!(strip.len(), 11);
-        let merged = crate::merge_regions(&strip);
+        // As the Shape Builder merges them: in the map, so no sweep can round the corners apart.
+        let merged = crate::FaceMerger::new(&s).merge(&strip);
         assert_eq!(merged.subpaths.len(), 1, "{merged:?}");
+        let want: f64 = strip.iter().map(|f| area(f)).sum();
+        assert!((crate::area(&merged, FillRule::NonZero) - want).abs() < 1e-6 * want);
+    }
+
+    /// Merging faces of a grid of lines in the map: a ring keeps its hole, cells that only touch at
+    /// a corner stay two outlines, a line's loose end inside the merge leaves no spur.
+    #[test]
+    fn faces_merge_in_the_map_with_holes_corners_and_loose_ends() {
+        let mut s = vec![];
+        for k in 0..4 {
+            let v = f64::from(k) * 10.0;
+            s.push(line((v, -5.0), (v, 35.0), 0));
+            s.push(line((-5.0, v), (35.0, v), 1));
+        }
+        // A loose end poking into the middle cell.
+        s.push(line((15.0, 10.0), (15.0, 15.0), 2));
+        let (faces, _) = live_paint(&s);
+        let cell = |x: f64, y: f64| at(&faces, x, y)[0];
+        let merger = crate::FaceMerger::new(&s);
+        let m = map(&s).unwrap();
+        let check = |picked: &[&Region], subpaths: usize, area_want: f64| {
+            // Merged in the map itself, not by the fallback union.
+            let inside: Vec<Point> = picked.iter().map(|f| interior_point(&f.path).unwrap()).collect();
+            assert_eq!(m.merge(&inside).as_ref(), Some(&merger.merge(picked)));
+            let m = merger.merge(picked);
+            assert_eq!(m.subpaths.len(), subpaths, "{m:?}");
+            assert!((crate::area(&m, FillRule::NonZero) - area_want).abs() < 1e-6, "{}", crate::area(&m, FillRule::NonZero));
+            m
+        };
+        let all: Vec<&Region> = faces.iter().collect();
+        let whole = check(&all, 1, 900.0);
+        assert_eq!(whole.subpaths[0].anchors.len(), 4, "one square, no anchors left from the inner lines or the loose end");
+        let ring: Vec<&Region> =
+            [(5., 5.), (15., 5.), (25., 5.), (5., 15.), (25., 15.), (5., 25.), (15., 25.), (25., 25.)].iter().map(|&(x, y)| cell(x, y)).collect();
+        check(&ring, 2, 800.0);
+        check(&[cell(5.0, 5.0), cell(15.0, 15.0)], 2, 200.0);
     }
 
     #[test]

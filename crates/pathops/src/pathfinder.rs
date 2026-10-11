@@ -268,23 +268,42 @@ pub fn merge_regions(regions: &[&Region]) -> PathData {
 /// path, from the arrangement itself, made once for every merge of the set: the faces' contours
 /// share their edges exactly, so the edges between merged faces vanish. Uniting the faces' tidied
 /// outlines ([`merge_regions`]) could leave those edges in, as a hairline gap or a spur, where
-/// neighbouring faces' outlines had been refit apart. Shapes with open paths (faces lines cut)
-/// fall back to [`merge_regions`].
+/// neighbouring faces' outlines had been refit apart. Shapes with open paths (faces lines cut, as
+/// [`shape_builder`](crate::shape_builder) gives them) merge in their planar map the same way
+/// (#893). Either falls back to [`merge_regions`] when it can't place a face.
 pub struct FaceMerger {
     /// The arrangement (`None`: open paths, or the sweep failed) and the number of shapes.
     arr: Option<Arrangement>,
     shapes: usize,
+    /// With open paths, the shapes, and their planar map once a merge has needed it.
+    lines: Option<(Vec<Shape>, std::cell::OnceCell<Option<crate::planar::Map>>)>,
 }
 
 impl FaceMerger {
     pub fn new(shapes: &[Shape]) -> Self {
         let has_open = shapes.iter().flat_map(|s| &s.path.subpaths).any(|sp| !sp.closed && sp.anchors.len() >= 2);
-        Self { arr: if has_open { None } else { arrangement(shapes) }, shapes: shapes.len() }
+        // The Shape Builder's faces come from the planar map only up to its cap.
+        let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
+        let lines = (has_open && segments <= crate::SHAPE_BUILDER_MAX_SEGMENTS).then(|| (shapes.to_vec(), std::cell::OnceCell::new()));
+        Self { arr: if has_open { None } else { arrangement(shapes) }, shapes: shapes.len(), lines }
     }
 
     /// The union of `faces`.
     pub fn merge(&self, faces: &[&Region]) -> PathData {
-        self.exact(faces).filter(|p| !p.is_empty()).unwrap_or_else(|| merge_regions(faces))
+        self.exact(faces).or_else(|| self.planar(faces)).filter(|p| !p.is_empty()).unwrap_or_else(|| merge_regions(faces))
+    }
+
+    /// `faces` merged in the planar map of shapes with open paths: each face found again by a
+    /// point inside it, and the result checked to cover what they cover.
+    fn planar(&self, faces: &[&Region]) -> Option<PathData> {
+        let (shapes, map) = self.lines.as_ref()?;
+        let map = map.get_or_init(|| crate::planar::map(shapes)).as_ref()?;
+        let inside: Vec<Point> = faces.iter().map(|r| crate::planar::interior_point(&r.path)).collect::<Option<_>>()?;
+        let merged = map.merge(&inside)?;
+        // A face not found as itself (two points in one face of the map) shows in the area.
+        let want: f64 = faces.iter().map(|r| crate::area(&r.path, FillRule::NonZero)).sum();
+        let outlines: f64 = faces.iter().map(|r| r.path.to_bezpath().perimeter(1e-6)).sum();
+        ((crate::area(&merged, FillRule::NonZero) - want).abs() <= 1e-9 * want.max(1.0) + crate::DEFAULT_PRECISION * outlines).then_some(merged)
     }
 
     fn exact(&self, faces: &[&Region]) -> Option<PathData> {
