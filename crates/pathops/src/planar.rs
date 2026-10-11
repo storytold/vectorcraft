@@ -149,6 +149,20 @@ struct Edge {
     source: usize,
 }
 
+/// `segs` (a chain) moved to start at `a` and end at `b`, the handles next to each moving with it.
+fn pin_ends(segs: &mut [Seg], a: Point, b: Point) {
+    if let Some(s) = segs.first_mut() {
+        let d = a - s.c.p0;
+        s.c.p0 = a;
+        s.c.p1 += d;
+    }
+    if let Some(s) = segs.last_mut() {
+        let d = b - s.c.p3;
+        s.c.p3 = b;
+        s.c.p2 += d;
+    }
+}
+
 /// Half-edge `2e` runs along edge `e`, `2e + 1` back along it.
 fn twin(h: usize) -> usize {
     h ^ 1
@@ -508,11 +522,11 @@ fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
             .filter_map(|k| grid.get(&k))
             .flatten()
             .copied()
-            .find(|&v| points.get(v).is_some_and(|q| q.distance(p) <= eps));
+            .find_map(|v| points.get(v).filter(|q| q.distance(p) <= eps).map(|&q| (v, q)));
         near.unwrap_or_else(|| {
             points.push(p);
             grid.entry((cx, cy)).or_default().push(points.len() - 1);
-            points.len() - 1
+            (points.len() - 1, p)
         })
     };
     let mut edges: Vec<Edge> = Vec::new();
@@ -520,11 +534,16 @@ fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
     let outlines = Outlines::new(&inputs, eps);
     for idx in top.segment_indices() {
         let half = idx.first_half();
-        let segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
-        let ends = [vertex_id(top.point(half).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo())];
-        if segs.is_empty() || ends[0] == ends[1] {
+        let mut segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
+        let ((v0, p0), (v1, p1)) = (vertex_id(top.point(half).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo()));
+        let ends = [v0, v1];
+        if segs.is_empty() || v0 == v1 {
             continue;
         }
+        // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
+        // coordinates: merging them (a union) then cancels their common edge, which it can't when
+        // each face carries its own rounding of the corner (#893).
+        pin_ends(&mut segs, p0, p1);
         let Some(source) = mid(&segs).and_then(|m| outlines.source_at(m)) else { continue };
         // Coincident pieces the sweep left apart are one edge (the front-most input's).
         let key = (ends[0].min(ends[1]), ends[0].max(ends[1]));
@@ -911,6 +930,55 @@ mod tests {
         let (faces, edges) = live_paint(&[line((0.0, 0.0), (10.0, 10.0), 0)]);
         assert!(faces.is_empty());
         assert_eq!(edges.len(), 1);
+    }
+
+    /// A strip merged across an axonometric grid of lines (#893, the reporter's file): faces meeting
+    /// at a vertex share its exact coordinates, so the merge is one outline with no edge left inside.
+    #[test]
+    fn faces_share_their_corners_exactly_so_merging_them_leaves_no_seam() {
+        const LINES: &[[f64; 4]] = &[
+            [416.57797027866155, 268.45362144397683, 416.5779702786616, 811.5463785560231],
+            [243.12292300414873, 511.1134238473054, 713.4550472745127, 782.6598024033286],
+            [836.8770769958512, 511.1134238473054, 366.5449527254871, 782.6598024033286],
+            [457.718646852441, 268.45362144397683, 457.718646852441, 811.5463785560231],
+            [263.6932612910385, 475.4845528055331, 734.0253855614023, 747.0309313615563],
+            [816.3067387089613, 475.4845528055331, 345.9746144385975, 747.0309313615563],
+            [498.85932342622044, 268.45362144397683, 498.85932342622044, 811.5463785560231],
+            [284.26359957792823, 439.8556817637607, 754.5957238482922, 711.4020603197839],
+            [795.7364004220717, 439.8556817637607, 325.40427615170773, 711.4020603197839],
+            [539.9999999999998, 268.45362144397683, 539.9999999999998, 811.5463785560231],
+            [304.83393786481787, 404.22681072198844, 775.1660621351818, 675.7731892780117],
+            [775.1660621351821, 404.22681072198844, 304.833937864818, 675.7731892780117],
+            [581.1406765737793, 268.45362144397683, 581.1406765737793, 811.5463785560231],
+            [325.4042761517076, 368.59793968021614, 795.7364004220715, 640.1443182362394],
+            [754.5957238482922, 368.59793968021614, 284.26359957792835, 640.1443182362394],
+            [622.2813531475588, 268.45362144397683, 622.2813531475588, 811.5463785560231],
+            [345.97461443859737, 332.9690686384438, 816.3067387089613, 604.515447194467],
+            [734.0253855614026, 332.9690686384438, 263.6932612910385, 604.515447194467],
+            [663.422029721338, 268.45362144397683, 663.422029721338, 811.5463785560231],
+            [366.54495272548706, 297.3401975966715, 836.877076995851, 568.8865761526947],
+            [713.4550472745128, 297.3401975966715, 243.12292300414884, 568.8865761526947],
+        ];
+        let s: Vec<Shape> = LINES.iter().enumerate().map(|(i, &[x0, y0, x1, y1])| line((x0, y0), (x1, y1), i as u64)).collect();
+        let (faces, _) = live_paint(&s);
+        let corners: Vec<Point> = faces.iter().flat_map(|f| f.path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
+        for p in &corners {
+            for q in &corners {
+                assert!(p == q || p.distance(*q) > 1e-6, "one corner, two positions: {p:?} {q:?}");
+            }
+        }
+        // Down the strip between the lines x ≈ 498.9 and x = 540: 11 triangles, one outline.
+        let mut strip: Vec<&Region> = vec![];
+        for k in 0..=240 {
+            if let Some(f) = faces.iter().find(|f| f.contains(Point::new(519.43, 420.0 + f64::from(k))))
+                && !strip.iter().any(|g| std::ptr::eq(*g, f))
+            {
+                strip.push(f);
+            }
+        }
+        assert_eq!(strip.len(), 11);
+        let merged = crate::merge_regions(&strip);
+        assert_eq!(merged.subpaths.len(), 1, "{merged:?}");
     }
 
     #[test]
