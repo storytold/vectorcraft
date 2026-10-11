@@ -29,7 +29,7 @@ use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{HitKind, hit_test};
-use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind};
+use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Anchor, PathData, Point, Rect};
 
 use crate::bbox::move_delta;
@@ -51,8 +51,11 @@ enum State {
         grab: Point,
         began: bool,
     },
+    /// Moving (Alt: copying) the selected objects; `grab`: the anchor an Alt-press picked the
+    /// path by, which snaps as a dragged anchor does.
     MoveObject {
         start: Point,
+        grab: Option<Point>,
         began: bool,
     },
     /// Dragging a curved segment: it follows the pointer (`path.reshapeSegment`).
@@ -320,7 +323,7 @@ impl Tool for DirectSelectionTool {
                 } else {
                     h.leaf
                 };
-                self.state = State::MoveObject { start: p, began: false };
+                self.state = State::MoveObject { start: p, grab: None, began: false };
                 if cx.selection.contains(target) {
                     vec![]
                 } else if ev.mods.shift || cx.selection.contains(h.leaf) {
@@ -371,7 +374,7 @@ impl Tool for DirectSelectionTool {
                     }
                     // Alt picks the whole path (and Alt-drag copies it), as on a segment.
                     if ev.mods.alt {
-                        self.state = State::MoveObject { start: p, began: false };
+                        self.state = State::MoveObject { start: p, grab: Some(grab), began: false };
                         let whole = cx.selection.contains(id) && cx.selection.partial(id).is_none();
                         return if whole { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                     }
@@ -417,7 +420,7 @@ impl Tool for DirectSelectionTool {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": h.leaf.0, "anchors": anchors, "mode": "set"}))];
                     }
                     // Clicking the fill selects the whole leaf path (all anchors).
-                    self.state = State::MoveObject { start: p, began: false };
+                    self.state = State::MoveObject { start: p, grab: None, began: false };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
                     }
@@ -467,18 +470,29 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
-            (PointerKind::Drag, State::MoveObject { start, began }) => {
+            (PointerKind::Drag, State::MoveObject { start, grab, began }) => {
                 let mut out = vec![];
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
-                    out.push(Action::Begin("Move".into()));
-                    self.state = State::MoveObject { start, began: true };
-                    self.move_snap = Some(MoveSnap::new(cx));
+                    out.push(Action::Begin(if ev.mods.alt { "Copy".into() } else { "Move".into() }));
+                    self.state = State::MoveObject { start, grab, began: true };
+                    if grab.is_some() {
+                        // A copy leaves the original behind, so its anchors are targets too.
+                        let stay = if ev.mods.alt { Selection::default() } else { cx.selection.clone() };
+                        self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &stay)));
+                    } else {
+                        self.move_snap = Some(MoveSnap::new(cx));
+                    }
                 }
                 let mut d = move_delta(start, p, ev.mods.shift);
-                if let Some(snap) = &self.move_snap {
+                self.guides.clear();
+                if let (Some(grab), Some(snap)) = (grab, &self.anchor_snap) {
+                    let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
+                    let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref());
+                    (d, self.guides) = (q - grab, guides);
+                } else if let Some(snap) = &self.move_snap {
                     (d, self.guides) = snap.snap(cx, start, d);
                 }
                 out.push(Action::Preview(
@@ -1082,6 +1096,31 @@ mod tests {
         assert_eq!(t.pointer(cx, &PointerEvent::new(PointerKind::Up, to.0, to.1).with_mods(mods)), vec![Action::Commit]);
         assert!(t.overlays(cx).iter().all(|o| !matches!(o, Overlay::Label { .. })), "the guides go with the drag");
         (v.clone(), labels)
+    }
+
+    /// Alt-dragging a path by an anchor copies it, and that anchor snaps as a dragged anchor does:
+    /// onto another path's anchor, or onto an anchor of the original the copy leaves behind.
+    #[test]
+    fn alt_dragged_copies_snap_by_the_anchor_pressed() {
+        let (d, _, b) = two_squares();
+        let p = paint();
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut whole = Selection::default();
+        whole.set([b]);
+        let c = cx(&d, &whole, &p);
+        let mut t = DirectSelectionTool::new(false);
+        let copy =
+            |dx: f64, dy: f64| json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": true});
+        // B's top-left corner, pressed 1 pt off, onto A's bottom-right one.
+        let (v, labels) = drag(&mut t, &c, (301.0, 301.0), (203.0, 199.0), alt);
+        assert_eq!((v, labels), (copy(-100.0, -100.0), vec!["anchor".to_string()]));
+        // B's top-left corner onto the original B's top-right one: the copy sits beside it.
+        let (v, labels) = drag(&mut t, &c, (300.0, 300.0), (402.0, 301.0), alt);
+        assert_eq!((v, labels), (copy(100.0, 0.0), vec!["anchor".to_string()]));
+        // The history says what the drag did.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0).with_mods(alt));
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0).with_mods(alt));
+        assert_eq!(out.first(), Some(&Action::Begin("Copy".into())));
     }
 
     /// A dragged anchor lands on another path's anchor or segment, lines up with the other anchors
