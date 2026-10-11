@@ -206,8 +206,9 @@ impl Manifest {
                     // Keep JSON integers exact: f64 cannot represent every i64 or its bounds.
                     let value = if let Some(i) = v.as_i64() {
                         i.clamp(*min, *max)
-                    } else if let Some(i) = v.as_u64() {
-                        i128::from(i).clamp(i128::from(*min), i128::from(*max)) as i64
+                    } else if v.is_u64() {
+                        // Past i64::MAX, so past any maximum.
+                        *max
                     } else {
                         let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| wrong("a number"))?;
                         (f.round() as i64).clamp(*min, *max)
