@@ -976,9 +976,23 @@ fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rec
     ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
 }
 
-/// Is every move in `moves` a rounding error (1e-9 pt or less on both axes)?
-fn moves_nothing(moves: &[(NodeId, Vec2)]) -> bool {
-    moves.iter().all(|(_, dv)| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
+/// Move each object of `moves` by its offset, as undo step `label`; pattern tiles move too when
+/// [`transform_patterns`] says so for `ids`. When every move is a rounding error (1e-9 pt or less
+/// on both axes), the document and its undo history stay as they are.
+fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &[(NodeId, Vec2)]) -> Result<Value> {
+    let sc = Scaling { patterns: transform_patterns(s, p, ids)?, ..Scaling::default() };
+    if moves.iter().all(|(_, dv)| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9) {
+        return ok();
+    }
+    s.edit(label, |d, _| {
+        for (id, dv) in moves {
+            if let Some(n) = d.node_mut(*id) {
+                n.transform(Affine::translate(*dv), sc);
+            }
+        }
+        Ok(())
+    })?;
+    ok()
 }
 
 /// What `object.align` aligns to: `to`, else the key object when there is one, else the
@@ -1048,20 +1062,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect()
     };
-    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
-    // When nothing moves, the document and its undo history stay as they are.
-    if moves_nothing(&moves) {
-        return ok();
-    }
-    s.edit("Align", |d, _| {
-        for (id, dv) in &moves {
-            if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), sc);
-            }
-        }
-        Ok(())
-    })?;
-    ok()
+    apply_moves(s, "Align", p, &ids, &moves)
 }
 
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1103,20 +1104,7 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
             (*id, if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) })
         })
         .collect();
-    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
-    // When nothing moves, the document and its undo history stay as they are.
-    if moves_nothing(&moves) {
-        return ok();
-    }
-    s.edit("Distribute", |d, _| {
-        for (id, dv) in &moves {
-            if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), sc);
-            }
-        }
-        Ok(())
-    })?;
-    ok()
+    apply_moves(s, "Distribute", p, &ids, &moves)
 }
 
 fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1155,20 +1143,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let fixed = spacing.and_then(|_| deltas.iter().find(|(id, _)| Some(*id) == key)).map_or(0.0, |k| k.1);
     let moves: Vec<(NodeId, Vec2)> =
         deltas.into_iter().map(|(id, d)| (id, if horiz { Vec2::new(d - fixed, 0.0) } else { Vec2::new(0.0, d - fixed) })).collect();
-    let sc = Scaling { patterns: transform_patterns(s, p, &ids)?, ..Scaling::default() };
-    // When nothing moves, the document and its undo history stay as they are.
-    if moves_nothing(&moves) {
-        return ok();
-    }
-    s.edit("Distribute Spacing", |d, _| {
-        for (id, dv) in &moves {
-            if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(*dv), sc);
-            }
-        }
-        Ok(())
-    })?;
-    ok()
+    apply_moves(s, "Distribute Spacing", p, &ids, &moves)
 }
 
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
