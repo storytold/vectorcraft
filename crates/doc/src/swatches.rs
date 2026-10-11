@@ -163,7 +163,12 @@ impl Document {
                 }
             })
         };
-        self.layers.iter().chain(self.symbols.iter().map(|s| &s.art)).chain(self.patterns.iter().flat_map(|p| &p.art)).for_each(|n| tree(n));
+        self.layers
+            .iter()
+            .chain(self.symbols.iter().map(|s| &s.art))
+            .chain(self.graph_designs.iter().map(|g| &g.art))
+            .chain(self.patterns.iter().flat_map(|p| &p.art))
+            .for_each(|n| tree(n));
         self.graphic_styles.iter().flat_map(|gs| &gs.appearance.items).for_each(|it| f(item_paint(it)));
     }
 }

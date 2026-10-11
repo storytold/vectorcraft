@@ -1071,6 +1071,14 @@
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Design	图表设计
+	Graph Marker	图表标记
+	No Legend	无图例
+	Standard Legend	标准图例
+	Legends in Wedges	楔形中的图例
+	Ratio	比例
+	Even	平均
+	Stacked	堆积
 	Graphic Style	图形样式
 	Graphic Style Libraries	图形样式库
 	Graphic Style Libraries Menu	图形样式库菜单
