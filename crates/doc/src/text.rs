@@ -96,8 +96,8 @@ pub struct CharStyle {
     #[serde(default, rename = "charAlign", skip_serializing_if = "crate::skip::is_default")]
     pub char_align: CharAlign,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
-    /// font's own proportional widths, OpenType `palt` (#966). Vertical type sets them as before
-    /// for now.
+    /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
+    /// its proportional heights, `vpal`.
     #[serde(default, rename = "proportionalMetrics", skip_serializing_if = "crate::skip::is_default")]
     pub proportional_metrics: bool,
 }

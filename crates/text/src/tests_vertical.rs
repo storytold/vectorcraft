@@ -539,3 +539,46 @@ fn kinsoku_set_decides_whether_a_small_kana_may_start_a_line() {
         assert_eq!(stop(Kinsoku::Soft), [0, 1, 1], "vertical {vertical_type}");
     }
 }
+
+/// Proportional Metrics in vertical type (#966): upright glyphs take the font's proportional
+/// heights (`vpal`, from shaping them top to bottom) and move with them, so each glyph's ink stays in
+/// its shorter cell. Line-end Punctuation Half Width takes nothing more off the punctuation `vpal`
+/// re-spaced, and trims the punctuation it leaves full height (〘〙 in Shippori Mincho) as before.
+/// Off, the column is as before, and a font without vertical metrics (the bundled Source Sans 3)
+/// keeps today's cells. Needs craft-fonts' Shippori Mincho (skipped without it).
+#[test]
+fn proportional_metrics_set_upright_glyphs_on_their_proportional_heights() {
+    use vectorcraft_doc::Mojikumi;
+    let lay = |text: &str, font: &str, on: bool, m: Mojikumi| {
+        let mut t = vertical_styled(text, CharStyle { size: 20.0, font_family: font.into(), proportional_metrics: on, ..CharStyle::default() });
+        t.para.mojikumi = m;
+        layout(FontDb::global(), &t)
+    };
+    let adv = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let y0 = |l: &TextLayout| l.glyphs.iter().map(|g| g.outline.bounding_box().y0).collect::<Vec<_>>();
+    let near = |a: &[f64], b: &[f64]| a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.01);
+    // Without vertical metrics the cells stay as they are.
+    let (on, off) = (lay("§§", "Source Sans 3", true, Mojikumi::None), lay("§§", "Source Sans 3", false, Mojikumi::None));
+    assert!(near(&adv(&on), &adv(&off)) && near(&y0(&on), &y0(&off)), "{:?} {:?}", adv(&on), adv(&off));
+    if FontDb::global().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let text = "「あ」、ッ漢。";
+    let off = lay(text, "Shippori Mincho", false, Mojikumi::None);
+    assert!(off.glyphs.iter().all(|g| (g.advance - 20.0).abs() < 0.01), "off: an em each, as before: {:?}", adv(&off));
+    let on = lay(text, "Shippori Mincho", true, Mojikumi::None);
+    assert!(on.glyphs[0].advance < 12.0 && on.glyphs[4].advance < 16.0, "「 and ッ shorter: {:?}", adv(&on));
+    assert!((on.glyphs[5].advance - 20.0).abs() < 0.01, "the kanji keeps its em: {:?}", adv(&on));
+    // Each glyph's ink stays in its own cell, so none runs into the next.
+    for g in &on.glyphs {
+        let b = g.outline.bounding_box();
+        assert!(b.y0 > g.origin.y - 0.5 && b.y1 < g.origin.y + g.advance + 0.5, "byte {}: ink {b:?} in [{}, +{}]", g.byte, g.origin.y, g.advance);
+    }
+    // Re-spaced punctuation: Line-end Punctuation Half Width changes nothing.
+    let half = lay(text, "Shippori Mincho", true, Mojikumi::LineEndHalf);
+    assert!(near(&adv(&half), &adv(&on)) && near(&y0(&half), &y0(&on)), "{:?} {:?}", adv(&half), adv(&on));
+    // Punctuation `vpal` leaves full height: set flush at the paragraph's start, as before.
+    let (half, none) = (lay("〘あ〙", "Shippori Mincho", true, Mojikumi::LineEndHalf), lay("〘あ〙", "Shippori Mincho", true, Mojikumi::None));
+    assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
+}

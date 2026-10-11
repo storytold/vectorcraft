@@ -52,10 +52,23 @@ pub(crate) struct SGlyph {
     /// Proportional Metrics changed the glyph's advance (`palt`): it has its proportional width,
     /// and Japanese composition takes no more space off it (#966).
     pub proportional: bool,
+    /// Vertical type with Proportional Metrics: what `vpal` does to the glyph when it stands
+    /// upright ([`crate::layout`] applies it).
+    pub vpal: Option<VAdjust>,
     /// Resolved Unicode bidi embedding level (logical source order).
     pub level: Level,
     /// An inline graphic ([`vectorcraft_doc::TextRun::inline`]) standing in for a glyph.
     pub inline: Option<InlineBox>,
+}
+
+/// How `vpal` moves an upright glyph in vertical type and changes its length down the column, in
+/// points: `advance` down the column, `dx` and `dy` in glyph space (y down; `dy` is down the column
+/// once the glyph stands upright).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct VAdjust {
+    pub advance: f64,
+    pub dx: f64,
+    pub dy: f64,
 }
 
 /// Placement of an inline graphic's art, glyph space being points with the pen at the origin on
@@ -121,6 +134,7 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     h.ch = '-';
     h.inline = None;
     h.proportional = false;
+    h.vpal = None;
     h
 }
 
@@ -427,6 +441,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         tcy: None,
         lead: 0.0,
         proportional: false,
+        vpal: None,
         // U+FFFC is a bidi neutral (ON): its level, resolved from its neighbours, places it in
         // RTL text like any other glyph once the line is reordered.
         level,
@@ -475,11 +490,14 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let first_char = |byte: usize| text[byte..].chars().next().unwrap_or(' ');
 
     let mut raw: Vec<(u32, u32, i32, i32, i32)> = Vec::with_capacity(text_seg.len()); // gid, cluster, xadv, xoff, yoff
-    // Proportional Metrics: which glyphs `palt` gave another advance than their full width.
+    // Proportional Metrics: which glyphs `palt` gave another advance than their full width, and
+    // what `vpal` does to each in vertical type.
     let mut proportional = vec![];
+    let mut vpal = vec![];
     let shaped = face.hb().map(|hb| {
         let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
-        let shape = |feats: &[Feature]| {
+        // gid, cluster, x and y advance, x and y offset.
+        let shape = |feats: &[Feature], direction: Direction| {
             let mut buf = UnicodeBuffer::new();
             for (i, c) in text_seg.char_indices() {
                 let cl = (range.start + i) as u32;
@@ -491,7 +509,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     buf.add(c, cl);
                 }
             }
-            buf.set_direction(if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight });
+            buf.set_direction(direction);
             buf.guess_segment_properties();
             // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
             // glyphs for it. This retains context at real style/font segmentation boundaries without
@@ -506,16 +524,36 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             gb.glyph_infos()
                 .iter()
                 .zip(gb.glyph_positions())
-                .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.x_offset, pos.y_offset))
+                .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.y_advance, pos.x_offset, pos.y_offset))
                 .collect::<Vec<_>>()
         };
-        raw = shape(&feats.resolve(st));
+        let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
+        raw = shape(&feats.resolve(st), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
+        let same_glyphs = |v: &[(u32, u32, i32, i32, i32, i32)]| v.len() == raw.len() && v.iter().zip(&raw).all(|(a, b)| a.0 == b.0);
         if feats.proportional(st) {
             // `palt` is positioning only: the same glyphs set on their full widths tell which
             // advances it changed (kerning and the rest change both alike).
-            let full = shape(&feats.resolve_fixed_width(st));
-            if full.len() == raw.len() && full.iter().zip(&raw).all(|(a, b)| a.0 == b.0) {
+            let full = shape(&feats.resolve_fixed_width(st), along);
+            if same_glyphs(&full) {
                 proportional = full.iter().zip(&raw).map(|(a, b)| a.2 != b.2).collect();
+            }
+        }
+        if feats.proportional_vertical(st) {
+            // `vpal` adjusts heights, which only top-to-bottom shaping applies: the same glyphs set
+            // top to bottom with and without it tell how it moves each and changes its advance down
+            // the column (y up, advances negative).
+            let (with, without) =
+                (shape(&feats.resolve_vertical(st, true), Direction::TopToBottom), shape(&feats.resolve_vertical(st, false), Direction::TopToBottom));
+            if same_glyphs(&with) && same_glyphs(&without) {
+                vpal = with
+                    .iter()
+                    .zip(&without)
+                    .map(|(a, b)| {
+                        let adj =
+                            VAdjust { advance: f64::from(b.3 - a.3) * k * vs, dx: f64::from(a.4 - b.4) * k * hs, dy: -f64::from(a.5 - b.5) * k * vs };
+                        (adj != VAdjust::default()).then_some(adj)
+                    })
+                    .collect();
             }
         }
     });
@@ -573,6 +611,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             tcy: None,
             lead: 0.0,
             proportional: proportional.get(gi).copied().unwrap_or(false),
+            vpal: vpal.get(gi).copied().flatten(),
             level: *level,
             inline: None,
         });

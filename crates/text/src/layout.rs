@@ -55,6 +55,14 @@ impl Ctx<'_> {
                 let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
+                // Proportional Metrics: `vpal` moves it and changes its length down the column,
+                // in fonts with vertical metrics (else the cell stays as it is, #966).
+                if let Some(a) = g.vpal.filter(|_| g.tcy.is_none() && g.face.vertical_glyph(g.gid).is_some()) {
+                    g.dx += a.dx;
+                    g.dy += a.dy;
+                    g.adv += a.advance;
+                    g.proportional = a.advance != 0.0;
+                }
             }
         }
         v
@@ -1178,6 +1186,7 @@ mod wrapping_tests {
                 inline: None,
                 lead: 0.0,
                 proportional: false,
+                vpal: None,
                 level: unicode_bidi::Level::ltr(),
             })
             .collect()

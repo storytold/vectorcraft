@@ -655,7 +655,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
-        // Proportional Metrics: full-width glyphs on the font's proportional widths (`palt`).
+        // Proportional Metrics: full-width glyphs on the font's proportional widths (`palt`, `vpal`).
         let proportional = s.as_ref().is_some_and(|s| s.proportional_metrics);
         if menu_item(ui, tl!("Proportional Metrics"), has, proportional) {
             format(app, json!({"proportionalMetrics": !proportional}));
