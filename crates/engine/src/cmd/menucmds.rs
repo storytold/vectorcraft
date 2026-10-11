@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Lock"],
             None,
-            "{} lock objects in the same layer that are above and overlap the selection → {count}",
+            "{} lock objects in the same layer that are above and overlap the selection, deselecting every selected object left locked or hidden (the key object too) → {count}",
             has_selection,
             |s, _| above(s, true)
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Hide"],
             None,
-            "{} hide objects in the same layer that are above and overlap the selection → {count}",
+            "{} hide objects in the same layer that are above and overlap the selection, deselecting every selected object left hidden or locked (the key object too) → {count}",
             has_selection,
             |s, _| above(s, false)
         ),
@@ -228,7 +228,7 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
     }
     let label = if lock { "Lock" } else { "Hide" };
     let n = hits.len();
-    s.edit(label, |d, _| {
+    s.edit(label, |d, sel| {
         for id in &hits {
             if let Some(n) = d.node_mut(*id) {
                 if lock {
@@ -237,6 +237,11 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
                     n.visible = false;
                 }
             }
+        }
+        // Hidden or locked content can't stay selected.
+        let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
+        for h in hidden {
+            sel.remove(h);
         }
         Ok(())
     })?;
