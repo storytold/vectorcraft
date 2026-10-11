@@ -80,6 +80,59 @@ impl GraphKind {
     }
 }
 
+/// A graph design (Object › Graph › Design…): named art that graphs draw in place of their default marks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GraphDesign {
+    pub name: String,
+    pub art: std::sync::Arc<crate::Node>,
+}
+
+impl GraphDesign {
+    /// Most designs a document keeps, objects in one design's art, and characters in a design's name.
+    pub const MAX: usize = 1000;
+    pub const MAX_NODES: usize = 2000;
+    pub const MAX_NAME: usize = 64;
+
+    /// A design name cleaned up: trimmed, without control characters, at most [`Self::MAX_NAME`] long; `None` when
+    /// nothing is left.
+    pub fn clean_name(name: &str) -> Option<String> {
+        let n: String = name.trim().chars().filter(|c| !c.is_control()).take(Self::MAX_NAME).collect();
+        Some(n.trim().to_string()).filter(|n| !n.is_empty())
+    }
+
+    /// `art` as plain design art: a graph inside it becomes the plain group it draws as, so a marker never holds a
+    /// graph of its own (that its commands would then edit).
+    pub fn plain_art(art: &crate::Node) -> crate::Node {
+        let mut n = art.clone();
+        n.graph = None;
+        n.series_index = None;
+        if let Some(ch) = n.children_mut() {
+            let old = std::mem::take(ch);
+            *ch = old.iter().map(|c| std::sync::Arc::new(Self::plain_art(c))).collect();
+        }
+        n
+    }
+}
+
+impl crate::Document {
+    /// The graph designs a file gave, made safe to list and draw: at most [`GraphDesign::MAX`], each with a clean,
+    /// unique name, art of at most [`GraphDesign::MAX_NODES`] objects and no graph inside.
+    pub fn tidy_graph_designs(&mut self) {
+        let mut kept: Vec<GraphDesign> = vec![];
+        for d in std::mem::take(&mut self.graph_designs) {
+            if kept.len() >= GraphDesign::MAX {
+                break;
+            }
+            let Some(name) = GraphDesign::clean_name(&d.name) else { continue };
+            if kept.iter().any(|k| k.name == name) || d.art.count() > GraphDesign::MAX_NODES {
+                continue;
+            }
+            kept.push(GraphDesign { name, art: std::sync::Arc::new(GraphDesign::plain_art(&d.art)) });
+        }
+        self.graph_designs = kept;
+    }
+}
+
 /// Graph Type › Value Axis: which side of the plot the value axis is drawn on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -200,6 +253,10 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// Object › Graph › Marker: the graph design each series' data points (and legend swatch) are drawn with, by
+    /// series index, for line, scatter and radar series; `None` and missing entries draw the default square.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub series_markers: Vec<Option<String>>,
     /// Graph Type › Tick Marks for the value axis (the left one, or the bottom one of bar graphs) and the right one:
     /// length, and tick marks per division (0 and 1 = one, at the labels).
     #[serde(skip_serializing_if = "TickLength::is_short")]
@@ -302,6 +359,7 @@ impl Default for GraphSpec {
             right_ticks: 0,
             right_axis_min: None,
             right_axis_max: None,
+            series_markers: vec![],
             tick_length: TickLength::Short,
             tick_marks: 1,
             right_tick_length: TickLength::Short,

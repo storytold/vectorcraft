@@ -129,11 +129,19 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 
 /// The roots of `d`'s art: layers, symbol definitions and pattern swatches.
 fn roots(d: &Document) -> impl Iterator<Item = &Arc<Node>> {
-    d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.patterns.iter().flat_map(|p| &p.art))
+    d.layers
+        .iter()
+        .chain(d.symbols.iter().map(|s| &s.art))
+        .chain(d.graph_designs.iter().map(|g| &g.art))
+        .chain(d.patterns.iter().flat_map(|p| &p.art))
 }
 
 fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
-    d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| &mut p.art))
+    d.layers
+        .iter_mut()
+        .chain(d.symbols.iter_mut().map(|s| &mut s.art))
+        .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
+        .chain(d.patterns.iter_mut().flat_map(|p| &mut p.art))
 }
 
 impl Document {
@@ -495,7 +503,10 @@ impl Document {
             let prefix = prefix(&p.key);
             add_resources(&mut d, &e.doc, &prefix);
             // The placed documents in that art, under their names here.
-            let inner = std::iter::once(&e.art).chain(e.doc.symbols.iter().map(|s| &s.art)).chain(e.doc.patterns.iter().flat_map(|p| &p.art));
+            let inner = std::iter::once(&e.art)
+                .chain(e.doc.symbols.iter().map(|s| &s.art))
+                .chain(e.doc.graph_designs.iter().map(|g| &g.art))
+                .chain(e.doc.patterns.iter().flat_map(|p| &p.art));
             for root in inner {
                 walk_all(root, &mut |n| {
                     if let NodeKind::PlacedDocument(q) = &n.kind {

@@ -302,7 +302,7 @@ fn brush_set_current(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The selection as one art node (a group for several objects), ids kept.
-fn selection_art(s: &Session, p: &Value) -> Result<Option<Node>> {
+pub(crate) fn selection_art(s: &Session, p: &Value) -> Result<Option<Node>> {
     let d = &s.doc()?.doc;
     let ids = roots(s, p)?;
     let nodes: Vec<Node> = ids.iter().filter_map(|id| d.node(*id).cloned()).collect();
