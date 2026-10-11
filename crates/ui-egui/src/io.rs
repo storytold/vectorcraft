@@ -19,31 +19,25 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 /// and flattener, PDF, print and perspective grid presets files are imported. → `document.open`'s result for a document opened now (its
 /// `warnings` say what didn't come in as it was), else null.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
-    let ext = fileio::extension(name);
+    let opens = opens_as(name);
     // A WebAssembly plug-in is installed.
-    if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
+    if opens == Some(OpensAs::Plugin) {
         let r =
             app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}))?;
         app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or(name)));
         return Ok(Value::Null);
     }
-    let presets = [
-        (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
-        (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
-        (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
-        (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
-    ];
-    if let Some((_, import, what)) = presets.iter().find(|(exts, ..)| exts.contains(&ext.as_str())) {
+    if let Some(OpensAs::Presets { import, what }) = opens {
         let r = app.run(import, serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
         let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         app.status(format!("Imported {what}: {}", names.join(", ")));
         return Ok(Value::Null);
     }
-    if vectorcraft_engine::cmd::library::LIBRARY_EXTS.contains(&ext.as_str()) {
+    if opens == Some(OpensAs::Library) {
         return crate::panels::libraries::import(app, json!({"data": String::from_utf8_lossy(bytes)})).map(|_| Value::Null);
     }
-    let swatches = vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str());
-    if swatches || ext == vectorcraft_doc::style_libs::STYLES_EXT {
+    let swatches = opens == Some(OpensAs::SwatchLibrary);
+    if swatches || opens == Some(OpensAs::StyleLibrary) {
         let p = match path {
             Some(path) => serde_json::json!({ "path": path }),
             // `.ase` swatch libraries are binary.
@@ -61,6 +55,49 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         return Ok(Value::Null);
     }
     open_document(app, name, bytes, path, &Value::Null)
+}
+
+/// The kinds of file File → Open installs, imports or shows in the library panel or the Libraries
+/// panel ([`opens_as`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum OpensAs {
+    /// A WebAssembly plug-in: installed.
+    Plugin,
+    /// Flattener, PDF, print or perspective grid presets: imported with command `import`, and
+    /// `what` names them in the status bar.
+    Presets { import: &'static str, what: &'static str },
+    /// A Libraries panel file: added to the Libraries panel as a new library.
+    Library,
+    /// A swatch library: opened in the library panel.
+    SwatchLibrary,
+    /// A graphic style library: opened in the library panel.
+    StyleLibrary,
+}
+
+/// The kind of file named `name` (by its extension) that File → Open installs, imports or shows in
+/// the library panel or the Libraries panel ([`open_bytes`]), else `None`. A drop opens these files
+/// the same way, wherever they are dropped ([`VectorcraftApp::drop_target`]).
+pub fn opens_as(name: &str) -> Option<OpensAs> {
+    let ext = fileio::extension(name);
+    let presets = [
+        (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
+        (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
+        (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
+        (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+    ];
+    if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
+        Some(OpensAs::Plugin)
+    } else if let Some(&(_, import, what)) = presets.iter().find(|(exts, ..)| exts.contains(&ext.as_str())) {
+        Some(OpensAs::Presets { import, what })
+    } else if vectorcraft_engine::cmd::library::LIBRARY_EXTS.contains(&ext.as_str()) {
+        Some(OpensAs::Library)
+    } else if vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str()) {
+        Some(OpensAs::SwatchLibrary)
+    } else if ext == vectorcraft_doc::style_libs::STYLES_EXT {
+        Some(OpensAs::StyleLibrary)
+    } else {
+        None
+    }
 }
 
 /// Open a document through the engine loader with the `document.open` options in `p` →
