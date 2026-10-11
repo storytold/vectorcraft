@@ -905,7 +905,8 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
         v.artboard = i;
     }
     // A press with a selection tool inside an artboard makes it the active one (#693), as the
-    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it.
+    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it, Align to
+    // Artboard aligns to it, and All on Active Artboard selects on it.
     if ev.kind == PointerKind::Down
         && vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id())
         && let Some(i) = app.session.active().and_then(|d| d.doc.artboard_at(ev.pos))
@@ -2190,6 +2191,37 @@ mod tests {
             .collect();
         let b = app.session.active().unwrap().doc.bounds_of(&ids, false).unwrap();
         assert_eq!((b.x0, b.y0), (boards[2].x0 + 10.0, boards[2].y0 + 15.0));
+    }
+
+    /// A Shift-click with the Selection tool on an empty spot inside an artboard makes it the active
+    /// one and keeps the selection, and Align to Artboard then aligns the objects to it unless the
+    /// call names another artboard.
+    #[test]
+    fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+        let mut rect = |x: f64, y: f64| {
+            let r = app.session.execute("shape.rectangle", &json!({"x": boards[0].x0 + x, "y": boards[0].y0 + y, "width": 20, "height": 20}));
+            vectorcraft_doc::NodeId(r.unwrap()["id"].as_u64().unwrap())
+        };
+        let ids = [rect(10.0, 15.0), rect(50.0, 40.0)];
+        app.session.execute("select.set", &json!({"ids": [ids[0].0, ids[1].0]})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let view = app.view_info();
+        let shift = Mods { shift: true, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, pressure: 1.0 }, view);
+        }
+        assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
+        assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
+        let lefts = |app: &VectorcraftApp| ids.map(|id| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0);
+        app.run("object.align", json!({"horizontal": "left", "to": "artboard"})).unwrap();
+        assert_eq!(lefts(&app), [boards[2].x0; 2], "the left edges are on the active artboard's");
+        app.run("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})).unwrap();
+        assert_eq!(lefts(&app), [boards[1].x0; 2], "an artboard the caller names is kept");
     }
 
     /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the

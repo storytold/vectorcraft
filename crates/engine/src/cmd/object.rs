@@ -159,7 +159,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\" (default: the key object when the selection has one, select.key, else the selection), artboard?: index (0-based; with to: \"artboard\", the artboard to align to; the app passes the active one; default: the artboard under the center of the selection, else the first), bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_selection,
             align
         ),
@@ -965,8 +965,12 @@ fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Resu
     match align_to(s, p) {
         Some("artboard") => {
             let b = st.doc.bounds_of(ids, preview).unwrap_or_default();
+            // Align to Artboard uses artboard `artboard` (the app passes the active one). Without
+            // it, or with an index the document doesn't have, it uses the artboard under the center
+            // of the selection, or the first one when no artboard is there.
+            let named = p.get("artboard").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).and_then(|i| st.doc.artboards.get(i));
             let i = st.doc.artboard_at(b.center()).unwrap_or(0);
-            Ok(st.doc.artboards.get(i).map(|a| a.rect).unwrap_or(b))
+            Ok(named.or(st.doc.artboards.get(i)).map(|a| a.rect).unwrap_or(b))
         }
         Some("key") => {
             let k = st.selection.key.ok_or_else(|| EngineError::Other("no key object".into()))?;

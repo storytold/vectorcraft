@@ -8,12 +8,14 @@ use crate::{DocState, EngineError};
 pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     let mut cmds = p.get("commands").and_then(Value::as_array).ok_or_else(|| bad("command.batch", "missing commands"))?.clone();
     let label = str_param(p, "label").unwrap_or("Batch").to_string();
+    // The active artboard the app passes, for the steps that act on it.
+    let artboard = p.get("artboard").and_then(Value::as_u64);
     // What an error rolls back besides the documents: session-level state a step may change
     // (paint defaults, drawing mode, clipboard, the Untitled-N count).
     let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter);
     let (start, active): (Vec<u64>, _) = (s.docs.iter().map(|d| d.uid).collect(), s.active);
     s.batch_stash = Some(vec![]);
-    let r = run_steps(s, &label, &mut cmds);
+    let r = run_steps(s, &label, artboard, &mut cmds);
     let stash = s.batch_stash.take().unwrap_or_default();
     let results = match r {
         Ok(results) => results,
@@ -43,7 +45,10 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Run the steps → their results. Each runs inside an interaction of the document active when it
 /// starts (one for all the steps in that document), so a step may open, switch or close documents.
-fn run_steps(s: &mut Session, label: &str, cmds: &mut [Value]) -> Result<Vec<Value>> {
+/// A step that acts on the active artboard ([`crate::ON_ACTIVE_ARTBOARD`]) and names none gets
+/// `artboard`, as the Artboards panel shows it in the document the step runs in: past that
+/// document's last artboard, the last one.
+fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Value]) -> Result<Vec<Value>> {
     let mut results = Vec::with_capacity(cmds.len());
     for c in cmds {
         let id = c.get("command").and_then(Value::as_str).unwrap_or("").to_string();
@@ -53,7 +58,15 @@ fn run_steps(s: &mut Session, label: &str, cmds: &mut [Value]) -> Result<Vec<Val
         if s.active().is_some() {
             s.begin_interaction(label)?;
         }
-        let params = c.get("params").cloned().unwrap_or(json!({}));
+        let mut params = c.get("params").cloned().unwrap_or(json!({}));
+        if let Some(a) = artboard
+            && crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str())
+            && params.get("artboard").is_none()
+            && let Some(last) = s.active().and_then(|d| d.doc.artboards.len().checked_sub(1))
+            && let Some(o) = params.as_object_mut()
+        {
+            o.insert("artboard".into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
+        }
         let (v, noted) =
             s.execute_step(&id, &params).map_err(|e| EngineError::Other(format!("batch step {} (`{id}`) failed: {e}", results.len())))?;
         // The step's journal entry records what it took from the preferences or the clock (a

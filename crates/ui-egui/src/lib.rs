@@ -580,9 +580,9 @@ impl VectorcraftApp {
             return r;
         }
         let mut params = params;
-        // Paste in place, in front, in back (#693) and Select › All on Active Artboard (#1006): onto
-        // or on the active artboard, the view's.
-        if matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack" | "select.allOnArtboard")
+        // Paste in place, in front, in back (#693), Select › All on Active Artboard (#1006) and Align to
+        // Artboard: onto, on or to the active artboard, the view's. A batch passes it on to those steps.
+        if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
             && params.get("artboard").is_none()
             && self.view().is_some()
             && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())

@@ -369,10 +369,27 @@ impl DocState {
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
 pub const MAX_COORD: f64 = 4.0e6;
 
+/// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
+/// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, and All on
+/// Active Artboard selects on it. A `command.batch` given `artboard` passes it on to each of their
+/// steps that names none.
+pub const ON_ACTIVE_ARTBOARD: [&str; 5] = ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack", "object.align", "select.allOnArtboard"];
+
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
-/// (dates from the clock: `cmd::clock_date`); an action leaves them out
+/// (dates from the clock: `cmd::clock_date`; the active artboard the app passes to the
+/// [`ON_ACTIVE_ARTBOARD`] commands and to a batch); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 3] = [("file.new", "created"), ("document.save", "modified"), ("file.saveAs", "modified")];
+const REPLAY_ONLY: [(&str, &str); 9] = [
+    ("file.new", "created"),
+    ("document.save", "modified"),
+    ("file.saveAs", "modified"),
+    ("edit.pasteInPlace", "artboard"),
+    ("edit.pasteInFront", "artboard"),
+    ("edit.pasteInBack", "artboard"),
+    ("object.align", "artboard"),
+    ("select.allOnArtboard", "artboard"),
+    ("command.batch", "artboard"),
+];
 
 /// `p`, the params of command `id`, without its [`REPLAY_ONLY`] values (a batch: its steps').
 fn strip_replay_only(id: &str, p: &mut Value) {

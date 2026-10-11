@@ -143,6 +143,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vectorcraft_engine::Session;
 
     #[test]
     fn defaults_are_valid_commands() {
@@ -153,5 +154,47 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Actions recorded with Align to Artboard and Paste in Place, and the default Center on
+    /// Artboard, play on the artboard active when they play, not on the one active when they were
+    /// recorded.
+    #[test]
+    fn actions_play_on_the_artboard_active_when_they_play() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+        let r = app.run("shape.rectangle", json!({"x": boards[1].x0 + 10.0, "y": boards[1].y0 + 15.0, "width": 20, "height": 20})).unwrap();
+        let rect = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+        let bounds = |app: &VectorcraftApp, ids: &[vectorcraft_doc::NodeId]| app.session.active().unwrap().doc.bounds_of(ids, false).unwrap();
+        // Each recorded as the panel records an action, with artboard 0 active.
+        let record = |app: &mut VectorcraftApp, name: &str, id: &str, params: Value| {
+            let start = app.session.journal.len();
+            app.run(id, params).unwrap();
+            let steps = app.session.journal_for_action(start);
+            app.ui.action_sets[0].actions.push(Action { name: name.into(), steps });
+            app.ui.action_sets[0].actions.len() - 1
+        };
+        app.run("edit.copy", json!({})).unwrap();
+        let align = record(&mut app, "Align Left", "object.align", json!({"horizontal": "left", "to": "artboard"}));
+        assert_eq!(bounds(&app, &[rect]).x0, boards[0].x0, "aligned to artboard 0 while recording");
+        let paste = record(&mut app, "Paste in Place", "edit.pasteInPlace", json!({}));
+        app.view_mut().unwrap().artboard = 2;
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        play(&mut app, 0, align).unwrap();
+        assert_eq!(bounds(&app, &[rect]).x0, boards[2].x0, "aligned to artboard 2, active when the action plays");
+        let ids: Vec<vectorcraft_doc::NodeId> = play(&mut app, 0, paste).unwrap()["results"][0]["ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| vectorcraft_doc::NodeId(v.as_u64().unwrap()))
+            .collect();
+        let b = bounds(&app, &ids);
+        assert_eq!((b.x0, b.y0), (boards[2].x0 + 10.0, boards[2].y0 + 15.0), "pasted onto artboard 2, where it was on artboard 1");
+        app.view_mut().unwrap().artboard = 1;
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        let center = app.ui.action_sets[0].actions.iter().position(|a| a.name == "Center on Artboard").unwrap();
+        play(&mut app, 0, center).unwrap();
+        assert_eq!(bounds(&app, &[rect]).center(), boards[1].center(), "centered on artboard 1, the active one");
     }
 }

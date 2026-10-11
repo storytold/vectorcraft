@@ -1468,6 +1468,31 @@ one undo step.
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
 ```
 
+## Align to Artboard
+
+`object.align {to: "artboard", artboard?}` aligns the selected objects to artboard `artboard` (a 0-based index).
+Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
+selection, or to the first artboard when no artboard is under the center. With `to: "selection"` or `"key"`,
+`object.align` does not use `artboard`. `select.allOnArtboard {artboard?}` (Select › All on Active Artboard) selects
+the objects on artboard `artboard`, or on the first artboard when the call gives none; an index the document doesn't
+have is an error.
+
+The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align` and
+`select.allOnArtboard` calls it runs without `artboard`, as it does for `edit.pasteInPlace`, `edit.pasteInFront` and
+`edit.pasteInBack`, and to each `command.batch`. A batch passes its `artboard` on to each of these steps that names
+none, when the step runs. When the document a step runs in has no artboard at that index (for example, after an
+earlier step deleted the active artboard when it was the last one), the step gets that document's last artboard. In
+remote mode, MCP's `run_command` calls and each step of the `command_batch` tool get the active artboard too. The
+Actions panel plays an action as a `command.batch`. An action recorded in the Actions panel leaves the artboard out,
+and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
+Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
+tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection.
+
+```json
+{"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
+{"name":"run_command","arguments":{"command":"select.allOnArtboard","params":{"artboard":1}}}
+```
+
 ## Use Preview Bounds
 
 With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel

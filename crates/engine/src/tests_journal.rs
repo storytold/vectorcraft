@@ -66,6 +66,65 @@ fn recorded_actions_leave_out_replay_only_values() {
     assert_eq!(s.journal_for_action(1), s.journal[1..].to_vec());
 }
 
+/// The artboard the app passes to Paste in Place, in Front and in Back, to Align to Artboard, to
+/// All on Active Artboard and to a batch (its active one) is journaled and left out of recorded
+/// actions, so a played action uses the artboard active when it plays.
+#[test]
+fn recorded_actions_leave_out_the_artboard_the_app_passes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2, "created": null})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let start = s.journal.len();
+    let steps = [
+        ("edit.pasteInPlace", json!({"artboard": 1})),
+        ("edit.pasteInFront", json!({"artboard": 1})),
+        ("edit.pasteInBack", json!({"artboard": 1})),
+        ("select.allOnArtboard", json!({"artboard": 1})),
+        ("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("command.batch", json!({"artboard": 1, "commands": [{"command": "select.allOnArtboard", "params": {}}]})),
+    ];
+    for (id, p) in &steps {
+        s.execute(id, p).unwrap();
+    }
+    assert!(s.journal[start..].iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", &s.journal[start..]);
+    let action = s.journal_for_action(start);
+    assert_eq!(action.len(), steps.len());
+    for ((id, mut p), (step, recorded)) in steps.into_iter().zip(action) {
+        p.as_object_mut().unwrap().remove("artboard");
+        assert_eq!((step.as_str(), recorded), (id, p));
+    }
+}
+
+/// A batch passes its `artboard` (the app's active one) to each step that acts on the active
+/// artboard and names none, when the step runs: once a step deletes the last artboard, the new
+/// last one, and in a new document with fewer artboards, its last one. A step that names an
+/// artboard keeps it.
+#[test]
+fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let ids: Vec<u64> = boards
+        .iter()
+        .map(|b| {
+            s.execute("shape.rectangle", &json!({"x": b.x0 + 10.0, "y": b.y0 + 10.0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        })
+        .collect();
+    let picked = |s: &Session| s.doc().unwrap().selection.objects.iter().map(|id| id.0).collect::<Vec<_>>();
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    let all_on_artboard = step("select.allOnArtboard", json!({}));
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [all_on_artboard]})).unwrap();
+    assert_eq!(picked(&s), [ids[2]], "the batch's artboard 3");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("select.allOnArtboard", json!({"artboard": 0}))]})).unwrap();
+    assert_eq!(picked(&s), [ids[0]], "an artboard the step names is kept");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("artboard.delete", json!({"index": 2})), all_on_artboard]})).unwrap();
+    assert_eq!(picked(&s), [ids[1]], "artboard 2, the last one once artboard 3 is deleted");
+    let new = step("file.new", json!({"width": 100, "height": 100}));
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [new, all_on_artboard]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
     let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();
