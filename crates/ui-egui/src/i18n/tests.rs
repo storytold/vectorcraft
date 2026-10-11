@@ -923,6 +923,37 @@ fn complete_languages_translate_every_message() {
     }
 }
 
+/// The parameter errors of Align, Distribute Spacing, Reflect and Shear, whose text the scan above
+/// doesn't read, are translated whole in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn align_reflect_and_shear_param_errors_are_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    for x in [0, 50] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap();
+    }
+    s.execute("select.all", &json!({})).unwrap();
+    for (cmd, p) in [
+        ("object.align", json!({})),
+        ("object.align", json!({"horizontal": "middle"})),
+        ("object.align", json!({"vertical": "centre"})),
+        ("object.align", json!({"horizontal": "left", "to": "page"})),
+        ("object.align", json!({"horizontal": "left", "bounds": "visual"})),
+        ("object.distributeSpacing", json!({"axis": "diagonal"})),
+        ("object.distributeSpacing", json!({"spacing": "5"})),
+        ("object.reflect", json!({"axis": "diagonal"})),
+        ("object.shear", json!({"axis": "diagonal"})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{cmd} {p}: {e}") };
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+            assert!(!shown.contains(msg.as_str()), "{code}: {shown}");
+        }
+    }
+}
+
 /// Languages whose catalogs cover every status and error message.
 const COMPLETE_MESSAGES: &[&str] = &["de", "es", "fr", "it", "ja", "ru", "uk"];
 

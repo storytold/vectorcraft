@@ -3384,6 +3384,7 @@ theme	Appearance	Erscheinungsbild
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art oder type
 @msg	artboard {0} does not exist	Zeichenfläche {0} ist nicht vorhanden
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	in diesem Maßstab misst die Zeichnung {w} × {h} pt, mehr als die Arbeitsfläche fasst: Wählen Sie einen kleineren Maßstab oder passen Sie sie an die Zeichenfläche an
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis muss "vertical", "horizontal" oder ein Winkel in Grad sein, nicht `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
@@ -3426,6 +3427,7 @@ theme	Appearance	Erscheinungsbild
 @msg	freeform line {i} must be an array of point indices	Freiformlinie {i} muss ein Array von Punktindizes sein
 @msg	give both `start` and `end` [x, y] (or neither)	geben Sie sowohl `start` als auch `end` [x, y] an (oder keines von beiden)
 @msg	give corners of the path: anchors between two straight sides	geben Sie Ecken des Pfads an: Ankerpunkte zwischen zwei geraden Seiten
+@msg	give horizontal or vertical	geben Sie horizontal oder vertical an
 @msg	give the path `id` and the width point `index`	geben Sie die `id` des Pfads und den `index` des Breitenpunkts an
 @msg	guides are locked	die Hilfslinien sind gesperrt
 @msg	image '{key}' has no pixels and was left out	das Bild '{key}' hat keine Pixel und wurde ausgelassen

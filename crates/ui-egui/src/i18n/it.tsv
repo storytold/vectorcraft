@@ -3485,6 +3485,7 @@ axis	Both	Entrambi
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art o type
 @msg	artboard {0} does not exist	la tavola da disegno {0} non esiste
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	a questa scala il disegno misura {w} × {h} pt, più di quanto possa contenere l'area di disegno: scegli una scala più piccola o adattalo alla tavola da disegno
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
@@ -3527,6 +3528,7 @@ axis	Both	Entrambi
 @msg	freeform line {i} must be an array of point indices	la linea a forma libera {i} deve essere un array di indici di punti
 @msg	give both `start` and `end` [x, y] (or neither)	specifica sia `start` sia `end` [x, y] (o nessuno dei due)
 @msg	give corners of the path: anchors between two straight sides	specifica angoli del tracciato: punti di ancoraggio tra due lati diritti
+@msg	give horizontal or vertical	specifica horizontal o vertical
 @msg	give the path `id` and the width point `index`	specifica l'`id` del tracciato e l'`index` del punto di larghezza
 @msg	guides are locked	le guide sono bloccate
 @msg	image '{key}' has no pixels and was left out	l'immagine '{key}' non ha pixel ed è stata omessa

@@ -3468,6 +3468,7 @@ axis	Both	Обидві
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art або type
 @msg	artboard {0} does not exist	монтажна область {0} не існує
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при цьому масштабі малюнок має розмір {w} × {h} пт, що більше полотна: виберіть менший масштаб або впишіть його в монтажну область
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
@@ -3510,6 +3511,7 @@ axis	Both	Обидві
 @msg	freeform line {i} must be an array of point indices	довільна лінія {i} має бути масивом індексів точок
 @msg	give both `start` and `end` [x, y] (or neither)	вкажіть `start`, `end` [x, y] (або жодного)
 @msg	give corners of the path: anchors between two straight sides	вкажіть кути контуру: опорні точки між двома прямими сторонами
+@msg	give horizontal or vertical	вкажіть horizontal або vertical
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини
 @msg	guides are locked	напрямні заблоковані
 @msg	image '{key}' has no pixels and was left out	зображення '{key}' не має пікселів і було пропущено

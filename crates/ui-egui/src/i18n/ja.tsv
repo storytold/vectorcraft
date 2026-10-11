@@ -3528,6 +3528,8 @@ theme	Appearance	外観
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください
 @msg	select two or more objects to distribute	分布させるオブジェクトを 2 つ以上選択してください
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis には "vertical"、"horizontal"、度単位の角度のいずれかを指定してください (`{v}` は指定できません)
+@msg	give horizontal or vertical	horizontal または vertical を指定してください
 @msg	selection has no bounds	選択範囲に境界がありません
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	クリッピングマスクとして使うには、最前面のオブジェクトがパス、複合パス、テキストオブジェクトのいずれかである必要があります
 @msg	no target object has an opacity mask: select one or give `id`	不透明マスクのあるターゲットオブジェクトがありません: 該当するオブジェクトを選択するか、`id` を指定してください

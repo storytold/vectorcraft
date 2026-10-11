@@ -3482,6 +3482,7 @@ axis	Both	Les deux
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}` : none, art ou type
 @msg	artboard {0} does not exist	le plan de travail {0} n’existe pas
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	à cette échelle, le dessin mesure {w} × {h} pt, plus que ne peut contenir la zone de travail : choisissez une échelle plus petite ou ajustez-le au plan de travail
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis doit être "vertical", "horizontal" ou un angle en degrés, pas `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arrière-plan {other} : transparent, white, black ou une couleur comme "#ff8800"
 @msg	bad color {v}	couleur non valide {v}
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
@@ -3524,6 +3525,7 @@ axis	Both	Les deux
 @msg	freeform line {i} must be an array of point indices	la ligne de forme libre {i} doit être un tableau d’indices de points
 @msg	give both `start` and `end` [x, y] (or neither)	indiquez à la fois `start` et `end` [x, y] (ou aucun des deux)
 @msg	give corners of the path: anchors between two straight sides	indiquez des angles du tracé : des points d’ancrage entre deux côtés droits
+@msg	give horizontal or vertical	indiquez horizontal ou vertical
 @msg	give the path `id` and the width point `index`	indiquez l’`id` du tracé et l’`index` du point de largeur
 @msg	guides are locked	les repères sont verrouillés
 @msg	image '{key}' has no pixels and was left out	l’image « {key} » n’a aucun pixel et a été ignorée

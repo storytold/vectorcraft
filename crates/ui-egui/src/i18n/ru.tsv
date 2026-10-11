@@ -3481,6 +3481,7 @@ axis	Both	Оба
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art или type
 @msg	artboard {0} does not exist	монтажная область {0} не существует
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при этом масштабе рисунок имеет размер {w} × {h} пт, что больше холста: выберите меньший масштаб или впишите его в монтажную область
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
 @msg	bad colour `{hex}` (#rrggbb)	недопустимый цвет `{hex}` (#rrggbb)
@@ -3523,6 +3524,7 @@ axis	Both	Оба
 @msg	freeform line {i} must be an array of point indices	произвольная линия {i} должна быть массивом индексов точек
 @msg	give both `start` and `end` [x, y] (or neither)	укажите и `start`, и `end` [x, y] (или ни одного)
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
+@msg	give horizontal or vertical	укажите horizontal или vertical
 @msg	give the path `id` and the width point `index`	укажите `id` контура и `index` точки ширины
 @msg	guides are locked	направляющие заблокированы
 @msg	image '{key}' has no pixels and was left out	изображение '{key}' не имеет пикселей и было пропущено

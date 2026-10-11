@@ -3485,6 +3485,7 @@ axis	Both	Ambos
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art o type
 @msg	artboard {0} does not exist	la mesa de trabajo {0} no existe
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	a esta escala el dibujo mide {w} × {h} pt, más de lo que cabe en el lienzo: elige una escala menor o ajústalo a la mesa de trabajo
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis debe ser "vertical", "horizontal" o un ángulo en grados, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fondo {other}: transparent, white, black o un color como "#ff8800"
 @msg	bad color {v}	color no válido {v}
 @msg	bad colour `{hex}` (#rrggbb)	color no válido `{hex}` (#rrggbb)
@@ -3527,6 +3528,7 @@ axis	Both	Ambos
 @msg	freeform line {i} must be an array of point indices	la línea de forma libre {i} debe ser una lista de índices de puntos
 @msg	give both `start` and `end` [x, y] (or neither)	indica `start` y `end` [x, y] (o ninguno de los dos)
 @msg	give corners of the path: anchors between two straight sides	indica esquinas del trazado: puntos de ancla entre dos lados rectos
+@msg	give horizontal or vertical	indica horizontal o vertical
 @msg	give the path `id` and the width point `index`	indica el `id` del trazado y el `index` del punto de anchura
 @msg	guides are locked	las guías están bloqueadas
 @msg	image '{key}' has no pixels and was left out	la imagen '{key}' no tiene píxeles y se omitió
