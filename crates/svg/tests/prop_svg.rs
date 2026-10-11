@@ -7,6 +7,10 @@ use proptest::prelude::*;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::Appearance;
 use vectorcraft_geom::{PathData, Rect, shapes};
+
+fn close_rect(a: Rect, b: Rect, tol: f64) -> bool {
+    (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol
+}
 use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import};
 use vectorcraft_testkit::fixtures::{self, DocBuilder, art_nodes};
 use vectorcraft_testkit::invariants::check_document;
@@ -73,8 +77,8 @@ proptest! {
         // Multi-subpath paths may come back split into several objects; compare the union.
         let bb = paths.iter().filter_map(|q| q.bounds()).reduce(|x, y| x.union(y)).unwrap();
         let a = p.bounds().unwrap();
-        let eps = 2.0 * 10f64.powi(-(decimals as i32));
-        prop_assert!((a.x0 - bb.x0).abs() <= eps && (a.y0 - bb.y0).abs() <= eps && (a.x1 - bb.x1).abs() <= eps && (a.y1 - bb.y1).abs() <= eps, "{a:?} vs {bb:?}");
+        let eps = 4.0 * 10f64.powi(-(decimals as i32));
+        prop_assert!(close_rect(a, bb, eps), "{a:?} vs {bb:?}");
     }
 
     /// Importing arbitrary text never panics.

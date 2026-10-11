@@ -7,6 +7,10 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, OpacityMask};
 use vectorcraft_geom::{Rect, shapes};
+
+fn close_rect(a: Rect, b: Rect, tol: f64) -> bool {
+    (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol
+}
 use vectorcraft_svg::{ExportOptions, export, import_with_report};
 
 /// A red square masked by white art over its left half.
@@ -47,7 +51,9 @@ fn an_inverted_unclipped_mask_round_trips() {
         // The original art: one white rectangle, no backdrop and no filter group around it.
         assert!(m.art.path_data().is_some(), "{:?}", m.art.kind);
         let b = m.art.geometric_bounds().unwrap();
-        assert!((b.x0 - 10.0).abs() < 1e-6 && (b.x1 - 50.0).abs() < 1e-6 && (b.y0 - 10.0).abs() < 1e-6 && (b.y1 - 90.0).abs() < 1e-6, "{b:?}");
+        // #864: appending `pt` to width/height makes usvg do a px→pt round trip on import, costing
+        // ~1e-7 of float error; relax to 1e-4.
+        assert!(close_rect(b, Rect::new(10.0, 10.0, 50.0, 90.0), 1e-4), "{b:?}");
         assert_eq!(m.art.appearance.fill_paint(), Paint::solid(Color::WHITE));
         // Exporting the import again writes the same mask.
         let again = export(&back, &ExportOptions::default());

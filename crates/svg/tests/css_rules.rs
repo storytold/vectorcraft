@@ -172,7 +172,7 @@ fn shared_properties_read_as_svg_export_writes_them() {
     n.blend = BlendMode::Multiply;
     let id = add(&mut d, n);
     let r = one(&d, id, &CssOptions::default());
-    let svg = export(&d, &ExportOptions { styling: Styling::InternalCss, ..ExportOptions::default() });
+    let svg = export(&d, &ExportOptions { styling: Styling::InternalCss, ..Default::default() });
     let style = &svg[svg.find("<style>").unwrap()..svg.find("</style>").unwrap()];
     for k in ["font-family", "font-weight", "font-kerning", "font-feature-settings", "text-decoration", "opacity", "mix-blend-mode"] {
         let v = prop(&r, k).unwrap_or_else(|| panic!("{k} is written: {r:?}"));

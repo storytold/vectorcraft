@@ -23,9 +23,10 @@ fn rect_doc(align_corners: bool) -> Document {
     d
 }
 
-/// The SVG rendered by resvg on white at 1 px/pt.
+/// The SVG rendered by resvg on white at 1 px/pt. usvg defaults to 96 dpi (1 pt = 4/3 px), which
+/// would scale a pt-typed SVG to 75% of its declared size; pin dpi to 72 so pt and px match.
 fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
-    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default()).expect("parse");
+    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options { dpi: 72.0, ..Default::default() }).expect("parse");
     let mut pm = resvg::tiny_skia::Pixmap::new(w, h).unwrap();
     pm.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut pm.as_mut());
