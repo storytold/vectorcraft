@@ -753,8 +753,8 @@ fn layout_10k_area_text_is_fast() {
 /// Proportional Metrics (#966): in horizontal type full-width glyphs take the font's proportional
 /// widths (`palt`), and Japanese composition takes nothing more off the punctuation `palt`
 /// re-spaced (the flush bracket at a paragraph's start, consecutive punctuation, half width at a
-/// line's end); punctuation it leaves full width is trimmed as before. Vertical type sets as
-/// before. Needs craft-fonts' Shippori Mincho, whose `palt` covers kana and most brackets but not
+/// line's end); punctuation it leaves full width is trimmed as before (vertical type: see
+/// `tests_vertical`). Needs craft-fonts' Shippori Mincho, whose `palt` covers kana and most brackets but not
 /// 〘〙 (skipped without it).
 #[test]
 fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
@@ -765,32 +765,29 @@ fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
     }
     let st = |on: bool| CharStyle { size: 20.0, font_family: "Shippori Mincho".into(), proportional_metrics: on, ..CharStyle::default() };
     // Right-aligned in a frame ten ems wide, so a line's end trim moves the line.
-    let lay = |text: &str, on: bool, m: Mojikumi, vertical: bool| {
+    let lay = |text: &str, on: bool, m: Mojikumi| {
         let mut t = area(text, st(on), Rect::new(0.0, 0.0, 200.0, 200.0), Justify::Right);
-        t.vertical = vertical;
         t.para.mojikumi = m;
         layout(db(), &t)
     };
     let adv = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
     let x0 = |l: &TextLayout| l.glyphs.iter().map(|g| g.outline.bounding_box().x0).collect::<Vec<_>>();
     let near = |a: &[f64], b: &[f64]| a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.01);
-    let off = adv(&lay("「あ漢」", false, Mojikumi::None, false));
-    let on = adv(&lay("「あ漢」", true, Mojikumi::None, false));
+    let off = adv(&lay("「あ漢」", false, Mojikumi::None));
+    let on = adv(&lay("「あ漢」", true, Mojikumi::None));
     assert!(off.iter().all(|a| (a - 20.0).abs() < 0.01), "{off:?}");
     assert!(on[0] < 15.0 && on[1] < 19.0 && on[3] < 15.0, "kana and brackets narrower: {on:?}");
     assert!((on[2] - 20.0).abs() < 0.01, "the kanji keeps its em: {on:?}");
     // Re-spaced punctuation: Line-end Punctuation Half Width changes nothing, at the paragraph's
     // start (「), between punctuation (」、) or at the line's end (」).
     for text in ["「あ」、漢", "漢「あ」"] {
-        let (half, none) = (lay(text, true, Mojikumi::LineEndHalf, false), lay(text, true, Mojikumi::None, false));
+        let (half, none) = (lay(text, true, Mojikumi::LineEndHalf), lay(text, true, Mojikumi::None));
         assert!(near(&adv(&half), &adv(&none)), "{text}: {:?} {:?}", adv(&half), adv(&none));
         assert!(near(&x0(&half), &x0(&none)), "{text}: {:?} {:?}", x0(&half), x0(&none));
     }
     // Punctuation `palt` leaves full width: flush at the paragraph's start, half width at the end.
-    let (half, none) = (lay("〘あ〙", true, Mojikumi::LineEndHalf, false), lay("〘あ〙", true, Mojikumi::None, false));
+    let (half, none) = (lay("〘あ〙", true, Mojikumi::LineEndHalf), lay("〘あ〙", true, Mojikumi::None));
     assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
     let moved = x0(&half)[1] - x0(&none)[1];
     assert!((moved - 10.0).abs() < 0.01, "〙's empty half goes past the line's end: あ moved {moved}");
-    // Vertical type sets as before.
-    assert!(near(&adv(&lay("「あ漢」", true, Mojikumi::None, true)), &adv(&lay("「あ漢」", false, Mojikumi::None, true))));
 }

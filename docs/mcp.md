@@ -2669,10 +2669,12 @@ without ideographs uses its em box. One undo step.
 
 `text.setFormat {proportionalMetrics: true}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end,
 proportionalMetrics}` (a range) set full-width glyphs on the proportional widths the font gives them with the
-OpenType `palt` feature; glyphs the font doesn't re-space keep their full width. Line-end Punctuation Half Width then takes nothing more off the punctuation `palt` re-spaced (the opening
-bracket at a line's start, consecutive punctuation, the closing mark at a line's end); punctuation left full width is
-trimmed as before. Off by default and saved only when on. Horizontal type only for now: vertical type sets as before.
-One undo step.
+OpenType `palt` feature; glyphs the font doesn't re-space keep their full width. In vertical type, upright glyphs take
+the proportional heights of the font's `vpal` feature (the glyphs are shaped top to bottom for it) and move with them;
+a font without vertical metrics keeps its cells. Line-end Punctuation Half Width then takes nothing more off the
+punctuation `palt` or `vpal` re-spaced (the opening bracket at a line's start, consecutive punctuation, the closing
+mark at a line's end); punctuation left full width is trimmed as before. Off by default and saved only when on. One
+undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}

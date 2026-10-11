@@ -43,7 +43,8 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Middle Eastern: Character Direction, digit types, kashidas, Middle Eastern composers, split caret | missing | |
 | CJK: input methods (marked text, candidate window) | done | |
 | CJK: kinsoku (Hard, Soft, None), Line-end Punctuation Half Width, tate-chu-yoko (auto) | done / partial | custom kinsoku sets, the Mojikumi Settings dialog and the other mojikumi sets missing |
-| CJK: ruby, proportional vertical metrics (`vpal`/`palt`), manual tate-chu-yoko | missing | #966, #633 |
+| CJK: Proportional Metrics (`palt` in horizontal type, `vpal` in vertical type) | done | #966 |
+| CJK: ruby, manual tate-chu-yoko | missing | #633 |
 | Inline symbols in text | beyond Illustrator | not scored |
 
 ## Revision history
