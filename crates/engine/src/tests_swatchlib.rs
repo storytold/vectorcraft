@@ -284,6 +284,26 @@ fn swatch_exchange_files_save_with_models_kinds_and_groups() {
 }
 
 #[test]
+fn save_counts_the_swatches_the_file_holds() {
+    let mut s = session();
+    // A new document has 46 solid colors and 4 linear or radial gradients besides None. Mesh is a freeform gradient.
+    run(&mut s, "swatch.new", json!({"name": "Mesh", "gradient": {"kind": "freeform"}}));
+    let mut counts = vec![];
+    for format in ["vcswatches", "gpl", "ase", "css"] {
+        let r = run(&mut s, "swatch.library.save", json!({ "format": format }));
+        // The libraries load back with that many swatches, and the CSS file has one property for each.
+        let held = if format == "css" {
+            r["data"].as_str().unwrap().lines().filter(|l| l.starts_with("  --")).count() as u64
+        } else {
+            let load = json!({"data": r["data"], "dataBase64": r["dataBase64"], "name": format!("Saved.{format}")});
+            run(&mut s, "swatch.library.load", load)["count"].as_u64().unwrap()
+        };
+        counts.push((format, r["count"].as_u64().unwrap(), held));
+    }
+    assert_eq!(counts, [("vcswatches", 51, 51), ("gpl", 46, 46), ("ase", 46, 46), ("css", 50, 50)]);
+}
+
+#[test]
 fn loaded_libraries_copy_into_the_user_folder_without_replacing_files() {
     use vectorcraft_testkit::ase::{Block, ase, sample};
     let dir = temp_dir("copy");

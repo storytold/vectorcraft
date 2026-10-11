@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Swatch Library…",
             ["Window", "Swatches"],
             None,
-            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"ase\" (swatch exchange, binary: solid colors in their own model (RGB, CMYK, Lab, Gray) as global, spot or process colors, and color groups; gradients are left out, and a tint swatch is saved as the color it shows) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}, or {dataBase64, format, count} for ase",
+            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"ase\" (swatch exchange, binary: solid colors in their own model (RGB, CMYK, Lab, Gray) as global, spot or process colors, and color groups; gradients are left out, and a tint swatch is saved as the color it shows) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count: the swatches written (gpl and ase hold solid colors only, and css leaves freeform gradients out), library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}, or {dataBase64, format, count} for ase",
             has_doc,
             save
         ),
@@ -454,7 +454,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
     let bytes = palette_io::write(&lib, format).map_err(|e| bad(C, e))?;
     let data = if format.binary() { FileData::Binary(bytes) } else { FileData::Text(String::from_utf8_lossy(&bytes).into_owned()) };
-    let mut out = json!({"format": format.id(), "count": lib.len()});
+    let mut out = json!({"format": format.id(), "count": lib.iter().filter(|w| format.holds(&w.paint)).count()});
     s.swatch_libraries.write(p, &lib.name, format.id(), data, &mut out, C)?;
     Ok(out)
 }
