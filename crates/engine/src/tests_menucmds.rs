@@ -94,6 +94,49 @@ fn hide_all_artwork_above() {
     assert!(node(&s, over).visible);
 }
 
+fn key(s: &Session) -> Option<NodeId> {
+    s.doc().unwrap().selection.key
+}
+
+/// Lock › All Artwork Above deselects the selected objects it locks: here the key object, in a
+/// group above the other selected object. Undo selects it again as the key object.
+#[test]
+fn lock_all_artwork_above_deselects_the_objects_it_locks() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    sel(&mut s, &[b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[a, b]);
+    s.execute("select.key", &json!({"id": b.0})).unwrap();
+    s.execute("object.lock.above", &json!({})).unwrap();
+    assert!(node(&s, g).locked);
+    assert_eq!((selected(&s), key(&s)), (vec![a], None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!node(&s, g).locked);
+    assert_eq!((selected(&s), key(&s)), (vec![a, b], Some(b)));
+}
+
+/// Hide › All Artwork Above deselects the selected objects it hides (here one in a sublayer above)
+/// and selected objects that were hidden before. The one object left can't be the key object, so
+/// the key goes too; undo brings both back.
+#[test]
+fn hide_all_artwork_above_deselects_the_objects_it_hides() {
+    let mut s = session();
+    let hidden = rect(&mut s, 400.0, 400.0, 20.0, 20.0);
+    s.execute("layer.setProps", &json!({"id": hidden.0, "visible": false})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({})).unwrap());
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    sel(&mut s, &[hidden, a, b]);
+    s.execute("select.key", &json!({"id": a.0})).unwrap();
+    s.execute("object.hide.above", &json!({})).unwrap();
+    assert!(!node(&s, sub).visible);
+    assert_eq!((selected(&s), key(&s)), (vec![a], None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((selected(&s), key(&s)), (vec![hidden, a, b], Some(a)));
+}
+
 #[test]
 fn lock_and_hide_other_layers() {
     let mut s = session();
