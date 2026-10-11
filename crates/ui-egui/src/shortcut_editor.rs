@@ -464,6 +464,8 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
                     None => Err("no file writer".into()),
                 },
+                // Its save dialog is open: the file is written when it answers.
+                None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
                     Some(dl) => {
                         dl("VectorCraft Shortcuts.json", &bytes);
@@ -698,39 +700,64 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let import = d.fields.remove("__import").is_some();
     let export = d.fields.remove("__export").is_some();
     app.ui.dialog = Some(d);
+    // Their file dialogs, shown off the UI thread, import into or export from the dialog as it is
+    // when they answer.
     if import {
-        // Import replaces the working set (committed on OK like other edits).
-        let saved = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
-        match run_command(app, "shortcuts.import", &json!({})) {
-            Some(Ok(_)) => {
-                let (o, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
-                (app.ui.shortcut_overrides, app.ui.shortcut_set) = saved;
-                sync(&app.ui);
-                if let Some(d) = app.ui.dialog.as_mut() {
-                    d.fields.insert("overrides".into(), serde_json::to_value(&o).unwrap_or(json!({})));
-                    d.fields.insert("set".into(), json!(s));
-                    d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
-                }
-            }
-            Some(Err(e)) if e != "cancelled" => app.status(e),
-            _ => {}
-        }
+        crate::picks::button(app, import_into_dialog);
     }
     if export {
-        let (ov, set) = app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), d.str("set"))).unwrap_or_default();
-        let saved = std::mem::replace(&mut app.ui.shortcut_overrides, ov);
-        let saved_set = std::mem::replace(&mut app.ui.shortcut_set, set);
-        if let Some(Err(e)) = run_command(app, "shortcuts.export", &json!({})) {
-            app.status(e);
-        }
-        app.ui.shortcut_overrides = saved;
-        app.ui.shortcut_set = saved_set;
+        crate::picks::button(app, export_from_dialog);
     }
     if cancel {
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
     }
+}
+
+/// The Keyboard Shortcuts dialog, while it is open.
+fn shortcuts_dialog(app: &VectorcraftApp) -> bool {
+    app.ui.dialog.as_ref().is_some_and(|d| d.kind == "shortcuts")
+}
+
+/// The dialog's Import…: the imported set replaces its working set (committed on OK like other
+/// edits).
+fn import_into_dialog(app: &mut VectorcraftApp) {
+    if !shortcuts_dialog(app) {
+        app.status(crate::picks::dialog_gone());
+        return;
+    }
+    let saved = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
+    match run_command(app, "shortcuts.import", &json!({})) {
+        Some(Ok(_)) => {
+            let (o, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
+            (app.ui.shortcut_overrides, app.ui.shortcut_set) = saved;
+            sync(&app.ui);
+            if let Some(d) = app.ui.dialog.as_mut() {
+                d.fields.insert("overrides".into(), serde_json::to_value(&o).unwrap_or(json!({})));
+                d.fields.insert("set".into(), json!(s));
+                d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
+            }
+        }
+        Some(Err(e)) if e != "cancelled" => app.status(e),
+        _ => {}
+    }
+}
+
+/// The dialog's Export…: its working set, as edited so far.
+fn export_from_dialog(app: &mut VectorcraftApp) {
+    if !shortcuts_dialog(app) {
+        app.status(crate::picks::dialog_gone());
+        return;
+    }
+    let (ov, set) = app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), d.str("set"))).unwrap_or_default();
+    let saved = std::mem::replace(&mut app.ui.shortcut_overrides, ov);
+    let saved_set = std::mem::replace(&mut app.ui.shortcut_set, set);
+    if let Some(Err(e)) = run_command(app, "shortcuts.export", &json!({})) {
+        app.status(e);
+    }
+    app.ui.shortcut_overrides = saved;
+    app.ui.shortcut_set = saved_set;
 }
 
 /// Apply a recorded chord to `key` in the working set, warning about (and resolving) conflicts.

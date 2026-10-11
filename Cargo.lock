@@ -4448,6 +4448,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-text",
  "objc2-foundation 0.3.2",
+ "pollster 1.0.1",
  "raw-window-handle",
  "rfd",
  "serde_json",

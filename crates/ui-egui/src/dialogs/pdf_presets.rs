@@ -103,12 +103,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     });
     if let Some(a) = act {
-        let r = if matches!(a, Action::Import) {
-            // Its file dialog, shown off the UI thread, imports into the dialog as it is then.
-            let current = preset.name.clone();
-            crate::picks::in_dialog(app, d, move |app, d| run(app, d, Action::Import, &current))
-        } else {
-            run(app, d, a, &preset.name)
+        let r = match a {
+            // Their file dialogs, shown off the UI thread, import into or export from the dialog
+            // as it is then.
+            Action::Import | Action::Export => {
+                let (current, export) = (preset.name.clone(), matches!(a, Action::Export));
+                crate::picks::in_dialog(app, d, move |app, d| run(app, d, if export { Action::Export } else { Action::Import }, &current))
+            }
+            a => run(app, d, a, &preset.name),
         };
         if let Err(e) = r {
             app.status(e);

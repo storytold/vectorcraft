@@ -3833,6 +3833,8 @@ theme	Appearance	Erscheinungsbild
 	Images: link to the file instead of only embedding it.	Bilder: mit der Datei verknüpfen, statt sie nur einzubetten.
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-Dokumente: ein gesperrtes Objekt, das aktualisiert wird, wenn sich die Datei ändert.
 	A file dialog is open: choose there first	Ein Dateidialog ist geöffnet: Treffen Sie zuerst dort Ihre Auswahl
+	The document was closed while its file dialog was open	Das Dokument wurde geschlossen, während sein Dateidialog geöffnet war
+	The dialog was closed before its file dialog answered	Das Dialogfeld wurde geschlossen, bevor sein Dateidialog geantwortet hat
 	Shaper	Shaper
 	Expand Shaper Group	Shaper-Gruppe umwandeln
 	Release Shaper Group	Shaper-Gruppe zurückwandeln

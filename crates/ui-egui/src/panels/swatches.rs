@@ -1092,8 +1092,10 @@ impl LibraryKind for SwatchLibraries {
     }
     fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.separator();
+        // As a command, so its file dialog, shown off the UI thread, loads the library when it
+        // answers.
         if menu_item(ui, tl!("Other Library…"), true, false)
-            && let Err(e) = other_library(app, None)
+            && let Err(e) = app.run("window.swatchLibrary.other", json!({}))
         {
             app.status(e);
         }

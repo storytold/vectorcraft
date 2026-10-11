@@ -3934,6 +3934,8 @@ axis	Both	Entrambi
 	Images: link to the file instead of only embedding it.	Immagini: collega il file invece di incorporarlo soltanto.
 	VectorCraft documents: one locked object, updated when the file changes.	Documenti VectorCraft: un unico oggetto bloccato, aggiornato quando il file cambia.
 	A file dialog is open: choose there first	È aperta una finestra di dialogo dei file: scegli prima lì
+	The document was closed while its file dialog was open	Il documento è stato chiuso mentre la sua finestra di dialogo dei file era aperta
+	The dialog was closed before its file dialog answered	La finestra di dialogo è stata chiusa prima che rispondesse la sua finestra di dialogo dei file
 	Shaper	Shaper
 	Expand Shaper Group	Espandi gruppo Shaper
 	Release Shaper Group	Rilascia gruppo Shaper

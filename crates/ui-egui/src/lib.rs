@@ -243,9 +243,13 @@ pub struct Services {
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<native_menu::NativeMenu>,
     /// Show file dialogs off the UI thread (desktop Linux, where a dialog in line holds the window
-    /// and the compositor finds it not answering): what asked runs again with the answer
-    /// ([`picks`]). Without it they are shown in line.
+    /// and the compositor finds it not answering, #592) or as sheets on the window (macOS, where a
+    /// dialog in line aborts the app, #867): what asked runs again with the answer ([`picks`]).
+    /// Without it they are shown in line.
     pub start_pick: Option<picks::StartPick>,
+    /// [`Self::start_pick`]'s dialogs are sheets on the window (macOS): while one is open the app
+    /// neither quits nor closes documents, as under the modal dialog before.
+    pub dialogs_are_sheets: bool,
 }
 
 /// Cached canvas raster.
@@ -679,8 +683,13 @@ impl VectorcraftApp {
             let reply = req.reply.clone();
             // Guarded per request: a panic must not drop the channel (taken out of `self` above).
             let roots = self.automation_roots.clone();
-            let outcome = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)))
-                .unwrap_or_else(|msg| control::err(format!("internal error: {msg} (please report this bug)")));
+            let outcome = match file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))) {
+                Ok(outcome) => outcome,
+                Err(msg) => {
+                    self.picks.recover();
+                    control::err(format!("internal error: {msg} (please report this bug)"))
+                }
+            };
             match outcome {
                 control::Outcome::Done(v) => {
                     let _ = reply.send(v);
@@ -816,6 +825,18 @@ impl VectorcraftApp {
         }
     }
 
+    /// A file dialog is open off the UI thread (a sheet on macOS, [`picks`]): what asked for it runs
+    /// again when it answers.
+    pub fn file_dialog_open(&self) -> bool {
+        self.picks.is_waiting()
+    }
+
+    /// A file dialog is open as a sheet on the window ([`Services::dialogs_are_sheets`]): nothing
+    /// closes or quits until it answers.
+    pub fn file_sheet_open(&self) -> bool {
+        self.services.dialogs_are_sheets && self.file_dialog_open()
+    }
+
     /// Show a transient status message.
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
@@ -904,6 +925,7 @@ impl VectorcraftApp {
     pub fn logic(&mut self, ctx: &egui::Context) {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.logic_frame(ctx))) {
+            self.picks.recover();
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -957,10 +979,14 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents,
-        // once the saves running in the background are done.
+        // once the saves running in the background are done. Not while a file dialog's sheet is on
+        // the window: what asked for it runs again when it answers.
         if ctx.input(|i| i.viewport().close_requested()) {
             background::wait_all(self);
-            if unsaved::any_dirty(self) {
+            if self.file_sheet_open() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.status(picks::busy());
+            } else if unsaved::any_dirty(self) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 if let Err(e) = unsaved::close_all(self, "quit") {
                     self.status(e);
@@ -1078,7 +1104,9 @@ impl VectorcraftApp {
         // The native menu's key equivalents become the input their keys make, ahead of what came
         // after them (see `native_menu`).
         let keys = self.services.native_menu.as_mut().map(native_menu::NativeMenu::take_keys).unwrap_or_default();
-        if !keys.is_empty() {
+        // The menu bar does nothing while a file dialog is open (`native_menu`): a key that raced it
+        // going inert is dropped.
+        if !keys.is_empty() && !self.file_dialog_open() {
             let events: Vec<egui::Event> = keys.into_iter().flat_map(|k| native_menu::key_events(k, || self.system_clipboard_text())).collect();
             raw.events.splice(0..0, events);
         }
@@ -1135,6 +1163,7 @@ impl VectorcraftApp {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.ui_frame(ui))) {
+            self.picks.recover();
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }

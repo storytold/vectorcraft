@@ -3290,6 +3290,8 @@ theme	Appearance	外観
 	Images: link to the file instead of only embedding it.	画像：埋め込むだけでなく、ファイルにリンクします。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft ドキュメント：ロックされた 1 つのオブジェクト。ファイルの変更時に更新されます。
 	A file dialog is open: choose there first	ファイルダイアログが開いています。先にそちらで選択してください
+	The document was closed while its file dialog was open	ファイルダイアログが開いている間にドキュメントが閉じられました
+	The dialog was closed before its file dialog answered	ファイルダイアログが応答する前にダイアログが閉じられました
 	Shaper	Shaper
 	Expand Shaper Group	Shaper グループを拡張
 	Release Shaper Group	Shaper グループを解除

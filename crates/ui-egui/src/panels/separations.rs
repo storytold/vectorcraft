@@ -108,14 +108,14 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         run(app, "edit.colorSettings", json!({"bpc": !st.bpc}));
     }
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked()
-            && let Some(path) = app
-                .services
-                .pick_open
-                .as_mut()
-                .and_then(|f| f(&crate::FilePick { filters: vec![("ICC Profiles", &["icc", "icm"])], ..Default::default() }))
-        {
-            run(app, "color.loadProfile", json!({ "path": path }));
+        if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked() {
+            // Its file dialog, shown off the UI thread, loads the profile when it answers.
+            crate::picks::button(app, |app| {
+                let pick = crate::FilePick { filters: vec![("ICC Profiles", &["icc", "icm"])], ..Default::default() };
+                if let Some(path) = crate::picks::open(app, &pick) {
+                    run(app, "color.loadProfile", json!({ "path": path }));
+                }
+            });
         }
         if widgets::flat_button(ui, tl!("Gamut Check"), 100.0).clicked() {
             match app.run("color.gamutCheck", json!({})) {
