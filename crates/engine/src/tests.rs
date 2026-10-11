@@ -311,6 +311,57 @@ fn layers_and_lock_hide() {
     assert!(s.doc().unwrap().doc.node(b).is_none());
 }
 
+/// A key object is one object of a selection of several: a Shift-click (`select.toggle`) or a
+/// hidden or deleted row that leaves one object selected clears the key, and `select.key` sets
+/// none on a single selected object. A Shift-drag marquee that leaves two or more objects selected
+/// keeps the key in either order of its ids. `select.key` also sets none on a group selected with
+/// only its own member, and sets it once another object is selected.
+#[test]
+fn a_lone_selected_object_is_not_the_key_object() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 100.0, 30.0, 20.0, 20.0);
+    let c = rect(&mut s, 200.0, 60.0, 10.0, 10.0);
+    let key = |s: &Session| s.doc().unwrap().selection.key;
+    let objects = |s: &Session| s.doc().unwrap().selection.objects.clone();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("select.key", &json!({"id": b.0})).unwrap();
+    assert_eq!(key(&s), Some(b));
+    s.execute("select.toggle", &json!({"id": a.0})).unwrap();
+    assert_eq!(objects(&s), vec![b]);
+    assert_eq!(key(&s), None, "the Shift-click left one object");
+    s.execute("select.key", &json!({"id": b.0})).unwrap();
+    assert_eq!(key(&s), None, "one object selected");
+    for ids in [[a.0, c.0], [c.0, a.0]] {
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("select.key", &json!({"id": b.0})).unwrap();
+        s.execute("select.toggle", &json!({"ids": ids})).unwrap();
+        assert_eq!((objects(&s), key(&s)), (vec![b, c], Some(b)), "the marquee toggled {ids:?}");
+    }
+    // The Group Selection tool's second click on a member adds its group.
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.add", &json!({"ids": [g.0]})).unwrap();
+    s.execute("select.key", &json!({"id": g.0})).unwrap();
+    assert_eq!(key(&s), None, "a group and its own member");
+    s.execute("select.add", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.key", &json!({"id": g.0})).unwrap();
+    assert_eq!(key(&s), Some(g), "another object outside the group");
+    s.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    s.execute("select.key", &json!({"id": g.0})).unwrap();
+    assert_eq!(key(&s), Some(g));
+    s.execute("layer.setProps", &json!({"id": a.0, "visible": false})).unwrap();
+    assert_eq!((objects(&s), key(&s)), (vec![g], None), "hiding the other object's row left one object");
+    s.execute("layer.setProps", &json!({"id": a.0, "visible": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    s.execute("select.key", &json!({"id": g.0})).unwrap();
+    assert_eq!(key(&s), Some(g));
+    s.execute("layer.delete", &json!({"id": a.0})).unwrap();
+    assert_eq!(objects(&s), vec![g]);
+    assert_eq!(key(&s), None, "deleting the other object's row left one object");
+}
+
 #[test]
 fn clipping_and_compound() {
     let mut s = session();

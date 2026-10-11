@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Key Object",
             [],
             None,
-            "{id?: a selected object (the Selection tool: a click on one object of a selection of several; on the key again: none)} the key object Align aligns to and Distribute Spacing spaces from; none clears it",
+            "{id?: a selected object, one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: none)} the key object Align aligns to and Distribute Spacing spaces from; none clears it, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members)",
             has_doc,
             key
         ),

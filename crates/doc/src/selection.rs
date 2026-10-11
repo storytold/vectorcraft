@@ -16,7 +16,9 @@ pub struct Selection {
     /// Direct-selected anchors per path. A path in `objects` with no entry here is fully selected.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
-    /// Key object for Align.
+    /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
+    /// it when every selected object is the key or lies inside it, as when one object is left
+    /// selected or when the key is a group selected with only its own members.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<NodeId>,
     /// The object, group or layer targeted through its target circle in the Layers panel, which
@@ -118,7 +120,15 @@ impl Selection {
     pub fn prune(&mut self, doc: &Document) {
         self.objects.retain(|id| doc.node(*id).is_some());
         self.anchors.retain(|id, _| doc.node(*id).is_some());
-        if self.key.is_some_and(|k| doc.node(k).is_none()) {
+        // The key object stays while another selected object lies outside it.
+        let keep = self.key.and_then(|k| doc.node(k)).is_some_and(|n| {
+            let mut inside = BTreeSet::new();
+            n.walk(&mut |c| {
+                inside.insert(c.id);
+            });
+            self.objects.iter().any(|o| !inside.contains(o))
+        });
+        if !keep {
             self.key = None;
         }
         if self.target.is_some_and(|t| doc.node(t).is_none()) {
@@ -252,5 +262,48 @@ mod tests {
         s.target = Some(NodeId(1));
         s.set([NodeId(3)]);
         assert_eq!(s.target, None);
+    }
+
+    #[test]
+    fn a_key_object_needs_two_or_more_selected_objects() {
+        let mut s = Selection::default();
+        s.set([NodeId(1), NodeId(2)]);
+        s.key = Some(NodeId(2));
+        s.remove(NodeId(1));
+        assert_eq!(s.key, Some(NodeId(2)), "another object left: remove keeps the key");
+        s.remove(NodeId(2));
+        assert_eq!(s.key, None, "the key object itself left");
+        // Pruning drops objects the document no longer has and clears the key once no other
+        // selected object lies outside it.
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let mut ids = vec![];
+        for _ in 0..4 {
+            let id = d.alloc_id();
+            ids.push(d.insert(Some(layer), usize::MAX, crate::Node::group(id, vec![])).unwrap());
+        }
+        s.set(ids.iter().copied());
+        s.key = Some(ids[3]);
+        d.remove(ids[0]).unwrap();
+        s.prune(&d);
+        assert_eq!(s.key, Some(ids[3]), "three objects left: the key stays");
+        s.toggle(ids[1]);
+        s.prune(&d);
+        assert_eq!(s.key, Some(ids[3]), "two objects left: the key stays");
+        s.toggle(ids[2]);
+        s.prune(&d);
+        assert_eq!((s.objects.clone(), s.key), (vec![ids[3]], None), "one object left");
+        // A group key selected with only its own member is cleared too; another selected object
+        // outside the group keeps it.
+        let member = d.alloc_id();
+        d.insert(Some(ids[3]), usize::MAX, crate::Node::group(member, vec![])).unwrap();
+        s.set([member, ids[3]]);
+        s.key = Some(ids[3]);
+        s.prune(&d);
+        assert_eq!(s.key, None, "a group and its own member");
+        s.set([member, ids[3], ids[2]]);
+        s.key = Some(ids[3]);
+        s.prune(&d);
+        assert_eq!(s.key, Some(ids[3]), "another object outside the group");
     }
 }
