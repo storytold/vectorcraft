@@ -368,7 +368,8 @@ impl Tool for DirectSelectionTool {
                     if cx.doc.node(id).is_some_and(is_area_type) {
                         return self.press_type_area(cx, id, vec![(si, ai)], p, ev.mods.shift);
                     }
-                    let already = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, ai)));
+                    // A path with all its anchors selected is stored whole (no partial entry).
+                    let already = cx.selection.contains(id) && cx.selection.partial(id).is_none_or(|s| s.contains(&(si, ai)));
                     self.state = State::MoveAnchors { start: p, grab, began: false };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))];
@@ -836,6 +837,25 @@ mod tests {
         let mut t = DirectSelectionTool::new(false);
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))]);
+    }
+
+    /// Pressing an anchor of a path whose anchors are all selected (stored as the whole path)
+    /// keeps them all selected, so the drag moves them all; Shift still deselects that anchor.
+    #[test]
+    fn pressing_an_anchor_of_a_fully_selected_path_keeps_the_selection() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+        assert!(matches!(a.as_slice(), [Action::Begin(_), Action::Preview(c, _)] if c == "path.moveAnchors"), "{a:?}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 100.0));
+        let shift = Mods { shift: true, ..Default::default() };
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(shift));
+        assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"}))]);
     }
 
     #[test]
