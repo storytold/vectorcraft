@@ -1507,8 +1507,9 @@ Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets
 ```
 
 `object.align` needs `horizontal` or `vertical`. The three Align commands, `object.reflect` and `object.shear` return
-an error naming any `horizontal`, `vertical`, `to`, `axis` or `bounds` value outside the ones `list_commands` gives for
-that parameter, and any `spacing` that is not a number; nothing moves.
+an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `bounds` param given another value
+(`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
+moves.
 
 ## Selection preferences
 

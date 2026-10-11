@@ -3485,7 +3485,6 @@ axis	Both	Entrambi
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art o type
 @msg	artboard {0} does not exist	la tavola da disegno {0} non esiste
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	a questa scala il disegno misura {w} × {h} pt, più di quanto possa contenere l'area di disegno: scegli una scala più piccola o adattalo alla tavola da disegno
-@msg	axis must be "horizontal" or "vertical", not `{v}`	axis deve essere "horizontal" o "vertical", non `{v}`
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve essere "vertical", "horizontal" o un angolo in gradi, non `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
@@ -3496,7 +3495,6 @@ axis	Both	Entrambi
 @msg	bad trailer	trailer non valido
 @msg	balance must be between 0 and 100	il bilanciamento deve essere compreso tra 0 e 100
 @msg	batch step {_1} (`{id}`) failed: {e}	il passaggio {_1} del batch (`{id}`) non è riuscito: {e}
-@msg	bounds must be "preview" or "geometric", not `{v}`	bounds deve essere "preview" o "geometric", non `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	la luminosità deve essere dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	impossibile codificare il documento: {0}
 @msg	can't parse shortcut `{c}`	impossibile interpretare la scelta rapida `{c}`
@@ -3533,7 +3531,6 @@ axis	Both	Entrambi
 @msg	give horizontal or vertical	specifica horizontal o vertical
 @msg	give the path `id` and the width point `index`	specifica l'`id` del tracciato e l'`index` del punto di larghezza
 @msg	guides are locked	le guide sono bloccate
-@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal deve essere "left", "center" o "right", non `{v}`
 @msg	image '{key}' has no pixels and was left out	l'immagine '{key}' non ha pixel ed è stata omessa
 @msg	image data `{_1}` is missing	mancano i dati immagine `{_1}`
 @msg	image would be too large; lower the resolution	l'immagine sarebbe troppo grande; riduci la risoluzione
@@ -3733,7 +3730,6 @@ axis	Both	Entrambi
 @msg	shadings of more than 4096 patches or triangles were left out	le ombreggiature con più di 4096 patch o triangoli sono state omesse
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	le ombreggiature con funzioni di tipo sconosciuto vengono riempite con il loro colore intermedio
 @msg	shortcut for `{k}` must be a string	la scelta rapida per `{k}` deve essere una stringa
-@msg	spacing must be a number, not `{v}`	spacing deve essere un numero, non `{v}`
 @msg	stop {i} needs `offset`	il cursore colore {i} richiede `offset`
 @msg	stop {i} needs a valid `color`	il cursore colore {i} richiede un `color` valido
 @msg	stop {i}: `{k}` must be a number	cursore colore {i}: `{k}` deve essere un numero
@@ -3801,7 +3797,6 @@ axis	Both	Entrambi
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	questo è un disegno DWG, che non può essere letto: salvalo dall'app CAD come DXF ASCII e apri quel file
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	questo è un file PostScript (un .ai salvato in un formato precedente o senza compatibilità PDF, oppure un file EPS), che non può ancora essere aperto: salvalo come PDF, .ai compatibile con PDF o SVG
 @msg	this is not a PostScript file	questo non è un file PostScript
-@msg	to must be "selection", "artboard" or "key", not `{v}`	to deve essere "selection", "artboard" o "key", non `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	le scelte rapide degli strumenti devono essere un singolo tasto (eventualmente con Shift)
 @msg	truncated	troncato
 @msg	unknown command `{0}`	comando sconosciuto `{0}`
@@ -3826,7 +3821,6 @@ axis	Both	Entrambi
 @msg	unknown workspace (one of {_1})	area di lavoro sconosciuta (una delle seguenti: {_1})
 @msg	unsupported: {0}	non supportato: {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	i file della versione {0} non possono essere compressi: solo la versione {COMPRESSED_SINCE} e successive aprono file compressi
-@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical deve essere "top", "center" o "bottom", non `{v}`
 @msg	width and height are at least 1 pixel	larghezza e altezza sono di almeno 1 pixel
 @msg	workspace name can't be empty	il nome dell'area di lavoro non può essere vuoto
 @msg	{C}: no effect at index {from}	{C}: nessun effetto all'indice {from}

@@ -948,20 +948,12 @@ fn preview_bounds(s: &Session, p: &Value, cmd: &str) -> Result<bool> {
 }
 
 /// Param `key` of the Align commands and Shear: one of `values`, or `None` when it is missing or
-/// null. Any other value is an error that lists `values` and names the value given.
+/// null. Any other value is an error that lists `values`.
 fn choice<'a>(p: &'a Value, cmd: &str, key: &str, values: &[&str]) -> Result<Option<&'a str>> {
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
     match v.as_str() {
         Some(s) if values.contains(&s) => Ok(Some(s)),
-        s => {
-            let quoted: Vec<String> = values.iter().map(|value| format!("\"{value}\"")).collect();
-            let list = match quoted.split_last() {
-                Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
-                _ => quoted.concat(),
-            };
-            let given = s.map_or_else(|| v.to_string(), str::to_string);
-            Err(bad(cmd, format!("{key} must be {list}, not `{given}`")))
-        }
+        _ => Err(bad(cmd, format!("`{key}` must be one of {}", values.join(", ")))),
     }
 }
 
@@ -1131,7 +1123,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = p
         .get("spacing")
         .filter(|v| !v.is_null())
-        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", format!("spacing must be a number, not `{v}`"))))
+        .map(|v| v.as_f64().filter(|g| g.is_finite()).ok_or_else(|| bad("object.distributeSpacing", "`spacing` must be a number")))
         .transpose()?;
     let gap = match spacing {
         Some(g) => g,

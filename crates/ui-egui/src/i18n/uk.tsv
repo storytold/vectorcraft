@@ -3468,7 +3468,6 @@ axis	Both	Обидві
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art або type
 @msg	artboard {0} does not exist	монтажна область {0} не існує
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при цьому масштабі малюнок має розмір {w} × {h} пт, що більше полотна: виберіть менший масштаб або впишіть його в монтажну область
-@msg	axis must be "horizontal" or "vertical", not `{v}`	axis має бути "horizontal" або "vertical", а не `{v}`
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
@@ -3479,7 +3478,6 @@ axis	Both	Обидві
 @msg	bad trailer	неприпустимий трейлер
 @msg	balance must be between 0 and 100	баланс має бути від 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	крок пакету {_1} (`{id}`) не виконано: {e}
-@msg	bounds must be "preview" or "geometric", not `{v}`	bounds має бути "preview" або "geometric", а не `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	яскравість має бути dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не вдалося закодувати документ: {0}
 @msg	can't parse shortcut `{c}`	не вдалося розібрати поєднання `{c}`
@@ -3516,7 +3514,6 @@ axis	Both	Обидві
 @msg	give horizontal or vertical	вкажіть horizontal або vertical
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини
 @msg	guides are locked	напрямні заблоковані
-@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal має бути "left", "center" або "right", а не `{v}`
 @msg	image '{key}' has no pixels and was left out	зображення '{key}' не має пікселів і було пропущено
 @msg	image data `{_1}` is missing	дані зображення `{_1}` відсутні
 @msg	image would be too large; lower the resolution	зображення буде завеликим; зменште роздільну здатність
@@ -3716,7 +3713,6 @@ axis	Both	Обидві
 @msg	shadings of more than 4096 patches or triangles were left out	заливки з більш ніж 4096 фрагментів або трикутників були пропущені
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	заливки, функції яких мають невідомий тип, заповнюються своїм середнім кольором
 @msg	shortcut for `{k}` must be a string	поєднання для `{k}` має бути рядком
-@msg	spacing must be a number, not `{v}`	spacing має бути числом, а не `{v}`
 @msg	stop {i} needs `offset`	точці переходу {i} потрібен `offset`
 @msg	stop {i} needs a valid `color`	точці переходу {i} потрібен допустимий `color`
 @msg	stop {i}: `{k}` must be a number	точка переходу {i}: `{k}` має бути числом
@@ -3784,7 +3780,6 @@ axis	Both	Обидві
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як ASCII DXF і відкрийте його
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	це файл PostScript (.ai, збережений у старому форматі або без сумісності з PDF, або файл EPS), який поки неможливо відкрити: збережіть його як PDF, .ai із сумісністю з PDF або SVG
 @msg	this is not a PostScript file	це не файл PostScript
-@msg	to must be "selection", "artboard" or "key", not `{v}`	to має бути "selection", "artboard" або "key", а не `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	поєднання інструментів має бути однією клавішею (необов’язково з Shift)
 @msg	truncated	усічено
 @msg	unknown command `{0}`	невідома команда `{0}`
@@ -3809,7 +3804,6 @@ axis	Both	Обидві
 @msg	unknown workspace (one of {_1})	невідоме робоче середовище (одна з: {_1})
 @msg	unsupported: {0}	не підтримується: {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файли версії {0} не можуть бути стиснуті: тільки версія {COMPRESSED_SINCE} і новіші відкривають стислі файли
-@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical має бути "top", "center" або "bottom", а не `{v}`
 @msg	width and height are at least 1 pixel	ширина та висота повинні бути не менше 1 пікселя
 @msg	workspace name can't be empty	ім’я робочого середовища не може бути порожнім
 @msg	{C}: no effect at index {from}	{C}: немає ефекту з індексом {from}

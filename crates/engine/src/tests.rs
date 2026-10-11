@@ -401,9 +401,9 @@ fn align_without_a_direction_is_refused() {
     assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 50.0, "nothing moved");
 }
 
-/// Align, Distribute and Distribute Spacing return an error that names a value outside their
-/// choices: nothing moves and no undo step is recorded. A null value counts as not given, and
-/// Distribute Spacing without an `axis` spaces the objects horizontally.
+/// Align, Distribute and Distribute Spacing return an error that lists the choices of a param
+/// given a value outside them: nothing moves and no undo step is recorded. A null value counts as
+/// not given, and Distribute Spacing without an `axis` spaces the objects horizontally.
 #[test]
 fn align_and_distribute_reject_bad_params_without_changing_state() {
     let mut s = session();
@@ -412,21 +412,22 @@ fn align_and_distribute_reject_bad_params_without_changing_state() {
     let bounds = |s: &Session| ids.iter().map(|id| s.doc().unwrap().doc.node(*id).unwrap().geometric_bounds().unwrap()).collect::<Vec<_>>();
     let before = bounds(&s);
     let undo = s.doc().unwrap().history.undo.len();
-    let h = "horizontal must be \"left\", \"center\" or \"right\"";
-    let v = "vertical must be \"top\", \"center\" or \"bottom\"";
+    let h = "`horizontal` must be one of left, center, right";
+    let v = "`vertical` must be one of top, center, bottom";
+    let to = "`to` must be one of selection, artboard, key";
     for (cmd, p, msg) in [
-        ("object.align", json!({"horizontal": "middle"}), format!("{h}, not `middle`")),
-        ("object.align", json!({"vertical": "centre"}), format!("{v}, not `centre`")),
-        ("object.align", json!({"horizontal": true}), format!("{h}, not `true`")),
-        ("object.align", json!({"horizontal": "left", "to": "page"}), "to must be \"selection\", \"artboard\" or \"key\", not `page`".into()),
-        ("object.align", json!({"horizontal": "left", "to": 0}), "to must be \"selection\", \"artboard\" or \"key\", not `0`".into()),
-        ("object.align", json!({"horizontal": "left", "bounds": false}), "bounds must be \"preview\" or \"geometric\", not `false`".into()),
-        ("object.align", json!({"horizontal": "left", "vertical": "middle"}), format!("{v}, not `middle`")),
-        ("object.distribute", json!({"horizontal": "middle"}), format!("{h}, not `middle`")),
-        ("object.distribute", json!({"vertical": "centre"}), format!("{v}, not `centre`")),
-        ("object.distribute", json!({"horizontal": "left", "vertical": "middle"}), format!("{v}, not `middle`")),
-        ("object.distributeSpacing", json!({"axis": "diagonal"}), "axis must be \"horizontal\" or \"vertical\", not `diagonal`".into()),
-        ("object.distributeSpacing", json!({"axis": "vertical", "spacing": "5"}), "spacing must be a number, not `\"5\"`".into()),
+        ("object.align", json!({"horizontal": "middle"}), h),
+        ("object.align", json!({"vertical": "centre"}), v),
+        ("object.align", json!({"horizontal": true}), h),
+        ("object.align", json!({"horizontal": "left", "to": "page"}), to),
+        ("object.align", json!({"horizontal": "left", "to": 0}), to),
+        ("object.align", json!({"horizontal": "left", "bounds": false}), "`bounds` must be one of preview, geometric"),
+        ("object.align", json!({"horizontal": "left", "vertical": "middle"}), v),
+        ("object.distribute", json!({"horizontal": "middle"}), h),
+        ("object.distribute", json!({"vertical": "centre"}), v),
+        ("object.distribute", json!({"horizontal": "left", "vertical": "middle"}), v),
+        ("object.distributeSpacing", json!({"axis": "diagonal"}), "`axis` must be one of horizontal, vertical"),
+        ("object.distributeSpacing", json!({"axis": "vertical", "spacing": "5"}), "`spacing` must be a number"),
     ] {
         let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
         assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));

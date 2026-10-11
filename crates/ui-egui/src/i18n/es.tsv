@@ -3485,7 +3485,6 @@ axis	Both	Ambos
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art o type
 @msg	artboard {0} does not exist	la mesa de trabajo {0} no existe
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	a esta escala el dibujo mide {w} × {h} pt, más de lo que cabe en el lienzo: elige una escala menor o ajústalo a la mesa de trabajo
-@msg	axis must be "horizontal" or "vertical", not `{v}`	axis debe ser "horizontal" o "vertical", no `{v}`
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis debe ser "vertical", "horizontal" o un ángulo en grados, no `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fondo {other}: transparent, white, black o un color como "#ff8800"
 @msg	bad color {v}	color no válido {v}
@@ -3496,7 +3495,6 @@ axis	Both	Ambos
 @msg	bad trailer	trailer no válido
 @msg	balance must be between 0 and 100	el equilibrio debe estar entre 0 y 100
 @msg	batch step {_1} (`{id}`) failed: {e}	falló el paso {_1} del lote (`{id}`): {e}
-@msg	bounds must be "preview" or "geometric", not `{v}`	bounds debe ser "preview" o "geometric", no `{v}`
 @msg	brightness must be dark|mediumDark|mediumLight|light	el brillo debe ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	no se puede codificar el documento: {0}
 @msg	can't parse shortcut `{c}`	no se puede interpretar el atajo `{c}`
@@ -3533,7 +3531,6 @@ axis	Both	Ambos
 @msg	give horizontal or vertical	indica horizontal o vertical
 @msg	give the path `id` and the width point `index`	indica el `id` del trazado y el `index` del punto de anchura
 @msg	guides are locked	las guías están bloqueadas
-@msg	horizontal must be "left", "center" or "right", not `{v}`	horizontal debe ser "left", "center" o "right", no `{v}`
 @msg	image '{key}' has no pixels and was left out	la imagen '{key}' no tiene píxeles y se omitió
 @msg	image data `{_1}` is missing	faltan los datos de imagen `{_1}`
 @msg	image would be too large; lower the resolution	la imagen sería demasiado grande; baja la resolución
@@ -3733,7 +3730,6 @@ axis	Both	Ambos
 @msg	shadings of more than 4096 patches or triangles were left out	se omitieron los sombreados de más de 4096 parches o triángulos
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	los sombreados cuyas funciones son de tipo desconocido se rellenan con su color intermedio
 @msg	shortcut for `{k}` must be a string	el atajo de `{k}` debe ser un texto
-@msg	spacing must be a number, not `{v}`	spacing debe ser un número, no `{v}`
 @msg	stop {i} needs `offset`	la parada {i} necesita `offset`
 @msg	stop {i} needs a valid `color`	la parada {i} necesita un `color` válido
 @msg	stop {i}: `{k}` must be a number	parada {i}: `{k}` debe ser un número
@@ -3801,7 +3797,6 @@ axis	Both	Ambos
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	este es un dibujo DWG, que no se puede leer: guárdalo desde la aplicación de CAD como DXF ASCII y abre ese archivo
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	este es un archivo PostScript (un .ai guardado en un formato antiguo o sin compatibilidad con PDF, o un archivo EPS), que todavía no se puede abrir: guárdalo como PDF, .ai compatible con PDF o SVG
 @msg	this is not a PostScript file	este no es un archivo PostScript
-@msg	to must be "selection", "artboard" or "key", not `{v}`	to debe ser "selection", "artboard" o "key", no `{v}`
 @msg	tool shortcuts must be a single key (optionally with Shift)	los atajos de herramientas deben ser una sola tecla (opcionalmente con Shift)
 @msg	truncated	truncado
 @msg	unknown command `{0}`	comando desconocido `{0}`
@@ -3826,7 +3821,6 @@ axis	Both	Ambos
 @msg	unknown workspace (one of {_1})	espacio de trabajo desconocido (uno de estos: {_1})
 @msg	unsupported: {0}	no compatible: {0}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	los archivos de la versión {0} no se pueden comprimir: solo la versión {COMPRESSED_SINCE} y posteriores abren archivos comprimidos
-@msg	vertical must be "top", "center" or "bottom", not `{v}`	vertical debe ser "top", "center" o "bottom", no `{v}`
 @msg	width and height are at least 1 pixel	el ancho y el alto son de al menos 1 píxel
 @msg	workspace name can't be empty	el nombre del espacio de trabajo no puede estar vacío
 @msg	{C}: no effect at index {from}	{C}: no hay ningún efecto en el índice {from}
