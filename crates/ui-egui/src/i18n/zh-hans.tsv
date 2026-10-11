@@ -3540,6 +3540,8 @@ axis	Both	两者
 	Images: link to the file instead of only embedding it.	图像：链接到文件，而不只是嵌入。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文档：一个锁定对象，文件更改时随之更新。
 	A file dialog is open: choose there first	文件对话框已打开：请先在其中选择
+	The document was closed while its file dialog was open	文件对话框打开期间，文档已关闭
+	The dialog was closed before its file dialog answered	文件对话框给出结果之前，对话框已关闭
 	Expand Shaper Group	扩展 Shaper 组
 	Release Shaper Group	释放 Shaper 组
 	Select Shaper Face	选择 Shaper 区域

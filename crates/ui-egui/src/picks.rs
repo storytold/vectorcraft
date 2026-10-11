@@ -1,13 +1,20 @@
-//! File dialogs that leave the window running (#592).
+//! File dialogs that leave the window running (#592, #867).
 //!
 //! The app asks for a path where it needs one (Open, Save As, Export, Place, Relink, presets…)
 //! and goes on with it at once, so a dialog shown on the UI thread holds the window until it
-//! closes. On Windows the dialog runs the window's events meanwhile; on Linux nothing does, so a
-//! Wayland compositor finds the window not answering and offers to kill it, and on macOS they
-//! re-enter the window's event handler, which crashed the app when the panel was resized (#867).
-//! There the host shows dialogs on another thread ([`Services::start_pick`]): asking returns no path for now,
-//! and when the dialog answers, what asked (the command, the dialog's OK, a panel's button: the
-//! *entry*) runs again and gets the picked path at once.
+//! closes. On Windows the dialog runs the window's events meanwhile. On Linux nothing does, so a
+//! Wayland compositor finds the window not answering and offers to kill it (#592); on macOS the
+//! panel's modal loop runs inside winit's event handler, and an event winit had held back meanwhile
+//! re-enters it and aborts the app (#867). There the host shows dialogs off the UI thread (Linux)
+//! or as sheets (macOS) ([`Services::start_pick`]): asking returns no path for now, and when the
+//! dialog answers, what asked (the command, the dialog's OK, a panel's button: the *entry*) runs
+//! again, on the document it asked for, and gets the picked path at once. Everything that asks
+//! must run as an entry ([`as_entry`]): outside one the dialog is shown in line, which macOS
+//! refuses.
+//!
+//! While a dialog is open ([`VectorcraftApp::file_dialog_open`]) another is refused; on macOS,
+//! where it is a sheet on the window, the menu bar does nothing and the app neither quits nor
+//! closes documents, as under the modal dialog before.
 
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -48,11 +55,35 @@ pub(crate) enum Entry {
     Call(Rc<dyn Fn(&mut VectorcraftApp)>),
 }
 
+/// Commands that ask for a file but act on no document: their answer goes on even when the
+/// document active at the time has closed meanwhile.
+const DOCUMENT_FREE: &[&str] = &[
+    "file.open",
+    "file.newFromTemplate",
+    "ui.installPlugin",
+    "window.swatchLibrary.other",
+    "window.graphicStyleLibrary.other",
+    "shortcuts.import",
+    "shortcuts.export",
+];
+
+impl Entry {
+    /// The document it acts on when it runs again: the active one, unless it acts on none.
+    fn document(&self, app: &VectorcraftApp) -> Option<u64> {
+        match self {
+            Entry::Command(id, _) if DOCUMENT_FREE.contains(&id.as_str()) => None,
+            _ => app.session.active().map(|d| d.uid),
+        }
+    }
+}
+
 /// A dialog shown off the UI thread, waiting for its answer.
 struct Waiting {
     request: PickRequest,
     answer: Receiver<PickAnswer>,
     entry: Entry,
+    /// The active document when it was asked for ([`vectorcraft_engine::DocState::uid`]).
+    doc: Option<u64>,
 }
 
 /// The app's file dialogs ([`VectorcraftApp`]'s `picks`).
@@ -63,6 +94,8 @@ pub(crate) struct Picks {
     waiting: Option<Waiting>,
     /// A picked answer for the entry running again: the dialog it asks for gets it.
     answer: Option<(PickRequest, PickAnswer)>,
+    /// Another dialog was refused while this one is open ([`busy`]).
+    refused: bool,
 }
 
 impl Picks {
@@ -70,6 +103,39 @@ impl Picks {
     pub(crate) fn is_entry_free(&self) -> bool {
         self.entry.is_none()
     }
+
+    /// A dialog shown off the UI thread is open.
+    pub(crate) fn is_waiting(&self) -> bool {
+        self.waiting.is_some()
+    }
+
+    /// After a panic the guard caught (a bug): no entry is running any more, and an answer kept for
+    /// one is stale. The open dialog's answer still arrives.
+    pub(crate) fn recover(&mut self) {
+        self.entry = None;
+        self.answer = None;
+    }
+
+    /// The kind of dialog open off the UI thread (`ui.inspect`'s `fileDialog`).
+    pub(crate) fn waiting_kind(&self) -> Option<&'static str> {
+        self.waiting.as_ref().map(|w| match w.request {
+            PickRequest::Open(_) => "open",
+            PickRequest::OpenMany => "place",
+            PickRequest::Save(_) => "save",
+            PickRequest::Folder => "folder",
+        })
+    }
+}
+
+/// What the status bar says when a dialog is asked for while another is open.
+pub(crate) fn busy() -> &'static str {
+    tl!("A file dialog is open: choose there first")
+}
+
+/// What the status bar says when the dialog whose button asked closed before the file dialog
+/// answered.
+pub(crate) fn dialog_gone() -> &'static str {
+    tl!("The dialog was closed before its file dialog answered")
 }
 
 /// Run `f` as `entry`: a dialog it asks for off the UI thread runs `entry` again when it
@@ -102,8 +168,11 @@ pub(crate) fn in_dialog(
     let (again, kind) = (f.clone(), d.kind.clone());
     let entry = move || {
         Entry::Call(Rc::new(move |app: &mut VectorcraftApp| {
-            let Some(mut d) = app.ui.dialog.take() else { return };
-            let r = if d.kind == kind { again(app, &mut d) } else { Ok(()) };
+            let Some(mut d) = app.ui.dialog.take_if(|d| d.kind == kind) else {
+                app.status(dialog_gone());
+                return;
+            };
+            let r = again(app, &mut d);
             app.ui.dialog = Some(d);
             if let Err(e) = r {
                 app.status(e);
@@ -168,15 +237,23 @@ fn ask(app: &mut VectorcraftApp, request: PickRequest) -> Option<PickAnswer> {
     if !can(app, &request) {
         return None;
     }
-    if let (Some(entry), Some(start)) = (app.picks.entry.clone(), app.services.start_pick.as_mut()) {
-        if app.picks.waiting.is_some() {
-            app.status(tl!("A file dialog is open: choose there first"));
-            return None;
+    if app.services.start_pick.is_some() && app.picks.waiting.is_some() {
+        app.status(busy());
+        app.picks.refused = true;
+        return None;
+    }
+    match (app.picks.entry.clone(), app.services.start_pick.as_mut()) {
+        (Some(entry), Some(start)) => {
+            if let Some(answer) = start(request.clone()) {
+                let doc = entry.document(app);
+                app.picks.waiting = Some(Waiting { request, answer, entry, doc });
+                return None;
+            }
         }
-        if let Some(answer) = start(request.clone()) {
-            app.picks.waiting = Some(Waiting { request, answer, entry });
-            return None;
-        }
+        // Shown in line it holds the window (Linux) or is refused (macOS): what asks must run as
+        // an entry.
+        (None, Some(_)) => log::warn!("a file dialog asked for outside a command, a dialog's OK or a button: {request:?}"),
+        _ => {}
     }
     let s = &mut app.services;
     let one = |p: Option<String>| Some(p.into_iter().collect());
@@ -199,19 +276,38 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let answer = match w.answer.try_recv() {
         Ok(answer) => answer,
         Err(TryRecvError::Empty) => {
-            // What asked gave up for now: no "cancelled" while the dialog is open.
+            // What asked gave up for now: no "cancelled" while the dialog is open, unless it was
+            // another dialog, refused.
             if app.ui.status == "cancelled" {
-                app.ui.status.clear();
+                app.ui.status = if std::mem::take(&mut app.picks.refused) { busy().into() } else { String::new() };
             }
-            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            // The host wakes the window when the dialog answers; this is in case it can't.
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
             return;
         }
         // The dialog's thread is gone: as cancelled.
         Err(TryRecvError::Disconnected) => vec![],
     };
-    let Some(Waiting { request, entry, .. }) = app.picks.waiting.take() else { return };
+    let Some(Waiting { request, entry, doc, .. }) = app.picks.waiting.take() else { return };
+    app.picks.refused = false;
+    // Once more: what waited for the dialog (files from the Finder, the menu bar) goes on.
+    ctx.request_repaint();
     if answer.is_empty() {
         return;
+    }
+    // On the document it was asked for: another may be active by now (opened from the Finder, by
+    // an agent), or it may be gone.
+    if let Some(uid) = doc {
+        let Some(i) = app.session.documents().iter().position(|d| d.uid == uid) else {
+            app.status(tl!("The document was closed while its file dialog was open"));
+            return;
+        };
+        if app.session.active_index() != Some(i)
+            && let Err(e) = app.run("document.activate", serde_json::json!({ "index": i }))
+        {
+            app.status(e);
+            return;
+        }
     }
     app.picks.answer = Some((request, answer));
     rerun(app, entry);
@@ -227,8 +323,10 @@ fn rerun(app: &mut VectorcraftApp, entry: Entry) {
             app.ui.dialog = Some(*d);
             crate::dialogs::confirm(app).map(|_| ())
         }
+        // An entry again, so a dialog it asks for next is shown off the UI thread too.
         Entry::Call(f) => {
-            f(app);
+            let again = f.clone();
+            as_entry(app, move || Entry::Call(again), |app| f(app));
             Ok(())
         }
     };

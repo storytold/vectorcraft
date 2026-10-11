@@ -3319,6 +3319,8 @@ axis	Both	兩者
 	Images: link to the file instead of only embedding it.	影像：連結至檔案，而不只是嵌入。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft 文件：單一鎖定物件，檔案變更時隨之更新。
 	A file dialog is open: choose there first	檔案對話方塊已開啟：請先在其中選擇
+	The document was closed while its file dialog was open	檔案對話方塊開啟期間，文件已關閉
+	The dialog was closed before its file dialog answered	檔案對話方塊回應之前，對話方塊已關閉
 	Shaper	Shaper
 	Expand Shaper Group	展開 Shaper 群組
 	Release Shaper Group	釋放 Shaper 群組

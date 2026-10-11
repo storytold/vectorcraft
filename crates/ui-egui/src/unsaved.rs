@@ -12,12 +12,20 @@ use serde_json::{Value, json};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, io};
 
-/// Dialog kind. Fields: `index` (document), `name` (its title), `then` (`close`, `closeAll` or
-/// `quit`: what continues after this document) and `discard` (Don't Save).
+/// Dialog kind. Fields: `index` (document), `uid` (the same document, which `index` may no longer
+/// point at once a file dialog answers), `name` (its title), `then` (`close`, `closeAll` or `quit`:
+/// what continues after this document) and `discard` (Don't Save).
 pub const KIND: &str = "saveChanges";
+
+/// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
+/// again when it answers. (Elsewhere the dialog is a window of its own, and closing goes on.)
+fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
+    if app.file_sheet_open() { Err(crate::picks::busy().into()) } else { Ok(()) }
+}
 
 /// File → Close (or a tab's ×) for document `i`.
 pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
+    refuse_while_picking(app)?;
     // A save still running decides whether there is anything left to save.
     crate::background::wait_all(app);
     let dirty = app.session.documents().get(i).ok_or("no such document")?.is_dirty();
@@ -27,6 +35,7 @@ pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
 /// File → Close All (`then` = `closeAll`) or Quit (`quit`): ask about the next modified document,
 /// or finish once none is left.
 pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> {
+    refuse_while_picking(app)?;
     crate::background::wait_all(app);
     if let Some(i) = app.session.documents().iter().position(|d| d.is_dirty()) {
         return ask(app, i, then);
@@ -54,8 +63,9 @@ pub fn any_dirty(app: &VectorcraftApp) -> bool {
 /// Show document `i` and ask whether to save it.
 fn ask(app: &mut VectorcraftApp, i: usize, then: &str) -> Result<Value, String> {
     app.session.set_active(i);
-    let name = app.session.documents()[i].title();
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "index": i, "name": name, "then": then })));
+    let doc = &app.session.documents()[i];
+    let (name, uid) = (doc.title(), doc.uid);
+    app.ui.dialog = Some(Dialog::new(KIND, json!({ "index": i, "uid": uid, "name": name, "then": then })));
     Ok(json!({ "pending": KIND }))
 }
 
@@ -72,7 +82,12 @@ fn close_now(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
 /// Answer the open dialog: save (or, with `discard`, don't), close the document and carry on.
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let d = app.ui.dialog.take().ok_or("no dialog open")?;
-    let i = d.fields.get("index").and_then(Value::as_u64).map(|i| i as usize).filter(|i| *i < app.session.documents().len());
+    let docs = app.session.documents();
+    // By its uid: documents may have closed while its Save dialog was open.
+    let i = match d.fields.get("uid").and_then(Value::as_u64) {
+        Some(uid) => docs.iter().position(|doc| doc.uid == uid),
+        None => d.fields.get("index").and_then(Value::as_u64).map(|i| i as usize).filter(|i| *i < docs.len()),
+    };
     let i = i.ok_or("no such document")?;
     if !d.bool("discard") {
         app.session.set_active(i);

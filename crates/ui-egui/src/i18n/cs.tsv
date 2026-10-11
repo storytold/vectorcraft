@@ -656,6 +656,8 @@
 	Appearance of Black	Vzhled černé
 	Devices	Zařízení
 	A file dialog is open: choose there first	Je otevřené dialogové okno souboru: nejprve vyberte v něm
+	The document was closed while its file dialog was open	Dokument byl zavřen, zatímco bylo otevřené jeho dialogové okno souboru
+	The dialog was closed before its file dialog answered	Dialogové okno se zavřelo dřív, než odpovědělo jeho dialogové okno souboru
 	Shaper	Shaper
 	Expand Shaper Group	Rozšířit skupinu Shaper
 	Release Shaper Group	Uvolnit skupinu Shaper
