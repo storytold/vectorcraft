@@ -67,3 +67,17 @@ objc2-core-text = { version = "0.3", default-features = false, features = ["std"
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
 winresource = "0.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Standard org.freedesktop.appearance Settings portal, initial Read and SettingChanged signals.
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+async-channel = "2"
+futures-lite = "2"
+
+[dev-dependencies]
+# Typecheck the cancellable Unix portal and run deterministic lifecycle tests on native hosts.
+zbus = { version = "=5.19.0", default-features = false, features = ["async-io"] }
+async-channel = "2"
+futures-lite = "2"
+tempfile = "3"
+async-io = "2"

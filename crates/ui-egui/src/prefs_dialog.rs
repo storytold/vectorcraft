@@ -80,6 +80,7 @@ pub fn restore(app: &mut VectorcraftApp) {
 #[derive(Clone, Copy, PartialEq)]
 struct Applied {
     brightness: Brightness,
+    resolved: Brightness,
     /// User Interface › Canvas Color, unless it matches the interface brightness.
     canvas: Option<egui::Color32>,
     threads: i32,
@@ -110,6 +111,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let want = Applied {
         brightness: app.ui.brightness,
+        resolved: app.ui.brightness.resolved(ctx.system_theme()),
         canvas: canvas_color(&p.canvas_color),
         threads: p.render_threads,
         tool_tips: p.show_tool_tips,
@@ -123,7 +125,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
         // due), whichever widget asks for one.
         let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
-        ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
+        ctx.all_styles_mut(|s| s.interaction.tooltip_delay = delay);
         crate::scrub::set_enabled(ctx, want.scrub);
         crate::widgets::set_bare_numbers_are_points(ctx, want.bare_points);
         if let Some(c) = want.canvas {
@@ -560,8 +562,10 @@ mod tests {
         out.textures_delta.clear();
         let mut shown = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-        assert!(shown.iter().any(|t| t == "System Title Bar"), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
+        // The control is intentionally offered on Windows/Linux; macOS always uses its title bar.
+        let offered = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+        assert_eq!(shown.iter().any(|t| t == "System Title Bar"), offered, "{shown:?}");
+        assert_eq!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), offered, "{shown:?}");
         a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(true));
         confirm(&mut a).unwrap();
         assert!(a.session.prefs.system_title_bar);

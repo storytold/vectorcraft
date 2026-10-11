@@ -3821,7 +3821,7 @@ theme	Appearance	外観
 @msg	No saved views (View → New View…)	保存した表示はありません (表示 → 新規表示…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
-@msg	brightness must be dark|mediumDark|mediumLight|light	brightness には dark|mediumDark|mediumLight|light のいずれかを指定してください
+@msg	brightness must be dark|mediumDark|mediumLight|light|system	brightness には dark|mediumDark|mediumLight|light|system のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last	index には数値、または first、previous、next、last のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last, not `{other}`	index には数値、または first、previous、next、last のいずれかを指定してください (`{other}` は指定できません)
 @msg	lang must be one of {_1}	lang には {_1} のいずれかを指定してください
@@ -4087,3 +4087,5 @@ lighting	Light	ライト
 	Stroke Pressure	ストロークの筆圧
 	Right Diagonal	右斜め
 	Left Diagonal	左斜め
+
+	System	システム

@@ -21,6 +21,7 @@ compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinar
 #[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
 compile_error!("the win7 target requires --no-default-features --features windows7");
 
+mod appearance;
 mod clipboard;
 mod control_server;
 #[cfg(feature = "wgpu")]
@@ -48,6 +49,7 @@ use vectorcraft_ui_egui::picks::PickRequest;
 use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
 
 struct App {
+    appearance: Option<appearance::Reader>,
     app: VectorcraftApp,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
@@ -65,6 +67,9 @@ impl eframe::App for App {
         file_access::unconfined(|| self.logic_frame(ctx, frame));
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if let Some(read) = &self.appearance {
+            raw.system_theme = read.get();
+        }
         #[cfg(target_os = "macos")]
         if self.app.services.native_menu.is_some() {
             mac_menu::raw_input_hook(raw);
@@ -624,7 +629,7 @@ fn main() -> std::process::ExitCode {
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
-                Ok(Box::new(App { app, graphics_loss, graphics_lost: false, frames: 0 }))
+                Ok(Box::new(App { appearance: appearance::service(&cc.egui_ctx), app, graphics_loss, graphics_lost: false, frames: 0 }))
             }),
         )
     });

@@ -3491,7 +3491,7 @@ axis	Both	Ambos
 @msg	bad trailer	trailer no válido
 @msg	balance must be between 0 and 100	el equilibrio debe estar entre 0 y 100
 @msg	batch step {_1} (`{id}`) failed: {e}	falló el paso {_1} del lote (`{id}`): {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	el brillo debe ser dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light|system	el brillo debe ser dark|mediumDark|mediumLight|light|system
 @msg	can't encode the document: {0}	no se puede codificar el documento: {0}
 @msg	can't parse shortcut `{c}`	no se puede interpretar el atajo `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	no se puede interpretar el atajo `{s}` de `{k}`
@@ -4092,3 +4092,5 @@ lighting	Light	Luz
 	Stroke Pressure	Presión de pincelada
 	Right Diagonal	Diagonal derecha
 	Left Diagonal	Diagonal izquierda
+
+	System	Sistema

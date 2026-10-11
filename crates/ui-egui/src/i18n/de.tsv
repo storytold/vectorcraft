@@ -3387,7 +3387,7 @@ theme	Appearance	Erscheinungsbild
 @msg	bad trailer	fehlerhafter Trailer
 @msg	balance must be between 0 and 100	balance muss zwischen 0 und 100 liegen
 @msg	batch step {_1} (`{id}`) failed: {e}	Stapelschritt {_1} (`{id}`) ist fehlgeschlagen: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	brightness muss dark|mediumDark|mediumLight|light sein
+@msg	brightness must be dark|mediumDark|mediumLight|light|system	brightness muss dark|mediumDark|mediumLight|light|system sein
 @msg	can't encode the document: {0}	das Dokument kann nicht kodiert werden: {0}
 @msg	can't parse shortcut `{c}`	Tastaturbefehl `{c}` kann nicht ausgewertet werden
 @msg	can't parse shortcut `{s}` for `{k}`	Tastaturbefehl `{s}` für `{k}` kann nicht ausgewertet werden
@@ -4047,3 +4047,5 @@ theme	Appearance	Erscheinungsbild
 	Stroke Pressure	Strichdruck
 	Right Diagonal	Diagonal nach rechts
 	Left Diagonal	Diagonal nach links
+
+	System	System

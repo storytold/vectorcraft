@@ -4323,10 +4323,13 @@ name = "vectorcraft"
 version = "0.8.0"
 dependencies = [
  "arboard",
+ "async-channel",
+ "async-io",
  "block2 0.6.2",
  "clipboard-win",
  "eframe",
  "egui",
+ "futures-lite",
  "image",
  "log",
  "muda",
@@ -4338,6 +4341,7 @@ dependencies = [
  "raw-window-handle",
  "rfd",
  "serde_json",
+ "tempfile",
  "vectorcraft-engine",
  "vectorcraft-text",
  "vectorcraft-ui-egui",
@@ -4346,6 +4350,7 @@ dependencies = [
  "winit",
  "winresource",
  "winsafe",
+ "zbus",
 ]
 
 [[package]]

@@ -12,16 +12,19 @@ pub enum Brightness {
     MediumDark,
     MediumLight,
     Light,
+    /// Follow the OS while retaining this saved choice. Unknown appearance uses Medium Dark.
+    System,
 }
 
 impl Brightness {
-    pub const ALL: [Brightness; 4] = [Brightness::Dark, Brightness::MediumDark, Brightness::MediumLight, Brightness::Light];
+    pub const ALL: [Brightness; 5] = [Brightness::Dark, Brightness::MediumDark, Brightness::MediumLight, Brightness::Light, Brightness::System];
     pub fn label(self) -> &'static str {
         match self {
             Brightness::Dark => "Dark",
             Brightness::MediumDark => "Medium Dark",
             Brightness::MediumLight => "Medium Light",
             Brightness::Light => "Light",
+            Brightness::System => "System",
         }
     }
     pub fn id(self) -> &'static str {
@@ -30,6 +33,15 @@ impl Brightness {
             Brightness::MediumDark => "mediumDark",
             Brightness::MediumLight => "mediumLight",
             Brightness::Light => "light",
+            Brightness::System => "system",
+        }
+    }
+    /// The concrete palette, independent of the stored mode and Canvas Color.
+    pub fn resolved(self, system: Option<egui::Theme>) -> Self {
+        match (self, system) {
+            (Self::System, Some(egui::Theme::Light)) => Self::Light,
+            (Self::System, _) => Self::MediumDark,
+            _ => self,
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
@@ -144,7 +156,7 @@ impl Tokens {
         match b {
             Brightness::Dark => base,
             // Measured from Illustrator 2026 (plan/illustrator/10-observed-ui.md §1).
-            Brightness::MediumDark => Tokens {
+            Brightness::MediumDark | Brightness::System => Tokens {
                 app_bar: hex(0x535353),
                 panel: hex(0x535353),
                 panel_darker: hex(0x424242),
@@ -285,7 +297,12 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
 
 /// Apply tokens to egui's global style.
 pub fn apply(ctx: &egui::Context, b: Brightness) {
-    let t = Tokens::for_brightness(b);
+    // Keep native inheritance active even in manual modes. A concrete egui preference sends
+    // SetTheme(Light/Dark) to winit, which pins NSWindow.appearance and suppresses ThemeChanged.
+    // Both egui branches use the selected palette, so manual choices remain immune to OS changes.
+    ctx.set_theme(egui::ThemePreference::System);
+    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Dark);
+    let t = Tokens::for_brightness(b.resolved(ctx.system_theme()));
     ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
     let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
@@ -318,8 +335,9 @@ pub fn apply(ctx: &egui::Context, b: Brightness) {
     w.inactive.bg_stroke = Stroke::NONE;
     w.hovered.bg_stroke = Stroke::new(1.0, t.input_border);
     w.active.bg_stroke = Stroke::new(1.0, t.accent);
-    ctx.set_visuals(v);
-    ctx.global_style_mut(|s| {
+    ctx.set_visuals_of(egui::Theme::Light, v.clone());
+    ctx.set_visuals_of(egui::Theme::Dark, v);
+    ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(6.0, 5.0);
         s.spacing.button_padding = egui::vec2(6.0, 2.0);
         s.spacing.interact_size = egui::vec2(24.0, 24.0);

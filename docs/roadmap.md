@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (added the Alpha gate table; earlier the same day: moved the milestone table and direction here from ROADMAP.md, added Current focus) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (System interface appearance, #825; existing parity estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.md) and
 [target-app-parity.md](target-app-parity.md); the ranked work list is [gaps.md](gaps.md). Hours are Opus 5.5
@@ -61,7 +61,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | M11 | Artboards & views (artboard panel/tool with Move Artwork for X/Y fields and Artboard Options, Trim View, middle-button pan, print tiling and the status bar's artboard navigator done; multiple windows, presentation polish) | 🟡 | 15–25 |
 | M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (13 presets, 18 ms/1k² image; the Flat Logo mode places edges to a fraction of a pixel, restores sharp corners, snaps lines and circles, and refuses gradients), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, group-selected series colours persist through regenerate/save/open) done; graph Design/Column/Marker designs pending | 6–10 |
 | M13 | Automation (Actions ✅ record/playback, persisted; variables, scripting, batch) | 🟡 | 18–27 |
-| M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor (chords with Shift and a punctuation key fire as typed), workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs, menus that scroll when longer than the window and macOS native menu dismissal done (M14.8); an experimental, unsupported Windows 7 x64 portable OpenGL build (not verified by maintainers); accessibility and broader Windows/Linux packaging/QA pending | 18–28 |
+| M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, System brightness (#825, Medium Dark default preserved), shortcut editor (chords with Shift and a punctuation key fire as typed), workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs, menus that scroll when longer than the window and macOS native menu dismissal done (M14.8); an experimental, unsupported Windows 7 x64 portable OpenGL build (not verified by maintainers); accessibility and broader Windows/Linux packaging/QA pending | 18–28 |
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance) | ⬜ | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 | 50–80 |
 | | **Total to full parity** (one agent; from [target-app-parity.md](target-app-parity.md)) | | **~360–590** |
@@ -79,6 +79,7 @@ After placed documents (File › Place of a `.vectorcraft` file, linked), M4.14�
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | System brightness follows reported OS appearance; preserves four manual palettes, Medium Dark default and Canvas Color. Native desktop switching remains a separate verification boundary. |
 | 2026-10-10 | minor | M9 row from main: initial Revolve |
 | 2026-10-10 | minor | Added the Alpha gate table (core-workflow gate): all six workflows work end to end, `.ai` exchange partial but not blocking; stage stays alpha |
 | 2026-10-10 | major | Created from ROADMAP.md's milestone table and "Where we're going"; added Current focus and the beta list |

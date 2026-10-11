@@ -1173,3 +1173,6 @@ impl VectorcraftApp {
         let _ = json!(null);
     }
 }
+
+#[cfg(test)]
+mod tests_system_theme;

@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first checklist: pen, anchors, handles, snapping, nudging, modifiers, panels) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (System interface appearance, #825; existing parity estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft's tools, handles, snapping and panels behave next to Illustrator's. A vector illustrator's
 trust is in the details: where a handle lands, what Shift and Alt do mid-drag, what a smart guide snaps to,
@@ -157,11 +157,15 @@ Layers panel.
 
 Medium Dark theme and four brightness levels, the categorized and Advanced toolbars, 35 pt document tabs,
 33 pt panel tabs, hint bar, contextual task bar and native macOS menus, restyled to values measured from
-public screenshots on 2026-10-02 (~75–80% then). Missing: a System theme that follows the OS (#825), a
-re-measure of the panels added since.
+public screenshots on 2026-10-02 (~75–80% then). System brightness (#825) follows reported OS appearance
+using Light or Medium Dark, with Medium Dark for an unavailable report. Preferences and the native
+Appearance menu retain System during transitions and restarts. All four manual palettes and Canvas
+Color remain independent. See [System appearance](development.md#system-appearance) for platform
+support and verification limits. Missing: a re-measure of the panels added since.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | System brightness follows reported OS appearance; preserves four manual palettes, Medium Dark default and Canvas Color. Native desktop switching remains a separate verification boundary. |
 | 2026-10-10 | major | First checklist, built from the tool sources and tests against Illustrator 2026's public documentation |

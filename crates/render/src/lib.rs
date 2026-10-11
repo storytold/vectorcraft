@@ -924,7 +924,7 @@ impl Renderer {
     fn isolation_path(&mut self, f: &Frame) -> Option<(NodeId, Vec<NodeId>)> {
         let isolated = f.opts.isolated.filter(|_| !self.isolation_settled)?;
         let doc = std::ptr::from_ref(f.doc) as usize;
-        if !self.isolation.as_ref().is_some_and(|(stamp, d, id, _)| (*stamp, *d, *id) == (self.stamp, doc, isolated)) {
+        if self.isolation.as_ref().is_none_or(|(stamp, d, id, _)| (*stamp, *d, *id) != (self.stamp, doc, isolated)) {
             self.isolation = Some((self.stamp, doc, isolated, f.doc.ancestry(isolated).unwrap_or_default()));
         }
         let path = self.isolation.as_ref().map(|(.., path)| path.clone()).filter(|p| !p.is_empty())?;

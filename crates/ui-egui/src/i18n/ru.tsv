@@ -3487,7 +3487,7 @@ axis	Both	Оба
 @msg	bad trailer	недопустимый трейлер
 @msg	balance must be between 0 and 100	баланс должен быть от 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	шаг пакета {_1} (`{id}`) не выполнен: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яркость должна быть dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light|system	яркость должна быть dark|mediumDark|mediumLight|light|system
 @msg	can't encode the document: {0}	не удалось закодировать документ: {0}
 @msg	can't parse shortcut `{c}`	не удалось разобрать сочетание `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не удалось разобрать сочетание `{s}` для `{k}`
@@ -4090,3 +4090,5 @@ lighting	Light	Свет
 	Stroke Pressure	Нажим мазка
 	Right Diagonal	Диагональ вправо
 	Left Diagonal	Диагональ влево
+
+	System	Системная

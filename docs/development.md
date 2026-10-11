@@ -309,3 +309,35 @@ Vertical type keeps its logical order down the column. SVG export outlines text 
 lines (with a warning) until it is written with `direction`/`unicode-bidi`; PDF and raster exports
 use the laid-out glyphs. No font is bundled for these scripts: the installed fonts' fallback
 covers them (the web build needs a font with that coverage).
+
+## System appearance
+
+Preferences › User Interface › Brightness and the macOS VectorCraft › Appearance menu offer
+System beside Dark, Medium Dark, Medium Light and Light. The default remains Medium Dark.
+System uses Light for a Light OS report and Medium Dark for Dark or unavailable appearance.
+The saved `uiBrightness: "system"` and UI-state `brightness: "System"` stay System when the OS
+changes. Legacy preferences and all four fixed palettes retain their existing look.
+
+Custom chrome, panels, dialogs and menus use the resolved tokens. Both egui style branches
+receive that palette while `ThemePreference::System` retains native window inheritance. Using a
+concrete egui preference would set an NSWindow appearance override and suppress winit's macOS
+`ThemeChanged` notification. Manual modes populate both branches with their fixed palette, so OS
+reports never change their interface colours. Canvas Color still controls the pasteboard separately;
+document and presentation colours are untouched.
+
+macOS and Windows reports arrive through eframe/egui-winit. The web uses the browser's
+`prefers-color-scheme` event. Linux winit does not deliver `ThemeChanged`, so the native host reads
+`org.freedesktop.portal.Settings` appearance `color-scheme`: 1 is Dark, 2 is Light, and 0 or an
+unknown value is unavailable. It subscribes to `SettingChanged` before the initial Read and wakes
+the UI after both initial publication and later changes. There is no polling. While a Linux Read
+is pending, System uses Medium Dark; the reply requests a frame even if it arrives after startup.
+Without a portal, or after a portal disconnect, System uses its unavailable-appearance fallback;
+automatic reconnect and desktop-specific fallbacks are not provided. The window owns a cancellation
+channel and worker handle. Dropping its reader interrupts setup, Read or idle reception and joins
+the worker, releasing its context and subscription while the process may remain alive. FreeBSD has no extra detector
+and uses the deterministic fallback when the host has no report.
+
+`tests_system_theme` exercises actual app commands and frames with injected OS reports, preference
+reload, native viewport commands, both style branches, manual immunity and document/Canvas Color
+independence. Injected reports prove these application boundaries. They do not by themselves prove
+real global or scheduled OS appearance event delivery.

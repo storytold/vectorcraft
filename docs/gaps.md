@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (moved from the ROADMAP's "Where we're lacking", re-ranked, added file-format, stability, hardware, localization, ecosystem and AI gaps) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (System interface appearance, #825; existing parity estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -46,6 +46,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Missing:** a tool-by-tool, panel-by-panel pass over modifiers, cursors, the Properties panel per context,
   isolation mode and small behaviours, against the public tool and shortcut documentation. Itemized in
   [ui-parity.md](ui-parity.md). The Shaper's construction-mode widget and gesture refinements remain.
+- **System appearance (#825):** implemented independently of the G1 fidelity pass; existing estimates stay unchanged. Platform limits are in [development.md](development.md#system-appearance).
 - **Evidence:** no side-by-side session has ever happened (the clean-room rule forbids running Illustrator, so
   the pass works from the documentation); users keep reporting small differences: #991, #975, #973, #955, #908.
 - **Impact:** a power user notices this in the first minutes and stops trusting the tool.
@@ -201,6 +202,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-10 | minor | System brightness follows reported OS appearance; preserves four manual palettes, Medium Dark default and Canvas Color. Native desktop switching remains a separate verification boundary. |
 | 2026-10-10 | minor | G3: initial Revolve landed (#846), 45–75 h left |
 | 2026-10-10 | minor | G9 evidence counted from the tracker (28 `.ai`/EPS issues, 20 fixed); impact narrowed to handing files back |
 | 2026-10-10 | minor | Alpha blockers checked against the core-workflow gate: none |
