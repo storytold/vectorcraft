@@ -353,8 +353,10 @@ fn artboards(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                             ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
                         }
                     }
-                    if let Some(b) = boards.get_mut(i) {
-                        ui.checkbox(b, name);
+                    if let Some(b) = boards.get_mut(i)
+                        && crate::widgets::check_name(ui, name, *b)
+                    {
+                        *b ^= true;
                     }
                 });
             }
@@ -399,10 +401,10 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
                 crate::panels::asset_export::paint_thumb(ui, st, a, r);
-                let mut checked = on.contains(&a.id);
-                if ui.checkbox(&mut checked, a.name.as_str()).changed() {
+                let checked = on.contains(&a.id);
+                if crate::widgets::check_name(ui, &a.name, checked) {
                     on.retain(|id| *id != a.id);
-                    if checked {
+                    if !checked {
                         on.push(a.id);
                     }
                 }

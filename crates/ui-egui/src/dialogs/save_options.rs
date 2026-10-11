@@ -145,9 +145,9 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
     let value = d.fields.get(o.name).cloned().unwrap_or(Value::Null);
     if o.ty == "boolean" {
         ui.label("");
-        let mut on = value.as_bool().unwrap_or(false);
-        if ui.checkbox(&mut on, label.trim_end_matches(':')).on_hover_text(o.description).changed() {
-            d.fields.insert(o.name.into(), json!(on));
+        let on = value.as_bool().unwrap_or(false);
+        if widgets::check_tip(ui, label.trim_end_matches(':'), on, true, o.description) {
+            d.fields.insert(o.name.into(), json!(!on));
         }
         ui.end_row();
         if o.name == "separateArtboards" {
