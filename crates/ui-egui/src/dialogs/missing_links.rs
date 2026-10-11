@@ -66,6 +66,7 @@ fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
 
 /// The same offer for linked files another app changed while the document is open
 /// ([`vectorcraft_engine::link_watch`]).
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn ask_update_changed(app: &mut VectorcraftApp, ids: Vec<Value>) {
     ask(app, ids, tl!("{count} linked image(s) changed on disk. Show the new versions?"));
 }
