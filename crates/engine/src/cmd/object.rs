@@ -164,6 +164,33 @@ pub fn specs() -> Vec<CommandSpec> {
             align
         ),
         cmd!(
+            "object.align.left",
+            "Horizontal Align Left",
+            ["Window", "Align"],
+            Some("Cmd+Shift+L"),
+            "{} align selected objects horizontally by their left edges (same as object.align)",
+            has_selection,
+            |s, _| align(s, &json!({"horizontal": "left"}))
+        ),
+        cmd!(
+            "object.align.center",
+            "Horizontal Align Center",
+            ["Window", "Align"],
+            Some("Cmd+Shift+C"),
+            "{} align selected objects horizontally by their center edges (same as object.align)",
+            has_selection,
+            |s, _| align(s, &json!({"horizontal": "center"}))
+        ),
+        cmd!(
+            "object.align.right",
+            "Horizontal Align Right",
+            ["Window", "Align"],
+            Some("Cmd+Shift+R"),
+            "{} align selected objects horizontally by their right edges (same as object.align)",
+            has_selection,
+            |s, _| align(s, &json!({"horizontal": "right"}))
+        ),
+        cmd!(
             "object.distribute",
             "Distribute",
             ["Window", "Align"],

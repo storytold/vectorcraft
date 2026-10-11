@@ -2095,9 +2095,9 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Align",
                     vec![
-                        cp("Horizontal Align Left", "object.align", json!({"horizontal": "left"})),
-                        cp("Horizontal Align Center", "object.align", json!({"horizontal": "center"})),
-                        cp("Horizontal Align Right", "object.align", json!({"horizontal": "right"})),
+                        c("Horizontal Align Left", "object.align.left"),
+                        c("Horizontal Align Center", "object.align.center"),
+                        c("Horizontal Align Right", "object.align.right"),
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),

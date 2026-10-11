@@ -340,6 +340,39 @@ fn align_left() {
     assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 0.0);
 }
 
+/// The keyboard-alignment commands take the same path as Window › Align / object.align,
+/// including moving only horizontally, keeping the selection, and one undoable edit.
+#[test]
+fn horizontal_align_shortcuts_match_object_align_and_undo() {
+    for (command, side) in [
+        ("object.align.left", "left"),
+        ("object.align.center", "center"),
+        ("object.align.right", "right"),
+    ] {
+        let make = || {
+            let mut s = session();
+            let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+            let b = rect(&mut s, 50.0, 30.0, 10.0, 10.0);
+            s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+            (s, a, b)
+        };
+        let bounds = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        let (mut via_shortcut, a, b) = make();
+        let undo_before = via_shortcut.doc().unwrap().history.undo.len();
+        via_shortcut.execute(command, &json!({})).unwrap();
+        let actual = (bounds(&via_shortcut, a), bounds(&via_shortcut, b));
+        assert_eq!(via_shortcut.doc().unwrap().history.undo.len(), undo_before + 1, "{command}");
+        assert_eq!(via_shortcut.doc().unwrap().selection.objects, [a, b], "{command}");
+
+        let (mut via_command, a2, b2) = make();
+        via_command.execute("object.align", &json!({"horizontal": side})).unwrap();
+        assert_eq!(actual, (bounds(&via_command, a2), bounds(&via_command, b2)), "{command}");
+
+        via_shortcut.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((bounds(&via_shortcut, a).x0, bounds(&via_shortcut, b).x0), (0.0, 50.0), "{command} undoes");
+    }
+}
+
 /// #541: with the Selection tool, a click on one object of the selection makes it the key object:
 /// aligning to the key moves the others to it, Distribute Spacing spaces them from it, and a click
 /// on the key again lets it go.
