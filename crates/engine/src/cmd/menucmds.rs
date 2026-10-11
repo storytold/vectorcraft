@@ -238,11 +238,7 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
                 }
             }
         }
-        // Hidden or locked content can't stay selected.
-        let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-        for h in hidden {
-            sel.remove(h);
-        }
+        sel.deselect_uneditable(d);
         Ok(())
     })?;
     Ok(json!({ "count": n }))

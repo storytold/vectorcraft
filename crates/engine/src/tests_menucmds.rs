@@ -118,7 +118,8 @@ fn lock_all_artwork_above_deselects_the_objects_it_locks() {
 }
 
 /// Hide › All Artwork Above deselects the selected objects it hides (here one in a sublayer above)
-/// and selected objects that were hidden before; the key object stays when it is still shown.
+/// and selected objects that were hidden before. The one object left can't be the key object, so
+/// the key goes too; undo brings both back.
 #[test]
 fn hide_all_artwork_above_deselects_the_objects_it_hides() {
     let mut s = session();
@@ -131,7 +132,7 @@ fn hide_all_artwork_above_deselects_the_objects_it_hides() {
     s.execute("select.key", &json!({"id": a.0})).unwrap();
     s.execute("object.hide.above", &json!({})).unwrap();
     assert!(!node(&s, sub).visible);
-    assert_eq!((selected(&s), key(&s)), (vec![a], Some(a)));
+    assert_eq!((selected(&s), key(&s)), (vec![a], None));
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!((selected(&s), key(&s)), (vec![hidden, a, b], Some(a)));
 }
