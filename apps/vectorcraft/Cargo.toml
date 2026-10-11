@@ -34,6 +34,9 @@ webbrowser = { workspace = true }
 # The window's monitors, size and position (the same winit eframe runs on).
 winit = { version = "0.30", default-features = false }
 
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["x11"] }
+
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { workspace = true }
 # Which GPU drives which display (EnumDisplayDevices, src/gpu.rs), so the window is drawn on the
