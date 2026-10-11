@@ -362,7 +362,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let artboard_tool = app.session.tool_id() == "artboard";
     let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
     for (i, ab) in doc.artboards.iter().enumerate() {
-        let r = xf.rect_to_screen(ab.rect);
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
         // The bleed (Document Setup) as a red outline around the artboard.
@@ -370,7 +369,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
         if (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
-            artboard_label(&painter, r, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
+            // At the artboard's own top-left corner, which a rotated view turns away from its
+            // bounding box's (#1095).
+            let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
+            artboard_label(&painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
         }
     }
     if app.ui.view.guides {
@@ -1753,16 +1755,16 @@ fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
 /// out rather than spilling over its neighbours.
 const MIN_LABELLED_ARTBOARD: f32 = 24.0;
 
-/// Artboard `name` above the top-left corner of its on-screen rect `r`, no wider than the
-/// artboard: a longer name ends in "…", and an artboard too narrow shows none (#949).
-fn artboard_label(painter: &egui::Painter, r: egui::Rect, name: &str, color: Color32) {
-    if r.width() < MIN_LABELLED_ARTBOARD {
+/// Artboard `name` above its top-left `corner` on screen, no wider than the artboard (`width` on
+/// screen): a longer name ends in "…", and an artboard too narrow shows none (#949).
+fn artboard_label(painter: &egui::Painter, corner: Pos2, width: f32, name: &str, color: Color32) {
+    if !width.is_finite() || width < MIN_LABELLED_ARTBOARD {
         return;
     }
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), egui::FontId::proportional(11.0), color);
-    job.wrap = egui::text::TextWrapping { max_width: r.width(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    job.wrap = egui::text::TextWrapping { max_width: width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     let galley = painter.layout_job(job);
-    painter.galley(r.left_top() - vec2(0.0, 4.0 + galley.size().y), galley, color);
+    painter.galley(corner - vec2(0.0, 4.0 + galley.size().y), galley, color);
 }
 
 /// Is overlay label `text` the Artboard tool's "01 - <artboard name>"? It holds a name, so it is
@@ -2272,8 +2274,9 @@ mod tests {
     fn artboard_labels_fit_their_artboard() {
         let ctx = egui::Context::default();
         let drawn = |width: f32| {
-            let r = egui::Rect::from_min_size(pos2(50.0, 50.0), vec2(width, 40.0));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| artboard_label(ui.painter(), r, "01 - A long artboard name", Color32::WHITE));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                artboard_label(ui.painter(), pos2(50.0, 50.0), width, "01 - A long artboard name", Color32::WHITE)
+            });
             out.textures_delta.clear();
             out.shapes
                 .into_iter()
