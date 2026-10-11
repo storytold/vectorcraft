@@ -454,7 +454,7 @@ jobs:
     name: Draft GitHub Release
     # Needs the signed jobs, so a branch dry run (where the environment refuses them) never
     # drafts a release.
-    needs: [version, macos, windows, linux, flatpak, freebsd, web]
+    needs: [version, macos, windows, linux, linux-riscv64, flatpak, freebsd, web]
     runs-on: ubuntu-latest
     environment: release
     permissions:
