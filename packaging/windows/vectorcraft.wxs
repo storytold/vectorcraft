@@ -10,7 +10,9 @@
   Per-machine install with a setup wizard that names the version: Welcome, install folder (Program Files\VectorCraft by
   default, remembered for upgrades), Ready, a progress page, and a Finish page with a ticked
   "Launch VectorCraft" box. Installs a Start Menu shortcut and an App Paths entry (so `vectorcraft`
-  starts from the Run dialog), plus vectorcraft-cli. `msiexec /qn` still installs silently.
+  starts from the Run dialog), plus vectorcraft-cli. A Shortcuts page after the install folder offers
+  a desktop shortcut (ticked). `msiexec /qn` still installs silently, with the desktop shortcut
+  unless INSTALLDESKTOPSHORTCUT="" is passed.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
@@ -39,6 +41,7 @@
       <Directory Id="INSTALLFOLDER" Name="VectorCraft" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
 
     <!-- An upgrade installs where the user put the previous version (written by VectorcraftApp). -->
     <Property Id="INSTALLFOLDER">
@@ -47,7 +50,12 @@
 
     <Feature Id="Main" Title="VectorCraft" Level="1">
       <ComponentGroupRef Id="VectorcraftFiles" />
+      <ComponentRef Id="DesktopShortcut" />
     </Feature>
+
+    <!-- A desktop shortcut: the Shortcuts page's box (ticked), or INSTALLDESKTOPSHORTCUT="" on the
+         msiexec command line for none. Secure, so the wizard's choice reaches the install. -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" Secure="yes" />
 
     <!-- The setup wizard: WixUI_InstallDir without its licence page (the code is MIT OR
          Apache-2.0; there is nothing to accept). A later NewDialog on the same button wins. -->
@@ -55,6 +63,30 @@
     <UI>
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="NOT Installed" />
       <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" />
+      <!-- The Shortcuts page sits between the install folder and Ready (once the folder is valid). -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ShortcutsDlg" Order="5"
+          Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ShortcutsDlg" Order="5" Condition="NOT Installed" />
+
+      <Dialog Id="ShortcutsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="InstallDirDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.ShortcutsDlgTitle)" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.ShortcutsDlgDescription)" />
+        <Control Id="DesktopShortcutCheckBox" Type="CheckBox" X="20" Y="60" Width="330" Height="18"
+            Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="!(loc.ShortcutsDlgDesktop)" />
+        <Control Id="StartMenuNote" Type="Text" X="20" Y="84" Width="330" Height="30" NoPrefix="yes" Text="!(loc.ShortcutsDlgStartMenu)" />
+      </Dialog>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchVectorcraft"
           Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
     </UI>
@@ -92,5 +124,13 @@
         <File Id="VectorcraftCliExe" Source="$(var.BinDir)\vectorcraft-cli.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
+
+    <!-- Installed only with INSTALLDESKTOPSHORTCUT set (the Shortcuts page's box); removed with the
+         app. A per-machine install puts it on the common desktop. -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="498F2D4C-E655-47F6-B406-2D4C449B8D26" Condition="INSTALLDESKTOPSHORTCUT">
+      <Shortcut Id="DesktopShortcut" Name="VectorCraft" Description="VectorCraft vector illustration app"
+          Target="[#VectorcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="VectorcraftIcon.ico" IconIndex="0" />
+      <RegistryValue Root="HKLM" Key="Software\VectorCraft" Name="DesktopShortcut" Value="1" Type="integer" KeyPath="yes" />
+    </Component>
   </Fragment>
 </Wix>

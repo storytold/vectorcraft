@@ -7,5 +7,9 @@
   <String Id="WelcomeDlgTitle" Value="{\WixUI_Font_Bigger}Welcome to the [ProductName] [VectorcraftVersion] Setup Wizard" />
   <String Id="WelcomeDlgDescription" Value="The Setup Wizard will install [ProductName] version [VectorcraftVersion] on your computer. Click Next to continue or Cancel to exit the Setup Wizard." />
   <String Id="VerifyReadyDlgInstallTitle" Value="{\WixUI_Font_Title}Ready to install [ProductName] [VectorcraftVersion]" />
+  <String Id="ShortcutsDlgTitle" Value="{\WixUI_Font_Title}Shortcuts" />
+  <String Id="ShortcutsDlgDescription" Value="Choose where you can start [ProductName] from." />
+  <String Id="ShortcutsDlgDesktop" Value="Create a &amp;desktop shortcut" />
+  <String Id="ShortcutsDlgStartMenu" Value="[ProductName] is always added to the Start menu." />
   <String Id="ExitDialogTitle" Value="{\WixUI_Font_Bigger}Completed the [ProductName] [VectorcraftVersion] Setup Wizard" />
 </WixLocalization>
