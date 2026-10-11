@@ -331,7 +331,9 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
     }
     if rows.is_empty() {
         widgets::dim_label(ui, tl!("No matching fonts"));
-        return None;
+        // A filter or a font rescan can remove the row whose font was previewed.
+        // Do not leave that font applied while the list has no candidate to highlight.
+        return st.previewed.take().map(|_| FontPick::EndPreview);
     }
     // The rows: only those in view are laid out (there are thousands of families). The list is
     // the menu's one scrolling part, under the search field and filters (#555): it fills the
@@ -449,6 +451,7 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
             st.previewed = Some(pick.clone());
             Some(FontPick::Preview(pick.0, pick.1))
         }
+        None => st.previewed.take().map(|_| FontPick::EndPreview),
         _ => None,
     }
 }
