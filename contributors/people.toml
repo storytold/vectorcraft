@@ -65,3 +65,8 @@ sync_github_name = false
 [people.KattKnight]
 display_name = "KattKnight (ayla.dsc)"
 sync_github_name = false
+
+[people.NoJuanNobody]
+real_name = "Alejandro Londono"
+display_name = "alex"
+sync_github_name = false

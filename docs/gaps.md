@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -88,7 +88,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** scaled text's size and horizontal-scale controls account for object/group transforms (#1034),
   including exact sizes across grouped labels and resetting horizontal stretch while keeping editable text.
-- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937, #893); Transform effect dialog's invisible checkboxes and missing options (#885);
+- **Missing:** Shape Builder misses planar regions and targets whole shapes (#937); Transform effect dialog's invisible checkboxes and missing options (#885);
   PDF text boxes moving on open (#722); SVG units reverting to points (#864); bezier drag preview freezing (#834).
 - **Impact:** wrong output in everyday work.
 - **Estimate:** 8–15 h.
@@ -203,6 +203,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | G11: #893 fixed (merged regions of crossing lines left seams); #937 still open, estimate unchanged |
 | 2026-10-11 | minor | #1034: corrected scaled type controls; optional group font-size preservation remains separate. Estimates unchanged at this rounding. |
 | 2026-10-11 | minor | G9: legacy `.ai` without the prolog opens with its layers (#1027) |
 | 2026-10-11 | minor | G9: `.ai` pattern fills and global colours read from the editing data (#1025) |
