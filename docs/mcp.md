@@ -1544,8 +1544,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
-  `object.move`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`, `object.transformEach`, the
-  Selection and transform tools, the dialogs' Transform Patterns): pattern fills and strokes move with the art.
+  `object.move`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`, `object.transformEach`,
+  `object.align`, `object.distribute`, `object.distributeSpacing`, the Selection and transform tools, the dialogs'
+  Transform Patterns): pattern fills and strokes move with the art.
 - `selectSameTintPercent` (off by default): `select.same.fillColor`, `strokeColor` and `fillAndStroke` take every tint
   of a global or spot swatch; on, only the same tint.
 
