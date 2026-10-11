@@ -3,7 +3,8 @@
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
 //! path's anchors on that segment, drag to move selected anchors (the one pressed on snaps to
 //! anchors, segments and Smart Guides, or with them off Snap to Point; Shift keeps the move at 45°
-//! steps), drag a direction handle to
+//! steps; Alt on an anchor or a segment picks the whole path and Alt-drag copies it), drag a
+//! direction handle to
 //! reshape (Shift keeps it at 45° steps round its anchor, Alt moves it alone; smart guides snap
 //! it), marquee to select anchors (Shift-drag toggles them: the selected ones inside are
 //! deselected, the others selected), drag a corner widget of any path (a star, a pen path) to round its corners
@@ -367,6 +368,12 @@ impl Tool for DirectSelectionTool {
                 if let Some((id, si, ai, grab)) = hit_anchor(cx, p, point) {
                     if cx.doc.node(id).is_some_and(is_area_type) {
                         return self.press_type_area(cx, id, vec![(si, ai)], p, ev.mods.shift);
+                    }
+                    // Alt picks the whole path (and Alt-drag copies it), as on a segment.
+                    if ev.mods.alt {
+                        self.state = State::MoveObject { start: p, began: false };
+                        let whole = cx.selection.contains(id) && cx.selection.partial(id).is_none();
+                        return if whole { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                     }
                     // A path with all its anchors selected is stored whole (no partial entry).
                     let already = cx.selection.contains(id) && cx.selection.partial(id).is_none_or(|s| s.contains(&(si, ai)));
@@ -856,6 +863,26 @@ mod tests {
         let shift = Mods { shift: true, ..Default::default() };
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"}))]);
+    }
+
+    /// Alt-pressing an anchor picks the whole path, as Alt on a segment does, and the drag copies
+    /// it as the Selection tool's Alt-drag does.
+    #[test]
+    fn alt_dragging_an_anchor_copies_the_whole_path() {
+        let (d, id) = doc_with_rect();
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut whole = Selection::default();
+        whole.set([id]);
+        let p = paint();
+        for (s, pick) in [(Selection::default(), true), (anchors_of(id, &[(0, 0)]), true), (whole, false)] {
+            let cx = cx(&d, &s, &p);
+            let mut t = DirectSelectionTool::new(false);
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+            let set = vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
+            assert_eq!(a, if pick { set } else { vec![] }, "{s:?}");
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0).with_mods(alt));
+            assert!(matches!(a.as_slice(), [Action::Begin(_), Action::Preview(c, v)] if c == "object.transform" && v["copy"] == true), "{a:?}");
+        }
     }
 
     #[test]
