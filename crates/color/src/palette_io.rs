@@ -101,7 +101,7 @@ const ACB_CUT_SHORT: &str = "the color book is cut short";
 /// colors in their own model. Writing `.ase` fails for a library with more colors and groups than
 /// [`read_bytes`] reads from one file.
 pub fn write(lib: &SwatchLibrary, format: PaletteFormat) -> Result<Vec<u8>, String> {
-    let keep = |w: &&Swatch| matches!(w.paint, Paint::Solid { .. } | Paint::Gradient(_));
+    let keep = |w: &&Swatch| format.holds(&w.paint);
     let text = match format {
         PaletteFormat::Native => {
             let strip = |list: &[Swatch]| list.iter().filter(keep).cloned().collect::<Vec<_>>();
