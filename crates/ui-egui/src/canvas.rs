@@ -1435,8 +1435,19 @@ impl<'a> HandleLook<'a> {
     }
 }
 
+/// A thin dark edge makes light layer colours (yellow or green) legible over light
+/// artwork. Dark layer colours use a light edge instead. The marker itself still
+/// uses the original layer colour so colour-coded layers remain recognizable.
+fn anchor_edge_color(color: Color32) -> Color32 {
+    let brightness = u32::from(color.r()) * 299 + u32::from(color.g()) * 587 + u32::from(color.b()) * 114;
+    if brightness >= 70_000 { Color32::BLACK } else { Color32::WHITE }
+}
+
 fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     let r = egui::Rect::from_center_size(c, vec2(size, size));
+    // One device-independent point, outside the selectable anchor's normal size.
+    // This also outlines an unselected (white-filled) anchor on pale artwork.
+    p.rect_filled(r.expand(1.0), 0.0, anchor_edge_color(color));
     if filled {
         p.rect_filled(r, 0.0, color);
     } else {
@@ -2738,6 +2749,36 @@ mod tests {
         let red_dots = |s: &Shape| matches!(s, Shape::Mesh(m) if m.vertices.len() > 40 && m.vertices.iter().all(|v| v.color == red));
         assert!(s.iter().any(red_dots), "the grid's dots");
         assert!(s.iter().any(|s| matches!(s, Shape::Circle(c) if c.fill == green)), "the guide dotted");
+    }
+
+    /// #1072: yellow and green anchors stay visible over light artwork without
+    /// replacing their layer colours. Dark layer colours keep a light outside edge.
+    #[test]
+    fn anchor_markers_have_contrasting_halos_and_keep_the_layer_colour() {
+        assert_eq!(anchor_edge_color(Color32::YELLOW), Color32::BLACK);
+        assert_eq!(anchor_edge_color(Color32::from_rgb(0, 170, 40)), Color32::BLACK);
+        assert_eq!(anchor_edge_color(Color32::from_rgb(0, 0, 60)), Color32::WHITE);
+
+        let ctx = egui::Context::default();
+        for filled in [false, true] {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                anchor_square(ui.painter(), pos2(50.0, 50.0), Color32::YELLOW, filled, 5.0);
+            });
+            out.textures_delta.clear();
+            let rects: Vec<_> = out
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    Shape::Rect(r) => Some((r.rect.width(), r.fill)),
+                    _ => None,
+                })
+                .collect();
+            assert!(rects.contains(&(7.0, Color32::BLACK)), "contrasting outer edge: {rects:?}");
+            assert!(
+                rects.contains(&(5.0, if filled { Color32::YELLOW } else { Color32::WHITE })),
+                "the original anchor body stays unchanged: {rects:?}"
+            );
+        }
     }
 
     /// Selection & Anchor Display › Size (#394): anchors and the bounding box's handles grow.
