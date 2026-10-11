@@ -70,3 +70,6 @@ sync_github_name = false
 real_name = "Alejandro Londono"
 display_name = "alex"
 sync_github_name = false
+
+[people.webdevtodayjason]
+display_name = "Jason Brashear"
