@@ -551,11 +551,7 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             apply_options(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, p);
         }
-        // Hidden or locked content can't stay selected.
-        let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-        for h in hidden {
-            sel.remove(h);
-        }
+        sel.deselect_uneditable(d);
         Ok(())
     })?;
     ok()

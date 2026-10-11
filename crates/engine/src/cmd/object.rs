@@ -150,7 +150,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, data?: {key: \"value\" | null (removes it)} (the object's own data, SVG data-* attributes: {pivot: \"100,180\"} is data-pivot; document.node → attrs.data)}",
+            "{ids?|id?, name?, visible?, locked? (visible: false or locked: true deselects every selected object hidden or locked after the call, the key object included), opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, data?: {key: \"value\" | null (removes it)} (the object's own data, SVG data-* attributes: {pivot: \"100,180\"} is data-pivot; document.node → attrs.data)}",
             has_doc,
             set_props
         ),
@@ -854,6 +854,7 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         ),
         None => None,
     };
+    let hides = p.get("visible").and_then(Value::as_bool) == Some(false) || p.get("locked").and_then(Value::as_bool) == Some(true);
     // When every object already has every value given, the document and its undo history stay as
     // they are.
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
@@ -873,9 +874,13 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let d = &s.doc()?.doc;
     if ids.iter().all(|id| d.node(*id).is_some_and(has_values)) {
+        // Hidden or locked objects can't stay selected.
+        if hides {
+            s.select(|d, sel| sel.deselect_uneditable(d))?;
+        }
         return ok();
     }
-    s.edit("Object Properties", |d, _| {
+    s.edit("Object Properties", |d, sel| {
         for id in &ids {
             let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
             if let Some(v) = str_param(p, "name") {
@@ -920,6 +925,10 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 });
             }
+        }
+        // Hidden or locked objects can't stay selected.
+        if hides {
+            sel.deselect_uneditable(d);
         }
         Ok(())
     })?;

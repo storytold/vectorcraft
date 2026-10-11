@@ -207,6 +207,89 @@ fn visibility_and_lock_per_row_are_undoable() {
 }
 
 #[test]
+fn object_set_props_deselects_the_objects_it_hides_or_locks() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+    for (prop, value) in [("visible", false), ("locked", true)] {
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        run(&mut s, "select.key", json!({"id": b.0}));
+        let mut p = json!({"ids": [b.0]});
+        p[prop] = json!(value);
+        run(&mut s, "object.setProps", p);
+        assert!(!s.doc().unwrap().doc.is_editable(b));
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![a], None), "{prop}: {value} deselects the key object");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(s.doc().unwrap().doc.is_editable(b));
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![a, b], Some(b)), "undoing {prop}: {value} selects it again as the key");
+    }
+}
+
+#[test]
+fn object_set_props_deselects_the_objects_inside_a_group_or_layer_it_hides_or_locks() {
+    let mut s = session();
+    let (_, sub, a, g, b, c) = tree(&mut s);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "object.setProps", json!({"ids": [g.0], "locked": true}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, c], "b is in the locked group");
+    run(&mut s, "select.key", json!({"id": a.0}));
+    assert_eq!(s.doc().unwrap().selection.key, Some(a));
+    run(&mut s, "object.setProps", json!({"ids": [sub.0], "visible": false}));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![c], None), "a, the key object, is in the hidden sublayer");
+}
+
+#[test]
+fn object_set_props_that_hides_or_locks_nothing_keeps_the_selection() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let x = rect(&mut s, 0.0);
+    run(&mut s, "select.set", json!({"ids": [x.0]}));
+    run(&mut s, "object.lock", json!({}));
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "locked": true}));
+    run(&mut s, "object.unlockAll", json!({}));
+    let st = s.doc().unwrap();
+    assert!(st.selection.objects == vec![x] && !st.doc.is_editable(x), "Unlock All selects x, and its layer still locks it");
+    for p in [json!({"opacity": 50}), json!({"visible": true, "locked": false})] {
+        run(&mut s, "object.setProps", p.clone());
+        assert_eq!(s.doc().unwrap().selection.objects, vec![x], "{p} keeps x selected");
+    }
+    assert_eq!(node(&s, x).opacity, 0.5);
+}
+
+#[test]
+fn object_set_props_that_hides_or_locks_deselects_objects_hidden_or_locked_before() {
+    let mut s = session();
+    let (x, y, z) = (rect(&mut s, 0.0), rect(&mut s, 100.0), rect(&mut s, 200.0));
+    run(&mut s, "object.setProps", json!({"ids": [x.0], "visible": false}));
+    run(&mut s, "select.set", json!({"ids": [x.0, y.0, z.0]}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![x, y, z], "select.set selects the hidden x");
+    run(&mut s, "object.setProps", json!({"ids": [y.0], "locked": true}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![z], "locking y deselects x, hidden before the call, too");
+}
+
+#[test]
+fn object_set_props_that_changes_nothing_deselects_what_it_leaves_hidden_or_locked() {
+    let mut s = session();
+    let (x, y) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+    for (prop, value) in [("visible", false), ("locked", true)] {
+        let mut p = json!({"ids": [x.0]});
+        p[prop] = json!(value);
+        run(&mut s, "object.setProps", p.clone());
+        run(&mut s, "select.set", json!({"ids": [x.0, y.0]}));
+        run(&mut s, "select.key", json!({"id": x.0}));
+        let before = undos(&s);
+        run(&mut s, "object.setProps", p);
+        assert_eq!(undos(&s), before, "{prop}: {value} again records no undo step");
+        let sel = s.doc().unwrap().selection.clone();
+        assert_eq!((sel.objects, sel.key), (vec![y], None), "{prop}: {value} again deselects x, the key object");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(s.doc().unwrap().doc.is_editable(x));
+    }
+}
+
+#[test]
 fn layer_options_validate_and_template_locks_and_dims() {
     let mut s = session();
     let (layer, ..) = tree(&mut s);
