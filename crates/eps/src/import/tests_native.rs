@@ -654,6 +654,20 @@ fn art_the_layers_print_outside_an_eps_page_of_its_art_makes_it_come_in_as_its_p
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// An EPS whose page is its art's box keeps that page when it comes in through its layers, as it
+/// does as its page: not the editing data's artboard (#1102).
+#[test]
+fn an_eps_page_of_its_art_stays_its_page_through_the_layers() {
+    let file = eps_of_art([10, 10, 14, 14], &page_square(10, 10), &(layer("Art", true, &square(10, 10)) + &layer("Far", false, &square(80, 80))));
+    let r = import(&file).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Far"], "{:?}", r.warnings);
+    let boards: Vec<_> = r.document.artboards.iter().map(|a| a.rect).collect();
+    let art = r.document.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    assert_eq!(boards.len(), 1);
+    assert!((boards[0].width() - 4.0).abs() < 1e-6 && (boards[0].height() - 4.0).abs() < 1e-6, "{boards:?}");
+    assert!(boards[0].inflate(1e-6, 1e-6).contains_rect(art), "{boards:?} round {art:?}");
+}
+
 #[test]
 fn an_eps_saved_as_its_artboard_keeps_the_art_outside_it() {
     // The page is the artboard (0 0 100 100): the art beyond it is the pasteboard's.
