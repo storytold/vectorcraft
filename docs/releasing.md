@@ -85,8 +85,9 @@ The rules are in craftrules `standards/fonts.md`, the build option in
   (`entitlements.plist`) are deliberately empty.
 - **Notarization:** the app is zipped and sent with `xcrun notarytool submit --wait`, then the
   ticket is stapled and checked with `stapler validate` and `spctl`. The app goes on a DMG
-  (`hdiutil makehybrid` and `convert`, with an `Applications` link to drag onto), which is signed,
-  notarized and stapled too. Its Finder window (background, icon size and positions) comes from
+  (`hdiutil create -srcfolder`, retried when a CI runner's device is busy, with an `Applications` link
+  to drag onto), which is signed, notarized and stapled too; the app mounted from it must pass
+  `codesign --verify --strict --deep` (#1085). Its Finder window (background, icon size and positions) comes from
   [`packaging/macos/dmg/`](../packaging/macos/dmg/README.md), and its volume is named `VectorCraft`
   without the version, which the window's background needs; the DMG file name keeps the version.
 - **CLI:** the universal `vectorcraft-cli` is signed the same way, zipped, and the zip is
