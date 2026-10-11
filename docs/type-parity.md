@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** minor (document-point character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Proportional Metrics in vertical type, `vpal`, #966; document-point character controls after object/group scaling, #1034) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -51,5 +51,6 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Proportional Metrics done: `palt` in horizontal type, `vpal` in vertical type (#966, #1082); ruby and manual tate-chu-yoko still missing |
 | 2026-10-10 | minor | #1034: transformed character controls and regression coverage; preserving group font sizes remains a separate enhancement. Scores/hours unchanged at this rounding. |
 | 2026-10-10 | major | First checklist, split out of the parity table's Type core and Type advanced rows |

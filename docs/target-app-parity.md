@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Shape Builder: #893 fixed, merged regions of crossing lines no longer keep seams; scores unchanged while #937 is open; #1034: document-point character controls after object/group scaling; full readiness recomputed as the standard's additive weighted sum, ~62%; per-audience hours; essentials-user score ~75% added; ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (Type advanced: proportional vertical metrics (`vpal`) done, #966; Shape Builder: #893 fixed, merged regions of crossing lines no longer keep seams; scores unchanged while #937 is open; #1034: document-point character controls after object/group scaling; full readiness recomputed as the standard's additive weighted sum, ~62%; per-audience hours; essentials-user score ~75% added; ready-for-real-work re-examined: 50% → 55%, mainstream 65% added; earlier the same day: full re-measure against Illustrator 2026 30.x; merged the ROADMAP's parity estimate, honest assessment and "Shipped so far" into this file) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 The authoritative parity assessment. [`ROADMAP.md`](../ROADMAP.md) summarizes it; [`gaps.md`](gaps.md) is
 the work list made from it. Deep areas have their own checklists: [UI and interaction](ui-parity.md),
@@ -460,6 +460,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | Type advanced: Proportional Metrics in vertical type (`vpal`, #966) leaves the missing list; score and hours unchanged at this rounding (estimated) |
 | 2026-10-11 | minor | Shape Builder #893 fixed (planar-map faces share their corners exactly, so merges leave no seams); Path operations stays 80% and Shape Builder 70% while #937 is open (estimated) |
 | 2026-10-10 | minor | Merged main: initial live Revolve landed (#846). 3D 0% → ~8% (50–85 h), menu stubs 28 → 27; depth, readiness and totals unchanged within rounding |
 | 2026-10-10 | minor | Method aligned with the standard, no new evidence: the full ready-for-real-work number is the additive weighted sum over the dimensions (~62%). The multiplicative 55% from earlier today is withdrawn, and the 50% before it was an unbroken-down judgement. Added hours to ~95% for each audience (full 340–560 h, mainstream 230–380 h, essentials 60–105 h). Beta distance is now ~13 points |

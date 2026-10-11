@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (G4: proportional vertical metrics done, #966; G11: Shape Builder merge seams on grids of lines fixed, #893; scaled text controls corrected, #1034; group font-size preservation deferred) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every known shortfall against Illustrator, one entry each, **ranked by how much it stops a professional from
 switching**. This is the work list: unless you were given a task, pick the highest-ranked gap you can make
@@ -96,7 +96,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G4 Advanced type
 
 - **Missing:** hyphenation and justification options, Optical Margin Alignment (type core); CJK vertical
-  composition (ruby, mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern features beyond bidi, variable font axes, spell check with an open dictionary,
+  composition (ruby, mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
+  features beyond bidi, variable font axes, spell check with an open dictionary,
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
@@ -202,6 +203,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-11 | minor | G4: proportional vertical metrics (#966) done; estimate unchanged |
 | 2026-10-11 | minor | G11: #893 fixed (merged regions of crossing lines left seams); #937 still open, estimate unchanged |
 | 2026-10-11 | minor | #1034: corrected scaled type controls; optional group font-size preservation remains separate. Estimates unchanged at this rounding. |
 | 2026-10-11 | minor | G9: legacy `.ai` without the prolog opens with its layers (#1027) |
