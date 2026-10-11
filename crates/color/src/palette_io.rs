@@ -57,6 +57,19 @@ impl PaletteFormat {
     pub fn binary(self) -> bool {
         self == PaletteFormat::Ase
     }
+    /// Does [`write`] keep a swatch with `paint` in a file of this format? None and patterns are
+    /// never written; `.gpl` and `.ase` hold solid colors only, and CSS holds no freeform gradients.
+    pub fn holds(self, paint: &Paint) -> bool {
+        match paint {
+            Paint::Solid { .. } => true,
+            Paint::Gradient(g) => match self {
+                PaletteFormat::Native => true,
+                PaletteFormat::Css => g.gradient.kind != GradientKind::Freeform,
+                PaletteFormat::Gpl | PaletteFormat::Ase => false,
+            },
+            Paint::None | Paint::Pattern { .. } => false,
+        }
+    }
 }
 
 /// The native file: a header around the library.
@@ -88,7 +101,7 @@ const ACB_CUT_SHORT: &str = "the color book is cut short";
 /// colors in their own model. Writing `.ase` fails for a library with more colors and groups than
 /// [`read_bytes`] reads from one file.
 pub fn write(lib: &SwatchLibrary, format: PaletteFormat) -> Result<Vec<u8>, String> {
-    let keep = |w: &&Swatch| matches!(w.paint, Paint::Solid { .. } | Paint::Gradient(_));
+    let keep = |w: &&Swatch| format.holds(&w.paint);
     let text = match format {
         PaletteFormat::Native => {
             let strip = |list: &[Swatch]| list.iter().filter(keep).cloned().collect::<Vec<_>>();
@@ -792,6 +805,23 @@ mod tests {
         assert!(read(&text, "x").is_err(), "CSS is written only");
     }
 
+    #[test]
+    fn holds_counts_the_swatches_each_format_writes() {
+        // `sample()` holds the spot color Ink, the linear gradient Fade, the pattern Tiles and two solid colors in a group.
+        let mut lib = sample();
+        let Paint::Gradient(mut mesh) = lib.swatches[1].paint.clone() else { panic!("Fade is a gradient") };
+        mesh.gradient.kind = GradientKind::Freeform;
+        lib.swatches.push(Swatch { name: "Mesh".into(), paint: Paint::Gradient(mesh), global: false, spot: false });
+        lib.swatches.push(Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false });
+        let held = |f: PaletteFormat| lib.iter().filter(|w| f.holds(&w.paint)).count();
+        assert_eq!(PaletteFormat::ALL.map(held), [5, 3, 3, 4], "vcswatches, gpl, ase, css");
+        for f in [PaletteFormat::Native, PaletteFormat::Gpl, PaletteFormat::Ase] {
+            assert_eq!(read_bytes(&write(&lib, f).unwrap(), "x").unwrap().len(), held(f), "{f:?}");
+        }
+        let css = written(&lib, PaletteFormat::Css);
+        assert_eq!(css.lines().filter(|l| l.starts_with("  --")).count(), held(PaletteFormat::Css), "one property each: {css}");
+    }
+
     /// A swatch exchange file of `blocks` (type, body).
     fn ase(blocks: &[(u16, Vec<u8>)]) -> Vec<u8> {
         let mut out = b"ASEF\0\x01\0\0".to_vec();
@@ -1086,6 +1116,16 @@ mod tests {
             for (g, want) in back.groups.iter().zip(&lib.groups) {
                 prop_assert_eq!(&g.name, &want.name);
                 prop_assert!(same_swatches(&g.swatches, &ase_expected(&want.swatches)), "{}: {:?}", g.name, g.swatches);
+            }
+        }
+
+        /// A written `.vcswatches`, `.gpl` or `.ase` file reads back with as many swatches as
+        /// [`PaletteFormat::holds`] counts.
+        #[test]
+        fn written_files_read_back_with_the_swatches_holds_counts(lib in arb_library()) {
+            for f in [PaletteFormat::Native, PaletteFormat::Gpl, PaletteFormat::Ase] {
+                let back = read_bytes(&write(&lib, f).unwrap(), &lib.name).unwrap();
+                prop_assert_eq!(back.len(), lib.iter().filter(|w| f.holds(&w.paint)).count(), "{:?}", f);
             }
         }
     }

@@ -931,7 +931,8 @@ groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in
 (RGB, CMYK, Lab or Gray) as global, spot or process colors, and color groups, writes a tint swatch
 as the color it shows and leaves gradients out; CSS writes custom properties); without `path`
 it returns `{data}`, or `{dataBase64}` for `.ase`, and `user: true` saves into the user library
-folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
+folder of the desktop app (listed as category `user`, User Defined). The reply's `count` is the number of swatches
+written: `.gpl` and `.ase` hold solid colors only, and CSS leaves freeform gradients out. `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches`, `.gpl`, swatch exchange (`.ase`) or color book (`.acb`) file, or another
 document's swatches, as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global,
 spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
