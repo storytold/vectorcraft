@@ -189,6 +189,16 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.textThreads", "Hide Text Threads", "Cmd+Shift+Y", "{} toggle the thread lines between threaded text frames"),
     ("view.gradientAnnotator", "Hide Gradient Annotator", "Cmd+Alt+G", "{} toggle the Gradient tool's annotator"),
     ("type.hiddenCharacters", "Show Hidden Characters", "Cmd+Alt+I", "{} toggle markers for spaces, paragraph ends and story ends"),
+    ("type.alignLeft", "Align left", "Cmd+Shift+L", "{} align the selected type's paragraphs (or those the Type tool's selection touches) left"),
+    (
+        "type.alignCenter",
+        "Align center",
+        "Cmd+Shift+C",
+        "{} align the selected type's paragraphs (or those the Type tool's selection touches) centred",
+    ),
+    ("type.alignRight", "Align right", "Cmd+Shift+R", "{} align the selected type's paragraphs (or those the Type tool's selection touches) right"),
+    ("type.justifyLeft", "Justify with last line aligned left", "Cmd+Shift+J", "{} justify the selected type's paragraphs, last line aligned left"),
+    ("type.justifyAll", "Justify all lines", "Cmd+Shift+F", "{} justify every line of the selected type's paragraphs"),
     (
         "type.bold",
         "Bold",
@@ -994,6 +1004,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "type.hiddenCharacters" => flag(&mut app.ui.view.hidden_chars),
         "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
         "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
+        id if let Some((_, justify)) = crate::panels::paragraph::ALIGN_COMMANDS.iter().find(|c| c.0 == id) => {
+            crate::panels::paragraph::align(app, justify)
+        }
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "effect.last" => match app.last_effect.clone() {
             Some((e, params)) => {
@@ -1876,6 +1889,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
         "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
+        id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.place"
         | "file.export.svg"
