@@ -202,9 +202,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     label(ui, &v.name);
                     let key = value_key(&v.name);
                     match v.kind {
-                        VariableKind::Text => text(ui, d, &key, 220.0),
+                        VariableKind::Text => {
+                            text(ui, d, &key, 220.0);
+                        }
                         VariableKind::Visibility => checkbox(ui, d, &key),
-                    };
+                    }
                     ui.end_row();
                 }
             }
@@ -224,13 +226,11 @@ fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Respo
 }
 
 /// A checkbox for `key`, written back as it is toggled.
-fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str) -> egui::Response {
-    let mut b = d.bool(key);
-    let r = ui.checkbox(&mut b, "");
-    if r.changed() {
-        d.fields.insert(key.into(), json!(b));
+fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
+    let b = d.bool(key);
+    if widgets::check(ui, "", b, true) {
+        d.fields.insert(key.into(), json!(!b));
     }
-    r
 }
 
 /// A dropdown over the document's names `options` (shown as they are, never translated) for

@@ -320,8 +320,8 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
                     crate::widgets::range_field(ui, ("plugin-int", k), x, *min as f64..=*max as f64, "", 0, 100.0).map(|x| json!(x as i64))
                 }
                 ParamSpec::Bool { .. } => {
-                    let mut b = cur.as_bool().unwrap_or(false);
-                    ui.checkbox(&mut b, "").changed().then(|| json!(b))
+                    let b = cur.as_bool().unwrap_or(false);
+                    crate::widgets::check(ui, "", b, true).then(|| json!(!b))
                 }
                 ParamSpec::Choice { options, .. } => {
                     let labels: Vec<&str> = options.iter().map(String::as_str).collect();

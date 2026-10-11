@@ -356,13 +356,11 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     divider(ui);
     section_header(ui, tl!("Snap Options"));
-    let mut sp = app.ui.view.snap_to_point;
-    if ui.checkbox(&mut sp, tl!("Snap to Point")).changed() {
-        app.ui.view.snap_to_point = sp;
+    if widgets::check(ui, tl!("Snap to Point"), app.ui.view.snap_to_point, true) {
+        app.ui.view.snap_to_point ^= true;
     }
-    let mut sg = app.ui.view.snap_to_grid;
-    if ui.checkbox(&mut sg, tl!("Snap to Grid")).changed() {
-        app.ui.view.snap_to_grid = sg;
+    if widgets::check(ui, tl!("Snap to Grid"), app.ui.view.snap_to_grid, true) {
+        app.ui.view.snap_to_grid ^= true;
     }
     divider(ui);
     section_header(ui, tl!("Preferences"));
@@ -373,9 +371,9 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.session.prefs.keyboard_increment = v.max(0.001);
         }
     });
-    let mut ss = app.session.prefs.scale_strokes;
-    if ui.checkbox(&mut ss, tl!("Scale Strokes & Effects")).changed() {
-        super::transform::set_pref(app, "scaleStrokes", ss);
+    let ss = app.session.prefs.scale_strokes;
+    if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
+        super::transform::set_pref(app, "scaleStrokes", !ss);
     }
     divider(ui);
     section_header(ui, tl!("Quick Actions"));
@@ -582,6 +580,40 @@ mod tests {
         let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
         frame(app, ctx, vec![b(false)]);
+    }
+
+    /// The Snap Options and Scale Strokes & Effects checkboxes keep a visible box at rest in every
+    /// theme, as the Preferences ones do (#1080), and toggle when clicked.
+    #[test]
+    fn the_document_checkboxes_show_their_boxes_and_toggle() {
+        for brightness in crate::theme::Brightness::ALL {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, brightness);
+            frame(&mut app, &ctx, vec![]);
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+            out.textures_delta.clear();
+            let boxes = out
+                .shapes
+                .iter()
+                .filter(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.stroke.width > 0.0 && (r.rect.width() - 13.0).abs() < 0.5 && (r.rect.height() - 13.0).abs() < 0.5))
+                .count();
+            assert!(boxes >= 3, "{brightness:?}: {boxes} checkbox outlines");
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let texts = frame(&mut app, &ctx, vec![]);
+        let (grid, strokes) = (app.ui.view.snap_to_grid, app.session.prefs.scale_strokes);
+        click(&mut app, &ctx, &texts, "Snap to Grid");
+        assert_eq!(app.ui.view.snap_to_grid, !grid);
+        let texts = frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, &texts, "Scale Strokes & Effects");
+        assert_eq!(app.session.prefs.scale_strokes, !strokes);
     }
 
     /// #921: with the Gradient tool, a Gradient section: the type, and for a freeform gradient

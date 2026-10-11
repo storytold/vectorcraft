@@ -93,14 +93,15 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         super::form::check(ui, d, "__showAxis", tl!("Show axis"));
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            let mut visible = d.fields.get("expandVisibleOnly").and_then(Value::as_bool).unwrap_or(true);
-            let response = ui.allocate_ui_with_layout(
+            let visible = d.fields.get("expandVisibleOnly").and_then(Value::as_bool).unwrap_or(true);
+            let tip = tl!("Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.");
+            let toggled = ui.allocate_ui_with_layout(
                 vec2((ui.available_width() - 30.0).max(100.0), 24.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.checkbox(&mut visible, egui::RichText::new(tl!("Keep visible surfaces only when expanding")).size(12.0))
+                    widgets::check_tip(ui, tl!("Keep visible surfaces only when expanding"), visible, true, tip)
                 },
             ).inner;
-            if response.on_hover_text(tl!("Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.")).changed() {
-                d.fields.insert("expandVisibleOnly".into(), json!(visible));
+            if toggled {
+                d.fields.insert("expandVisibleOnly".into(), json!(!visible));
             }
             if reset_dot(ui, "expandVisibleOnly", !visible, "true") {
                 d.fields.insert("expandVisibleOnly".into(), json!(true));
@@ -111,9 +112,9 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 
 fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.horizontal(|ui| {
-        let mut shade = d.bool("shade");
-        if ui.checkbox(&mut shade, tl!("Shading")).changed() {
-            d.fields.insert("shade".into(), json!(shade));
+        let shade = d.bool("shade");
+        if widgets::check(ui, tl!("Shading"), shade, true) {
+            d.fields.insert("shade".into(), json!(!shade));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
         if reset_dot(ui, "shade", !shade, "true") {
