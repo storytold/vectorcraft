@@ -133,6 +133,46 @@ impl crate::Document {
     }
 }
 
+/// Graph Type › Position for pie graphs with several pies: the same size (Even), sized by their totals (Ratio), or
+/// stacked one on another, sized by their totals (Stacked).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PiePosition {
+    #[default]
+    Even,
+    Ratio,
+    Stacked,
+}
+
+/// Graph Type › Sort for pie graphs: wedges in data order (None), largest first in each pie (All), or in the first
+/// pie's largest-first order in every pie (First).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PieSort {
+    #[default]
+    None,
+    All,
+    First,
+}
+
+macro_rules! ids {
+    ($t:ty { $($v:ident => $id:literal),* }) => {
+        impl $t {
+            pub fn id(self) -> &'static str {
+                match self { $(Self::$v => $id),* }
+            }
+            pub fn parse(s: &str) -> Option<Self> {
+                [$(Self::$v),*].into_iter().find(|k| k.id().eq_ignore_ascii_case(s))
+            }
+            fn is_default(&self) -> bool {
+                *self == Self::default()
+            }
+        }
+    };
+}
+ids!(PiePosition { Even => "even", Ratio => "ratio", Stacked => "stacked" });
+ids!(PieSort { None => "none", All => "all", First => "first" });
+
 /// Graph Type › Value Axis: which side of the plot the value axis is drawn on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -253,6 +293,14 @@ pub struct GraphSpec {
     pub right_axis_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_axis_max: Option<f64>,
+    /// Pie graphs: Legends in Wedges (the series labels inside their wedges instead of a legend beside the pies),
+    /// Position and Sort.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub pie_legend_in_wedges: bool,
+    #[serde(skip_serializing_if = "PiePosition::is_default")]
+    pub pie_position: PiePosition,
+    #[serde(skip_serializing_if = "PieSort::is_default")]
+    pub pie_sort: PieSort,
     /// Object › Graph › Marker: the graph design each series' data points (and legend swatch) are drawn with, by
     /// series index, for line, scatter and radar series; `None` and missing entries draw the default square.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -360,6 +408,9 @@ impl Default for GraphSpec {
             right_axis_min: None,
             right_axis_max: None,
             series_markers: vec![],
+            pie_legend_in_wedges: false,
+            pie_position: PiePosition::Even,
+            pie_sort: PieSort::None,
             tick_length: TickLength::Short,
             tick_marks: 1,
             right_tick_length: TickLength::Short,

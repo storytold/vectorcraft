@@ -42,6 +42,9 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
         ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
         ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),
+        ("graph.setType", "pieLegend") => Some(PIE_LEGEND),
+        ("graph.setType", "piePosition") => Some(PIE_POSITION),
+        ("graph.setType", "pieSort") => Some(PIE_SORT),
         _ => None,
     }
 }
@@ -61,6 +64,11 @@ const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("
 
 /// Graph Type › Value Axis (series picked on both axes show none, and OK leaves each where it is).
 const GRAPH_VALUE_AXIS: form::Choices = &[("On Left Side", "left"), ("On Right Side", "right"), ("On Both Sides", "both")];
+
+/// Graph Type › Legend, Position and Sort for pie graphs.
+const PIE_LEGEND: form::Choices = &[("No Legend", "none"), ("Standard Legend", "standard"), ("Legends in Wedges", "wedges")];
+const PIE_POSITION: form::Choices = &[("Ratio", "ratio"), ("Even", "even"), ("Stacked", "stacked")];
+const PIE_SORT: form::Choices = &[("All", "all"), ("First", "first"), ("None", "none")];
 
 /// Graph Type › Tick Marks › Length.
 const GRAPH_TICK_LENGTH: form::Choices = &[("None", "none"), ("Short", "short"), ("Full Width", "full")];

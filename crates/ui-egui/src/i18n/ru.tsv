@@ -1120,6 +1120,12 @@
 	Graph Type	Тип диаграммы
 	Graph Design	Дизайн диаграммы
 	Graph Marker	Маркер диаграммы
+	No Legend	Без легенды
+	Standard Legend	Стандартная легенда
+	Legends in Wedges	Легенды в секторах
+	Ratio	Пропорционально
+	Even	Одинаково
+	Stacked	Стопкой
 	Graphic Style	Графический стиль
 	Graphic Style Libraries	Библиотеки графических стилей
 	Graphic Style Libraries Menu	Меню «Библиотеки графических стилей»

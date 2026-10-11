@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Data…",
             ["Object", "Graph"],
             None,
-            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label} replace the graph's data; no data → the current {csv, series, categories, rows}",
+            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label, a `|` in a label a line break; transpose?: true swaps rows and columns (Transpose row/column), switchXY?: true swaps each scatter series' y and x columns (Switch x/y)} replace the graph's data; no data → the current {csv, series, categories, rows}",
             has_selection,
             set_data
         ),
@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
         ),
@@ -178,7 +178,12 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         );
         changed = true;
     }
-    // Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+    drop_empty_rows(g);
+    changed
+}
+
+/// Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+fn drop_empty_rows(g: &mut GraphSpec) {
     let mut cells = g.cells();
     let keep: Vec<bool> = (0..cells.len())
         .map(|c| cells.get(c).is_some_and(|r| r.iter().any(Option::is_some)) || g.categories.get(c).is_some_and(|l| !l.is_empty()))
@@ -190,7 +195,6 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         g.categories.retain(|_| k.next().copied().unwrap_or(true));
         g.set_cells(cells);
     }
-    changed
 }
 
 fn fmt_value(v: f64) -> String {
@@ -307,6 +311,13 @@ impl Gen<'_> {
         refresh_bounds(&mut t);
         Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
     }
+    /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
+    /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
+    fn label(&mut self, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
+        let lines = s.split('|').count();
+        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * LABEL_SIZE * 1.2 / 2.0) } else { at };
+        self.text(at, &s.replace('|', "\n"), justify)
+    }
     fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);
         g.name = Some(name.into());
@@ -327,6 +338,22 @@ impl Gen<'_> {
         g.series_index = u32::try_from(index).ok();
         Arc::new(g)
     }
+}
+
+/// A label with nothing to show (empty, or only `|` line breaks).
+fn blank_label(s: &str) -> bool {
+    s.chars().all(|c| c == '|')
+}
+
+/// Text node `t` with its characters painted `colour`.
+fn recolour_text(t: &Arc<Node>, colour: Color) -> Arc<Node> {
+    let mut n = (**t).clone();
+    if let NodeKind::Text(text) = &mut n.kind {
+        for run in &mut text.runs {
+            run.style.fill = Paint::solid(colour);
+        }
+    }
+    Arc::new(n)
 }
 
 /// The stretches of two or more points between blank cells, which a line connects.
@@ -413,35 +440,110 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Where the art right of the plot ends (the right value axis' labels), so the legend starts after it.
     let mut right_edge = r.x1;
 
+    // Labels drawn over the series: a pie's Legends in Wedges (in the Legend group) and stacked pies' names.
+    let mut wedge_labels = vec![];
+    let mut on_top = vec![];
     match g.kind {
         GraphKind::Pie => {
-            // One pie per row, side by side; a wedge per series, clockwise from 12 o'clock.
-            let w = r.width() / ncat as f64;
-            let rad = (w.min(r.height()) / 2.0 * 0.9).max(1.0);
-            for c in 0..ncat {
-                let centre = Point::new(r.x0 + w * (c as f64 + 0.5), r.y0 + r.height() / 2.0);
-                let total: f64 = (0..nser).map(|s| val(c, s).max(0.0)).sum();
+            // One pie per row, a wedge per series, clockwise from 12 o'clock. Position: side by side at one size
+            // (Even) or sized by their totals (Ratio, by area), or stacked on one centre, the largest at the back.
+            let totals: Vec<f64> = (0..ncat).map(|c| (0..nser).map(|s| val(c, s).max(0.0)).sum()).collect();
+            let biggest = totals.iter().copied().fold(0.0, f64::max);
+            let stacked = g.pie_position == vectorcraft_doc::PiePosition::Stacked;
+            let w = if stacked { r.width() } else { r.width() / ncat as f64 };
+            let full = (w.min(r.height()) / 2.0 * 0.9).max(1.0);
+            let radius = |total: f64| match g.pie_position {
+                vectorcraft_doc::PiePosition::Even => full,
+                _ if biggest > 0.0 && biggest.is_finite() => (full * (total / biggest).sqrt()).max(1.0),
+                _ => full,
+            };
+            // Sort: data order, largest first in each pie, or the first pie's largest-first order everywhere.
+            let order = |c: usize| {
+                let mut o: Vec<usize> = (0..nser).collect();
+                let by = match g.pie_sort {
+                    vectorcraft_doc::PieSort::None => return o,
+                    vectorcraft_doc::PieSort::All => c,
+                    vectorcraft_doc::PieSort::First => 0,
+                };
+                o.sort_by(|a, b| val(by, *b).max(0.0).total_cmp(&val(by, *a).max(0.0)));
+                o
+            };
+            let mut pies: Vec<usize> = (0..ncat).collect();
+            if stacked {
+                pies.sort_by(|a, b| totals.get(*b).copied().unwrap_or(0.0).total_cmp(&totals.get(*a).copied().unwrap_or(0.0)));
+            }
+            // Stacked pies share a centre: each one but the smallest is drawn as the ring outside the next smaller
+            // one, so a pie never covers another (a pie as big as the next one has no ring and is left out).
+            let inner: Vec<f64> = if stacked {
+                (0..pies.len()).map(|k| pies.get(k + 1).map_or(0.0, |c| radius(totals.get(*c).copied().unwrap_or(0.0)))).collect()
+            } else {
+                vec![0.0; pies.len()]
+            };
+            for (k, c) in pies.into_iter().enumerate() {
+                let total = totals.get(c).copied().unwrap_or(0.0);
+                let rad = radius(total);
+                let hole = inner.get(k).copied().unwrap_or(0.0);
+                if hole >= rad - 1e-9 {
+                    continue;
+                }
+                let centre = if stacked { r.center() } else { Point::new(r.x0 + w * (c as f64 + 0.5), r.y0 + r.height() / 2.0) };
                 let mut a0 = -std::f64::consts::FRAC_PI_2;
-                for (s, items) in series.iter_mut().enumerate() {
+                for s in order(c) {
                     let v = val(c, s).max(0.0);
                     if total <= 0.0 || v <= 0.0 {
                         continue;
                     }
                     let sweep = v / total * std::f64::consts::TAU;
                     let mut bp = BezPath::new();
-                    bp.move_to(centre);
+                    let dir = |a: f64| vectorcraft_geom::Vec2::new(a.cos(), a.sin());
                     let arc = vectorcraft_geom::kurbo::Arc::new(centre, (rad, rad), a0, sweep, 0.0);
-                    bp.line_to(centre + vectorcraft_geom::Vec2::new(a0.cos(), a0.sin()) * rad);
-                    arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    if hole > 0.0 {
+                        // A ring segment: out along the outer arc, back along the inner one.
+                        bp.move_to(centre + dir(a0) * rad);
+                        arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                        bp.line_to(centre + dir(a0 + sweep) * hole);
+                        let back = vectorcraft_geom::kurbo::Arc::new(centre, (hole, hole), a0 + sweep, -sweep, 0.0);
+                        back.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    } else {
+                        bp.move_to(centre);
+                        bp.line_to(centre + dir(a0) * rad);
+                        arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    }
                     bp.close_path();
-                    let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.5);
-                    let n = b.path(PathData::from_bezpath(&bp), fill, stroke, w);
-                    items.push(n);
+                    let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.5);
+                    // White text on a dark wedge.
+                    let dark = fill.color().is_some_and(|c| {
+                        let [r, g, b] = c.to_rgb();
+                        0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
+                    });
+                    let n = b.path(PathData::from_bezpath(&bp), fill, stroke, sw);
+                    if let Some(items) = series.get_mut(s) {
+                        items.push(n);
+                    }
+                    // Legends in Wedges: the series label inside its wedge, centred two thirds of the way out.
+                    if g.legend && g.pie_legend_in_wedges {
+                        let label = series_label(s);
+                        if !blank_label(&label) {
+                            // Two thirds of the way out (of the ring, for a stacked pie).
+                            let mid = a0 + sweep / 2.0;
+                            let at = centre + dir(mid) * (hole + (rad - hole) * 0.62);
+                            let t = b.label(Point::new(at.x, at.y + LABEL_SIZE * 0.35), &label, Justify::Center, true);
+                            wedge_labels.push(if dark { recolour_text(&t, Color::WHITE) } else { t });
+                        }
+                    }
                     a0 += sweep;
                 }
                 if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
-                    let t = b.text(Point::new(centre.x, centre.y + rad + LABEL_SIZE * 1.6), cat, Justify::Center);
-                    b.out.push(t);
+                    if stacked {
+                        // Just above its own outline, all its lines, and drawn over the pies.
+                        let lines = cat.split('|').count() as f64;
+                        let at = Point::new(centre.x, centre.y - rad - LABEL_SIZE * 0.4 - (lines - 1.0) * LABEL_SIZE * 1.2);
+                        let t = b.label(at, cat, Justify::Center, false);
+                        on_top.push(t);
+                    } else {
+                        let t = b.label(Point::new(centre.x, centre.y + rad + LABEL_SIZE * 1.6), cat, Justify::Center, false);
+                        b.out.push(t);
+                    }
                 }
             }
         }
@@ -458,7 +560,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 axes.push(b.line(centre, at(c, hi)));
                 if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
                     let p = at(c, hi) + (at(c, hi) - centre).normalize() * (LABEL_SIZE * 1.2);
-                    axes.push(b.text(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center));
+                    axes.push(b.label(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center, true));
                 }
             }
             for v in tick_values(lo, hi, step).into_iter().skip(1) {
@@ -646,9 +748,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 for c in 0..ncat {
                     if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
                         let t = if horizontal {
-                            b.text(Point::new(r.x0 - 6.0, cat_mid(c) + LABEL_SIZE * 0.35), cat, Justify::Right)
+                            b.label(Point::new(r.x0 - 6.0, cat_mid(c) + LABEL_SIZE * 0.35), cat, Justify::Right, true)
                         } else {
-                            b.text(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center)
+                            b.label(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center, false)
                         };
                         axes.push(t);
                     }
@@ -819,19 +921,24 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Legend: a swatch + label per series, right of the plot; the swatch joins its series group.
     let legend_series = if g.kind == GraphKind::Scatter { nser.div_ceil(2) } else { nser };
     let mut labels = vec![];
-    if g.legend && !g.series.is_empty() {
+    if g.legend && !g.series.is_empty() && !(g.kind == GraphKind::Pie && g.pie_legend_in_wedges) {
         let x = right_edge + 14.0;
+        // Each row as tall as its label's lines (a `|` in a label starts a new line).
+        let mut y = r.y0;
         for (s, items) in series.iter_mut().enumerate().take(legend_series) {
             let label = if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) };
-            if label.is_empty() {
+            let row_y = y;
+            if blank_label(&label) {
+                y += LABEL_SIZE * 1.8;
                 continue;
             }
-            let y = r.y0 + s as f64 * (LABEL_SIZE * 1.8);
+            y += LABEL_SIZE * 1.8 * label.split('|').count() as f64;
+            let y = row_y;
             // Series drawn with markers show their marker design in the legend.
             let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(s) == GraphKind::Line;
             let paint = mark(s, true, Paint::None, 0.0);
             items.push(b.marker(design(s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint));
-            labels.push(b.text(Point::new(x + 12.0, y + 7.5), &label, Justify::Left));
+            labels.push(b.label(Point::new(x + 12.0, y + 7.5), &label, Justify::Left, false));
         }
     }
     // Areas at the back, lines and points in front of columns; one graph type keeps the series order.
@@ -850,6 +957,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         let grp = b.series(&name, s, items);
         b.out.push(grp);
     }
+    b.out.append(&mut on_top);
+    labels.append(&mut wedge_labels);
     if !labels.is_empty() {
         let grp = b.group("Legend", labels);
         b.out.push(grp);
@@ -1020,10 +1129,61 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
     }
 }
 
+/// Graph Data › Transpose row/column: categories become series and series categories.
+fn transpose(g: &mut GraphSpec) {
+    let cells = g.cells();
+    let width = cells.iter().map(Vec::len).max().unwrap_or(0);
+    let flipped: Vec<Vec<Option<f64>>> = (0..width).map(|s| cells.iter().map(|row| row.get(s).copied().flatten()).collect()).collect();
+    std::mem::swap(&mut g.series, &mut g.categories);
+    g.set_cells(flipped);
+}
+
+/// Graph Data › Switch x/y (scatter graphs): each series' y and x columns trade places, with their labels.
+fn switch_xy(g: &mut GraphSpec) {
+    let mut cells = g.cells();
+    // Labels for every column, so each pair's labels trade places with its data.
+    let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(g.series.len());
+    g.series.resize(width, String::new());
+    for row in &mut cells {
+        for pair in row.as_chunks_mut::<2>().0 {
+            pair.swap(0, 1);
+        }
+    }
+    for pair in g.series.as_chunks_mut::<2>().0 {
+        pair.swap(0, 1);
+    }
+    while g.series.last().is_some_and(String::is_empty) {
+        g.series.pop();
+    }
+    g.set_cells(cells);
+}
+
 fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p, "graph.setData")?;
+    const C: &str = "graph.setData";
+    let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
-    if !apply_data(&mut spec, p) {
+    let flip = bool_or(p, "transpose", false);
+    let swap = bool_or(p, "switchXY", false);
+    if swap && spec.kind != GraphKind::Scatter {
+        return Err(bad(C, "Switch x/y is for scatter graphs"));
+    }
+    // Transpose and Switch x/y act after any new data in the same call.
+    let changed = apply_data(&mut spec, p);
+    if flip {
+        // The categories become series: at most as many as a graph has series.
+        if spec.cells().len() > vectorcraft_doc::MAX_GRAPH_SERIES {
+            return Err(bad(
+                C,
+                format!("a graph has at most {} series, so it transposes with at most that many categories", vectorcraft_doc::MAX_GRAPH_SERIES),
+            ));
+        }
+        transpose(&mut spec);
+        drop_empty_rows(&mut spec);
+    }
+    if swap {
+        switch_xy(&mut spec);
+    }
+    if !(changed || flip || swap) {
         // Blank cells come back as null, so the rows can be edited and sent back as they are.
         return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.cells() }));
     }
@@ -1244,6 +1404,9 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "suffix",
         "rightPrefix",
         "rightSuffix",
+        "pieLegend",
+        "piePosition",
+        "pieSort",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         // With series picked, the type and value axis they share, so the dialog's OK keeps them.
@@ -1256,7 +1419,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             Some(r) if sides.iter().all(|x| x == r) => Some(if *r { "right" } else { "left" }),
             Some(_) => None,
         };
-        return Ok(json!({
+        let mut fields = json!({
             "type": kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
             "axisMin": spec.axis_min, "axisMax": spec.axis_max, "valueAxis": value_axis, "separateScales": spec.separate_scales,
@@ -1266,7 +1429,24 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             "categoryTickMarks": spec.category_tick_marks.clamp(1, MAX_TICK_MARKS), "ticksBetweenLabels": spec.ticks_between_labels,
             "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
             "rightSuffix": one_line(&spec.right_suffix),
-        }));
+        });
+        // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
+        if let Some(o) = fields.as_object_mut().filter(|_| spec.kind == GraphKind::Pie) {
+            o.remove("legend");
+            o.insert(
+                "pieLegend".into(),
+                json!(if !spec.legend {
+                    "none"
+                } else if spec.pie_legend_in_wedges {
+                    "wedges"
+                } else {
+                    "standard"
+                }),
+            );
+            o.insert("piePosition".into(), json!(spec.pie_position.id()));
+            o.insert("pieSort".into(), json!(spec.pie_sort.id()));
+        }
+        return Ok(fields);
     }
     // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
     let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
@@ -1321,6 +1501,13 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         *slot = count_param(p, key, MAX_TICK_MARKS as u64).map_or(*slot, |n| n.max(1));
     }
     spec.ticks_between_labels = bool_or(p, "ticksBetweenLabels", spec.ticks_between_labels);
+    if let Some(v) = str_param(p, "piePosition") {
+        spec.pie_position =
+            vectorcraft_doc::PiePosition::parse(v).ok_or_else(|| bad(C, format!("unknown piePosition `{v}` (even, ratio or stacked)")))?;
+    }
+    if let Some(v) = str_param(p, "pieSort") {
+        spec.pie_sort = vectorcraft_doc::PieSort::parse(v).ok_or_else(|| bad(C, format!("unknown pieSort `{v}` (none, all or first)")))?;
+    }
     for (key, slot) in
         [("prefix", &mut spec.prefix), ("suffix", &mut spec.suffix), ("rightPrefix", &mut spec.right_prefix), ("rightSuffix", &mut spec.right_suffix)]
     {
@@ -1339,6 +1526,15 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
     spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
     spec.legend = bool_or(p, "legend", spec.legend);
+    // After `legend`, which the Graph Type dialog sends too.
+    if let Some(v) = str_param(p, "pieLegend") {
+        (spec.legend, spec.pie_legend_in_wedges) = match v.to_ascii_lowercase().as_str() {
+            "none" => (false, false),
+            "standard" => (true, false),
+            "wedges" => (true, true),
+            _ => return Err(bad(C, format!("unknown pieLegend `{v}` (none, standard or wedges)"))),
+        };
+    }
     spec.mark_points = bool_or(p, "markPoints", spec.mark_points);
     spec.connect_points = bool_or(p, "connectPoints", spec.connect_points);
     spec.edge_to_edge = bool_or(p, "edgeToEdge", spec.edge_to_edge);
@@ -2733,5 +2929,246 @@ mod tests {
         let mut seen = false;
         s.doc().unwrap().doc.visit_paints(&mut |p| seen |= p.color().is_some_and(|c| c.to_hex() == "#123456"));
         assert!(seen, "the colour is used by the design");
+    }
+
+    fn make(s: &mut Session, ty: &str, csv: &str) -> NodeId {
+        NodeId(
+            s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        )
+    }
+
+    /// Where each wedge of series `index` starts: its angle from 12 o'clock, clockwise, in degrees (the legend
+    /// swatch, last, left out).
+    fn wedge_starts(s: &Session, id: NodeId, index: u32) -> Vec<f64> {
+        let parts = series_parts(s, id, index);
+        parts[..parts.len() - 1]
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Path { path, .. } => {
+                    let bp = path.to_bezpath();
+                    let pts: Vec<_> = bp.elements().iter().filter_map(|e| e.end_point()).collect();
+                    let (c, p) = (pts.first()?, pts.get(1)?);
+                    let deg = (p.x - c.x).atan2(-(p.y - c.y)).to_degrees();
+                    Some(if deg < -1e-6 { deg + 360.0 } else { deg })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bar_in_a_label_breaks_the_line() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",Total|Sales|2023,b\nQ1|first,3,2\nQ2,5,4");
+        let texts = axis_texts(&s, id);
+        assert!(texts.contains(&"Q1\nfirst".to_string()), "{texts:?}");
+        // The legend: a label of three lines, and the next row below all three.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let legend: Vec<_> = group(&n, "Legend").children().unwrap().iter().map(|c| (**c).clone()).collect();
+        let NodeKind::Text(t) = &legend[0].kind else { panic!() };
+        assert_eq!(t.plain_text(), "Total\nSales\n2023");
+        let (a, b) = (
+            series_parts(&s, id, 0).last().unwrap().geometric_bounds().unwrap(),
+            series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap(),
+        );
+        assert!((b.y0 - a.y0 - 3.0 * 9.0 * 1.8).abs() < 1e-6, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn transpose_swaps_rows_and_columns_and_switch_xy_swaps_scatter_pairs() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",a,b\nQ1,1,2\nQ2,3,");
+        let before = spec(&s, id);
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.series.clone(), g.categories.clone()), (vec!["Q1".to_string(), "Q2".into()], vec!["a".to_string(), "b".into()]));
+        assert_eq!(g.cells(), [[Some(1.0), Some(3.0)], [Some(2.0), None]]);
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert_eq!(spec(&s, id).cells(), before.cells());
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(spec(&s, id).cells(), g.cells());
+        assert!(s.execute("graph.setData", &json!({"switchXY": true})).is_err(), "scatter graphs only");
+        let sc = make(&mut s, "scatter", ",y1,x1,y2,x2\nP,1,10,2,20");
+        s.execute("graph.setData", &json!({"switchXY": true})).unwrap();
+        let g = spec(&s, sc);
+        assert_eq!(g.cells(), [[Some(10.0), Some(1.0), Some(20.0), Some(2.0)]]);
+        assert_eq!(g.series, ["x1", "y1", "x2", "y2"]);
+    }
+
+    #[test]
+    fn pie_wedges_sort_largest_first_in_each_pie_or_in_the_first_pies_order() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b,c\nP1,1,3,2\nP2,3,1,2");
+        // None (data order): a starts at 12 o'clock in both pies.
+        assert_eq!(wedge_starts(&s, id, 0).iter().map(|d| d.round()).collect::<Vec<_>>(), [0.0, 0.0]);
+        s.execute("graph.setType", &json!({"pieSort": "all"})).unwrap();
+        // P1: b (3) first; P2: a (3) first.
+        let (a, b) = (wedge_starts(&s, id, 0), wedge_starts(&s, id, 1));
+        assert!(b[0].abs() < 1e-6 && a[1].abs() < 1e-6, "{a:?} {b:?}");
+        s.execute("graph.setType", &json!({"pieSort": "first"})).unwrap();
+        // P1's order (b, c, a) in both: b first in P2 too.
+        let b = wedge_starts(&s, id, 1);
+        assert!(b.iter().all(|d| d.abs() < 1e-6), "{b:?}");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["pieSort"], "first");
+        assert!(s.execute("graph.setType", &json!({"pieSort": "random"})).is_err());
+    }
+
+    #[test]
+    fn pies_sized_by_their_totals_side_by_side_or_stacked() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nSmall,5,5\nBig,20,20");
+        let pie = |s: &Session, c: usize| {
+            let wedges = |i: u32| {
+                let parts = series_parts(s, id, i);
+                parts[..parts.len() - 1].to_vec()
+            };
+            let rects: Vec<_> = (0..2).flat_map(wedges).filter_map(|n| n.geometric_bounds()).collect();
+            rects.into_iter().skip(c).step_by(2).reduce(|a, b| a.union(b)).unwrap()
+        };
+        let even = (pie(&s, 0), pie(&s, 1));
+        assert!((even.0.width() - even.1.width()).abs() < 1e-6);
+        s.execute("graph.setType", &json!({"piePosition": "ratio"})).unwrap();
+        let (small, big) = (pie(&s, 0), pie(&s, 1));
+        // Areas in proportion to the totals: 10 and 40, so radii 1 : 2.
+        assert!((big.width() / small.width() - 2.0).abs() < 1e-6, "{small:?} {big:?}");
+        assert!((big.width() - even.1.width()).abs() < 1e-6, "the biggest keeps the full size");
+        s.execute("graph.setType", &json!({"piePosition": "stacked"})).unwrap();
+        // Drawn largest first, so the big pie's wedges come first in each series.
+        let (big, small) = (pie(&s, 0), pie(&s, 1));
+        assert!((small.center() - big.center()).hypot() < 1e-6 && (big.width() / small.width() - 2.0).abs() < 1e-6);
+        // The big pie is drawn first, under the small one.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let wedges: Vec<f64> = series(&n, 0).children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.width()).collect();
+        assert!(wedges[0] > wedges[1], "{wedges:?}");
+    }
+
+    #[test]
+    fn legends_in_wedges_put_the_series_labels_inside_the_pie() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",North,South|East\nP,1,1");
+        s.execute("graph.setType", &json!({"pieLegend": "wedges"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let pie =
+            series(&n, 0).children().unwrap()[0].geometric_bounds().unwrap().union(series(&n, 1).children().unwrap()[0].geometric_bounds().unwrap());
+        let labels: Vec<_> = group(&n, "Legend").children().unwrap().iter().map(|c| (**c).clone()).collect();
+        assert_eq!(labels.len(), 2);
+        for l in &labels {
+            let b = l.geometric_bounds().unwrap();
+            assert!(pie.contains(b.center()), "{b:?} inside {pie:?}");
+        }
+        // No swatches beside the pie: each series group holds only its wedge.
+        assert_eq!((series(&n, 0).children().unwrap().len(), series(&n, 1).children().unwrap().len()), (1, 1));
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["pieLegend"].clone(), v["piePosition"].clone()), (json!("wedges"), json!("even")));
+        assert!(v.get("legend").is_none(), "a pie's Legend stands for the checkbox");
+        // The labels are drawn over the wedges, and on the black first wedge in white.
+        let order: Vec<_> = n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect();
+        assert_eq!(order.last().map(String::as_str), Some("Legend"), "{order:?}");
+        let colour = |l: &vectorcraft_doc::Node| match &l.kind {
+            NodeKind::Text(t) => t.runs[0].style.fill.color().unwrap().to_hex(),
+            _ => panic!(),
+        };
+        assert_eq!((colour(&labels[0]), colour(&labels[1])), ("#ffffff".to_string(), "#000000".to_string()));
+        // No Legend wins over a legend checkbox sent along (as the dialog does), and Standard comes back without wedges.
+        s.execute("graph.setType", &json!({"pieLegend": "none", "legend": true})).unwrap();
+        assert!(!spec(&s, id).legend);
+        s.execute("graph.setType", &json!({"legend": true})).unwrap();
+        assert!(!spec(&s, id).pie_legend_in_wedges);
+        assert!(s.execute("graph.setType", &json!({"pieLegend": "inside"})).is_err());
+        let path = vectorcraft_testkit::temp_dir("graph-pie").join("pie.vectorcraft");
+        s.execute("graph.setType", &json!({"pieLegend": "wedges", "piePosition": "stacked", "pieSort": "all"})).unwrap();
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(
+            (g.pie_legend_in_wedges, g.pie_position, g.pie_sort),
+            (true, vectorcraft_doc::PiePosition::Stacked, vectorcraft_doc::PieSort::All)
+        );
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        for k in ["pieLegendInWedges", "piePosition", "pieSort"] {
+            assert!(v.get(k).is_none(), "{k}");
+        }
+    }
+
+    #[test]
+    fn stacked_pies_are_rings_so_none_covers_another() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nSmall,5,5\nBig,20,20\nSame,20,20");
+        s.execute("graph.setType", &json!({"piePosition": "stacked"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        // Series b's wedges: of the two equal big pies one is left out, the other a ring outside the small pie
+        // (clear of the centre), and the small pie's whole.
+        let b: Vec<_> = series(&n, 1).children().unwrap().iter().map(|c| (**c).clone()).collect();
+        assert_eq!(b.len(), 3, "two wedges and the swatch");
+        let small = b[1].geometric_bounds().unwrap();
+        let NodeKind::Path { path, .. } = &b[0].kind else { panic!() };
+        let c = small.center();
+        let near: Vec<f64> = path.to_bezpath().elements().iter().filter_map(|e| e.end_point()).map(|p| (p - c).hypot()).collect();
+        let min = near.iter().copied().fold(f64::MAX, f64::min);
+        assert!(min > 1.0, "the ring keeps clear of the centre: {near:?}");
+        // The names are drawn over the pies: after every series group.
+        let kids = n.children().unwrap();
+        let last_series = kids.iter().rposition(|c| c.series_index.is_some()).unwrap();
+        let names: Vec<usize> = kids.iter().enumerate().filter(|(_, c)| matches!(c.kind, NodeKind::Text(_))).map(|(i, _)| i).collect();
+        assert_eq!(names.len(), 2, "of two equal pies, one has no ring and no name");
+        assert!(names.iter().all(|i| *i > last_series), "{names:?} after {last_series}");
+    }
+
+    #[test]
+    fn transpose_keeps_within_the_series_cap_and_drops_stale_axis_series() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let rows: Vec<Vec<f64>> = (0..300).map(|i| vec![i as f64]).collect();
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "column", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        assert!(s.execute("graph.setData", &json!({"transpose": true})).is_err(), "300 categories can't become series");
+        assert_eq!(spec(&s, id).cells().len(), 300);
+        let g = make(&mut s, "column", ",a,b,c\nQ1,1,2,3");
+        s.execute("graph.setType", &json!({"seriesIndexes": [2], "valueAxis": "right"})).unwrap();
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert!(spec(&s, g).right_series.is_empty(), "one series left");
+        // An all-blank series becomes no category.
+        let h = make(&mut s, "column", ",a,b\nQ1,1,\nQ2,2,");
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert_eq!(spec(&s, h).categories, ["a", "b"], "b keeps its label");
+        assert!(s.execute("graph.setData", &json!({"id": h.0, "transpose": false})).unwrap().get("csv").is_some(), "no change: the query");
+    }
+
+    #[test]
+    fn switch_xy_moves_the_labels_with_their_columns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "scatter", ",y1,x1,y2\nP,1,10,2,20");
+        s.execute("graph.setData", &json!({"switchXY": true})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(g.series, ["x1", "y1", "", "y2"]);
+        assert_eq!(g.cells(), [[Some(10.0), Some(1.0), Some(20.0), Some(2.0)]]);
+    }
+
+    #[test]
+    fn a_label_of_only_bars_is_blank_and_non_pie_graphs_list_no_pie_options() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",||,b\nQ1,1,2");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert_eq!(group(&n, "Legend").children().unwrap().len(), 1, "only b");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert!(v.get("pieLegend").is_none() && v.get("legend").is_some());
+        // Bar and radar labels with a `|` centre their lines on the category.
+        for ty in ["bar", "radar"] {
+            let g = make(&mut s, ty, ",a\nOne|Two|Three,1\nQ2,2\nQ3,3");
+            assert!(axis_texts(&s, g).contains(&"One\nTwo\nThree".to_string()), "{ty}");
+        }
     }
 }
