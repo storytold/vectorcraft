@@ -28,6 +28,24 @@ fn format(app: &mut VectorcraftApp, p: Value) {
     para_cmd(app, "text.setFormat", p);
 }
 
+/// The alignment shortcuts' commands (Cmd+Shift+L, C, R, J and F, as in page layout apps) and the
+/// `justify` each sets ([`align`]).
+pub const ALIGN_COMMANDS: [(&str, &str); 5] = [
+    ("type.alignLeft", "left"),
+    ("type.alignCenter", "center"),
+    ("type.alignRight", "right"),
+    ("type.justifyLeft", "justifyLeft"),
+    ("type.justifyAll", "justifyAll"),
+];
+
+/// Align the paragraphs of the selected type, or those the Type tool's selection touches, as
+/// `justify` (an [`ALIGN_COMMANDS`] alignment, #1111).
+pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    para_cmd(app, "text.setStyle", json!({ "justify": justify }));
+    Ok(Value::Null)
+}
+
 fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
