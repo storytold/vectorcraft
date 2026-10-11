@@ -138,6 +138,15 @@ impl Selection {
         // Guides on a hidden or locked layer can't stay selected.
         self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
     }
+    /// Deselect the objects that are hidden or locked, themselves or through a group or layer
+    /// around them (and so the key object when it is one): hidden or locked art can't stay
+    /// selected.
+    pub fn deselect_uneditable(&mut self, doc: &Document) {
+        let out: Vec<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable(*o)).collect();
+        for o in out {
+            self.remove(o);
+        }
+    }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected
     /// (the art of its sublayers too), anything else is selected itself.
     pub fn set_target(&mut self, doc: &Document, id: NodeId) {

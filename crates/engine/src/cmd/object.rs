@@ -876,12 +876,7 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.iter().all(|id| d.node(*id).is_some_and(has_values)) {
         // Hidden or locked objects can't stay selected.
         if hides {
-            s.select(|d, sel| {
-                let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-                for h in hidden {
-                    sel.remove(h);
-                }
-            })?;
+            s.select(|d, sel| sel.deselect_uneditable(d))?;
         }
         return ok();
     }
@@ -933,10 +928,7 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Hidden or locked objects can't stay selected.
         if hides {
-            let hidden: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-            for h in hidden {
-                sel.remove(h);
-            }
+            sel.deselect_uneditable(d);
         }
         Ok(())
     })?;

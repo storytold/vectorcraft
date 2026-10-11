@@ -188,11 +188,7 @@ fn set_flag(s: &mut Session, ids: Vec<NodeId>, flag: Flag, v: bool, label: &str)
                     flag.set(n, v);
                 }
             }
-            // Hidden or locked art can't stay selected.
-            let out: Vec<NodeId> = sel.objects.iter().copied().filter(|o| !d.is_editable(*o)).collect();
-            for o in out {
-                sel.remove(o);
-            }
+            sel.deselect_uneditable(d);
             Ok(())
         })?;
     }
