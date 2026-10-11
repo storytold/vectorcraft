@@ -79,36 +79,47 @@ pub struct SelectionTool {
 /// Snap to Grid lands its bounds on the grid (#740), taking over from the rest; otherwise Smart
 /// Guides line its bounds up with the other art, and with them off, View → Snap to Point lands the
 /// point it was grabbed by on an anchor or a ruler guide. Snap to Pixel puts its top-left on whole
-/// pixels.
+/// pixels. A copy (Alt, which can go down or up at any time during the drag) leaves the original
+/// behind, so it snaps to the original too.
 pub(crate) struct MoveSnap {
     bounds: Option<Rect>,
     targets: Option<Targets>,
     points: Option<Targets>,
+    /// The targets and points for a copy, gathered with the others before the previews move the
+    /// original.
+    copy_targets: Option<Targets>,
+    copy_points: Option<Targets>,
 }
 
 impl MoveSnap {
     pub(crate) fn new(cx: &ToolContext) -> Self {
+        let guides = cx.smart_guides && !cx.snap_to_grid;
+        let points = |exclude: &[NodeId]| if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, exclude) };
         Self {
             bounds: selection_bounds(cx),
-            targets: (cx.smart_guides && !cx.snap_to_grid).then(|| Targets::for_move(cx)),
-            points: if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, &cx.selection.objects) },
+            targets: guides.then(|| Targets::for_move(cx, &cx.selection.objects)),
+            points: points(&cx.selection.objects),
+            copy_targets: guides.then(|| Targets::for_move(cx, &[])),
+            copy_points: points(&[]),
         }
     }
 
-    /// The move by `d` of the selection grabbed at `start`, snapped, and its guides.
-    pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2) -> (Vec2, Vec<Overlay>) {
+    /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
+    /// guides.
+    pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
+        let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
         {
             d += grid_pull(b + d, cx.grid_step());
         }
-        if let Some(t) = &self.points {
+        if let Some(t) = points {
             let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
             d = q - start;
             guides = ov;
         }
-        if let (Some(t), Some(b)) = (&self.targets, self.bounds) {
+        if let (Some(t), Some(b)) = (targets, self.bounds) {
             let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
             d += adj;
             guides = ov;
@@ -331,7 +342,7 @@ impl Tool for SelectionTool {
                 }
                 let mut d = move_delta(start, p, m.shift);
                 if let Some(snap) = &self.moving {
-                    (d, self.guides) = snap.snap(cx, start, d);
+                    (d, self.guides) = snap.snap(cx, start, d, m.alt);
                 }
                 self.state = State::Moving { start, began: true, deselect: None, key: None };
                 self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
@@ -620,6 +631,38 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
         let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
         assert_eq!(a, vec![Action::Commit]);
+    }
+
+    /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
+    /// gathered before the previews moved it); released, the move doesn't.
+    #[test]
+    fn an_alt_copy_snaps_to_the_original_left_behind() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, id) = doc_with_rect();
+        // An artboard whose edges and centre are out of reach.
+        d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut t = SelectionTool::default();
+        let dx = |a: &[Action]| {
+            let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+            v["matrix"][4].as_f64().unwrap()
+        };
+        t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(dx(&t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Drag, 200.0, 150.0))), 50.0);
+        // The previews moved the rectangle: the tool sees it 50 pt along.
+        let mut moved = d.clone();
+        let l = moved.layers[0].id;
+        moved.remove(id).unwrap();
+        let r = vectorcraft_geom::shapes::rectangle(Rect::new(150.0, 100.0, 250.0, 200.0));
+        moved.insert(Some(l), 0, Node::path(id, r, Appearance::default_art())).unwrap();
+        let c = cx(&moved, &s, &p);
+        let alt = Mods { alt: true, ..Mods::default() };
+        // The copy's left edge, 3 pt past the original's right edge (x = 200), lands on it.
+        assert_eq!(dx(&t.pointer(&c, &ev(PointerKind::Drag, 253.0, 150.0).with_mods(alt))), 100.0);
+        // Without Alt nothing stays behind there.
+        assert_eq!(dx(&t.pointer(&c, &ev(PointerKind::Drag, 253.0, 150.0))), 103.0);
     }
 
     /// #740: with Snap to Grid on, a moved object lands on the grid (every 9 pt by default) by

@@ -355,3 +355,19 @@ fn an_undo_group_is_one_undo_step() {
     assert!((width(&s) - 120.0).abs() < 1e-9);
     assert_eq!(undo_len(&s), undo + 2);
 }
+
+/// A move drag is named for what its last preview did: Alt pressed or released during the drag
+/// turns it into a copy or back (the Selection and Direct Selection tools).
+#[test]
+fn a_move_drag_is_named_for_whether_it_copied() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| e.label.clone());
+    for (begin, copy, label) in [("Move", true, "Copy"), ("Copy", false, "Move"), ("Move", false, "Move")] {
+        s.begin_interaction(begin).unwrap();
+        s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": copy})).unwrap();
+        s.commit_interaction().unwrap();
+        assert_eq!(last(&s).as_deref(), Some(label), "begun as {begin}, copy: {copy}");
+    }
+}
