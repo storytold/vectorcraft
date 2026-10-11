@@ -116,11 +116,12 @@ to the target triple, so host build scripts aren't affected.
   candidates replace each other.
 - Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page):
   Welcome, install folder (remembered for upgrades in `HKLM\Software\VectorCraft\InstallDir`),
-  Ready, a progress page, and a Finish page that says where to find the app, with a ticked "Launch
-  VectorCraft" box. The pages name the full version (`vectorcraft.en-us.wxl`). `package.ps1` draws
-  the wizard's banner and side bitmaps from the app icon, so no WiX stock art ships. `msiexec /qn`
-  still installs silently. Building needs the WiX UI and Util extensions:
-  `wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2`.
+  Shortcuts (a ticked "Create a desktop shortcut" box), Ready, a progress page, and a Finish page
+  that says where to find the app, with a ticked "Launch VectorCraft" box. The pages name the full
+  version (`vectorcraft.en-us.wxl`). `package.ps1` draws the wizard's banner and side bitmaps from
+  the app icon, so no WiX stock art ships. `msiexec /qn` still installs silently, with the desktop
+  shortcut unless `INSTALLDESKTOPSHORTCUT=""` is passed. Building needs the WiX UI and Util
+  extensions: `wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2`.
 - The ARM64 build is cross-compiled on the x64 runner. `.github/workflows/windows-arm64.yml`
   installs that MSI on a Windows 11 ARM64 runner, checks that both installed programs are ARM64,
   runs `vectorcraft-cli --version` natively and uninstalls.
