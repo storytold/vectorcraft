@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    Appearance, CharStyle, Document, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, TickLength, ValueAxisSide,
+    Appearance, CharStyle, Document, GraphDesign, GraphKind, GraphSpec, Justify, Node, NodeId, NodeKind, TextObject, TickLength, ValueAxisSide,
 };
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, shapes};
 
@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Data…",
             ["Object", "Graph"],
             None,
-            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label} replace the graph's data; no data → the current {csv, series, categories, rows}",
+            "{id?, series?, categories?, rows?, csv?: first row = series labels (first cell empty), then one row per category: label, values…; an empty cell or a null is a blank value, a quoted number a label, a `|` in a label a line break; transpose?: true swaps rows and columns (Transpose row/column), switchXY?: true swaps each scatter series' y and x columns (Switch x/y)} replace the graph's data; no data → the current {csv, series, categories, rows}",
             has_selection,
             set_data
         ),
@@ -43,9 +43,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type…",
             ["Object", "Graph"],
             None,
-            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
+            "{id?, type?, seriesIndexes?: [index], columnWidth?: %, clusterWidth?: %, legend?: bool, markPoints?: bool, connectPoints?: bool, edgeToEdge?: bool (line graphs: true runs the lines across the whole plot, false puts the points at the centres of their categories), ticks?: n, axisMin?, axisMax?, valueAxis?: left|right|both (the bar graphs' value axis stays along the bottom), separateScales?: bool, rightTicks?: n, rightAxisMin?, rightAxisMax?, tickLength?: none|short|full, tickMarks?: n per division, rightTickLength?, rightTickMarks?, categoryTickLength?: none|short|full, categoryTickMarks?: n, ticksBetweenLabels?: bool, prefix?, suffix?, rightPrefix?, rightSuffix?: text around the value axis numbers, dropShadow?: bool (Add Drop Shadow: a translucent black shadow down and right of the columns, bars, lines and pie wedges), legendAcrossTop?: bool (Add Legend Across Top: the legend in rows above the plot), pieLegend?: none|standard|wedges (Legends in Wedges: the series labels inside their wedges), piePosition?: ratio|even|stacked (several pies sized by their totals, at one size (the default), or stacked), pieSort?: all|first|none (wedges largest first in each pie, in the first pie's order, or in data order (the default)); the query lists the pie options for pie graphs} change the graph type and options; with `seriesIndexes`, or (no `id`) with only series selected with Group Selection, `type` goes to those series only and `valueAxis` (left|right; both is refused) puts them on that value axis, while the other options still apply to the whole graph (Combine different graph types: column, stacked column, line and area mix, and so do bar and stacked bar; a series given the graph's type follows the graph again) (axisMin and axisMax together override the calculated value axis: exactly that range in `ticks` divisions, 5 when 0; with the value axis on both sides, separateScales gives the series on the right axis a scale of their own, set the same way with rightTicks, rightAxisMin and rightAxisMax); no options → the current ones",
             has_selection,
             set_type
+        ),
+        cmd!(
+            "graph.design",
+            "Design…",
+            ["Object", "Graph"],
+            None,
+            "{save?: name (the selected art becomes a graph design; put a rectangle at the back to set the size it draws at), paste?: name (a copy of the design's art into the document, selected, to edit and save again), delete?: name (graphs drawing it go back to their default marks)}; no params → {designs: [names]}",
+            has_doc,
+            design
+        ),
+        cmd!(
+            "graph.marker",
+            "Marker…",
+            ["Object", "Graph"],
+            None,
+            "{id?, seriesIndexes?: [index], design?: name|null} draw the data points and legend swatch of the series selected with Group Selection (or listed, or every series) with a graph design, scaled so its backmost object fills the default marker's square; null = the default marker. Line, scatter and radar series. No design → {designs: [names], design: the selected series' design or null}",
+            has_selection,
+            set_marker
         ),
     ]
 }
@@ -160,7 +178,12 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         );
         changed = true;
     }
-    // Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+    drop_empty_rows(g);
+    changed
+}
+
+/// Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+fn drop_empty_rows(g: &mut GraphSpec) {
     let mut cells = g.cells();
     let keep: Vec<bool> = (0..cells.len())
         .map(|c| cells.get(c).is_some_and(|r| r.iter().any(Option::is_some)) || g.categories.get(c).is_some_and(|l| !l.is_empty()))
@@ -172,7 +195,6 @@ fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
         g.categories.retain(|_| k.next().copied().unwrap_or(true));
         g.set_cells(cells);
     }
-    changed
 }
 
 fn fmt_value(v: f64) -> String {
@@ -289,10 +311,24 @@ impl Gen<'_> {
         refresh_bounds(&mut t);
         Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
     }
+    /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
+    /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
+    fn label(&mut self, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
+        let lines = s.split('|').count();
+        let at = if middle { Point::new(at.x, at.y - (lines - 1) as f64 * LABEL_SIZE * 1.2 / 2.0) } else { at };
+        self.text(at, &s.replace('|', "\n"), justify)
+    }
     fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);
         g.name = Some(name.into());
         Arc::new(g)
+    }
+    /// A data point's marker filling `cell`: the series' marker design, else the default square in the series' paint.
+    fn marker(&mut self, design: Option<&Arc<Node>>, cell: Rect, (fill, stroke, w): (Paint, Paint, f64)) -> Arc<Node> {
+        match design.and_then(|a| fit_design(self.d, a, cell)) {
+            Some(n) => n,
+            None => self.path(shapes::rectangle(cell), fill, stroke, w),
+        }
     }
     /// A series group. Empty series are omitted by the caller; the index is stored on the group
     /// so later paint edits find the series without counting siblings.
@@ -302,6 +338,47 @@ impl Gen<'_> {
         g.series_index = u32::try_from(index).ok();
         Arc::new(g)
     }
+}
+
+/// Add Drop Shadow: how far the shadow sits down and right of its mark, and how dark it is.
+const SHADOW_OFFSET: f64 = 2.0;
+const SHADOW_OPACITY: f32 = 0.35;
+/// Most marks a graph draws shadows for (each is a copy).
+const SHADOW_BUDGET: usize = 200_000;
+
+/// Mark `n`'s shadow: a black copy moved down and right, its fill and stroke (whichever it has) black.
+fn shadow_of(d: &mut Document, n: &Node) -> Arc<Node> {
+    // Generated marks carry only paint and a stroke width, so that's all a shadow keeps.
+    let mut c = n.clone();
+    c.transform(Affine::translate((SHADOW_OFFSET, SHADOW_OFFSET)), false);
+    let fill = if c.appearance.fill_paint().is_none() { Paint::None } else { Paint::solid(Color::BLACK) };
+    let stroke = if c.appearance.stroke_paint().is_none() { Paint::None } else { Paint::solid(Color::BLACK) };
+    c.appearance = Appearance::basic(fill, stroke, c.appearance.stroke_width());
+    Arc::new(d.reid(&c))
+}
+
+/// How wide label `s` is set (its widest line), without adding it to a document.
+fn label_width(s: &str) -> f64 {
+    let style = CharStyle { size: LABEL_SIZE, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let mut t = TextObject::point(Point::ZERO, &s.replace('|', "\n"), style);
+    refresh_bounds(&mut t);
+    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds().map_or(0.0, |b| b.width())
+}
+
+/// A label with nothing to show (empty, or only `|` line breaks).
+fn blank_label(s: &str) -> bool {
+    s.chars().all(|c| c == '|')
+}
+
+/// Text node `t` with its characters painted `colour`.
+fn recolour_text(t: &Arc<Node>, colour: Color) -> Arc<Node> {
+    let mut n = (**t).clone();
+    if let NodeKind::Text(text) = &mut n.kind {
+        for run in &mut text.runs {
+            run.style.fill = Paint::solid(colour);
+        }
+    }
+    Arc::new(n)
 }
 
 /// The stretches of two or more points between blank cells, which a line connects.
@@ -324,13 +401,52 @@ fn polyline(pts: &[Point], closed: bool) -> PathData {
     PathData::from_bezpath(&bp)
 }
 
-fn marker(p: Point, s: f64) -> PathData {
-    shapes::rectangle(Rect::from_center_size(p, (s, s)))
+/// Most objects a graph's marker designs may add (each data point and legend swatch draws a copy of its design).
+const MARKER_BUDGET: usize = 200_000;
+
+/// Each series' marker design art, when the document has the design.
+fn marker_designs(d: &Document, g: &GraphSpec) -> Vec<Option<Arc<Node>>> {
+    let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+    (0..nser)
+        .map(|s| {
+            let name = g.series_markers.get(s)?.as_deref()?;
+            d.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone())
+        })
+        .collect()
+}
+
+/// How many objects the marker designs `designs` add to graph `g`: a copy per data point and legend swatch.
+fn marker_cost(g: &GraphSpec, designs: &[Option<Arc<Node>>]) -> usize {
+    let points = g.rows.len().min(vectorcraft_doc::MAX_GRAPH_CATEGORIES) + 1;
+    designs.iter().flatten().map(|a| a.count().saturating_mul(points)).fold(0, usize::saturating_add)
+}
+
+/// Graph design `art` scaled into `cell` (Object › Graph › Marker): its backmost object, the rectangle a design is
+/// drawn around, fills the cell (the whole art does when the design is a single object), strokes scaling with it.
+/// Fresh ids. `None` for art with no area.
+fn fit_design(d: &mut Document, art: &Node, cell: Rect) -> Option<Arc<Node>> {
+    let usable = |b: &Rect| b.width() > 1e-9 && b.height() > 1e-9 && b.width().is_finite() && b.height().is_finite();
+    let group = matches!(art.kind, NodeKind::Group { .. });
+    let backmost = art.children().filter(|_| group).and_then(|c| c.first()).and_then(|c| c.geometric_bounds()).filter(usable);
+    let frame = backmost.or_else(|| art.geometric_bounds().filter(usable))?;
+    let a = Affine::translate(cell.origin().to_vec2())
+        * Affine::scale_non_uniform(cell.width() / frame.width(), cell.height() / frame.height())
+        * Affine::translate(-frame.origin().to_vec2());
+    // Strokes, effects and pattern tiles scale with the art.
+    let art = super::place::transformed(art.clone(), a);
+    Some(Arc::new(d.reid(&art)))
 }
 
 /// Build the graph's children.
 fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     let mark = |i: usize, series_fill: bool, stroke: Paint, width: f64| series_marks(g, i, series_fill, stroke, width);
+    // Each series' marker design (Object › Graph › Marker), when the document has it; default squares for all
+    // when the designs would draw more than MARKER_BUDGET objects.
+    let mut designs = marker_designs(d, g);
+    if marker_cost(g, &designs) > MARKER_BUDGET {
+        designs.clear();
+    }
+    let design = |s: usize| designs.get(s).and_then(Option::as_ref);
     let mut b = Gen { d, out: vec![] };
     let r = g.rect;
     let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
@@ -349,35 +465,113 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Where the art right of the plot ends (the right value axis' labels), so the legend starts after it.
     let mut right_edge = r.x1;
 
+    // Labels drawn over the series: a pie's Legends in Wedges (in the Legend group) and stacked pies' names.
+    let mut wedge_labels = vec![];
+    let mut on_top = vec![];
+    // Add Drop Shadow: the columns, bars, lines and wedges to cast one.
+    let mut shadowed: Vec<(usize, Arc<Node>)> = vec![];
     match g.kind {
         GraphKind::Pie => {
-            // One pie per row, side by side; a wedge per series, clockwise from 12 o'clock.
-            let w = r.width() / ncat as f64;
-            let rad = (w.min(r.height()) / 2.0 * 0.9).max(1.0);
-            for c in 0..ncat {
-                let centre = Point::new(r.x0 + w * (c as f64 + 0.5), r.y0 + r.height() / 2.0);
-                let total: f64 = (0..nser).map(|s| val(c, s).max(0.0)).sum();
+            // One pie per row, a wedge per series, clockwise from 12 o'clock. Position: side by side at one size
+            // (Even) or sized by their totals (Ratio, by area), or stacked on one centre, the largest at the back.
+            let totals: Vec<f64> = (0..ncat).map(|c| (0..nser).map(|s| val(c, s).max(0.0)).sum()).collect();
+            let biggest = totals.iter().copied().fold(0.0, f64::max);
+            let stacked = g.pie_position == vectorcraft_doc::PiePosition::Stacked;
+            let w = if stacked { r.width() } else { r.width() / ncat as f64 };
+            let full = (w.min(r.height()) / 2.0 * 0.9).max(1.0);
+            let radius = |total: f64| match g.pie_position {
+                vectorcraft_doc::PiePosition::Even => full,
+                _ if biggest > 0.0 && biggest.is_finite() => (full * (total / biggest).sqrt()).max(1.0),
+                _ => full,
+            };
+            // Sort: data order, largest first in each pie, or the first pie's largest-first order everywhere.
+            let order = |c: usize| {
+                let mut o: Vec<usize> = (0..nser).collect();
+                let by = match g.pie_sort {
+                    vectorcraft_doc::PieSort::None => return o,
+                    vectorcraft_doc::PieSort::All => c,
+                    vectorcraft_doc::PieSort::First => 0,
+                };
+                o.sort_by(|a, b| val(by, *b).max(0.0).total_cmp(&val(by, *a).max(0.0)));
+                o
+            };
+            let mut pies: Vec<usize> = (0..ncat).collect();
+            if stacked {
+                pies.sort_by(|a, b| totals.get(*b).copied().unwrap_or(0.0).total_cmp(&totals.get(*a).copied().unwrap_or(0.0)));
+            }
+            // Stacked pies share a centre: each one but the smallest is drawn as the ring outside the next smaller
+            // one, so a pie never covers another (a pie as big as the next one has no ring and is left out).
+            let inner: Vec<f64> = if stacked {
+                (0..pies.len()).map(|k| pies.get(k + 1).map_or(0.0, |c| radius(totals.get(*c).copied().unwrap_or(0.0)))).collect()
+            } else {
+                vec![0.0; pies.len()]
+            };
+            for (k, c) in pies.into_iter().enumerate() {
+                let total = totals.get(c).copied().unwrap_or(0.0);
+                let rad = radius(total);
+                let hole = inner.get(k).copied().unwrap_or(0.0);
+                if hole >= rad - 1e-9 {
+                    continue;
+                }
+                let centre = if stacked { r.center() } else { Point::new(r.x0 + w * (c as f64 + 0.5), r.y0 + r.height() / 2.0) };
                 let mut a0 = -std::f64::consts::FRAC_PI_2;
-                for (s, items) in series.iter_mut().enumerate() {
+                for s in order(c) {
                     let v = val(c, s).max(0.0);
                     if total <= 0.0 || v <= 0.0 {
                         continue;
                     }
                     let sweep = v / total * std::f64::consts::TAU;
                     let mut bp = BezPath::new();
-                    bp.move_to(centre);
+                    let dir = |a: f64| vectorcraft_geom::Vec2::new(a.cos(), a.sin());
                     let arc = vectorcraft_geom::kurbo::Arc::new(centre, (rad, rad), a0, sweep, 0.0);
-                    bp.line_to(centre + vectorcraft_geom::Vec2::new(a0.cos(), a0.sin()) * rad);
-                    arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    if hole > 0.0 {
+                        // A ring segment: out along the outer arc, back along the inner one.
+                        bp.move_to(centre + dir(a0) * rad);
+                        arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                        bp.line_to(centre + dir(a0 + sweep) * hole);
+                        let back = vectorcraft_geom::kurbo::Arc::new(centre, (hole, hole), a0 + sweep, -sweep, 0.0);
+                        back.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    } else {
+                        bp.move_to(centre);
+                        bp.line_to(centre + dir(a0) * rad);
+                        arc.to_cubic_beziers(0.1, |p1, p2, p| bp.curve_to(p1, p2, p));
+                    }
                     bp.close_path();
-                    let (fill, stroke, w) = mark(s, true, Paint::solid(Color::WHITE), 0.5);
-                    let n = b.path(PathData::from_bezpath(&bp), fill, stroke, w);
-                    items.push(n);
+                    let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.5);
+                    // White text on a dark wedge.
+                    let dark = fill.color().is_some_and(|c| {
+                        let [r, g, b] = c.to_rgb();
+                        0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
+                    });
+                    let n = b.path(PathData::from_bezpath(&bp), fill, stroke, sw);
+                    shadowed.push((s, n.clone()));
+                    if let Some(items) = series.get_mut(s) {
+                        items.push(n);
+                    }
+                    // Legends in Wedges: the series label inside its wedge, centred two thirds of the way out.
+                    if g.legend && g.pie_legend_in_wedges {
+                        let label = series_label(s);
+                        if !blank_label(&label) {
+                            // Two thirds of the way out (of the ring, for a stacked pie).
+                            let mid = a0 + sweep / 2.0;
+                            let at = centre + dir(mid) * (hole + (rad - hole) * 0.62);
+                            let t = b.label(Point::new(at.x, at.y + LABEL_SIZE * 0.35), &label, Justify::Center, true);
+                            wedge_labels.push(if dark { recolour_text(&t, Color::WHITE) } else { t });
+                        }
+                    }
                     a0 += sweep;
                 }
                 if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
-                    let t = b.text(Point::new(centre.x, centre.y + rad + LABEL_SIZE * 1.6), cat, Justify::Center);
-                    b.out.push(t);
+                    if stacked {
+                        // Just above its own outline, all its lines, and drawn over the pies.
+                        let lines = cat.split('|').count() as f64;
+                        let at = Point::new(centre.x, centre.y - rad - LABEL_SIZE * 0.4 - (lines - 1.0) * LABEL_SIZE * 1.2);
+                        let t = b.label(at, cat, Justify::Center, false);
+                        on_top.push(t);
+                    } else {
+                        let t = b.label(Point::new(centre.x, centre.y + rad + LABEL_SIZE * 1.6), cat, Justify::Center, false);
+                        b.out.push(t);
+                    }
                 }
             }
         }
@@ -394,7 +588,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 axes.push(b.line(centre, at(c, hi)));
                 if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
                     let p = at(c, hi) + (at(c, hi) - centre).normalize() * (LABEL_SIZE * 1.2);
-                    axes.push(b.text(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center));
+                    axes.push(b.label(Point::new(p.x, p.y + LABEL_SIZE * 0.35), cat, Justify::Center, true));
                 }
             }
             for v in tick_values(lo, hi, step).into_iter().skip(1) {
@@ -407,12 +601,14 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 let pts: Vec<Point> = (0..ncat).map(|c| at(c, val(c, s))).collect();
                 if g.connect_points && pts.len() > 1 {
                     let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
-                    items.push(b.path(polyline(&pts, true), fill, stroke, w));
+                    let n = b.path(polyline(&pts, true), fill, stroke, w);
+                    shadowed.push((s, n.clone()));
+                    items.push(n);
                 }
                 if g.mark_points {
                     for p in pts {
-                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                        items.push(b.path(marker(p, 4.0), fill, stroke, w));
+                        let paint = mark(s, true, Paint::None, 0.0);
+                        items.push(b.marker(design(s), Rect::from_center_size(p, (4.0, 4.0)), paint));
                     }
                 }
             }
@@ -582,9 +778,9 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 for c in 0..ncat {
                     if let Some(cat) = g.categories.get(c).filter(|c| !c.is_empty()) {
                         let t = if horizontal {
-                            b.text(Point::new(r.x0 - 6.0, cat_mid(c) + LABEL_SIZE * 0.35), cat, Justify::Right)
+                            b.label(Point::new(r.x0 - 6.0, cat_mid(c) + LABEL_SIZE * 0.35), cat, Justify::Right, true)
                         } else {
-                            b.text(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center)
+                            b.label(Point::new(cat_mid(c), r.y1 + LABEL_SIZE * 1.4), cat, Justify::Center, false)
                         };
                         axes.push(t);
                     }
@@ -647,13 +843,16 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     if g.connect_points {
                         for run in runs(&pts) {
                             let (fill, stroke, w) = mark(si, false, default_series_paint(si), 1.0);
-                            series[si].push(b.path(polyline(&run, false), fill, stroke, w));
+                            let n = b.path(polyline(&run, false), fill, stroke, w);
+                            shadowed.push((si, n.clone()));
+                            series[si].push(n);
                         }
                     }
                     if g.mark_points {
                         for p in pts.iter().flatten() {
-                            let (fill, stroke, w) = mark(si, true, Paint::None, 0.0);
-                            series[si].push(b.path(marker(*p, 5.0), fill, stroke, w));
+                            let paint = mark(si, true, Paint::None, 0.0);
+                            let n = b.marker(design(si), Rect::from_center_size(*p, (5.0, 5.0)), paint);
+                            series[si].push(n);
                         }
                     }
                 }
@@ -681,6 +880,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     let a = c0 + slot * i as f64 + (slot - bar) / 2.0;
                     let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
                     let n = b.path(shapes::rectangle(bar_rect(a, bar, zero(axis(s)), vpos(axis(s), v))), fill, stroke, w);
+                    shadowed.push((s, n.clone()));
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
@@ -705,6 +905,10 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     *base += v;
                     let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
                     let n = b.path(shapes::rectangle(bar_rect(a, w, v0, v1)), fill, stroke, sw);
+                    // A segment of 0 has no area to shade.
+                    if v != 0.0 {
+                        shadowed.push((s, n.clone()));
+                    }
                     if let Some(items) = series.get_mut(s) {
                         items.push(n);
                     }
@@ -734,6 +938,7 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                     for run in runs(&pts) {
                         let (fill, stroke, w) = mark(s, false, default_series_paint(s), 1.0);
                         let n = b.path(polyline(&run, false), fill, stroke, w);
+                        shadowed.push((s, n.clone()));
                         if let Some(items) = series.get_mut(s) {
                             items.push(n);
                         }
@@ -741,8 +946,8 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
                 }
                 if g.mark_points {
                     for p in pts.iter().flatten() {
-                        let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-                        let n = b.path(marker(*p, 5.0), fill, stroke, w);
+                        let paint = mark(s, true, Paint::None, 0.0);
+                        let n = b.marker(design(s), Rect::from_center_size(*p, (5.0, 5.0)), paint);
                         if let Some(items) = series.get_mut(s) {
                             items.push(n);
                         }
@@ -754,17 +959,64 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
     // Legend: a swatch + label per series, right of the plot; the swatch joins its series group.
     let legend_series = if g.kind == GraphKind::Scatter { nser.div_ceil(2) } else { nser };
     let mut labels = vec![];
-    if g.legend && !g.series.is_empty() {
+    let legend_on = g.legend && !g.series.is_empty() && !(g.kind == GraphKind::Pie && g.pie_legend_in_wedges);
+    if legend_on && g.legend_across_top {
+        // Add Legend Across Top: swatch and label after swatch and label, in rows as wide as the plot, the last row
+        // just above it.
+        let entries: Vec<(usize, String)> = (0..legend_series)
+            .map(|s| (s, if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) }))
+            .filter(|(_, l)| !blank_label(l))
+            .collect();
+        let mut rows: Vec<Vec<(usize, String, f64)>> = vec![vec![]];
+        let mut used = 0.0;
+        for (s, label) in entries {
+            let w = 12.0 + label_width(&label) + 12.0;
+            // The gap after an entry may run past the plot's edge.
+            if used + w - 12.0 > r.width() && rows.last().is_some_and(|row| !row.is_empty()) {
+                rows.push(vec![]);
+                used = 0.0;
+            }
+            used += w;
+            if let Some(row) = rows.last_mut() {
+                row.push((s, label, w));
+            }
+        }
+        let height = |row: &[(usize, String, f64)]| LABEL_SIZE * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
+        // Above the plot and anything drawn over it (radar and stacked-pie labels).
+        let top = b.out.iter().chain(on_top.iter()).filter_map(|n| n.geometric_bounds()).map(|bb| bb.y0).fold(r.y0, f64::min);
+        let mut y = top - 8.0 - rows.iter().map(|row| height(row)).sum::<f64>();
+        for row in &rows {
+            let mut x = r.x0;
+            for (s, label, w) in row {
+                let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(*s) == GraphKind::Line;
+                let paint = mark(*s, true, Paint::None, 0.0);
+                let swatch = b.marker(design(*s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint);
+                if let Some(items) = series.get_mut(*s) {
+                    items.push(swatch);
+                }
+                labels.push(b.label(Point::new(x + 12.0, y + 7.5), label, Justify::Left, false));
+                x += w;
+            }
+            y += height(row);
+        }
+    } else if legend_on {
         let x = right_edge + 14.0;
+        // Each row as tall as its label's lines (a `|` in a label starts a new line).
+        let mut y = r.y0;
         for (s, items) in series.iter_mut().enumerate().take(legend_series) {
             let label = if g.kind == GraphKind::Scatter { series_label(s * 2) } else { series_label(s) };
-            if label.is_empty() {
+            let row_y = y;
+            if blank_label(&label) {
+                y += LABEL_SIZE * 1.8;
                 continue;
             }
-            let y = r.y0 + s as f64 * (LABEL_SIZE * 1.8);
-            let (fill, stroke, w) = mark(s, true, Paint::None, 0.0);
-            items.push(b.path(shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0)), fill, stroke, w));
-            labels.push(b.text(Point::new(x + 12.0, y + 7.5), &label, Justify::Left));
+            y += LABEL_SIZE * 1.8 * label.split('|').count() as f64;
+            let y = row_y;
+            // Series drawn with markers show their marker design in the legend.
+            let marked = matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || kind(s) == GraphKind::Line;
+            let paint = mark(s, true, Paint::None, 0.0);
+            items.push(b.marker(design(s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint));
+            labels.push(b.label(Point::new(x + 12.0, y + 7.5), &label, Justify::Left, false));
         }
     }
     // Areas at the back, lines and points in front of columns; one graph type keeps the series order.
@@ -773,16 +1025,35 @@ fn generate(d: &mut Document, g: &GraphSpec) -> Vec<Arc<Node>> {
         GraphKind::Line => 2,
         _ => 1,
     };
+    // Add Drop Shadow: a translucent black copy of each column, bar, line and wedge, a little down and right, just
+    // behind the series of its layer (areas, columns, lines), so a layer in front doesn't hide the shadows of the one
+    // behind. Left out past SHADOW_BUDGET marks.
+    if !g.drop_shadow || shadowed.len() > SHADOW_BUDGET {
+        shadowed.clear();
+    }
     let mut series: Vec<(usize, Vec<Arc<Node>>)> = series.into_iter().enumerate().collect();
     series.sort_by_key(|(s, _)| depth(*s));
+    let mut layer = None;
     for (s, items) in series {
         if items.is_empty() {
             continue;
+        }
+        if layer != Some(depth(s)) {
+            layer = Some(depth(s));
+            let copies: Vec<Arc<Node>> = shadowed.iter().filter(|(t, _)| depth(*t) == depth(s)).map(|(_, n)| shadow_of(b.d, n)).collect();
+            if !copies.is_empty() {
+                let mut grp = Node::group(b.d.alloc_id(), copies);
+                grp.name = Some("Drop Shadow".into());
+                grp.opacity = SHADOW_OPACITY;
+                b.out.push(Arc::new(grp));
+            }
         }
         let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
         let grp = b.series(&name, s, items);
         b.out.push(grp);
     }
+    b.out.append(&mut on_top);
+    labels.append(&mut wedge_labels);
     if !labels.is_empty() {
         let grp = b.group("Legend", labels);
         b.out.push(grp);
@@ -901,13 +1172,16 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     }
     let mut out = Vec::new();
     for id in ids {
-        match members.get(id).filter(|r| r.group == *id).and_then(|_| doc.node(*id)) {
-            Some(group) => group.walk(&mut |m| {
-                if matches!(m.kind, NodeKind::Path { .. }) {
-                    out.push(m.id);
+        // The series' own marks: the art of a marker design inside it keeps the design's paint (painting it would
+        // last only until the graph is drawn again), so edit the design to change it.
+        match members.get(id) {
+            Some(r) if r.group == *id => {
+                if let Some(group) = doc.node(*id) {
+                    out.extend(group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id));
                 }
-            }),
-            None => out.push(*id),
+            }
+            Some(r) if doc.parent_of(*id) != Some(r.group) => {}
+            _ => out.push(*id),
         }
     }
     out.sort_unstable();
@@ -926,7 +1200,8 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
     let captures: Vec<_> = ids
         .iter()
         .filter_map(|id| {
-            let r = members.get(id)?;
+            // Only a series' own marks set its paint, not the art of a marker design.
+            let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
             let node = doc.node(*id)?;
             let paint = node.appearance.paint_at(None, fill)?.clone();
             let width = (!fill).then(|| node.appearance.stroke_width());
@@ -949,10 +1224,61 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
     }
 }
 
+/// Graph Data › Transpose row/column: categories become series and series categories.
+fn transpose(g: &mut GraphSpec) {
+    let cells = g.cells();
+    let width = cells.iter().map(Vec::len).max().unwrap_or(0);
+    let flipped: Vec<Vec<Option<f64>>> = (0..width).map(|s| cells.iter().map(|row| row.get(s).copied().flatten()).collect()).collect();
+    std::mem::swap(&mut g.series, &mut g.categories);
+    g.set_cells(flipped);
+}
+
+/// Graph Data › Switch x/y (scatter graphs): each series' y and x columns trade places, with their labels.
+fn switch_xy(g: &mut GraphSpec) {
+    let mut cells = g.cells();
+    // Labels for every column, so each pair's labels trade places with its data.
+    let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(g.series.len());
+    g.series.resize(width, String::new());
+    for row in &mut cells {
+        for pair in row.as_chunks_mut::<2>().0 {
+            pair.swap(0, 1);
+        }
+    }
+    for pair in g.series.as_chunks_mut::<2>().0 {
+        pair.swap(0, 1);
+    }
+    while g.series.last().is_some_and(String::is_empty) {
+        g.series.pop();
+    }
+    g.set_cells(cells);
+}
+
 fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p, "graph.setData")?;
+    const C: &str = "graph.setData";
+    let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
-    if !apply_data(&mut spec, p) {
+    let flip = bool_or(p, "transpose", false);
+    let swap = bool_or(p, "switchXY", false);
+    if swap && spec.kind != GraphKind::Scatter {
+        return Err(bad(C, "Switch x/y is for scatter graphs"));
+    }
+    // Transpose and Switch x/y act after any new data in the same call.
+    let changed = apply_data(&mut spec, p);
+    if flip {
+        // The categories become series: at most as many as a graph has series.
+        if spec.cells().len() > vectorcraft_doc::MAX_GRAPH_SERIES {
+            return Err(bad(
+                C,
+                format!("a graph has at most {} series, so it transposes with at most that many categories", vectorcraft_doc::MAX_GRAPH_SERIES),
+            ));
+        }
+        transpose(&mut spec);
+        drop_empty_rows(&mut spec);
+    }
+    if swap {
+        switch_xy(&mut spec);
+    }
+    if !(changed || flip || swap) {
         // Blank cells come back as null, so the rows can be edited and sent back as they are.
         return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.cells() }));
     }
@@ -961,6 +1287,172 @@ fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0);
     spec.right_series.retain(|i| *i < count);
     s.edit("Graph Data", |d, _| regenerate(d, id, spec))?;
+    Ok(json!({ "id": id.0 }))
+}
+
+/// The series a command on graph `id` (of `count` series) applies to: `seriesIndexes`, else, with no `id` param, a
+/// selection made only of this graph's series (Group Selection). Empty: the whole graph.
+fn picked_series(s: &Session, p: &Value, id: NodeId, count: usize, cmd: &str) -> Result<Vec<usize>> {
+    Ok(match p.get("seriesIndexes") {
+        Some(v) => {
+            let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`seriesIndexes` is a non-empty list of series indexes"))?;
+            a.iter()
+                .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(cmd, format!("no series {i}"))))
+                .collect::<Result<_>>()?
+        }
+        None if p.get("id").is_none() => {
+            let st = s.doc()?;
+            let members = series_members(&st.doc);
+            let picked: Option<Vec<usize>> = st.selection.objects.iter().map(|n| members.get(n).filter(|r| r.graph == id).map(|r| r.index)).collect();
+            let mut out = picked.unwrap_or_default();
+            out.sort_unstable();
+            out.dedup();
+            out
+        }
+        None => vec![],
+    })
+}
+
+/// Select the series groups `indexes` of graph `id` (they are new nodes after a regeneration).
+fn reselect_series(d: &Document, sel: &mut vectorcraft_doc::Selection, id: NodeId, indexes: &[u32]) {
+    let groups: Vec<NodeId> = d
+        .node(id)
+        .and_then(Node::children)
+        .into_iter()
+        .flatten()
+        .filter(|c| c.series_index.is_some_and(|i| indexes.contains(&i)))
+        .map(|c| c.id)
+        .collect();
+    sel.set(groups);
+}
+
+/// The document's graph design names, in order.
+fn design_names(d: &Document) -> Vec<String> {
+    d.graph_designs.iter().map(|x| x.name.clone()).collect()
+}
+
+/// Regenerate the graphs whose series use design `name` (it was added or removed).
+fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
+    let mut ids = vec![];
+    d.walk(|n| {
+        if n.graph.as_deref().is_some_and(|g| g.series_markers.iter().flatten().any(|m| m == name)) {
+            ids.push(n.id);
+        }
+    });
+    for id in ids {
+        if let Some(spec) = d.node(id).and_then(|n| n.graph.as_deref().cloned()) {
+            regenerate(d, id, spec)?;
+        }
+    }
+    Ok(())
+}
+
+fn design(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "graph.design";
+    for key in ["save", "paste", "delete"] {
+        if p.get(key).is_some_and(|v| !v.is_string()) {
+            return Err(bad(C, format!("`{key}` is a design name")));
+        }
+    }
+    if let Some(name) = str_param(p, "save") {
+        let name = GraphDesign::clean_name(name).ok_or_else(|| bad(C, "a design needs a name"))?;
+        if s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
+            return Err(bad(C, format!("there is already a design named `{name}`")));
+        }
+        if s.doc()?.doc.graph_designs.len() >= GraphDesign::MAX {
+            return Err(bad(C, format!("a document keeps at most {} graph designs", GraphDesign::MAX)));
+        }
+        let art = super::brushsym::selection_art(s, p)?.ok_or_else(|| bad(C, "select the art for the design"))?;
+        if art.count() > GraphDesign::MAX_NODES {
+            return Err(bad(C, format!("a design holds at most {} objects", GraphDesign::MAX_NODES)));
+        }
+        // A graph saved as a design is kept as the art it draws.
+        let art = GraphDesign::plain_art(&art);
+        let saved = name.clone();
+        s.edit("Graph Design", |d, _| {
+            let art = d.reid(&art);
+            d.graph_designs.push(GraphDesign { name: saved.clone(), art: Arc::new(art) });
+            refresh_graphs_using(d, &saved)
+        })?;
+        return Ok(json!({ "name": name }));
+    }
+    if let Some(name) = str_param(p, "paste") {
+        let art = s
+            .doc()?
+            .doc
+            .graph_designs
+            .iter()
+            .find(|x| x.name == name)
+            .map(|x| x.art.clone())
+            .ok_or_else(|| bad(C, format!("no design named `{name}`")))?;
+        let parent = s.doc()?.insertion_parent();
+        let id = s.edit("Paste Design", |d, sel| {
+            let n = d.reid(&art);
+            let id = n.id;
+            d.insert(parent, usize::MAX, n)?;
+            sel.set([id]);
+            Ok(id)
+        })?;
+        return Ok(json!({ "id": id.0 }));
+    }
+    if let Some(name) = str_param(p, "delete") {
+        if !s.doc()?.doc.graph_designs.iter().any(|x| x.name == name) {
+            return Err(bad(C, format!("no design named `{name}`")));
+        }
+        let name = name.to_string();
+        s.edit("Delete Design", |d, _| {
+            d.graph_designs.retain(|x| x.name != name);
+            refresh_graphs_using(d, &name)
+        })?;
+        return ok();
+    }
+    Ok(json!({ "designs": design_names(&s.doc()?.doc) }))
+}
+
+fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "graph.marker";
+    let id = target(s, p, C)?;
+    let mut spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    let picked = picked_series(s, p, id, count, C)?;
+    let names = design_names(&s.doc()?.doc);
+    let Some(v) = p.get("design") else {
+        // The design the picked series (all of them with none picked) share, or null.
+        let all: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked };
+        // A design deleted since doesn't count: those series draw the default marker.
+        let used: Vec<Option<&String>> =
+            all.iter().map(|i| spec.series_markers.get(*i).and_then(Option::as_ref).filter(|n| names.contains(n))).collect();
+        let shared = used.first().copied().flatten().filter(|d| used.iter().all(|x| *x == Some(*d)));
+        return Ok(json!({ "designs": names, "design": shared }));
+    };
+    let design = match v {
+        Value::Null => None,
+        Value::String(n) if names.contains(n) => Some(n.clone()),
+        Value::String(n) => return Err(bad(C, format!("no design named `{n}`"))),
+        _ => return Err(bad(C, "`design` is a design name, or null for the default marker")),
+    };
+    let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
+    let targets: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked };
+    spec.series_markers.truncate(count);
+    spec.series_markers.resize(count, None);
+    for i in targets {
+        if let Some(m) = spec.series_markers.get_mut(i) {
+            *m = design.clone();
+        }
+    }
+    while spec.series_markers.last().is_some_and(Option::is_none) {
+        spec.series_markers.pop();
+    }
+    if marker_cost(&spec, &marker_designs(&s.doc()?.doc, &spec)) > MARKER_BUDGET {
+        return Err(bad(C, "the design is too big to draw at every data point of this graph"));
+    }
+    s.edit("Graph Marker", |d, sel| {
+        regenerate(d, id, spec)?;
+        if !reselect.is_empty() {
+            reselect_series(d, sel, id, &reselect);
+        }
+        Ok(())
+    })?;
     Ok(json!({ "id": id.0 }))
 }
 
@@ -975,27 +1467,10 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.right_series.retain(|i| *i < count);
     spec.right_series.sort_unstable();
     spec.right_series.dedup();
-    let picked: Vec<usize> = match p.get("seriesIndexes") {
-        Some(v) => {
-            let a = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(C, "`seriesIndexes` is a non-empty list of series indexes"))?;
-            if str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
-                return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
-            }
-            a.iter()
-                .map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count).ok_or_else(|| bad(C, format!("no series {i}"))))
-                .collect::<Result<_>>()?
-        }
-        None if p.get("id").is_none() => {
-            let st = s.doc()?;
-            let members = series_members(&st.doc);
-            let picked: Option<Vec<usize>> = st.selection.objects.iter().map(|n| members.get(n).filter(|r| r.graph == id).map(|r| r.index)).collect();
-            let mut out = picked.unwrap_or_default();
-            out.sort_unstable();
-            out.dedup();
-            out
-        }
-        None => vec![],
-    };
+    if p.get("seriesIndexes").is_some() && str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
+        return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
+    }
+    let picked = picked_series(s, p, id, count, C)?;
     let keys = [
         "type",
         "seriesIndexes",
@@ -1024,6 +1499,11 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "suffix",
         "rightPrefix",
         "rightSuffix",
+        "dropShadow",
+        "legendAcrossTop",
+        "pieLegend",
+        "piePosition",
+        "pieSort",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         // With series picked, the type and value axis they share, so the dialog's OK keeps them.
@@ -1036,7 +1516,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             Some(r) if sides.iter().all(|x| x == r) => Some(if *r { "right" } else { "left" }),
             Some(_) => None,
         };
-        return Ok(json!({
+        let mut fields = json!({
             "type": kind.id(), "columnWidth": spec.column_width, "clusterWidth": spec.cluster_width, "legend": spec.legend,
             "markPoints": spec.mark_points, "connectPoints": spec.connect_points, "edgeToEdge": spec.edge_to_edge, "ticks": spec.ticks,
             "axisMin": spec.axis_min, "axisMax": spec.axis_max, "valueAxis": value_axis, "separateScales": spec.separate_scales,
@@ -1045,8 +1525,25 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             "rightTickMarks": spec.right_tick_marks.clamp(1, MAX_TICK_MARKS), "categoryTickLength": spec.category_tick_length.id(),
             "categoryTickMarks": spec.category_tick_marks.clamp(1, MAX_TICK_MARKS), "ticksBetweenLabels": spec.ticks_between_labels,
             "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
-            "rightSuffix": one_line(&spec.right_suffix),
-        }));
+            "rightSuffix": one_line(&spec.right_suffix), "dropShadow": spec.drop_shadow, "legendAcrossTop": spec.legend_across_top,
+        });
+        // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
+        if let Some(o) = fields.as_object_mut().filter(|_| spec.kind == GraphKind::Pie) {
+            o.remove("legend");
+            o.insert(
+                "pieLegend".into(),
+                json!(if !spec.legend {
+                    "none"
+                } else if spec.pie_legend_in_wedges {
+                    "wedges"
+                } else {
+                    "standard"
+                }),
+            );
+            o.insert("piePosition".into(), json!(spec.pie_position.id()));
+            o.insert("pieSort".into(), json!(spec.pie_sort.id()));
+        }
+        return Ok(fields);
     }
     // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
     let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
@@ -1101,6 +1598,13 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         *slot = count_param(p, key, MAX_TICK_MARKS as u64).map_or(*slot, |n| n.max(1));
     }
     spec.ticks_between_labels = bool_or(p, "ticksBetweenLabels", spec.ticks_between_labels);
+    if let Some(v) = str_param(p, "piePosition") {
+        spec.pie_position =
+            vectorcraft_doc::PiePosition::parse(v).ok_or_else(|| bad(C, format!("unknown piePosition `{v}` (even, ratio or stacked)")))?;
+    }
+    if let Some(v) = str_param(p, "pieSort") {
+        spec.pie_sort = vectorcraft_doc::PieSort::parse(v).ok_or_else(|| bad(C, format!("unknown pieSort `{v}` (none, all or first)")))?;
+    }
     for (key, slot) in
         [("prefix", &mut spec.prefix), ("suffix", &mut spec.suffix), ("rightPrefix", &mut spec.right_prefix), ("rightSuffix", &mut spec.right_suffix)]
     {
@@ -1119,6 +1623,17 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
     spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 100.0);
     spec.legend = bool_or(p, "legend", spec.legend);
+    spec.drop_shadow = bool_or(p, "dropShadow", spec.drop_shadow);
+    spec.legend_across_top = bool_or(p, "legendAcrossTop", spec.legend_across_top);
+    // After `legend`, which the Graph Type dialog sends too.
+    if let Some(v) = str_param(p, "pieLegend") {
+        (spec.legend, spec.pie_legend_in_wedges) = match v.to_ascii_lowercase().as_str() {
+            "none" => (false, false),
+            "standard" => (true, false),
+            "wedges" => (true, true),
+            _ => return Err(bad(C, format!("unknown pieLegend `{v}` (none, standard or wedges)"))),
+        };
+    }
     spec.mark_points = bool_or(p, "markPoints", spec.mark_points);
     spec.connect_points = bool_or(p, "connectPoints", spec.connect_points);
     spec.edge_to_edge = bool_or(p, "edgeToEdge", spec.edge_to_edge);
@@ -1133,15 +1648,7 @@ fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Graph Type", |d, sel| {
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {
-            let groups: Vec<NodeId> = d
-                .node(id)
-                .and_then(Node::children)
-                .into_iter()
-                .flatten()
-                .filter(|c| c.series_index.is_some_and(|i| reselect.contains(&i)))
-                .map(|c| c.id)
-                .collect();
-            sel.set(groups);
+            reselect_series(d, sel, id, &reselect);
         }
         if let Some(n) = d.node_mut(id)
             && n.name.as_deref().is_some_and(|nm| nm.ends_with(" Graph"))
@@ -2272,5 +2779,618 @@ mod tests {
             .collect();
         assert!(ticks.len() <= 10_000 && ticks.len() >= 5000, "{}", ticks.len());
         assert!(ticks.iter().copied().fold(f64::MIN, f64::max) > 199.0, "the last category is ticked");
+    }
+
+    /// A graph design: a 10 × 10 rectangle at the back and a 20-wide ellipse over it, saved as `name`.
+    fn save_design(s: &mut Session, name: &str) {
+        let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let e = s.execute("shape.ellipse", &json!({"x": 595, "y": 600, "width": 20, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r, e]})).unwrap();
+        s.execute("graph.design", &json!({"save": name})).unwrap();
+    }
+
+    /// The marks of series `index` (legend swatch last) and their bounds.
+    fn series_parts(s: &Session, id: NodeId, index: u32) -> Vec<vectorcraft_doc::Node> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        series(&n, index).children().unwrap().iter().map(|c| (**c).clone()).collect()
+    }
+
+    #[test]
+    fn a_marker_design_draws_each_data_point_sized_by_its_backmost_object() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!(["Pill"]));
+        let id = graph(&mut s, "line");
+        let before = series_parts(&s, id, 1);
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        s.execute("select.set", &json!({"ids": [grp.0]})).unwrap();
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        let after = series_parts(&s, id, 1);
+        assert_eq!(after.len(), before.len(), "a line, three markers and the swatch");
+        for (old, new) in before.iter().zip(&after).skip(1) {
+            let (o, n) = (old.geometric_bounds().unwrap(), new.geometric_bounds().unwrap());
+            assert!(matches!(new.kind, NodeKind::Group { .. }), "the design's art");
+            // The 10-point rectangle fills the marker's square, the 20-wide ellipse twice as wide.
+            assert!((n.center() - o.center()).hypot() < 1e-6, "{o:?} {n:?}");
+            assert!((n.width() - 2.0 * o.width()).abs() < 1e-6 && (n.height() - o.height()).abs() < 1e-6, "{o:?} {n:?}");
+        }
+        // The series stays selected; the other series keeps its squares; the query names the design.
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+        assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [grp]);
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        assert_eq!(s.execute("graph.marker", &json!({})).unwrap()["design"], "Pill");
+        assert_eq!(spec(&s, id).series_markers, [None, Some("Pill".to_string())]);
+        // Back to the default square.
+        s.execute("graph.marker", &json!({"design": null})).unwrap();
+        assert!(spec(&s, id).series_markers.is_empty());
+        assert!(series_parts(&s, id, 1).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        assert!(s.execute("graph.marker", &json!({"design": "Nope"})).is_err());
+        assert!(s.execute("graph.marker", &json!({"design": 3})).is_err());
+    }
+
+    #[test]
+    fn marker_designs_apply_to_markers_not_to_columns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+        // Every series (none picked): the line series' markers and swatch; the columns and their swatch stay.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        let line = series_parts(&s, id, 1);
+        assert!(line.iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })), "markers and swatch");
+        let swatch = line.last().unwrap().geometric_bounds().unwrap();
+        assert!((swatch.width() - 16.0).abs() < 1e-6 && (swatch.height() - 8.0).abs() < 1e-6, "{swatch:?}");
+        // Scatter and radar graphs draw them too.
+        for ty in ["scatter", "radar"] {
+            let g = graph(&mut s, ty);
+            s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+            s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+            assert!(series_parts(&s, g, 0).iter().any(|n| matches!(n.kind, NodeKind::Group { .. })), "{ty}");
+        }
+    }
+
+    #[test]
+    fn graph_designs_are_saved_pasted_and_deleted() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "nothing selected");
+        save_design(&mut s, "Pill");
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Pill"})).is_err(), "the name is taken");
+        assert!(s.execute("graph.design", &json!({"save": "  "})).is_err(), "no name");
+        // Paste Design: a copy of the art, selected, with ids of its own.
+        let pasted = NodeId(s.execute("graph.design", &json!({"paste": "Pill"})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [pasted]);
+        let art = s.doc().unwrap().doc.graph_designs[0].art.clone();
+        let copy = s.doc().unwrap().doc.node(pasted).unwrap().clone();
+        assert_ne!(copy.id, art.id);
+        assert_eq!(copy.geometric_bounds(), art.geometric_bounds());
+        assert!(s.execute("graph.design", &json!({"paste": "Nope"})).is_err());
+        // Deleting a design draws its graphs' default markers again; undo brings both back.
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Pill"})).unwrap();
+        assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+        assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(series_parts(&s, id, 0).iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })));
+        assert!(s.execute("graph.design", &json!({"delete": "Nope"})).is_err());
+    }
+
+    #[test]
+    fn designs_and_markers_survive_save_and_open() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"seriesIndexes": [0], "design": "Pill"})).unwrap();
+        let path = vectorcraft_testkit::temp_dir("graph-designs").join("designs.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!(["Pill"]));
+        assert_eq!(spec(&s, id).series_markers, [Some("Pill".to_string())]);
+        assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("seriesMarkers").is_none());
+        // A design whose art has no area draws the default square.
+        let g = GraphSpec { kind: GraphKind::Line, series_markers: vec![Some("Dot".into())], ..GraphSpec::default() };
+        let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+        let dot = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Dot".into(), art: std::sync::Arc::new(dot) });
+        let art = super::generate(&mut d, &g);
+        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+    }
+
+    #[test]
+    fn a_graph_saved_as_a_design_is_plain_art_even_as_its_own_marker() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.design", &json!({"save": "Chart"})).unwrap();
+        let art = s.doc().unwrap().doc.graph_designs[1].art.clone();
+        let mut graphs = 0;
+        art.walk(&mut |n| graphs += usize::from(n.graph.is_some() || n.series_index.is_some()));
+        assert_eq!(graphs, 0, "no graph inside a design");
+        // The graph drawn with itself as a marker, then the design it used deleted: still one graph to edit.
+        s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Chart"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Pill"})).unwrap();
+        let mut found = 0;
+        s.doc().unwrap().doc.walk(|n| found += usize::from(n.graph.is_some()));
+        assert_eq!(found, 1);
+        // A deleted design reads as none in the query, so the dialog opens on the default marker.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.marker", &json!({"seriesIndexes": [0], "design": null})).unwrap();
+        let v = s.execute("graph.marker", &json!({"seriesIndexes": [1, 0]})).unwrap();
+        assert!(v["design"].is_null(), "{v}");
+    }
+
+    #[test]
+    fn designs_too_big_for_a_graph_are_refused_and_drawn_as_squares() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        // 1,500 objects at each of 200 points is past the budget.
+        let ids: Vec<u64> = (0..1500)
+            .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        s.execute("graph.design", &json!({"save": "Big"})).unwrap();
+        let rows: Vec<Vec<f64>> = (0..200).map(|i| vec![i as f64]).collect();
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "line", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        assert!(s.execute("graph.marker", &json!({"id": id.0, "design": "Big"})).is_err());
+        assert!(spec(&s, id).series_markers.is_empty());
+        // A file asking for it anyway draws the default squares.
+        let mut g = spec(&s, id);
+        g.series_markers = vec![Some("Big".into())];
+        let mut d = (*s.doc().unwrap().doc).clone();
+        let art = super::generate(&mut d, &g);
+        let s0 = art.iter().find(|n| n.series_index == Some(0)).unwrap();
+        assert!(s0.children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+        // Too many objects for one design.
+        let ids: Vec<u64> = (0..2001)
+            .map(|i| s.execute("shape.rectangle", &json!({"x": i % 40, "y": i / 40, "width": 1, "height": 1})).unwrap()["id"].as_u64().unwrap())
+            .collect();
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        assert!(s.execute("graph.design", &json!({"save": "Huge"})).is_err());
+    }
+
+    #[test]
+    fn a_files_designs_are_tidied() {
+        let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+        let art = |d: &mut vectorcraft_doc::Document| std::sync::Arc::new(vectorcraft_doc::Node::group(d.alloc_id(), vec![]));
+        let mut graphy = vectorcraft_doc::Node::group(d.alloc_id(), vec![]);
+        graphy.graph = Some(Box::new(GraphSpec::default()));
+        for name in ["  A\u{7}  ", "A", "", "   ", &"x".repeat(100)] {
+            let a = art(&mut d);
+            d.graph_designs.push(vectorcraft_doc::GraphDesign { name: name.into(), art: a });
+        }
+        d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "G".into(), art: std::sync::Arc::new(graphy) });
+        d.tidy_graph_designs();
+        let names: Vec<_> = d.graph_designs.iter().map(|x| x.name.clone()).collect();
+        assert_eq!(names, ["A".to_string(), "x".repeat(64), "G".to_string()]);
+        assert!(d.graph_designs[2].art.graph.is_none());
+    }
+
+    #[test]
+    fn painting_a_series_drawn_with_a_design_leaves_the_design_alone() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Pill");
+        let id = graph(&mut s, "line");
+        s.execute("graph.marker", &json!({"design": "Pill"})).unwrap();
+        let grp = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+        s.execute("paint.setFill", &json!({"ids": [grp.0], "color": "#f00"})).unwrap();
+        // The design's paths keep the design's paint, before and after the graph is drawn again.
+        let design_fill = |s: &Session| {
+            let parts = series_parts(s, id, 0);
+            let mut fills = vec![];
+            parts[1].walk(&mut |n| {
+                if let NodeKind::Path { .. } = n.kind {
+                    fills.push(n.appearance.fill_paint().color().map(|c| c.to_hex()));
+                }
+            });
+            fills
+        };
+        let painted = design_fill(&s);
+        assert!(!painted.contains(&Some("#ff0000".into())), "{painted:?}");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+        assert_eq!(design_fill(&s), painted);
+    }
+
+    #[test]
+    fn graph_design_params_are_names() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        for p in [json!({"save": 5}), json!({"paste": null}), json!({"delete": ["a"]})] {
+            assert!(s.execute("graph.design", &p).is_err(), "{p}");
+        }
+    }
+
+    #[test]
+    fn document_wide_passes_see_design_art() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [r], "color": "#123456"})).unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        s.execute("graph.design", &json!({"save": "Blue"})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mut seen = false;
+        s.doc().unwrap().doc.visit_paints(&mut |p| seen |= p.color().is_some_and(|c| c.to_hex() == "#123456"));
+        assert!(seen, "the colour is used by the design");
+    }
+
+    fn make(s: &mut Session, ty: &str, csv: &str) -> NodeId {
+        NodeId(
+            s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        )
+    }
+
+    /// Where each wedge of series `index` starts: its angle from 12 o'clock, clockwise, in degrees (the legend
+    /// swatch, last, left out).
+    fn wedge_starts(s: &Session, id: NodeId, index: u32) -> Vec<f64> {
+        let parts = series_parts(s, id, index);
+        parts[..parts.len() - 1]
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Path { path, .. } => {
+                    let bp = path.to_bezpath();
+                    let pts: Vec<_> = bp.elements().iter().filter_map(|e| e.end_point()).collect();
+                    let (c, p) = (pts.first()?, pts.get(1)?);
+                    let deg = (p.x - c.x).atan2(-(p.y - c.y)).to_degrees();
+                    Some(if deg < -1e-6 { deg + 360.0 } else { deg })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bar_in_a_label_breaks_the_line() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",Total|Sales|2023,b\nQ1|first,3,2\nQ2,5,4");
+        let texts = axis_texts(&s, id);
+        assert!(texts.contains(&"Q1\nfirst".to_string()), "{texts:?}");
+        // The legend: a label of three lines, and the next row below all three.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let legend: Vec<_> = group(&n, "Legend").children().unwrap().iter().map(|c| (**c).clone()).collect();
+        let NodeKind::Text(t) = &legend[0].kind else { panic!() };
+        assert_eq!(t.plain_text(), "Total\nSales\n2023");
+        let (a, b) = (
+            series_parts(&s, id, 0).last().unwrap().geometric_bounds().unwrap(),
+            series_parts(&s, id, 1).last().unwrap().geometric_bounds().unwrap(),
+        );
+        assert!((b.y0 - a.y0 - 3.0 * 9.0 * 1.8).abs() < 1e-6, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn transpose_swaps_rows_and_columns_and_switch_xy_swaps_scatter_pairs() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",a,b\nQ1,1,2\nQ2,3,");
+        let before = spec(&s, id);
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!((g.series.clone(), g.categories.clone()), (vec!["Q1".to_string(), "Q2".into()], vec!["a".to_string(), "b".into()]));
+        assert_eq!(g.cells(), [[Some(1.0), Some(3.0)], [Some(2.0), None]]);
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert_eq!(spec(&s, id).cells(), before.cells());
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(spec(&s, id).cells(), g.cells());
+        assert!(s.execute("graph.setData", &json!({"switchXY": true})).is_err(), "scatter graphs only");
+        let sc = make(&mut s, "scatter", ",y1,x1,y2,x2\nP,1,10,2,20");
+        s.execute("graph.setData", &json!({"switchXY": true})).unwrap();
+        let g = spec(&s, sc);
+        assert_eq!(g.cells(), [[Some(10.0), Some(1.0), Some(20.0), Some(2.0)]]);
+        assert_eq!(g.series, ["x1", "y1", "x2", "y2"]);
+    }
+
+    #[test]
+    fn pie_wedges_sort_largest_first_in_each_pie_or_in_the_first_pies_order() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b,c\nP1,1,3,2\nP2,3,1,2");
+        // None (data order): a starts at 12 o'clock in both pies.
+        assert_eq!(wedge_starts(&s, id, 0).iter().map(|d| d.round()).collect::<Vec<_>>(), [0.0, 0.0]);
+        s.execute("graph.setType", &json!({"pieSort": "all"})).unwrap();
+        // P1: b (3) first; P2: a (3) first.
+        let (a, b) = (wedge_starts(&s, id, 0), wedge_starts(&s, id, 1));
+        assert!(b[0].abs() < 1e-6 && a[1].abs() < 1e-6, "{a:?} {b:?}");
+        s.execute("graph.setType", &json!({"pieSort": "first"})).unwrap();
+        // P1's order (b, c, a) in both: b first in P2 too.
+        let b = wedge_starts(&s, id, 1);
+        assert!(b.iter().all(|d| d.abs() < 1e-6), "{b:?}");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["pieSort"], "first");
+        assert!(s.execute("graph.setType", &json!({"pieSort": "random"})).is_err());
+    }
+
+    #[test]
+    fn pies_sized_by_their_totals_side_by_side_or_stacked() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nSmall,5,5\nBig,20,20");
+        let pie = |s: &Session, c: usize| {
+            let wedges = |i: u32| {
+                let parts = series_parts(s, id, i);
+                parts[..parts.len() - 1].to_vec()
+            };
+            let rects: Vec<_> = (0..2).flat_map(wedges).filter_map(|n| n.geometric_bounds()).collect();
+            rects.into_iter().skip(c).step_by(2).reduce(|a, b| a.union(b)).unwrap()
+        };
+        let even = (pie(&s, 0), pie(&s, 1));
+        assert!((even.0.width() - even.1.width()).abs() < 1e-6);
+        s.execute("graph.setType", &json!({"piePosition": "ratio"})).unwrap();
+        let (small, big) = (pie(&s, 0), pie(&s, 1));
+        // Areas in proportion to the totals: 10 and 40, so radii 1 : 2.
+        assert!((big.width() / small.width() - 2.0).abs() < 1e-6, "{small:?} {big:?}");
+        assert!((big.width() - even.1.width()).abs() < 1e-6, "the biggest keeps the full size");
+        s.execute("graph.setType", &json!({"piePosition": "stacked"})).unwrap();
+        // Drawn largest first, so the big pie's wedges come first in each series.
+        let (big, small) = (pie(&s, 0), pie(&s, 1));
+        assert!((small.center() - big.center()).hypot() < 1e-6 && (big.width() / small.width() - 2.0).abs() < 1e-6);
+        // The big pie is drawn first, under the small one.
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let wedges: Vec<f64> = series(&n, 0).children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.width()).collect();
+        assert!(wedges[0] > wedges[1], "{wedges:?}");
+    }
+
+    #[test]
+    fn legends_in_wedges_put_the_series_labels_inside_the_pie() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",North,South|East\nP,1,1");
+        s.execute("graph.setType", &json!({"pieLegend": "wedges"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let pie =
+            series(&n, 0).children().unwrap()[0].geometric_bounds().unwrap().union(series(&n, 1).children().unwrap()[0].geometric_bounds().unwrap());
+        let labels: Vec<_> = group(&n, "Legend").children().unwrap().iter().map(|c| (**c).clone()).collect();
+        assert_eq!(labels.len(), 2);
+        for l in &labels {
+            let b = l.geometric_bounds().unwrap();
+            assert!(pie.contains(b.center()), "{b:?} inside {pie:?}");
+        }
+        // No swatches beside the pie: each series group holds only its wedge.
+        assert_eq!((series(&n, 0).children().unwrap().len(), series(&n, 1).children().unwrap().len()), (1, 1));
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert_eq!((v["pieLegend"].clone(), v["piePosition"].clone()), (json!("wedges"), json!("even")));
+        assert!(v.get("legend").is_none(), "a pie's Legend stands for the checkbox");
+        // The labels are drawn over the wedges, and on the black first wedge in white.
+        let order: Vec<_> = n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect();
+        assert_eq!(order.last().map(String::as_str), Some("Legend"), "{order:?}");
+        let colour = |l: &vectorcraft_doc::Node| match &l.kind {
+            NodeKind::Text(t) => t.runs[0].style.fill.color().unwrap().to_hex(),
+            _ => panic!(),
+        };
+        assert_eq!((colour(&labels[0]), colour(&labels[1])), ("#ffffff".to_string(), "#000000".to_string()));
+        // No Legend wins over a legend checkbox sent along (as the dialog does), and Standard comes back without wedges.
+        s.execute("graph.setType", &json!({"pieLegend": "none", "legend": true})).unwrap();
+        assert!(!spec(&s, id).legend);
+        s.execute("graph.setType", &json!({"legend": true})).unwrap();
+        assert!(!spec(&s, id).pie_legend_in_wedges);
+        assert!(s.execute("graph.setType", &json!({"pieLegend": "inside"})).is_err());
+        let path = vectorcraft_testkit::temp_dir("graph-pie").join("pie.vectorcraft");
+        s.execute("graph.setType", &json!({"pieLegend": "wedges", "piePosition": "stacked", "pieSort": "all"})).unwrap();
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(
+            (g.pie_legend_in_wedges, g.pie_position, g.pie_sort),
+            (true, vectorcraft_doc::PiePosition::Stacked, vectorcraft_doc::PieSort::All)
+        );
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        for k in ["pieLegendInWedges", "piePosition", "pieSort"] {
+            assert!(v.get(k).is_none(), "{k}");
+        }
+    }
+
+    #[test]
+    fn stacked_pies_are_rings_so_none_covers_another() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nSmall,5,5\nBig,20,20\nSame,20,20");
+        s.execute("graph.setType", &json!({"piePosition": "stacked"})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        // Series b's wedges: of the two equal big pies one is left out, the other a ring outside the small pie
+        // (clear of the centre), and the small pie's whole.
+        let b: Vec<_> = series(&n, 1).children().unwrap().iter().map(|c| (**c).clone()).collect();
+        assert_eq!(b.len(), 3, "two wedges and the swatch");
+        let small = b[1].geometric_bounds().unwrap();
+        let NodeKind::Path { path, .. } = &b[0].kind else { panic!() };
+        let c = small.center();
+        let near: Vec<f64> = path.to_bezpath().elements().iter().filter_map(|e| e.end_point()).map(|p| (p - c).hypot()).collect();
+        let min = near.iter().copied().fold(f64::MAX, f64::min);
+        assert!(min > 1.0, "the ring keeps clear of the centre: {near:?}");
+        // The names are drawn over the pies: after every series group.
+        let kids = n.children().unwrap();
+        let last_series = kids.iter().rposition(|c| c.series_index.is_some()).unwrap();
+        let names: Vec<usize> = kids.iter().enumerate().filter(|(_, c)| matches!(c.kind, NodeKind::Text(_))).map(|(i, _)| i).collect();
+        assert_eq!(names.len(), 2, "of two equal pies, one has no ring and no name");
+        assert!(names.iter().all(|i| *i > last_series), "{names:?} after {last_series}");
+    }
+
+    #[test]
+    fn transpose_keeps_within_the_series_cap_and_drops_stale_axis_series() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let rows: Vec<Vec<f64>> = (0..300).map(|i| vec![i as f64]).collect();
+        let id = NodeId(
+            s.execute("graph.create", &json!({"type": "column", "x": 0, "y": 0, "width": 300, "height": 200, "rows": rows})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        assert!(s.execute("graph.setData", &json!({"transpose": true})).is_err(), "300 categories can't become series");
+        assert_eq!(spec(&s, id).cells().len(), 300);
+        let g = make(&mut s, "column", ",a,b,c\nQ1,1,2,3");
+        s.execute("graph.setType", &json!({"seriesIndexes": [2], "valueAxis": "right"})).unwrap();
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert!(spec(&s, g).right_series.is_empty(), "one series left");
+        // An all-blank series becomes no category.
+        let h = make(&mut s, "column", ",a,b\nQ1,1,\nQ2,2,");
+        s.execute("graph.setData", &json!({"transpose": true})).unwrap();
+        assert_eq!(spec(&s, h).categories, ["a", "b"], "b keeps its label");
+        assert!(s.execute("graph.setData", &json!({"id": h.0, "transpose": false})).unwrap().get("csv").is_some(), "no change: the query");
+    }
+
+    #[test]
+    fn switch_xy_moves_the_labels_with_their_columns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "scatter", ",y1,x1,y2\nP,1,10,2,20");
+        s.execute("graph.setData", &json!({"switchXY": true})).unwrap();
+        let g = spec(&s, id);
+        assert_eq!(g.series, ["x1", "y1", "", "y2"]);
+        assert_eq!(g.cells(), [[Some(10.0), Some(1.0), Some(20.0), Some(2.0)]]);
+    }
+
+    #[test]
+    fn a_label_of_only_bars_is_blank_and_non_pie_graphs_list_no_pie_options() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",||,b\nQ1,1,2");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert_eq!(group(&n, "Legend").children().unwrap().len(), 1, "only b");
+        let v = s.execute("graph.setType", &json!({})).unwrap();
+        assert!(v.get("pieLegend").is_none() && v.get("legend").is_some());
+        // Bar and radar labels with a `|` centre their lines on the category.
+        for ty in ["bar", "radar"] {
+            let g = make(&mut s, ty, ",a\nOne|Two|Three,1\nQ2,2\nQ3,3");
+            assert!(axis_texts(&s, g).contains(&"One\nTwo\nThree".to_string()), "{ty}");
+        }
+    }
+
+    #[test]
+    fn drop_shadows_sit_behind_the_columns_lines_and_wedges() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let kids = n.children().unwrap();
+        let at = kids.iter().position(|c| c.name.as_deref() == Some("Drop Shadow")).unwrap();
+        assert!(kids.iter().position(|c| c.series_index.is_some()).unwrap() > at, "behind the series");
+        let shadow = &kids[at];
+        assert!((shadow.opacity - 0.35).abs() < 1e-6);
+        let copies: Vec<_> = shadow.children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        let cols: Vec<_> = (0..2).flat_map(|i| marks(&s, id, i)).collect();
+        assert_eq!(copies.len(), cols.len(), "one per column, none for the swatches");
+        for c in &cols {
+            assert!(copies.iter().any(|b| (b.x0 - c.x0 - 2.0).abs() < 1e-6 && (b.y0 - c.y0 - 2.0).abs() < 1e-6), "{c:?}");
+        }
+        let black = shadow.children().unwrap().iter().all(|c| c.appearance.fill_paint().color().map(|c| c.to_hex()) == Some("#000000".into()));
+        assert!(black);
+        // Lines cast one too (not their markers); pies one per wedge.
+        let line = graph(&mut s, "line");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(line).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 2, "one per series line");
+        let pie = graph(&mut s, "pie");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(pie).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 5, "the wedges with a value above 0");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["dropShadow"], true);
+        s.execute("graph.setType", &json!({"dropShadow": false})).unwrap();
+        let n = s.doc().unwrap().doc.node(pie).unwrap().clone();
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Drop Shadow")));
+    }
+
+    #[test]
+    fn the_legend_across_top_runs_in_rows_above_the_plot() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let swatch = |s: &Session, i: u32| series_parts(s, id, i).last().unwrap().geometric_bounds().unwrap();
+        let (a, b) = (swatch(&s, 0), swatch(&s, 1));
+        assert!(a.y1 <= 100.0 - 8.0 + 1e-6 && (a.y0 - b.y0).abs() < 1e-6 && b.x0 > a.x1 && (a.x0 - 100.0).abs() < 1e-6, "{a:?} {b:?}");
+        assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["legendAcrossTop"], true);
+        // Long labels wrap into rows within the plot's width, the last row just above it.
+        let labels: Vec<String> = (0..6).map(|i| format!("A rather long series name {i}")).collect();
+        let csv = format!(",{}\nQ1,1,2,3,4,5,6", labels.join(","));
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let ys: Vec<f64> = (0..6).map(|i| swatch(&s, i).y0).collect();
+        assert!(ys.windows(2).any(|w| w[1] > w[0]), "a second row: {ys:?}");
+        assert!(ys.iter().all(|y| *y + 8.0 <= 100.0 - 8.0 + 1e-6), "{ys:?}");
+        let xs: Vec<f64> = (0..6).map(|i| swatch(&s, i).x1).collect();
+        assert!(xs.iter().all(|x| *x <= 400.0), "{xs:?}");
+        let path = vectorcraft_testkit::temp_dir("graph-top").join("top.vectorcraft");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let g = spec(&s, id);
+        assert!(g.legend_across_top && g.drop_shadow);
+        let v = serde_json::to_value(GraphSpec::default()).unwrap();
+        assert!(v.get("dropShadow").is_none() && v.get("legendAcrossTop").is_none());
+    }
+
+    #[test]
+    fn each_layer_keeps_its_shadows_just_behind_it() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "column", ",a,b,c\nQ1,3,2,1\nQ2,5,,2\nQ3,4,6,3");
+        s.execute("graph.setType", &json!({"seriesIndexes": [0], "type": "area"})).unwrap();
+        s.execute("graph.setType", &json!({"seriesIndexes": [2], "type": "line", "dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let order: Vec<String> =
+            n.children().unwrap().iter().map(|c| c.series_index.map_or_else(|| c.name.clone().unwrap_or_default(), |i| format!("s{i}"))).collect();
+        // Areas cast none; the columns' shadows sit between the area and the columns, the line's between the columns
+        // and the line.
+        let at = |k: &str| order.iter().position(|o| o == k).unwrap();
+        let shadows: Vec<usize> = order.iter().enumerate().filter(|(_, o)| *o == "Drop Shadow").map(|(i, _)| i).collect();
+        assert_eq!(shadows.len(), 2, "{order:?}");
+        assert!(at("s0") < shadows[0] && shadows[0] < at("s1") && at("s1") < shadows[1] && shadows[1] < at("s2"), "{order:?}");
+        // b's blank leaves two columns; a line with a blank casts a shadow per run.
+        let line = make(&mut s, "line", ",a\nQ1,1\nQ2,\nQ3,3\nQ4,4");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(line).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 1, "Q1 alone draws no line; Q3–Q4 one");
+        // Scatter and radar lines cast one too; a stacked segment of 0 doesn't.
+        for (ty, want) in [("scatter", 1), ("radar", 2)] {
+            let g = graph(&mut s, ty);
+            s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+            let n = s.doc().unwrap().doc.node(g).unwrap().clone();
+            assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), want, "{ty}");
+        }
+        let st = make(&mut s, "stackedColumn", ",a,b\nQ1,0,2");
+        s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(st).unwrap().clone();
+        assert_eq!(group(&n, "Drop Shadow").children().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_legend_across_top_keeps_above_labels_over_the_plot() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "radar", ",a,b\nTop|of|chart,1,2\nQ2,2,3\nQ3,3,1");
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let axes_top = group(&n, "Axes").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.y0).fold(f64::MAX, f64::min);
+        let legend_bottom =
+            group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.y1).fold(f64::MIN, f64::max);
+        assert!(legend_bottom < axes_top, "{legend_bottom} above {axes_top}");
+        // No legend: nothing across the top either.
+        s.execute("graph.setType", &json!({"legend": false})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert!(n.children().unwrap().iter().all(|c| c.name.as_deref() != Some("Legend")));
+        // Labels of a row other than the last stay within the plot's width.
+        let labels: Vec<String> = (0..6).map(|i| format!("A rather long series name {i}")).collect();
+        let col = make(&mut s, "column", &format!(",{}\nQ1,1,2,3,4,5,6", labels.join(",")));
+        s.execute("graph.setType", &json!({"legendAcrossTop": true})).unwrap();
+        let n = s.doc().unwrap().doc.node(col).unwrap().clone();
+        let texts: Vec<_> = group(&n, "Legend").children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        let last_row = texts.iter().map(|b| b.y0).fold(f64::MIN, f64::max);
+        assert!(texts.iter().filter(|b| b.y0 < last_row - 1e-6).all(|b| b.x1 <= 400.0 + 1e-6), "{texts:?}");
     }
 }

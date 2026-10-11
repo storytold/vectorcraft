@@ -127,7 +127,12 @@ impl Document {
     /// Visit every image object: in the layers, then in symbol definitions and pattern swatches,
     /// opacity-mask art included.
     pub fn visit_images<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a ImageObject)) {
-        let roots = self.layers.iter().chain(self.symbols.iter().map(|s| &s.art)).chain(self.patterns.iter().flat_map(|p| &p.art));
+        let roots = self
+            .layers
+            .iter()
+            .chain(self.symbols.iter().map(|s| &s.art))
+            .chain(self.graph_designs.iter().map(|g| &g.art))
+            .chain(self.patterns.iter().flat_map(|p| &p.art));
         for root in roots {
             walk_all(root, &mut |n| {
                 if let NodeKind::Image(im) = &n.kind {
@@ -276,8 +281,12 @@ impl Document {
                 walk(child, f);
             }
         }
-        let roots =
-            self.layers.iter_mut().chain(self.symbols.iter_mut().map(|s| &mut s.art)).chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
         for root in roots {
             walk(root, &mut f);
         }
@@ -308,8 +317,12 @@ impl Document {
                 update(c, pick, f);
             }
         }
-        let roots =
-            self.layers.iter_mut().chain(self.symbols.iter_mut().map(|s| &mut s.art)).chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
         for root in roots {
             update(root, &pick, &mut f);
         }
