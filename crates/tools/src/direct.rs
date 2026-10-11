@@ -115,11 +115,11 @@ pub struct DirectSelectionTool {
     mesh: MeshEdit,
     /// Smart guides of the handle, anchors or objects being dragged.
     guides: Vec<Overlay>,
-    /// What the dragged anchors snap to, gathered when the drag begins (for a path moved whole by
-    /// an anchor, again when Alt turns the copy on or off: whether the original is a target).
+    /// What the dragged anchors snap to, gathered when the drag begins.
     anchor_snap: Option<PointSnap>,
-    /// Whether [`Self::anchor_snap`] was gathered for a copy.
-    snap_for_copy: bool,
+    /// What the anchor holding paths moved whole snaps to while Alt makes a copy: the original left
+    /// behind too. Gathered with [`Self::anchor_snap`], before the previews move the original.
+    copy_snap: Option<PointSnap>,
     /// What the dragged handle snaps to.
     handle_snap: HandleSnap,
     /// What the objects being moved snap to, gathered when the move begins.
@@ -138,7 +138,7 @@ impl DirectSelectionTool {
             mesh: MeshEdit::default(),
             guides: vec![],
             anchor_snap: None,
-            snap_for_copy: false,
+            copy_snap: None,
             handle_snap: HandleSnap::default(),
             move_snap: None,
             hover: None,
@@ -488,25 +488,23 @@ impl Tool for DirectSelectionTool {
                     }
                     out.push(Action::Begin(if ev.mods.alt { "Copy".into() } else { "Move".into() }));
                     self.state = State::MoveObject { start, grab, began: true };
-                    self.anchor_snap = None;
-                    if grab.is_none() {
+                    if grab.is_some() {
+                        // Alt can go down or up at any time: gather both while nothing has moved.
+                        self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+                        self.copy_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
+                    } else {
                         self.move_snap = Some(MoveSnap::new(cx));
                     }
                 }
-                if grab.is_some() && (self.anchor_snap.is_none() || self.snap_for_copy != ev.mods.alt) {
-                    // A copy leaves the original behind, so its anchors are targets too.
-                    let stay = if ev.mods.alt { Selection::default() } else { cx.selection.clone() };
-                    self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &stay)));
-                    self.snap_for_copy = ev.mods.alt;
-                }
                 let mut d = move_delta(start, p, ev.mods.shift);
                 self.guides.clear();
-                if let (Some(grab), Some(snap)) = (grab, &self.anchor_snap) {
+                let snap = if ev.mods.alt { &self.copy_snap } else { &self.anchor_snap };
+                if let (Some(grab), Some(snap)) = (grab, snap) {
                     let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
                     let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref());
                     (d, self.guides) = (q - grab, guides);
                 } else if let Some(snap) = &self.move_snap {
-                    (d, self.guides) = snap.snap(cx, start, d);
+                    (d, self.guides) = snap.snap(cx, start, d, ev.mods.alt);
                 }
                 out.push(Action::Preview(
                     "object.transform".into(),
@@ -589,7 +587,7 @@ impl Tool for DirectSelectionTool {
             ) => {
                 self.state = State::Idle;
                 self.guides.clear();
-                (self.anchor_snap, self.move_snap) = (None, None);
+                (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
                 if began { vec![Action::Commit] } else { vec![] }
             }
             (PointerKind::Up, State::Handle { .. } | State::SpineHandle { .. }) => {
@@ -1159,6 +1157,13 @@ mod tests {
             t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0)),
             vec![Action::Begin("Move".into()), preview(-50.0, -50.0, false)]
         );
+        // The tool sees the document as previewed: B moved along, not where the copy leaves it.
+        let (mut moved, _, b2) = two_squares();
+        let l = moved.layers[0].id;
+        let sq = vectorcraft_geom::shapes::rectangle(Rect::new(250.0, 250.0, 350.0, 350.0));
+        moved.remove(b2).unwrap();
+        moved.insert(Some(l), 1, vectorcraft_doc::Node::path(b, sq, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let c = cx(&moved, &whole, &p);
         // Alt down mid-drag: a copy, whose pressed corner can land on the original's top-right one.
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 402.0, 301.0).with_mods(alt)), vec![preview(100.0, 0.0, true)]);
         // Alt up: a move again, which leaves nothing behind to snap to.

@@ -179,10 +179,11 @@ impl Targets {
         Self::collect_inner(doc, exclude, None, visible, Gather::Bounds)
     }
 
-    /// Targets for moving the selection of `cx`: [`Self::collect`]'s, styled as `cx` asks, and with
-    /// Smart Guides › Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]).
-    pub fn for_move(cx: &ToolContext) -> Self {
-        let mut t = Self::collect(cx.doc, &cx.selection.objects, None).styled(cx);
+    /// Targets for moving the selection of `cx`: [`Self::collect`]'s but `exclude` (the selection,
+    /// or nothing for a copy, which leaves it behind), styled as `cx` asks, and with Smart Guides ›
+    /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]).
+    pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
+        let mut t = Self::collect(cx.doc, exclude, None).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
@@ -1229,7 +1230,7 @@ mod tests {
         }
         let (s, p) = (Selection::default(), paint());
         let lines = |ov: &[Overlay]| ov.iter().filter(|o| matches!(o, Overlay::Line { color, .. } if *color == MAGENTA)).count();
-        let t = Targets::for_move(&cx(&d, &s, &p));
+        let t = Targets::for_move(&cx(&d, &s, &p), &s.objects);
         // 21 after B: 20, as A and B, with both gaps marked (a line and two ticks each).
         let (dv, ov) = t.snap_rect(Rect::new(141.0, 305.0, 181.0, 345.0), 4.0);
         assert_eq!(dv, Vec2::new(-1.0, 0.0));
@@ -1241,7 +1242,7 @@ mod tests {
         let id = wide.alloc_id();
         wide.insert(Some(l), 0, Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(220.0, 300.0, 260.0, 340.0)), Default::default()))
             .unwrap();
-        let (dv, ov) = Targets::for_move(&cx(&wide, &s, &p)).snap_rect(Rect::new(148.0, 305.0, 188.0, 345.0), 4.0);
+        let (dv, ov) = Targets::for_move(&cx(&wide, &s, &p), &s.objects).snap_rect(Rect::new(148.0, 305.0, 188.0, 345.0), 4.0);
         assert_eq!(dv, Vec2::new(2.0, 0.0));
         assert!(lines(&ov) >= 6, "{ov:?}");
         // A column: 28 under D, as C and D are 30 apart.
@@ -1253,7 +1254,7 @@ mod tests {
         assert_eq!(dv, Vec2::new(0.0, 2.0));
         // Off: nowhere to go, and no marks.
         let off = ToolContext { spacing_guides: false, ..cx(&d, &s, &p) };
-        let (dv, ov) = Targets::for_move(&off).snap_rect(Rect::new(141.0, 305.0, 181.0, 345.0), 4.0);
+        let (dv, ov) = Targets::for_move(&off, &s.objects).snap_rect(Rect::new(141.0, 305.0, 181.0, 345.0), 4.0);
         assert_eq!((dv, lines(&ov)), (Vec2::ZERO, 0));
     }
 
