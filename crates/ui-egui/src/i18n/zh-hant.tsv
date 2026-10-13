@@ -7138,3 +7138,6 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	剪貼簿

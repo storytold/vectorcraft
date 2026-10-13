@@ -8926,3 +8926,6 @@ breakText	Glyphs	Glifi
 	Grommets	Occhielli
 	Grommet Inset	Distanza degli occhielli dal bordo
 	Diameter	Diametro
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Appunti

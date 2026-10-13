@@ -9159,3 +9159,5 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Schowek

@@ -7436,3 +7436,6 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Portapapeles

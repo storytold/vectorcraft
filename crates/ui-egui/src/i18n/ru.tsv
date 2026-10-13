@@ -7581,3 +7581,6 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Буфер обмена

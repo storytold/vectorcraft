@@ -7476,3 +7476,6 @@ breakText	Glyphs	Glifák
 	Grommets	Ringlik
 	Grommet Inset	Ringlik távolsága a széltől
 	Diameter	Átmérő
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Vágólap

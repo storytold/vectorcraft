@@ -506,10 +506,10 @@ fn image_keys(v: &Value) -> std::collections::HashSet<&str> {
 
 /// Largest artboard side `file.new` and `artboard.new` accept, points: the span of the canvas
 /// ([`crate::MAX_COORD`] from the origin) less the largest bleed on both sides, 3,999,856 pt.
-pub(crate) const MAX_SIDE: f64 = crate::MAX_COORD - 2.0 * vectorcraft_doc::setup::MAX_BLEED;
+pub const MAX_SIDE: f64 = crate::MAX_COORD - 2.0 * vectorcraft_doc::setup::MAX_BLEED;
 
 /// Is `side` an artboard side `file.new` and `artboard.new` accept: more than 0 and at most [`MAX_SIDE`]?
-pub(crate) fn side_in_range(side: f64) -> bool {
+pub fn side_in_range(side: f64) -> bool {
     side > 0.0 && side <= MAX_SIDE
 }
 

@@ -9145,3 +9145,6 @@ breakText	Glyphs	字形
 @msg	{what} can't be intertwined	{what} 不能交织
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	剪贴板

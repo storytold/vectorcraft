@@ -7103,3 +7103,6 @@ breakText	Glyphs	Glyph
 	Grommets	Khoen
 	Grommet Inset	Khoảng cách từ mép đến khoen
 	Diameter	Đường kính
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Bảng nhớ tạm

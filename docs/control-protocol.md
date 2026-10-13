@@ -620,7 +620,8 @@ pop-up first, then leaves saving, and keeps the fields each time. `ui.dialog.con
 (with `previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open. While `__saving` is
 true, `ui.dialog.confirm` saves the preset and does not create a document; after a save `presetName` is empty, and the
 next Save Preset fills it with the first `Preset N` that no saved preset has. `ui.click` on the More Settings button
-opens the `newDocumentMore` pop-up.
+opens the `newDocumentMore` pop-up. When the clipboard holds a picture another app copied, or art copied here,
+the dialog opens at that size on the `Clipboard` preset (category Recent), however it is opened.
 
 Swatch Conflict: through the app, when the pasted objects' global or spot swatches conflict with the document's
 (see `clipboard.conflicts`) and the params have no `swatchConflict`, every Paste command opens the `swatchConflict`

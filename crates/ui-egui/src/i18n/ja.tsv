@@ -7188,3 +7188,6 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	クリップボード

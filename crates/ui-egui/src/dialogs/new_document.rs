@@ -81,14 +81,60 @@ const HEADER: f32 = 100.0;
 /// Width of the More Settings pop-up's rows.
 const MORE_WIDTH: f32 = 310.0;
 
-/// Open New Document on the most recent settings (or Letter), named after the next untitled
-/// document.
+/// The preset that takes the size of what the clipboard holds.
+pub(crate) const CLIPBOARD: &str = "Clipboard";
+/// The field holding the Clipboard preset (its settings), while the clipboard offers one.
+const CLIPBOARD_FIELD: &str = "__clipboard";
+
+/// Open New Document named after the next untitled document. Every way of opening it (File › New,
+/// Cmd+N, the Home screen, the control channel and MCP through `file.newDialog`) comes here: when
+/// the clipboard holds art or a picture, the Clipboard preset (its size) is chosen first, under
+/// Recent; else the most recent settings, or Letter.
 pub fn open(app: &mut VectorcraftApp) {
-    let category = if app.session.prefs.recent_new_docs.is_empty() { "Print" } else { "Recent" };
-    let first = newdoc::category(&app.session, category).and_then(|v| v.into_iter().next()).unwrap_or_default();
+    let clipboard = clipboard_preset(app);
+    let category = if clipboard.is_some() || !app.session.prefs.recent_new_docs.is_empty() { "Recent" } else { "Print" };
+    let first = match &clipboard {
+        Some(c) => c.clone(),
+        None => newdoc::category(&app.session, category).and_then(|v| v.into_iter().next()).unwrap_or_default(),
+    };
     let mut d = Dialog::new(KIND, json!({ "category": category, "name": app.session.peek_untitled(), "advanced": false }));
+    if let Some(c) = &clipboard {
+        d.fields.insert(CLIPBOARD_FIELD.into(), serde_json::to_value(c).unwrap_or_default());
+    }
     apply(&mut d, &first);
     app.ui.dialog = Some(d);
+}
+
+/// The Clipboard preset: the size of what Paste would bring. A picture another app copied (a
+/// screenshot, an image from a browser) gives its pixels; else the objects copied here give
+/// their box as drawn, in the default units. `None` when the clipboard offers neither (another
+/// app's copy that isn't a picture replaces what was copied here, so that offers none either).
+fn clipboard_preset(app: &mut VectorcraftApp) -> Option<DocSettings> {
+    use vectorcraft_engine::cmd::clipboard::{BITMAP, PASTE_ORDER};
+    // Only a size New Document can make (Create would refuse a larger one).
+    // `side_in_range` is false for NaN and the infinities as well.
+    let fits = newdoc::side_in_range;
+    let preset = |width: f64, height: f64, units: Unit| {
+        (fits(width) && fits(height)).then(|| DocSettings { name: CLIPBOARD.into(), width, height, units, ..DocSettings::default() })
+    };
+    if let Some(cb) = app.services.system_clipboard.as_mut()
+        && !cb.holds_ours()
+    {
+        if let Some(f) = cb.read(&[BITMAP]) {
+            let size = image::ImageReader::new(std::io::Cursor::new(&f.data)).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
+            return size.and_then(|(w, h)| preset(f64::from(w), f64::from(h), Unit::Pixels));
+        }
+        if cb.has(&PASTE_ORDER) {
+            return None;
+        }
+    }
+    let r = app.session.clipboard.bounds()?;
+    preset(r.width(), r.height(), app.session.default_units())
+}
+
+/// The Clipboard preset the dialog offers, if any.
+fn offered_clipboard(d: &Dialog) -> Option<DocSettings> {
+    d.fields.get(CLIPBOARD_FIELD).and_then(|v| serde_json::from_value(v.clone()).ok())
 }
 
 /// Fill the fields from a preset.
@@ -309,7 +355,13 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             apply(d, &first);
         }
     }
-    let list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
+    let mut list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
+    // Recent leads with the Clipboard preset while the clipboard offers one.
+    if cat == 0
+        && let Some(c) = offered_clipboard(d)
+    {
+        list.insert(0, c);
+    }
     ui.add_space(14.0);
     let heading = if cat == 0 {
         tl!("RECENT")
@@ -383,11 +435,17 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// Is `name` a built-in preset's? Those are ours (translated); Recent and Saved hold the names of
 /// the user's documents and presets, shown as they are.
 fn is_builtin_preset(name: &str) -> bool {
+    if name == CLIPBOARD {
+        return true;
+    }
     newdoc::CATEGORIES.iter().any(|(_, _, _, presets)| presets.iter().any(|(n, ..)| *n == name))
 }
 
 /// A preset's name as shown: a built-in one translated, the user's as it is.
 pub(crate) fn preset_name(name: &str) -> &str {
+    if name == CLIPBOARD {
+        return tl!("Clipboard");
+    }
     if is_builtin_preset(name) { tl!(name) } else { name }
 }
 

@@ -1332,3 +1332,23 @@ fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
     app.ui.dialog = None;
     assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}))["error"], "no dialog open");
 }
+
+/// New Document opened through the control channel matches the clipboard too (as from the
+/// menu and the Home screen, photocraft#2034): copied art sets its size and the Clipboard preset.
+#[test]
+fn opening_new_document_through_control_matches_the_clipboard() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    for (cmd, p) in [
+        ("file.new", json!({})),
+        ("shape.rectangle", json!({"x": 10, "y": 10, "width": 120, "height": 80})),
+        ("select.all", json!({})),
+        ("paint.setStroke", json!({"none": true})),
+        ("edit.copy", json!({})),
+    ] {
+        app.run(cmd, p).unwrap_or_else(|e| panic!("{cmd}: {e}"));
+    }
+    let r = input_request(&mut app, "engine.execute", json!({"command": "file.newDialog"}));
+    assert!(r.get("error").is_none(), "{r}");
+    let fields = &app.ui.dialog.as_ref().expect("New Document opened").fields;
+    assert_eq!((fields["width"].as_f64(), fields["height"].as_f64(), fields["preset"].as_str()), (Some(120.0), Some(80.0), Some("Clipboard")));
+}

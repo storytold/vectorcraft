@@ -9377,3 +9377,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Área de transferência
