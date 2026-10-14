@@ -274,7 +274,7 @@ impl CloudApp for VectorcraftApp {
     }
 
     fn go_to_save_as(&mut self) {
-        crate::dialogs::cloud::open_save(self, true);
+        crate::dialogs::cloud::open(self, true);
     }
 
     fn app_name(&self) -> &str {

@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 
 use craft_ui::icons::{SvgIconSet, SvgStyle};
 use egui::{Color32, ImageSource, Rect, Ui, Vec2};
+use emath::GuiRounding;
 
 fn table() -> &'static SvgIconSet {
     static T: OnceLock<SvgIconSet> = OnceLock::new();
