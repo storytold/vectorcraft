@@ -7188,3 +7188,12 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	線幅をロック
+	Lock Point Reordering	ポイントの順序をロック
+	Snap to Curve Nodes	カーブのノードにスナップ
+	Snap to Widths on Same Curve	同じカーブの幅にスナップ
+	Reset Profile	プロファイルをリセット
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	線幅プロファイル：ポイントをドラッグすると幅や位置が変わります。クリックで追加、ダブルクリックで削除します
+	Click Adds Width Points	クリックで線幅ポイントを追加

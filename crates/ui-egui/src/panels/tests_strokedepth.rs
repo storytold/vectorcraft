@@ -161,3 +161,20 @@ fn arrowhead_dropdown_offers_the_new_heads() {
     click(&ctx, &mut app, text_rect(&t, "Barbed").center(), stroke::show);
     assert_eq!(current_stroke(&app).and_then(|s| s.end_arrow), Some(vectorcraft_doc::Arrowhead::Barbed));
 }
+
+/// #1854: the Stroke panel's width profile chart. A click on it adds one width point at the
+/// width the stroke has there (a uniform stroke gets its third point), as one undo step.
+#[test]
+fn the_profile_chart_adds_a_width_point_on_a_click() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_line();
+    let texts = frame_events(&ctx, &mut app, vec![], stroke::show);
+    let label = text_rect(&texts, "Profile:");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    // The chart sits under the Profile row, 64 points tall, across the panel.
+    click(&ctx, &mut app, egui::pos2(label.left() + 100.0, label.bottom() + 40.0), stroke::show);
+    let pts = profile_points(&app).expect("a profile after the click");
+    assert_eq!(pts.len(), 3, "{pts:?}");
+    assert!(pts.iter().all(|p| (p.1 - 1.0).abs() < 1e-9 && (p.2 - 1.0).abs() < 1e-9), "the stroke's width: {pts:?}");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+}

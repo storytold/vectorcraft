@@ -9159,3 +9159,11 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	Zablokuj grubość linii
+	Lock Point Reordering	Zablokuj kolejność punktów
+	Snap to Curve Nodes	Przyciągaj do węzłów krzywej
+	Snap to Widths on Same Curve	Przyciągaj do szerokości tej samej krzywej
+	Reset Profile	Resetuj profil
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	Profil szerokości: przeciągnij punkt, aby zmienić jego szerokość lub położenie, kliknij, aby dodać punkt, kliknij dwukrotnie, aby go usunąć
+	Click Adds Width Points	Kliknięcie dodaje punkty szerokości
