@@ -7581,3 +7581,12 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	Зафиксировать толщину линии
+	Lock Point Reordering	Зафиксировать порядок точек
+	Snap to Curve Nodes	Привязка к узлам кривой
+	Snap to Widths on Same Curve	Привязка к ширинам той же кривой
+	Reset Profile	Сбросить профиль
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	Профиль ширины: перетащите точку, чтобы изменить ширину или положение, щёлкните, чтобы добавить точку, дважды щёлкните, чтобы удалить её
+	Click Adds Width Points	Щелчок добавляет точки ширины

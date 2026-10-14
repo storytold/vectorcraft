@@ -47,6 +47,8 @@ const ROWS: &[Row] = &[
     (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
     // Live Paint Bucket Options (`builder::LivePaintBucketTool`).
     (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"]),
+    // The Width tool's locks and snaps (#1854).
+    (&["width"], None, &["clickAdds", "lockWeight", "lockOrder", "snapNodes", "snapWidths"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),

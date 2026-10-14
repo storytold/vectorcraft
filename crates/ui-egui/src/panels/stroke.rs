@@ -364,6 +364,130 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("stroke.setAdvanced", json!({"flipProfile": "across"})).ok();
         }
     });
+    // The profile as a chart to edit (#1854): the same width points the Width tool shows. Only
+    // with a stroked object selected (what it edits); else the panel keeps its height.
+    let selected = app.session.active().is_some_and(|d| !d.selection.objects.is_empty());
+    if let Some(s) = st.as_ref().filter(|s| selected && s.width > 0.0) {
+        profile_chart(app, ui, s.profile.as_ref());
+    }
+}
+
+/// A width point's handle in [`profile_chart`]: its index, and the left (true) or right side.
+type ChartHandle = (usize, bool);
+
+/// The selected stroke's width profile as a chart: its length left to right, the left side's
+/// width above the middle line and the right side's below. Drag a handle up or down to change that
+/// width (both sides alike; Alt: that side only), sideways to move the point along the stroke;
+/// click the chart to add a point; double-click a handle to remove its point. One drag is one undo
+/// step (`stroke.widthProfile.set`). Without a profile the stroke is uniform: its two end points.
+fn profile_chart(app: &mut VectorcraftApp, ui: &mut Ui, profile: Option<&WidthProfile>) {
+    let t = Tokens::get(ui.ctx());
+    let mut points: Vec<(f64, f64, f64)> = profile.map_or_else(|| vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)], |p| p.points.clone());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(80.0), 64.0), Sense::click_and_drag());
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, 3.0, t.input);
+    let inner = rect.shrink2(vec2(8.0, 6.0));
+    let mid = inner.center().y;
+    let top = points.iter().map(|q| q.1.max(q.2)).fold(1.0, f64::max);
+    let half = inner.height() / 2.0;
+    let x_of = |t: f64| inner.left() + t as f32 * inner.width();
+    let y_of = |w: f64, left: bool| if left { mid - (w / top) as f32 * half } else { mid + (w / top) as f32 * half };
+    // The width as a filled outline.
+    let outline: Vec<egui::Pos2> =
+        points.iter().map(|q| pos2(x_of(q.0), y_of(q.1, true))).chain(points.iter().rev().map(|q| pos2(x_of(q.0), y_of(q.2, false)))).collect();
+    // Filled piece by piece: each span between two points is a trapezoid (convex), while the whole
+    // outline often isn't.
+    let fill = t.accent.gamma_multiply(0.25);
+    for w in points.windows(2) {
+        let (Some(a), Some(b)) = (w.first(), w.get(1)) else { continue };
+        let quad = vec![
+            pos2(x_of(a.0), y_of(a.1, true)),
+            pos2(x_of(b.0), y_of(b.1, true)),
+            pos2(x_of(b.0), y_of(b.2, false)),
+            pos2(x_of(a.0), y_of(a.2, false)),
+        ];
+        p.add(egui::Shape::convex_polygon(quad, fill, Stroke::NONE));
+    }
+    p.add(egui::Shape::closed_line(outline, Stroke::new(1.0, t.accent)));
+    p.line_segment([pos2(inner.left(), mid), pos2(inner.right(), mid)], Stroke::new(1.0, t.text_dim));
+    let handles: Vec<(ChartHandle, egui::Pos2)> = points
+        .iter()
+        .enumerate()
+        .flat_map(|(i, q)| [((i, true), pos2(x_of(q.0), y_of(q.1, true))), ((i, false), pos2(x_of(q.0), y_of(q.2, false)))])
+        .collect();
+    let near = |at: egui::Pos2| {
+        handles.iter().filter(|(_, h)| h.distance(at) <= 7.0).min_by(|a, b| a.1.distance(at).total_cmp(&b.1.distance(at))).map(|(k, _)| *k)
+    };
+    let key = "stroke-profile-chart";
+    let mut held: Option<ChartHandle> = pstate(ui.ctx(), key);
+    let pointer = resp.interact_pointer_pos().or(resp.hover_pos());
+    for ((i, left), h) in &handles {
+        let on = held == Some((*i, *left)) || pointer.and_then(near) == Some((*i, *left));
+        p.circle_filled(*h, if on { 4.5 } else { 3.5 }, if on { t.accent } else { t.text });
+    }
+    let to_point =
+        |at: egui::Pos2| (f64::from((at.x - inner.left()) / inner.width()).clamp(0.0, 1.0), f64::from(((mid - at.y).abs() / half).max(0.0)) * top);
+    let run = |app: &mut VectorcraftApp, pts: &[(f64, f64, f64)], phase: Option<widgets::Live>| {
+        let v: Vec<[f64; 3]> = pts.iter().map(|q| [q.0, q.1, q.2]).collect();
+        let params = json!({ "points": v });
+        match phase {
+            Some(phase) => super::live_run(app, "Width Profile", "stroke.widthProfile.set", params, phase),
+            None => {
+                app.run("stroke.widthProfile.set", params).ok();
+            }
+        }
+    };
+    if resp.double_clicked() {
+        if let Some((i, _)) = pointer.and_then(near) {
+            if points.len() > 2 {
+                points.remove(i);
+                run(app, &points, None);
+            } else {
+                app.run("stroke.widthProfile.set", json!({ "points": null })).ok();
+            }
+        }
+        set_pstate::<Option<ChartHandle>>(ui.ctx(), key, None);
+        return;
+    }
+    if resp.drag_started() {
+        held = pointer.and_then(near);
+        set_pstate(ui.ctx(), key, held);
+    }
+    if let (Some((i, left)), Some(at)) = (held, pointer)
+        && (resp.dragged() || resp.drag_stopped())
+    {
+        let (pos, w) = to_point(at);
+        let alt = ui.input(|inp| inp.modifiers.alt);
+        if let Some(q) = points.get_mut(i) {
+            q.0 = pos;
+            match (alt, left) {
+                (true, true) => q.1 = w,
+                (true, false) => q.2 = w,
+                (false, _) => (q.1, q.2) = (w, w),
+            }
+        }
+        points.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let phase = if resp.drag_stopped() { widgets::Live::Released } else { widgets::Live::Dragging };
+        run(app, &points, Some(phase));
+        if resp.drag_stopped() {
+            set_pstate::<Option<ChartHandle>>(ui.ctx(), key, None);
+        }
+        return;
+    }
+    if resp.clicked()
+        && let Some(at) = pointer.filter(|at| near(*at).is_none())
+    {
+        // A new point at the clicked place, at the width the stroke has there.
+        let pos = f64::from((at.x - inner.left()) / inner.width()).clamp(0.0, 1.0);
+        // A frame egui runs twice sees the click twice: a point already there isn't added again.
+        if points.iter().all(|q| (q.0 - pos).abs() > 1e-6) {
+            let (l, r) = WidthProfile::at_points(&points, pos);
+            points.push((pos, l, r));
+            points.sort_by(|a, b| a.0.total_cmp(&b.0));
+            run(app, &points, None);
+        }
+    }
+    resp.on_hover_text(tl!("Width profile: drag a point to change its width or place, click to add one, double-click one to remove it"));
 }
 
 /// The document an arrowhead preview renders: a `w`×`h` pt line with head `a` at its left

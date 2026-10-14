@@ -19,6 +19,14 @@
 //! A compound path's stroke is the compound's: its members are edited through it, and the width
 //! points show on every subpath of the stroke (one profile runs along each). The cursor says what a
 //! drag does: add a width point on a stroke, or move or widen the one under it.
+//!
+//! The tool's options (the Control bar, `tool.setOption`), as the Stroke Width tool of other apps
+//! has them (#1854): Click Adds Width Points (off by default, so a click alone changes nothing, as
+//! documented: on, a click on a stroke adds a width point there at the stroke's width, and
+//! Alt-clicking a width point removes it), Lock Line Weight (no side wider than the
+//! stroke's weight), Lock Point Reordering (a point slides no further than its neighbours), Snap
+//! to Curve Nodes (a sliding point snaps to the path's anchors) and Snap to Widths on Same Curve
+//! (a width drag snaps to the widths of the stroke's other points).
 
 use serde_json::json;
 use vectorcraft_doc::{Document, NodeId, NodeKind, StrokeLayer};
@@ -88,6 +96,8 @@ struct Group {
 struct Drag {
     /// Where the dragged point started (`t`, widths); `p` and `n` follow a slide.
     spot: Spot,
+    /// The stroke's half weight (the widest a side gets with Lock Line Weight).
+    half: f64,
     index: Option<usize>,
     mode: Mode,
     left: f64,
@@ -107,6 +117,25 @@ pub struct WidthTool {
     selected: Option<(NodeId, Vec<f64>)>,
     /// The selected width points when the button went down: a dropped press puts them back.
     before_press: Option<(NodeId, Vec<f64>)>,
+    /// Click Adds Width Points: a click adds one, an Alt-click removes one.
+    click_adds: bool,
+    /// Lock Line Weight: no side wider than the stroke's weight.
+    lock_weight: bool,
+    /// Lock Point Reordering: a sliding point stops at its neighbours.
+    lock_order: bool,
+    /// Snap to Curve Nodes: a sliding point snaps to the path's anchors.
+    snap_nodes: bool,
+    /// Snap to Widths on Same Curve: a width drag snaps to the other points' widths.
+    snap_widths: bool,
+    /// The width point the last click added (the stroke's owner, t): a double-click that follows
+    /// on it undoes that click first, so a double-click still opens Width Point Edit to create a
+    /// point (Cancel adds none).
+    just_added: Option<(NodeId, f64)>,
+}
+
+/// The fractions along subpath `sp` of its anchors.
+fn anchor_fractions(sp: &vectorcraft_geom::SubPath) -> Vec<f64> {
+    (0..=sp.segment_count()).map(|i| super::pathutil::fraction_at(sp, i, 0.0)).collect()
 }
 
 /// The object whose stroke path `id` draws with: its compound path, if it is a member of one.
@@ -302,6 +331,15 @@ impl Tool for WidthTool {
             }
             PointerKind::DoubleClick => {
                 let Some(spot) = Self::spot_at(cx, p) else { return vec![] };
+                // The first click of this double-click added a width point: take it back, then
+                // create one through the dialog as a double-click on the stroke does.
+                if let Some((owner, t)) = self.just_added.take()
+                    && owner == spot.owner
+                    && Self::hit(cx, &spot, p).is_some_and(|(w, _)| (w.t - t).abs() <= SAME_T)
+                {
+                    self.selected = Some((owner, vec![t]));
+                    return vec![Action::Exec("edit.undo".into(), json!({})), Action::Dialog("widthPoint".into(), json!({"id": owner.0, "t": t}))];
+                }
                 let Some((w, _)) = Self::hit(cx, &spot, p) else {
                     self.selected = Some((spot.owner, vec![spot.t]));
                     return vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "t": spot.t}))];
@@ -311,6 +349,12 @@ impl Tool for WidthTool {
             }
             PointerKind::Down => {
                 self.before_press = self.selected.clone();
+                // A press elsewhere than on the point the last click added starts afresh.
+                if let Some((owner, t)) = self.just_added
+                    && !Self::spot_at(cx, p).is_some_and(|s| s.owner == owner && Self::hit(cx, &s, p).is_some_and(|(w, _)| (w.t - t).abs() <= SAME_T))
+                {
+                    self.just_added = None;
+                }
                 let Some(spot) = Self::spot_at(cx, p) else {
                     if !ev.mods.shift {
                         self.selected = None;
@@ -334,13 +378,17 @@ impl Tool for WidthTool {
                         let others = Self::points_of(cx, spot.owner, spot.id, spot.sub).into_iter().filter(|o| o.index != w.index).collect();
                         let group = self.group(cx, spot.owner, mode);
                         let spot = Spot { t: w.t, p: w.p, n: w.n, left: w.left, right: w.right, ..spot };
-                        Drag { spot, index: Some(w.index), mode, left: w.left, right: w.right, t: w.t, group, others, moved: false }
+                        let half = stroke_of(cx.doc, spot.owner).map_or(0.0, |s| s.width / 2.0);
+                        Drag { spot, half, index: Some(w.index), mode, left: w.left, right: w.right, t: w.t, group, others, moved: false }
                     }
                     None => {
                         let side = (p - spot.p).dot(spot.n) >= 0.0;
                         self.selected = Some((spot.owner, vec![spot.t]));
                         let mode = Mode::Width(ev.mods.alt.then_some(side));
-                        Drag { spot, index: None, mode, left: spot.left, right: spot.right, t: spot.t, group: None, others: vec![], moved: false }
+                        let half = stroke_of(cx.doc, spot.owner).map_or(0.0, |s| s.width / 2.0);
+                        // The other points, whose widths a width drag can snap to.
+                        let others = Self::points_of(cx, spot.owner, spot.id, spot.sub);
+                        Drag { spot, half, index: None, mode, left: spot.left, right: spot.right, t: spot.t, group: None, others, moved: false }
                     }
                 };
                 let label = if drag.mode == Mode::Copy { "Copy Width Point" } else { "Width Point" };
@@ -353,19 +401,50 @@ impl Tool for WidthTool {
                 match d.mode {
                     Mode::Width(side) => {
                         let off = (p - d.spot.p).dot(d.spot.n);
+                        // Snap to Widths on Same Curve: a side within a few pixels of another
+                        // point's width takes it. Lock Line Weight: no wider than the weight.
+                        let tol = cx.tol(5.0);
+                        let widths: Vec<f64> = if self.snap_widths { d.others.iter().flat_map(|o| [o.left, o.right]).collect() } else { vec![] };
+                        let (lock, half) = (self.lock_weight, d.half);
+                        let fit = |w: f64| {
+                            let w = widths
+                                .iter()
+                                .copied()
+                                .filter(|o| (o - w).abs() <= tol)
+                                .min_by(|a, b| (a - w).abs().total_cmp(&(b - w).abs()))
+                                .unwrap_or(w);
+                            if lock { w.min(half) } else { w }
+                        };
                         match side {
                             None => {
-                                d.left = off.abs();
-                                d.right = off.abs();
+                                d.left = fit(off.abs());
+                                d.right = fit(off.abs());
                             }
-                            Some(true) => d.left = off.max(0.0),
-                            Some(false) => d.right = (-off).max(0.0),
+                            Some(true) => d.left = fit(off.max(0.0)),
+                            Some(false) => d.right = fit((-off).max(0.0)),
                         }
                     }
                     Mode::Move | Mode::Copy => {
                         let Some(NodeKind::Path { path, .. }) = cx.doc.node(d.spot.id).map(|n| &n.kind) else { return vec![] };
                         let Some(sp) = path.subpaths.get(d.spot.sub) else { return vec![] };
-                        let Some((_, t, q, tan, _)) = nearest_fraction(&vectorcraft_geom::PathData::single(sp.clone()), p) else { return vec![] };
+                        let Some((_, mut t, _, _, _)) = nearest_fraction(&vectorcraft_geom::PathData::single(sp.clone()), p) else { return vec![] };
+                        // Snap to Curve Nodes: an anchor within a few pixels takes the point.
+                        if self.snap_nodes {
+                            let tol = cx.tol(5.0);
+                            if let Some(a) =
+                                anchor_fractions(sp).into_iter().find(|a| eval_fraction(sp, *a).is_some_and(|(q, _)| q.distance(p) <= tol))
+                            {
+                                t = a;
+                            }
+                        }
+                        // Lock Point Reordering: no further than the neighbours.
+                        if self.lock_order {
+                            let start = d.spot.t;
+                            let below = d.others.iter().map(|o| o.t).filter(|o| *o < start - SAME_T).fold(0.0, f64::max);
+                            let above = d.others.iter().map(|o| o.t).filter(|o| *o > start + SAME_T).fold(1.0, f64::min);
+                            t = t.clamp(below, above);
+                        }
+                        let Some((q, tan)) = eval_fraction(sp, t) else { return vec![] };
                         (d.t, d.spot.p, d.spot.n) = (t, q, left_normal(tan));
                         // Dropped onto another width point (a single point only): it lands exactly
                         // there, making a discontinuous point.
@@ -380,6 +459,22 @@ impl Tool for WidthTool {
                 vec![Self::preview(d)]
             }
             PointerKind::Up => match self.drag.take() {
+                // A click (no drag) on a stroke adds a width point there, at its width.
+                Some(d) if self.click_adds && !d.moved && d.index.is_none() && d.group.is_none() => {
+                    self.selected = Some((d.spot.owner, vec![d.t]));
+                    self.just_added = Some((d.spot.owner, d.t));
+                    vec![Self::preview(&d), Action::Commit]
+                }
+                // Alt-click (no drag) on a width point's centre removes it.
+                Some(d) if self.click_adds && !d.moved && d.mode == Mode::Copy => {
+                    self.selected = None;
+                    match d.index {
+                        Some(i) => {
+                            vec![Action::Commit, Action::Exec("stroke.widthPoint.remove".into(), json!({"id": d.spot.owner.0, "indices": [i]}))]
+                        }
+                        None => vec![Action::Commit],
+                    }
+                }
                 Some(d) => {
                     let dt = d.t - d.spot.t;
                     self.selected = match (d.group.is_some(), d.moved, self.selected.take()) {
@@ -475,6 +570,20 @@ impl Tool for WidthTool {
     }
     fn busy(&self) -> bool {
         self.drag.is_some()
+    }
+    fn options(&self) -> serde_json::Value {
+        json!({"clickAdds": self.click_adds, "lockWeight": self.lock_weight, "lockOrder": self.lock_order, "snapNodes": self.snap_nodes, "snapWidths": self.snap_widths})
+    }
+    fn set_option(&mut self, key: &str, v: &serde_json::Value) {
+        let Some(on) = v.as_bool() else { return };
+        match key {
+            "clickAdds" => self.click_adds = on,
+            "lockWeight" => self.lock_weight = on,
+            "lockOrder" => self.lock_order = on,
+            "snapNodes" => self.snap_nodes = on,
+            "snapWidths" => self.snap_widths = on,
+            _ => {}
+        }
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.hover = None;
@@ -794,5 +903,117 @@ mod tests {
             assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
             assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 250.0, mods)).is_empty(), "not on a stroked path");
         }
+    }
+
+    /// #1854: with Click Adds Width Points on, a click on a stroke (no drag) adds a width point
+    /// there at the stroke's width, so the stroke looks the same; Alt-clicking a width point removes
+    /// it. Off (the default), a click changes nothing.
+    #[test]
+    fn a_click_adds_a_width_point_and_alt_click_removes_one() {
+        let (d, id) = doc_line();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 201.0, Mods::default()));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 201.0, Mods::default())), vec![Action::Commit], "off: nothing");
+        t.set_option("clickAdds", &json!(true));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 150.0, 201.0, Mods::default())), vec![Action::Begin("Width Point".into())]);
+        let acts = t.pointer(&c, &ev(PointerKind::Up, 150.0, 201.0, Mods::default()));
+        assert_eq!(acts.len(), 2, "{acts:?}");
+        let (cmd, v) = preview(&acts[..1]);
+        assert_eq!((cmd, v["id"].clone()), ("stroke.widthPoint.set", json!(id.0)));
+        assert!((v["t"].as_f64().unwrap() - 0.25).abs() < 1e-3);
+        assert_eq!((v["left"].as_f64(), v["right"].as_f64()), (Some(5.0), Some(5.0)), "the stroke's width");
+        assert_eq!(acts[1], Action::Commit);
+        // Alt-click the middle point of three: it is removed (an Alt-drag would copy it).
+        let (d, id) = doc_three_points();
+        let c = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut t = WidthTool::default();
+        t.set_option("clickAdds", &json!(true));
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, alt));
+        let acts = t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0, alt));
+        assert_eq!(acts, vec![Action::Commit, Action::Exec("stroke.widthPoint.remove".into(), json!({"id": id.0, "indices": [2]}))]);
+    }
+
+    /// Lock Line Weight keeps every side within the stroke's weight (5 pt either side here).
+    #[test]
+    fn lock_line_weight_caps_the_width() {
+        let (d, _) = doc_line();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        t.set_option("lockWeight", &json!(true));
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 201.0, Mods::default()));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 260.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert_eq!((v["left"].as_f64(), v["right"].as_f64()), (Some(5.0), Some(5.0)));
+        // Off, the drag goes as wide as the pointer.
+        let mut t = WidthTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 201.0, Mods::default()));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 260.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert_eq!(v["left"].as_f64(), Some(60.0));
+    }
+
+    /// Lock Point Reordering: the middle point slides no further than its neighbours (0.25, 0.75).
+    #[test]
+    fn lock_point_reordering_stops_at_the_neighbours() {
+        let (d, _) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        t.set_option("lockOrder", &json!(true));
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, Mods::default()));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 295.0, 200.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert!((v["t"].as_f64().unwrap() - 0.75).abs() < 1e-9, "{v}");
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 105.0, 200.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert!((v["t"].as_f64().unwrap() - 0.25).abs() < 1e-9, "{v}");
+    }
+
+    /// Snap to Curve Nodes: a point slid near an anchor lands on it; Snap to Widths: a width
+    /// dragged near another point's width takes it.
+    #[test]
+    fn snaps_to_nodes_and_to_widths_on_the_same_curve() {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut ap = Appearance::default_art();
+        let st = ap.stroke_mut().unwrap();
+        st.width = 10.0;
+        // A point at t = 0.3 that is 8 pt wide either side (factor 1.6 of the 5 pt half weight).
+        st.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.3, 1.6, 1.6), (1.0, 1.0, 1.0)] });
+        let path = PathData::single(SubPath::polyline(&[Point::new(100.0, 200.0), Point::new(200.0, 200.0), Point::new(300.0, 200.0)], false));
+        d.insert(Some(l), 0, Node::path(id, path, ap)).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        t.set_option("snapNodes", &json!(true));
+        t.pointer(&c, &ev(PointerKind::Down, 160.0, 200.0, Mods::default()));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 203.0, 200.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert_eq!(v["t"].as_f64(), Some(0.5), "the middle anchor");
+        t.pointer(&c, &ev(PointerKind::Up, 203.0, 200.0, Mods::default()));
+        // A new point dragged 9 pt out snaps to the other point's 8 pt.
+        let mut t = WidthTool::default();
+        t.set_option("snapWidths", &json!(true));
+        t.pointer(&c, &ev(PointerKind::Down, 270.0, 201.0, Mods::default()));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 270.0, 209.0, Mods::default()));
+        let (_, v) = preview(&acts);
+        assert!((v["left"].as_f64().unwrap() - 8.0).abs() < 1e-9, "{v}");
+    }
+
+    /// The options round-trip through `options` and `set_option` (and so the preferences).
+    #[test]
+    fn options_round_trip() {
+        let mut t = WidthTool::default();
+        assert_eq!(t.options(), json!({"clickAdds": false, "lockWeight": false, "lockOrder": false, "snapNodes": false, "snapWidths": false}));
+        for k in ["clickAdds", "lockWeight", "lockOrder", "snapNodes", "snapWidths"] {
+            t.set_option(k, &json!(true));
+        }
+        t.set_option("lockWeight", &json!("yes"));
+        assert_eq!(t.options(), json!({"clickAdds": true, "lockWeight": true, "lockOrder": true, "snapNodes": true, "snapWidths": true}));
     }
 }

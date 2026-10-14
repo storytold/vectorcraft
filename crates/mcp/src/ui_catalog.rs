@@ -775,7 +775,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.setOption",
         "Tool Option",
         "",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools, the Width tool's clickAdds, lockWeight, lockOrder, snapNodes and snapWidths…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
     ),
     (
         "tool.toggleTouchMode",
