@@ -30,6 +30,25 @@ impl VectorcraftApp {
         Ok(())
     }
 
+    /// Keep a URL a control asked for while the window was being drawn ([`crate::cloud`]).
+    ///
+    /// A paint call holds a shared borrow, and [`Self::open_url`] wants a mutable one because the
+    /// host's own opener is `FnMut`. So the URL waits one step rather than the opener being made
+    /// reachable from everywhere.
+    pub(crate) fn queue_url(&self, url: &str) {
+        if let Ok(mut queue) = self.cloud_urls.try_borrow_mut() {
+            queue.push(url.to_owned());
+        }
+    }
+
+    /// Open what [`Self::queue_url`] kept. Once a frame, before anything is drawn.
+    pub(super) fn open_queued_urls(&mut self) {
+        let queued = self.cloud_urls.try_borrow_mut().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        for url in queued {
+            self.open_url(&url);
+        }
+    }
+
     /// Run a Help link command and open the URL it returns.
     pub fn open_link(&mut self, id: &str) {
         if let Ok(v) = self.run(id, serde_json::json!({}))

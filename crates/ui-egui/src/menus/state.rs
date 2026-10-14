@@ -109,7 +109,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
 /// Menu slots that are left out while they have nothing to show (unused saved views, recent files,
 /// User Defined swatch and graphic style libraries).
 pub(super) fn hidden_when_disabled(id: &str) -> bool {
-    id.starts_with("view.goto")
+    // A build with no cloud service configured offers nothing cloud-shaped at all. An item greyed
+    // out for ever would be a promise the application cannot keep.
+    id.starts_with("cloud.")
+        || id.starts_with("view.goto")
         || saved_selection_slot(id).is_some()
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
@@ -193,6 +196,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
+        // Cloud storage: nothing without a service, and the ones that act on a drawing need one open.
+        "cloud.open" | "cloud.browse" | "cloud.shared" | "cloud.link" | "cloud.status" => crate::cloud::available(app),
+        "cloud.saveAs" | "cloud.save" | "cloud.reload" | "cloud.openFile" => crate::cloud::available(app) && app.session.active().is_some(),
         "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
             crate::panels::character::text_style(app).is_some()
         }

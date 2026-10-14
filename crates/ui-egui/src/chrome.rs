@@ -77,7 +77,23 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
-            let room = right.width();
+            let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
+            let ui = &mut rui;
+            // Who is signed in, who else is in this drawing, and Share, at the far right where
+            // every office suite puts them. Drawn before the rest because this layout runs right
+            // to left, and what they take is subtracted from the room the rest divides up. A build
+            // with no cloud service draws none of it, and the group below then has the whole width
+            // it always had.
+            crate::cloud::who(app, ui);
+            if crate::cloud::shares(app) {
+                ui.add_space(8.0);
+                // A split button, drawn by craft-ui so every Craft app offers the same one. Only
+                // the Save a Copy formats under the chevron are VectorCraft's own.
+                if let Some(format) = crate::cloud::share_button(app, ui, &crate::cloud::copies()) {
+                    app.run("file.saveCopy", json!({"format": format})).ok();
+                }
+            }
+            let room = ui.available_width();
             // Built-in workspace names translate; the user's own stay as typed.
             let ws_name =
                 if crate::workspaces::is_builtin(&app.ui.workspace) { tl!(&app.ui.workspace).to_string() } else { app.ui.workspace.clone() };
@@ -89,8 +105,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let search = room >= 64.0 + 8.0 + gap + icon;
             let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
             let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
-            let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
-            let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
             let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
             ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });

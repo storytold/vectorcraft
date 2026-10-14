@@ -14,7 +14,6 @@ repository = "https://github.com/storytold/vectorcraft"
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb", features = ["serde"] }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
@@ -23,6 +22,19 @@ craft-window = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63
 craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "c5a1cbfb5f9049f9270955caffb5bee5997aebf7", features = ["egui"] }
+# The shared controls, now including the cloud Open and Save pages, the share dialog, the account
+# badge and the presence row. One revision of this crate in the graph, always: collabcraft's share
+# backend pins the same one, and two revisions are two different `ShareBackend` traits.
+craft-ui = { git = "https://github.com/wdunn001/craft-libs", rev = "183056e", features = ["serde", "cloud"] }
+# The vendor-neutral cloud vocabulary (a file entry, a capability, a share). Types and contracts
+# only: the crate opens no socket and names no provider, so this builds for the web too.
+craft-cloud = { git = "https://github.com/wdunn001/craft-libs", rev = "183056e" }
+# How this app reaches CollabCraft, which is the single place a storage provider is configured.
+# No provider credential, no provider URL and no provider protocol live in VectorCraft.
+craft-cloud-client = { git = "https://github.com/wdunn001/collabcraft", rev = "918c8890ae5c734bf2c9e91243ee514cbee64bb5" }
+# The share dialog's backend. craft-ui draws the dialog and opens no socket; this is the half that
+# reaches the service, so it lives beside the client rather than in craft-libs.
+collabcraft-share = { git = "https://github.com/wdunn001/collabcraft", rev = "918c8890ae5c734bf2c9e91243ee514cbee64bb5" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }

@@ -10,7 +10,7 @@ use super::state::{
 };
 use super::{
     Arc, AutomationRoots, ControlRequest, Ordering, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome,
-    clipboard_probe, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
+    clipboard_probe, cloud, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
     panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scrub, shortcut_editor, shortcuts, theme,
     titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
 };
@@ -95,6 +95,13 @@ impl VectorcraftApp {
             last_pathfinder: None,
             last_warp: None,
             character_focus: None,
+            cloud: cloud::CloudFiles::new(),
+            cloud_sent: cloud::Sent::new(),
+            cloud_urls: std::cell::RefCell::new(Vec::new()),
+            share: craft_ui::share::ShareDialog::new(),
+            // Initials alone: the app bar has room for a row of them beside the account, and a
+            // name each would crowd out the controls next to it.
+            presence: craft_ui::presence::PresenceBar::new().badges_only(),
             run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
@@ -306,6 +313,9 @@ impl VectorcraftApp {
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
+        // Answers from the cloud worker, and anything still in flight.
+        cloud::pump(self, ctx);
+        self.open_queued_urls();
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
@@ -528,9 +538,19 @@ impl VectorcraftApp {
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
         crate::doc_windows::show(self, &ctx);
+        panels::library_panel::show_window(self, &ctx);
+        self.share.show(&ctx);
+        // A share of a drawing that has never been saved. The dialog asked; only this side can
+        // encode one, so it answers.
+        share_save(self);
+        // Above the dialogs: a refused save has to be answered, and the answer decides what
+        // happens to the user's edits.
+        cloud::conflict_modal(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
+        // Save As that chose this computer instead, which cannot run inside the dialog's own body.
+        dialogs::cloud::settle(self);
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         palette::show(self, &ctx);
@@ -560,5 +580,36 @@ impl VectorcraftApp {
             self.issue_screenshots(&ctx);
         }
         let _ = json!(null);
+    }
+}
+
+/// Carry out a save the share dialog asked for, and report the outcome back.
+///
+/// Split into asking and answering because a cloud save is asynchronous. The dialog waits, showing
+/// its own progress, until one of these arrives. A drawing that has never been in the cloud has no
+/// handle to share, which is the one case this exists for.
+fn share_save(app: &mut VectorcraftApp) {
+    if let Some(request) = app.share.take_save_request() {
+        // One destination today. `request.destination` names which, and is carried through so a
+        // second provider needs no change here.
+        let _ = request.destination;
+        match cloud::save_as(app, "/", &request.name) {
+            Ok(_) => app.cloud.sharing_save = true,
+            Err(reason) => app.share.save_failed(reason),
+        }
+    }
+    // The worker reports by clearing `busy`. A new origin means it landed.
+    if app.cloud.sharing_save && app.cloud.busy.is_none() {
+        app.cloud.sharing_save = false;
+        match cloud::origin(app) {
+            Some(origin) => {
+                let (id, name) = (origin.entry.id.clone(), origin.entry.name.clone());
+                app.share.saved(id, name);
+            }
+            None => {
+                let reason = app.cloud.status.clone().unwrap_or_else(|| "the drawing was not saved".to_owned());
+                app.share.save_failed(reason);
+            }
+        }
     }
 }

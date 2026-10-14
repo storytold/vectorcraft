@@ -30,6 +30,42 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+O",
         "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
     ),
+    // Cloud storage (`crate::cloud`). Every one of these is refused in a build with no service
+    // configured, and the menu items they belong to are not drawn at all.
+    (
+        "cloud.open",
+        "Open from the Cloud…",
+        "",
+        "{} show the Home screen with its Cloud section (your own cloud files, and what other people shared with you) and ask the service who is signed in → the cloud state, as cloud.status reports it",
+    ),
+    (
+        "cloud.openFile",
+        "Open a Cloud Drawing",
+        "",
+        "{id? | name?} open a file the cloud listing already holds, by the provider handle or by its name (cloud.open or cloud.browse lists them first) → the cloud state; refused for a file VectorCraft cannot open",
+    ),
+    ("cloud.browse", "Browse a Cloud Folder", "", "{path?} list cloud folder `path` (empty: the top of your own storage) → {folder}"),
+    ("cloud.shared", "List Cloud Shares", "", "{} list what other people shared with you, where the provider offers it"),
+    ("cloud.link", "Connect Cloud Storage", "", "{} link a storage account, which the user finishes in their browser → the cloud state"),
+    (
+        "cloud.save",
+        "Save to the Cloud",
+        "",
+        "{} write the open drawing back over the cloud file it came from, under the version it was read at (a stored copy that has moved on refuses the write, and the user is asked what to do) → {saving, bytes, ifMatch}",
+    ),
+    (
+        "cloud.saveAs",
+        "Save to the Cloud…",
+        "",
+        "{folder?, name?} write the open drawing into cloud folder `folder` as `name` (a name with no known extension becomes .vectorcraft) → {saving, folder, bytes}; without both, Save As asks where to save",
+    ),
+    ("cloud.reload", "Reload from the Cloud", "", "{} read the open drawing stored copy again, discarding the edits since → {reloading}"),
+    (
+        "cloud.status",
+        "Cloud Status",
+        "",
+        "{} → the whole of the cloud state: the account, the folder listed, the shares, where the open drawing came from, and whatever transfer is in flight",
+    ),
     (
         "file.save",
         "Save",
