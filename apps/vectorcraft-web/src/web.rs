@@ -13,6 +13,7 @@ use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
+use vectorcraft_ui_egui::cloud;
 use vectorcraft_ui_egui::stylus::StylusFeed;
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
@@ -121,7 +122,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
                 let stylus = host.pointers.borrow().stylus();
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone(), stylus);
-                let app = match taken.borrow_mut().take() {
+                let mut app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
                         app.services = services;
@@ -139,6 +140,11 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         VectorcraftApp::new(Session::new(), services).with_control(control_rx)
                     }
                 };
+                app.cloud.connect(crate::cloud::Service::new(ctx.clone()));
+                if let Some(share) = collabcraft_share::CollabCraft::from_env() {
+                    app.share.connect(share);
+                }
+                cloud::start(&mut app);
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
         )
