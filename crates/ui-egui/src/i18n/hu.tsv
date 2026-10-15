@@ -6151,3 +6151,24 @@ breakText	Glyphs	Glifák
 	Small to Large	Kicsitől a nagyig
 	Large to Small	Nagytól a kicsiig
 	Distribute Evenly	Egyenletes elosztás
+
+@msg	the FreeHand file is empty	a FreeHand-fájl üres
+@msg	the FreeHand file is cut off in the header	a FreeHand-fájl a fejlécnél csonka
+@msg	not a FreeHand file	nem FreeHand-fájl
+@msg	the FreeHand file is cut off in its compressed data	a FreeHand-fájl a tömörített adatnál csonka
+@msg	the FreeHand file's compressed data is damaged	a FreeHand-fájl tömörített adatai sérültek
+@msg	the FreeHand file is cut off in the dictionary	a FreeHand-fájl a szótárnál csonka
+@msg	the FreeHand file is cut off in the record list	a FreeHand-fájl a rekordlistánál csonka
+@msg	the FreeHand file is cut off in a record	a FreeHand-fájl egy rekordnál csonka
+@msg	the FreeHand file claims more records than can be read	a FreeHand-fájl több rekordot állít, mint amennyit be lehet olvasni
+@msg	the FreeHand file claims a dictionary larger than can be read	a FreeHand-fájl a beolvashatónál nagyobb szótárat állít
+@msg	the FreeHand file claims more path nodes than can be read	a FreeHand-fájl több útvonalcsomópontot állít, mint amennyit be lehet olvasni
+@msg	the FreeHand file claims more list entries than can be read	a FreeHand-fájl több listaelemet állít, mint amennyit be lehet olvasni
+@msg	a FreeHand record id points past the end of the file	egy FreeHand-rekordazonosító a fájl vége utánra mutat
+@msg	the FreeHand file decompresses past the safety limit	a FreeHand-fájl kibontva meghaladja a biztonsági korlátot
+@msg	the FreeHand file's data block runs past the end of the file	a FreeHand-fájl adatblokkja túllóg a fájl végén
+@msg	the FreeHand file is larger than can be read	a FreeHand-fájl nagyobb, mint amit be lehet olvasni
+@msg	the FreeHand file claims more entries than can be read	a FreeHand-fájl több elemet állít, mint amennyit be lehet olvasni
+@msg	the FreeHand file has a record whose size is not known	a FreeHand-fájlban van egy rekord, amelynek a mérete nem ismert
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nem támogatott FreeHand-verzió {n}: a VectorCraft a FreeHand 8-tól MX-ig (11) nyitja meg; nyissa meg egy újabb FreeHandben, és mentse, vagy exportálja EPS, PDF vagy AI formátumba
+@msg	the drawing has more objects than can be read; the rest were left out	a rajz több objektumot tartalmaz, mint amennyit be lehet olvasni; a többit kihagytuk

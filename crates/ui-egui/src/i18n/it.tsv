@@ -5785,3 +5785,24 @@ breakText	Glyphs	Glifi
 	Small to Large	Dal più piccolo al più grande
 	Large to Small	Dal più grande al più piccolo
 	Distribute Evenly	Distribuisci uniformemente
+
+@msg	the FreeHand file is empty	il file FreeHand è vuoto
+@msg	the FreeHand file is cut off in the header	il file FreeHand è troncato nell’intestazione
+@msg	not a FreeHand file	non è un file FreeHand
+@msg	the FreeHand file is cut off in its compressed data	il file FreeHand è troncato nei dati compressi
+@msg	the FreeHand file's compressed data is damaged	i dati compressi del file FreeHand sono danneggiati
+@msg	the FreeHand file is cut off in the dictionary	il file FreeHand è troncato nel dizionario
+@msg	the FreeHand file is cut off in the record list	il file FreeHand è troncato nell’elenco dei record
+@msg	the FreeHand file is cut off in a record	il file FreeHand è troncato in un record
+@msg	the FreeHand file claims more records than can be read	il file FreeHand dichiara più record di quanti se ne possano leggere
+@msg	the FreeHand file claims a dictionary larger than can be read	il file FreeHand dichiara un dizionario più grande di quanto si possa leggere
+@msg	the FreeHand file claims more path nodes than can be read	il file FreeHand dichiara più nodi di tracciato di quanti se ne possano leggere
+@msg	the FreeHand file claims more list entries than can be read	il file FreeHand dichiara più voci di elenco di quante se ne possano leggere
+@msg	a FreeHand record id points past the end of the file	un identificatore di record FreeHand punta oltre la fine del file
+@msg	the FreeHand file decompresses past the safety limit	il file FreeHand si decomprime oltre il limite di sicurezza
+@msg	the FreeHand file's data block runs past the end of the file	il blocco dati del file FreeHand supera la fine del file
+@msg	the FreeHand file is larger than can be read	il file FreeHand è più grande di quanto si possa leggere
+@msg	the FreeHand file claims more entries than can be read	il file FreeHand dichiara più voci di quante se ne possano leggere
+@msg	the FreeHand file has a record whose size is not known	il file FreeHand ha un record di cui non si conosce la dimensione
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	versione FreeHand {n} non supportata: VectorCraft apre FreeHand 8 fino a MX (11); aprilo in un FreeHand più recente e salva, oppure esportalo come EPS, PDF o AI
+@msg	the drawing has more objects than can be read; the rest were left out	il disegno ha più oggetti di quanti se ne possano leggere; il resto è stato lasciato fuori

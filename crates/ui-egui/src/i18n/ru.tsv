@@ -6142,3 +6142,24 @@ breakText	Glyphs	Глифы
 	Small to Large	От меньшего к большему
 	Large to Small	От большего к меньшему
 	Distribute Evenly	Распределить равномерно
+
+@msg	the FreeHand file is empty	файл FreeHand пуст
+@msg	the FreeHand file is cut off in the header	файл FreeHand обрезан в заголовке
+@msg	not a FreeHand file	это не файл FreeHand
+@msg	the FreeHand file is cut off in its compressed data	файл FreeHand обрезан в сжатых данных
+@msg	the FreeHand file's compressed data is damaged	сжатые данные файла FreeHand повреждены
+@msg	the FreeHand file is cut off in the dictionary	файл FreeHand обрезан в словаре
+@msg	the FreeHand file is cut off in the record list	файл FreeHand обрезан в списке записей
+@msg	the FreeHand file is cut off in a record	файл FreeHand обрезан в записи
+@msg	the FreeHand file claims more records than can be read	файл FreeHand заявляет больше записей, чем можно прочитать
+@msg	the FreeHand file claims a dictionary larger than can be read	файл FreeHand заявляет словарь больше, чем можно прочитать
+@msg	the FreeHand file claims more path nodes than can be read	файл FreeHand заявляет больше узлов контура, чем можно прочитать
+@msg	the FreeHand file claims more list entries than can be read	файл FreeHand заявляет больше элементов списка, чем можно прочитать
+@msg	a FreeHand record id points past the end of the file	идентификатор записи FreeHand указывает за конец файла
+@msg	the FreeHand file decompresses past the safety limit	файл FreeHand при распаковке превышает предел безопасности
+@msg	the FreeHand file's data block runs past the end of the file	блок данных файла FreeHand выходит за конец файла
+@msg	the FreeHand file is larger than can be read	файл FreeHand больше, чем можно прочитать
+@msg	the FreeHand file claims more entries than can be read	файл FreeHand заявляет больше элементов, чем можно прочитать
+@msg	the FreeHand file has a record whose size is not known	в файле FreeHand есть запись, размер которой неизвестен
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	неподдерживаемая версия FreeHand {n}: VectorCraft открывает FreeHand с 8 по MX (11); откройте файл в более новой версии FreeHand и сохраните его либо экспортируйте как EPS, PDF или AI
+@msg	the drawing has more objects than can be read; the rest were left out	в рисунке больше объектов, чем можно прочитать; остальное пропущено

@@ -5852,3 +5852,24 @@ breakText	Glyphs	字形
 	Small to Large	小さい順
 	Large to Small	大きい順
 	Distribute Evenly	均等に分布
+
+@msg	the FreeHand file is empty	FreeHand ファイルが空です
+@msg	the FreeHand file is cut off in the header	FreeHand ファイルはヘッダーの途中で切れています
+@msg	not a FreeHand file	FreeHand ファイルではありません
+@msg	the FreeHand file is cut off in its compressed data	FreeHand ファイルは圧縮データの途中で切れています
+@msg	the FreeHand file's compressed data is damaged	FreeHand ファイルの圧縮データが壊れています
+@msg	the FreeHand file is cut off in the dictionary	FreeHand ファイルは辞書の途中で切れています
+@msg	the FreeHand file is cut off in the record list	FreeHand ファイルはレコード一覧の途中で切れています
+@msg	the FreeHand file is cut off in a record	FreeHand ファイルはレコードの途中で切れています
+@msg	the FreeHand file claims more records than can be read	FreeHand ファイルが読み取れる数を超えるレコードを宣言しています
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand ファイルが読み取れる大きさを超える辞書を宣言しています
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand ファイルが読み取れる数を超えるパスノードを宣言しています
+@msg	the FreeHand file claims more list entries than can be read	FreeHand ファイルが読み取れる数を超えるリスト項目を宣言しています
+@msg	a FreeHand record id points past the end of the file	FreeHand のレコード ID がファイルの末尾より先を指しています
+@msg	the FreeHand file decompresses past the safety limit	FreeHand ファイルの展開結果が安全上限を超えています
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand ファイルのデータブロックがファイルの末尾を超えています
+@msg	the FreeHand file is larger than can be read	FreeHand ファイルが読み取れる大きさを超えています
+@msg	the FreeHand file claims more entries than can be read	FreeHand ファイルが読み取れる数を超える項目を宣言しています
+@msg	the FreeHand file has a record whose size is not known	FreeHand ファイルに、大きさが不明なレコードがあります
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	未対応の FreeHand バージョン {n} です: VectorCraft が開けるのは FreeHand 8 から MX (11) までです。より新しい FreeHand で開いて保存するか、EPS、PDF または AI として書き出してください
+@msg	the drawing has more objects than can be read; the rest were left out	図面のオブジェクトが読み取れる数を超えています。残りは省かれました

@@ -6008,3 +6008,24 @@ breakText	Glyphs	字形
 	Small to Large	从小到大
 	Large to Small	从大到小
 	Distribute Evenly	均匀分布
+
+@msg	the FreeHand file is empty	FreeHand 文件是空的
+@msg	the FreeHand file is cut off in the header	FreeHand 文件在文件头处被截断
+@msg	not a FreeHand file	不是 FreeHand 文件
+@msg	the FreeHand file is cut off in its compressed data	FreeHand 文件在压缩数据处被截断
+@msg	the FreeHand file's compressed data is damaged	FreeHand 文件的压缩数据已损坏
+@msg	the FreeHand file is cut off in the dictionary	FreeHand 文件在字典处被截断
+@msg	the FreeHand file is cut off in the record list	FreeHand 文件在记录列表处被截断
+@msg	the FreeHand file is cut off in a record	FreeHand 文件在一条记录中被截断
+@msg	the FreeHand file claims more records than can be read	FreeHand 文件声明的记录数超过了可读取的上限
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand 文件声明的字典超过了可读取的上限
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand 文件声明的路径节点数超过了可读取的上限
+@msg	the FreeHand file claims more list entries than can be read	FreeHand 文件声明的列表项数超过了可读取的上限
+@msg	a FreeHand record id points past the end of the file	FreeHand 记录编号指向了文件末尾之后
+@msg	the FreeHand file decompresses past the safety limit	FreeHand 文件解压后超过了安全上限
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand 文件的数据块超出了文件末尾
+@msg	the FreeHand file is larger than can be read	FreeHand 文件大于可读取的上限
+@msg	the FreeHand file claims more entries than can be read	FreeHand 文件声明的条目数超过了可读取的上限
+@msg	the FreeHand file has a record whose size is not known	FreeHand 文件含有一条大小未知的记录
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	不支持的 FreeHand 版本 {n}：VectorCraft 打开 FreeHand 8 到 MX（11）；请用较新的 FreeHand 打开并保存，或导出为 EPS、PDF 或 AI
+@msg	the drawing has more objects than can be read; the rest were left out	绘图中的对象数超过了可读取的上限；其余对象已略去

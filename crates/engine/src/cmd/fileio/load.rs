@@ -71,6 +71,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
+    if vectorcraft_freehand::is_freehand(bytes) {
+        return format("freehand");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -360,6 +363,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        "freehand" => {
+            let (doc, warnings) = super::freehand::import(bytes)?;
+            (doc, warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
