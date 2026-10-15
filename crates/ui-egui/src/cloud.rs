@@ -71,6 +71,7 @@ const MIMES: [&str; 15] = [
 
 /// The readable content type this list leaves out, and the reason, in one place so the test and
 /// the comment above cannot drift apart.
+#[cfg_attr(not(test), expect(dead_code))]
 const MIME_LEFT_OUT: &str = "application/json";
 
 /// What a VectorCraft document is, as a cloud file list needs to know.
