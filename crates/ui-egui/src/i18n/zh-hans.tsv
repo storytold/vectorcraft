@@ -5000,7 +5000,6 @@ lighting	Light	光源
 	A setting isn't valid	某项设置无效
 	Accepted by {printer}	{printer} 已接收
 	Asking the printer…	正在询问打印机…
-	Black and white	黑白
 	Canceling…	正在取消…
 	Colour	彩色
 	Couldn't reach the printer	无法连接到打印机
@@ -5044,8 +5043,9 @@ lighting	Light	光源
 	This printer does not take a quality setting.	这台打印机不支持质量设置。
 	This printer does not take a resolution setting.	这台打印机不支持分辨率设置。
 	This printer does not take an orientation setting.	这台打印机不支持方向设置。
-	This printer only prints in black and white.	这台打印机只能黑白打印。
+	This printer only prints in grayscale.	这台打印机只能以灰度打印。
 	This printer only prints one-sided.	这台打印机只能单面打印。
 	Two-sided:	双面：
 	Waiting in the printer's queue	正在打印机队列中等待
 	Network Printer…	网络打印机…
+	{printer} (default)	{printer}（默认）

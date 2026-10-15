@@ -5164,7 +5164,6 @@ mark-style	Japanese	Japonské
 	A setting isn't valid	Nastavení není platné
 	Accepted by {printer}	Přijato tiskárnou {printer}
 	Asking the printer…	Dotazování tiskárny…
-	Black and white	Černobíle
 	Canceling…	Ruší se…
 	Colour	Barva
 	Couldn't reach the printer	Tiskárnu se nepodařilo zastihnout
@@ -5208,8 +5207,9 @@ mark-style	Japanese	Japonské
 	This printer does not take a quality setting.	Tato tiskárna nepřijímá nastavení kvality.
 	This printer does not take a resolution setting.	Tato tiskárna nepřijímá nastavení rozlišení.
 	This printer does not take an orientation setting.	Tato tiskárna nepřijímá nastavení orientace.
-	This printer only prints in black and white.	Tato tiskárna tiskne pouze černobíle.
+	This printer only prints in grayscale.	Tato tiskárna tiskne pouze ve stupních šedi.
 	This printer only prints one-sided.	Tato tiskárna tiskne pouze jednostranně.
 	Two-sided:	Oboustranně:
 	Waiting in the printer's queue	Čeká ve frontě tiskárny
 	Network Printer…	Síťová tiskárna…
+	{printer} (default)	{printer} (výchozí)

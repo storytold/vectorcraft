@@ -5081,7 +5081,6 @@ mark-style	Japanese	Japonesas
 	A setting isn't valid	Uma configuração não é válida
 	Accepted by {printer}	Aceito por {printer}
 	Asking the printer…	Consultando a impressora…
-	Black and white	Preto e branco
 	Canceling…	Cancelando…
 	Colour	Cor
 	Couldn't reach the printer	Não foi possível alcançar a impressora
@@ -5125,8 +5124,9 @@ mark-style	Japanese	Japonesas
 	This printer does not take a quality setting.	Esta impressora não aceita configuração de qualidade.
 	This printer does not take a resolution setting.	Esta impressora não aceita configuração de resolução.
 	This printer does not take an orientation setting.	Esta impressora não aceita configuração de orientação.
-	This printer only prints in black and white.	Esta impressora só imprime em preto e branco.
+	This printer only prints in grayscale.	Esta impressora só imprime em escala de cinza.
 	This printer only prints one-sided.	Esta impressora só imprime em um lado.
 	Two-sided:	Frente e verso:
 	Waiting in the printer's queue	Aguardando na fila da impressora
 	Network Printer…	Impressora de rede…
+	{printer} (default)	{printer} (padrão)

@@ -4739,7 +4739,6 @@ effect	Regular	Regelmäßig
 	A setting isn't valid	Eine Einstellung ist ungültig
 	Accepted by {printer}	Von {printer} angenommen
 	Asking the printer…	Drucker wird abgefragt …
-	Black and white	Schwarzweiß
 	Canceling…	Wird abgebrochen …
 	Colour	Farbe
 	Couldn't reach the printer	Der Drucker ist nicht erreichbar
@@ -4783,8 +4782,9 @@ effect	Regular	Regelmäßig
 	This printer does not take a quality setting.	Dieser Drucker unterstützt keine Qualitätseinstellung.
 	This printer does not take a resolution setting.	Dieser Drucker unterstützt keine Auflösungseinstellung.
 	This printer does not take an orientation setting.	Dieser Drucker unterstützt keine Ausrichtungseinstellung.
-	This printer only prints in black and white.	Dieser Drucker druckt nur Schwarzweiß.
+	This printer only prints in grayscale.	Dieser Drucker druckt nur in Graustufen.
 	This printer only prints one-sided.	Dieser Drucker druckt nur einseitig.
 	Two-sided:	Zweiseitig:
 	Waiting in the printer's queue	Wartet in der Warteschlange des Druckers
 	Network Printer…	Netzwerkdrucker …
+	{printer} (default)	{printer} (Standard)

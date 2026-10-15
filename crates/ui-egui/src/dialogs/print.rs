@@ -53,6 +53,8 @@ pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
 const EDITING: &str = "__editing";
 /// The field holding the name typed for Save Preset… (present while that row shows).
 const SAVE_AS: &str = "__savePresetAs";
+/// The paper (`media`) when the dialog opened.
+const MEDIA0: &str = "__media0";
 /// The preset whose settings were loaded last (`preset` loads its settings when it differs).
 const LOADED: &str = "__loaded";
 
@@ -92,6 +94,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert("toFile".into(), json!(!printers["service"].as_bool().unwrap_or(false)));
     fields.insert("network".into(), json!(false));
     fields.insert("__printers".into(), printers);
+    // The paper the document was set up with: the person has chosen another once it differs.
+    fields.insert(MEDIA0.into(), fields.get("media").cloned().unwrap_or_default());
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
@@ -211,7 +215,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         // A network printer: the job runs in the background and the dialog stays open to show it.
         return crate::print::run_network(app, &settings);
     }
-    let r = crate::print::run(app, &json!({ "settings": settings, "printer": d.str("printer"), "toFile": d.bool("toFile") }))?;
+    let job = json!({ "settings": settings, "printer": d.str("printer"), "toFile": d.bool("toFile"), "paperChosen": paper_chosen(&d) });
+    let r = crate::print::run(app, &job)?;
     app.ui.dialog = None;
     Ok(r)
 }
@@ -231,7 +236,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         preset_rows(app, ui, d);
         printer_row(app, ui, d);
     }
-    let preview = preview_of(app, ui.ctx(), &settings(d));
+    let shown = shown_settings(app, d);
+    let preview = preview_of(app, ui.ctx(), &shown);
     #[cfg(not(target_arch = "wasm32"))]
     if d.kind == KIND && d.bool("network") {
         // The address, query, listed options, confirmation and job are craft-ui's `printing::network`.
@@ -246,7 +252,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         super::save_pdf::section_frame(ui, |ui| {
             super::save_pdf::section_list(ui, d, &SECTIONS, section);
             ui.add_space(10.0);
-            page_preview(app, ui, d, &preview);
+            page_preview(app, ui, d, &preview, prints_gray(&shown));
         });
         ui.add_space(14.0);
         ui.vertical(|ui| {
@@ -311,8 +317,10 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// What the Printer list offers.
-enum Destination {
-    Printer(String),
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Destination {
+    /// A queue of the system, and whether it is the system's default.
+    Printer(String, bool),
     /// The system's default printer (the web: the browser's print dialog).
     Default,
     File,
@@ -321,68 +329,91 @@ enum Destination {
     Network,
 }
 
-/// The Printer row: the system's printers (or its default one), PDF File; Setup….
-fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let printers = d.fields.get("__printers");
-    let names: Vec<String> = printers
-        .and_then(|p| p["printers"].as_array())
-        .map(|a| a.iter().filter_map(|p| p["name"].as_str().map(str::to_string)).collect())
-        .unwrap_or_default();
+/// The Printer list in its order: every queue the system has (the default first), then Network
+/// Printer…, then PDF File. A system with a print service but no queue lists its default printer.
+pub(super) fn destinations(printers: Option<&Value>) -> Vec<Destination> {
+    let list = printers.and_then(|p| p["printers"].as_array()).map(Vec::as_slice).unwrap_or_default();
     let service = printers.and_then(|p| p["service"].as_bool()).unwrap_or(false);
-    let setup = printers.and_then(|p| p["setup"].as_bool()).unwrap_or(false);
-    let mut entries: Vec<Destination> = names.iter().cloned().map(Destination::Printer).collect();
-    if service && names.is_empty() {
+    let mut queues: Vec<(String, bool)> = list.iter().filter_map(|p| Some((p["name"].as_str()?.to_string(), p["default"] == true))).collect();
+    // The default first, the rest in the order the system gave them.
+    queues.sort_by_key(|(_, default)| !default);
+    let mut entries: Vec<Destination> = queues.into_iter().map(|(name, default)| Destination::Printer(name, default)).collect();
+    if service && entries.is_empty() {
         entries.push(Destination::Default);
     }
-    entries.push(Destination::File);
     #[cfg(not(target_arch = "wasm32"))]
     entries.push(Destination::Network);
-    // The system's printers by their names; the default printer and PDF File are ours.
-    let options: Vec<&str> = entries
-        .iter()
-        .map(|e| match e {
-            Destination::Printer(name) => name.as_str(),
-            Destination::Default => tl!(DEFAULT_PRINTER),
-            Destination::File => tl!(PDF_FILE),
-            #[cfg(not(target_arch = "wasm32"))]
-            Destination::Network => tl!("Network Printer…"),
-        })
-        .collect();
-    let printer = d.str("printer");
-    let current = if d.bool("network") {
-        tl!("Network Printer…")
-    } else if d.bool("toFile") {
-        tl!(PDF_FILE)
-    } else if printer.is_empty() {
-        tl!(DEFAULT_PRINTER)
-    } else {
-        printer.as_str()
+    entries.push(Destination::File);
+    entries
+}
+
+/// How the Printer list shows `e`: queue names as the system gives them, the default one marked.
+pub(super) fn destination_label(e: &Destination) -> String {
+    match e {
+        Destination::Printer(name, true) => crate::i18n::fmt(tl!("{printer} (default)"), &[("printer", name)]),
+        Destination::Printer(name, false) => name.clone(),
+        Destination::Default => tl!(DEFAULT_PRINTER).into(),
+        Destination::File => tl!(PDF_FILE).into(),
+        #[cfg(not(target_arch = "wasm32"))]
+        Destination::Network => tl!("Network Printer…").into(),
+    }
+}
+
+/// Choose `e`: what the dialog's `printer`, `toFile` and `network` fields say.
+pub(super) fn choose(app: &mut VectorcraftApp, d: &mut Dialog, e: &Destination) {
+    let mut to = |printer: Option<&str>, file: bool, network: bool| {
+        if let Some(p) = printer {
+            d.fields.insert("printer".into(), json!(p));
+        }
+        d.fields.insert("toFile".into(), json!(file));
+        d.fields.insert("network".into(), json!(network));
     };
+    match e {
+        Destination::Printer(name, _) => to(Some(name), false, false),
+        Destination::Default => to(Some(""), false, false),
+        Destination::File => to(None, true, false),
+        #[cfg(not(target_arch = "wasm32"))]
+        Destination::Network => {
+            to(None, false, true);
+            // The dialog's copies are where the printer's copies start; the confirmation is asked afresh.
+            app.print_net.state.dialog_opened();
+            app.print_net.state.draft.copies = (d.f64("copies", 1.0).max(1.0) as u32).min(999);
+        }
+    }
+    let _ = app;
+}
+
+/// The Printer row: the system's printers (or its default one), Network Printer…, PDF File; Setup….
+/// Under it the Grayscale box, for the printers and the PDF alike (a network printer has its own
+/// Color setting in its section).
+fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let printers = d.fields.get("__printers");
+    let setup = printers.and_then(|p| p["setup"].as_bool()).unwrap_or(false);
+    let entries = destinations(printers);
+    let labels: Vec<String> = entries.iter().map(destination_label).collect();
+    let options: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let printer = d.str("printer");
+    #[cfg(not(target_arch = "wasm32"))]
+    let network = d.bool("network").then_some(Destination::Network);
+    #[cfg(target_arch = "wasm32")]
+    let network: Option<Destination> = None;
+    let current = if let Some(network) = network {
+        network
+    } else if d.bool("toFile") {
+        Destination::File
+    } else if printer.is_empty() {
+        Destination::Default
+    } else {
+        entries
+            .iter()
+            .find(|e| matches!(e, Destination::Printer(n, _) if *n == printer))
+            .cloned()
+            .unwrap_or(Destination::Printer(printer.clone(), false))
+    };
+    let current = destination_label(&current);
     row_with(ui, tl!("Printer:"), TOP_LABEL_WIDTH, |ui| {
-        match widgets::dropdown_names(ui, "print-printer", current, &options, 300.0).and_then(|i| entries.get(i)) {
-            Some(Destination::Printer(name)) => {
-                d.fields.insert("printer".into(), json!(name));
-                d.fields.insert("toFile".into(), json!(false));
-                d.fields.insert("network".into(), json!(false));
-            }
-            Some(Destination::Default) => {
-                d.fields.insert("printer".into(), json!(""));
-                d.fields.insert("toFile".into(), json!(false));
-                d.fields.insert("network".into(), json!(false));
-            }
-            Some(Destination::File) => {
-                d.fields.insert("toFile".into(), json!(true));
-                d.fields.insert("network".into(), json!(false));
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            Some(Destination::Network) => {
-                d.fields.insert("toFile".into(), json!(false));
-                d.fields.insert("network".into(), json!(true));
-                // The dialog's copies are where the printer's copies start; the confirmation is asked afresh.
-                app.print_net.state.dialog_opened();
-                app.print_net.state.draft.copies = (d.f64("copies", 1.0).max(1.0) as u32).min(999);
-            }
-            None => {}
+        if let Some(e) = widgets::dropdown_names(ui, "print-printer", &current, &options, 300.0).and_then(|i| entries.get(i)) {
+            choose(app, d, e);
         }
         let to_file = d.bool("toFile") || d.bool("network");
         let tip = if setup { tl!("The system's settings of this printer") } else { tl!("No printer settings to open here") };
@@ -392,6 +423,36 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             app.status(e);
         }
     });
+    // A network printer's Grayscale is its Color setting (below); every other destination has the box.
+    if !d.bool("network") {
+        row_with(ui, "", TOP_LABEL_WIDTH, |ui| {
+            flag(ui, d, "color.grayscale", tl!("Grayscale"), get(d, "output.mode").as_str() != Some("separations"))
+        });
+    }
+}
+
+/// The settings the pages print with: the dialog's, with Grayscale also when a network printer's
+/// Color setting is Grayscale. The preview, the Summary and the job all use these.
+pub(super) fn shown_settings(app: &VectorcraftApp, d: &Dialog) -> Value {
+    let s = settings(d);
+    #[cfg(not(target_arch = "wasm32"))]
+    if d.kind == KIND && d.bool("network") {
+        return crate::print::with_grayscale(&s, app.print_net.network_grayscale());
+    }
+    let _ = app;
+    s
+}
+
+/// Whether `settings` print gray (Grayscale on, composite output).
+pub(super) fn prints_gray(settings: &Value) -> bool {
+    serde_json::from_value::<PrintSettings>(settings.clone()).is_ok_and(|s| vectorcraft_engine::cmd::print::prints_gray(&s))
+}
+
+/// Whether the person chose the paper: a standard size other than the one the document was set up
+/// with. The paper the document came with (or a Custom size) is not a demand on the queue.
+fn paper_chosen(d: &Dialog) -> bool {
+    let media = d.str("media");
+    media != "custom" && !media.is_empty() && media != d.str(MEDIA0)
 }
 
 /// `print.preview` of `settings` (an error when they can't print), cached until they or the
@@ -425,7 +486,7 @@ fn current_sheet<'a>(d: &Dialog, pv: &'a Value) -> Option<(usize, usize, &'a Val
 
 /// The preview: the page with its imageable area (dashed) and the art as it prints; ◀ ▶ step
 /// through the pages; dragging the art moves the placement (not when tiling).
-fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
+fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, gray: bool) {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(PREVIEW, egui::Sense::drag());
     ui.painter().rect_filled(rect, 3.0, t.pasteboard);
@@ -464,7 +525,7 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     if let ([a, b, c, dd, e, f], Some(area)) = (coeffs.as_slice(), rect_of(&sheet["area"])) {
         let px = (f64::from(page.width().max(page.height()) * ui.ctx().pixels_per_point())).min(1024.0);
         let layers = choice::<PrintLayers>(d, "printLayers").unwrap_or(PrintLayers::VisiblePrintable);
-        if let Some(tex) = art_texture(app, ui.ctx(), layers, area, px) {
+        if let Some(tex) = art_texture(app, ui.ctx(), layers, gray, area, px) {
             let at = |x: f64, y: f64| to_screen(a * x + c * y + e, b * x + dd * y + f) + offset;
             let mut mesh = egui::Mesh::with_texture(tex.id());
             for (p, uv) in [
@@ -569,10 +630,17 @@ fn round2(v: f64) -> f64 {
 
 /// The art of `area` as it prints (only the layers that print), `px` pixels on its longest side;
 /// cached until the document, the layers or the size change.
-fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayers, area: DRect, px: f64) -> Option<egui::TextureHandle> {
+pub(super) fn art_texture(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    layers: PrintLayers,
+    gray: bool,
+    area: DRect,
+    px: f64,
+) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
     let bits = [area.x0, area.y0, area.x1, area.y1].map(f64::to_bits);
-    let stamp = egui::Id::new((st.uid, st.revision, layers, bits, px.round() as u32));
+    let stamp = egui::Id::new((st.uid, st.revision, layers, gray, bits, px.round() as u32));
     let key = egui::Id::new("print-preview-art");
     if let Some((s, tex)) = ctx.data(|m| m.get_temp::<(egui::Id, egui::TextureHandle)>(key))
         && s == stamp
@@ -581,6 +649,10 @@ fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayer
     }
     let mut doc = (*st.doc).clone();
     vectorcraft_pdf::keep_layers(&mut doc.layers, layers);
+    // Grayscale is in the stamp above, so the preview is gray from the frame the box is ticked.
+    if gray {
+        doc = vectorcraft_engine::cmd::print::grayscale_document(&doc);
+    }
     let tex = widgets::region_texture(ctx, &mut app.canvas.renderer, "print-preview-art", &doc, area, px);
     ctx.data_mut(|m| m.insert_temp(key, (stamp, tex.clone())));
     Some(tex)

@@ -4777,7 +4777,6 @@ lighting	Light	Luce
 	A setting isn't valid	Un'impostazione non è valida
 	Accepted by {printer}	Accettato da {printer}
 	Asking the printer…	Interrogazione della stampante…
-	Black and white	Bianco e nero
 	Canceling…	Annullamento…
 	Colour	Colore
 	Couldn't reach the printer	Impossibile raggiungere la stampante
@@ -4821,8 +4820,9 @@ lighting	Light	Luce
 	This printer does not take a quality setting.	Questa stampante non supporta un'impostazione per la qualità.
 	This printer does not take a resolution setting.	Questa stampante non supporta un'impostazione per la risoluzione.
 	This printer does not take an orientation setting.	Questa stampante non supporta un'impostazione per l'orientamento.
-	This printer only prints in black and white.	Questa stampante stampa solo in bianco e nero.
+	This printer only prints in grayscale.	Questa stampante stampa solo in scala di grigi.
 	This printer only prints one-sided.	Questa stampante stampa solo su un lato.
 	Two-sided:	Fronte/retro:
 	Waiting in the printer's queue	In attesa nella coda della stampante
 	Network Printer…	Stampante di rete…
+	{printer} (default)	{printer} (predefinita)

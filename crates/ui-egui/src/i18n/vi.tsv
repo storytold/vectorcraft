@@ -4757,7 +4757,6 @@ theme	Appearance	Giao diện
 	A setting isn't valid	Một thiết lập không hợp lệ
 	Accepted by {printer}	{printer} đã nhận
 	Asking the printer…	Đang hỏi máy in…
-	Black and white	Đen trắng
 	Canceling…	Đang hủy…
 	Colour	Màu
 	Couldn't reach the printer	Không thể kết nối với máy in
@@ -4801,8 +4800,9 @@ theme	Appearance	Giao diện
 	This printer does not take a quality setting.	Máy in này không hỗ trợ thiết lập chất lượng.
 	This printer does not take a resolution setting.	Máy in này không hỗ trợ thiết lập độ phân giải.
 	This printer does not take an orientation setting.	Máy in này không hỗ trợ thiết lập hướng giấy.
-	This printer only prints in black and white.	Máy in này chỉ in đen trắng.
+	This printer only prints in grayscale.	Máy in này chỉ in thang xám.
 	This printer only prints one-sided.	Máy in này chỉ in một mặt.
 	Two-sided:	In hai mặt:
 	Waiting in the printer's queue	Đang chờ trong hàng đợi của máy in
 	Network Printer…	Máy in mạng…
+	{printer} (default)	{printer} (mặc định)

@@ -4757,7 +4757,6 @@ lighting	Light	Світло
 	A setting isn't valid	Недійсний параметр
 	Accepted by {printer}	Прийнято принтером {printer}
 	Asking the printer…	Опитування принтера…
-	Black and white	Чорно-білий
 	Canceling…	Скасування…
 	Colour	Колір
 	Couldn't reach the printer	Не вдалося зв'язатися з принтером
@@ -4801,8 +4800,9 @@ lighting	Light	Світло
 	This printer does not take a quality setting.	Цей принтер не підтримує параметр якості.
 	This printer does not take a resolution setting.	Цей принтер не підтримує параметр роздільної здатності.
 	This printer does not take an orientation setting.	Цей принтер не підтримує параметр орієнтації.
-	This printer only prints in black and white.	Цей принтер друкує лише чорно-білим.
+	This printer only prints in grayscale.	Цей принтер друкує лише у відтінках сірого.
 	This printer only prints one-sided.	Цей принтер друкує лише з одного боку.
 	Two-sided:	Двосторонній друк:
 	Waiting in the printer's queue	Очікує в черзі принтера
 	Network Printer…	Мережевий принтер…
+	{printer} (default)	{printer} (за замовчуванням)

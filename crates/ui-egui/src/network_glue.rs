@@ -85,6 +85,11 @@ impl NetTasks {
         self.transport.clone()
     }
 
+    /// Whether the network printer's Color setting is Grayscale, as it will be sent.
+    pub(crate) fn network_grayscale(&self) -> bool {
+        self.state.draft.request(None).color == Some(net::ColorMode::Monochrome)
+    }
+
     /// What the last query read of the printer at `address`, when it is the same printer.
     fn queried(&self, address: &str) -> Option<Elements> {
         lock(&self.queried).as_ref().filter(|(a, _)| a == address).map(|(_, e)| e.clone())
@@ -488,7 +493,7 @@ pub(crate) fn labels() -> Labels<'static> {
         photo: tl!("Photo"),
         color: tl!("Color:"),
         color_color: tl!("Colour"),
-        color_monochrome: tl!("Black and white"),
+        color_monochrome: tl!("Grayscale"),
         resolution: tl!("Resolution:"),
         resolution_dpi: "{dpi} dpi",
         resolution_dpi_xy: "{x} x {y} dpi",
@@ -497,7 +502,7 @@ pub(crate) fn labels() -> Labels<'static> {
         unsupported_sides: tl!("This printer only prints one-sided."),
         unsupported_orientation: tl!("This printer does not take an orientation setting."),
         unsupported_quality: tl!("This printer does not take a quality setting."),
-        unsupported_color: tl!("This printer only prints in black and white."),
+        unsupported_color: tl!("This printer only prints in grayscale."),
         unsupported_resolution: tl!("This printer does not take a resolution setting."),
         unconfirmed_note: tl!("Not confirmed by the printer"),
         confirm: tl!("I confirm sending this document to this printer"),

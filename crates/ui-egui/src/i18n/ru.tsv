@@ -4773,7 +4773,6 @@ lighting	Light	Свет
 	A setting isn't valid	Недопустимый параметр
 	Accepted by {printer}	Принято принтером {printer}
 	Asking the printer…	Запрос к принтеру…
-	Black and white	Чёрно-белый
 	Canceling…	Отмена…
 	Colour	Цвет
 	Couldn't reach the printer	Не удалось связаться с принтером
@@ -4817,8 +4816,9 @@ lighting	Light	Свет
 	This printer does not take a quality setting.	Этот принтер не поддерживает параметр качества.
 	This printer does not take a resolution setting.	Этот принтер не поддерживает параметр разрешения.
 	This printer does not take an orientation setting.	Этот принтер не поддерживает параметр ориентации.
-	This printer only prints in black and white.	Этот принтер печатает только в чёрно-белом режиме.
+	This printer only prints in grayscale.	Этот принтер печатает только в оттенках серого.
 	This printer only prints one-sided.	Этот принтер печатает только на одной стороне.
 	Two-sided:	Двусторонняя печать:
 	Waiting in the printer's queue	Ожидает в очереди принтера
 	Network Printer…	Сетевой принтер…
+	{printer} (default)	{printer} (по умолчанию)

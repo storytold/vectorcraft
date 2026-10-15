@@ -5163,7 +5163,6 @@ theme	Appearance	Apparence
 	A setting isn't valid	Un réglage n'est pas valide
 	Accepted by {printer}	Accepté par {printer}
 	Asking the printer…	Interrogation de l'imprimante…
-	Black and white	Noir et blanc
 	Canceling…	Annulation…
 	Colour	Couleur
 	Couldn't reach the printer	Impossible de joindre l'imprimante
@@ -5207,8 +5206,9 @@ theme	Appearance	Apparence
 	This printer does not take a quality setting.	Cette imprimante ne prend pas en charge un réglage de la qualité.
 	This printer does not take a resolution setting.	Cette imprimante ne prend pas en charge un réglage de la résolution.
 	This printer does not take an orientation setting.	Cette imprimante ne prend pas en charge un réglage de l'orientation.
-	This printer only prints in black and white.	Cette imprimante n'imprime qu'en noir et blanc.
+	This printer only prints in grayscale.	Cette imprimante n'imprime qu'en niveaux de gris.
 	This printer only prints one-sided.	Cette imprimante n'imprime qu'en recto.
 	Two-sided:	Recto verso :
 	Waiting in the printer's queue	En attente dans la file de l'imprimante
 	Network Printer…	Imprimante réseau…
+	{printer} (default)	{printer} (par défaut)

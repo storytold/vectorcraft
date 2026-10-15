@@ -5150,7 +5150,6 @@ imageTrace	Outline	Körvonal
 	A setting isn't valid	Egy beállítás érvénytelen
 	Accepted by {printer}	{printer} elfogadta
 	Asking the printer…	A nyomtató lekérdezése…
-	Black and white	Fekete-fehér
 	Canceling…	Megszakítás…
 	Colour	Szín
 	Couldn't reach the printer	A nyomtató nem érhető el
@@ -5194,8 +5193,9 @@ imageTrace	Outline	Körvonal
 	This printer does not take a quality setting.	Ez a nyomtató nem támogatja a minőség beállítását.
 	This printer does not take a resolution setting.	Ez a nyomtató nem támogatja a felbontás beállítását.
 	This printer does not take an orientation setting.	Ez a nyomtató nem támogatja a tájolás beállítását.
-	This printer only prints in black and white.	Ez a nyomtató csak fekete-fehérben nyomtat.
+	This printer only prints in grayscale.	Ez a nyomtató csak szürkeárnyalatosan nyomtat.
 	This printer only prints one-sided.	Ez a nyomtató csak egyoldalasan nyomtat.
 	Two-sided:	Kétoldalas:
 	Waiting in the printer's queue	Várakozik a nyomtató sorában
 	Network Printer…	Hálózati nyomtató…
+	{printer} (default)	{printer} (alapértelmezett)

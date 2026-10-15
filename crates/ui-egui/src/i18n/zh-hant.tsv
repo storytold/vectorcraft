@@ -4067,7 +4067,6 @@ lighting	Light	光源
 	A setting isn't valid	某項設定無效
 	Accepted by {printer}	{printer} 已接收
 	Asking the printer…	正在詢問印表機…
-	Black and white	黑白
 	Canceling…	正在取消…
 	Colour	彩色
 	Couldn't reach the printer	無法連線到印表機
@@ -4111,8 +4110,9 @@ lighting	Light	光源
 	This printer does not take a quality setting.	這台印表機不支援品質設定。
 	This printer does not take a resolution setting.	這台印表機不支援解析度設定。
 	This printer does not take an orientation setting.	這台印表機不支援方向設定。
-	This printer only prints in black and white.	這台印表機只能黑白列印。
+	This printer only prints in grayscale.	這台印表機只能以灰階列印。
 	This printer only prints one-sided.	這台印表機只能單面列印。
 	Two-sided:	雙面：
 	Waiting in the printer's queue	正在印表機佇列中等候
 	Network Printer…	網路印表機…
+	{printer} (default)	{printer}（預設）

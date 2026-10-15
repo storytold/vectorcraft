@@ -15,10 +15,13 @@ use crate::{Services, VectorcraftApp, theme};
 /// What the mock service was sent: (printer, title, PDF).
 type Jobs = Rc<RefCell<Vec<(Option<String>, String, Vec<u8>)>>>;
 
+/// What the mock service was asked beside the PDF: (grayscale, paper chosen) per job.
+type Asked = Rc<RefCell<Vec<(bool, bool)>>>;
+
 /// What the app wrote: (path, bytes).
 type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
-struct MockPrint(Jobs);
+struct MockPrint(Jobs, Asked);
 
 impl PrintService for MockPrint {
     fn printers(&mut self) -> Vec<Printer> {
@@ -27,18 +30,26 @@ impl PrintService for MockPrint {
 
     fn print(&mut self, job: &PrintJob) -> Result<String, String> {
         self.0.borrow_mut().push((job.printer.map(str::to_string), job.title.to_string(), job.pdf.to_vec()));
+        self.1.borrow_mut().push((job.grayscale, job.paper_chosen));
         Ok(format!("Sent to {}", job.printer.unwrap_or("the default printer")))
     }
 }
 
 /// An app with three 120 × 90 artboards and a rectangle, printing through the mock.
 fn app() -> (VectorcraftApp, Jobs) {
-    let jobs = Jobs::default();
-    let services = Services { print: Some(Box::new(MockPrint(jobs.clone()))), ..Default::default() };
+    let (app, jobs, _) = app_asked();
+    (app, jobs)
+}
+
+/// The same, also giving what each job asked of the queue; the rectangle is red.
+fn app_asked() -> (VectorcraftApp, Jobs, Asked) {
+    let (jobs, asked) = (Jobs::default(), Asked::default());
+    let services = Services { print: Some(Box::new(MockPrint(jobs.clone(), asked.clone()))), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
     app.run("file.new", json!({"width": 120, "height": 90, "artboards": 3})).unwrap();
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
-    (app, jobs)
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"ids": [rect["id"].clone()], "color": "#dc1e28"})).unwrap();
+    (app, jobs, asked)
 }
 
 fn frame(app: &mut VectorcraftApp) {
@@ -231,6 +242,169 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     call(&mut app, "ui.dialog.confirm", json!({}));
     assert_eq!(app.session.active().unwrap().doc.print_setup.as_ref().unwrap()["copies"], 5);
     assert_eq!(jobs.borrow().len(), 1);
+}
+
+// ---------- one Printer list ----------
+
+#[test]
+fn the_printer_list_holds_every_system_printer_then_network_then_pdf() {
+    use super::print::Destination::*;
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let printers = dialog(&mut app).fields["__printers"].clone();
+    let entries = super::print::destinations(Some(&printers));
+    assert_eq!(
+        entries,
+        [Printer("Proofer".into(), true), Printer("Office".into(), false), Network, File],
+        "the default queue first, the other queues, Network Printer…, PDF File"
+    );
+    let labels: Vec<String> = entries.iter().map(super::print::destination_label).collect();
+    assert_eq!(labels, ["Proofer (default)", "Office", "Network Printer…", "PDF File"]);
+    // A system with a print service and no queue lists its default printer.
+    let none = json!({"printers": [], "service": true});
+    assert_eq!(super::print::destinations(Some(&none)), [Default, Network, File]);
+    frame(&mut app);
+}
+
+#[test]
+fn choosing_the_network_entry_shows_the_network_section_and_a_queue_hides_it() {
+    use super::print::{Destination, choose};
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let mut d = app.ui.dialog.take().unwrap();
+    choose(&mut app, &mut d, &Destination::Network);
+    assert!(d.bool("network") && !d.bool("toFile"));
+    choose(&mut app, &mut d, &Destination::Printer("Office".into(), false));
+    assert_eq!((d.str("printer"), d.bool("network"), d.bool("toFile")), ("Office".to_string(), false, false));
+    choose(&mut app, &mut d, &Destination::Network);
+    app.ui.dialog = Some(d);
+    // The section draws (address field, Query printer) in the same dialog as the queues.
+    frame(&mut app);
+    assert!(dialog(&mut app).bool("network"));
+}
+
+// ---------- Grayscale ----------
+
+#[test]
+fn the_colour_choice_says_grayscale_not_black_and_white() {
+    let labels = crate::network_glue::labels();
+    assert_eq!(labels.color_monochrome, "Grayscale");
+    assert!(labels.unsupported_color.contains("grayscale"), "{}", labels.unsupported_color);
+    assert!(!labels.unsupported_color.to_lowercase().contains("black"));
+}
+
+/// Whether the PDF's art has RGB colours and whether it has gray ones (read back through the importer).
+fn paints(pdf: &[u8]) -> (bool, bool) {
+    let layers = format!("{:?}", vectorcraft_pdf::import(pdf).unwrap().layers);
+    (layers.contains("Rgb"), layers.contains("Gray"))
+}
+
+#[test]
+fn grayscale_makes_the_printed_pdf_gray_and_asks_the_queue_for_monochrome_too() {
+    let (mut app, jobs, asked) = app_asked();
+    let print = |app: &mut VectorcraftApp, gray: bool| {
+        app.run("file.print", json!({"settings": {"color": {"grayscale": gray}}, "printer": "Office"})).unwrap();
+        let (pdf, ask) = (jobs.borrow().last().unwrap().2.clone(), *asked.borrow().last().unwrap());
+        (pdf, ask)
+    };
+    let (colour, ask) = print(&mut app, false);
+    assert!(!ask.0);
+    assert!(paints(&colour).0, "the colour job paints RGB");
+    let (gray, ask) = print(&mut app, true);
+    assert!(ask.0, "the queue is asked for monochrome as well");
+    assert_ne!(colour, gray, "the PDF itself changes");
+    let (rgb, g) = paints(&gray);
+    assert!(g && !rgb, "the gray PDF paints gray only (rgb {rgb}, gray {g})");
+    // Through the dialog: the box is the setting `color.grayscale`, kept with the document.
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "printer", json!("Office"));
+    set(&mut app, "color", json!({"grayscale": true}));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    assert!(asked.borrow().last().unwrap().0);
+    assert_eq!(app.session.active().unwrap().doc.print_setup.as_ref().unwrap()["color"]["grayscale"], true);
+    assert!(!paints(&jobs.borrow().last().unwrap().2).0);
+}
+
+#[test]
+fn grayscale_uses_rec_709_weights() {
+    let (app, _) = app();
+    let doc = app.session.active().unwrap().doc.clone();
+    let gray = vectorcraft_engine::cmd::print::grayscale_document(&doc);
+    let fills = |d: &vectorcraft_doc::Document| format!("{:?}", d.layers);
+    assert!(fills(&doc).contains("Rgb"), "the rectangle is coloured");
+    assert!(!fills(&gray).contains("Rgb"), "no colour is left");
+    // Rec. 709: 0.2126 × 220/255 + 0.7152 × 30/255 + 0.0722 × 40/255 = 0.2789 light: 0.7211 ink.
+    assert!(fills(&gray).contains("0.721"), "{}", fills(&gray));
+}
+
+#[test]
+fn the_preview_art_is_gray_from_the_frame_the_box_is_ticked() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let area = vectorcraft_geom::Rect::new(0.0, 0.0, 120.0, 90.0);
+    let layers = vectorcraft_pdf::PrintLayers::VisiblePrintable;
+    let colour = super::print::art_texture(&mut app, &ctx, layers, false, area, 64.0).unwrap();
+    let gray = super::print::art_texture(&mut app, &ctx, layers, true, area, 64.0).unwrap();
+    assert_ne!(colour.id(), gray.id(), "toggling renders again: the cache key holds the gray flag");
+    let again = super::print::art_texture(&mut app, &ctx, layers, false, area, 64.0).unwrap();
+    assert_ne!(gray.id(), again.id(), "back to colour is a colour render, not the gray one");
+    // What the gray preview draws: the document the print composes, rendered.
+    let doc = app.session.active().unwrap().doc.clone();
+    let img = app.canvas.renderer.render_region(&vectorcraft_engine::cmd::print::grayscale_document(&doc), area, 1.0, true);
+    assert!(img.pixels.chunks(4).all(|p| p[0] == p[1] && p[1] == p[2]), "every pixel is gray");
+    let img = app.canvas.renderer.render_region(&doc, area, 1.0, true);
+    assert!(img.pixels.chunks(4).any(|p| p[0] != p[1] || p[1] != p[2]), "the colour render has colour");
+    // Not offered for separations (inks are plates already).
+    assert!(super::print::prints_gray(&json!({"color": {"grayscale": true}})));
+    assert!(!super::print::prints_gray(&json!({"color": {"grayscale": true}, "output": {"mode": "separations"}})));
+    assert!(!super::print::prints_gray(&json!({})));
+}
+
+// ---------- paper ----------
+
+#[test]
+fn a_document_sized_job_does_not_demand_a_paper_but_a_chosen_paper_is_demanded() {
+    let (mut app, _, asked) = app_asked();
+    // Untouched paper: the queue's default paper, shrunk to fit.
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "printer", json!("Office"));
+    super::confirm(&mut app).unwrap();
+    assert!(!asked.borrow().last().unwrap().1);
+    // A custom size is the document's own size too (a 13.33 x 7.50 in slide page).
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "media", json!("custom"));
+    set(&mut app, "width", json!(960));
+    set(&mut app, "height", json!(540));
+    super::confirm(&mut app).unwrap();
+    assert!(!asked.borrow().last().unwrap().1);
+    // The person picks A4: the queue has to have it.
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "media", json!("a4"));
+    super::confirm(&mut app).unwrap();
+    assert!(asked.borrow().last().unwrap().1);
+    // An agent naming a paper chose it; one naming none did not.
+    app.run("file.print", json!({"settings": {"media": "legal"}})).unwrap();
+    assert!(asked.borrow().last().unwrap().1);
+    app.run("file.print", json!({"settings": {"copies": 2}})).unwrap();
+    assert!(!asked.borrow().last().unwrap().1);
+}
+
+#[test]
+fn a_network_printers_grayscale_makes_the_preview_and_the_job_gray() {
+    use craft_ui::printing::network::ColorMode;
+    let (mut app, ..) = app_asked();
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "network", json!(true));
+    let mut d = dialog(&mut app).clone();
+    assert!(!super::print::prints_gray(&super::print::shown_settings(&app, &d)));
+    app.print_net.state.draft.color = Some(ColorMode::Monochrome);
+    assert!(super::print::prints_gray(&super::print::shown_settings(&app, &d)), "the Color setting is Grayscale");
+    // The dialog's own box does not leak into a network job: the printer's Color setting decides.
+    app.print_net.state.draft.color = Some(ColorMode::Color);
+    d.fields.insert("color".into(), json!({"grayscale": true}));
+    assert!(!super::print::prints_gray(&super::print::shown_settings(&app, &d)));
 }
 
 // ---------- the network printer destination ----------

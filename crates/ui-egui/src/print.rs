@@ -26,6 +26,11 @@ pub struct PrintJob<'a> {
     /// The job's name in the print queue.
     pub title: &'a str,
     pub pdf: &'a [u8],
+    /// The pages are gray already (the PDF was composed so); also ask the queue for monochrome.
+    pub grayscale: bool,
+    /// The person picked the paper: the queue must have it. `false`: the pages are the document's
+    /// own size (an artboard, a custom size), so the job goes on the queue's own paper, shrunk to fit.
+    pub paper_chosen: bool,
 }
 
 /// Submission callable from the desktop background worker.
@@ -96,6 +101,7 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let pdf = data.as_ref().and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or("the print job has no data")?;
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let printer = s("printer").filter(|n| !n.is_empty());
+    let (grayscale, paper_chosen) = job_hints(app, p);
     let service = app.services.print.as_mut().ok_or("no print service")?;
     if let Some(submit) = service.shared_print() {
         let pending_printer = printer.clone();
@@ -105,7 +111,8 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             format!("Printing {title}"),
             None,
             move |_| {
-                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf }).map(|note| json!({ "note": note, "printer": printer }))
+                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, grayscale, paper_chosen })
+                    .map(|note| json!({ "note": note, "printer": printer }))
             },
             move |app, result| {
                 let receipt = result?;
@@ -126,11 +133,37 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         return Ok(v);
     }
-    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf })?;
+    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, grayscale, paper_chosen })?;
     app.status(done);
     v["printer"] = json!(printer);
     v["printed"] = json!(true);
     Ok(v)
+}
+
+/// What a local-queue job asks of the driver, beside the PDF: `(grayscale, paper chosen)`. Gray is
+/// the merged settings' Grayscale (composite output); the paper is chosen when the caller says so
+/// (`paperChosen`, the dialog) or names a standard paper in `settings.media`. A Custom size, or no
+/// paper named, is the document's own page size, which the queue may not list.
+fn job_hints(app: &mut VectorcraftApp, p: &Value) -> (bool, bool) {
+    let settings = p.get("settings").filter(|v| v.is_object()).cloned().unwrap_or_else(|| json!({}));
+    let merged = app.session.execute("print.preview", &json!({ "settings": settings })).ok().map(|v| v["settings"].clone());
+    let gray = merged.as_ref().is_some_and(|m| m["color"]["grayscale"] == true && m["output"]["mode"] != "separations");
+    let named = |v: &Value| v["media"].as_str().is_some_and(|m| m != "custom");
+    let chosen = p.get("paperChosen").and_then(Value::as_bool).unwrap_or_else(|| named(&settings));
+    (gray, chosen)
+}
+
+/// `settings` with Grayscale `gray` (a network printer's Color setting is the only say it has).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn with_grayscale(settings: &Value, gray: bool) -> Value {
+    let mut out = settings.clone();
+    if let Some(o) = out.as_object_mut() {
+        let color = o.entry("color").or_insert_with(|| json!({}));
+        if let Some(c) = color.as_object_mut() {
+            c.insert("grayscale".into(), json!(gray));
+        }
+    }
+    out
 }
 
 /// `file.print` for the Print dialog's Network printer destination: compose the print-ready PDF
@@ -163,7 +196,8 @@ pub fn run_network(app: &mut VectorcraftApp, settings: &Value) -> Result<Value, 
     // The printer makes the copies when it takes a copies setting.
     let by_printer = draft.request(None).copies.is_some();
     let copies = if by_printer { 1 } else { draft.copies.max(1) };
-    let mut q = json!({ "settings": settings });
+    // A printer told to print Grayscale may still print colour, so the PDF itself is gray too.
+    let mut q = json!({ "settings": with_grayscale(settings, app.print_net.network_grayscale()) });
     q["settings"]["copies"] = json!(copies);
     let mut v = app.session.execute("file.print", &q).map_err(|e| e.to_string())?;
     let data = v.as_object_mut().and_then(|o| o.remove("dataBase64"));

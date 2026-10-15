@@ -4818,7 +4818,6 @@ lighting	Light	ライト
 	A setting isn't valid	無効な設定があります
 	Accepted by {printer}	{printer} が受け付けました
 	Asking the printer…	プリンターに問い合わせています…
-	Black and white	白黒
 	Canceling…	キャンセルしています…
 	Colour	カラー
 	Couldn't reach the printer	プリンターに接続できませんでした
@@ -4862,8 +4861,9 @@ lighting	Light	ライト
 	This printer does not take a quality setting.	このプリンターは品質の設定に対応していません。
 	This printer does not take a resolution setting.	このプリンターは解像度の設定に対応していません。
 	This printer does not take an orientation setting.	このプリンターは向きの設定に対応していません。
-	This printer only prints in black and white.	このプリンターは白黒でのみ印刷できます。
+	This printer only prints in grayscale.	このプリンターはグレースケールでのみ印刷できます。
 	This printer only prints one-sided.	このプリンターは片面印刷のみ対応しています。
 	Two-sided:	両面印刷:
 	Waiting in the printer's queue	プリンターのキューで待機中
 	Network Printer…	ネットワークプリンター…
+	{printer} (default)	{printer}（既定）
