@@ -159,7 +159,7 @@ fn failure(e: &PrintError, open: bool) -> Failure {
         FailureKind::Encode
     } else {
         match e.kind() {
-            ErrorKind::InvalidRequest | ErrorKind::Denied if open => FailureKind::Policy,
+            ErrorKind::InvalidRequest if open => FailureKind::Policy,
             ErrorKind::InvalidRequest | ErrorKind::ConsentRequired => FailureKind::Invalid,
             ErrorKind::UnsupportedFormat => FailureKind::NoCommonFormat,
             ErrorKind::Unsupported => FailureKind::Unsupported,

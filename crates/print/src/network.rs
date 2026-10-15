@@ -157,22 +157,6 @@ pub struct Printer {
     side: Side,
     registry: Registry,
     known: Mutex<Option<Known>>,
-    /// The deny list (`CRAFT_PRINT_DENY`) as it was when the printer was opened.
-    denied: Vec<String>,
-}
-
-/// The refusal for a printer on the deny list: [`ErrorKind::Denied`], naming the variable and never
-/// the printer.
-fn denied_error() -> PrintError {
-    PrintError::new(
-        ErrorKind::Denied,
-        format!("the printer is on the deny list ({}); it was not opened and nothing was sent to it", craft_print::DENY_ENV),
-    )
-}
-
-/// Refuse when any of `texts` (an address, a name the printer reported) names a printer on `denied`.
-fn check_denied(denied: &[String], texts: &[&str]) -> Result<(), PrintError> {
-    if craft_print::any_denied(texts, denied) { Err(denied_error()) } else { Ok(()) }
 }
 
 /// What a read of the printer left: the details the registry takes, the formats as the printer
@@ -195,17 +179,8 @@ impl Printer {
 
     /// [`Self::open`] with the WS-Print backend's own [`Settings`].
     pub fn open_with(address: &str, transport: Option<Transport>, settings: Settings) -> Result<Self, PrintError> {
-        Self::open_denying(address, transport, settings, craft_print::deny_list())
-    }
-
-    /// [`Self::open_with`] with the deny list given instead of read from the environment (tests).
-    /// The WS-Print `info` call reaches the printer with a client of its own, outside the registry,
-    /// so this type checks the list itself: here by address, and in [`Self::info`] by the name the
-    /// printer reports. A denied printer is [`ErrorKind::Denied`], and nothing is sent to it.
-    pub fn open_denying(address: &str, transport: Option<Transport>, settings: Settings, denied: Vec<String>) -> Result<Self, PrintError> {
         let transport = transport.unwrap_or_else(wsd::adapter::default_transport);
         let registry = Registry::new();
-        registry.set_deny_list(Some(denied.clone()));
         let side = match Protocol::of(address) {
             Protocol::Wsd => {
                 let backend = WsdBackend::new()
@@ -216,7 +191,6 @@ impl Printer {
                     .with_transfer(settings.transfer);
                 let id = backend.add(address)?;
                 let url = PrinterUrl::parse(&id).map_err(PrintError::from)?;
-                check_denied(&denied, &[address, &id])?;
                 registry.register(Box::new(backend.clone())).map_err(|e| PrintError::new(ErrorKind::Failed, e.to_string()))?;
                 Side::Wsd(Box::new(WsdSide { client: Client::new(transport, url.clone()), url, backend }))
             }
@@ -224,7 +198,6 @@ impl Printer {
                 let backend = IppBackend::new().with_transport(Arc::clone(&transport)).with_strict(settings.strict);
                 let id = backend.add(address)?;
                 let uri = PrinterUri::parse(&id).map_err(PrintError::from)?;
-                check_denied(&denied, &[address, &id])?;
                 registry.register(Box::new(backend)).map_err(|e| PrintError::new(ErrorKind::Failed, e.to_string()))?;
                 Side::Ipp { uri }
             }
@@ -232,7 +205,7 @@ impl Printer {
         if let Some(converter) = registered_converter() {
             registry.set_converter(converter);
         }
-        Ok(Self { side, registry, known: Mutex::new(None), denied })
+        Ok(Self { side, registry, known: Mutex::new(None) })
     }
 
     /// Use `converter` for this printer instead of the registered one (tests, embedding).
@@ -269,13 +242,10 @@ impl Printer {
     /// What the printer is and what it accepts. Sends no job. The answer is kept: [`Self::submit`]
     /// uses it instead of reading the printer again.
     pub fn info(&self) -> Result<Elements, PrintError> {
-        check_denied(&self.denied, &[&self.address()])?;
         let elements = match &self.side {
             Side::Wsd(w) => Elements::Wsd(wsd::printer_info(&w.client).map_err(|e| e.print_error(Op::Query))?),
             Side::Ipp { .. } => Elements::Ipp(self.registry.printer_details(&self.registry_id())?),
         };
-        // The name the printer reports is checked too; the answer is dropped.
-        check_denied(&self.denied, &[reported_name(&elements)])?;
         self.remember(&elements);
         Ok(elements)
     }
@@ -379,13 +349,6 @@ impl Printer {
     }
 }
 
-fn reported_name(elements: &Elements) -> &str {
-    match elements {
-        Elements::Wsd(e) => e.description.as_ref().map_or("", |d| d.name.as_str()),
-        Elements::Ipp(d) => d.name.as_str(),
-    }
-}
-
 /// The registry's view of a printer, from what a read returned: the formats craft-print has a name
 /// for (in the printer's order), colour, paper, copies and the listed resolutions.
 fn known_from(id: &str, elements: &Elements) -> Known {
@@ -451,10 +414,6 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
 
-    fn deny(entries: &str) -> Vec<String> {
-        craft_print::parse_deny_list(entries)
-    }
-
     #[test]
     fn the_address_picks_the_protocol() {
         assert_eq!(Protocol::of("http://192.168.1.50:5357/service"), Protocol::Wsd);
@@ -466,30 +425,9 @@ mod tests {
     }
 
     #[test]
-    fn a_denied_address_is_refused_at_open_and_nothing_is_sent() {
-        for address in ["http://127.0.0.1:9/0f1e2d3c-1111-4222-8333-444455556666", "ipp://127.0.0.1:9/0f1e2d3c-1111-4222-8333-444455556666"] {
-            let error = Printer::open_denying(address, None, Settings::default(), deny("0F1E2D3C11114222")).err().expect("denied");
-            assert_eq!(error.kind(), ErrorKind::Denied, "{address}");
-            assert!(error.message().contains("CRAFT_PRINT_DENY") && !error.message().contains("0f1e"), "{error}");
-        }
-    }
-
-    #[test]
-    fn an_allowed_address_opens_and_the_reported_name_is_checked() {
-        let printer = Printer::open_denying("http://127.0.0.1:9/other", None, Settings::default(), deny("brother;0f1e")).expect("allowed");
-        assert_eq!(printer.address(), "http://127.0.0.1:9/other");
-        assert_eq!(printer.protocol(), Protocol::Wsd);
-        assert!(check_denied(&printer.denied, &["Brother MFC-9330CDW"]).is_err(), "a reported name on the list is dropped");
-        assert!(check_denied(&printer.denied, &["Office Laser", ""]).is_ok());
-        assert!(check_denied(&[], &["Brother MFC-9330CDW"]).is_ok());
-        let ipp = Printer::open_denying("ipp://127.0.0.1:9/print", None, Settings::default(), deny("brother")).expect("allowed");
-        assert_eq!((ipp.protocol(), ipp.address().as_str()), (Protocol::Ipp, "ipp://127.0.0.1:9/print"));
-    }
-
-    #[test]
     fn a_host_name_and_a_public_address_are_refused() {
         for address in ["http://printer.example.com/service", "http://8.8.8.8/service", "ipp://printer.local/ipp/print"] {
-            let error = Printer::open_denying(address, None, Settings::default(), Vec::new()).err().expect("refused");
+            let error = Printer::open(address, None).err().expect("refused");
             assert_eq!(error.kind(), ErrorKind::InvalidRequest, "{address}");
         }
     }

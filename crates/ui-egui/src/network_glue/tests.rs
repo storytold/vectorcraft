@@ -85,7 +85,6 @@ fn errors_map_onto_the_failures_the_dialog_words_and_keep_whether_the_outcome_is
         assert_eq!(failure(&PrintError::new(kind, "x"), false).kind, want, "{kind:?}");
     }
     assert_eq!(failure(&PrintError::new(ErrorKind::InvalidRequest, "x"), true).kind, FailureKind::Policy);
-    assert_eq!(failure(&PrintError::new(ErrorKind::Denied, "x"), true).kind, FailureKind::Policy, "a denied printer is an address that was refused");
     // A document that could not be made into a format the printer takes is "couldn't be prepared".
     assert_eq!(failure(&PrintError::new(ErrorKind::Failed, "x").with_phase(Phase::Prepare), false).kind, FailureKind::Encode);
     assert!(failure(&PrintError::new(ErrorKind::Timeout, "x").with_safety(RetrySafety::OutcomeUnknown), false).outcome_unknown);
