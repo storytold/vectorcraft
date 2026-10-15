@@ -1,0 +1,21 @@
+[package]
+name = "vectorcraft-print"
+description = "Network printing for VectorCraft: WS-Print and IPP through craft-print, and the PDF to PWG raster converter for printers that list no PDF"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+vectorcraft-pdf = { workspace = true }
+vectorcraft-render = { workspace = true }
+
+# Network printing is not built for wasm32 (there is no socket to open): the crate is empty there.
+# Nothing connects until a person adds a printer and confirms a job.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+craft-print = { workspace = true, features = ["wsd", "ipp"] }
+
+[dev-dependencies]
+vectorcraft-doc = { workspace = true }

@@ -132,3 +132,49 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     v["printed"] = json!(true);
     Ok(v)
 }
+
+/// `file.print` for the Print dialog's Network printer destination: compose the print-ready PDF
+/// from `settings` (over the document's) and hand it to the queried printer, off the UI thread. The
+/// person's confirmation, the query and the address are craft-ui's rules (`Draft::block`), and a job
+/// that cannot start says why. The dialog stays open to show the job; the result of the job is
+/// shown there, or as a notice when the dialog is closed.
+///
+/// Copies: a printer that takes a copies setting makes them itself (the PDF is one copy); one that
+/// doesn't (or hasn't been queried to say) gets them in the PDF, so the sheets are what was asked for.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run_network(app: &mut VectorcraftApp, settings: &Value) -> Result<Value, String> {
+    use craft_ui::printing::network::Block;
+    let sheets_ok =
+        app.session.execute("print.preview", &json!({ "settings": settings })).is_ok_and(|v| v["sheets"].as_array().is_some_and(|s| !s.is_empty()));
+    let draft = &app.print_net.state.draft;
+    let address_ok = crate::network_glue::validate(&draft.normalized_url()).is_ok();
+    if let Some(block) = draft.block(address_ok, sheets_ok, crate::network_glue::FORMATS) {
+        let labels = crate::network_glue::labels();
+        return Err(match block {
+            Block::Address => labels.address_note,
+            Block::NotQueried => labels.query_first,
+            Block::Format => labels.no_common_format,
+            Block::NoPages => tl!("Nothing to print"),
+            Block::Unconfirmed => labels.confirm,
+            Block::Busy => labels.sending,
+        }
+        .replace("{printer}", "…"));
+    }
+    // The printer makes the copies when it takes a copies setting.
+    let by_printer = draft.request(None).copies.is_some();
+    let copies = if by_printer { 1 } else { draft.copies.max(1) };
+    let mut q = json!({ "settings": settings });
+    q["settings"]["copies"] = json!(copies);
+    let mut v = app.session.execute("file.print", &q).map_err(|e| e.to_string())?;
+    let data = v.as_object_mut().and_then(|o| o.remove("dataBase64"));
+    let pdf = data.as_ref().and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or("the print job has no data")?;
+    let title = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let pages = v["pages"].as_u64().map_or(0, |n| n as usize);
+    let paper = settings["media"].as_str().and_then(crate::network_glue::media_for_paper);
+    if !app.print_net.send(None, &title, pdf, pages, paper) {
+        return Err(tl!("Couldn't reach the printer").into());
+    }
+    v["printed"] = json!(false);
+    v["network"] = json!(true);
+    Ok(v)
+}

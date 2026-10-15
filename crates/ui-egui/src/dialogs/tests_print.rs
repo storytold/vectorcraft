@@ -232,3 +232,81 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     assert_eq!(app.session.active().unwrap().doc.print_setup.as_ref().unwrap()["copies"], 5);
     assert_eq!(jobs.borrow().len(), 1);
 }
+
+// ---------- the network printer destination ----------
+
+mod network {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use craft_print::wsd::testing::{FakeConfig as Config, FakePrinter, MemTransport};
+
+    use super::*;
+
+    const ADDRESS: &str = "127.0.0.1:5357/printer";
+
+    fn network_app() -> (VectorcraftApp, Jobs, Arc<FakePrinter>) {
+        let (mut app, jobs) = app();
+        let printer = FakePrinter::new(Config::default());
+        app.set_network_print_transport(Arc::new(MemTransport(printer.clone())));
+        app.print_net.state.draft = craft_ui::printing::network::Draft::for_address(ADDRESS);
+        app.run("file.print", json!({})).unwrap();
+        set(&mut app, "network", json!(true));
+        set(&mut app, "toFile", json!(false));
+        (app, jobs, printer)
+    }
+
+    #[test]
+    fn the_destination_draws_and_is_not_a_print_setting() {
+        let (mut app, ..) = network_app();
+        frame(&mut app);
+        assert!(app.ui.dialog.is_some());
+        let settings = super::super::print::settings(app.ui.dialog.as_ref().unwrap());
+        assert!(settings.get("network").is_none() && settings.get("printer").is_none(), "{settings}");
+    }
+
+    #[test]
+    fn print_sends_nothing_until_the_printer_was_queried_and_the_box_ticked() {
+        let (mut app, jobs, printer) = network_app();
+        let err = super::super::confirm(&mut app).unwrap_err();
+        assert!(err.contains("Query the printer first"), "{err}");
+        assert!(app.ui.dialog.is_some(), "the dialog stays");
+        assert_eq!((printer.jobs(), jobs.borrow().len()), (0, 0));
+        assert!(printer.actions().is_empty(), "nothing reached the printer: {:?}", printer.actions());
+    }
+
+    #[test]
+    fn a_confirmed_job_goes_to_the_network_printer_not_the_spooler_and_the_dialog_stays_open() {
+        let (mut app, jobs, printer) = network_app();
+        set(&mut app, "copies", json!(2));
+        set(&mut app, "media", json!("a4"));
+        // Query as the Query button does.
+        let transport = app.print_net.transport();
+        let worker = crate::network_glue::query_printer(transport, None, Default::default());
+        assert!(app.print_net.state.start_query(&worker, true));
+        let ctx = egui::Context::default();
+        for _ in 0..200 {
+            app.print_net.poll(&ctx, true);
+            if !app.print_net.state.draft.querying() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // The query went to a worker of its own: this app's "queried" memory is empty, the job reads again.
+        app.print_net.state.draft.confirmed = true;
+        super::super::confirm(&mut app).expect("the job starts");
+        assert!(app.ui.dialog.is_some() && app.print_net.state.draft.running());
+        for _ in 0..400 {
+            app.print_net.poll(&ctx, true);
+            if !app.print_net.state.draft.running() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(printer.jobs(), 1);
+        assert!(jobs.borrow().is_empty(), "the spooler was not used");
+        let pdf = printer.job(1).unwrap().document.unwrap();
+        // Three artboards, one copy made by the printer (it lists a copies range): three sheets in the PDF.
+        assert_eq!(pages(&pdf), 3);
+    }
+}

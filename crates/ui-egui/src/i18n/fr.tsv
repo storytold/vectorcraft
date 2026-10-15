@@ -5159,3 +5159,56 @@ theme	Appearance	Apparence
 @msg	too many library panels were opened in this session	trop de panneaux de bibliothèque ont été ouverts dans cette session
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	L’image fait {_1} × {_2} pixels, plus de {LARGE_TRACE_SIDE} sur un côté : elle est vectorisée, mais plus lentement. Un paramètre prédéfini moins fidèle ou une copie plus petite de l’image se vectorise plus vite.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	L’image a été vectorisée à {_1} × {_2} pixels, réduite de {_3} × {_4} ({_5} mégapixels au plus).
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A setting isn't valid	Un réglage n'est pas valide
+	Accepted by {printer}	Accepté par {printer}
+	Asking the printer…	Interrogation de l'imprimante…
+	Black and white	Noir et blanc
+	Canceling…	Annulation…
+	Colour	Couleur
+	Couldn't reach the printer	Impossible de joindre l'imprimante
+	Flip on long edge	Retourner sur le bord long
+	Flip on short edge	Retourner sur le bord court
+	Held by the printer	Retenu par l'imprimante
+	I confirm sending this document to this printer	Je confirme l'envoi de ce document à cette imprimante
+	Not confirmed by the printer	Non confirmé par l'imprimante
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Seules les adresses IP de ce réseau sont acceptées (privées, de lien local ou de bouclage), pas les noms d'hôte.
+	Photo	Photo
+	Printed with errors	Imprimé avec des erreurs
+	Printed with warnings	Imprimé avec des avertissements
+	Printer address:	Adresse de l'imprimante :
+	Printer orientation:	Orientation de l'imprimante :
+	Printer status: {state}	État de l'imprimante : {state}
+	Query printer	Interroger l'imprimante
+	Query the printer first to see what it supports.	Interrogez d'abord l'imprimante pour voir ce qu'elle prend en charge.
+	Reasons: {reasons}	Motifs : {reasons}
+	Reverse landscape	Paysage inversé
+	Reverse portrait	Portrait inversé
+	Sending to {printer}…	Envoi à {printer}…
+	Sent to {printer}	Envoyé à {printer}
+	Sent. The printer can't say whether it printed.	Envoyé. L'imprimante ne peut pas dire si elle a imprimé.
+	Sheets printed: {done} of {total}	Feuilles imprimées : {done} sur {total}
+	Sheets printed: {n}	Feuilles imprimées : {n}
+	Still printing; the job continues on the printer	Impression en cours ; le travail se poursuit sur l'imprimante
+	The document couldn't be prepared	Le document n'a pas pu être préparé
+	The job was canceled	Le travail a été annulé
+	The print job stopped unexpectedly	Le travail d'impression s'est arrêté de façon inattendue
+	The printer accepts none of the formats this document can be sent in	L'imprimante n'accepte aucun des formats dans lesquels ce document peut être envoyé
+	The printer address was refused	L'adresse de l'imprimante a été refusée
+	The printer doesn't support this setting	L'imprimante ne prend pas en charge ce réglage
+	The printer is printing it	L'imprimante est en train de l'imprimer
+	The printer may have received the document. Check the printer before sending again.	L'imprimante a peut-être reçu le document. Vérifiez l'imprimante avant de le renvoyer.
+	The printer no longer lists the job; it most likely finished	L'imprimante ne liste plus le travail ; il est très probablement terminé
+	The printer paused the job; it needs attention	L'imprimante a mis le travail en pause ; elle a besoin d'attention
+	The printer refused the request	L'imprimante a refusé la demande
+	The printer stopped the job	L'imprimante a arrêté le travail
+	The printer's reply couldn't be understood	La réponse de l'imprimante n'a pas pu être comprise
+	This printer does not take a copies setting.	Cette imprimante ne prend pas en charge un réglage du nombre de copies.
+	This printer does not take a quality setting.	Cette imprimante ne prend pas en charge un réglage de la qualité.
+	This printer does not take a resolution setting.	Cette imprimante ne prend pas en charge un réglage de la résolution.
+	This printer does not take an orientation setting.	Cette imprimante ne prend pas en charge un réglage de l'orientation.
+	This printer only prints in black and white.	Cette imprimante n'imprime qu'en noir et blanc.
+	This printer only prints one-sided.	Cette imprimante n'imprime qu'en recto.
+	Two-sided:	Recto verso :
+	Waiting in the printer's queue	En attente dans la file de l'imprimante
+	Network Printer…	Imprimante réseau…

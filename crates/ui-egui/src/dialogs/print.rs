@@ -33,7 +33,7 @@ use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
 
-pub(super) const KIND: &str = "print";
+pub(crate) const KIND: &str = "print";
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Print").into(), body, confirm, ok: Some("Print"), discard: Some("Done"), ..DialogSpec::FORM };
@@ -70,7 +70,7 @@ pub(super) fn defaults(kind: &str) -> Option<&'static Value> {
 const PLACED: &str = "tileOrigin.placed";
 
 /// The fields that aren't print settings.
-const NOT_SETTINGS: [&str; 5] = ["printer", "toFile", "discard", "preset", "name"];
+const NOT_SETTINGS: [&str; 6] = ["printer", "toFile", "network", "discard", "preset", "name"];
 
 /// The Printer list's entries besides the system's printers.
 const DEFAULT_PRINTER: &str = "Default Printer";
@@ -90,6 +90,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let default = list.iter().find(|p| p["default"] == true).or(list.first()).and_then(|p| p["name"].as_str()).unwrap_or_default();
     fields.insert("printer".into(), json!(default));
     fields.insert("toFile".into(), json!(!printers["service"].as_bool().unwrap_or(false)));
+    fields.insert("network".into(), json!(false));
     fields.insert("__printers".into(), printers);
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
@@ -205,6 +206,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = None;
         return Ok(json!({ "settings": settings }));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if d.bool("network") {
+        // A network printer: the job runs in the background and the dialog stays open to show it.
+        return crate::print::run_network(app, &settings);
+    }
     let r = crate::print::run(app, &json!({ "settings": settings, "printer": d.str("printer"), "toFile": d.bool("toFile") }))?;
     app.ui.dialog = None;
     Ok(r)
@@ -225,9 +231,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         preset_rows(app, ui, d);
         printer_row(app, ui, d);
     }
+    let preview = preview_of(app, ui.ctx(), &settings(d));
+    #[cfg(not(target_arch = "wasm32"))]
+    if d.kind == KIND && d.bool("network") {
+        // The address, query, listed options, confirmation and job are craft-ui's `printing::network`.
+        let sheets_ok = preview.as_ref().as_ref().is_ok_and(|v| v["sheets"].as_array().is_some_and(|s| !s.is_empty()));
+        egui::ScrollArea::vertical().id_salt("print-network").max_height(250.0).auto_shrink([false, true]).show(ui, |ui| {
+            app.print_net.show(ui, sheets_ok);
+        });
+    }
     ui.add_space(10.0);
     let section = current_section(d, &SECTIONS);
-    let preview = preview_of(app, ui.ctx(), &settings(d));
     ui.horizontal_top(|ui| {
         super::save_pdf::section_frame(ui, |ui| {
             super::save_pdf::section_list(ui, d, &SECTIONS, section);
@@ -302,6 +316,9 @@ enum Destination {
     /// The system's default printer (the web: the browser's print dialog).
     Default,
     File,
+    /// A printer on the network, by its address (desktop only).
+    #[cfg(not(target_arch = "wasm32"))]
+    Network,
 }
 
 /// The Printer row: the system's printers (or its default one), PDF File; Setup….
@@ -318,6 +335,8 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         entries.push(Destination::Default);
     }
     entries.push(Destination::File);
+    #[cfg(not(target_arch = "wasm32"))]
+    entries.push(Destination::Network);
     // The system's printers by their names; the default printer and PDF File are ours.
     let options: Vec<&str> = entries
         .iter()
@@ -325,10 +344,14 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             Destination::Printer(name) => name.as_str(),
             Destination::Default => tl!(DEFAULT_PRINTER),
             Destination::File => tl!(PDF_FILE),
+            #[cfg(not(target_arch = "wasm32"))]
+            Destination::Network => tl!("Network Printer…"),
         })
         .collect();
     let printer = d.str("printer");
-    let current = if d.bool("toFile") {
+    let current = if d.bool("network") {
+        tl!("Network Printer…")
+    } else if d.bool("toFile") {
         tl!(PDF_FILE)
     } else if printer.is_empty() {
         tl!(DEFAULT_PRINTER)
@@ -340,17 +363,28 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             Some(Destination::Printer(name)) => {
                 d.fields.insert("printer".into(), json!(name));
                 d.fields.insert("toFile".into(), json!(false));
+                d.fields.insert("network".into(), json!(false));
             }
             Some(Destination::Default) => {
                 d.fields.insert("printer".into(), json!(""));
                 d.fields.insert("toFile".into(), json!(false));
+                d.fields.insert("network".into(), json!(false));
             }
             Some(Destination::File) => {
                 d.fields.insert("toFile".into(), json!(true));
+                d.fields.insert("network".into(), json!(false));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Some(Destination::Network) => {
+                d.fields.insert("toFile".into(), json!(false));
+                d.fields.insert("network".into(), json!(true));
+                // The dialog's copies are where the printer's copies start; the confirmation is asked afresh.
+                app.print_net.state.dialog_opened();
+                app.print_net.state.draft.copies = (d.f64("copies", 1.0).max(1.0) as u32).min(999);
             }
             None => {}
         }
-        let to_file = d.bool("toFile");
+        let to_file = d.bool("toFile") || d.bool("network");
         let tip = if setup { tl!("The system's settings of this printer") } else { tl!("No printer settings to open here") };
         if ui.add_enabled_ui(setup && !to_file, |ui| widgets::flat_button(ui, tl!("Setup…"), 72.0)).inner.on_hover_text(tip).clicked()
             && let Err(e) = app.run("print.printerSetup", json!({ "printer": d.str("printer") }))

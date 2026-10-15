@@ -36,6 +36,8 @@ pub mod icons;
 pub mod io;
 pub mod menus;
 pub mod native_menu;
+#[cfg(not(target_arch = "wasm32"))]
+mod network_glue;
 pub mod opening;
 pub mod palette;
 mod panel_docking;
@@ -422,6 +424,9 @@ pub struct VectorcraftApp {
     pub graphics_adapter: Option<String>,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
+    /// File → Print ▸ Network printer: the address, the query and the job in flight (not on the web: no sockets).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) print_net: network_glue::NetTasks,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
     /// (SVG without a `system_clipboard`) while the internal clipboard is empty. It enables the
     /// Paste menu items.
@@ -539,6 +544,8 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             graphics_adapter: None,
             place: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            print_net: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
@@ -1169,6 +1176,8 @@ impl VectorcraftApp {
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.poll_network(ctx);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
         if !self.background.jobs.is_empty() || !self.opening.pending.is_empty() {

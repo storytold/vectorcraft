@@ -4769,3 +4769,56 @@ lighting	Light	Свет
 @msg	too many library panels were opened in this session	в этом сеансе открыто слишком много панелей библиотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Изображение {_1} × {_2} пикселей, больше {LARGE_TRACE_SIDE} по одной стороне: трассировка выполняется, но медленнее. Стиль с меньшей точностью или уменьшенная копия изображения трассируются быстрее.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Изображение трассировано в размере {_1} × {_2} пикселей, уменьшенное с {_3} × {_4} (не более {_5} мегапикселей).
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A setting isn't valid	Недопустимый параметр
+	Accepted by {printer}	Принято принтером {printer}
+	Asking the printer…	Запрос к принтеру…
+	Black and white	Чёрно-белый
+	Canceling…	Отмена…
+	Colour	Цвет
+	Couldn't reach the printer	Не удалось связаться с принтером
+	Flip on long edge	Переворот по длинному краю
+	Flip on short edge	Переворот по короткому краю
+	Held by the printer	Задержано принтером
+	I confirm sending this document to this printer	Подтверждаю отправку этого документа на этот принтер
+	Not confirmed by the printer	Не подтверждено принтером
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Принимаются только IP-адреса этой сети (частные, link-local или loopback), а не имена хостов.
+	Photo	Фото
+	Printed with errors	Напечатано с ошибками
+	Printed with warnings	Напечатано с предупреждениями
+	Printer address:	Адрес принтера:
+	Printer orientation:	Ориентация принтера:
+	Printer status: {state}	Состояние принтера: {state}
+	Query printer	Опросить принтер
+	Query the printer first to see what it supports.	Сначала опросите принтер, чтобы узнать, что он поддерживает.
+	Reasons: {reasons}	Причины: {reasons}
+	Reverse landscape	Альбомная перевёрнутая
+	Reverse portrait	Книжная перевёрнутая
+	Sending to {printer}…	Отправка на {printer}…
+	Sent to {printer}	Отправлено на {printer}
+	Sent. The printer can't say whether it printed.	Отправлено. Принтер не может сообщить, напечатано ли.
+	Sheets printed: {done} of {total}	Напечатано листов: {done} из {total}
+	Sheets printed: {n}	Напечатано листов: {n}
+	Still printing; the job continues on the printer	Печать продолжается; задание выполняется на принтере
+	The document couldn't be prepared	Не удалось подготовить документ
+	The job was canceled	Задание отменено
+	The print job stopped unexpectedly	Задание печати неожиданно остановилось
+	The printer accepts none of the formats this document can be sent in	Принтер не принимает ни один из форматов, в которых можно отправить этот документ
+	The printer address was refused	Адрес принтера отклонён
+	The printer doesn't support this setting	Принтер не поддерживает этот параметр
+	The printer is printing it	Принтер печатает его
+	The printer may have received the document. Check the printer before sending again.	Возможно, принтер получил документ. Проверьте принтер перед повторной отправкой.
+	The printer no longer lists the job; it most likely finished	Принтер больше не показывает задание; скорее всего, оно завершено
+	The printer paused the job; it needs attention	Принтер приостановил задание; требуется внимание
+	The printer refused the request	Принтер отклонил запрос
+	The printer stopped the job	Принтер остановил задание
+	The printer's reply couldn't be understood	Не удалось понять ответ принтера
+	This printer does not take a copies setting.	Этот принтер не поддерживает параметр числа копий.
+	This printer does not take a quality setting.	Этот принтер не поддерживает параметр качества.
+	This printer does not take a resolution setting.	Этот принтер не поддерживает параметр разрешения.
+	This printer does not take an orientation setting.	Этот принтер не поддерживает параметр ориентации.
+	This printer only prints in black and white.	Этот принтер печатает только в чёрно-белом режиме.
+	This printer only prints one-sided.	Этот принтер печатает только на одной стороне.
+	Two-sided:	Двусторонняя печать:
+	Waiting in the printer's queue	Ожидает в очереди принтера
+	Network Printer…	Сетевой принтер…
