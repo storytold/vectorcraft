@@ -3,8 +3,8 @@
 use std::sync::OnceLock;
 
 use craft_ui::icons::{SvgIconSet, SvgStyle};
-use egui::{Color32, ImageSource, Rect, Ui, Vec2};
 use egui::emath::GuiRounding;
+use egui::{Color32, ImageSource, Rect, Ui, Vec2};
 
 fn table() -> &'static SvgIconSet {
     static T: OnceLock<SvgIconSet> = OnceLock::new();
@@ -136,11 +136,7 @@ pub fn paint_with(painter: &egui::Painter, name: &str, rect: Rect, tint: Color32
     let rect = rect.round_to_pixels(scale);
     // Exactly the pixels the rectangle covers, so an SVG comes out crisp.
     let size = rect.size();
-    let hint = egui::SizeHint::Size {
-        width: (scale * size.x).round() as u32,
-        height: (scale * size.y).round() as u32,
-        maintain_aspect_ratio: false,
-    };
+    let hint = egui::SizeHint::Size { width: (scale * size.x).round() as u32, height: (scale * size.y).round() as u32, maintain_aspect_ratio: false };
     let loaded = source(name).load(painter.ctx(), egui::TextureOptions::default(), hint);
     let Ok(egui::load::TexturePoll::Ready { texture }) = loaded else { return };
     egui::paint_texture_at(painter, rect, &egui::ImageOptions { tint, ..Default::default() }, &texture);

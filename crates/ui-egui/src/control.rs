@@ -449,12 +449,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "app.quit" => wrap(app.run("app.quit", json!({}))),
         // Cloud storage. Each one states a job and answers at once; the worker reports later, and
         // `cloud.status` is where that shows up.
-        "cloud.status" | "cloud.open" | "cloud.shared" | "cloud.link" | "cloud.save" | "cloud.reload" => {
-            wrap(app.run(&req.method, json!({})))
-        }
-        "cloud.browse" | "cloud.openFile" | "cloud.saveAs" => {
-            wrap(app.run(&req.method, if p.is_object() { p.clone() } else { json!({}) }))
-        }
+        "cloud.status" | "cloud.open" | "cloud.shared" | "cloud.link" | "cloud.save" | "cloud.reload" => wrap(app.run(&req.method, json!({}))),
+        "cloud.browse" | "cloud.openFile" | "cloud.saveAs" => wrap(app.run(&req.method, if p.is_object() { p.clone() } else { json!({}) })),
         other => err(format!("unknown method `{other}`")),
     }
 }
