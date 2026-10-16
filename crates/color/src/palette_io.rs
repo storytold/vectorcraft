@@ -191,6 +191,10 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
                         g.gradient.stops.iter().map(|s| format!("{} {}%", css_color(&s.color, s.opacity), (s.offset * 100.0).round())).collect();
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
+                        // CSS turns clockwise from straight up, as the angle is measured from the right.
+                        GradientKind::Conic => {
+                            format!("conic-gradient(from {}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", "))
+                        }
                         _ => format!("linear-gradient({}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", ")),
                     }
                 }
@@ -803,6 +807,16 @@ mod tests {
         let text = written(&lib, PaletteFormat::Css);
         assert!(text.contains("--red: #000000;") && text.contains("--red-2: #000000;"));
         assert!(read(&text, "x").is_err(), "CSS is written only");
+        // A conic gradient swatch starts where its angle points (CSS turns from straight up).
+        let mut conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
+        conic.angle = 90.0;
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch { name: "Sweep".into(), paint: Paint::Gradient(Box::new(conic)), global: false, spot: false }],
+            groups: vec![],
+        };
+        let text = written(&lib, PaletteFormat::Css);
+        assert!(text.contains("--sweep: conic-gradient(from 0deg, #ffffff 0%, #000000 100%);"), "{text}");
     }
 
     #[test]

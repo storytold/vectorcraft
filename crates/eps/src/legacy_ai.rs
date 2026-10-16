@@ -88,6 +88,7 @@ pub const TRANSPARENCY: &str = "transparency (opacity, blending modes, opacity m
 pub const NAMES: &str = "object names are left out (legacy .ai files name only layers)";
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
 const FREEFORM: &str = "freeform gradients are written as their average colour";
+const CONIC: &str = "conic gradients are written as linear gradients (legacy .ai files have none)";
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
@@ -1000,6 +1001,9 @@ impl<'a> Writer<'a> {
         // give (§3.5.4), so it stays the identity: an elliptical radial is written circular.
         if g.gradient.kind == GradientKind::Radial && (geom.aspect - 1.0).abs() > 1e-6 {
             self.warn(ELLIPTICAL);
+        }
+        if g.gradient.kind == GradientKind::Conic {
+            self.warn(CONIC);
         }
         let mut s = String::from("Bb\n");
         if g.gradient.kind == GradientKind::Radial

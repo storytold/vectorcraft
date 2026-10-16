@@ -2217,6 +2217,7 @@
 	Radial	Радиальный
 	Radial Glows	Радиальные свечения
 	Radial Gradient	Радиальный градиент
+	Conic Gradient	Конический градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -4003,7 +4004,7 @@ axis	Both	Оба
 @msg	unknown format	неизвестный формат
 @msg	unknown format `{f}` (Save writes {_1})	неизвестный формат `{f}` (сохранение записывает {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	неизвестный режим произвольной формы `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	неизвестный тип градиента `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	неизвестный тип градиента `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	неизвестное выделение `{h}`
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)

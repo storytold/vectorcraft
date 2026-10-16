@@ -20,6 +20,10 @@
 //! focal point (where the first stop sits): drag it to make the gradient off-centre, back onto
 //! the centre to centre it.
 //!
+//! A conic gradient shows the same extent ellipse, aspect handle and centre ring (it has no
+//! focal point): the bar marks where the sweep starts, its stops along it by their share of the
+//! turn.
+//!
 //! On a freeform gradient the tool edits its points instead (see `freeform`).
 
 use serde_json::{Value, json};
@@ -99,7 +103,12 @@ impl Annotator {
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
         Self { geom, gradient: Gradient { kind: GradientKind::Linear, stops: stops.to_vec() } }
     }
+    /// Placed by a centre and an extent ellipse (radial and conic)?
     fn radial(&self) -> bool {
+        self.gradient.kind.is_centred()
+    }
+    /// Has a focal point to drag (radial only)?
+    fn focal(&self) -> bool {
         self.gradient.kind == GradientKind::Radial
     }
     /// A radial's aspect handle: on the extent ellipse, across the bar from the stops.
@@ -160,7 +169,7 @@ impl Annotator {
             return Some(Part::End);
         }
         let radial = self.radial();
-        if radial && near(Some(self.geom.focal_point()), FOCAL_HIT) {
+        if self.focal() && near(Some(self.geom.focal_point()), FOCAL_HIT) {
             return Some(Part::Focal);
         }
         if near(Some(self.geom.start), if radial { CENTRE_HIT } else { HANDLE }) {
@@ -256,7 +265,7 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     o.extend([
         Overlay::Line { a: s, b: e, color: BAR, dashed: false },
         Overlay::Line { a: s + shade, b: e + shade, color: LIGHT, dashed: false },
-        Overlay::Handle { p: if a.radial() { a.geom.focal_point() } else { s }, color: BAR },
+        Overlay::Handle { p: if a.focal() { a.geom.focal_point() } else { s }, color: BAR },
         Overlay::Anchor { p: e, color: BAR, filled: true, size: 7.0 },
     ]);
     let len = a.vector().hypot();
@@ -924,5 +933,25 @@ mod tests {
         assert_eq!((hit(120.0, 145.0), hit(104.0, 150.0), hit(100.0, 100.0)), (Some(Part::Focal), Some(Part::Start), Some(Part::Aspect)));
         assert_eq!((hit(100.0, 200.0), hit(0.0, 150.0), hit(100.0, 220.0)), (Some(Part::Rotate), Some(Part::Rotate), None));
         assert_eq!(GradientTool::default().cursor(&cx, Point::new(100.0, 200.0), Mods::default()), Cursor::Rotate);
+    }
+
+    #[test]
+    fn a_conic_shows_its_extent_ellipse_and_aspect_handle_without_a_focal_dot() {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        g.gradient.kind = GradientKind::Conic;
+        let geom = g.geom.as_mut().unwrap();
+        geom.aspect = 0.5;
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let o = GradientTool::default().overlays(&cx);
+        assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Path { dashed: true, .. })).count(), 1, "the extent ellipse");
+        assert!(o.contains(&Overlay::Handle { p: Point::new(100.0, 100.0), color: BAR }), "the aspect handle");
+        let a = Annotator::of(&cx).unwrap();
+        let hit = |x: f64, y: f64| a.hit(&cx, Point::new(x, y));
+        // The centre is the start handle (no focal dot to grab there); the ellipse rotates.
+        assert_eq!((hit(100.0, 150.0), hit(100.0, 100.0), hit(0.0, 150.0)), (Some(Part::Start), Some(Part::Aspect), Some(Part::Rotate)));
     }
 }

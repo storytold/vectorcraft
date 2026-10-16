@@ -555,9 +555,27 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
     }
 }
 
-/// Draw a gradient preview into `rect` (linear left to right; radial from the centre).
+/// Draw a gradient preview into `rect` (linear left to right; radial from the centre; conic
+/// clockwise around the centre from the right).
 pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient) {
     let p = ui.painter();
+    if gradient.kind == vectorcraft_color::GradientKind::Conic {
+        let p = p.with_clip_rect(rect.intersect(p.clip_rect()));
+        let (c, r) = (rect.center(), rect.width().max(rect.height()));
+        let n = 36;
+        let at = |i: usize| {
+            let a = std::f32::consts::TAU * i as f32 / n as f32;
+            c + vec2(a.cos(), a.sin()) * r
+        };
+        for i in 0..n {
+            let (col, _) = gradient.sample((i as f32 + 0.5) / n as f32);
+            let [r, g, b, _] = col.to_rgba8(1.0);
+            let col = Color32::from_rgb(r, g, b);
+            // A hairline in the wedge's own colour covers the seam to the next one.
+            p.add(egui::Shape::convex_polygon(vec![c, at(i), at(i + 1)], col, Stroke::new(0.5, col)));
+        }
+        return;
+    }
     let radial = gradient.kind == vectorcraft_color::GradientKind::Radial;
     if radial {
         // Outer colour fills the corners beyond the largest circle.

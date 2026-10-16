@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges for conic ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -363,12 +363,14 @@ fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32
     out
 }
 
-/// A linear or radial gradient's geometry over an object's box: its start, the vector to its
-/// end, the vector across it (radial: the ellipse's other axis), and the parameter ranges that
-/// cover the box (linear: along the vector `t0..t1` and across it `s0..s1` in points; radial:
-/// `0..t1`, each level's ellipse centred on the way from the focal point to the start).
+/// A linear, radial or conic gradient's geometry over an object's box: its start, the vector to
+/// its end, the vector across it (radial and conic: the ellipse's other axis), and the parameter
+/// ranges that cover the box (linear: along the vector `t0..t1` and across it `s0..s1` in points;
+/// radial: `0..t1`, each level's ellipse centred on the way from the focal point to the start;
+/// conic: the same ellipses about the centre, `t1` the one reaching every corner).
 struct Frame {
     radial: bool,
+    conic: bool,
     start: Point,
     focal: Point,
     along: Vec2,
@@ -382,7 +384,8 @@ struct Frame {
 impl Frame {
     fn new(g: &GradientPaint, bounds: Rect) -> Self {
         let geom = g.resolve(bounds);
-        let radial = g.gradient.kind == GradientKind::Radial;
+        let conic = g.gradient.kind == GradientKind::Conic;
+        let radial = g.gradient.kind.is_centred();
         // A vector of no length paints as one pointing right (as the canvas does).
         let along = if geom.start.distance(geom.end) < 1e-9 { Vec2::new(1.0, 0.0) } else { geom.end - geom.start };
         let normal = Vec2::new(-along.y, along.x) / along.hypot();
@@ -392,12 +395,14 @@ impl Frame {
         let (mut t0, mut t1) = range(&|c| (c - geom.start).dot(along) / along.hypot2());
         let (s0, s1) = range(&|c| (c - geom.start).dot(normal));
         if radial {
-            let geom = vectorcraft_color::GradientGeom { end: geom.start + along, ..geom };
+            // A conic has no focal point: its ellipses share the centre.
+            let geom = vectorcraft_color::GradientGeom { end: geom.start + along, focal: geom.focal.filter(|_| !conic), ..geom };
             (t0, t1) = (0.0, range(&|c| geom.param_at(GradientKind::Radial, c)).1);
         }
         // Keep a sliver of span so the art maps back invertibly.
         t1 = t1.max(t0 + 1e-6);
-        Self { radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
+        let focal = if conic { geom.start } else { geom.focal_point() };
+        Self { radial, conic, start: geom.start, focal, along, across, t0, t1, s0, s1 }
     }
 
     /// Linear: the point at parameter `t` along and `s` across. Radial: the point at parameter `t`
@@ -413,6 +418,13 @@ impl Frame {
     /// A gradient mesh covering the box: columns (linear) or rings (radial) where the colour
     /// changes, so it paints the gradient exactly.
     fn mesh(&self, g: &Gradient) -> GradientMesh {
+        if self.conic {
+            // Columns around the centre where the colour changes (at most 1/32 turn apart, so
+            // the arcs stay round), from the centre out past the corners.
+            let br = breaks(g, 0.0, 1.0, 1.0 / 32.0);
+            let us: Vec<f64> = br.iter().map(|(t, _)| *t).collect();
+            return GradientMesh::from_grid(&us, &[0.0, 1.0], &|u, v| self.at(self.t1 * v, u * std::f64::consts::TAU), &|_, c, _| br[c].1);
+        }
         // Rings as close as the columns around them, so the mesh draws smoothly.
         let gap = if self.radial { (self.t1 - self.t0) / RADIAL_MESH_COLS as f64 } else { f64::INFINITY };
         let br = breaks(g, self.t0, self.t1, gap);
@@ -435,6 +447,22 @@ impl Frame {
         let step = (self.t1 - self.t0) / n as f64;
         let color = |k: usize| g.sample_with((self.t0 + (k as f64 + 0.5) * step) as f32, lerp_color);
         let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
+        if self.conic {
+            // Wedges around the centre, past the corners (arc points at most 1/32 turn apart,
+            // their chords outside the box), each run on to the seam when opaque.
+            let r = self.t1 / (std::f64::consts::PI / 32.0).cos();
+            let turn = 1.0 / n as f64;
+            let color = |k: usize| g.sample_with(((k as f64 + 0.5) * turn) as f32, lerp_color);
+            return (0..n)
+                .map(|k| {
+                    let (a, b) = (k as f64 * turn, if opaque { 1.0 } else { (k + 1) as f64 * turn });
+                    let steps = ((b - a) * 32.0).ceil().max(1.0) as usize;
+                    let mut pts = vec![self.start];
+                    pts.extend((0..=steps).map(|i| self.at(r, (a + (b - a) * i as f64 / steps as f64) * std::f64::consts::TAU)));
+                    (PathData::single(SubPath::polyline(&pts, true)), color(k))
+                })
+                .collect();
+        }
         if self.radial {
             let ellipse = |t: f64| {
                 let c = self.focal + (self.start - self.focal) * t;

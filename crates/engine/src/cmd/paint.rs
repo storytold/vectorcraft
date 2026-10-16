@@ -511,7 +511,7 @@ fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> 
         return Err("span: \"selection\" places a `gradient`, not a swatch".into());
     }
     if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some() {
-        return Err("span: \"selection\" places a linear, radial or conic gradient, not a freeform one".into());
+        return Err("span: \"selection\" places a linear or radial gradient, not a freeform one".into());
     }
     if g.geom.is_some() {
         return Err(

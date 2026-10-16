@@ -82,7 +82,7 @@ fn bad_gradients_are_rejected_without_editing() {
         json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"color": "#000000"}]}),
         json!({"stops": [{"offset": "a", "color": "#ff0000"}, {"offset": 1, "color": "#000000"}]}),
         json!({"stops": "red"}),
-        json!({"kind": "conic"}),
+        json!({"kind": "spiral"}),
         json!({"start": [0, 0]}),
         json!({"aspect": "wide"}),
     ] {

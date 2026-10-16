@@ -297,6 +297,7 @@ pub(crate) fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bo
             let icon = match g.gradient.kind {
                 GradientKind::Linear => "dc-grad-linear",
                 GradientKind::Radial => "dc-grad-radial",
+                GradientKind::Conic => "dc-grad-conic",
                 GradientKind::Freeform => "dc-grad-freeform",
             };
             icons::paint(ui, icon, kind.expand(1.0), t.icon);

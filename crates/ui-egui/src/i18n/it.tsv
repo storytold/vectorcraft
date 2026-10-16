@@ -2221,6 +2221,7 @@
 	Radial	Radiale
 	Radial Glows	Bagliori radiali
 	Radial Gradient	Sfumatura radiale
+	Conic Gradient	Sfumatura conica
 	Radius 1	Raggio 1
 	Radius 2	Raggio 2
 	Radius1	Raggio1
@@ -4007,7 +4008,7 @@ axis	Both	Entrambi
 @msg	unknown format	formato sconosciuto
 @msg	unknown format `{f}` (Save writes {_1})	formato sconosciuto `{f}` (Salva scrive {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modalità a forma libera sconosciuta `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo di sfumatura sconosciuto `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	evidenziazione sconosciuta `{h}`
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)

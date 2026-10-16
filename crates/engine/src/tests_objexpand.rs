@@ -142,6 +142,35 @@ fn a_radial_gradient_becomes_concentric_ellipses() {
 }
 
 #[test]
+fn a_conic_gradient_becomes_wedges_or_a_mesh_that_paint_it() {
+    let conic = json!({"kind": "conic", "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ff00ff"}, {"offset": 1, "color": "#004080"}]});
+    // Objects: a wedge per step, each from the centre and coloured at its middle.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), conic.clone(), false);
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"steps": 180}));
+    let g = selected(&s);
+    let (_, wedges) = clip_parts(&g);
+    assert_eq!(wedges.len(), 180);
+    let first = wedges[0].path_data().unwrap().subpaths[0].anchors[0].p;
+    assert!(first.distance(vectorcraft_geom::Point::new(100.0, 100.0)) < 1e-9, "wedges start at the centre: {first:?}");
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.0, "{}", mean_diff(&before, &after));
+    // Mesh: columns around the centre.
+    let mut s = session();
+    gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), conic, false);
+    run(&mut s, "object.expand", json!({"gradient": "mesh"}));
+    let g = selected(&s);
+    let (_, content) = clip_parts(&g);
+    let NodeKind::Mesh(m) = &content[0].kind else { panic!("a mesh node: {:?}", content[0].kind) };
+    assert!(m.is_valid());
+    let after = render(&s);
+    assert!(differing(&before, &after, 48) < 200, "{}", differing(&before, &after, 48));
+    assert!(mean_diff(&before, &after) < 2.5, "{}", mean_diff(&before, &after));
+}
+
+#[test]
 fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [
         json!({"kind": "linear", "angle": 30, "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 0.4, "color": "#00ff00", "midpoint": 0.3}, {"offset": 1, "color": "#0000ff"}]}),

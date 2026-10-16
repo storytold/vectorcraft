@@ -95,7 +95,7 @@ fn dragged_stops(origin: &[GradientStop], i: usize, offset: f32, copy: bool, ove
 
 // ---------- shared edits ----------
 
-/// The Type row: Linear, Radial and Freeform for the paint behind the active proxy (one of them
+/// The Type row: Linear, Radial, Conic and Freeform for the paint behind the active proxy (one of them
 /// lit when it is a gradient). The Gradient panel's and the Properties panel's.
 pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let kind = current(app).map(|g| g.gradient.kind);
@@ -104,6 +104,7 @@ pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         for (k, icon, tip) in [
             (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
             (GradientKind::Radial, "dc-grad-radial", tl!("Radial Gradient")),
+            (GradientKind::Conic, "dc-grad-conic", tl!("Conic Gradient")),
             (GradientKind::Freeform, "dc-grad-freeform", tl!("Freeform Gradient")),
         ] {
             if widgets::icon_button(ui, icon, tip, kind == Some(k), 24.0).clicked() {
@@ -277,10 +278,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind == GradientKind::Radial && placed;
+            let radial = kind.is_centred() && placed;
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text(tl!("Aspect Ratio"));
-                let asp = g.geom.map_or(100.0, |x| (x.aspect * 1000.0).round() / 10.0);
+                let asp = g.geom.map_or(100.0, |x| (x.aspect.abs() * 1000.0).round() / 10.0);
                 let set = ui.add_enabled_ui(radial, |ui| widgets::spin_plain(ui, "grad-aspect", asp, "%", 1, 104.0, 1.0, 0.5, &ASPECT_PRESETS)).inner;
                 if let Some(a) = set {
                     edit(app, json!({"aspect": a}), Live::Released);

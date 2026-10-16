@@ -2226,6 +2226,7 @@
 	RECENT	最近使用したもの
 	Radar Graph Tool	レーダーチャートツール
 	Radial Gradient	円形グラデーション
+	Conic Gradient	円錐グラデーション
 	Random	ランダム
 	Randomize Colors	カラーをランダム化
 	Randomly change color order	カラーの順序をランダムに変更
@@ -3728,7 +3729,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	stop {i} needs `offset`	分岐点 {i} には `offset` が必要です
 @msg	stop {i} needs a valid `color`	分岐点 {i} には有効な `color` が必要です
 @msg	stop {i}: `{k}` must be a number	分岐点 {i}: `{k}` には数値を指定してください
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、freeform)
 @msg	the art could not be sampled	アートをサンプリングできませんでした
 @msg	the art is too light for any dots	アートが明るすぎて網点を生成できません
 @msg	the document has no symbols	ドキュメントにシンボルがありません

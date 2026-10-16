@@ -190,6 +190,41 @@ fn gradients_are_smooth_shadings_at_level_3_and_stepped_fills_at_level_2() {
 }
 
 #[test]
+fn conic_gradients_are_solid_wedges_at_both_levels() {
+    // PostScript has no conic shading: wedges around the centre, each run on to the seam.
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Conic, stops });
+    g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(150.0, 70.0), aspect: 1.0, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+        let out = export(&d, &o, None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("conic")), "{:?}", out.warnings);
+        let page = page_of(&d, &o);
+        assert!(!page.contains("shfill"), "no shading stands in");
+        assert_eq!(page.matches("closepath fill").count(), 360, "a wedge per degree");
+    }
+    // Read back from its PostScript, it looks as the canvas paints it.
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let back = import_with(&out.bytes, false).unwrap().document;
+    vectorcraft_testkit::raster::assert_similar(
+        &vectorcraft_testkit::raster::render_artboard(&d),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        8.0,
+        0.01,
+    );
+}
+
+#[test]
+fn legacy_ai_writes_a_conic_gradient_as_linear_with_a_warning() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Conic, stops })));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    let out = export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as linear")), "{:?}", out.warnings);
+}
+
+#[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
         let mut n = path(d, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)), Paint::None, Paint::solid(Color::BLACK), 4.0);
