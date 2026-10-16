@@ -4617,3 +4617,13 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+	Smudge Stick…	スマッジスティック…
+	Smudge Stick	スマッジスティック
+	Sponge…	スポンジ…
+	Sponge	スポンジ
+	Watercolor…	水彩…
+	Watercolor	水彩
+	Brush Size	ブラシサイズ
+	Definition	精細度
+	Brush Detail	ブラシの細かさ
+	Shadow Intensity	シャドウの強さ

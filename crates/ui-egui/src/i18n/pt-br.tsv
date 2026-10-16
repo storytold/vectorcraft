@@ -4916,3 +4916,13 @@ mark-style	Japanese	Japonesas
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
+	Smudge Stick…	Esfuminho…
+	Smudge Stick	Esfuminho
+	Sponge…	Esponja…
+	Sponge	Esponja
+	Watercolor…	Aquarela…
+	Watercolor	Aquarela
+	Brush Size	Tamanho do pincel
+	Definition	Definição
+	Brush Detail	Detalhe do pincel
+	Shadow Intensity	Intensidade da sombra

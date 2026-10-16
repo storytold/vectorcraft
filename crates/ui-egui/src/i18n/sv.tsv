@@ -4955,3 +4955,13 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
+	Smudge Stick…	Utsmetning…
+	Smudge Stick	Utsmetning
+	Sponge…	Svamp…
+	Sponge	Svamp
+	Watercolor…	Akvarell…
+	Watercolor	Akvarell
+	Brush Size	Penselstorlek
+	Definition	Skärpa
+	Brush Detail	Penseldetalj
+	Shadow Intensity	Skuggintensitet

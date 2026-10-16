@@ -4844,3 +4844,13 @@ mark-style	Japanese	Japońskie
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
+	Smudge Stick…	Rozmazywacz…
+	Smudge Stick	Rozmazywacz
+	Sponge…	Gąbka…
+	Sponge	Gąbka
+	Watercolor…	Akwarela…
+	Watercolor	Akwarela
+	Brush Size	Rozmiar pędzla
+	Definition	Wyrazistość
+	Brush Detail	Szczegółowość pędzla
+	Shadow Intensity	Intensywność cieni

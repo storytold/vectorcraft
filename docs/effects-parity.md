@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (G2: Effect › Sketch › Halftone Pattern; Photoshop filters 30/57, 27 remaining (22–38 h); Round Corners also rounds corners where a curve meets a line or another curve, with Live Corners' cut; straight corners unchanged; score unchanged; Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (G2: Effect › Artistic › Smudge Stick, Sponge and Watercolor; Photoshop filters 33/57, 24 remaining (19–35 h); G2: Effect › Sketch › Halftone Pattern; Photoshop filters 30/57, 27 remaining (22–38 h); Round Corners also rounds corners where a curve meets a line or another curve, with Live Corners' cut; straight corners unchanged; score unchanged; Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -12,7 +12,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
 | Illustrator effects (vector and stylize) | 50 | 45 | 90% | 6–10 |
-| Photoshop effects (raster, Effect Gallery) | 57 | 30 | 53% | 22–38 |
+| Photoshop effects (raster, Effect Gallery) | 57 | 33 | 58% | 19–35 |
 | 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
@@ -38,7 +38,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 | Submenu | Items | Ours | Missing |
 |---|---|---:|---|
-| Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 1/15 (approximate Film Grain) | Colored Pencil, Cutout, Dry Brush, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor |
+| Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 4/15 (approximate Film Grain, Smudge Stick, Sponge, Watercolor) | Colored Pencil, Cutout, Dry Brush, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Underpainting |
 | Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | — |
 | Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 8/8 | — |
 | Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | — |
@@ -52,7 +52,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 The pixel-filter pipeline (`vectorcraft_effects::pixel`) is in place: each new filter is one function, a
 catalogue row, a menu entry and translations. Measured throughput: 0.7–1.2 agent hours per filter
-(see [calibration](target-app-parity.md#calibration)), so the 27 missing filters are ~18–33 h and the Effect
+(see [calibration](target-app-parity.md#calibration)), so the 24 missing filters are ~16–29 h and the Effect
 Gallery dialog another 4–6 h. These parallelize well across agents.
 
 Film Grain (`artistic.filmGrain`, Effect › Artistic) adds stable monochrome noise to shadows and
@@ -78,7 +78,26 @@ Calibration on uniform grey at Grain 20, using 32×32 fine samples per coarse pi
 grain standard deviation within about 15% of the dense area average at pixel widths of 2, 4
 and 8 document units (ratios 1.13, 0.89, 0.85). This is evidence for the bounded approximation,
 not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grain_*`,
-`tests_rasterfilters`, `tests_adjust::film_grain_dialog_*` and `tests_labels::effect_menu_lists_film_grain_*`.
+`tests_rasterfilters`, `tests_adjust::film_grain_dialog_*` and `tests_labels::effect_menu_lists_the_artistic_filters_*`.
+
+Smudge Stick (`artistic.smudgeStick`), Sponge (`artistic.sponge`) and Watercolor (`artistic.watercolor`),
+Effect › Artistic, are original visual approximations from the public descriptions in
+[Illustrator's effects reference](https://helpx.adobe.com/illustrator/using/summary-effects.html) and the
+[public Artistic filters guide](https://helpx.adobe.com/photoshop-elements/using/artistic-filters.html), not
+pixel-identical copies. Each has live preview, appearance editing, document-unit patterns that follow the
+object, bounded work per pixel and kept coverage (they paint nothing outside the object), and bakes to an
+image in SVG and PDF. Ranges and defaults are chosen for VectorCraft, not asserted as measured.
+- Smudge Stick (Stroke Length 0–10, Highlight Area 0–20, Intensity 0–10): dark areas smudged along short
+  diagonal strokes; light areas smudged with strokes twice as long and lightened towards white.
+- Sponge (Brush Size 0–10, Definition 0–25, Smoothness 1–15): the object softened, then lighter and darker
+  blobs of the same hue, their contrast set by Definition, their edges by Smoothness.
+- Watercolor (Brush Detail 1–14, Shadow Intensity 0–10, Texture 1–3): detail simplified by an edge-keeping
+  average whose brush widens as Brush Detail falls, colour saturated and pooled darker where tones change at
+  edges, shadows deepened, a faint paper grain. Edges are found from tone only, so a change of hue at equal
+  brightness is not saturated.
+
+Tests: `pixel::tests_paint::*`, `tests_rasterfilters`, `dialogs::tests::raster_filter_dialogs_*`,
+`tests_labels::effect_menu_lists_the_artistic_filters_*` and the `command_sweep` structured junk.
 
 ## 3D and Materials
 
@@ -99,6 +118,7 @@ angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | G2: Effect › Artistic › Smudge Stick, Sponge and Watercolor (live, with their documented options; original approximations); measured Photoshop filters 33/57, 24 remaining (19–35 h). |
 | 2026-10-16 | minor | G2: Effect › Sketch › Halftone Pattern (Size, Contrast, Pattern Type Circle, Dot or Line; black ink on white paper, Size in points at any Document Raster Effects resolution); measured Photoshop filters 30/57, 27 remaining (22–38 h). |
 | 2026-10-15 | minor | Round Corners rounds corners whose anchor carries a handle (where a curve meets a line, or two curves meet) with the round cut Live Corners uses (#1144), reaching `radius` along each side; before, they were left sharp. Corners between handle-less anchors are rounded as before; score unchanged (estimated) |
 | 2026-10-14 | minor | Revolve: automatic smooth vector shading, default-on Cap with continuous curved rims, and bounded seam joins; angular cut sides remain open. Scores and hour estimates unchanged at this rounding |

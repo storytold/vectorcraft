@@ -4998,3 +4998,13 @@ theme	Appearance	Apparence
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
+	Smudge Stick…	Estompe…
+	Smudge Stick	Estompe
+	Sponge…	Éponge…
+	Sponge	Éponge
+	Watercolor…	Aquarelle…
+	Watercolor	Aquarelle
+	Brush Size	Taille du pinceau
+	Definition	Définition
+	Brush Detail	Détail du pinceau
+	Shadow Intensity	Intensité des ombres

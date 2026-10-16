@@ -4540,3 +4540,13 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+	Smudge Stick…	문지르기 막대…
+	Smudge Stick	문지르기 막대
+	Sponge…	스펀지…
+	Sponge	스펀지
+	Watercolor…	수채화…
+	Watercolor	수채화
+	Brush Size	브러시 크기
+	Definition	선명도
+	Brush Detail	브러시 세부 묘사
+	Shadow Intensity	그림자 강도

@@ -30,8 +30,9 @@ const BRUSH_STROKES: [(&str, &str); 8] = [
     ("brushStrokes.sumiE", "{}"),
 ];
 
-/// Effect › Artistic › Film Grain, at its defaults.
-const ARTISTIC: [(&str, &str); 1] = [("artistic.filmGrain", "{}")];
+/// Effect › Artistic › Film Grain, Smudge Stick, Sponge and Watercolor, at their defaults.
+const ARTISTIC: [(&str, &str); 4] =
+    [("artistic.filmGrain", "{}"), ("artistic.smudgeStick", "{}"), ("artistic.sponge", "{}"), ("artistic.watercolor", "{}")];
 
 /// Effect › Distort (Diffuse Glow with its highlights glowing from a low brightness up, as the
 /// striped art's reds are dark).

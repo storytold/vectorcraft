@@ -69,13 +69,13 @@ fn effect_menu_lists_outline_object_between_offset_path_and_outline_stroke() {
 }
 
 #[test]
-fn effect_menu_lists_film_grain_in_artistic_before_blur() {
+fn effect_menu_lists_the_artistic_filters_before_blur() {
     let app = app();
     let entries = menus::menu_entries(&app);
     let artistic: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Artistic"]).collect();
-    assert_eq!(artistic.len(), 1);
-    assert_eq!(artistic[0].label, "Film Grain…");
-    assert_eq!(artistic[0].command.as_deref(), Some("effect.dialog"));
+    let labels: Vec<&str> = artistic.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Film Grain…", "Smudge Stick…", "Sponge…", "Watercolor…"]);
+    assert!(artistic.iter().all(|e| e.command.as_deref() == Some("effect.dialog")));
     let at = |name: &str| entries.iter().position(|e| e.path == ["Effect", name]).unwrap();
     assert!(at("Artistic") < at("Blur"));
 }

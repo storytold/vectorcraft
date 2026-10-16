@@ -4556,3 +4556,13 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
+	Smudge Stick…	Bút chì xóa mờ…
+	Smudge Stick	Bút chì xóa mờ
+	Sponge…	Bọt biển…
+	Sponge	Bọt biển
+	Watercolor…	Màu nước…
+	Watercolor	Màu nước
+	Brush Size	Kích thước cọ
+	Definition	Độ nét
+	Brush Detail	Chi tiết cọ
+	Shadow Intensity	Cường độ bóng

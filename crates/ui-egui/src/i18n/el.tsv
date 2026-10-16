@@ -4951,3 +4951,13 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+	Smudge Stick…	Μουτζούρα…
+	Smudge Stick	Μουτζούρα
+	Sponge…	Σφουγγάρι…
+	Sponge	Σφουγγάρι
+	Watercolor…	Υδατογραφία…
+	Watercolor	Υδατογραφία
+	Brush Size	Μέγεθος πινέλου
+	Definition	Ευκρίνεια
+	Brush Detail	Λεπτομέρεια πινέλου
+	Shadow Intensity	Ένταση σκιών

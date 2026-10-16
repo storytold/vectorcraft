@@ -4981,3 +4981,13 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+	Smudge Stick…	Размазваща пръчка…
+	Smudge Stick	Размазваща пръчка
+	Sponge…	Гъба…
+	Sponge	Гъба
+	Watercolor…	Акварел…
+	Watercolor	Акварел
+	Brush Size	Размер на четката
+	Definition	Дефиниция
+	Brush Detail	Детайл на четката
+	Shadow Intensity	Интензивност на сенките
