@@ -161,8 +161,12 @@ pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
         // Deleting all artboards keeps artboard 1 (the public Delete artboards guide).
         all.retain(|i| *i != 0);
     }
-    if n > all.len() && app.run("artboard.delete", json!({ "indices": all })).is_ok() {
-        select(app, all.first().copied().unwrap_or(0).saturating_sub(1));
+    if n > all.len() {
+        // A locked artboard refuses: the status bar says which.
+        match app.run("artboard.delete", json!({ "indices": all })) {
+            Ok(_) => select(app, all.first().copied().unwrap_or(0).saturating_sub(1)),
+            Err(e) => app.status(e),
+        }
     }
 }
 
@@ -247,6 +251,9 @@ pub(crate) fn duplicate_picked(app: &mut VectorcraftApp) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
+    // Each artboard's lock and colour, for the row's lock toggle and colour chip.
+    let looks: Vec<(bool, Option<vectorcraft_doc::color::Color>)> =
+        app.session.active().map(|d| d.doc.artboards.iter().map(|a| (a.locked, a.color)).collect()).unwrap_or_default();
     if abs.is_empty() {
         super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;
@@ -275,7 +282,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.0),
                     t.text_dim,
                 );
-                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 28.0, r.bottom() - 2.0));
+                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 72.0, r.bottom() - 2.0));
                 if editing == Some(i) {
                     let id = ui.id().with(("ab-name", i));
                     let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
@@ -294,6 +301,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else {
                     ui.painter().text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
                 }
+                let (locked, color) = looks.get(i).copied().unwrap_or_default();
+                // The lock toggle: the lock shows when locked, or dim while the row is hovered. A
+                // click locks or unlocks the selected artboards when this row is one of them.
+                let lock = egui::Rect::from_center_size(r.right_center() - vec2(34.0, 0.0), vec2(14.0, 14.0));
+                let lresp = ui.interact(lock, ui.id().with(("ab-lock", i)), Sense::click());
+                if locked {
+                    icons::paint(ui, "lock", lock, if lresp.hovered() { t.text_strong } else { t.icon });
+                } else if resp.hovered() || lresp.hovered() {
+                    icons::paint(ui, "lock", lock, t.text_disabled);
+                }
+                if lresp.on_hover_text(if locked { tl!("Unlock Artboard") } else { tl!("Lock Artboard") }).clicked() {
+                    let targets = if all.contains(&i) { all.clone() } else { vec![i] };
+                    app.run("artboard.lock", json!({ "indices": targets, "locked": !locked })).ok();
+                }
+                // The colour chip: a click picks the artboard colour (set when the pointer is
+                // released, one undo step); an empty chip means the paper shows.
+                let chip = egui::Rect::from_center_size(r.right_center() - vec2(54.0, 0.0), vec2(14.0, 14.0));
+                artboard_color_chip(app, ui, i, chip, color, &all);
                 let opt = egui::Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0));
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
                 icons::paint(ui, "dc-artboard-options", opt, if oresp.hovered() { t.text_strong } else { t.icon });
@@ -364,6 +389,43 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// Artboard `i`'s colour chip in `chip`: the colour button, with a red slash while the artboard has
+/// no colour. The colour is set (`artboard.setColor`, on every selected artboard when `i` is one
+/// of them) once the pointer is released, so a drag in the picker is one undo step.
+fn artboard_color_chip(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    i: usize,
+    chip: egui::Rect,
+    color: Option<vectorcraft_doc::color::Color>,
+    all: &[usize],
+) {
+    let pending_id = egui::Id::new(("ab-color-pending", i));
+    let [r, g, b, _] = color.unwrap_or(vectorcraft_doc::color::Color::WHITE).to_rgba8(1.0);
+    let mut rgb = [r, g, b];
+    let changed = ui
+        .scope_builder(egui::UiBuilder::new().max_rect(chip), |ui| {
+            ui.spacing_mut().interact_size = vec2(14.0, 14.0);
+            ui.spacing_mut().button_padding = vec2(0.0, 0.0);
+            ui.color_edit_button_srgb(&mut rgb).on_hover_text(tl!("Artboard Color")).changed()
+        })
+        .inner;
+    if color.is_none() {
+        ui.painter().line_segment([chip.left_bottom(), chip.right_top()], egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 40, 40)));
+    }
+    if changed {
+        ui.data_mut(|d| d.insert_temp(pending_id, rgb));
+    }
+    let pending = ui.data(|d| d.get_temp::<[u8; 3]>(pending_id));
+    if let Some([r, g, b]) = pending
+        && !ui.input(|inp| inp.pointer.any_down())
+    {
+        ui.data_mut(|d| d.remove::<[u8; 3]>(pending_id));
+        let targets = if all.contains(&i) { all.to_vec() } else { vec![i] };
+        app.run("artboard.setColor", json!({ "indices": targets, "color": format!("#{r:02x}{g:02x}{b:02x}") })).ok();
+    }
+}
+
 /// Open Rearrange All Artboards (#681).
 pub(crate) fn open_rearrange(app: &mut VectorcraftApp) {
     app.run("ui.menuDialog", json!({ "command": "artboard.rearrange" })).ok();
@@ -386,6 +448,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     menu_item(ui, tl!("Delete Empty Artboards"), false, false);
     ui.separator();
+    let boards = picked(app, n);
+    let locked = app.session.active().is_some_and(|d| boards.iter().any(|i| d.doc.artboards.get(*i).is_some_and(|a| a.locked)));
+    if menu_item(ui, if locked { tl!("Unlock Artboards") } else { tl!("Lock Artboards") }, n > 0, false) {
+        app.run("artboard.lock", json!({ "indices": boards, "locked": !locked })).ok();
+    }
+    if menu_item(ui, tl!("Clear Artboard Color"), n > 0, false) {
+        app.run("artboard.setColor", json!({ "indices": boards, "color": null })).ok();
+    }
+    ui.separator();
     menu_item(ui, tl!("Convert to Artboards"), false, false);
     if menu_item(ui, tl!("Artboard Options…"), n > 0, false) {
         app.run("tool.options", json!({ "tool": "artboard" })).ok();
@@ -403,6 +474,34 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    /// With the Artboard tool, the canvas context menu locks and unlocks artboards: Lock Selected
+    /// locks the selected one (the others stay free), Unlock All frees every artboard.
+    #[test]
+    fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
+        use crate::menus::Item;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+        let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
+        let run = |app: &mut VectorcraftApp, menu: &str, label: &str| {
+            let items = crate::menus::context_items(app);
+            let Some(Item::Sub(_, subs)) = items.iter().find(|i| matches!(i, Item::Sub(t, _) if *t == menu)) else { panic!("no {menu}") };
+            let Some(Item::Cmd(_, id, p)) = subs.iter().find(|i| matches!(i, Item::Cmd(l, ..) if *l == label)) else { panic!("no {label}") };
+            crate::menus::invoke(app, id, p.clone());
+        };
+        // Without the Artboard tool the menu has no such submenu.
+        assert!(!crate::menus::context_items(&app).iter().any(|i| matches!(i, Item::Sub(t, _) if *t == "Lock Artboards")));
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        run(&mut app, "Lock Artboards", "Lock Selected");
+        assert_eq!(locked(&app), [false, true, false]);
+        run(&mut app, "Lock Artboards", "Lock All Except Selected");
+        assert_eq!(locked(&app), [true, true, true], "the others lock, the locked one stays");
+        run(&mut app, "Unlock Artboards", "Unlock Selected");
+        assert_eq!(locked(&app), [true, false, true]);
+        run(&mut app, "Unlock Artboards", "Unlock All");
+        assert_eq!(locked(&app), [false, false, false]);
+    }
 
     /// Clicking a row makes its artboard the active one (the navigator's, Fit Artboard in Window's).
     #[test]

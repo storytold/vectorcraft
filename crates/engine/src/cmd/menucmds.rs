@@ -962,6 +962,8 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 rect: b,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                locked: false,
+                color: None,
             });
             converted.push(id);
         }
@@ -1010,6 +1012,10 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let first = rects.first().map_or(Point::ZERO, |r| r.origin());
     let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
     let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
+    // A locked artboard stays where it is: the layout would have to move it.
+    let moved_locked: Vec<usize> =
+        (0..d.artboards.len()).filter(|i| deltas.get(*i).is_some_and(|dl| dl.x.abs() > 1e-9 || dl.y.abs() > 1e-9)).collect();
+    super::layer::ensure_unlocked(d, &moved_locked)?;
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
     if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {

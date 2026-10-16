@@ -4063,3 +4063,15 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
+	Lock Artboards	鎖定工作區域
+	Unlock Artboards	解除鎖定工作區域
+	Artboard Color	工作區域顏色
+	Lock Selected	鎖定所選
+	Lock All Except Selected	鎖定所選以外的全部
+	Lock All	全部鎖定
+	Unlock Selected	解除鎖定所選
+	Lock Artboard	鎖定工作區域
+	Unlock Artboard	解除鎖定工作區域
+	Clear Artboard Color	清除工作區域顏色
+@msg	artboard {_1} is locked	工作區域 {_1} 已鎖定
+	Include Artboard Fill	包含工作區域顏色

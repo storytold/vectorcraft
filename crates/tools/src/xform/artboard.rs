@@ -12,7 +12,8 @@
 //! (Shift proportional, Alt from centre; with the `scaleArt` option on, Scale Artwork with Artboard,
 //! always proportional, and the art fully inside scales with it), drag on the pasteboard draws a new artboard, Delete removes
 //! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`) and Escape returns to
-//! the Selection tool. Moving and resizing snap like drawing
+//! the Selection tool. A locked artboard (`artboard.lock`) has no handles and ignores drags and
+//! Delete (an Alt-drag still copies it). Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
 //! objects (never to the dragged artboard or the art moving or scaling with it); the artboard's own bleed edges
 //! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]).
@@ -104,8 +105,15 @@ fn rect_json(index: usize, r: Rect) -> Value {
 }
 
 impl ArtboardTool {
-    fn active_rect(&self, cx: &ToolContext) -> Option<Rect> {
-        cx.doc.artboards.get(self.active).map(|a| a.rect)
+    /// The active artboard's rectangle unless it is locked: a locked artboard has no handles.
+    fn resizable_rect(&self, cx: &ToolContext) -> Option<Rect> {
+        cx.doc.artboards.get(self.active).filter(|a| !a.locked).map(|a| a.rect)
+    }
+
+    /// A locked artboard is among those a move of `index` (with `many`: the selected ones) takes.
+    fn any_locked(&self, cx: &ToolContext, index: usize, many: bool) -> bool {
+        let locked = |i: &usize| cx.doc.artboards.get(*i).is_some_and(|a| a.locked);
+        if many { self.selected(cx).iter().any(locked) } else { locked(&index) }
     }
 
     /// The selected artboards that are still in the document: the active one and the others,
@@ -257,7 +265,7 @@ impl Tool for ArtboardTool {
         match (ev.kind, self.drag) {
             (PointerKind::Down, _) => {
                 self.click_art = None;
-                if let Some(r) = self.active_rect(cx)
+                if let Some(r) = self.resizable_rect(cx)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
                     self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, grab: handle.pos(r) - p, began: false });
@@ -291,8 +299,10 @@ impl Tool for ArtboardTool {
             (PointerKind::Drag, Some(Drag::Move { index, many, start, rect, began, copy })) => {
                 let mut out = vec![];
                 let label = |copy: bool| if copy { "Duplicate Artboard" } else { "Move Artboard" };
+                // A locked artboard stays put; only an Alt-drag copy of it goes ahead.
+                let blocked = !m.alt && self.any_locked(cx, index, many);
                 if !began {
-                    if p.distance(start) < cx.tol(3.0) {
+                    if p.distance(start) < cx.tol(3.0) || blocked {
                         return out;
                     }
                     out.push(Action::Begin(label(m.alt).into()));
@@ -300,6 +310,11 @@ impl Tool for ArtboardTool {
                 } else if m.alt != copy {
                     // Alt pressed or released mid-drag: start over as a copy or a move.
                     out.push(Action::Cancel);
+                    if blocked {
+                        self.drag = Some(Drag::Move { index, many, start, rect, began: false, copy: false });
+                        self.preview = None;
+                        return out;
+                    }
                     out.push(Action::Begin(label(m.alt).into()));
                 }
                 self.drag = Some(Drag::Move { index, many, start, rect, began: true, copy: m.alt });
@@ -375,7 +390,7 @@ impl Tool for ArtboardTool {
                 self.end_drag();
                 // Fitting already happened on the first click. On an object this gesture does not
                 // open Artboard Options; a handle, a modifier, or empty artboard space still does.
-                let on_handle = self.active_rect(cx).and_then(|r| hit_handle(r, p, cx.tol(5.0))).is_some();
+                let on_handle = self.resizable_rect(cx).and_then(|r| hit_handle(r, p, cx.tol(5.0))).is_some();
                 if m == Mods::default() && !on_handle && fittable_bounds(cx, p).is_some() {
                     return vec![];
                 }
@@ -405,6 +420,10 @@ impl Tool for ArtboardTool {
             ToolKey::Delete | ToolKey::Backspace => {
                 let mut sel = self.selected(cx);
                 if self.drag.is_some() || cx.doc.artboards.len() <= 1 || self.active >= cx.doc.artboards.len() {
+                    return vec![];
+                }
+                // Locked artboards can't be deleted: nothing happens while one is selected.
+                if sel.iter().any(|i| cx.doc.artboards.get(*i).is_some_and(|a| a.locked)) {
                     return vec![];
                 }
                 // With every artboard selected, keep the first one in the current order.
@@ -453,7 +472,8 @@ impl Tool for ArtboardTool {
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
         let r = self.preview.unwrap_or(ab.rect);
         o.push(Overlay::Path { path: polygon(&rect_corners(r), true), color: BLUE, width: 1.0, dashed: true });
-        for h in Handle::ALL {
+        // No handles on a locked artboard: it can't be resized.
+        for h in Handle::ALL.into_iter().filter(|_| !ab.locked) {
             o.push(Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 });
         }
         // Where the canvas names the other artboards: on the top edge, flush with the left one
@@ -473,7 +493,7 @@ impl Tool for ArtboardTool {
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
-        if let Some(r) = self.active_rect(cx)
+        if let Some(r) = self.resizable_rect(cx)
             && let Some(h) = hit_handle(r, p, cx.tol(5.0))
         {
             return match h {
@@ -555,6 +575,36 @@ mod tests {
     fn drag_board2(cx: &ToolContext, t: &mut ArtboardTool, dx: f64, dy: f64) -> Value {
         t.pointer(cx, &ev(PointerKind::Down, 700.0, 100.0));
         preview_params(&t.pointer(cx, &ev(PointerKind::Drag, 700.0 + dx, 100.0 + dy)))
+    }
+
+    /// A locked artboard shows no handles, does not resize or move by a drag (an Alt-drag still
+    /// copies it) and ignores Delete.
+    #[test]
+    fn a_locked_artboard_has_no_handles_and_does_not_move_or_delete() {
+        let mut d = two_boards();
+        d.artboards[1].locked = true;
+        let (s, p) = (Selection::default(), paint());
+        let anchors = |t: &ArtboardTool, d: &vectorcraft_doc::Document| {
+            t.overlays(&cx(d, &s, &p)).iter().filter(|o| matches!(o, Overlay::Anchor { .. })).count()
+        };
+        let mut t = ArtboardTool::default();
+        t.set_option("active", &json!(1));
+        assert_eq!(anchors(&t, &d), 0, "no handles");
+        let cx = cx(&d, &s, &p);
+        // A press on its edge handle starts a move, not a resize; the drag does nothing.
+        t.pointer(&cx, &ev(PointerKind::Down, 600.0, 100.0));
+        let out = t.pointer(&cx, &ev(PointerKind::Drag, 650.0, 100.0));
+        assert!(out.is_empty(), "{out:?}");
+        t.pointer(&cx, &ev(PointerKind::Up, 650.0, 100.0));
+        assert!(t.key(&cx, ToolKey::Delete, Mods::default()).is_empty());
+        // Alt-drag makes a copy.
+        t.pointer(&cx, &ev(PointerKind::Down, 700.0, 100.0));
+        let mut e = ev(PointerKind::Drag, 750.0, 100.0);
+        e.mods.alt = true;
+        assert_eq!(preview_params(&t.pointer(&cx, &e))["copy"], true);
+        // Unlocked, the handles are back.
+        d.artboards[1].locked = false;
+        assert_eq!(anchors(&t, &d), 8);
     }
 
     #[test]

@@ -5159,3 +5159,15 @@ theme	Appearance	Apparence
 @msg	too many library panels were opened in this session	trop de panneaux de bibliothèque ont été ouverts dans cette session
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	L’image fait {_1} × {_2} pixels, plus de {LARGE_TRACE_SIDE} sur un côté : elle est vectorisée, mais plus lentement. Un paramètre prédéfini moins fidèle ou une copie plus petite de l’image se vectorise plus vite.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	L’image a été vectorisée à {_1} × {_2} pixels, réduite de {_3} × {_4} ({_5} mégapixels au plus).
+	Lock Artboards	Verrouiller les plans de travail
+	Unlock Artboards	Déverrouiller les plans de travail
+	Artboard Color	Couleur du plan de travail
+	Lock Selected	Verrouiller la sélection
+	Lock All Except Selected	Tout verrouiller sauf la sélection
+	Lock All	Tout verrouiller
+	Unlock Selected	Déverrouiller la sélection
+	Lock Artboard	Verrouiller le plan de travail
+	Unlock Artboard	Déverrouiller le plan de travail
+	Clear Artboard Color	Effacer la couleur du plan de travail
+@msg	artboard {_1} is locked	le plan de travail {_1} est verrouillé
+	Include Artboard Fill	Inclure la couleur du plan de travail

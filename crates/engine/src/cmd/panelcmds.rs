@@ -177,6 +177,9 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     }
     let art = st.doc.paint_order(arts.into_iter().flat_map(|(_, a)| a));
     let boards: Vec<_> = indices.iter().filter_map(|i| st.doc.artboards.get(*i).cloned()).collect();
+    if cut {
+        super::layer::ensure_unlocked(&st.doc, &indices)?;
+    }
     let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art) };
     let copied = clip.nodes.len();
     if cut {
@@ -227,6 +230,8 @@ pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vector
         .find(|name| !taken(name))
         .unwrap_or_default();
     a.rect = rect;
+    // The copy is a new artboard: it starts unlocked.
+    a.locked = false;
     d.artboards.push(a);
     d.artboards.len() - 1
 }
