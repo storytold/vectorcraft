@@ -96,9 +96,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Below ~32 pt the switcher is unreadable; Window → Workspace still reaches it.
             let ws_w = ws_w.min(available_for_ws);
             let show_ws = ws_w >= 32.0;
-            let discord = search
-                && show_ws
-                && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
+            let discord = search && show_ws && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
             if show_ws {
                 let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
@@ -1447,11 +1445,8 @@ mod visual_regressions {
             // Menu-bar buttons are the tallest interactive elements in the left portion
             // of the bar (interact_size.y = 24 pt in our theme). Exclude the MenuBar's own
             // stretch rect (full leftover width) by capping button width to a title label.
-            let menu_buttons: Vec<egui::Rect> = widgets
-                .iter()
-                .copied()
-                .filter(|r| r.height() > 20.0 && r.height() < 30.0 && r.width() < 120.0 && r.left() < width * 0.6)
-                .collect();
+            let menu_buttons: Vec<egui::Rect> =
+                widgets.iter().copied().filter(|r| r.height() > 20.0 && r.height() < 30.0 && r.width() < 120.0 && r.left() < width * 0.6).collect();
             let Some(rightmost_menu) = menu_buttons.iter().max_by(|a, b| a.right().total_cmp(&b.right())) else {
                 continue; // menus absent at this scale/size – skip
             };
