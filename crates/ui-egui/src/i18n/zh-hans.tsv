@@ -4106,3 +4106,14 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
+	Bas Relief…	浅浮雕…
+	Bas Relief	浅浮雕
+	Charcoal…	炭笔…
+	Charcoal	炭笔
+	Photocopy…	影印…
+	Photocopy	影印
+	Stamp…	图章…
+	Stamp	图章
+	Thickness	粗细
+	Detail	细节
+	Light/Dark Balance	明暗平衡

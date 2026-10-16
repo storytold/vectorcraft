@@ -4556,3 +4556,14 @@ lighting	Light	Світло
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
+	Bas Relief…	Барельєф…
+	Bas Relief	Барельєф
+	Charcoal…	Вугілля…
+	Charcoal	Вугілля
+	Photocopy…	Фотокопія…
+	Photocopy	Фотокопія
+	Stamp…	Штамп…
+	Stamp	Штамп
+	Thickness	Товщина
+	Detail	Деталі
+	Light/Dark Balance	Баланс світлого й темного

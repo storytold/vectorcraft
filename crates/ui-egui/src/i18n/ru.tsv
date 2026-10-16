@@ -4572,3 +4572,14 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+	Bas Relief…	Барельеф…
+	Bas Relief	Барельеф
+	Charcoal…	Уголь…
+	Charcoal	Уголь
+	Photocopy…	Фотокопия…
+	Photocopy	Фотокопия
+	Stamp…	Штамп…
+	Stamp	Штамп
+	Thickness	Толщина
+	Detail	Детали
+	Light/Dark Balance	Баланс светлого и тёмного

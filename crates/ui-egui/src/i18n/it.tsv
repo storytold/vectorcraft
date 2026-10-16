@@ -4576,3 +4576,14 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
+	Bas Relief…	Bassorilievo…
+	Bas Relief	Bassorilievo
+	Charcoal…	Carboncino…
+	Charcoal	Carboncino
+	Photocopy…	Fotocopia…
+	Photocopy	Fotocopia
+	Stamp…	Timbro…
+	Stamp	Timbro
+	Thickness	Spessore
+	Detail	Dettaglio
+	Light/Dark Balance	Equilibrio chiaro/scuro

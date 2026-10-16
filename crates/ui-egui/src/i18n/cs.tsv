@@ -4999,3 +4999,14 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+	Bas Relief…	Basreliéf…
+	Bas Relief	Basreliéf
+	Charcoal…	Uhel…
+	Charcoal	Uhel
+	Photocopy…	Fotokopie…
+	Photocopy	Fotokopie
+	Stamp…	Razítko…
+	Stamp	Razítko
+	Thickness	Tloušťka
+	Detail	Detail
+	Light/Dark Balance	Vyvážení světlé/tmavé

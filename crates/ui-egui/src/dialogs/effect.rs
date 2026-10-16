@@ -269,7 +269,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("sketch.halftonePattern", "patternType") => Some(&vectorcraft_effects::pixel::HALFTONE_TYPES),
         ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
         ("texture.texturizer", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
-        ("texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
+        ("sketch.basRelief" | "texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
         ("video.deinterlace", "eliminate") => Some(&[("Odd Fields", "odd"), ("Even Fields", "even")]),
         ("video.deinterlace", "create") => Some(&[("Duplication", "duplication"), ("Interpolation", "interpolation")]),
         ("stylize.innerGlow", "source") => Some(&[("Center", "center"), ("Edge", "edge")]),

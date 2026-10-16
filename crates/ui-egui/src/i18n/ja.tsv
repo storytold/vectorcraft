@@ -4617,3 +4617,14 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+	Bas Relief…	レリーフ…
+	Bas Relief	レリーフ
+	Charcoal…	木炭…
+	Charcoal	木炭
+	Photocopy…	コピー…
+	Photocopy	コピー
+	Stamp…	スタンプ…
+	Stamp	スタンプ
+	Thickness	太さ
+	Detail	ディテール
+	Light/Dark Balance	明暗のバランス

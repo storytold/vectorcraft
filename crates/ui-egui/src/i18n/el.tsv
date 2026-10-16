@@ -4951,3 +4951,14 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+	Bas Relief…	Ανάγλυφο…
+	Bas Relief	Ανάγλυφο
+	Charcoal…	Κάρβουνο…
+	Charcoal	Κάρβουνο
+	Photocopy…	Φωτοαντίγραφο…
+	Photocopy	Φωτοαντίγραφο
+	Stamp…	Σφραγίδα…
+	Stamp	Σφραγίδα
+	Thickness	Πάχος
+	Detail	Λεπτομέρεια
+	Light/Dark Balance	Ισορροπία φωτεινού/σκούρου

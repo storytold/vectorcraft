@@ -4966,3 +4966,14 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+	Bas Relief…	Dombormű…
+	Bas Relief	Dombormű
+	Charcoal…	Szén…
+	Charcoal	Szén
+	Photocopy…	Fénymásolat…
+	Photocopy	Fénymásolat
+	Stamp…	Bélyegző…
+	Stamp	Bélyegző
+	Thickness	Vastagság
+	Detail	Részletesség
+	Light/Dark Balance	Világos/sötét egyensúly

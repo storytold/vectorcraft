@@ -4941,3 +4941,14 @@ mark-style	Japanese	Japonesas
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
+	Bas Relief…	Bajorrelieve…
+	Bas Relief	Bajorrelieve
+	Charcoal…	Carboncillo…
+	Charcoal	Carboncillo
+	Photocopy…	Fotocopia…
+	Photocopy	Fotocopia
+	Stamp…	Sello…
+	Stamp	Sello
+	Thickness	Grosor
+	Detail	Detalle
+	Light/Dark Balance	Equilibrio claro/oscuro

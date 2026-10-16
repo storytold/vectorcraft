@@ -4963,3 +4963,14 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+	Bas Relief…	Matala korkokuva…
+	Bas Relief	Matala korkokuva
+	Charcoal…	Hiili…
+	Charcoal	Hiili
+	Photocopy…	Valokopio…
+	Photocopy	Valokopio
+	Stamp…	Leima…
+	Stamp	Leima
+	Thickness	Paksuus
+	Detail	Yksityiskohta
+	Light/Dark Balance	Vaalean ja tumman tasapaino

@@ -4955,3 +4955,14 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
+	Bas Relief…	Basrelief…
+	Bas Relief	Basrelief
+	Charcoal…	Kol…
+	Charcoal	Kol
+	Photocopy…	Fotokopia…
+	Photocopy	Fotokopia
+	Stamp…	Stämpel…
+	Stamp	Stämpel
+	Thickness	Tjocklek
+	Detail	Detalj
+	Light/Dark Balance	Balans ljust/mörkt

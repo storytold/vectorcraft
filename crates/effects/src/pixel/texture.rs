@@ -128,7 +128,7 @@ impl Light {
     }
 
     /// The unit vector towards the light (document axes, y down).
-    fn toward(self) -> Vec2 {
+    pub(super) fn toward(self) -> Vec2 {
         let d = FRAC_1_SQRT_2;
         match self {
             Light::Bottom => Vec2::new(0.0, 1.0),
@@ -269,7 +269,7 @@ impl Tones {
     }
 
     /// The tone at pixel (`x`, `y`) and its slope per document unit along the document's axes.
-    fn slope(&self, x: usize, y: usize, place: &Place) -> (f64, Vec2) {
+    pub(super) fn slope(&self, x: usize, y: usize, place: &Place) -> (f64, Vec2) {
         let gx = 0.5 * (self.get(x + 1, y) - self.get(x.saturating_sub(1), y));
         let gy = 0.5 * (self.get(x, y + 1) - self.get(x, y.saturating_sub(1)));
         // Per pixel → per document unit: through the transpose of the document → pixel map.
