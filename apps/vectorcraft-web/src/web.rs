@@ -106,12 +106,7 @@ struct Moving {
 
 /// Run the app on `canvas`: the `moving` one when starting again after losing the graphics, else
 /// a new one. `invite` is only set on the first start after a keyed link handed us here.
-async fn run(
-    host: Host,
-    canvas: web_sys::HtmlCanvasElement,
-    moving: Option<Moving>,
-    invite: Option<craft_cloud_client::invite::Invitation>,
-) {
+async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Moving>, invite: Option<craft_cloud_client::invite::Invitation>) {
     track_drag(&canvas, &host.drag);
     let kept = moving.as_ref().map(|m| m.kept);
     // The app until the new runner takes it (still here if starting fails before).
@@ -220,11 +215,7 @@ fn open_invite(app: &mut VectorcraftApp, invitation: craft_cloud_client::invite:
     match cloud::CloudApp::open_bytes(app, &name, invitation.document.clone()) {
         Ok(Some(_)) => {
             let mode = if invitation.read_only() { " (view only)" } else { "" };
-            let who = if invitation.recipient.is_empty() {
-                String::new()
-            } else {
-                format!(" · shared with {}", invitation.recipient)
-            };
+            let who = if invitation.recipient.is_empty() { String::new() } else { format!(" · shared with {}", invitation.recipient) };
             app.status(format!("Opened \"{name}\"{mode}{who}"));
             // Live edits are optional: a document nobody can see is not improved by a relay.
             if let Err(e) = invitation.join() {
