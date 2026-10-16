@@ -264,6 +264,8 @@ pub struct RowMap {
     mean_l: f32,
     /// Hue turn from the key colour to the new colour (Hue Shift).
     turn: f32,
+    /// Whether colours take the new colour in its own model, not in the model they had.
+    own_model: bool,
 }
 
 impl RowMap {
@@ -274,7 +276,14 @@ impl RowMap {
             Method::TintsShades => mean_l(&row.iter().map(|c| (*c, c.to_lab())).collect::<Vec<_>>()),
             _ => 0.0,
         };
-        Self { method, to, key, mean_l, turn: to.to_hsb()[0] - key.to_hsb()[0] }
+        Self { method, to, key, mean_l, turn: to.to_hsb()[0] - key.to_hsb()[0], own_model: false }
+    }
+
+    /// With `own`, current colours take the new colour in the new colour's model (an RGB colour
+    /// replaced by a CMYK one becomes CMYK) instead of keeping the model they had.
+    pub fn with_own_model(mut self, own: bool) -> Self {
+        self.own_model = own;
+        self
     }
 
     /// The colour of the row the new colour stands for.
@@ -301,7 +310,7 @@ impl RowMap {
 
     /// The new colour of current colour `c`, in `c`'s model.
     pub fn map(&self, c: Color) -> Color {
-        let to = keep_model(c, self.to);
+        let to = if self.own_model { self.to } else { keep_model(c, self.to) };
         match self.method {
             Method::Exact => to,
             Method::PreserveTints if is_tint(c, self.key) => to.tinted(tint_of(c, self.key)),
