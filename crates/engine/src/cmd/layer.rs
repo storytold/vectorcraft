@@ -143,7 +143,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index, name?, x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
+            "{index | artboards: [{index, name?, x?, y?, width?, height?}…] (several artboards in one undo step, each with its own fields; the art inside each before any of them changes goes with it, and an object inside several goes with the first listed that moves or scales its art), name?, x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
             has_doc,
             artboard_set
         ),
@@ -833,58 +833,93 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// One artboard's part of `artboard.setProps`: its index, new rectangle and name, how far it moved,
+/// whether it was resized, the map its art and guides take when they go with it (`fit` when it
+/// scales them), and that art.
+struct ArtboardEdit<'a> {
+    index: usize,
+    now: Rect,
+    name: Option<&'a str>,
+    delta: vectorcraft_geom::Vec2,
+    resized: bool,
+    fit: Option<Affine>,
+    transform: Option<Affine>,
+    art: Vec<NodeId>,
+}
+
 fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let was = s.doc()?.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-    let now = rect_from(p, was);
-    let resized = (now.width() - was.width()).abs() > 1e-6 || (now.height() - was.height()).abs() > 1e-6;
-    // Scale Artwork with Artboard: resized, it takes the art fully inside it (as Move Artwork with
-    // Artboard gathers it) and its guides from the old rectangle onto the new one.
-    let scale_art = bool_or(p, "scaleArt", false);
-    let fit = if scale_art && resized { rect_map(was, now) } else { None };
-    // Position fields honor Move Artwork independently of Scale Artwork. A resize still
-    // leaves the art alone unless scaling was requested. Fit-to-art callers keep the default.
-    let delta = now.origin() - was.origin();
-    let moving = !resized && bool_or(p, "moveArt", false) && delta != vectorcraft_geom::Vec2::ZERO;
-    let transform = fit.or_else(|| moving.then(|| Affine::translate(delta)));
-    let art = if transform.is_some() {
-        // Locked and hidden art too? Noted in the journal, so a replay transforms the same objects
-        // whatever the preference is then.
-        let all = bool_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard);
-        s.note_journal("lockedAndHidden", json!(all));
-        s.doc()?.doc.art_on_artboard(was, all)
-    } else {
-        vec![]
-    };
-    let mut sc = match fit {
-        Some(xf) if Scaling::factor(xf).is_some() => super::object::scaling(s, p),
-        _ => Scaling::default(),
-    };
-    sc.patterns = super::object::transform_patterns(s, p, &art)?;
-    s.edit("Artboard Options", |d, _| {
-        let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-        a.rect = now;
-        if let Some(n) = str_param(p, "name") {
-            a.name = n.to_string();
+    // One artboard (`index` and its fields), or several (`artboards`, each with its own fields).
+    let entries: Vec<&Value> = match p.get("artboards") {
+        Some(list) => {
+            list.as_array().filter(|l| !l.is_empty()).ok_or_else(|| bad("artboard.setProps", "artboards must be a non-empty list"))?.iter().collect()
         }
-        let id = a.id;
-        if let Some(xf) = transform {
-            d.map_artboard_guides(id, xf);
-            for id in &art {
-                if let Some(n) = d.node_mut(*id) {
-                    n.transform(xf, sc);
-                }
+        None => vec![p],
+    };
+    // Scale Artwork with Artboard: resized, an artboard takes the art fully inside it (as Move
+    // Artwork with Artboard gathers it) and its guides from the old rectangle onto the new one.
+    let scale_art = bool_or(p, "scaleArt", false);
+    // Locked and hidden art too?
+    let all = bool_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard);
+    let d = &s.doc()?.doc;
+    // Each artboard's art is the art inside it before any of them changes; an object inside
+    // several of them goes with the first one listed that moves or scales its art.
+    let mut taken = HashSet::new();
+    let mut edits: Vec<ArtboardEdit> = Vec::with_capacity(entries.len());
+    for q in entries {
+        let index = q.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+        if edits.iter().any(|e| e.index == index) {
+            return Err(bad("artboard.setProps", "an artboard is listed twice"));
+        }
+        let was = d.artboards.get(index).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+        let now = rect_from(q, was);
+        let resized = (now.width() - was.width()).abs() > 1e-6 || (now.height() - was.height()).abs() > 1e-6;
+        let fit = if scale_art && resized { rect_map(was, now) } else { None };
+        // Position fields honor Move Artwork independently of Scale Artwork. A resize still
+        // leaves the art alone unless scaling was requested. Fit-to-art callers keep the default.
+        let delta = now.origin() - was.origin();
+        let moving = !resized && bool_or(p, "moveArt", false) && delta != vectorcraft_geom::Vec2::ZERO;
+        let transform = fit.or_else(|| moving.then(|| Affine::translate(delta)));
+        let art = if transform.is_some() { d.art_on_artboard(was, all).into_iter().filter(|id| taken.insert(*id)).collect() } else { vec![] };
+        edits.push(ArtboardEdit { index, now, name: str_param(q, "name"), delta, resized, fit, transform, art });
+    }
+    // Noted in the journal when art goes along, so a replay transforms the same objects whatever
+    // the preference is then.
+    if edits.iter().any(|e| e.transform.is_some()) {
+        s.note_journal("lockedAndHidden", json!(all));
+    }
+    let scaling =
+        if edits.iter().any(|e| e.fit.is_some_and(|xf| Scaling::factor(xf).is_some())) { super::object::scaling(s, p) } else { Scaling::default() };
+    let art: Vec<NodeId> = edits.iter().flat_map(|e| e.art.iter().copied()).collect();
+    let patterns = super::object::transform_patterns(s, p, &art)?;
+    s.edit("Artboard Options", |d, _| {
+        for e in &edits {
+            let a = d.artboards.get_mut(e.index).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+            a.rect = e.now;
+            if let Some(n) = e.name {
+                a.name = n.to_string();
             }
-        } else if !resized {
-            // Moved (not resized), it takes its guides along.
-            d.move_artboard_guides(id, delta);
+            let id = a.id;
+            if let Some(xf) = e.transform {
+                let mut sc = if e.fit.is_some_and(|xf| Scaling::factor(xf).is_some()) { scaling } else { Scaling::default() };
+                sc.patterns = patterns;
+                d.map_artboard_guides(id, xf);
+                for id in &e.art {
+                    if let Some(n) = d.node_mut(*id) {
+                        n.transform(xf, sc);
+                    }
+                }
+            } else if !e.resized {
+                // Moved (not resized), it takes its guides along.
+                d.move_artboard_guides(id, e.delta);
+            }
         }
         Ok(())
     })?;
     if !scale_art {
         return ok();
     }
-    Ok(json!({ "scaled": if fit.is_some() { art.iter().map(|i| i.0).collect::<Vec<_>>() } else { vec![] } }))
+    let scaled: Vec<_> = edits.iter().filter(|e| e.fit.is_some()).flat_map(|e| e.art.iter().map(|i| i.0)).collect();
+    Ok(json!({ "scaled": scaled }))
 }
 
 /// The map taking artboard rectangle `from` onto `to`, each side scaled by its own ratio. None

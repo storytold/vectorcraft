@@ -931,6 +931,45 @@ fn artboard_options_position_follows_the_tool_option_with_another_tool() {
     }
 }
 
+/// #1482: with Artboards 1 and 3 selected with the Artboard tool, a new Width in Artboard Options
+/// goes to both, each keeping its top-left corner and its height, in one undo step. The new name
+/// goes only to the artboard the dialog shows, and Artboard 2 keeps its size. A name alone resizes
+/// nothing.
+#[test]
+fn artboard_options_width_resizes_every_selected_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    app.run("artboard.setProps", json!({"index": 2, "width": 300, "height": 150})).unwrap();
+    app.select_tool("artboard");
+    crate::panels::artboards::select(&mut app, 0);
+    app.session.set_tool_option("selected", &json!([0, 2]));
+    let boards = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards.clone();
+    let before = boards(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+    fields.insert("width".into(), json!("250 pt"));
+    fields.insert("name".into(), json!("Cover"));
+    frame(&mut app, Default::default());
+    super::confirm(&mut app).unwrap();
+    let mut want = before.clone();
+    want[0].name = "Cover".into();
+    for i in [0, 2] {
+        want[i].rect.x1 = want[i].rect.x0 + 250.0;
+    }
+    assert_eq!(boards(&app), want);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(boards(&app), before);
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Cover"));
+    frame(&mut app, Default::default());
+    super::confirm(&mut app).unwrap();
+    want = before.clone();
+    want[0].name = "Cover".into();
+    assert_eq!(boards(&app), want, "a name alone");
+}
+
 /// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
 /// Corner as radio buttons, not dropdowns (#1133).
 #[test]
