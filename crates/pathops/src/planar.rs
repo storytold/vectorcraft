@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 
-use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveArclen, PathSeg, Point, Shape as _};
+use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, PathSeg, Point, Shape as _};
 use linesweeper::topology::{Topology, WindingNumber};
 use vectorcraft_geom::{FillRule, PathData, SubPath};
 
@@ -613,12 +613,115 @@ pub fn has_open_path(shapes: &[Shape]) -> bool {
 /// [`SHAPE_BUILDER_MAX_SEGMENTS`] segments or a map that can't be built, only the filled areas
 /// count and there are no pieces.
 pub fn shape_builder(shapes: &[Shape], edges: bool) -> BuilderArrangement {
+    shape_builder_with_gap(shapes, edges, 0.0)
+}
+
+/// Most distance (document units) a Shape Builder gap may span.
+pub const SHAPE_BUILDER_MAX_GAP: f64 = 1000.0;
+
+/// The closest two points are to count as touching: no bridge is needed between them.
+const GAP_TOUCH: f64 = 1e-6;
+
+/// The straight bridges Gap Detection adds: for each end of an open subpath, a line to the nearest
+/// end of another open path (or of its own, when it has three anchors or more) or the nearest point
+/// of another subpath's outline, when that lies within `gap` and the two don't already touch. The
+/// bridges only close regions: they are never part of the art. Nothing for a `gap` that isn't a
+/// positive finite number.
+fn gap_bridges(shapes: &[Shape], gap: f64) -> Vec<PathData> {
+    if !(gap.is_finite() && gap > GAP_TOUCH) {
+        return Vec::new();
+    }
+    let gap = gap.min(SHAPE_BUILDER_MAX_GAP);
+    // (shape, subpath, end point) of every end of an open subpath.
+    let mut ends: Vec<(usize, usize, Point)> = Vec::new();
+    for (i, sh) in shapes.iter().enumerate() {
+        for (j, sp) in sh.path.subpaths.iter().enumerate() {
+            if sp.closed {
+                continue;
+            }
+            if let (Some(a), Some(b)) = (sp.anchors.first(), sp.anchors.last())
+                && sp.anchors.len() >= 2
+            {
+                ends.extend([(i, j, a.p), (i, j, b.p)]);
+            }
+        }
+    }
+    let mut bridges: Vec<(Point, Point)> = Vec::new();
+    for (k, &(i, j, e)) in ends.iter().enumerate() {
+        if !(e.x.is_finite() && e.y.is_finite()) {
+            continue;
+        }
+        // The nearest other end.
+        let mut best_end: Option<(f64, Point)> = None;
+        for (m, &(i2, j2, f)) in ends.iter().enumerate() {
+            let own = (i2, j2) == (i, j);
+            let own_short = own && shapes.get(i).and_then(|s| s.path.subpaths.get(j)).is_none_or(|sp| sp.anchors.len() < 3);
+            if m == k || own_short {
+                continue;
+            }
+            let d = e.distance(f);
+            if d.is_finite() && d <= gap && best_end.is_none_or(|b| d < b.0) {
+                best_end = Some((d, f));
+            }
+        }
+        // The nearest point on another subpath.
+        let mut best_curve: Option<(f64, Point)> = None;
+        for (i2, sh) in shapes.iter().enumerate() {
+            for (j2, sp) in sh.path.subpaths.iter().enumerate() {
+                if (i2, j2) == (i, j) {
+                    continue;
+                }
+                for n in 0..sp.segment_count() {
+                    let c = sp.segment(n);
+                    let near = [c.p0, c.p1, c.p2, c.p3];
+                    let (x0, x1) = near.iter().fold((f64::MAX, f64::MIN), |a, q| (a.0.min(q.x), a.1.max(q.x)));
+                    let (y0, y1) = near.iter().fold((f64::MAX, f64::MIN), |a, q| (a.0.min(q.y), a.1.max(q.y)));
+                    if e.x < x0 - gap || e.x > x1 + gap || e.y < y0 - gap || e.y > y1 + gap {
+                        continue;
+                    }
+                    let nearest = c.nearest(e, 1e-6);
+                    let d = nearest.distance_sq.sqrt();
+                    if d.is_finite() && d <= gap && best_curve.is_none_or(|b| d < b.0) {
+                        best_curve = Some((d, c.eval(nearest.t)));
+                    }
+                }
+            }
+        }
+        // Touching already: another path passes through the end.
+        if best_curve.is_some_and(|b| b.0 <= GAP_TOUCH) || best_end.is_some_and(|b| b.0 <= GAP_TOUCH) {
+            continue;
+        }
+        // An end is a better target than a point beside it on the path it ends.
+        let target = match (best_end, best_curve) {
+            (Some(a), Some(b)) => Some(if a.0 <= b.0 * 1.5 + GAP_TOUCH { a.1 } else { b.1 }),
+            (a, b) => a.or(b).map(|t| t.1),
+        };
+        if let Some(t) = target
+            && !bridges.iter().any(|&(a, b)| (a == e && b == t) || (a == t && b == e))
+        {
+            bridges.push((e, t));
+        }
+    }
+    bridges.into_iter().map(|(a, b)| PathData::single(SubPath::polyline(&[a, b], false))).collect()
+}
+
+/// [`shape_builder`] with Gap Detection: open paths whose ends come within `gap` (document units)
+/// of another path are bridged for the regions they bound, so a region left open by a small gap is
+/// found. A `gap` of 0 is [`shape_builder`]. The bridges are in no region's sources and in no piece
+/// of `lines` or `edges`.
+pub fn shape_builder_with_gap(shapes: &[Shape], edges: bool, gap: f64) -> BuilderArrangement {
     let has_open = has_open_path(shapes);
     let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
     let planar = (segments <= SHAPE_BUILDER_MAX_SEGMENTS)
         .then(|| {
-            let keyed: Vec<Shape> = shapes.iter().enumerate().map(|(i, s)| Shape::new(s.path.clone(), s.rule, i as u64)).collect();
-            live_paint(&keyed)
+            let mut keyed: Vec<Shape> = shapes.iter().enumerate().map(|(i, s)| Shape::new(s.path.clone(), s.rule, i as u64)).collect();
+            let n = keyed.len() as u64;
+            if has_open {
+                keyed.extend(gap_bridges(shapes, gap).into_iter().enumerate().map(|(k, p)| Shape::new(p, FillRule::NonZero, n + k as u64)));
+            }
+            let (faces, pieces) = live_paint(&keyed);
+            // The bridges only closed faces: their own pieces aren't art.
+            (faces, pieces.into_iter().filter(|e| e.key < n).collect::<Vec<_>>())
         })
         .filter(|(faces, pieces)| !faces.is_empty() || !pieces.is_empty());
     let Some((faces, pieces)) = planar else {
@@ -1540,6 +1643,48 @@ mod tests {
         assert_eq!(regions.len(), 1);
         assert!(regions[0].sources.is_empty() && regions[0].top().is_none());
         assert_eq!(lines.len(), 9);
+    }
+
+    #[test]
+    fn shape_builder_gap_detection_closes_small_gaps() {
+        // Three sides of a 100 x 100 square, the fourth open by 4: no region without Gap Detection.
+        let open = |gap: f64| {
+            let pts = [(0.0, gap), (0.0, 100.0), (100.0, 100.0), (100.0, 0.0), (0.0, 0.0)];
+            let pts: Vec<Point> = pts.iter().map(|&(x, y)| Point::new(x, y)).collect();
+            vec![Shape::new(PathData::single(SubPath::polyline(&pts, false)), FillRule::NonZero, 0)]
+        };
+        let s = open(4.0);
+        assert!(shape_builder(&s, false).regions.is_empty());
+        assert!(shape_builder_with_gap(&s, false, 3.0).regions.is_empty(), "a gap longer than the length stays open");
+        let arr = shape_builder_with_gap(&s, true, 6.0);
+        assert_eq!(arr.regions.len(), 1);
+        assert!((area(&arr.regions[0]) - 10000.0).abs() < 1e-6);
+        // The bridge is no art: the path comes back as it was, in its own pieces only.
+        assert!(arr.lines.iter().chain(&arr.edges).all(|p| p.key == 0));
+        let len: f64 = arr.lines.iter().map(|p| p.path.to_bezpath().perimeter(1e-6)).sum();
+        assert!((len - 396.0).abs() < 1e-6, "{len}");
+        // Two paths whose ends miss each other: a U and a lid 3 above it.
+        let u = Shape::new(
+            PathData::single(SubPath::polyline(
+                &[Point::new(0.0, 0.0), Point::new(0.0, 100.0), Point::new(100.0, 100.0), Point::new(100.0, 0.0)],
+                false,
+            )),
+            FillRule::NonZero,
+            0,
+        );
+        let s = [u, line((0.0, -3.0), (100.0, -3.0), 1)];
+        assert!(shape_builder_with_gap(&s, false, 2.0).regions.is_empty());
+        let arr = shape_builder_with_gap(&s, false, 3.5);
+        assert_eq!(arr.regions.len(), 1);
+        assert!((area(&arr.regions[0]) - 10300.0).abs() < 1e-6);
+        // An end close to the side of another path bridges to the nearest point on it.
+        let s = [rect(0.0, 0.0, 100.0, 100.0, 0), line((50.0, 140.0), (50.0, 104.0), 1)];
+        assert_eq!(shape_builder_with_gap(&s, false, 5.0).regions.len(), 1, "nothing is enclosed, nothing breaks");
+        // Bad gaps are no gap.
+        let s = open(4.0);
+        for gap in [f64::NAN, f64::INFINITY, -3.0] {
+            assert!(shape_builder_with_gap(&s, false, gap).regions.is_empty());
+        }
     }
 
     #[test]

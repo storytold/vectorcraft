@@ -350,6 +350,7 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::eyedropper::open(app);
             Ok(json!({ "dialog": crate::dialogs::eyedropper::KIND }))
         }
+        "shapeBuilder" => crate::dialogs::shape_builder::open(app),
         "blend" => {
             crate::dialogs::blend_options::open(app)?;
             Ok(json!({ "dialog": crate::dialogs::blend_options::KIND }))
