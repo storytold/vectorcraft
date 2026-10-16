@@ -4106,3 +4106,13 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
+	Smudge Stick…	涂抹棒…
+	Smudge Stick	涂抹棒
+	Sponge…	海绵…
+	Sponge	海绵
+	Watercolor…	水彩…
+	Watercolor	水彩
+	Brush Size	画笔大小
+	Definition	清晰度
+	Brush Detail	画笔细节
+	Shadow Intensity	阴影强度

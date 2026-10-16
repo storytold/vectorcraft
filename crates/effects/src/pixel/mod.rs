@@ -1,4 +1,4 @@
-//! Photoshop-style raster effects (Effect › Artistic › Film Grain, Blur › Radial Blur and Smart Blur, Brush Strokes ›
+//! Photoshop-style raster effects (Effect › Artistic › Film Grain, Smudge Stick, Sponge and Watercolor, Blur › Radial Blur and Smart Blur, Brush Strokes ›
 //! Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes
 //! and Sumi-e, Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone,
 //! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Sketch › Halftone Pattern, Stylize ›
@@ -19,6 +19,7 @@ mod brushstrokes;
 mod distort;
 mod edges;
 mod loaded;
+mod paint;
 mod pixelate;
 mod sharpen;
 mod sketch;
@@ -39,8 +40,11 @@ pub use sketch::{HALFTONE_TYPES, HalftonePattern};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 29] = [
+pub const PIXEL_EFFECTS: [&str; 32] = [
     "artistic.filmGrain",
+    "artistic.smudgeStick",
+    "artistic.sponge",
+    "artistic.watercolor",
     "blur.radial",
     "blur.smart",
     "brushStrokes.accentedEdges",
@@ -78,6 +82,16 @@ pub enum PixelFx {
     /// Artistic › Film Grain: monochrome grain in shadows and midtones, a wider bright
     /// highlight area (0..20), and tonal intensity (0..10), preserving coverage.
     FilmGrain { grain: f64, highlight: f64, intensity: f64 },
+    /// Artistic › Smudge Stick: the dark areas smudged along short diagonal strokes `stroke`
+    /// (0..10) long, the light areas (widened by `highlight`, 0..20) smudged longer and lightened
+    /// by up to `intensity` (0..10).
+    SmudgeStick { stroke: f64, highlight: f64, intensity: f64 },
+    /// Artistic › Sponge: soft blobs of lighter and darker colour about `brush` (0..10) large,
+    /// contrasting as `definition` (0..25) says, their edges as soft as `smoothness` (1..15).
+    Sponge { brush: f64, definition: f64, smoothness: f64 },
+    /// Artistic › Watercolor: detail simplified by a brush of `detail` (1..14), edges saturated,
+    /// shadows deepened by `shadow` (0..10), `texture` (1..3) grains of paper showing.
+    Watercolor { detail: f64, shadow: f64, texture: u32 },
     /// Blur › Radial Blur around the object's centre: along arcs (spin, an arc of `amount`°) or
     /// along rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
     RadialBlur { amount: f64, zoom: bool, passes: u32 },
@@ -214,6 +228,21 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             grain: num(p, "grain", 4.0).clamp(0.0, 20.0),
             highlight: num(p, "highlightArea", 0.0).clamp(0.0, 20.0),
             intensity: num(p, "intensity", 10.0).clamp(0.0, 10.0),
+        },
+        "artistic.smudgeStick" => PixelFx::SmudgeStick {
+            stroke: num(p, "strokeLength", 2.0).clamp(0.0, 10.0),
+            highlight: num(p, "highlightArea", 12.0).clamp(0.0, 20.0),
+            intensity: num(p, "intensity", 10.0).clamp(0.0, 10.0),
+        },
+        "artistic.sponge" => PixelFx::Sponge {
+            brush: num(p, "brushSize", 2.0).clamp(0.0, 10.0),
+            definition: num(p, "definition", 12.0).clamp(0.0, 25.0),
+            smoothness: num(p, "smoothness", 5.0).clamp(1.0, 15.0),
+        },
+        "artistic.watercolor" => PixelFx::Watercolor {
+            detail: num(p, "brushDetail", 9.0).clamp(1.0, 14.0),
+            shadow: num(p, "shadowIntensity", 1.0).clamp(0.0, 10.0),
+            texture: num(p, "texture", 1.0).clamp(1.0, 3.0).round() as u32,
         },
         "blur.radial" => PixelFx::RadialBlur {
             amount: num(p, "amount", 10.0).clamp(1.0, 100.0),
@@ -367,6 +396,8 @@ impl PixelFx {
             PixelFx::OceanRipple { size, magnitude } => distort::ripple_shift(size, magnitude),
             PixelFx::UnsharpMask { .. } | PixelFx::HalftonePattern { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
+            // These three keep the object's coverage.
+            PixelFx::SmudgeStick { .. } | PixelFx::Sponge { .. } | PixelFx::Watercolor { .. } => 0.0,
             PixelFx::FilmGrain { .. }
             | PixelFx::ColorHalftone { .. }
             | PixelFx::Mezzotint { .. }
@@ -389,6 +420,9 @@ impl PixelFx {
         match *self {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, .. } => Some(radius),
+            PixelFx::SmudgeStick { stroke, .. } => Some(paint::smudge_reach(stroke)),
+            PixelFx::Sponge { brush, smoothness, .. } => Some(paint::sponge_reach(brush, smoothness)),
+            PixelFx::Watercolor { detail, .. } => Some(paint::watercolor_reach(detail)),
             PixelFx::AccentedEdges { width, smoothness, .. } => Some(brushstrokes::accent_reach(width, smoothness)),
             // The strokes, and the softened tones that choose them.
             PixelFx::AngledStrokes { length, .. } => Some(brushstrokes::stroke_reach(length).max(brushstrokes::TONE_REACH)),
@@ -430,6 +464,9 @@ impl PixelFx {
         let to_px = |len: f64| len / space.px.max(1e-9);
         match *self {
             PixelFx::FilmGrain { grain, highlight, intensity } => artistic::film_grain(px, w, h, space, grain, highlight, intensity),
+            PixelFx::SmudgeStick { stroke, highlight, intensity } => paint::smudge_stick(px, w, h, space, stroke, highlight, intensity),
+            PixelFx::Sponge { brush, definition, smoothness } => paint::sponge(px, w, h, space, brush, definition, smoothness),
+            PixelFx::Watercolor { detail, shadow, texture } => paint::watercolor(px, w, h, space, detail, shadow, texture),
             PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
             PixelFx::SmartBlur { radius, threshold, samples, mode: SmartBlurMode::Normal } => {
                 blur::smart(px, w, h, to_px(radius), threshold, samples)
@@ -661,3 +698,5 @@ pub fn gaussian_rgba(data: &mut [u8], w: usize, h: usize, sigma: f64) {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_paint;

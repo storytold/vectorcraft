@@ -177,6 +177,9 @@ fn effect_preview_is_kept_as_one_undo_step() {
 #[test]
 fn raster_filter_dialogs_preview_and_apply() {
     for (effect, key, value) in [
+        ("artistic.smudgeStick", "strokeLength", "6"),
+        ("artistic.sponge", "definition", "20"),
+        ("artistic.watercolor", "texture", "2"),
         ("blur.radial", "method", "zoom"),
         ("blur.smart", "quality", "high"),
         ("blur.smart", "blurMode", "overlayEdge"),

@@ -344,6 +344,27 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"grain": 4.0, "highlightArea": 0.0, "intensity": 10.0}),
         ),
         r(
+            "artistic.smudgeStick",
+            "Smudge Stick…",
+            ARTISTIC,
+            "{strokeLength: 0..10 (2; length of the short diagonal strokes), highlightArea: 0..20 (12; widens the area counted as light), intensity: 0..10 (10; how far the light areas are lightened)} smudges the dark areas along short diagonal strokes; the lighter areas become brighter and lose detail. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"strokeLength": 2.0, "highlightArea": 12.0, "intensity": 10.0}),
+        ),
+        r(
+            "artistic.sponge",
+            "Sponge…",
+            ARTISTIC,
+            "{brushSize: 0..10 (2; size of the sponge's pores), definition: 0..25 (12; how strongly lighter and darker blobs contrast), smoothness: 1..15 (5; softer blob edges)} paints the object as if dabbed with a sponge, in highly textured areas of contrasting colour. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"brushSize": 2.0, "definition": 12.0, "smoothness": 5.0}),
+        ),
+        r(
+            "artistic.watercolor",
+            "Watercolor…",
+            ARTISTIC,
+            "{brushDetail: 1..14 (9; the larger, the more detail stays), shadowIntensity: 0..10 (1; deepens the shadows), texture: 1..3 (1; paper grain, whole numbers)} paints the object in a watercolor style: detail simplified, colour saturated and darker where tones change at edges. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"brushDetail": 9.0, "shadowIntensity": 1.0, "texture": 1.0}),
+        ),
+        r(
             "blur.radial",
             "Radial Blur…",
             BLUR,

@@ -4556,3 +4556,13 @@ lighting	Light	Світло
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
+	Smudge Stick…	Розтушовування…
+	Smudge Stick	Розтушовування
+	Sponge…	Губка…
+	Sponge	Губка
+	Watercolor…	Акварель…
+	Watercolor	Акварель
+	Brush Size	Розмір пензля
+	Definition	Чіткість
+	Brush Detail	Деталізація пензля
+	Shadow Intensity	Інтенсивність тіней

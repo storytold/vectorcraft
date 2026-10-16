@@ -4536,3 +4536,13 @@ theme	Appearance	Erscheinungsbild
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
+	Smudge Stick…	Wischstift…
+	Smudge Stick	Wischstift
+	Sponge…	Schwamm…
+	Sponge	Schwamm
+	Watercolor…	Aquarell…
+	Watercolor	Aquarell
+	Brush Size	Pinselgröße
+	Definition	Definition
+	Brush Detail	Pinseldetail
+	Shadow Intensity	Schattenintensität

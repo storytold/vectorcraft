@@ -4572,3 +4572,13 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+	Smudge Stick…	Растушёвка…
+	Smudge Stick	Растушёвка
+	Sponge…	Губка…
+	Sponge	Губка
+	Watercolor…	Акварель…
+	Watercolor	Акварель
+	Brush Size	Размер кисти
+	Definition	Чёткость
+	Brush Detail	Детализация кисти
+	Shadow Intensity	Интенсивность теней

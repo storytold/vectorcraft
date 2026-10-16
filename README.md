@@ -245,7 +245,7 @@ The scores are self-assessed from our code against Illustrator's public document
 - reliable exchange of Illustrator's own `.ai` files (layer structure in real files; Illustrator's editing data isn't written);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
-- about half of the Photoshop-style raster effects (27 of 57 still missing; Film Grain is available under Artistic, Halftone Pattern under Sketch) and the Effect Gallery;
+- about half of the Photoshop-style raster effects (24 of 57 still missing; Film Grain, Smudge Stick, Sponge and Watercolor are available under Artistic, Halftone Pattern under Sketch) and the Effect Gallery;
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.

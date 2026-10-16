@@ -4963,3 +4963,13 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+	Smudge Stick…	Sumennuskynä…
+	Smudge Stick	Sumennuskynä
+	Sponge…	Sieni…
+	Sponge	Sieni
+	Watercolor…	Vesiväri…
+	Watercolor	Vesiväri
+	Brush Size	Siveltimen koko
+	Definition	Terävyys
+	Brush Detail	Siveltimen yksityiskohta
+	Shadow Intensity	Varjojen voimakkuus

@@ -4966,3 +4966,13 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+	Smudge Stick…	Elmosó rúd…
+	Smudge Stick	Elmosó rúd
+	Sponge…	Szivacs…
+	Sponge	Szivacs
+	Watercolor…	Akvarell…
+	Watercolor	Akvarell
+	Brush Size	Ecsetméret
+	Definition	Kidolgozottság
+	Brush Detail	Ecsetrészletesség
+	Shadow Intensity	Árnyék intenzitása

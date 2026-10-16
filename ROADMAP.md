@@ -29,7 +29,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 30/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 44/50, Photoshop effects 33/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
