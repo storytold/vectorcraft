@@ -265,6 +265,83 @@ mod native {
         synth::container(&[("doc.dat", &doc, method)], Some(&png()))
     }
 
+    /// A version-12 document at 144 ppi holding a 100 px square filled with a red-to-blue conical
+    /// gradient centred at (50, 40) px, radius 40 px (`mirror`: its unit +y points up).
+    fn conical_document(mirror: bool) -> Vec<u8> {
+        let stop = |id: u32, c: F| F::Def(id, vec![tag(b"RGBA")], vec![(tag(b"_col"), c)]);
+        let positions = [[0.0f32, 0.5], [1.0, 0.5]].iter().map(|p| p.iter().flat_map(|v| v.to_le_bytes()).collect()).collect();
+        let gradient = F::Def(
+            21,
+            vec![tag(b"FDsc")],
+            vec![
+                (tag(b"FDeX"), F::F64s(vec![40.0, 0.0, 50.0, 0.0, if mirror { -40.0 } else { 40.0 }, 40.0])),
+                (
+                    tag(b"FDeF"),
+                    F::Def(
+                        22,
+                        vec![tag(b"FilG")],
+                        vec![
+                            (tag(b"Type"), F::Enum(3, 0)),
+                            (
+                                tag(b"Grad"),
+                                F::Obj(
+                                    tag(b"Grad"),
+                                    vec![
+                                        (tag(b"Cols"), F::Shared(vec![stop(23, rgba(1.0, 0.0, 0.0, 1.0)), stop(24, rgba(0.0, 0.0, 1.0, 1.0))])),
+                                        (tag(b"Posn"), F::Records(8, positions)),
+                                    ],
+                                ),
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+        );
+        let square = F::Def(
+            20,
+            vec![tag(b"ShpN")],
+            vec![
+                (tag(b"Shpe"), F::Def(25, vec![tag(b"ShNR")], vec![])),
+                (tag(b"ShpB"), F::F64s(vec![0.0, 0.0, 100.0, 100.0])),
+                (tag(b"BFFl"), F::Shared(vec![gradient])),
+            ],
+        );
+        let spread =
+            F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"SprB"), F::F64s(vec![0.0, 0.0, 200.0, 200.0])), (tag(b"Chld"), F::Shared(vec![square]))]);
+        let doc = synth::stream(&[
+            (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(144.0))])),
+            (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
+        ]);
+        synth::container(&[("doc.dat", &doc, Method::Stored)], Some(&png()))
+    }
+
+    #[test]
+    fn conical_gradients_open_as_conic_gradients() {
+        use vectorcraft_color::{GradientKind, Paint};
+        for mirror in [false, true] {
+            let mut s = Session::new();
+            let r = open_bytes(&mut s, "conic.af", &conical_document(mirror), None).unwrap();
+            assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("conical")), "{r}");
+            let mut paint = None;
+            s.doc().unwrap().doc.walk(|n| {
+                if let Paint::Gradient(g) = n.appearance.fill_paint() {
+                    paint = Some(g.clone());
+                }
+            });
+            let g = paint.expect("a gradient fill");
+            assert_eq!(g.gradient.kind, GradientKind::Conic);
+            let geom = g.geom.unwrap();
+            // 144 ppi: centre (25, 20) pt, radius 20 pt, red at the start of the sweep.
+            assert!(geom.start.distance(kurbo::Point::new(25.0, 20.0)) < 1e-9 && (geom.length() - 20.0).abs() < 1e-9, "{geom:?}");
+            assert_eq!(geom.aspect < 0.0, mirror, "{geom:?}");
+            // A quarter turn on from the start lies along the unit +y: below the centre, or
+            // above it when mirrored.
+            let quarter = kurbo::Point::new(25.0, if mirror { 10.0 } else { 30.0 });
+            assert!((geom.param_at(GradientKind::Conic, quarter) - 0.25).abs() < 1e-9, "{geom:?}");
+            assert_eq!(g.gradient.stops[0].color.to_hex(), "#ff0000");
+        }
+    }
+
     #[test]
     fn layers_artboards_curves_and_paints_open_as_editable_art() {
         for method in [Method::Stored, Method::Zlib, Method::Zstd] {

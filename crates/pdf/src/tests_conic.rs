@@ -8,7 +8,7 @@ use vectorcraft_geom::{Point, Rect, shapes};
 use crate::*;
 
 /// A page-sized square filled with a white-to-black conic on `geom`.
-pub(crate) fn doc(geom: GradientGeom) -> Document {
+fn doc(geom: GradientGeom) -> Document {
     let mut gp = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
     gp.geom = Some(geom);
     let mut d = Document::new(200.0, 200.0);
@@ -35,13 +35,4 @@ fn a_conic_gradient_without_extent_still_exports() {
     let c = Point::new(100.0, 100.0);
     let report = export_with_report(&doc(GradientGeom { start: c, end: c, aspect: 1.0, focal: None }), &PdfOptions::uncompressed()).unwrap();
     assert!(String::from_utf8_lossy(&report.bytes).contains("/ShadingType 1"));
-}
-
-/// Not a test: writes the PDF for checking by eye (`VC_CONIC_PDF=/path.pdf`).
-#[test]
-fn write_sample_for_inspection() {
-    if let Ok(p) = std::env::var("VC_CONIC_PDF") {
-        let geom = GradientGeom::fit(GradientKind::Conic, Rect::new(0.0, 0.0, 200.0, 200.0), 0.0);
-        std::fs::write(p, export(&doc(geom), &PdfOptions::default()).unwrap()).unwrap();
-    }
 }

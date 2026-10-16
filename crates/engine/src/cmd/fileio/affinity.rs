@@ -363,17 +363,22 @@ impl Builder {
                 let kind = match g.kind {
                     AfKind::Linear => GradientKind::Linear,
                     AfKind::Radial => GradientKind::Radial,
-                    AfKind::Conical => {
-                        self.warn("conical gradients import as radial gradients");
-                        GradientKind::Radial
-                    }
+                    AfKind::Conical => GradientKind::Conic,
                 };
                 let (u, v): (Vec2, Vec2) = (x - o, y - o);
-                if kind == GradientKind::Radial && u.hypot() > 0.0 && (u.dot(v) / (u.hypot() * v.hypot().max(1e-12))).abs() > 0.01 {
+                if kind.is_centred() && u.hypot() > 0.0 && (u.dot(v) / (u.hypot() * v.hypot().max(1e-12))).abs() > 0.01 {
                     self.warn("skewed elliptical gradients import as upright ellipses");
                 }
                 let aspect = if u.hypot() > 0.0 { (v.hypot() / u.hypot()).clamp(0.01, 100.0) } else { 1.0 };
-                let geom = GradientGeom { start: o, end: x, aspect: if kind == GradientKind::Radial { aspect } else { 1.0 }, focal: None };
+                // A conic turns from unit +x towards unit +y: mirrored (a negative aspect) when
+                // that runs anticlockwise on the page.
+                let aspect = match kind {
+                    GradientKind::Radial => aspect,
+                    GradientKind::Conic if u.cross(v) < 0.0 => -aspect,
+                    GradientKind::Conic => aspect,
+                    _ => 1.0,
+                };
+                let geom = GradientGeom { start: o, end: x, aspect, focal: None };
                 let mut gp = GradientPaint::new(Gradient { kind, stops });
                 gp.angle = (-(u.y)).atan2(u.x).to_degrees();
                 gp.geom = Some(geom);
