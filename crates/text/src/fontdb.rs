@@ -892,11 +892,22 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
     let native_family = native_family_name(f, &family);
     let mut keys = FaceKeys::of(f, &family, &style);
     let traits = FontTraits::of(f, &keys);
-    let mut instances = named_instances(f, &family, &style, &mut keys, native_family.clone());
+    let (mut instances, renamed) = named_instances(f, &family, &style, &mut keys, native_family.clone());
     for i in &mut instances {
         i.traits = traits;
     }
-    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight: None, italic: false, traits };
+    // A variable font's default face renders at its `wght` default, whatever its name table and
+    // OS/2 table say (Noto Sans Hebrew: named `Light`, weight class 300, default instance Regular
+    // at 400): weigh it so, and name it by its default instance when that is another weight.
+    let weight = f
+        .axes()
+        .iter()
+        .find(|a| a.tag().to_be_bytes() == *b"wght")
+        .map(|a| a.default_value())
+        .filter(|w| w.is_finite())
+        .map(|w| w.clamp(1.0, 1000.0));
+    let style = renamed.unwrap_or(style);
+    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight, italic: false, traits };
     std::iter::once(face).chain(instances).collect()
 }
 
@@ -905,17 +916,40 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
 /// names already taken. The default instance's name, when it isn't the face's style name (a face
 /// `Regular` whose default instance is `Book`), names the face too (`keys`). Damaged tables give
 /// fewer instances or none; the counts read are capped.
-fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mut FaceKeys, native_family: Option<String>) -> Vec<FaceStyle> {
+fn named_instances(
+    f: &skrifa::FontRef<'_>,
+    family: &str,
+    style: &str,
+    keys: &mut FaceKeys,
+    native_family: Option<String>,
+) -> (Vec<FaceStyle>, Option<String>) {
     let axes = f.axes();
     if axes.is_empty() || axes.len() > MAX_AXES {
-        return vec![];
+        return (vec![], None);
     }
     let tags: Vec<Tag> = axes.iter().map(|a| a.tag()).collect();
     let defaults: Vec<f32> = axes.iter().map(|a| a.default_value()).collect();
+    let is_default = |coords: &[f32]| coords.len() == defaults.len() && coords.iter().zip(&defaults).all(|(c, d)| (c - d).abs() < 1e-3);
+    // The face renders as its default instance. When that instance is another weight than the
+    // name table says (`Light` face, Regular default instance), the instance names the face.
+    let renamed = tags.iter().any(|t| t.to_be_bytes() == *b"wght").then(|| {
+        f.named_instances()
+            .iter()
+            .take(MAX_INSTANCES)
+            .filter(|inst| is_default(&inst.user_coords().take(MAX_AXES).collect::<Vec<f32>>()))
+            .find_map(|inst| name(f, &[inst.subfamily_name_id()]))
+            .filter(|d| style_weight(d) != style_weight(style))
+    });
+    let renamed = renamed.flatten();
     // Instances without a PostScript name of their own are named `<prefix>-<style>` (Adobe
     // Technical Note #5902), as PDF and `.ai` files name them.
     let prefix = name(f, &[StringId::VARIATIONS_POSTSCRIPT_NAME_PREFIX]).unwrap_or_else(|| family.to_string());
-    let mut taken = vec![norm(style)];
+    if let Some(new) = &renamed {
+        let old = norm(style);
+        keys.styles.retain(|k| *k != old);
+        keys.styles.push(norm(new));
+    }
+    let mut taken = vec![norm(renamed.as_deref().unwrap_or(style))];
     let mut out = Vec::new();
     for inst in f.named_instances().iter().take(MAX_INSTANCES) {
         let coords: Vec<f32> = inst.user_coords().take(MAX_AXES).collect();
@@ -960,7 +994,7 @@ fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mu
             traits: FontTraits::default(),
         });
     }
-    out
+    (out, renamed)
 }
 
 /// Parse every face in `data` (a font file or collection) and the named instances of its variable
