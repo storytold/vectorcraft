@@ -5130,3 +5130,7 @@ theme	Appearance	Външен вид
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
+	Snapping	Прилепване
+	Snap to Tangent	Прилепване към допирателна
+	Snap to Perpendicular	Прилепване към перпендикуляр
+@msg	unknown snap option `{key}` (use {options})	неизвестна опция за прилепване `{key}` (използвайте {options})

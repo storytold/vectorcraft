@@ -256,6 +256,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.grid", "Show Grid", "Cmd+'", "{}"),
     ("view.snapToGrid", "Snap to Grid", "Cmd+Shift+'", "{}"),
     ("view.snapToPoint", "Snap to Point", "Cmd+Alt+'", "{}"),
+    (
+        "view.snapTangent",
+        "Snap to Tangent",
+        "",
+        "{} toggle: with Smart Guides on, a line drawn from an anchor lands where it just touches a nearby curve",
+    ),
+    (
+        "view.snapPerpendicular",
+        "Snap to Perpendicular",
+        "",
+        "{} toggle: with Smart Guides on, a line drawn from an anchor lands square to a nearby segment",
+    ),
+    (
+        "view.snapping",
+        "Snapping",
+        "",
+        "{smartGuides?, point?, grid?, pixel?, tangent?, perpendicular?: bool} set the snap options given (others stay); returns all six as {smartGuides, point, grid, pixel, tangent, perpendicular}; {} only reports them",
+    ),
     ("view.presentation", "Presentation Mode", "Shift+F", "{}"),
     ("view.screenMode", "Screen Mode", "F", "{mode?: 0..2} (no param cycles)"),
     (
@@ -1028,6 +1046,47 @@ pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Va
     session.check_params(id, params).map_err(|e| e.to_string())
 }
 
+/// The snap options `view.snapping` sets and reports, as its parameter names.
+const SNAP_OPTIONS: [&str; 6] = ["smartGuides", "point", "grid", "pixel", "tangent", "perpendicular"];
+
+/// `view.snapping`: set the snap options `p` names (nothing changes when any is wrong) and report
+/// all of them. Snap to Grid and Snap to Pixel can both be on; the tools let the grid win.
+fn set_snapping(v: &mut crate::state::ViewFlags, p: &Value) -> Result<Value, String> {
+    let options = SNAP_OPTIONS.join(", ");
+    let given = match p {
+        Value::Null => None,
+        Value::Object(m) => Some(m),
+        key => return Err(format!("unknown snap option `{key}` (use {options})")),
+    };
+    for (key, val) in given.into_iter().flatten() {
+        if !SNAP_OPTIONS.contains(&key.as_str()) {
+            return Err(format!("unknown snap option `{key}` (use {options})"));
+        }
+        if !val.is_boolean() && !val.is_null() {
+            return Err(format!("`{key}` must be true or false"));
+        }
+    }
+    let on = |key: &str, b: &mut bool| {
+        if let Some(x) = p.get(key).and_then(Value::as_bool) {
+            *b = x;
+        }
+    };
+    on("smartGuides", &mut v.smart_guides);
+    on("point", &mut v.snap_to_point);
+    on("grid", &mut v.snap_to_grid);
+    on("pixel", &mut v.snap_to_pixel);
+    on("tangent", &mut v.snap_tangent);
+    on("perpendicular", &mut v.snap_perpendicular);
+    Ok(json!({
+        "smartGuides": v.smart_guides,
+        "point": v.snap_to_point,
+        "grid": v.snap_to_grid,
+        "pixel": v.snap_to_pixel,
+        "tangent": v.snap_tangent,
+        "perpendicular": v.snap_perpendicular,
+    }))
+}
+
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     // The Window menu's panel items toggle like its other checked items (#2361); the panel's
     // other ways in (shortcuts, Show Properties Panel, a tool's double-click) only show it.
@@ -1227,6 +1286,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.grid" => flag(&mut app.ui.view.grid),
         "view.snapToGrid" => flag(&mut app.ui.view.snap_to_grid),
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
+        "view.snapTangent" => flag(&mut app.ui.view.snap_tangent),
+        "view.snapPerpendicular" => flag(&mut app.ui.view.snap_perpendicular),
+        "view.snapping" => set_snapping(&mut app.ui.view, p),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
             // Selection & Anchor Display › Zoom to Selection: the selection comes to the middle.
@@ -1748,6 +1810,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.grid" => v.grid,
         "view.snapToGrid" => v.snap_to_grid,
         "view.snapToPoint" => v.snap_to_point,
+        "view.snapTangent" => v.snap_tangent,
+        "view.snapPerpendicular" => v.snap_perpendicular,
         "view.rulers" => v.rulers,
         // A View › Rotate View item is checked when the active view is turned to its angle; without
         // a document no item is checked.
@@ -2861,6 +2925,18 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Snap to Grid", "view.snapToGrid"),
                 c("Snap to Pixel", "view.snapToPixel"),
                 c("Snap to Point", "view.snapToPoint"),
+                sub(
+                    "Snapping",
+                    vec![
+                        c("Smart Guides", "view.smartGuides"),
+                        c("Snap to Point", "view.snapToPoint"),
+                        c("Snap to Grid", "view.snapToGrid"),
+                        c("Snap to Pixel", "view.snapToPixel"),
+                        Sep,
+                        c("Snap to Tangent", "view.snapTangent"),
+                        c("Snap to Perpendicular", "view.snapPerpendicular"),
+                    ],
+                ),
                 todo("Snap to Glyph"),
                 Sep,
                 c("New View…", "view.saved.new"),
@@ -4028,6 +4104,42 @@ mod tests {
 
     fn open_titles(ctx: &egui::Context, titles: &[(egui::Rect, egui::Id)]) -> Vec<usize> {
         (0..titles.len()).filter(|&i| egui::Popup::is_id_open(ctx, titles[i].1)).collect()
+    }
+
+    /// View › Snapping lists every snap kind; `view.snapping` sets any of them from the control
+    /// channel or MCP, refuses a wrong option without changing any, and the flags are saved.
+    #[test]
+    fn view_snapping_lists_and_sets_every_snap_option() {
+        let tree = menu_tree();
+        let view = tree.iter().find(|(t, _)| *t == "View").map(|(_, i)| i).unwrap();
+        let Some(Item::Sub(_, items)) = view.iter().find(|i| matches!(i, Item::Sub("Snapping", _))) else { panic!("no Snapping submenu") };
+        let ids: Vec<&str> = items.iter().filter_map(|i| if let Item::Cmd(_, id, _) = i { Some(*id) } else { None }).collect();
+        assert_eq!(
+            ids,
+            ["view.smartGuides", "view.snapToPoint", "view.snapToGrid", "view.snapToPixel", "view.snapTangent", "view.snapPerpendicular"]
+        );
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let all = app.run("view.snapping", json!({})).unwrap();
+        assert_eq!(all, json!({"smartGuides": true, "point": true, "grid": false, "pixel": false, "tangent": true, "perpendicular": true}));
+        let r = app.run("view.snapping", json!({"tangent": false, "grid": true})).unwrap();
+        assert_eq!((r["tangent"].clone(), r["grid"].clone(), r["perpendicular"].clone()), (json!(false), json!(true), json!(true)));
+        assert!(!app.ui.view.snap_tangent && app.ui.view.snap_to_grid);
+        // A wrong value or name changes nothing, not even the options before it.
+        for bad in [json!({"tangent": true, "perpendicular": "yes"}), json!({"tangent": true, "sideways": true}), json!([1])] {
+            assert!(app.run("view.snapping", bad).is_err());
+            assert!(!app.ui.view.snap_tangent);
+        }
+        app.run("view.snapTangent", json!({})).unwrap();
+        assert!(app.ui.view.snap_tangent);
+        // Saved with the other view flags; flags saved before these existed read as on.
+        let saved = serde_json::to_value(&app.ui.view).unwrap();
+        let back: crate::state::ViewFlags = serde_json::from_value(saved.clone()).unwrap();
+        assert!(back.snap_tangent && back.snap_to_grid);
+        let mut old = saved;
+        old.as_object_mut().unwrap().retain(|k, _| k != "snap_tangent" && k != "snap_perpendicular");
+        let back: crate::state::ViewFlags = serde_json::from_value(old).unwrap();
+        assert!(back.snap_tangent && back.snap_perpendicular);
     }
 
     /// File ends with Exit, running the app's own quit flow (unsaved documents are asked about).

@@ -205,6 +205,12 @@ pub struct ViewFlags {
     /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
     #[serde(default = "yes")]
     pub templates: bool,
+    /// View → Snapping → Snap to Tangent: a drawn line leaving an anchor lands where it touches a curve.
+    #[serde(default = "yes")]
+    pub snap_tangent: bool,
+    /// View → Snapping → Snap to Perpendicular: a drawn line leaving an anchor lands square to a segment.
+    #[serde(default = "yes")]
+    pub snap_perpendicular: bool,
 }
 
 impl Default for ViewFlags {
@@ -228,6 +234,8 @@ impl Default for ViewFlags {
             gradient_annotator: true,
             hidden_chars: false,
             templates: true,
+            snap_tangent: true,
+            snap_perpendicular: true,
         }
     }
 }

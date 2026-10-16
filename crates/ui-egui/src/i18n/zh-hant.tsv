@@ -4063,3 +4063,7 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
+	Snapping	靠齊
+	Snap to Tangent	靠齊切線
+	Snap to Perpendicular	靠齊垂線
+@msg	unknown snap option `{key}` (use {options})	未知的靠齊選項 `{key}`（可用：{options}）
