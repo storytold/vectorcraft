@@ -6,7 +6,8 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor FreeHand
+//! drawings (mutated record streams), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -266,6 +267,48 @@ proptest! {
         });
         prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
     }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn freehand_garbage_never_panics(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"AGD4".to_vec();
+        bytes.extend(tail);
+        survive("FreeHand garbage", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn freehand_mutated_files_render_and_export(
+        edits in prop::collection::vec((0usize..4000, any::<u8>()), 0..16),
+        cut in 0usize..4000,
+    ) {
+        let mut bytes = vectorcraft_freehand::synth::demo();
+        let n = bytes.len().max(1);
+        for (at, b) in edits {
+            if let Some(slot) = bytes.get_mut(at % n) {
+                *slot = b;
+            }
+        }
+        let keep = cut.max(8).min(bytes.len());
+        bytes.truncate(keep);
+        survive("FreeHand mutated", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+}
+
+#[test]
+fn deeply_nested_freehand_groups_and_cycles_are_read_within_the_cap() {
+    let deep = vectorcraft_freehand::synth::nested_groups(10_000);
+    let cycle = vectorcraft_freehand::synth::cyclic_groups();
+    let symbol = vectorcraft_freehand::synth::cyclic_symbol();
+    on_a_small_stack(move || {
+        let (doc, warnings) = open_deep("deep.fh9", &deep).expect("10_000 groups open or the reader refuses them before they overflow");
+        assert!(merged(&warnings) || warnings.iter().any(|w| w.contains("deeply nested")), "{warnings:?}");
+        assert!(!doc.too_deep(None));
+        open_deep("cycle.fh9", &cycle).expect("a group cycle opens");
+        open_deep("symbol.fh9", &symbol).expect("a symbol cycle opens");
+    });
 }
 
 /// Import must not panic; whatever comes back must render and export without panicking either.

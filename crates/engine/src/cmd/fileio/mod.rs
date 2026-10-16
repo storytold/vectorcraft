@@ -29,6 +29,7 @@ pub mod dxfimport;
 mod encode;
 pub mod eps;
 mod export;
+mod freehand;
 pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
@@ -609,6 +610,14 @@ pub const FORMATS: &[Format] = &[
     reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
     // Photoshop's large document format: read like a PSD (its merged image), never written.
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
+    // FreeHand templates share the drawing format. Never written.
+    reader(
+        "freehand",
+        "FreeHand",
+        &["fh", "fh3", "fh4", "fh5", "fh7", "fh8", "fh9", "fh10", "fh11", "ft8", "ft9", "ft10", "ft11"],
+        "application/x-freehand",
+        false,
+    ),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -638,6 +647,19 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "fh",
+    "fh3",
+    "fh4",
+    "fh5",
+    "fh7",
+    "fh8",
+    "fh9",
+    "fh10",
+    "fh11",
+    "ft8",
+    "ft9",
+    "ft10",
+    "ft11",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
@@ -687,6 +709,19 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "fh",
+    "fh3",
+    "fh4",
+    "fh5",
+    "fh7",
+    "fh8",
+    "fh9",
+    "fh10",
+    "fh11",
+    "ft8",
+    "ft9",
+    "ft10",
+    "ft11",
     "txt",
 ];
 
@@ -1116,6 +1151,8 @@ pub(crate) fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) ->
 mod tests;
 #[cfg(test)]
 mod tests_affinity;
+#[cfg(test)]
+mod tests_freehand;
 #[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]

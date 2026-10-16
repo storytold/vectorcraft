@@ -95,6 +95,12 @@
       <key>LSHandlerRank</key><string>Alternate</string>
     </dict>
     <dict>
+      <key>CFBundleTypeName</key><string>FreeHand</string>
+      <key>CFBundleTypeExtensions</key><array><string>fh</string><string>fh3</string><string>fh4</string><string>fh5</string><string>fh7</string><string>fh8</string><string>fh9</string><string>fh10</string><string>fh11</string><string>ft8</string><string>ft9</string><string>ft10</string><string>ft11</string></array>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+    </dict>
+    <dict>
       <key>CFBundleTypeName</key><string>DXF</string>
       <key>CFBundleTypeExtensions</key><array><string>dxf</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
