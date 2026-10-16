@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, ImageBlob, ImageObject, Node, NodeKind, Symbol};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, ImageBlob, ImageObject, Node, NodeKind, StrokeLayer, Symbol};
 use vectorcraft_geom::{Point, shapes};
 
 use super::*;
@@ -677,6 +677,54 @@ fn a_rectangle_on_a_fill_below_type_with_outline_object_fits_the_glyphs() {
     assert_eq!(lum(img.pixel(glyphs.x1 as u32 + 12, y)), WHITE);
     assert_eq!(img.pixel(x, glyphs.y1 as u32 + 6), [255, 0, 0, 255]);
     assert_eq!(lum(img.pixel(x, glyphs.y1 as u32 + 12)), WHITE);
+}
+
+/// [`image_doc`] with a black 4 pt stroke of its own that carries the effects `row`, below the
+/// image when `below`.
+fn stroked_image_doc(row: Vec<Effect>, below: bool) -> Document {
+    let mut d = image_doc(vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+    stroke.effects = row;
+    let ap = &mut d.node_mut(id).unwrap().appearance;
+    ap.items.push(AppearanceItem::Stroke(stroke));
+    ap.set_contents_at(usize::from(below));
+    d
+}
+
+#[test]
+fn an_images_stroke_draws_only_the_shape_convert_to_shape_or_outline_object_gives_it() {
+    // The image's frame runs from 20 to 50. Without an effect the stroke draws nothing.
+    for below in [false, true] {
+        let img = render(&stroked_image_doc(vec![], below));
+        assert_eq!((lum(img.pixel(18, 35)), img.pixel(21, 35)), (WHITE, [255, 0, 0, 255]));
+    }
+    let rectangle = fx("convertToShape.rectangle", json!({"relative": true, "extraW": 0, "extraH": 0}));
+    let outline = fx("path.outlineObject", json!({}));
+    for effect in [rectangle, outline] {
+        // Below the image only the stroke's outer half shows, above it both halves.
+        let img = render(&stroked_image_doc(vec![effect.clone()], true));
+        assert_eq!((lum(img.pixel(17, 35)), lum(img.pixel(18, 35)), img.pixel(21, 35)), (WHITE, 0, [255, 0, 0, 255]), "{}", effect.id);
+        let img = render(&stroked_image_doc(vec![effect.clone()], false));
+        assert_eq!((lum(img.pixel(18, 35)), lum(img.pixel(21, 35)), img.pixel(23, 35)), (0, 0, [255, 0, 0, 255]), "{}", effect.id);
+        // An effect before it is left out.
+        let first = fx("path.offsetPath", json!({"offset": 10}));
+        let img = render(&stroked_image_doc(vec![first, effect.clone()], true));
+        assert_eq!((lum(img.pixel(10, 35)), lum(img.pixel(18, 35))), (WHITE, 0), "{}", effect.id);
+    }
+    // An Offset Path of 2 pt after Outline Object moves the stroke 2 pt out.
+    let img = render(&stroked_image_doc(vec![fx("path.outlineObject", json!({})), fx("path.offsetPath", json!({"offset": 2}))], true));
+    assert_eq!((lum(img.pixel(15, 35)), lum(img.pixel(16, 35)), lum(img.pixel(19, 35))), (WHITE, 0, 0));
+}
+
+#[test]
+fn an_images_stroke_is_drawn_when_only_it_is_in_view() {
+    // The stroke runs 8 pt outside the frame, from 10 to 14; the view shows x 15 and less.
+    let row = vec![fx("path.outlineObject", json!({})), fx("path.offsetPath", json!({"offset": 8}))];
+    let d = stroked_image_doc(row, true);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let img = Renderer::new().render(&d, 100, 100, Affine::translate((85.0, 0.0)), &opts);
+    assert_eq!((lum(img.pixel(96, 35)), lum(img.pixel(99, 35))), (0, WHITE));
 }
 
 #[test]

@@ -7,7 +7,9 @@
 //! warp bends a line of type as a whole. An image is clipped by its reshaped frame. Raster effects
 //! (shadows, glows, blur, feather) stay on the result for the renderer and exporters. Type without
 //! inline graphics whose own fills or strokes have geometry effects is outlined too: each of those
-//! effects reshapes the whole outline that its fill or stroke paints.
+//! effects reshapes the whole outline that its fill or stroke paints. An image's own fills and
+//! strokes paint only the shape that a Convert to Shape or Outline Object effect on them gives
+//! them ([`image_rows`]).
 
 use std::sync::Arc;
 
@@ -33,11 +35,48 @@ pub fn needs_outline(n: &Node) -> bool {
 }
 
 /// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
-/// visible geometry effect? Such an effect reshapes the whole outline that its fill or stroke
+/// visible geometry effect, or an image with a fill or stroke of its own that paints a shape
+/// ([`image_rows`])? On type, such an effect reshapes the whole outline that its fill or stroke
 /// paints ([`outline_text`], which leaves inline graphics out).
 pub fn has_item_geometry(n: &Node) -> bool {
-    let NodeKind::Text(t) = &n.kind else { return false };
-    t.runs.iter().all(|r| r.inline.is_none()) && n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
+    match &n.kind {
+        NodeKind::Text(t) => {
+            t.runs.iter().all(|r| r.inline.is_none()) && n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
+        }
+        NodeKind::Image(_) => n.appearance.items.iter().any(shapes_image),
+        _ => false,
+    }
+}
+
+/// Does effect `e` give an image's fill or stroke a shape to paint (a visible Convert to Shape or
+/// Outline Object)?
+fn gives_shape(e: &Effect) -> bool {
+    e.visible
+        && matches!(e.id.as_str(), "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" | "path.outlineObject")
+}
+
+/// Does `item`, a fill or stroke of an image, paint something: does it paint and carry an effect
+/// that gives it a shape ([`gives_shape`])?
+fn shapes_image(item: &AppearanceItem) -> bool {
+    crate::paints(item) && item.effects().iter().any(gives_shape)
+}
+
+/// The fills and strokes of `items` (an image's own) that paint something ([`shapes_image`]), each
+/// without the effects before its first Convert to Shape or Outline Object. Convert to Shape sizes
+/// its shape from the image's box, and Outline Object gives the image's frame. The others paint
+/// nothing.
+fn image_rows(items: &[AppearanceItem]) -> Vec<AppearanceItem> {
+    items
+        .iter()
+        .filter(|i| shapes_image(i))
+        .map(|i| {
+            let mut i = i.clone();
+            let fx = i.effects_mut();
+            let first = fx.iter().position(gives_shape).unwrap_or(0);
+            fx.drain(..first);
+            i
+        })
+        .collect()
 }
 
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
@@ -165,11 +204,13 @@ pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
 
 /// `n` (see [`needs_outline`]) with its object-level geometry effects and its perspective applied:
 /// its [`outline_art`] reshaped as one piece, or for an image the image clipped by its reshaped
-/// frame. Type's own fills and strokes keep their effects on its whole outline. The result is a
-/// group with `n`'s id, name, visibility, transparency, opacity mask and remaining (raster)
-/// effects; `None` when `n` has no visible geometry effect, no perspective and is not type with
-/// a geometry effect on a fill or stroke of its own ([`has_item_geometry`]), or has no art (a
-/// symbol instance without `symbol_art`).
+/// frame. Type's own fills and strokes keep their effects on its whole outline. An image's own
+/// fills and strokes that paint a shape ([`image_rows`]) become paths along its frame below and
+/// above it, reshaped with it, and keep their effects from their first Convert to Shape or Outline
+/// Object on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
+/// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
+/// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
+/// or has no art (a symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n) {
         return None;
@@ -178,10 +219,13 @@ pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
 }
 
 /// `n` (see [`needs_outline`]) as plain art for Expand Appearance: [`reshape`]d when it has
-/// geometry effects, else type with fills or strokes of its own outlined, in the same form. `None`
-/// when it has neither.
+/// geometry effects, else type with fills or strokes of its own outlined, or an image with fills
+/// or strokes of its own that paint a shape, in the same form. `None` when it has none of these.
 pub fn expand_outlined(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    let own_paint = matches!(n.kind, NodeKind::Text(_)) && !n.appearance.items.is_empty();
+    let own_paint = match n.kind {
+        NodeKind::Text(_) => !n.appearance.items.is_empty(),
+        _ => has_item_geometry(n),
+    };
     if !needs_outline(n) || (geometry_effects(n).is_empty() && !own_paint) {
         return None;
     }
@@ -194,12 +238,28 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
-            let mut clip = Node::path(n.id, frame, Appearance::default());
-            if let NodeKind::Path { clipping, .. } = &mut clip.kind {
-                *clipping = true;
-            }
             let image = Node::new(n.id, n.kind.clone());
-            Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })
+            let clipped = || {
+                let mut clip = Node::path(n.id, frame.clone(), Appearance::default());
+                if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+                    *clipping = true;
+                }
+                Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image.clone())], clip: true })
+            };
+            // The fills and strokes that paint a shape, as paths along the frame below and above
+            // the image.
+            let (below, above) = n.appearance.split_contents();
+            let (below, above) = (image_rows(below), image_rows(above));
+            if below.is_empty() && above.is_empty() {
+                clipped()
+            } else {
+                let rows = |items: Vec<AppearanceItem>| {
+                    (!items.is_empty()).then(|| Arc::new(Node::path(n.id, frame.clone(), Appearance { items, ..Default::default() })))
+                };
+                // Without geometry effects, the image is not clipped.
+                let image = if fx.is_empty() { image.clone() } else { clipped() };
+                Node::group(n.id, rows(below).into_iter().chain([Arc::new(image)]).chain(rows(above)).collect())
+            }
         }
         _ => outline_art(n, symbol_art)?,
     };
@@ -208,7 +268,8 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     if let Some(h) = n.projection() {
         project_leaves(&mut art, &h);
     }
-    // The art is a group with `n`'s id (a clip group for an image).
+    // The art is a group with `n`'s id (for an image without fills or strokes that paint, a clip
+    // group).
     let mut out = art;
     out.name = n.name.clone();
     out.visible = n.visible;

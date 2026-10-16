@@ -401,6 +401,7 @@ fn expandable(n: &Node) -> bool {
             !n.appearance.items.is_empty() || !n.appearance.effects.is_empty() || children.iter().any(|c| expandable(c))
         }
         NodeKind::Text(_) => !n.appearance.items.is_empty() || !n.appearance.effects.is_empty(),
+        NodeKind::Image(_) => effects::has_item_geometry(n) || !n.appearance.effects.is_empty(),
         _ => !n.appearance.effects.is_empty(),
     }
 }

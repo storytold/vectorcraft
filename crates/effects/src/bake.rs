@@ -106,9 +106,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         let m = evaluate_container(&m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
-    // Type, images, symbol instances and live objects: reshaped through their outlines, and so is
-    // type whose own fills or strokes have geometry effects ([`has_item_geometry`]). Type that
-    // Transform effects only move and copy stays type, moved to each place.
+    // Type, images, symbol instances and live objects: reshaped through their outlines, and so are
+    // type whose own fills or strokes have geometry effects and images whose own fills or strokes
+    // paint a shape ([`has_item_geometry`]). Type that Transform effects only move and copy stays
+    // type, moved to each place.
     if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));

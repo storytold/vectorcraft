@@ -625,15 +625,20 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
             chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p));
         }
     }
-    let resp =
-        resp.on_hover_text(if characters { tl!("Double-click to edit the characters' paint") } else { tl!("Double-click to target the contents") });
+    // An image's row has no members to target.
+    let image = matches!(n.kind, vectorcraft_doc::NodeKind::Image(_));
+    let resp = if image {
+        resp
+    } else {
+        resp.on_hover_text(if characters { tl!("Double-click to edit the characters' paint") } else { tl!("Double-click to target the contents") })
+    };
     if resp.clicked() || resp.double_clicked() {
         select_row(app, ui.ctx(), Sel::Contents);
     }
     if resp.double_clicked() {
         if characters {
             app.ui.open_panel = Some("color".into());
-        } else {
+        } else if !image {
             app.run("appearance.targetContents", json!({})).ok();
         }
     }
@@ -1138,6 +1143,22 @@ mod tests {
         assert_eq!(rows(frame(&mut app)), ["Characters"]);
         run(&mut app, "appearance.addFill", json!({}));
         assert_eq!(rows(frame(&mut app)), ["Fill:", "Characters"]);
+    }
+
+    #[test]
+    fn images_show_a_contents_row_with_new_fills_and_strokes_below_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let rows = |t: Vec<String>| t.into_iter().filter(|t| ["Fill:", "Stroke:", "Contents"].contains(&t.as_str())).collect::<Vec<_>>();
+        let mut png = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        run(&mut app, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+        assert_eq!(rows(frame(&mut app)), ["Contents"]);
+        run(&mut app, "appearance.addStroke", json!({}));
+        assert_eq!(rows(frame(&mut app)), ["Contents", "Stroke:"]);
     }
 
     #[test]

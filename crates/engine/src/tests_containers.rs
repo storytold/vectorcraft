@@ -1,5 +1,5 @@
-//! Group, layer and type appearance through commands: their own fills, strokes and effects, the
-//! Contents (Characters) slot, `target: "contents"`, Target Contents and effects on layers.
+//! Group, layer, type and image appearance through commands: their own fills, strokes and effects,
+//! the Contents (Characters) slot, `target: "contents"`, Target Contents and effects on layers.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -159,6 +159,76 @@ fn type_with_an_inline_graphic_stays_type_when_its_own_stroke_has_an_effect() {
     // Exports keep it as type, with its inline graphic.
     let baked = vectorcraft_render::effects::bake_document(&s.doc().unwrap().doc).unwrap();
     assert!(matches!(baked.node(t).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// A selected 30×30 red image placed with its frame from (50, 50) to (80, 80).
+fn image(s: &mut Session) -> NodeId {
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
+    NodeId(r["ids"][0].as_u64().unwrap())
+}
+
+#[test]
+fn new_image_fills_and_strokes_go_below_the_image() {
+    let mut s = session();
+    let im = image(&mut s);
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.addFill", json!({}));
+    // Each lands right below the Contents row: [stroke, fill | image].
+    let ap = node(&s, im).appearance;
+    assert!(!ap.items[0].is_fill() && ap.items[1].is_fill() && ap.contents_at() == 2, "{ap:?}");
+    assert_eq!(run(&mut s, "appearance.moveItem", json!({"from": "contents", "to": 1}))["contents"], 1);
+    assert_eq!(node(&s, im).appearance.contents_at(), 1);
+    // The active row above the image stays active when a new item goes in below it.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    assert_eq!(s.appearance_item(), Some(2));
+    assert!(node(&s, im).appearance.items[2].is_fill());
+}
+
+#[test]
+fn an_images_stroke_with_outline_object_draws_exports_and_expands_along_its_frame() {
+    let mut s = session();
+    let im = image(&mut s);
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 4, "color": "#000000"}));
+    // Without an effect the stroke draws nothing, and Use Preview Bounds measures the frame.
+    assert_eq!(pixel(&s, 49, 65), [255; 4]);
+    s.prefs.use_preview_bounds = true;
+    assert_eq!(s.transform_bounds(&[im]), Some(vectorcraft_geom::Rect::new(50.0, 50.0, 80.0, 80.0)));
+    assert!(s.execute("effect.expandAppearance", &json!({})).is_err());
+    run(&mut s, "effect.apply", json!({"effect": "path.outlineObject", "item": 0}));
+    // Under the image, the stroke's outer 2 pt shows.
+    assert_eq!((pixel(&s, 48, 65), pixel(&s, 49, 65), pixel(&s, 51, 65)), ([0, 0, 0, 255], [0, 0, 0, 255], RED));
+    assert_eq!(pixel(&s, 47, 65), [255; 4]);
+    // SVG and PDF hold the image and the frame stroked 4 pt.
+    let doc = s.doc().unwrap().doc.clone();
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    assert!(svg.contains("<image") && svg.contains("stroke-width=\"4\""), "{svg}");
+    let back = vectorcraft_pdf::import(&vectorcraft_pdf::export(&doc, &Default::default()).unwrap()).unwrap();
+    let (mut images, mut frames) = (0, 0);
+    for l in &back.layers {
+        l.walk(&mut |n| {
+            images += usize::from(matches!(n.kind, NodeKind::Image(_)));
+            let framed = n.geometric_bounds().is_some_and(|b| [b.x0 - 50.0, b.y0 - 50.0, b.x1 - 80.0, b.y1 - 80.0].iter().all(|d| d.abs() < 0.01));
+            frames += usize::from(matches!(n.kind, NodeKind::Path { .. }) && framed && (n.appearance.stroke_width() - 4.0).abs() < 0.01);
+        });
+    }
+    assert_eq!((images, frames), (1, 1));
+    // Expand Appearance leaves the stroke's outline (a filled path) below the image, in one step.
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let n = node(&s, im);
+    let kids = n.children().unwrap();
+    assert_eq!(kids.len(), 2, "{n:?}");
+    assert!(matches!(kids[1].kind, NodeKind::Image(_)), "{n:?}");
+    let outline = kids[0].visual_bounds().unwrap();
+    assert!((outline.x0 - 48.0).abs() < 0.01 && (outline.x1 - 82.0).abs() < 0.01, "{outline:?}");
+    assert_eq!(kids[0].appearance.fill_paint(), Paint::solid(Color::BLACK));
 }
 
 #[test]

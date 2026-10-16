@@ -1147,9 +1147,9 @@ impl Node {
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
-    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). A symbol
-    /// instance is measured as in [`Node::geometric_bounds`], grown by its own strokes' reach
-    /// ([`Node::visual_bounds_with`] measures its art).
+    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). An image is
+    /// measured by its frame. A symbol instance is measured as in [`Node::geometric_bounds`],
+    /// grown by its own strokes' reach ([`Node::visual_bounds_with`] measures its art).
     pub fn visual_bounds(&self) -> Option<Rect> {
         self.visual(None)
     }
@@ -1224,6 +1224,8 @@ impl Node {
                 let o = self.appearance.outset().max(chars);
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
+            // An image is measured by its frame, without its own fills and strokes.
+            NodeKind::Image(_) => self.geometric(symbols),
             _ => {
                 let o = self.appearance.outset();
                 self.geometric(symbols).map(|b| b.inflate(o, o))
@@ -1675,11 +1677,11 @@ impl Node {
 
 impl Node {
     /// The Appearance panel's row for what this object's own fills and strokes paint around:
-    /// "Contents" for a group or layer (its members), "Characters" for type; `None` for objects
-    /// whose fills and strokes paint their own geometry.
+    /// "Contents" for a group or layer (its members) and for an image (its pixels), "Characters"
+    /// for type; `None` for objects whose fills and strokes paint their own geometry.
     pub fn contents_label(&self) -> Option<&'static str> {
         match self.kind {
-            NodeKind::Group { .. } | NodeKind::Layer { .. } => Some("Contents"),
+            NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Image(_) => Some("Contents"),
             NodeKind::Text(_) => Some("Characters"),
             _ => None,
         }

@@ -68,8 +68,9 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 
 /// Does `n` carry visible object-level effects that only apply through its art (type, images,
 /// symbol instances, live objects; Crop Marks and colour adjustments on anything), is it type with
-/// a geometry effect on a fill or stroke of its own ([`effects::has_item_geometry`]), or is it a
-/// group or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
+/// a geometry effect on a fill or stroke of its own or an image with a fill or stroke of its own
+/// that paints a shape ([`effects::has_item_geometry`]), or is it a group or layer with an
+/// appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
     (effects::needs_outline(n) && (visible(&n.appearance.effects) || n.projection().is_some()))
         || effects::has_item_geometry(n)
@@ -215,8 +216,9 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
         }
         _ if has_fx(n) => visual_bounds(symbols, n),
         // The reshaped art (a symbol instance's reshaped art is made from its symbol's art; type's
-        // outlines measured one by one with the geometry effects of its own fills and strokes),
-        // grown by how far the effects in a symbol instance's art paint past that art.
+        // outlines, and an image and the paths of its own fills and strokes, measured one by one
+        // with the geometry effects of those fills and strokes), grown by how far the effects in a
+        // symbol instance's art paint past that art.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
                 NodeKind::SymbolInstance { symbol, .. } => symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
@@ -224,7 +226,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
             };
             let reshaped = effects::reshape(n, symbol.as_deref());
             let b = match &reshaped {
-                Some(r) if matches!(n.kind, NodeKind::Text(_)) => {
+                Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
                     r.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, inner(c)))
                 }
                 Some(r) => r.visual_bounds_with(symbols),
