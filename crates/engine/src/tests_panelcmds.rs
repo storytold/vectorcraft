@@ -64,7 +64,7 @@ fn edit_gradient_angle_reverse_and_errors() {
     assert_eq!(g.gradient.stops[0].color.to_hex(), "#0000ff");
     assert!((g.gradient.stops[0].midpoint - 0.8).abs() < 1e-6, "{:?}", g.gradient.stops);
     assert!(s.execute("paint.editGradient", &json!({"stops": [{"offset": 0, "color": "#fff"}]})).is_err());
-    assert!(s.execute("paint.editGradient", &json!({"kind": "conic"})).is_err());
+    assert!(s.execute("paint.editGradient", &json!({"kind": "spiral"})).is_err());
 }
 
 #[test]

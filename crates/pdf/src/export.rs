@@ -13,7 +13,7 @@ use krilla::geom::{Path, PathBuilder, Size, Transform};
 use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
+use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash, SweepGradient};
 use krilla::surface::Surface;
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
@@ -838,6 +838,27 @@ impl Exporter<'_> {
                                 cy,
                                 cr: r,
                                 transform: xf(space * t),
+                                spread_method: SpreadMethod::Pad,
+                                stops,
+                                anti_alias: false,
+                            }
+                            .into(),
+                        )
+                    }
+                    // A function-based shading (a PostScript function of the angle) swept once
+                    // around the unit circle, carried onto the extent ellipse.
+                    GradientKind::Conic => {
+                        let frame = geom.unit_frame().unwrap_or_else(|| Affine::translate(geom.start.to_vec2()));
+                        if !writable(s, space * frame, Rect::new(-1.0, -1.0, 1.0, 1.0)) {
+                            return None;
+                        }
+                        Some(
+                            SweepGradient {
+                                cx: 0.0,
+                                cy: 0.0,
+                                start_angle: 0.0,
+                                end_angle: 360.0,
+                                transform: xf(space * frame),
                                 spread_method: SpreadMethod::Pad,
                                 stops,
                                 anti_alias: false,

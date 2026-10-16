@@ -7,7 +7,7 @@ use std::fmt::Write;
 use std::sync::Arc;
 
 use kurbo::Shape;
-use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     AppearanceItem, ColorMode, Document, Effect, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject,
 };
@@ -35,6 +35,7 @@ const IMAGE_ALPHA_L2: &str = "transparent image pixels are written white at Post
 const IMAGE_PARTLY: &str = "partly transparent image pixels are written over white";
 const SPOT_GRADIENTS: &str = "gradients of spot colours are written in process colours";
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
+const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
 
 /// What the walk wrote: definitions for the setup, the page, the spot colours it uses (name and
 /// CMYK equivalent) and the warnings.
@@ -666,8 +667,8 @@ impl<'a> Scene<'a> {
         (space, out)
     }
 
-    /// Paint all of `area` (inside the current clip) with linear or radial gradient `g`, placed on
-    /// `bounds`: a smooth shading at Level 3, else stepped fills.
+    /// Paint all of `area` (inside the current clip) with linear, radial or conic gradient `g`,
+    /// placed on `bounds`: a smooth shading at Level 3, else stepped fills (conic: always).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
         let (space, stops) = self.gradient_stops(&g.gradient);
@@ -680,6 +681,7 @@ impl<'a> Scene<'a> {
         }
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
+            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops),
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
@@ -809,6 +811,25 @@ impl<'a> Scene<'a> {
                 push_nums(&mut self.body, &[at.x, at.y, r * t]);
                 self.line("0 360 newpath arc fill");
             }
+        }
+    }
+
+    /// A conic gradient as solid wedges around its centre covering `area` (PostScript has no
+    /// conic shading), each drawn on to the seam so the next one leaves no seam.
+    fn conic_steps(&mut self, geom: &GradientGeom, area: Rect, space: Space, stops: &[(f64, [f32; 4])]) {
+        self.warn(CONIC_WEDGES);
+        let at = |t: f64| match stops.windows(2).find(|w| t <= w[1].0) {
+            Some(w) if w[1].0 > w[0].0 => mix(&w[0].1, &w[1].1, ((t - w[0].0) / (w[1].0 - w[0].0)) as f32),
+            Some(w) => w[1].1,
+            None => stops.last().map_or([0.0; 4], |s| s.1),
+        };
+        for (pts, t) in geom.conic_wedges(area, 360, true) {
+            self.set_comps(space, at(t));
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath fill");
         }
     }
 

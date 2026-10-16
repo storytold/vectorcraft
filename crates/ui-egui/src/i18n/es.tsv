@@ -2219,6 +2219,7 @@
 	Radial	Radial
 	Radial Glows	Resplandores radiales
 	Radial Gradient	Degradado radial
+	Conic Gradient	Degradado cónico
 	Radius 1	Radio 1
 	Radius 2	Radio 2
 	Radius1	Radio1
@@ -4004,7 +4005,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconocido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconocido `{f}` (Guardar escribe {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma libre desconocido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo de degradado desconocido `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	resaltado desconocido `{h}`
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)

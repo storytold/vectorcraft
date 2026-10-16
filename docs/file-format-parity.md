@@ -102,7 +102,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | RTF / Word `.doc`/`.docx` | place | no | no | |
 | CSS | export (CSS Properties) | — | yes | |
 | OBJ / USDA / glTF | 3D export | — | no | needs 3D (gap G3) |
-| Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
+| Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md); conical gradients open as conic gradients (#2324) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art |
 
 ## Corpus download integrity

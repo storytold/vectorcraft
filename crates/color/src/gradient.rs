@@ -15,18 +15,32 @@ pub enum GradientKind {
     Radial,
     /// Freeform gradients: colour points and lines (see [`crate::freeform`]).
     Freeform,
+    /// Conic (angle) gradients: the stops sweep once around the centre (`start`), clockwise on
+    /// the page from the vector, the seam where the last stop meets the first.
+    Conic,
 }
 
 impl GradientKind {
-    /// Parse a kind name (`linear`, `radial`, `freeform`; any case).
+    /// Every kind, in the order the Gradient panel lists them.
+    pub const ALL: [GradientKind; 4] = [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Freeform];
+    /// Parse a kind name (`linear`, `radial`, `conic`, `freeform`; any case). `angle` and
+    /// `conical`, the names other apps give it, also mean conic.
     pub fn parse(s: &str) -> Option<Self> {
-        [GradientKind::Linear, GradientKind::Radial, GradientKind::Freeform].into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
+        if s.eq_ignore_ascii_case("angle") || s.eq_ignore_ascii_case("conical") {
+            return Some(GradientKind::Conic);
+        }
+        Self::ALL.into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
+    }
+    /// Is it placed by a centre and an extent ellipse (radial and conic), rather than by a line?
+    pub fn is_centred(self) -> bool {
+        matches!(self, GradientKind::Radial | GradientKind::Conic)
     }
     pub fn label(self) -> &'static str {
         match self {
             GradientKind::Linear => "Linear",
             GradientKind::Radial => "Radial",
             GradientKind::Freeform => "Freeform",
+            GradientKind::Conic => "Conic",
         }
     }
 }
@@ -288,13 +302,14 @@ fn one64() -> f64 {
 
 impl GradientGeom {
     /// Default placement for a bounding box: linear spans the box through the centre at `angle_deg`,
-    /// radial is centred with radius = half the larger dimension and its vector at `angle_deg`.
+    /// radial and conic are centred with radius = half the larger dimension and their vector at
+    /// `angle_deg`.
     pub fn fit(kind: GradientKind, b: Rect, angle_deg: f64) -> Self {
         let c = b.center();
         let a = angle_deg.to_radians();
         let d = Vec2::new(a.cos(), -a.sin());
         match kind {
-            GradientKind::Radial => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
+            GradientKind::Radial | GradientKind::Conic => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
             _ => {
                 // Project the box corners onto the direction to cover the whole box.
                 let half = (b.width() * d.x.abs() + b.height() * d.y.abs()) / 2.0;
@@ -308,7 +323,10 @@ impl GradientGeom {
     /// Linear (and freeform) gradients keep their isolines: the new vector is the normal to the
     /// mapped isolines, reaching the line the old end maps onto. Radial gradients map their ellipse
     /// (the radius along the vector, `aspect` × the radius across it); its principal axes give the
-    /// new end (on the axis nearest the mapped vector) and aspect.
+    /// new end (on the axis nearest the mapped vector) and aspect. Conic gradients keep their
+    /// vector (where the sweep starts) and take the mapped extent across it as their aspect, its
+    /// sign flipping with a mirror so the sweep turns the other way; exact for moves, rotations,
+    /// uniform scales and mirrors, the nearest such frame under a shear.
     pub fn transform(&mut self, a: Affine, kind: GradientKind) {
         // The focal point is a point like any other.
         self.focal = self.focal.map(|f| a * f);
@@ -320,6 +338,13 @@ impl GradientGeom {
         if u.hypot2() < 1e-18 {
             self.start = start;
             self.end = start;
+            return;
+        }
+        if kind == GradientKind::Conic {
+            let (lu, lw) = (lin(u), lin(perp(u) * self.aspect));
+            self.start = start;
+            self.end = start + lu;
+            self.aspect = if lu.hypot2() > 1e-18 { lw.dot(perp(lu)) / lu.hypot2() } else { 1.0 };
             return;
         }
         if kind != GradientKind::Radial {
@@ -364,11 +389,18 @@ impl GradientGeom {
     /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
     /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial,
     /// measured from the focal point (each level is the ellipse scaled about the line from the
-    /// focal point to the centre).
+    /// focal point to the centre). For conic gradients it is the turn from the vector, clockwise
+    /// on the page (in the extent ellipse's frame), in [0, 1).
     pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
         let u = self.end - self.start;
         if u.hypot2() < 1e-18 {
             return 0.0;
+        }
+        if kind == GradientKind::Conic {
+            let Some(to_unit) = self.unit_frame().map(|m| m.inverse()) else { return 0.0 };
+            let q = (to_unit * p).to_vec2();
+            let t = q.y.atan2(q.x) / std::f64::consts::TAU;
+            return if t < 0.0 { (t + 1.0).min(1.0 - f64::EPSILON) } else { t };
         }
         if kind != GradientKind::Radial {
             return (p - self.start).dot(u) / u.hypot2();
@@ -386,8 +418,9 @@ impl GradientGeom {
         (-b - (b * b - a * d.hypot2()).max(0.0).sqrt()) / a
     }
 
-    /// The map from the unit circle onto a radial's extent ellipse: (1, 0) to the end, (0, 1) to
-    /// `aspect` × the radius across the vector. None when the ellipse is flat (no inverse).
+    /// The map from the unit circle onto a radial's (or conic's) extent ellipse: (1, 0) to the
+    /// end, (0, 1) to `aspect` × the radius across the vector (a conic's negative aspect mirrors
+    /// it). None when the ellipse is flat (no inverse).
     pub fn unit_frame(&self) -> Option<Affine> {
         let u = self.end - self.start;
         (u.hypot2() * self.aspect.abs() > 1e-18).then(|| Affine::new([u.x, u.y, -u.y * self.aspect, u.x * self.aspect, self.start.x, self.start.y]))
@@ -429,6 +462,39 @@ impl GradientGeom {
         if let (Some(q), Some(m)) = (rel, self.unit_frame()) {
             self.set_focal(Some(m * q));
         }
+    }
+    /// A conic gradient drawn as `n` solid wedges around the centre, for formats without conic
+    /// gradients: each wedge's outline (the centre, then its arc, reaching past every corner of
+    /// `b`) and the turn its colour is sampled at (its middle). With `overlap` (opaque stops),
+    /// each wedge runs on to the seam and the next is drawn over it, so every point is covered
+    /// by the wedges before it and no hairline of what lies below shows between them; the seam
+    /// stays sharp.
+    pub fn conic_wedges(&self, b: Rect, n: usize, overlap: bool) -> Vec<(Vec<Point>, f64)> {
+        let n = n.clamp(1, 4096);
+        let frame = self.unit_frame().unwrap_or_else(|| Affine::translate(self.start.to_vec2()));
+        let to_unit = frame.inverse();
+        // The unit-frame radius past every corner, with a margin for the arcs' chords.
+        let corners = [b.origin(), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+        let reach = corners.iter().map(|&c| (to_unit * c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+        let reach = if reach.is_finite() { reach * 1.01 } else { 1.0 };
+        // Arc points at most 1/32 turn apart; their chords stay outside `reach` at this radius.
+        const ARC: f64 = 1.0 / 32.0;
+        let r = reach / (std::f64::consts::PI * ARC).cos();
+        let at = |turn: f64| {
+            let a = turn * std::f64::consts::TAU;
+            frame * Point::new(r * a.cos(), r * a.sin())
+        };
+        (0..n)
+            .map(|k| {
+                let from = k as f64 / n as f64;
+                let to = if overlap { 1.0 } else { (k + 1) as f64 / n as f64 };
+                let steps = ((to - from) / ARC).ceil().max(1.0) as usize;
+                let mut pts = Vec::with_capacity(steps + 2);
+                pts.push(self.start);
+                pts.extend((0..=steps).map(|i| at(from + (to - from) * i as f64 / steps as f64)));
+                (pts, (k as f64 + 0.5) / n as f64)
+            })
+            .collect()
     }
     pub fn angle_deg(&self) -> f64 {
         let v = self.end - self.start;
@@ -824,5 +890,90 @@ mod tests {
         let mut h = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(0.0, 50.0), aspect: 0.5, focal: None };
         h.keep_focal_from(&before);
         assert!(close(h.focal.unwrap(), Point::new(0.0, -20.0)), "{h:?}");
+    }
+
+    #[test]
+    fn conic_param_turns_clockwise_from_the_vector() {
+        // Centre (100, 100), vector pointing right: the page's y runs down, so a quarter turn
+        // clockwise is straight below the centre.
+        let g = GradientGeom { start: Point::new(100.0, 100.0), end: Point::new(150.0, 100.0), aspect: 1.0, focal: None };
+        let t = |x: f64, y: f64| g.param_at(GradientKind::Conic, Point::new(x, y));
+        assert!(t(200.0, 100.0).abs() < 1e-12);
+        assert!((t(100.0, 200.0) - 0.25).abs() < 1e-12);
+        assert!((t(0.0, 100.0) - 0.5).abs() < 1e-12);
+        assert!((t(100.0, 0.0) - 0.75).abs() < 1e-12);
+        // Either side of the seam: just after the start, just before the end.
+        assert!(t(200.0, 100.01) < 1e-3);
+        let before = t(200.0, 99.99);
+        assert!(before > 0.999 && before < 1.0, "{before}");
+        // The distance from the centre doesn't matter.
+        assert!((t(100.0, 101.0) - 0.25).abs() < 1e-12);
+    }
+
+    #[test]
+    fn conic_follows_rotations_scales_and_mirrors() {
+        let c = Point::new(10.0, 20.0);
+        let g0 = GradientGeom { start: c, end: c + Vec2::new(30.0, 0.0), aspect: 1.0, focal: None };
+        let p = c + Vec2::new(5.0, 7.0);
+        for a in [
+            Affine::rotate(0.7),
+            Affine::scale(2.5),
+            Affine::translate((4.0, -9.0)) * Affine::rotate(-2.0),
+            Affine::FLIP_X,
+            Affine::FLIP_Y * Affine::rotate(1.1),
+            Affine::scale_non_uniform(2.0, 0.5),
+        ] {
+            let mut g = g0;
+            g.transform(a, GradientKind::Conic);
+            assert!(g.start.distance(a * c) < 1e-9, "{a:?}");
+            let (want, got) = (g0.param_at(GradientKind::Conic, p), g.param_at(GradientKind::Conic, a * p));
+            assert!((want - got).abs() < 1e-9, "{a:?}: {want} vs {got}");
+        }
+    }
+
+    #[test]
+    fn conic_kind_names() {
+        for s in ["conic", "Conic", "angle", "CONICAL"] {
+            assert_eq!(GradientKind::parse(s), Some(GradientKind::Conic), "{s}");
+        }
+        assert_eq!(GradientKind::Conic.label(), "Conic");
+        let fit = GradientGeom::fit(GradientKind::Conic, Rect::new(0.0, 0.0, 200.0, 100.0), 90.0);
+        assert_eq!(fit.start, Point::new(100.0, 50.0));
+        assert!(fit.end.distance(Point::new(100.0, -50.0)) < 1e-9);
+    }
+
+    #[test]
+    fn conic_wedges_cover_the_box_and_meet_the_seam() {
+        let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+        let g = GradientGeom { start: Point::new(60.0, 40.0), end: Point::new(90.0, 40.0), aspect: 0.5, focal: None };
+        let wedges = g.conic_wedges(b, 36, false);
+        assert_eq!(wedges.len(), 36);
+        // Every point of the box (off the edges) is inside the wedge whose turn range holds it.
+        let inside = |poly: &[Point], p: Point| {
+            let mut w = 0i32;
+            for (i, &a) in poly.iter().enumerate() {
+                let c = poly[(i + 1) % poly.len()];
+                let cross = (c - a).cross(p - a);
+                if a.y <= p.y && c.y > p.y && cross > 0.0 {
+                    w += 1;
+                } else if a.y > p.y && c.y <= p.y && cross < 0.0 {
+                    w -= 1;
+                }
+            }
+            w != 0
+        };
+        for (x, y) in [(1.0, 1.0), (199.0, 99.0), (150.0, 30.0), (10.0, 90.0), (61.0, 39.0)] {
+            let p = Point::new(x, y);
+            let t = g.param_at(GradientKind::Conic, p);
+            let k = (t * 36.0).floor() as usize;
+            assert!(inside(&wedges[k].0, p), "({x}, {y}) t {t} not in wedge {k}");
+            assert!((wedges[k].1 - (k as f64 + 0.5) / 36.0).abs() < 1e-12);
+        }
+        // Overlapping wedges run on to the seam, each from its own start.
+        let over = g.conic_wedges(b, 36, true);
+        let frame = g.unit_frame().unwrap();
+        let at = |turn: f64| frame * Point::new(0.5 * (turn * std::f64::consts::TAU).cos(), 0.5 * (turn * std::f64::consts::TAU).sin());
+        assert!(inside(&over[0].0, at(0.5)) && inside(&over[0].0, at(35.9 / 36.0)));
+        assert!(inside(&over[20].0, at(35.9 / 36.0)) && !inside(&over[20].0, at(19.9 / 36.0)) && !inside(&over[20].0, at(0.1 / 36.0)));
     }
 }

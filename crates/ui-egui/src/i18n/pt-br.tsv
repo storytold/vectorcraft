@@ -1827,6 +1827,7 @@
 	Radial	Radial
 	Radial Glows	Brilhos Radiais
 	Radial Gradient	Gradiente Radial
+	Conic Gradient	Gradiente Cônico
 	Radius:	Raio:
 	Rainbow	Arco-íris
 	Random	Aleatório
@@ -3591,7 +3592,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconhecido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconhecido `{f}` (Salvar grava {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma livre desconhecido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de gradiente desconhecido `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	destaque desconhecido `{h}`
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)

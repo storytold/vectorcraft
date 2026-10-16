@@ -2490,6 +2490,7 @@
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Radial Gradient	Chuyển sắc hướng tâm
+	Conic Gradient	Chuyển sắc hình nón
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -4325,7 +4326,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)

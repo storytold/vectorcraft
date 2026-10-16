@@ -82,7 +82,7 @@ fn bad_gradients_are_rejected_without_editing() {
         json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"color": "#000000"}]}),
         json!({"stops": [{"offset": "a", "color": "#ff0000"}, {"offset": 1, "color": "#000000"}]}),
         json!({"stops": "red"}),
-        json!({"kind": "conic"}),
+        json!({"kind": "spiral"}),
         json!({"start": [0, 0]}),
         json!({"aspect": "wide"}),
     ] {
@@ -373,4 +373,56 @@ fn swatches_and_new_art_fit_a_placed_gradient_to_themselves() {
     let (_, doc) = node(&s, t).proxy_gradient(false, None).unwrap();
     let tb = node(&s, t).geometric_bounds().unwrap();
     assert!(doc.start.distance(tb.center()) < 1e-9 && (doc.aspect - 0.5).abs() < 1e-9, "{doc:?} on {tb:?}");
+}
+
+/// A conic gradient (#2324) through `paint.setFill`, the Gradient panel's edits, transforms, the
+/// params agents and swatches read, and the native format.
+#[test]
+fn a_conic_gradient_is_set_edited_transformed_and_saved() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic"}})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert_eq!(g.gradient.kind, GradientKind::Conic);
+    // Unplaced, it sweeps from the right around the box's centre.
+    let geom = g.resolve(node(&s, id).geometric_bounds().unwrap());
+    assert_eq!(geom.start, Point::new(200.0, 150.0));
+    assert!(geom.param_at(GradientKind::Conic, Point::new(200.0, 190.0)) - 0.25 < 1e-9);
+    // The names other apps use mean the same.
+    s.execute("paint.editGradient", &json!({"kind": "linear"})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "angle"})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.kind, GradientKind::Conic);
+    assert!(s.execute("paint.editGradient", &json!({"kind": "spiral"})).unwrap_err().to_string().contains("conic"));
+    // Placed, an angle turns the vector about the centre.
+    s.execute("paint.setGradientGeom", &json!({"start": [200, 150], "end": [260, 150], "aspect": 50})).unwrap();
+    s.execute("paint.editGradient", &json!({"angle": 90})).unwrap();
+    let g = fill_gradient(&s, id).geom.unwrap();
+    assert!(g.start.distance(Point::new(200.0, 150.0)) < 1e-9 && g.end.distance(Point::new(200.0, 90.0)) < 1e-9, "{g:?}");
+    // A mirror reverses the sweep (a negative aspect), and an aspect edit keeps it mirrored.
+    let p = Point::new(230.0, 170.0);
+    let before = g.param_at(GradientKind::Conic, p);
+    s.execute("object.reflect", &json!({"axis": "vertical", "origin": [200, 150]})).unwrap();
+    let m = fill_gradient(&s, id).geom.unwrap();
+    assert!(m.aspect < 0.0, "{m:?}");
+    assert!((m.param_at(GradientKind::Conic, Point::new(170.0, 170.0)) - before).abs() < 1e-9);
+    s.execute("paint.editGradient", &json!({"aspect": 80})).unwrap();
+    assert_eq!(fill_gradient(&s, id).geom.unwrap().aspect, -0.8);
+    // A rotation carries it along.
+    let g = fill_gradient(&s, id).geom.unwrap();
+    let before = g.param_at(GradientKind::Conic, p);
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [200, 150]})).unwrap();
+    let r = vectorcraft_geom::Affine::rotate_about(-30f64.to_radians(), Point::new(200.0, 150.0));
+    let after = fill_gradient(&s, id).geom.unwrap().param_at(GradientKind::Conic, r * p);
+    assert!((after - before).abs() < 1e-9, "{before} vs {after}");
+    // Params give it back, and the native format keeps it.
+    let want = fill_gradient(&s, id);
+    let params = vectorcraft_tools::params::gradient_params(&want);
+    assert_eq!(params["kind"], "conic");
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient, want.gradient);
+    assert_eq!(fill_gradient(&s, id).geom, want.geom);
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(g) = back.node(id).unwrap().appearance.fill_paint() else { panic!("gradient lost") };
+    assert_eq!((g.gradient.kind, g.geom), (GradientKind::Conic, want.geom));
 }
