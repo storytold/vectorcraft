@@ -541,11 +541,18 @@ impl Lerp {
 
     /// The object at `t` (0 = `a`, 1 = `b`), with id 0.
     pub fn at(&self, t: f64) -> Node {
+        self.at_eased(t, t)
+    }
+
+    /// The object whose shape is at `t` and whose colours (fills, strokes, opacity, mesh and text
+    /// colours) are at `tc`: a blend with its colours eased apart from its spacing.
+    pub fn at_eased(&self, t: f64, tc: f64) -> Node {
         let (a, b) = (&self.a, &self.b);
         let base = if t < 0.5 { a } else { b };
         let mut n = match &self.shape {
             Shape::Group { children, clip } => {
-                let mut g = Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at(t))).collect(), clip: *clip });
+                let mut g =
+                    Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at_eased(t, tc))).collect(), clip: *clip });
                 g.isolate = base.isolate;
                 g.knockout = base.knockout;
                 g
@@ -555,8 +562,8 @@ impl Lerp {
                 if let (NodeKind::Mesh(m), NodeKind::Mesh(ma), NodeKind::Mesh(mb)) = (&mut n.kind, &a.kind, &b.kind) {
                     for ((p, x), y) in m.points.iter_mut().zip(&ma.points).zip(&mb.points) {
                         p.p = x.p.lerp(y.p, t);
-                        p.color = lerp_color(&x.color, &y.color, t as f32);
-                        p.opacity = lerp_f32(x.opacity, y.opacity, t as f32);
+                        p.color = lerp_color(&x.color, &y.color, tc as f32);
+                        p.opacity = lerp_f32(x.opacity, y.opacity, tc as f32);
                         for h in 0..4 {
                             p.handles[h] = x.handles[h].lerp(y.handles[h], t);
                         }
@@ -582,7 +589,7 @@ impl Lerp {
             Shape::Placed => {
                 let mut n = base.clone();
                 match (&mut n.kind, &a.kind, &b.kind) {
-                    (NodeKind::Text(o), NodeKind::Text(x), NodeKind::Text(y)) => lerp_text(o, x, y, t),
+                    (NodeKind::Text(o), NodeKind::Text(x), NodeKind::Text(y)) => lerp_text(o, x, y, t, tc),
                     (NodeKind::SymbolInstance { xf: o, .. }, NodeKind::SymbolInstance { xf: x, .. }, NodeKind::SymbolInstance { xf: y, .. }) => {
                         *o = lerp_affine(*x, *y, t)
                     }
@@ -619,8 +626,8 @@ impl Lerp {
             }
         };
         n.id = NodeId(0);
-        n.appearance = lerp_appearance(&a.appearance, &b.appearance, t).into();
-        n.opacity = lerp_f32(a.opacity, b.opacity, t as f32);
+        n.appearance = lerp_appearance(&a.appearance, &b.appearance, tc).into();
+        n.opacity = lerp_f32(a.opacity, b.opacity, tc as f32);
         n.blend = base.blend;
         n.visible = true;
         n.locked = false;
@@ -650,7 +657,7 @@ fn compound(path: PathData, rule: FillRule, counts: &[usize], total: usize) -> N
 /// Interpolate text `x` → `y` into `o` (a copy of the nearer): the transform by its parts, an
 /// area frame anchor by anchor, and each run's colours, stroke weight and size from the runs at
 /// the same place (by character) of both.
-fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
+fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64, tc: f64) {
     o.xf = lerp_affine(x.xf, y.xf, t);
     if let (crate::text::TextKind::Area { frame: f }, crate::text::TextKind::Area { frame: fx }, crate::text::TextKind::Area { frame: fy }) =
         (&mut o.kind, &x.kind, &y.kind)
@@ -672,7 +679,7 @@ fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
     }
     let total: usize = o.runs.iter().map(|r| r.text.chars().count()).sum::<usize>().max(1);
     let mut start = 0usize;
-    let tf = t as f32;
+    let tf = tc as f32;
     let mut resized = false;
     for r in &mut o.runs {
         let len = r.text.chars().count();
@@ -1033,8 +1040,10 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         let n = blend_step_count(a, b, spec.spacing, len);
         let lerp = Lerp::new(a, b, (spec.start(i), spec.start(i + 1)));
         for j in 1..=n {
-            let t = j as f64 / (n + 1) as f64;
-            let mut s = lerp.at(t);
+            // Even position of the step, then where the easing puts its shape and its colours.
+            let u = j as f64 / (n + 1) as f64;
+            let (t, tc) = (spec.ease.apply(u), spec.color_ease.apply(u));
+            let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);
             }
@@ -1094,6 +1103,50 @@ mod tests {
         let mid = out[1].geometric_bounds().unwrap().center();
         assert!(mid.distance(Point::new(55.0, -95.0)) < 1e-6, "{mid:?}");
         assert_eq!(out[0].geometric_bounds().unwrap().center(), Point::new(5.0, 5.0), "keys stay put");
+    }
+
+    #[test]
+    fn easing_keeps_the_ends_and_stays_monotone() {
+        let lin = crate::live::BlendEase::default();
+        assert_eq!(lin.apply(0.3), 0.3);
+        for e in [crate::live::BlendEase::new(1.0, 0.0), crate::live::BlendEase::new(0.0, 1.0), crate::live::BlendEase::new(0.6, 0.6)] {
+            assert!(e.apply(0.0).abs() < 1e-9 && (e.apply(1.0) - 1.0).abs() < 1e-9);
+            let ys: Vec<f64> = (0..=20).map(|i| e.apply(i as f64 / 20.0)).collect();
+            assert!(ys.windows(2).all(|w| w[1] >= w[0] - 1e-12), "{ys:?}");
+            assert_eq!(ys, (0..=20).map(|i| e.apply(i as f64 / 20.0)).collect::<Vec<_>>(), "deterministic");
+        }
+        // Ease in starts slowly, ease out ends slowly.
+        assert!(crate::live::BlendEase::new(1.0, 0.0).apply(0.25) < 0.25);
+        assert!(crate::live::BlendEase::new(0.0, 1.0).apply(0.25) > 0.25);
+        // Junk is tamed.
+        assert_eq!(crate::live::BlendEase::new(f64::NAN, 9.0), crate::live::BlendEase { ease_in: 0.0, ease_out: 1.0 });
+        assert_eq!(lin.apply(f64::NAN), 0.0);
+    }
+
+    #[test]
+    fn colour_easing_moves_colours_apart_from_positions() {
+        let rect = |x: f64, c: Color| {
+            let mut n = Node::path(NodeId(1), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default());
+            n.appearance = Appearance::basic(Paint::solid(c), Paint::None, 0.0).into();
+            Arc::new(n)
+        };
+        let keys = vec![rect(0.0, Color::BLACK), rect(100.0, Color::WHITE)];
+        let mid = |spec: &BlendSpec| {
+            let out = blend_expand(&keys, spec);
+            let n = &out[1];
+            (n.geometric_bounds().unwrap().x0, n.appearance.fill_paint())
+        };
+        let base = BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() };
+        let (x0, p0) = mid(&base);
+        // Colour easing alone leaves the position and moves the colour.
+        let colour = BlendSpec { color_ease: crate::live::BlendEase::new(1.0, 0.0), ..base.clone() };
+        let (x1, p1) = mid(&colour);
+        assert!((x0 - x1).abs() < 1e-9 && p0 != p1);
+        // Position easing alone leaves the colour and moves the position.
+        let pos = BlendSpec { ease: crate::live::BlendEase::new(1.0, 0.0), ..base.clone() };
+        let (x2, p2) = mid(&pos);
+        assert!((x0 - x2).abs() > 1e-3 && p0 == p2);
+        assert_eq!(mid(&pos).0, x2, "deterministic");
     }
 
     #[test]

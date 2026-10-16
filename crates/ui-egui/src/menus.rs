@@ -981,7 +981,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.blendOptions",
         "Blend Options…",
         "",
-        "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
+        "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, easeIn/easeOut/colorEaseIn/colorEaseOut 0..100 on a blend, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
     ),
     (
         "ui.livePaintGapOptions",

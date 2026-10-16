@@ -4063,3 +4063,8 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
+	Ease In:	緩入：
+	Ease Out:	緩出：
+	Color Ease In:	顏色緩入：
+	Color Ease Out:	顏色緩出：
+	Easing (0% = even)	緩動（0% = 均勻）
