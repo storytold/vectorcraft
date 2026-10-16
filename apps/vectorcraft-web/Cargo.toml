@@ -16,8 +16,8 @@ path = "src/main.rs"
 [dependencies]
 vectorcraft-engine = { workspace = true }
 vectorcraft-ui-egui = { workspace = true }
-craft-cloud-client = { git = "https://github.com/wdunn001/collab-craft", rev = "e9594d4" }
-collabcraft-share = { git = "https://github.com/wdunn001/collab-craft", rev = "e9594d4" }
+craft-cloud-client = { git = "https://github.com/wdunn001/collab-craft", rev = "b946dce" }
+collabcraft-share = { git = "https://github.com/wdunn001/collab-craft", rev = "b946dce" }
 vectorcraft-format = { workspace = true }
 vectorcraft-text = { workspace = true }
 egui = { workspace = true }
