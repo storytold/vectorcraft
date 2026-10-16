@@ -4916,3 +4916,14 @@ mark-style	Japanese	Japonesas
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
+	Bas Relief…	Baixo-relevo…
+	Bas Relief	Baixo-relevo
+	Charcoal…	Carvão…
+	Charcoal	Carvão
+	Photocopy…	Fotocópia…
+	Photocopy	Fotocópia
+	Stamp…	Carimbo…
+	Stamp	Carimbo
+	Thickness	Espessura
+	Detail	Detalhe
+	Light/Dark Balance	Equilíbrio claro/escuro

@@ -429,6 +429,7 @@ pub(super) fn humanize(k: &str) -> String {
         "Channel2" => "Channel 2:".into(),
         "Channel3" => "Channel 3:".into(),
         "Channel4" => "Channel 4:".into(),
+        "Light Dark Balance" => "Light/Dark Balance:".into(),
         "Include Cmy Blacks" => "Include Blacks with CMY:".into(),
         "Align To Path" => "Align to Path:".into(),
         "Overlap Variation" | "Curviness Variation" | "Spacing Variation" => "Variation:".into(),

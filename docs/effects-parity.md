@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (G2: Effect › Sketch › Halftone Pattern; Photoshop filters 30/57, 27 remaining (22–38 h); Round Corners also rounds corners where a curve meets a line or another curve, with Live Corners' cut; straight corners unchanged; score unchanged; Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (G2: Effect › Sketch › Bas Relief, Charcoal, Photocopy and Stamp; Photoshop filters 34/57, 23 remaining (16–28 h); G2: Effect › Sketch › Halftone Pattern; Photoshop filters 30/57, 27 remaining (22–38 h); Round Corners also rounds corners where a curve meets a line or another curve, with Live Corners' cut; straight corners unchanged; score unchanged; Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -44,7 +44,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 | Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | — |
 | Pixelate | Color Halftone, Crystallize, Mezzotint, Pointillize | 4/4 | — |
 | Sharpen | Unsharp Mask | 1/1 | — |
-| Sketch | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper | 1/14 | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper |
+| Sketch | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper | 5/14 (approximate Bas Relief, Charcoal, Halftone Pattern, Photocopy, Stamp) | Chalk & Charcoal, Chrome, Conté Crayon, Graphic Pen, Note Paper, Plaster, Reticulation, Torn Edges, Water Paper |
 | Stylize | Glowing Edges | 1/1 | — |
 | Texture | Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass, Texturizer | 6/6 | Texturizer's Load Texture |
 | Video | De-Interlace, NTSC Colors | 2/2 | — |
@@ -52,7 +52,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 The pixel-filter pipeline (`vectorcraft_effects::pixel`) is in place: each new filter is one function, a
 catalogue row, a menu entry and translations. Measured throughput: 0.7–1.2 agent hours per filter
-(see [calibration](target-app-parity.md#calibration)), so the 27 missing filters are ~18–33 h and the Effect
+(see [calibration](target-app-parity.md#calibration)), so the 23 missing filters are ~16–28 h and the Effect
 Gallery dialog another 4–6 h. These parallelize well across agents.
 
 Film Grain (`artistic.filmGrain`, Effect › Artistic) adds stable monochrome noise to shadows and
@@ -80,6 +80,22 @@ and 8 document units (ratios 1.13, 0.89, 0.85). This is evidence for the bounded
 not an accuracy guarantee for arbitrary artwork. Tests: `pixel::tests::film_grain_*`,
 `tests_rasterfilters`, `tests_adjust::film_grain_dialog_*` and `tests_labels::effect_menu_lists_film_grain_*`.
 
+Bas Relief, Charcoal, Photocopy and Stamp (`sketch.basRelief`, `sketch.charcoal`, `sketch.photocopy`,
+`sketch.stamp`, Effect › Sketch; `pixel/sketch_ink.rs`) redraw the object in black ink on white paper
+and keep its coverage. Bas Relief carves low relief lit from one of eight directions (Detail, Smoothness,
+Light Direction); Charcoal draws bold edges and sketches the midtones in diagonal strokes (Thickness,
+Detail, Light/Dark Balance); Photocopy prints only where a pixel is darker than its surroundings, so large
+dark areas copy around their edges (Detail, Darkness); Stamp reduces the object to solid black and
+white (Light/Dark Balance, Smoothness). Sizes are in document points at any Document Raster Effects
+resolution, strokes and noise lie in document space around the object's centre, and all four preview
+live. Behaviour is an original visual approximation based on
+[Illustrator's public effects reference](https://helpx.adobe.com/illustrator/using/summary-effects.html)
+and the [public Sketch filters guide](https://helpx.adobe.com/photoshop-elements/using/sketch-filters.html),
+not a pixel-identical proprietary implementation; the parameter ranges and defaults are chosen for
+VectorCraft, not asserted as measured proprietary defaults. Tests: `pixel::tests_sketch::*`,
+`tests_rasterfilters`, `command_sweep`, `dialogs::tests::raster_filter_dialogs_preview_and_apply` and
+`tests_labels::effect_menu_lists_the_sketch_filters_*`.
+
 ## 3D and Materials
 
 | Item | Ours |
@@ -99,6 +115,7 @@ angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | G2: Effect › Sketch › Bas Relief, Charcoal, Photocopy and Stamp (black ink on white paper, sizes in points at any Document Raster Effects resolution, live preview); measured Photoshop filters 34/57, 23 remaining (16–28 h). |
 | 2026-10-16 | minor | G2: Effect › Sketch › Halftone Pattern (Size, Contrast, Pattern Type Circle, Dot or Line; black ink on white paper, Size in points at any Document Raster Effects resolution); measured Photoshop filters 30/57, 27 remaining (22–38 h). |
 | 2026-10-15 | minor | Round Corners rounds corners whose anchor carries a handle (where a curve meets a line, or two curves meet) with the round cut Live Corners uses (#1144), reaching `radius` along each side; before, they were left sharp. Corners between handle-less anchors are rounded as before; score unchanged (estimated) |
 | 2026-10-14 | minor | Revolve: automatic smooth vector shading, default-on Cap with continuous curved rims, and bounded seam joins; angular cut sides remain open. Scores and hour estimates unchanged at this rounding |

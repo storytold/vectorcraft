@@ -3894,3 +3894,14 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
+	Bas Relief…	淺浮雕…
+	Bas Relief	淺浮雕
+	Charcoal…	炭筆…
+	Charcoal	炭筆
+	Photocopy…	影印…
+	Photocopy	影印
+	Stamp…	圖章…
+	Stamp	圖章
+	Thickness	粗細
+	Detail	細節
+	Light/Dark Balance	明暗平衡

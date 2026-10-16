@@ -4540,3 +4540,14 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+	Bas Relief…	부조…
+	Bas Relief	부조
+	Charcoal…	목탄…
+	Charcoal	목탄
+	Photocopy…	복사…
+	Photocopy	복사
+	Stamp…	스탬프…
+	Stamp	스탬프
+	Thickness	두께
+	Detail	세부
+	Light/Dark Balance	밝음/어두움 균형

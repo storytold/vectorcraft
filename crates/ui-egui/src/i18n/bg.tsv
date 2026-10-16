@@ -4981,3 +4981,14 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+	Bas Relief…	Барелеф…
+	Bas Relief	Барелеф
+	Charcoal…	Въглен…
+	Charcoal	Въглен
+	Photocopy…	Фотокопие…
+	Photocopy	Фотокопие
+	Stamp…	Печат…
+	Stamp	Печат
+	Thickness	Дебелина
+	Detail	Детайл
+	Light/Dark Balance	Баланс светло/тъмно

@@ -4844,3 +4844,14 @@ mark-style	Japanese	Japońskie
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
+	Bas Relief…	Płaskorzeźba…
+	Bas Relief	Płaskorzeźba
+	Charcoal…	Węgiel…
+	Charcoal	Węgiel
+	Photocopy…	Fotokopia…
+	Photocopy	Fotokopia
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Grubość
+	Detail	Szczegóły
+	Light/Dark Balance	Równowaga jasne/ciemne
