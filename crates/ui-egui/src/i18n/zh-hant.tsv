@@ -4063,3 +4063,7 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
+	Keep	保持
+	New Color's	新顏色的
+	Document's	文件的
+	Some colors kept their color model. Choose a Color Model to change it.	部分顏色保留了原有的色彩模型。請選擇色彩模型以變更。

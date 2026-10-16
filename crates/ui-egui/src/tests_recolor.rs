@@ -185,6 +185,30 @@ fn the_options_button_edits_a_selected_group_and_applies_it_to_the_art() {
 }
 
 #[test]
+fn the_color_model_choice_reaches_the_recolour_and_a_kept_model_is_noted() {
+    let mut app = app();
+    let ctx = context();
+    app.run("file.new", json!({"width": 400, "height": 200, "colorMode": "cmyk"})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [id], "color": "#1a1a1a", "keepModel": true})).unwrap();
+    app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    let mut rows = field(&app, "rows");
+    rows[0]["to"] = json!("cmyk 0 0 0 100");
+    set(&mut app, "rows", rows);
+    dialog_frame(&mut app, &ctx);
+    assert!(field(&app, "__note").is_string(), "the kept RGB model is noted");
+    set(&mut app, "model", json!("new"));
+    dialog_frame(&mut app, &ctx);
+    assert!(field(&app, "__note").is_null(), "no note once the new colour's model is used");
+    dialogs::confirm(&mut app).unwrap();
+    let fill = app.session.execute("recolor.colors", &json!({})).unwrap()["colors"][0]["key"].as_str().unwrap().to_string();
+    assert!(fill.starts_with("cmyk"), "CMYK art: {fill}");
+}
+
+#[test]
 fn a_group_keeps_the_colours_no_art_row_took() {
     let mut app = app();
     let ctx = context();

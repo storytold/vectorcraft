@@ -286,6 +286,12 @@ impl RowMap {
         self
     }
 
+    /// True when current colour `c` keeps a colour model other than the new colour's (so the new
+    /// colour is converted into `c`'s model and may look different from what was asked for).
+    pub fn converts(&self, c: Color) -> bool {
+        !self.own_model && c.model() != self.to.model()
+    }
+
     /// The colour of the row the new colour stands for.
     pub fn key(&self) -> Color {
         self.key

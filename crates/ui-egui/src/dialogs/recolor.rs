@@ -15,7 +15,7 @@
 //! colours as a colour group named `groupName`.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?}]), `colors` (null: Auto, or a
-//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id,
+//! count), `method`, `model` (`keep`, `new` or `document`: the colour model of the new colours), `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id,
 //! "document" for the document's swatches, "" for none), `group`, `groupName`, `tab` (`assign` or
 //! `edit`), `rule` (harmony id), `linked`, `preview`. Changing `colors`, a preserve flag or
 //! `limitTo` reduces the rows again.
@@ -56,6 +56,11 @@ const WHEEL: f32 = 220.0;
 /// Height of the rows table, and of either tab (so switching tabs doesn't resize the dialog).
 const TABLE_H: f32 = 220.0;
 const TAB_H: f32 = 400.0;
+/// The Color Model choices (`recolor.apply`'s `model`): the model of the replaced colour, of the
+/// new colour, or of the document.
+const MODELS: [&str; 3] = ["keep", "new", "document"];
+/// The note of the last preview (a colour kept a model other than its new colour's).
+const NOTE: &str = "__note";
 const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job", "Color Library"];
 
 /// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
@@ -98,7 +103,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     // Without art the rows are the group's colours, as they are.
     let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
     let fields = json!({
-        "rows": start, "colors": count, "method": Method::ScaleTints.id(),
+        "rows": start, "colors": count, "method": Method::ScaleTints.id(), "model": MODELS[0],
         "preserveWhite": true, "preserveBlack": true, "preserveGrays": false, "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
         "preview": true, "__art": art, "__assign": assign, "__newGroup": new_group,
@@ -200,7 +205,8 @@ fn apply_params(d: &Dialog) -> Value {
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
     });
-    let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo")});
+    let model = Some(d.str("model")).filter(|m| MODELS.contains(&m.as_str())).unwrap_or_else(|| MODELS[0].into());
+    let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo"), "model": model});
     if let (Some(Value::Object(g)), Some(p)) = (group, p.as_object_mut()) {
         p.extend(g.into_iter().filter(|(_, v)| !v.is_null()));
     }
@@ -243,7 +249,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     }
     sync(app, d);
     if d.bool("__art") {
-        form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d));
+        if let Some(r) = form::preview_result(app, ui, d, "Recolor Artwork", CMD, apply_params(d)) {
+            match r.get("note").and_then(Value::as_str) {
+                Some(n) => d.fields.insert(NOTE.into(), json!(n)),
+                None => d.fields.remove(NOTE),
+            };
+        }
+        if !d.bool("preview") {
+            d.fields.remove(NOTE);
+        }
+        if d.bool("preview") && d.fields.contains_key(NOTE) {
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(tl!("Some colors kept their color model. Choose a Color Model to change it.")).color(t.text_dim));
+        }
     }
     false
 }
@@ -432,6 +450,13 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         let labels: Vec<&str> = Method::ALL.iter().map(|m| m.label()).collect();
         if let Some(i) = widgets::dropdown(ui, "recolor-method", m.label(), &labels, 180.0) {
             d.fields.insert("method".into(), json!(Method::ALL[i].id()));
+        }
+        ui.end_row();
+        ui.label(egui::RichText::new(tl!("Color Model:")).color(t.text_dim));
+        let model = MODELS.iter().position(|id| *id == d.str("model")).unwrap_or(0);
+        let labels = [tl!("Keep"), tl!("New Color's"), tl!("Document's")];
+        if let Some(i) = widgets::dropdown(ui, "recolor-model", labels[model], &labels, 180.0) {
+            d.fields.insert("model".into(), json!(MODELS[i]));
         }
         ui.end_row();
         ui.label(egui::RichText::new(tl!("Limit to Library:")).color(t.text_dim));

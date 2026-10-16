@@ -378,11 +378,13 @@ fn model_param_chooses_the_model_of_the_new_colour() {
     assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb);
     select_all(&mut s);
     let map = json!({"#1a1a1a": {"c": 0, "m": 0, "y": 0, "k": 100}});
-    run(&mut s, "recolor.apply", json!({"map": map}));
+    let r = run(&mut s, "recolor.apply", json!({"map": map}));
     assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb, "kept RGB");
+    assert!(r["note"].as_str().is_some_and(|n| n.contains("model")), "warns the model was kept: {r}");
     run(&mut s, "edit.undo", json!({}));
-    run(&mut s, "recolor.apply", json!({"map": map, "model": "new"}));
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "model": "new"}));
     assert_eq!(fill(&s, art), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    assert!(r.get("note").is_none(), "no note when the model follows the new colour: {r}");
     run(&mut s, "edit.undo", json!({}));
     // "document" converts a new RGB colour into the document's CMYK.
     run(&mut s, "recolor.apply", json!({"map": {"#1a1a1a": "#ff0000"}, "model": "document"}));
