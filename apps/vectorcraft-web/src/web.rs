@@ -129,7 +129,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 };
                 app.cloud.connect(crate::cloud::Service::new(ctx.clone()));
                 if let Some(share) = collabcraft_share::CollabCraft::from_env() {
-                    app.share.connect(share);
+                    app.share.connect(share.for_app("vectorcraft"));
                 }
                 cloud::start(&mut app);
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))

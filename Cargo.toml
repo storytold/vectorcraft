@@ -22,10 +22,10 @@ craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "289d562cc6e
 craft-cloud = { git = "https://github.com/storytold/craft-libs", rev = "289d562cc6e8b567819aee51f759a78f41a65454" }
 # How this app reaches CollabCraft, which is the single place a storage provider is configured.
 # No provider credential, no provider URL and no provider protocol live in VectorCraft.
-craft-cloud-client = { git = "https://github.com/wdunn001/collab-craft", rev = "80bfaec" }
+craft-cloud-client = { git = "https://github.com/wdunn001/collab-craft", rev = "3c77c3e" }
 # The share dialog's backend. craft-ui draws the dialog and opens no socket; this is the half that
 # reaches the service, so it lives beside the client rather than in craft-libs.
-collabcraft-share = { git = "https://github.com/wdunn001/collab-craft", rev = "80bfaec" }
+collabcraft-share = { git = "https://github.com/wdunn001/collab-craft", rev = "3c77c3e" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
