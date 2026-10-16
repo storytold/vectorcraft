@@ -102,3 +102,28 @@ fn a_mask_whose_art_is_all_hidden_hides_its_object() {
         }
     }
 }
+
+#[test]
+fn an_alpha_mask_uses_its_art_alpha_not_its_luminance() {
+    // `mask-type: alpha` (CSS Masking §7.2): an opaque dark red shows the square fully, black at
+    // half opacity shows it half, whatever their luminance. As a property and as an attribute.
+    for mask_type in [r#"style="mask-type:alpha""#, r#"mask-type="alpha""#] {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+              <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100" {mask_type}>
+                <rect width="50" height="100" fill="#b43333"/><rect x="50" width="50" height="100" fill="black" fill-opacity="0.5"/></mask>
+              <rect width="100" height="100" fill="#1a73e8" mask="url(#m)"/></svg>"##
+        );
+        let (d, warnings) = import_with_report(&svg).unwrap();
+        let [m] = &masks(&d)[..] else { panic!("one mask: {svg}") };
+        assert!(m.clip && !m.invert);
+        let (canvas, reference) = (render_artboard(&d), resvg_render(&svg, 100, 100));
+        for (x, y, want) in [(25, 50, [26, 115, 232]), (75, 50, [141, 185, 244])] {
+            let (got, r) = (canvas.over_white(x, y), reference.over_white(x, y));
+            let near = |a: [u8; 3]| a.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 3);
+            assert!(near(r), "resvg ({x},{y}) {r:?}: {svg}");
+            assert!(near(got), "canvas ({x},{y}) {got:?}, want {want:?}: {svg}");
+        }
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+}

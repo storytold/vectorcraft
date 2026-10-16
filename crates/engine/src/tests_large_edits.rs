@@ -66,7 +66,7 @@ fn in_turn(a: &[NodeId], b: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Runs `f` on `s` on a thread of its own and fails the test when it takes more than 20 s.
-fn soon<T: Send + 'static>(mut s: Session, what: &'static str, f: impl FnOnce(&mut Session) -> T + Send + 'static) -> (Session, T) {
+pub(crate) fn soon<T: Send + 'static>(mut s: Session, what: &'static str, f: impl FnOnce(&mut Session) -> T + Send + 'static) -> (Session, T) {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let r = f(&mut s);
@@ -630,9 +630,9 @@ fn path_commands_across_layers_and_inside_a_group_keep_order_and_ids() {
     undo_gives_back(&mut s, &before);
 }
 
-/// `object.transform` copies ids listed twice, and an object listed before a group around it.
-/// Each copy goes directly above its original, a later copy of the same object goes below an
-/// earlier one, and the copy of the group holds a copy of the copy made inside the group before it.
+/// `object.transform` copies ids listed twice, and copies an object listed before a group around it
+/// only with the group, as it does with the two selected. Each copy goes directly above its
+/// original, and a later copy of the same object goes below an earlier one.
 #[test]
 fn copies_of_ids_listed_twice_or_inside_another_listed_id_keep_their_order_and_ids() {
     let (mut s, [a, b, c, d, e, f, g, h, group]) = two_layers();
@@ -640,9 +640,9 @@ fn copies_of_ids_listed_twice_or_inside_another_listed_id_keep_their_order_and_i
     let n = before.peek_next_id();
 
     let r = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": true, "ids": [e, group]})).unwrap();
-    assert_eq!(r["ids"], json!([n, n + 1]));
-    let copied = json!([n + 1, n + 2, n + 3, n + 4, n + 5]);
-    assert_eq!(layers(&s), [json!([a, b, c, [group, d, e, n, f], copied]), json!([g, h])]);
+    assert_eq!(r["ids"], json!([n]));
+    let copied = json!([n, n + 1, n + 2, n + 3]);
+    assert_eq!(layers(&s), [json!([a, b, c, [group, d, e, f], copied]), json!([g, h])]);
     undo_gives_back(&mut s, &before);
 
     let r = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": true, "ids": [a, a]})).unwrap();

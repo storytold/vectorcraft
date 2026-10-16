@@ -12,6 +12,7 @@ use craft_pdf::interpret::{
     MaskType, PathDrawMode, SoftMask, StrokeProps,
 };
 use craft_pdf::syntax::object::Name;
+use craft_pdf::syntax::page::Page;
 use kurbo::{Affine, BezPath, PathEl, Rect, Shape};
 use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::{
@@ -22,7 +23,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
-use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, all_on, hides_forms, scan_page, tag_key};
+use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, Walked, all_on, hides_forms, scan_page, tag_key};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, gradient_shape, mesh_shading, shading_gradient};
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
@@ -258,7 +259,14 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         b.page = ab;
         // The first id of this page's art.
         let first_id = b.next;
-        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        let mut scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        // The walk's ink names pick between spaces of inks that look the same to the interpreter. A
+        // page keeps them only when it uses such an ink and the interpreter draws as many paths
+        // there as the walk counts.
+        let tied = scan.inks.iter().any(|n| b.colors.tied(n));
+        if !(tied && drawn_paths(page, Context::new(xf, ab, &cache, pdf.xref(), settings.clone())) == Some(scan.paints.len())) {
+            scan.inks.clear();
+        }
         if route {
             let mut seen = HashSet::new();
             let marked: Vec<usize> = scan.tags.iter().filter_map(|(_, g)| g.map(|g| top_group(g, &ocgs))).filter(|g| seen.insert(*g)).collect();
@@ -453,7 +461,32 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         }
     }
     doc.limit_depth_noting(&mut warnings);
-    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text })
+    let user_unit = picked.first().and_then(|&n| pages.get(n)).map_or(1.0, |page| f64::from(page.user_unit()));
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text, user_unit })
+}
+
+/// How many paths the interpreter draws on `page` (each fill and each stroke), leaving out those
+/// of soft masks, pattern cells and type 3 glyphs, which [`Builder`] reads nested. `None` when the
+/// interpreter fails.
+fn drawn_paths<'a>(page: &'a Page<'a>, mut ctx: Context<'a>) -> Option<usize> {
+    struct Count(usize);
+    impl<'a> Device<'a> for Count {
+        fn set_soft_mask(&mut self, _: Option<SoftMask<'a>>) {}
+        fn set_blend_mode(&mut self, _: craft_pdf::interpret::BlendMode) {}
+        // As `Builder::draw_path` takes them: each fill and each stroke.
+        fn draw_path(&mut self, _: &BezPath, _: Affine, _: &craft_pdf::interpret::Paint<'a>, _: &PathDrawMode) {
+            self.0 += 1;
+        }
+        fn push_clip_path(&mut self, _: &ClipPath) {}
+        fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'a>>, _: craft_pdf::interpret::BlendMode) {}
+        fn draw_glyph(&mut self, _: &Glyph<'a>, _: Affine, _: Affine, _: &craft_pdf::interpret::Paint<'a>, _: &GlyphDrawMode) {}
+        fn draw_image(&mut self, _: Image<'a, '_>, _: Affine) {}
+        fn pop_clip_path(&mut self) {}
+        fn pop_transparency_group(&mut self) {}
+    }
+    let mut count = Count(0);
+    craft_pdf::interpret_page(page, &mut ctx, &mut count).ok()?;
+    Some(count.0)
 }
 
 /// The characters of a CID-keyed CFF font embedded without a ToUnicode map (as macOS writes
@@ -1023,13 +1056,20 @@ impl<'p> Builder<'p> {
         }
     }
 
-    /// Whether the path the interpreter draws now (a fill or a stroke, each counted) overprints.
+    /// Whether the path the interpreter draws now (a fill or a stroke, each counted) overprints. It
+    /// takes the path's turn in the page's walk.
     fn path_overprint(&mut self) -> bool {
-        if self.nested > 0 || !self.scan.overprints {
+        if self.nested > 0 {
             return false;
         }
         self.paint_at += 1;
-        self.scan.paints.get(self.paint_at - 1).copied().unwrap_or(false)
+        self.scan.overprints && self.scan.paints.get(self.paint_at - 1).copied().unwrap_or(false)
+    }
+
+    /// What the interpreter draws now, as the page's walk counts it: the path whose turn comes
+    /// next, or the `text` before it. `None` in a nested reading, which the walk doesn't follow.
+    fn walked(&self, text: bool) -> Option<Walked> {
+        (self.nested == 0).then_some(if text { Walked::Text(self.paint_at) } else { Walked::Path(self.paint_at) })
     }
 
     /// Whether the glyph the interpreter draws now (its fill, or its `stroke`) overprints.
@@ -1290,13 +1330,20 @@ impl<'p> Builder<'p> {
     /// A stroke of the outline of the glyph just drawn, in the glyph's own paint, while every glyph
     /// before it on the open line was stroked so too, is held with the line instead of ending it
     /// (an editor writes type on a path glyph by glyph, each followed by the stroke added to the
-    /// type). `false`: it isn't one.
-    fn hold_glyph_stroke(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'_>, draw_mode: &PathDrawMode) -> bool {
+    /// type). `false`: it isn't one. `walked`: the path in the page's walk.
+    fn hold_glyph_stroke(
+        &mut self,
+        path: &BezPath,
+        transform: Affine,
+        paint: &craft_pdf::interpret::Paint<'_>,
+        draw_mode: &PathDrawMode,
+        walked: Option<Walked>,
+    ) -> bool {
         let PathDrawMode::Stroke(props) = draw_mode else { return false };
         if self.mask.is_some() || self.blend != BlendMode::Normal || matches!(paint, craft_pdf::interpret::Paint::Pattern(_)) {
             return false;
         }
-        let (p, opacity) = self.paint(paint, true);
+        let (p, opacity) = self.paint(paint, true, walked);
         let Some(line) = &self.text else { return false };
         let Some(ink) = line.ink.last() else { return false };
         if line.held.len() + 1 != line.ink.len() || opacity < 0.999 || !line.last_fill().is_some_and(|f| *f == p) {
@@ -1319,16 +1366,19 @@ impl<'p> Builder<'p> {
         true
     }
 
-    /// Convert a hayro paint to a VectorCraft paint and opacity (`stroke`: for a stroke).
-    fn paint(&mut self, p: &craft_pdf::interpret::Paint<'_>, stroke: bool) -> (Paint, f32) {
+    /// Convert a hayro paint to a VectorCraft paint and opacity (`stroke`: for a stroke; `walked`:
+    /// what it paints in the page's walk, which names its ink).
+    fn paint(&mut self, p: &craft_pdf::interpret::Paint<'_>, stroke: bool, walked: Option<Walked>) -> (Paint, f32) {
+        let pattern = matches!(p, craft_pdf::interpret::Paint::Pattern(_));
+        let inks = walked.and_then(|w| self.scan.ink(w, stroke, pattern));
         match p {
             craft_pdf::interpret::Paint::Color(c) => {
                 let [r, g, b, a] = c.to_rgba().components();
-                let paint = self.colors.solid(c).map_or_else(|| Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), Native::paint);
+                let paint = self.colors.solid(c, inks).map_or_else(|| Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), Native::paint);
                 (paint, a)
             }
             craft_pdf::interpret::Paint::Pattern(pat) => match pat.as_ref() {
-                Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors) {
+                Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors, inks) {
                     Some((g, _)) => (Paint::Gradient(Box::new(g)), sp.opacity),
                     None => {
                         self.warn("function-based shadings (and very large meshes) are imported as a flat colour");
@@ -1656,7 +1706,7 @@ impl<'p> Builder<'p> {
             None if self.matched.contains_key(&key) => self.versions.entry(key).or_insert_with(|| named(&info.face)).clone(),
             None => named(&info.face),
         };
-        let (paint, opacity) = self.paint(paint, stroke.is_some());
+        let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
         let stroke = stroke.map(|p| (paint.clone(), p.line_width as f64 * scale));
         let look = Look {
             font: key,
@@ -1742,7 +1792,8 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
-        if self.hold_glyph_stroke(path, transform, paint, draw_mode) {
+        let walked = self.walked(false);
+        if self.hold_glyph_stroke(path, transform, paint, draw_mode, walked) {
             self.pending = false;
             return;
         }
@@ -1763,14 +1814,14 @@ impl<'a> Device<'a> for Builder<'_> {
         };
         // Patch and triangle meshes are gradient meshes.
         if let (PathDrawMode::Fill(_), Some(sp)) = (draw_mode, shading)
-            && let Some(meshes) = mesh_shading(sp, &mut self.colors)
+            && let Some(meshes) = mesh_shading(sp, &mut self.colors, walked.and_then(|w| self.scan.ink(w, false, true)))
         {
             self.draw_meshes(meshes, &bp, sp.opacity);
             return;
         }
         let pd = PathData::from_bezpath(&bp);
         let stroke = matches!(draw_mode, PathDrawMode::Stroke(_));
-        let (paint, opacity) = self.paint(paint, stroke);
+        let (paint, opacity) = self.paint(paint, stroke, walked);
         // A gradient that doesn't extend past its ends paints only between them.
         let width = match draw_mode {
             PathDrawMode::Stroke(p) => p.line_width as f64 * mean_scale(transform),
@@ -1891,7 +1942,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 self.flush_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
-                let (paint, opacity) = self.paint(paint, stroke.is_some());
+                let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
                 let same = self.glyphs.as_ref().is_some_and(|r| {
                     r.paint == paint
                         && r.opacity == opacity

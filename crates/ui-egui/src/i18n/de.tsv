@@ -39,6 +39,10 @@
 	Draft	Entwurf
 	Good	Gut
 	Best	Sehr gut
+	Mode	Modus
+	Blur Mode	Weichzeichnermodus
+	Edge Only	Nur Kanten
+	Overlay Edge	Kanten überlagern
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the
@@ -204,7 +208,6 @@
 	Art	Bild
 	Art using a deleted global swatch keeps its colour.	Grafiken, die ein gelöschtes globales Farbfeld verwenden, behalten ihre Farbe.
 	Artboard Options	Zeichenflächenoptionen
-	Artboard Options: edit with the Artboard tool	Zeichenflächenoptionen: mit dem Zeichenflächen-Werkzeug bearbeiten
 	Artboard Options…	Zeichenflächenoptionen…
 	Artboard Tool	Zeichenflächen-Werkzeug
 	Artboard {number}	Zeichenfläche {number}
@@ -558,6 +561,7 @@
 	Convert to RGB	In RGB konvertieren
 	Convert to Shape	In Form umwandeln
 	Convert to sRGB	In sRGB konvertieren
+	Convert to Straight Lines	In gerade Linien umwandeln
 	Convert:	Konvertieren:
 	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 	Copies:	Kopien:
@@ -576,6 +580,7 @@
 	Copyright Notice:	Copyright-Vermerk:
 	Copyright Status:	Copyright-Status:
 	Copyright Symbol	Copyright-Symbol
+	Corner Point Angle Threshold:	Winkelschwelle für Eckpunkte:
 	Corner Radius	Eckenradius
 	Corner Radius:	Eckenradius:
 	Corner:	Ecke:
@@ -954,6 +959,32 @@
 	Export All…	Alle exportieren…
 	Export and Clipboard Transparency Flattener Settings	Einstellungen für die Transparenzreduzierung bei Export und Zwischenablage
 	Export Artboard	Zeichenfläche exportieren
+	A File per Object	Eine Datei pro Objekt
+	Example: {name}	Beispiel: {name}
+	Export Preset:	Exportvorgabe:
+	Folders:	Ordner:
+	Insert	Einfügen
+	Nothing is selected. Select the art to export, then open this tab again.	Nichts ausgewählt. Wählen Sie das zu exportierende Bildmaterial aus und öffnen Sie diese Registerkarte erneut.
+	One File of the Selection	Eine Datei der Auswahl
+	Start at:	Beginnen bei:
+	{n} objects selected	{n} Objekte ausgewählt
+	Delete Export Preset	Exportvorgabe löschen
+	Export Presets	Exportvorgaben
+	Save Export Preset	Exportvorgabe speichern
+	Export Layer	Ebene exportieren
+	Export Selection	Auswahl exportieren
+	All in One Folder	Alles in einem Ordner
+	By Size or Row	Nach Größe oder Zeile
+	By Format	Nach Format
+	By Artboard or Item	Nach Zeichenfläche oder Element
+	By Item, Then Format	Nach Element, dann Format
+	Document Name	Dokumentname
+	Artboard or Item Name	Name der Zeichenfläche oder des Elements
+	Number (####)	Nummer (####)
+	Date (YYYYMMDD)	Datum (JJJJMMTT)
+	Date (YYYY-MM-DD)	Datum (JJJJ-MM-TT)
+	Time (hhmmss)	Uhrzeit (hhmmss)
+	PDF Print	PDF Druck
 	Export As	Exportieren als
 	Export As PNG…	Als PNG exportieren…
 	Export As SVG…	Als SVG exportieren…
@@ -1026,6 +1057,7 @@
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
 	Keep selected	Ausgewählt lassen
+	Merge only with selection	Nur mit Auswahl zusammenfügen
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
 	Fill Rule	Füllregel
@@ -1048,8 +1080,11 @@
 	Fit dashes to corners and ends	Striche an Ecken und Enden anpassen
 	Fit Headline	Überschrift einpassen
 	Decrease Font Size	Schriftgrad verringern
+	Decrease Font Size by Five Steps	Schriftgrad um fünf Schritte verringern
 	Increase Font Size	Schriftgrad erhöhen
+	Increase Font Size by Five Steps	Schriftgrad um fünf Schritte erhöhen
 	Reset Tracking and Kerning	Laufweite und Kerning zurücksetzen
+	Reset Horizontal Scale	Horizontale Skalierung zurücksetzen
 	Spacing	Abstand
 	Step Type	Text schrittweise ändern
 	Fit in View	In Ansicht einpassen
@@ -1250,6 +1285,7 @@
 	Hide Print Tiling	Druckaufteilung ausblenden
 	Hide Rulers	Lineale ausblenden
 	Hide Slices	Slices ausblenden
+	Hide Template	Vorlage ausblenden
 	Hide Text Threads	Textverkettungen ausblenden
 	Hide Thumbnail	Miniatur ausblenden
 	Hide Thumbnails	Miniaturen ausblenden
@@ -1287,6 +1323,14 @@
 	Hyphenate	Silbentrennung
 	Hyphenation	Silbentrennung
 	Hyphenation…	Silbentrennung…
+	Words Longer Than:	Wörter länger als:
+	After First:	Nach den ersten:
+	Before Last:	Vor den letzten:
+	Hyphen Limit:	Trennstrichgrenze:
+	Hyphenation Zone:	Trennzone:
+	letters	Buchstaben
+	hyphens	Trennstriche
+	Hyphenate Capitalized Words	Großgeschriebene Wörter trennen
 	ICC Profile	ICC-Profil
 	Identify Objects By	Objekte identifizieren nach
 	Ignore	Ignorieren
@@ -1353,6 +1397,8 @@
 	Internal CSS	Internes CSS
 	Internet Standard RGB (sRGB)	Internet-Standard-RGB (sRGB)
 	Intersect	Schnittmenge bilden
+	Intertwine	Verflechten
+	Arrange Intertwine Area	Überlappungsbereich verflechten
 	Inverse	Auswahl umkehren
 	Invert	Umkehren
 	Invert Colors	Farben umkehren
@@ -1930,6 +1976,7 @@
 	Out Tangent Handles	Ausgehende Tangentengriffe
 	Outer Glow…	Schein nach außen…
 	Outline	Pfadansicht
+	Outline Object	Objekt in Pfade umwandeln
 	Outline Others	Andere in Pfadansicht
 	Outline Stroke	Konturlinie
 	Outline Text	Text in Pfade umwandeln
@@ -1999,6 +2046,7 @@
 	Pathfinder Options…	Pathfinder-Optionen…
 	Pathfinders:	Pathfinder:
 	Paths	Pfade
+	Path Length	Pfadlänge
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Pfade: {paths}    Ankerpunkte: {anchors}    Farben: {colors}
 	Pattern	Muster
 	Pattern Editing	Musterbearbeitung
@@ -2357,7 +2405,9 @@
 	Reset Panel	Bedienfeld zurücksetzen
 	Reset Preferences	Voreinstellungen zurücksetzen
 	Reset Profiles	Profile zurücksetzen
+	Rotate View	Ansicht drehen
 	Reset Rotate View	Ansichtsdrehung zurücksetzen
+	Rotate View to Selection	Ansicht nach Auswahl drehen
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
@@ -2467,6 +2517,7 @@
 	Save Save for Web Preset	Vorgabe für „Für Web speichern“ speichern
 	Save selected colors as swatches	Ausgewählte Farben als Farbfelder speichern
 	Save Selection…	Auswahl speichern…
+	Update Selection	Auswahl aktualisieren
 	Save Swatch Library	Farbfeldbibliothek speichern
 	Save Swatch Library…	Farbfeldbibliothek speichern…
 	Save the current layout under this name	Das aktuelle Layout unter diesem Namen speichern
@@ -2557,6 +2608,17 @@
 	Scripts	Skripte
 	Search	Suchen
 	Search All	Alle durchsuchen
+	Filter	Filter
+	Clear All	Alle aufheben
+	By Object	Nach Objekt
+	By Layer	Nach Ebene
+	Images	Bilder
+	Groups	Gruppen
+	Linked Files	Verknüpfte Dateien
+	Locked	Gesperrt
+	Hidden	Ausgeblendet
+	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
+@msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
 	Search Commands…	Befehle suchen…
@@ -2694,6 +2756,8 @@
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show Original Path	Originalpfad einblenden
+	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
 	Show Pattern Swatches	Musterfelder einblenden
@@ -2706,6 +2770,7 @@
 	Show Slices	Slices einblenden
 	Show Swatch Bounds	Farbfeldbegrenzung einblenden
 	Show Swatch Kinds	Farbfeldarten einblenden
+	Show Template	Vorlage einblenden
 	Show Text Threads	Textverkettungen einblenden
 	Show The Home Screen When No Documents Are Open	Startbildschirm anzeigen, wenn keine Dokumente geöffnet sind
 	Show Thumbnail	Miniatur einblenden
@@ -3516,6 +3581,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
 @msg	`{key}` must be one of {_1}	`{key}` muss einer der folgenden Werte sein: {_1}
 @msg	`{key}` must be true or false	`{key}` muss true oder false sein
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen
@@ -3582,6 +3648,8 @@ theme	Appearance	Erscheinungsbild
 @msg	cannot split an open path at its end point	ein offener Pfad kann nicht an seinem Endpunkt geteilt werden
 @msg	closing needs three anchors	zum Schließen sind drei Ankerpunkte nötig
 @msg	check an asset to export	markieren Sie ein Asset für den Export
+@msg	check a layer to export	wählen Sie eine Ebene für den Export
+@msg	select the art to export first	wählen Sie zuerst das zu exportierende Bildmaterial aus
 @msg	choice must be "merge" or "add", not `{choice}`	choice muss "merge" oder "add" sein, nicht `{choice}`
 @msg	choose a direction to divide in	wählen Sie eine Richtung für die Unterteilung
 @msg	choose a folder to export to	wählen Sie einen Ordner für den Export
@@ -3694,6 +3762,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no saved presets	keine gespeicherten Vorgaben
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	keine gespeicherte Druckvorgabe namens `{name}` ({DEFAULT_PRESET} ist geschützt: Erstellen Sie daraus eine neue)
 @msg	no saved profiles	keine gespeicherten Profile
+@msg	no saved selection recalled	keine gespeicherte Auswahl abgerufen
 @msg	no saved selections	keine gespeicherten Auswahlen
 @msg	no saved themes	keine gespeicherten Themen
 @msg	no segment {segment} on line {line}	kein Segment {segment} auf Linie {line}
@@ -3786,6 +3855,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a gradient mesh	wählen Sie ein Verlaufsgitter aus
 @msg	select a linked image: an embedded one has no file	wählen Sie ein verknüpftes Bild aus: Ein eingebettetes hat keine Datei
 @msg	select a repeat	wählen Sie eine Wiederholung aus
+@msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
@@ -3876,7 +3946,7 @@ theme	Appearance	Erscheinungsbild
 @msg	this file's PostScript couldn't be read ({why}): {what}	das PostScript dieser Datei konnte nicht gelesen werden ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	dieses Format fasst eine Zeichenfläche: Exportieren Sie mehrere als PDF oder mit document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als ASCII-DXF und öffnen Sie diese Datei
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	dies ist eine PostScript-Datei (eine .ai-Datei in einem älteren Format oder ohne PDF-Kompatibilität oder eine EPS-Datei), die noch nicht geöffnet werden kann: Speichern Sie sie als PDF, als PDF-kompatible .ai-Datei oder als SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	dies ist eine PostScript-Datei (eine .ai-Datei in einem älteren Format oder ohne PDF-Kompatibilität oder eine EPS-Datei), keine PDF-Datei: Datei › Öffnen und Datei › Platzieren lesen sie als EPS
 @msg	this is not a PostScript file	dies ist keine PostScript-Datei
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
@@ -3952,6 +4022,8 @@ theme	Appearance	Erscheinungsbild
 @msg	{_1} files	{_1}-Dateien
 @msg	The graphics were lost and have been restarted	Die Grafikausgabe ging verloren und wurde neu gestartet
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde VectorCraft auf {summary} neu gestartet
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Der letzte Start von VectorCraft endete auf {name}, bevor das Fenster erschien, daher wurde VectorCraft auf {summary} gestartet. Um diesen Grafikprozessor erneut zu versuchen, ändern Sie Voreinstellungen › Leistung › Grafikprozessor oder starten Sie mit gesetzter Variable WGPU_BACKEND
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Der letzte Start von VectorCraft endete beim Auflisten der Grafikprozessoren, daher wurde VectorCraft auf {summary} nur mit OpenGL gestartet. Um die anderen Grafikschnittstellen erneut zu versuchen, ändern Sie Voreinstellungen › Leistung › Grafikprozessor oder starten Sie mit gesetzter Variable WGPU_BACKEND
 @msg	Loading VectorCraft…	VectorCraft wird geladen…
 @msg	VectorCraft failed to start: {e}	VectorCraft konnte nicht gestartet werden: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Ein Browser mit WebGPU oder WebGL2 ist erforderlich.
@@ -4157,6 +4229,9 @@ theme	Appearance	Erscheinungsbild
 	Blocks	Blöcke
 	Frosted	Mattiert
 	Tiny Lens	Kleine Linsen
+	Loaded Texture	Geladene Struktur
+	Load Texture…	Struktur laden…
+	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
 	New Variable	Neue Variable
@@ -4341,6 +4416,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
 	Basic	Basis
 	Fill and Stroke Controls	Steuerelemente für Fläche und Kontur
 	Coloring Controls	Steuerelemente für Farbe
@@ -4354,6 +4430,11 @@ theme	Appearance	Erscheinungsbild
 @msg	give the path `id`	geben Sie die `id` des Pfads an
 @msg	invalid stroke widths	ungültige Konturbreiten
 @msg	object has no weighted stroke	das Objekt hat keine Kontur mit einer gültigen positiven Stärke
+# Free Distort: the names of the handles on the four corners of its box.
+	Top Left	Oben links
+	Top Right	Oben rechts
+	Bottom Right	Unten rechts
+	Bottom Left	Unten links
 # Corner Radius: a field per corner of a live rectangle.
 	Single Corner Radius	Einheitlicher Eckenradius
 	Top Left:	Oben links:
@@ -4363,7 +4444,7 @@ theme	Appearance	Erscheinungsbild
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
-
+	Registration:	Registrierung:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Bemaßung
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Zeichnung : reale Größe — 1:10 beschriftet 1 Einheit auf der Seite als 10.
@@ -4414,6 +4495,47 @@ theme	Appearance	Erscheinungsbild
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.
 	Distance	Abstand
+@msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
+	Make Image Dynamic	Bild dynamisch machen
+	Import Data Sets…	Datensätze importieren…
+	Export Data Sets…	Datensätze exportieren…
+	Make Graph Dynamic	Diagramm dynamisch machen
+	Batch…	Stapelverarbeitung…
+	Source Folder:	Quellordner:
+	Destination Folder:	Zielordner:
+	Overrides	Überschreibungen
+	Uses every data set of the open document.	Verwendet jeden Datensatz des geöffneten Dokuments.
+@msg	Batch: {count} processed	Stapelverarbeitung: {count} verarbeitet
+@msg	Batch: {count} processed, {failed} failed	Stapelverarbeitung: {count} verarbeitet, {failed} fehlgeschlagen
+@msg	choose a destination folder	wählen Sie einen Zielordner
+@msg	choose a source folder	wählen Sie einen Quellordner
+@msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
+@msg	the action has no steps	die Aktion hat keine Schritte
+
+# User Interface › Accent Color
+	Accent Color	Akzentfarbe
+	Amber	Bernstein
+	Coral	Koralle
+	Violet	Violett
+	Pink	Pink
+	Sketch	Zeichenfilter
+	Halftone Pattern…	Rasterungseffekt…
+	Halftone Pattern	Rasterungseffekt
+	Pattern Type	Musterart
+	Dot	Punkt
+# User Interface › Color Scheme
+	Color Scheme	Farbschema
+	Modern	Modern
+
+# Symbol Options › Export Type
+	Export Type:	Exporttyp:
+	Movie Clip	Movieclip
+@msg	name is empty	Name ist leer
+@msg	no symbol named `{n}`	kein Symbol namens `{n}`
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	Cloud-Ordner durchsuchen

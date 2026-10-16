@@ -22,13 +22,27 @@ use crate::{DocState, Prefs};
 /// they never become the document's own file.
 pub const SAVE_FORMATS: &[&str] = &["vectorcraft", "template", "pdf", "svg", "svgz", "ai"];
 
+/// The formats Save as Template writes, the default first: a native template, or a
+/// PDF-compatible `.ait` (written as a `.ai` file is).
+pub const TEMPLATE_FORMATS: &[&str] = &["template", "ait"];
+
 /// Save-panel filters `(label, [extension])` for `first` (a format id, or a file name whose
 /// extension names one): when Save writes that format, one per [`SAVE_FORMATS`] entry with it
 /// leading (the panel's default type), else none (an export picks its own). Only the extension a
 /// save writes (never the former native name).
 pub fn save_filters(first: &str) -> Vec<(&'static str, &'static [&'static str])> {
-    let Some(first) = format_for_name(first).or_else(|| format(first)).filter(|f| SAVE_FORMATS.contains(&f.id)) else { return vec![] };
-    let mut v: Vec<&'static Format> = SAVE_FORMATS.iter().filter_map(|id| format(id)).collect();
+    filters(SAVE_FORMATS, first)
+}
+
+/// [`save_filters`] for Save as Template: one per [`TEMPLATE_FORMATS`] entry.
+pub fn template_filters(first: &str) -> Vec<(&'static str, &'static [&'static str])> {
+    filters(TEMPLATE_FORMATS, first)
+}
+
+/// One filter per format of `ids`, `first` leading; none when `first` names none of them.
+fn filters(ids: &[&str], first: &str) -> Vec<(&'static str, &'static [&'static str])> {
+    let Some(first) = format_for_name(first).or_else(|| format(first)).filter(|f| ids.contains(&f.id)) else { return vec![] };
+    let mut v: Vec<&'static Format> = ids.iter().filter_map(|id| format(id)).collect();
     v.sort_by_key(|f| f.id != first.id);
     v.into_iter().map(|f| (f.label, &f.extensions[..1])).collect()
 }
@@ -73,7 +87,7 @@ pub struct SavePlan {
     pub format: &'static Format,
     /// The format's options (only those its encoder reads).
     pub options: Map<String, Value>,
-    /// Suggested file name: `<name>.<ext>`, `<name> copy.<ext>` or `<name> template.vctemplate`.
+    /// Suggested file name: `<name>.<ext>`, `<name> copy.<ext>` or `<name> template.<ext>`.
     pub name: String,
     /// Suggested folder: the document's own, or the Templates folder for a template.
     pub folder: Option<String>,
@@ -194,7 +208,11 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     let st = s.doc()?;
     let path = str_param(p, "path").map(str::to_string);
     let format = match (mode, str_param(p, "format"), path.as_deref().and_then(format_for_name)) {
-        (SaveMode::Template, ..) => checked(cmd, "template")?,
+        // `.ait` when the format or else the path's extension names it; else a native template.
+        (SaveMode::Template, f, by_name) => match f.map_or(by_name, format).filter(|f| TEMPLATE_FORMATS.contains(&f.id)) {
+            Some(f) => f,
+            None => checked(cmd, "template")?,
+        },
         (_, Some(f), _) => checked(cmd, f)?,
         (_, None, Some(f)) => checked(cmd, f.id)?,
         (_, None, None) => checked(cmd, st.format)?,
@@ -248,13 +266,13 @@ fn reads_option(f: &Format, key: &str) -> bool {
 }
 
 /// Formats that carry the whole native document: they lose nothing, and record links relative to
-/// where they are written. A `.ai` file is a PDF carrying it.
+/// where they are written. A `.ai` or `.ait` file is a PDF carrying it.
 fn is_native(f: &Format) -> bool {
-    matches!(f.id, "vectorcraft" | "template" | "ai")
+    matches!(f.id, "vectorcraft" | "template" | "ai" | "ait")
 }
 
 fn is_pdf(f: &Format) -> bool {
-    matches!(f.id, "pdf" | "ai")
+    matches!(f.id, "pdf" | "ai" | "ait")
 }
 
 fn is_svg(f: &Format) -> bool {
@@ -386,7 +404,8 @@ fn blank_pages(doc: &Document) -> Document {
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
 
-/// The shared Save and Export encoder for PDF-compatible `.ai` files.
+/// The shared Save and Export encoder for PDF-compatible `.ai` files (and `.ait` templates, the
+/// same file).
 pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Encoded> {
     if super::legacy_ai::wanted(cmd, p)? {
         return super::legacy_ai::encode(cmd, f, doc, p);
@@ -473,10 +492,10 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
     let legacy = super::legacy_ai::wanted(cmd, &params)?;
-    if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
+    if let (Some(o), "ai" | "ait") = (params.as_object_mut(), plan.format.id) {
         // Save keeps every artboard; exports may choose a subset instead. A legacy .ai file per
         // artboard keeps a range given: the artboards to save.
-        let chosen = legacy && o.get("range").and_then(Value::as_str).is_some_and(|r| !r.trim().is_empty());
+        let chosen = legacy && plan.format.id == "ai" && o.get("range").and_then(Value::as_str).is_some_and(|r| !r.trim().is_empty());
         if !chosen {
             o.insert("range".into(), json!("all"));
         }
@@ -520,7 +539,7 @@ impl SaveJob {
     /// Encode one file of `doc` in the job's format.
     fn encode_one(&self, doc: &Document) -> Result<Encoded> {
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
-        let enc = if f.id == "ai" { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
+        let enc = if matches!(f.id, "ai" | "ait") { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
         // A legacy .ai file per artboard.
         let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, &self.params)?;
         if enc.files.len() != 1 && !per_artboard {
@@ -703,7 +722,7 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.active();
     let id = str_param(p, "format").or(st.map(|d| d.format)).unwrap_or("vectorcraft");
     let f = format(id)
-        .filter(|f| f.write || SAVE_FORMATS.contains(&f.id))
+        .filter(|f| f.write || SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id))
         .ok_or_else(|| bad(C, format!("`{id}` is no writable format (see document.formats)")))?;
     let saved = st.filter(|d| d.format == f.id).map(|d| &d.save_options);
     // A native save compresses as Use Compression says, unless told otherwise.
@@ -754,7 +773,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{…as document.save} {path?, compress?, version?, preview?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{…as document.save} {path?, format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),
@@ -781,7 +800,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Format Options",
             [],
             None,
-            "{format?: a writable format id (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else the default",
+            "{format?: a writable format id or ait (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else the default",
             always,
             format_options
         ),

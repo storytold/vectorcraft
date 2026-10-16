@@ -171,7 +171,9 @@ fn bad_eps_options_are_refused_and_formats_list_eps() {
         let e = s.execute("document.exportEps", &p).unwrap_err().to_string();
         assert!(e.contains("EPS"), "{p}: {e}");
     }
-    assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "eps"}]})).is_err());
+    // Export for Screens writes an EPS per artboard (a document of that artboard alone).
+    let r = s.execute("document.exportForScreens", &json!({"formats": [{"format": "eps"}]})).unwrap();
+    assert!(r["files"][0]["name"].as_str().unwrap().ends_with(".eps"), "{r}");
     let r = s.execute("document.formats", &json!({})).unwrap();
     let eps = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "eps").unwrap().clone();
     // Readable too since EPS import (tests_epsimport.rs).

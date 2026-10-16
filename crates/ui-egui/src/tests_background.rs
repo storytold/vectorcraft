@@ -141,7 +141,7 @@ fn quitting_waits_for_background_saves() {
 }
 
 /// The status bar's texts in one headless frame.
-fn status_bar_texts(app: &mut VectorcraftApp) -> Vec<String> {
+pub(super) fn status_bar_texts(app: &mut VectorcraftApp) -> Vec<String> {
     fn texts(s: &egui::Shape, out: &mut Vec<String>) {
         match s {
             egui::Shape::Text(t) => out.push(t.galley.text().to_string()),

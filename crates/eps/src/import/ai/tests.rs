@@ -217,6 +217,29 @@ fn a_pattern_tiles_from_its_lower_left_wherever_its_definition_drew_it() {
     assert_eq!(xf * Point::ZERO, Point::new(0.0, 92.0));
 }
 
+/// A gradient in a pattern's definition is placed by an `Xm` written y down about the canvas point of
+/// art space's origin (here 7941, 7941: the canvas's centre less the template box's): its ramp from
+/// (10, 0) up to (10, 20) in the pattern's space is `0 -20 20 0 -7931 7941 Xm`.
+#[test]
+fn a_gradient_in_a_patterns_definition_is_placed_from_the_canvas() {
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let tile = rect_path(0.0, 0.0, 20.0, 20.0).replace('\n', "\n%_");
+    let pattern = format!(
+        "%AI3_BeginPattern: (Shade)\n(Shade) 0 0 20 20\n%_0 A\n%_0 Xw\n%_0 Ae\n%_u\n%_Bb\n%_1 (G) 0 0 90 1 1 0 0 1 0 0 1 Bg\n\
+         %_0 -20 20 0 -7931 7941 Xm\n%_{tile}f\n%_0 BB\n%_U\nE\n%AI3_EndPattern\n"
+    );
+    let file = stream(&format!("{defs}{pattern}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))))
+        .replace("%%EndComments", "%AI3_TemplateBox: 250.5 -250.5 250.5 -250.5\n%%EndComments");
+    let doc = read(file.as_bytes()).unwrap().doc;
+    let def = doc.pattern("Shade").unwrap();
+    let shaded = &def.art[0].children().unwrap()[0];
+    let Paint::Gradient(g) = fill(shaded) else { panic!("{:?}", fill(shaded)) };
+    let geom = g.geom.unwrap();
+    // The pattern's space is y down.
+    assert!(geom.start.distance(Point::new(10.0, 0.0)) < 1e-9 && geom.end.distance(Point::new(10.0, -20.0)) < 1e-9, "{geom:?}");
+}
+
 /// A pattern whose definition it can't read whole isn't kept: a fill with it is something the file
 /// has that isn't read, where it shows. Its definition costs nothing else.
 #[test]
@@ -270,6 +293,18 @@ fn compound_paths_and_clipping() {
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
 }
 
+/// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U
+/// … Q`): it still clips the clipping group.
+#[test]
+fn a_clipping_path_alone_in_a_group_clips_its_clipping_group() {
+    let body = format!("0 Ae\nq\n{RED}{}f\n0 Ae\nu\n{}h\nW\nn\nU\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let doc = read_ok(&layer(&body)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert_eq!(children.len(), 2, "{children:?}");
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
 /// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
 #[test]
 fn compound_path_takes_its_last_paths_paint() {
@@ -301,6 +336,24 @@ fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
     let a = art(&doc);
     assert_eq!((a[0].opacity, a[0].children().unwrap()[0].opacity), (0.5, 0.5));
     assert_eq!((a[1].opacity, a[1].children().unwrap()[0].opacity), (1.0, 0.5));
+}
+
+#[test]
+fn a_layer_keeps_its_own_transparency() {
+    // Illustrator writes a layer's own opacity, blend and knockout after its art, before `LB`
+    // (`Xy`, `Xd`, then `n () XW`); they belong to the layer, not to its last object (#2003).
+    let art_ = format!("{RED}{}f\n0 0.35 0 2 0 Xy\n0 0 Xd\n7 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    let l = &doc.layers[0];
+    assert_eq!((l.opacity, l.blend), (0.35, BlendMode::Normal), "the layer's own state");
+    assert_eq!((l.isolate, l.knockout), (false, Knockout::Neutral));
+    // The art inside keeps its own state.
+    assert_eq!(art(&doc)[0].opacity, 1.0);
+    // A layer whose last object is a group keeps that group's state apart from the layer's.
+    let art_ = format!("0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&art_)).doc;
+    assert_eq!(doc.layers[0].opacity, 1.0, "no layer state written: the layer stays opaque");
+    assert_eq!(art(&doc)[0].opacity, 0.5, "the group's own state");
 }
 
 #[test]
@@ -509,11 +562,53 @@ fn image(matrix: &str, (w, h): (u32, u32), (space, kind, alpha): (&str, u32, u32
     out
 }
 
+/// An effect that rasterizes (a blur) leaves its drawn look as one image, then the object itself on
+/// `%_` lines: the image stands for the object, as for a drawn look that's a group.
+#[test]
+fn a_drawn_look_that_is_an_image_stands_for_its_object() {
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3);
+    let object = format!("%_0 Ae\r\n%_u\r\n%_{}f\r\n%_U\r\n1 (Blurred) XW\r\n", rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\r\n%_"));
+    let at = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+    data.splice(at..at, object.into_bytes());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+}
+
 fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
     let blob = doc.images.get(&im.key).unwrap();
     (image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), im.xf)
+}
+
+/// A 1-bit image's row holds each pixel's channels in turn, one bit each, padded to whole bytes;
+/// a set bit is the channel at full strength.
+#[test]
+fn one_bit_images_read_each_channel() {
+    let one_bit = |src: Vec<u8>, kind: u32| {
+        let text = String::from_utf8(src).unwrap();
+        text.replacen(&format!(" 8 {kind} 0 0 1 0 "), &format!(" 1 {kind} 0 0 0 0 "), 1).into_bytes()
+    };
+    // 3 × 2 RGB in hex: red, green, blue (100 010 001), then white, black, yellow (111 000 110).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (3, 2), ("DeviceRGB", 3, 0), b"8880e300", 11), 3)).unwrap().doc;
+    let img = pixels(&doc).0;
+    let row = |y: u32| (0..3).map(|x| img.get_pixel(x, y).0).collect::<Vec<_>>();
+    assert_eq!(row(0), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+    assert_eq!(row(1), [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 0, 255]]);
+    // 2 × 1 CMYK: cyan, then black (1000 0001).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (2, 1), ("DeviceCMYK", 4, 0), b"81", 5), 4)).unwrap().doc;
+    let img = pixels(&doc).0;
+    for (x, ink) in [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]].into_iter().enumerate() {
+        let [r, g, b, _] = Color::cmyk(ink[0], ink[1], ink[2], ink[3]).to_rgba8(1.0);
+        assert_eq!(img.get_pixel(x as u32, 0).0, [r, g, b, 255], "pixel {x}");
+    }
+    // 3 × 1 gray: a bit a pixel (101).
+    let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (3, 1), ("DeviceGray", 1, 0), b"a0", 5), 1)).unwrap().doc;
+    let img = pixels(&doc).0;
+    assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 0, 255]);
 }
 
 #[test]
@@ -535,6 +630,71 @@ fn images_with_alpha_channels() {
     // Data cut short: the image goes, with a warning.
     let r = read(&image("[ 1 0 0 1 0 100 ]", (4, 4), ("DeviceRGB", 3, 0), &[1, 2, 3], 6)).unwrap();
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
+}
+
+/// The raster matrix `[a b c d tx ty]` is an art-space matrix (y up) applied to the image's pixels
+/// with their rows running downwards, `(u, -v)`: art x = a·u − c·v + tx, art y = b·u − d·v + ty.
+/// Without rotation (b = c = 0) that is the same as flipping the matrix's result; a rotated image
+/// tells the two apart (#2269).
+#[test]
+fn a_rotated_image_is_placed_as_its_matrix_maps_it() {
+    // Turned 90° counter-clockwise: in art space each row runs upwards, the next row to its right.
+    let doc = read(&image("[ 0 10 -10 0 50 50 ]", (2, 1), ("DeviceRGB", 3, 0), &[255, 0, 0, 0, 0, 255], 6)).unwrap().doc;
+    let xf = pixels(&doc).1;
+    // Art (x, y) is (x, 100 - y) on the page.
+    let page = |x: f64, y: f64| Point::new(x, 100.0 - y);
+    assert_eq!(xf * Point::ZERO, page(50.0, 50.0), "the top left pixel's corner stays at the matrix's origin");
+    assert_eq!(xf * Point::new(2.0, 0.0), page(50.0, 70.0), "the first row runs up");
+    assert_eq!(xf * Point::new(0.0, 1.0), page(60.0, 50.0), "the next row is to its right");
+    // Any rotation and scale: the same formula.
+    let (s, c) = 30f64.to_radians().sin_cos();
+    let m = [3.0 * c, 3.0 * s, -2.0 * s, 2.0 * c, 40.0, 60.0];
+    let matrix = format!("[ {} ]", m.map(|v| v.to_string()).join(" "));
+    let doc = read(&image(&matrix, (2, 1), ("DeviceRGB", 3, 0), &[255, 0, 0, 0, 0, 255], 6)).unwrap().doc;
+    let xf = pixels(&doc).1;
+    for (u, v) in [(0.0, 0.0), (2.0, 0.0), (0.0, 1.0), (2.0, 1.0)] {
+        let want = page(m[0] * u - m[2] * v + m[4], m[1] * u - m[3] * v + m[5]);
+        let got = xf * Point::new(u, v);
+        assert!((got - want).hypot() < 1e-9, "pixel ({u}, {v}): {got:?}, want {want:?}");
+    }
+}
+
+/// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
+/// becomes their opacity mask: a grayscale image over the image.
+#[test]
+fn cmyk_images_keep_their_ink_amounts() {
+    // 3 × 1: cyan, 100% black, then a mix.
+    let inks = [255, 0, 0, 0, 0, 0, 0, 255, 12, 34, 56, 78];
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 0), &inks, 14)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let blob = &doc.images[&im.key];
+    assert!(blob.is_cmyk(), "{}", blob.mime);
+    assert_eq!(blob.cmyk().map(|i| (i.width, i.height, i.data)), Some((3, 1, inks.to_vec())));
+    assert!(a[0].extras().mask.is_none(), "no alpha channel, no mask");
+    // The same samples with an alpha channel.
+    let data = [&inks[..], &[255, 128, 0]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()), "the inks are the same");
+    let m = a[0].extras().mask.clone().expect("the alpha channel is an opacity mask");
+    assert!(m.clip);
+    let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
+    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    assert_eq!(gray.into_raw(), [255, 128, 0]);
+    // An alpha channel that hides nothing adds no mask.
+    let data = [&inks[..], &[255; 3]].concat();
+    let doc = read(&image("[ 10 0 0 10 50 90 ]", (3, 1), ("DeviceCMYK", 4, 1), &data, 17)).unwrap().doc;
+    let a = art(&doc);
+    assert!(a[0].extras().mask.is_none());
+    // Hex samples, and a four-channel image whose space the data doesn't name.
+    let hex: String = inks.iter().map(|b| format!("{b:02x}")).collect();
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (3, 1), ("Other", 4, 0), hex.as_bytes(), 26)).unwrap();
+    let doc = read(text.replacen("8 4 0 0 1 0 4 4 0 0", "8 4 0 0 0 0 4 4 0 0", 1).as_bytes()).unwrap().doc;
+    let NodeKind::Image(im) = &art(&doc)[0].kind else { panic!() };
+    assert_eq!(doc.images[&im.key].cmyk().map(|i| i.data), Some(inks.to_vec()));
 }
 
 /// Editing data with one layer (showing or not) holding a placed file: its matrix, the file at
@@ -649,6 +809,14 @@ fn what_it_doesnt_read_is_an_error_where_it_shows() {
     assert!(e.contains("pattern fills"), "{e}");
     let e = read(stream(&layer("/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")).as_bytes()).unwrap_err();
     assert!(e.contains("symbols"), "{e}");
+    // An opacity mask (#2004): drawing the layer's art whole would show what the mask hides, so
+    // the mask is named and the file is read from its PDF part instead.
+    let mask = "%_/ArtDictionary :\n%_/XMLUID : (M) ; (AI10_ArtUID) ,\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_0 /Bool (Disabled) ,\n%_X=\n\
+                %_0 0 0 1 k\n%_0 0 m\n%_5 0 L\n%_5 5 L\n%_0 5 L\n%_0 0 L\n%_f\n%_X+\n%_ (Art) ,\n%_1 /Bool (Clipping) ,\n%_0 /Bool (Inverted) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let e = read(stream(&layer(mask)).as_bytes()).unwrap_err();
+    assert!(e.contains("opacity masks"), "{e}");
+    // A mask that is disabled changes nothing: the art reads.
+    read_ok(&layer(&mask.replace("%_0 /Bool (Disabled)", "%_1 /Bool (Disabled)")));
     // On a layer that doesn't show, it is left out of it.
     let hidden = "%AI5_BeginLayer\n0 1 1 1 0 0 0 1 255 79 79 0 50 0 Lb\n(Off) Ln\n1 2 frobnicate\n(J) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nLB\n%AI5_EndLayer--\n";
     let r = read_ok(hidden);
@@ -1007,6 +1175,21 @@ fn a_styled_object_inside_a_drawn_look_survives_it() {
     assert_eq!(fill(&inner[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     let shadow = &inner[0].appearance.effects[0];
     assert_eq!((shadow.id.as_str(), shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), ("stylize.dropShadow", Some(3.0), Some(4.0)));
+}
+
+/// A styled object read in place of its drawn look keeps the transparency written on the look (the
+/// object's own, after the look's group ends): here 60 % in Multiply.
+#[test]
+fn a_styled_object_keeps_the_transparency_written_on_its_look() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    // The object on `%_` lines sets its own paths' transparency back to normal, as files do.
+    let art_ =
+        format!("0 Ae\nu\n{RED}{}f\nU\n1 0.6 0 2 0 Xy\n6 () XW\n%_0 1 0 0 0 Xy\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((a[0].opacity, a[0].blend), (0.6, BlendMode::Multiply));
 }
 
 #[test]

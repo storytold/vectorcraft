@@ -331,6 +331,56 @@ fn an_ellipse_takes_pie_angles_and_inverts() {
     assert!(s.execute("object.setLiveShape", &json!({"pieStart": "half"})).is_err());
 }
 
+/// The Selection tool's pie widgets: dragging the End widget from 0° to straight up sets Pie End
+/// Angle to 90 in one undo step; on an inverted pie a drag moves only the dragged angle; a
+/// double-click on a widget makes the ellipse whole again in one step.
+#[test]
+fn dragging_and_double_clicking_the_pie_widgets() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": 50, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    let pie = |s: &Session| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match &**l {
+            LiveShape::Ellipse { pie, .. } => *pie,
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let gesture = |s: &mut Session, events: &[(PointerKind, f64, f64)]| {
+        for (kind, x, y) in events {
+            s.pointer(&PointerEvent::new(*kind, *x, *y).with_mods(Mods::default()), v).unwrap();
+        }
+    };
+    // The center is (150, 150); both widgets of the whole ellipse sit 12 pt right of (250, 150).
+    let n = steps(&s);
+    gesture(&mut s, &[(PointerKind::Down, 262.0, 150.0), (PointerKind::Drag, 150.0, 20.0), (PointerKind::Up, 150.0, 20.0)]);
+    assert!(near(pie(&s), (0.0, 90.0)), "{:?}", pie(&s));
+    assert_eq!(steps(&s), n + 1);
+    // Inverted, the pie runs from 90° to 360°: dragging the End widget (back at 0°) to 270°
+    // leaves the start at 90°.
+    s.execute("object.setLiveShape", &json!({"invertPie": true})).unwrap();
+    assert!(near(pie(&s), (90.0, 360.0)));
+    gesture(&mut s, &[(PointerKind::Down, 262.0, 150.0), (PointerKind::Drag, 150.0, 280.0), (PointerKind::Up, 150.0, 280.0)]);
+    assert!(near(pie(&s), (90.0, 270.0)), "{:?}", pie(&s));
+    // The Start widget sits 12 pt above the top of the outline, at 90°.
+    let n = steps(&s);
+    gesture(
+        &mut s,
+        &[(PointerKind::Down, 150.0, 88.0), (PointerKind::Up, 150.0, 88.0), (PointerKind::Down, 150.0, 88.0), (PointerKind::Up, 150.0, 88.0)],
+    );
+    assert_eq!(steps(&s), n, "two clicks record no undo step");
+    gesture(&mut s, &[(PointerKind::DoubleClick, 150.0, 88.0)]);
+    assert_eq!(pie(&s), (0.0, 360.0));
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(pie(&s), (90.0, 270.0)));
+}
+
 /// #812: a polygon's Polygon Properties: its angle, radius and side length, each one undo step;
 /// Make Sides Equal after an uneven scale; bad values are errors.
 #[test]

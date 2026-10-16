@@ -5,6 +5,7 @@ use std::io::Cursor;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
+use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
@@ -153,14 +154,15 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// A PDF-compatible `.ai`, or a PDF saved with the editing data, read through the editor's own copy
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
-/// Anything else as it was.
-fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>) -> (Document, Vec<String>) {
+/// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
+/// first page's `UserUnit`).
+fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>) {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return (doc, warnings);
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data);
+    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings);
@@ -228,7 +230,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     // Pages of text alone: the editing copy alone where it reads, as for a file
                     // saved without its PDF part (#1387: else the page, which is the art).
                     let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
-                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings)))
+                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit)))
                 }
                 // Saved without its PDF part: the editing copy is all the file has.
                 Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {
@@ -253,6 +255,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
+    // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
+    if matches!(format.id, "pdf" | "ai" | "ait")
+        && !restored
+        && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
+    {
+        super::super::fileinfo::read_pdf(&mut doc.metadata, info);
+    }
     // Threaded type read from a file flows through its frames.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
@@ -480,6 +490,43 @@ fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage>
         None => png,
     };
     stored(png, "image/png", size, ppi)
+}
+
+/// Effect › Distort › Glass › Load Texture…: encoded image `bytes`, in any format [`raster_image`]
+/// reads, as the `textureImage` Glass stores ([`LoadedTexture::to_stored`]). The pixels are decoded
+/// within [`MAX_RASTER_ALLOC`], counted as RGBA, as the renderer decodes them (#1717); a CMYK image
+/// is converted with the active color settings.
+pub fn texture_image(bytes: &[u8]) -> Result<String> {
+    if let Some(note) = too_large_note(bytes) {
+        return Err(err(note));
+    }
+    let RasterImage { blob, width, height, .. } = raster_image(bytes)?;
+    // The allowance counts the pixels as RGBA: a gray image takes four times its file's samples (#1717).
+    if u64::from(width) * u64::from(height) * 4 > MAX_RASTER_ALLOC {
+        return Err(err(format!("an image of {width} × {height} pixels is too large to draw")));
+    }
+    let texture = match blob.cmyk() {
+        Some(inks) => {
+            let cms = vectorcraft_color::cms::active();
+            let rgba: Vec<u8> = (inks.data.as_chunks::<4>().0.iter())
+                .flat_map(|c| {
+                    let rgb = cms.cmyk_to_srgb(c.map(|v| f32::from(v) / 255.0), false);
+                    let [r, g, b] = rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+                    [r, g, b, 255]
+                })
+                .collect();
+            LoadedTexture::from_rgba(inks.width, inks.height, &rgba)
+        }
+        None => {
+            let mut reader = image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(err)?;
+            let mut limits = image::Limits::default();
+            limits.max_alloc = Some(MAX_RASTER_ALLOC);
+            reader.limits(limits);
+            let img = reader.decode().map_err(err)?.to_rgba8();
+            LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
+        }
+    };
+    texture.and_then(|t| t.to_stored()).ok_or_else(|| err("the image can't be read as a texture"))
 }
 
 /// An image's encoded `bytes`, `width` × `height` pixels, ready to embed.

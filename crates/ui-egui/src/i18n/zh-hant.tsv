@@ -191,7 +191,6 @@
 	Art	圖稿
 	Art using a deleted global swatch keeps its colour.	使用已刪除整體色票的圖稿會保留其顏色。
 	Artboard Options	工作區域選項
-	Artboard Options: edit with the Artboard tool	工作區域選項：請使用工作區域工具編輯
 	Artboard Options…	工作區域選項…
 	Artboard Tool	工作區域工具
 	Artboard {number}	工作區域 {number}
@@ -546,6 +545,7 @@
 	Convert to RGB	轉換為 RGB
 	Convert to Shape	轉換為形狀
 	Convert to sRGB	轉換為 sRGB
+	Convert to Straight Lines	轉換為直線
 	Convert:	轉換：
 	Copied the CSS of {rules} object(s)	已複製 {rules} 個物件的 CSS
 	Copies:	份數：
@@ -564,6 +564,7 @@
 	Copyright Notice:	著作權聲明：
 	Copyright Status:	著作權狀態：
 	Copyright Symbol	著作權符號
+	Corner Point Angle Threshold:	尖角點角度臨界值：
 	Corner Radius	圓角半徑
 	Corner Radius:	圓角半徑：
 	Corner:	轉角：
@@ -945,6 +946,32 @@
 	Export All…	全部匯出…
 	Export and Clipboard Transparency Flattener Settings	匯出與剪貼簿透明度平面化設定
 	Export Artboard	匯出工作區域
+	A File per Object	每個物件一個檔案
+	Example: {name}	範例：{name}
+	Export Preset:	轉存預設集：
+	Folders:	資料夾：
+	Insert	插入
+	Nothing is selected. Select the art to export, then open this tab again.	未選取任何內容。請選取要轉存的圖稿，然後重新開啟此標籤。
+	One File of the Selection	選取範圍轉存為一個檔案
+	Start at:	起始編號：
+	{n} objects selected	已選取 {n} 個物件
+	Delete Export Preset	刪除轉存預設集
+	Export Presets	轉存預設集
+	Save Export Preset	儲存轉存預設集
+	Export Layer	轉存圖層
+	Export Selection	轉存選取範圍
+	All in One Folder	全部放在一個資料夾
+	By Size or Row	依尺寸或列
+	By Format	依格式
+	By Artboard or Item	依工作區域或項目
+	By Item, Then Format	依項目，再依格式
+	Document Name	文件名稱
+	Artboard or Item Name	工作區域或項目名稱
+	Number (####)	編號（####）
+	Date (YYYYMMDD)	日期（YYYYMMDD）
+	Date (YYYY-MM-DD)	日期（YYYY-MM-DD）
+	Time (hhmmss)	時間（hhmmss）
+	PDF Print	印刷用 PDF
 	Export As	匯出為
 	Export As PNG…	匯出為 PNG…
 	Export As SVG…	匯出為 SVG…
@@ -1018,6 +1045,7 @@
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
 	Keep selected	保持選取狀態
+	Merge only with selection	僅與選取物件合併
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
@@ -1040,8 +1068,11 @@
 	Fit dashes to corners and ends	讓虛線貼合轉角與端點
 	Fit Headline	符合標題
 	Decrease Font Size	縮小字體大小
+	Decrease Font Size by Five Steps	按五個增量縮小字體大小
 	Increase Font Size	放大字體大小
+	Increase Font Size by Five Steps	按五個增量放大字體大小
 	Reset Tracking and Kerning	重設字距與字距微調
+	Reset Horizontal Scale	重設水平縮放
 	Spacing	間距
 	Step Type	依增量調整文字
 	Fit in View	符合檢視
@@ -1242,6 +1273,7 @@
 	Hide Print Tiling	隱藏列印分頁
 	Hide Rulers	隱藏尺標
 	Hide Slices	隱藏切片
+	Hide Template	隱藏範本
 	Hide Text Threads	隱藏文字串連
 	Hide Thumbnail	隱藏縮圖
 	Hide Thumbnails	隱藏縮圖
@@ -1280,6 +1312,14 @@
 	Hyphenate	使用連字號
 	Hyphenation	連字號
 	Hyphenation…	連字號…
+	Words Longer Than:	單字長度超過：
+	After First:	斷開前至少：
+	Before Last:	斷開後至少：
+	Hyphen Limit:	連字號限制：
+	Hyphenation Zone:	連字區：
+	letters	個字母
+	hyphens	個連字號
+	Hyphenate Capitalized Words	大寫單字使用連字號
 	ICC Profile	ICC 描述檔
 	Identify Objects By	識別物件依據
 	Ignore	略過
@@ -1346,6 +1386,8 @@
 	Internal CSS	內部 CSS
 	Internet Standard RGB (sRGB)	網際網路標準 RGB (sRGB)
 	Intersect	交集
+	Intertwine	交織
+	Arrange Intertwine Area	排列交織區域
 	Inverse	反轉
 	Invert	反轉
 	Invert Colors	反轉顏色
@@ -1957,6 +1999,7 @@
 	Out Tangent Handles	外切線控制把手
 	Outer Glow…	外光暈…
 	Outline	外框
+	Outline Object	外框物件
 	Outline Others	其他以外框檢視
 	Outline Stroke	外框筆畫
 	Outline Text	外框文字
@@ -2027,6 +2070,7 @@
 	Pathfinder Options…	路徑管理員選項…
 	Pathfinders:	路徑管理員：
 	Paths	路徑
+	Path Length	路徑長度
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	路徑：{paths}    錨點：{anchors}    顏色：{colors}
 	Pattern	圖樣
 	Pattern Editing	圖樣編輯
@@ -2386,7 +2430,9 @@
 	Reset Panel	重設面板
 	Reset Preferences	重設偏好設定
 	Reset Profiles	重設描述檔
+	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
+	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
@@ -2496,6 +2542,7 @@
 	Save Save for Web Preset	儲存「儲存為網頁用」預設集
 	Save selected colors as swatches	將所選顏色儲存為色票
 	Save Selection…	儲存選取範圍…
+	Update Selection	更新選取範圍
 	Save Swatch Library	儲存色票資料庫
 	Save Swatch Library…	儲存色票資料庫…
 	Save the current layout under this name	以此名稱儲存目前的版面配置
@@ -2586,6 +2633,16 @@
 	Scripts	指令碼
 	Search	搜尋
 	Search All	搜尋全部
+	Filter	篩選
+	Clear All	全部清除
+	By Object	依物件
+	By Layer	依圖層
+	Images	影像
+	Groups	群組
+	Linked Files	連結檔案
+	Locked	已鎖定
+	Hidden	已隱藏
+	Filter Layers Panel Rows	篩選圖層面板列
 	Search commands and tools	搜尋指令與工具
 	Search commands and tools…	搜尋指令與工具…
 	Search Commands…	搜尋指令…
@@ -2723,6 +2780,8 @@
 	Show Modified	顯示已修改
 	Show Note	顯示註解
 	Show Options	顯示選項
+	Show Original Path	顯示原始路徑
+	Color Panel Options	顏色面板選項
 	Show Package	顯示封裝
 	Show Panel	顯示面板
 	Show Pattern Swatches	顯示圖樣色票
@@ -2735,6 +2794,7 @@
 	Show Slices	顯示切片
 	Show Swatch Bounds	顯示色票邊界
 	Show Swatch Kinds	顯示色票種類
+	Show Template	顯示範本
 	Show Text Threads	顯示文字串連
 	Show The Home Screen When No Documents Are Open	沒有開啟文件時顯示首頁
 	Show Thumbnail	顯示縮圖
@@ -3535,6 +3595,10 @@ axis	Both	兩者
 	Method	方法
 	Quality	品質
 	Radius	半徑
+	Mode	模式
+	Blur Mode	模糊模式
+	Edge Only	僅邊緣
+	Overlay Edge	覆蓋邊緣
 	Spin	旋轉
 	Draft	草稿
 	Good	良好
@@ -3615,6 +3679,9 @@ effect	Soft	柔和
 	Blocks	塊狀
 	Frosted	磨砂
 	Tiny Lens	小鏡頭
+	Loaded Texture	已載入的紋理
+	Load Texture…	載入紋理…
+	Texture Image	紋理影像
 	Rename Data Set	重新命名資料集
 	Rename Variable	重新命名變數
 	Variable Options	變數選項
@@ -3764,6 +3831,7 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Registration:	對齊點:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	建立尺寸標註
 	Dimension Tool	尺寸標註工具
@@ -3773,7 +3841,6 @@ lighting	Light	光源
 	Precision:	精確度：
 	Update Dimensions	更新尺寸標註
 	Display	顯示
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	尺寸
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	圖紙 : 實際尺寸 — 1:10 會將頁面上的 1 個單位標示為 10。
@@ -3795,6 +3862,38 @@ lighting	Light	光源
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封閉開放輪廓的圓形端部。部分旋轉的切割側面保持開放。
 	Distance	距離
+	Make Image Dynamic	使影像動態化
+	Import Data Sets…	匯入資料集…
+	Export Data Sets…	匯出資料集…
+	Make Graph Dynamic	使圖表動態化
+	Batch…	批次處理…
+	Source Folder:	來源資料夾：
+	Destination Folder:	目的地資料夾：
+	Overrides	覆寫
+	Uses every data set of the open document.	使用開啟文件的每個資料集。
+@msg	check a layer to export	請勾選要轉存的圖層
+@msg	select the art to export first	請先選取要轉存的圖稿
+
+# User Interface › Accent Color
+	Accent Color	強調色
+	Amber	琥珀色
+	Coral	珊瑚色
+	Violet	紫羅蘭色
+	Pink	粉紅色
+	Sketch	素描
+	Halftone Pattern…	半色調圖樣…
+	Halftone Pattern	半色調圖樣
+	Pattern Type	圖樣類型
+	Dot	網點
+# User Interface › Color Scheme
+	Color Scheme	配色方案
+	Modern	現代
+
+# Symbol Options › Export Type
+	Export Type:	轉存類型:
+	Movie Clip	影片片段
+@msg	name is empty	名稱為空
+@msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	瀏覽雲端資料夾

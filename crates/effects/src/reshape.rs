@@ -5,7 +5,9 @@
 //! (glyph outlines, the evaluated live object, the symbol's art) and [`reshape`] runs each effect
 //! over all of them as one piece, with the whole art's bounds as the effect's reference box, so a
 //! warp bends a line of type as a whole. An image is clipped by its reshaped frame. Raster effects
-//! (shadows, glows, blur, feather) stay on the result for the renderer and exporters.
+//! (shadows, glows, blur, feather) stay on the result for the renderer and exporters. Type without
+//! inline graphics whose own fills or strokes have geometry effects is outlined too: each of those
+//! effects reshapes the whole outline that its fill or stroke paints.
 
 use std::sync::Arc;
 
@@ -28,6 +30,14 @@ pub fn needs_outline(n: &Node) -> bool {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
     )
+}
+
+/// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
+/// visible geometry effect? Such an effect reshapes the whole outline that its fill or stroke
+/// paints ([`outline_text`], which leaves inline graphics out).
+pub fn has_item_geometry(n: &Node) -> bool {
+    let NodeKind::Text(t) = &n.kind else { return false };
+    t.runs.iter().all(|r| r.inline.is_none()) && n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
 }
 
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
@@ -135,7 +145,7 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
 /// its plain outlines ([`outline_text`]) with its visibility, which is what
 /// [`crate::clip_outline`] clips by.
-fn outline_nested_text(n: &mut Node, clipping: bool) {
+pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
@@ -155,11 +165,13 @@ fn outline_nested_text(n: &mut Node, clipping: bool) {
 
 /// `n` (see [`needs_outline`]) with its object-level geometry effects and its perspective applied:
 /// its [`outline_art`] reshaped as one piece, or for an image the image clipped by its reshaped
-/// frame. The result is a group with `n`'s id, name, visibility, transparency, opacity mask and
-/// remaining (raster) effects; `None` when `n` has neither a visible geometry effect nor a
-/// perspective, or has no art (a symbol instance without `symbol_art`).
+/// frame. Type's own fills and strokes keep their effects on its whole outline. The result is a
+/// group with `n`'s id, name, visibility, transparency, opacity mask and remaining (raster)
+/// effects; `None` when `n` has no visible geometry effect, no perspective and is not type with
+/// a geometry effect on a fill or stroke of its own ([`has_item_geometry`]), or has no art (a
+/// symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if (geometry_effects(n).is_empty() && n.projection().is_none()) || !needs_outline(n) {
+    if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n) {
         return None;
     }
     as_art(n, symbol_art)
@@ -244,9 +256,9 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 }
 
 /// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
-/// its reference box and the art's seed (a random Transform moves the pieces together). Images
-/// follow a Transform effect the same way ([`transform_images`]); other geometry effects leave
-/// them as they are (a raster follows a non-affine map only as a mesh warp).
+/// its reference box and the art's seed (a random Transform moves the pieces together). Images and
+/// symbol instances follow a Transform effect the same way ([`transform_placed`]); other geometry
+/// effects leave them as they are (a raster follows a non-affine map only as a mesh warp).
 pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
     let seed = art.id.0;
     // The placed gradients of type's outlines in `art` (`outline_text`) move and scale with the
@@ -263,7 +275,7 @@ pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
         });
         if e.id == "distort.transform" {
             let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
-            transform_images(art, m, copies);
+            transform_placed(art, m, copies);
         }
     }
     if !fx.is_empty() && outlines.iter().any(Option::is_some) {
@@ -342,36 +354,46 @@ fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
     vectorcraft_geom::Affine::new([sx, 0.0, 0.0, sy, tx, ty])
 }
 
-/// Apply the Transform effect's map `m` to every image under `n`, as [`for_each_leaf`] does to
-/// paths: the map goes into the image's placement (pixel space → document), and `copies` more
-/// images follow, each mapped once more than the last. Without copies the image itself takes the
-/// map, as a path does.
-fn transform_images(n: &mut Node, m: Affine, copies: usize) {
-    transform_images_within(n, m, copies, crate::distort::MAX_COPY_IMAGES)
+/// Apply the Transform effect's map `m` to every image and symbol instance under `n`, as
+/// [`for_each_leaf`] does to paths: the map goes into the object's placement, and `copies` more
+/// follow, each mapped once more than the last. Without copies the object itself takes the map,
+/// as a path does.
+fn transform_placed(n: &mut Node, m: Affine, copies: usize) {
+    transform_placed_within(n, m, copies, crate::distort::MAX_COPY_OBJECTS)
 }
 
-/// [`transform_images`] whose copies make at most `max` image nodes of the art, the originals
-/// included: each copy adds the image once more, and a Transform after this one copies the lot
-/// again, so copies stop where the result would pass `max` (#2042).
-pub(crate) fn transform_images_within(n: &mut Node, m: Affine, copies: usize, max: usize) {
-    let mut room = max.saturating_sub(image_count(n));
-    copy_images(n, m, copies, &mut room);
+/// [`transform_placed`] whose copies make at most `max` image and symbol instance nodes of the art,
+/// the originals included: each copy adds the object once more, and a Transform after this one
+/// copies the lot again, so copies stop where the result would pass `max` (#2042).
+pub(crate) fn transform_placed_within(n: &mut Node, m: Affine, copies: usize, max: usize) {
+    let mut room = max.saturating_sub(placed_count(n));
+    copy_placed(n, m, copies, &mut room);
 }
 
-/// The walk of [`transform_images`]: the map and its copies go to each image in document order,
-/// each copy taking one from `room` (what the art can still grow by), until the budget is full.
-fn copy_images(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
+/// An object that a Transform effect places through its transform rather than reshapes: an image
+/// (pixel space to document) or a symbol instance (the symbol's art to document).
+fn is_placed(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_) | NodeKind::SymbolInstance { .. })
+}
+
+/// The walk of [`transform_placed`]: the map and its copies go to each image and symbol instance in
+/// document order, each copy taking one from `room` (what the art can still grow by), until the
+/// budget is full. As with a path, the copies stop before one reaches past
+/// [`crate::distort::within_reach`].
+fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
     let Some(children) = n.children_mut() else { return };
     for c in children.iter_mut() {
-        if !matches!(c.kind, NodeKind::Image(_)) {
-            copy_images(Arc::make_mut(c), m, copies, room);
+        if !is_placed(c) {
+            copy_placed(Arc::make_mut(c), m, copies, room);
             continue;
         }
         let src = (**c).clone();
         let placed = |xf: Affine| {
             let mut one = src.clone();
-            if let NodeKind::Image(im) = &mut one.kind {
-                im.xf = xf * im.xf;
+            match &mut one.kind {
+                NodeKind::Image(im) => im.xf = xf * im.xf,
+                NodeKind::SymbolInstance { xf: at, .. } => *at = xf * *at,
+                _ => {}
             }
             one
         };
@@ -379,26 +401,28 @@ fn copy_images(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
             *c = Arc::new(placed(m));
             continue;
         }
-        let made = copies.min(*room);
-        *room -= made;
-        // The copies become image nodes of their own, under a group with the image's id, name and
-        // place in the art (as the runs an outlined text gets).
-        let mut images: Vec<Arc<Node>> = Vec::with_capacity(made + 1);
-        images.push(Arc::new(placed(Affine::IDENTITY)));
+        // The copies become nodes of their own, under a group with the object's id, name and place
+        // in the art (as the runs an outlined text gets).
+        let mut placements: Vec<Arc<Node>> = vec![Arc::new(placed(Affine::IDENTITY))];
         let mut xf = Affine::IDENTITY;
-        for _ in 0..made {
+        for _ in 0..copies.min(*room) {
             xf *= m;
-            images.push(Arc::new(placed(xf)));
+            let copy = placed(xf);
+            if !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
+                break;
+            }
+            placements.push(Arc::new(copy));
         }
-        let mut g = Node::group(src.id, images);
+        *room -= placements.len() - 1;
+        let mut g = Node::group(src.id, placements);
         g.name = src.name.clone();
         *c = Arc::new(g);
     }
 }
 
-/// How many image nodes `n` holds below itself.
-fn image_count(n: &Node) -> usize {
-    n.children().into_iter().flatten().map(|c| usize::from(matches!(c.kind, NodeKind::Image(_))) + image_count(c)).sum()
+/// How many images and symbol instances `n` holds below itself.
+fn placed_count(n: &Node) -> usize {
+    n.children().into_iter().flatten().map(|c| usize::from(is_placed(c)) + placed_count(c)).sum()
 }
 
 /// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on

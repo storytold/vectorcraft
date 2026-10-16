@@ -280,7 +280,7 @@ pub(crate) fn options_json(o: &SliceOptions) -> Value {
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = match ids_param(p, "ids") {
-        Some(ids) => ids,
+        Some(ids) => super::edit::outermost(&s.doc()?.doc, ids),
         None => super::edit::selected_roots(s)?,
     };
     let d = &s.doc()?.doc;

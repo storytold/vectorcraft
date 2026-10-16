@@ -354,6 +354,35 @@ fn radial_repeat_wraps_selection() {
     assert_eq!(n.kind_label(), "Radial Repeat");
 }
 
+/// Repeat given `ids` that list an object and a group that holds it (directly, or inside another
+/// group) repeats the outer group, which holds the object once, as it does with those objects
+/// selected.
+#[test]
+fn repeat_of_an_object_and_a_group_that_holds_it_repeats_the_group() {
+    let nested = || {
+        let mut s = session();
+        let (a, b) = (rect(&mut s, 195.0, 95.0, 10.0, 10.0), rect(&mut s, 215.0, 95.0, 10.0, 10.0));
+        sel(&mut s, &[a, b]);
+        let inner = id_of(&s.execute("object.group", &json!({})).unwrap());
+        let c = rect(&mut s, 235.0, 95.0, 10.0, 10.0);
+        sel(&mut s, &[inner, c]);
+        let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+        s.execute("select.none", &json!({})).unwrap();
+        (s, [a, inner, outer])
+    };
+    for (picks, group) in [(&[0, 1][..], 1), (&[1, 0, 2], 2)] {
+        let (mut given, ids) = nested();
+        let list: Vec<NodeId> = picks.iter().map(|i| ids[*i]).collect();
+        let v = given.execute("object.repeat.radial", &json!({ "ids": list.iter().map(|i| i.0).collect::<Vec<_>>() })).unwrap();
+        let NodeKind::Repeat(spec) = node(&given, id_of(&v)).kind else { panic!("{v}") };
+        assert_eq!(spec.source.iter().map(|n| n.id).collect::<Vec<_>>(), [ids[group]]);
+        let (mut selected, _) = nested();
+        sel(&mut selected, &list);
+        selected.execute("object.repeat.radial", &json!({})).unwrap();
+        assert!(doc(&given).layers == doc(&selected).layers, "ids {list:?}");
+    }
+}
+
 #[test]
 fn radial_instance_transforms_rotate_around_center() {
     let mut s = session();

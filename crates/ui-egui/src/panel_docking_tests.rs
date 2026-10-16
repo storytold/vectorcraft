@@ -574,3 +574,43 @@ fn native_set_drop_targets_respect_the_visible_layer_above_an_ordinary_float() {
         "visible native group owns the drop: {target:?}"
     );
 }
+
+/// Window › Properties hides the panel while it shows, and the next click shows it again where it
+/// was (#2361): in the dock as the app starts, floating, and once the layout has been changed.
+/// The panel's other ways in (a tool's double-click, Show Properties Panel) only show it.
+#[test]
+fn the_window_menu_item_hides_a_shown_panel_and_shows_it_again() {
+    let item = crate::menus::menu_entries(&app())
+        .into_iter()
+        .find(|e| e.path == ["Window"] && e.command.as_deref() == Some("window.panel") && e.params["panel"] == "properties")
+        .expect("Window › Properties");
+    let params = item.params;
+    let shown = |app: &VectorcraftApp| crate::menus::checked(app, "window.panel", &params) == Some(true);
+    let in_layout = |app: &VectorcraftApp| app.ui.docking.as_ref().is_some_and(|layout| layout.contains(&"properties".into()));
+
+    let mut app = app();
+    assert!(app.ui.docking.is_none() && shown(&app), "the default dock shows Properties");
+    let start = legacy(&app);
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(!shown(&app) && !in_layout(&app), "the first click hides it");
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(shown(&app));
+    assert_eq!(app.ui.docking.as_ref(), Some(&start), "the second shows it where it was");
+
+    app.run("window.panel.move", json!({"panel":"properties", "anchor":"layers", "zone":"top"})).unwrap();
+    let moved = app.ui.docking.clone();
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(!shown(&app) && !in_layout(&app));
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(shown(&app) && app.ui.docking == moved);
+
+    app.run("window.panel.float", json!({"panel":"properties", "x":50, "y":70, "width":330, "height":410})).unwrap();
+    let floating = app.ui.docking.clone();
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(!shown(&app) && !in_layout(&app), "a floating Properties hides too");
+    app.run("window.panel", params.clone()).unwrap();
+    assert!(shown(&app) && app.ui.docking == floating);
+
+    app.run("window.panel", json!({"panel":"properties"})).unwrap();
+    assert!(shown(&app), "without the menu's toggle the command only shows the panel");
+}

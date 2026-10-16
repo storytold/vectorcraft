@@ -210,6 +210,7 @@
 	Join	連結
 	Average…	平均…
 	Outline Stroke	パスのアウトライン
+	Outline Object	オブジェクトのアウトライン
 	Offset Path…	パスのオフセット…
 	Reverse Path Direction	パスの方向反転
 	Simplify…	単純化…
@@ -328,8 +329,11 @@
 	Remove Threading	スレッドを解除
 	Fit Headline	ヘッドラインを合わせる
 	Decrease Font Size	フォントサイズを小さく
+	Decrease Font Size by Five Steps	フォントサイズを5段階小さく
 	Increase Font Size	フォントサイズを大きく
+	Increase Font Size by Five Steps	フォントサイズを5段階大きく
 	Reset Tracking and Kerning	トラッキングとカーニングをリセット
+	Reset Horizontal Scale	水平比率をリセット
 	Step Type	文字を段階的に調整
 	Find Font…	フォントの検索と置換…
 	Change Case	大文字と小文字の変更
@@ -393,6 +397,7 @@
 	Area Text Objects	エリア内文字オブジェクト
 	Start Global Edit	グローバル編集を開始
 	Save Selection…	選択範囲を保存…
+	Update Selection	選択範囲を更新
 	Edit Selection…	選択範囲を編集…
 	Effect	効果
 	Apply Last Effect	前回の効果を適用
@@ -426,6 +431,8 @@
 	Pathfinder	パスファインダー
 	Add	追加
 	Intersect	交差
+	Intertwine	織り交ぜ
+	Arrange Intertwine Area	織り交ぜ領域の重ね順
 	Exclude	中マド
 	Subtract	前面オブジェクトで型抜き
 	Minus Back	背面オブジェクトで型抜き
@@ -483,7 +490,9 @@
 	Fit Artboard in Window	アートボードを全体表示
 	Fit All in Window	すべてのアートボードを全体表示
 	Actual Size	100% 表示
+	Rotate View	ビューを回転
 	Reset Rotate View	ビューを回転の初期化
+	Rotate View to Selection	選択範囲に合わせてビューを回転
 	Hide Edges	エッジを隠す
 	Hide Artboards	アートボードを隠す
 	Show Print Tiling	プリント分割を表示
@@ -495,6 +504,7 @@
 	Show Video Rulers	ビデオ定規を表示
 	Hide Bounding Box	バウンディングボックスを隠す
 	Show Transparency Grid	透明グリッドを表示
+	Hide Template	テンプレートを隠す
 	Hide Text Threads	テキストのスレッドを隠す
 	Hide Gradient Annotator	グラデーションガイドを隠す
 	Hide Corner Widget	コーナーウィジェットを隠す
@@ -655,6 +665,7 @@
 	Preview	プレビュー
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
+	Show Template	テンプレートを表示
 	Show Text Threads	テキストのスレッドを表示
 	Hide Hidden Characters	制御文字を隠す
 	Show Gradient Annotator	グラデーションガイドを表示
@@ -859,7 +870,6 @@
 	Art using a deleted global swatch keeps its colour.	削除したグローバルスウォッチを使っているアートは、そのカラーを保持します。
 	ArtCraft website	ArtCraft の Web サイト
 	Artboard Options	アートボードオプション
-	Artboard Options: edit with the Artboard tool	アートボードオプション: アートボードツールで編集
 	Artboard Options…	アートボードオプション…
 	Artboard Tool	アートボードツール
 	Artboard {number}	アートボード {number}
@@ -1085,6 +1095,7 @@
 	Convert Process to Global	プロセスカラーをグローバルに変換
 	Convert text to outlines	テキストをアウトラインに変換
 	Convert to sRGB	sRGB に変換
+	Convert to Straight Lines	直線に変換
 	Copies:	コピー:
 	Copy (make a transformed copy)	コピー (変形したコピーを作成)
 	Copy All Styles	すべてのスタイルをコピー
@@ -1096,6 +1107,7 @@
 	Copyright Info URL:	著作権情報の URL:
 	Copyright Notice:	著作権表示:
 	Copyright Status:	著作権の状態:
+	Corner Point Angle Threshold:	コーナーポイントの角度のしきい値:
 	Corner Radius	角の半径
 	Corner Radius:	角丸の半径:
 	Corner:	角の形状:
@@ -1358,6 +1370,32 @@
 	Expand:	拡張:
 	Export All…	すべて書き出し…
 	Export Artboard	アートボードを書き出し
+	A File per Object	オブジェクトごとに 1 ファイル
+	Example: {name}	例：{name}
+	Export Preset:	書き出しプリセット：
+	Folders:	フォルダー：
+	Insert	挿入
+	Nothing is selected. Select the art to export, then open this tab again.	何も選択されていません。書き出すアートを選択してから、このタブを開き直してください。
+	One File of the Selection	選択範囲を 1 ファイルに
+	Start at:	開始番号：
+	{n} objects selected	{n} 個のオブジェクトを選択中
+	Delete Export Preset	書き出しプリセットを削除
+	Export Presets	書き出しプリセット
+	Save Export Preset	書き出しプリセットを保存
+	Export Layer	レイヤーを書き出し
+	Export Selection	選択範囲を書き出し
+	All in One Folder	すべて 1 つのフォルダーに
+	By Size or Row	サイズまたは行ごと
+	By Format	形式ごと
+	By Artboard or Item	アートボードまたは項目ごと
+	By Item, Then Format	項目ごと、次に形式ごと
+	Document Name	ドキュメント名
+	Artboard or Item Name	アートボード名または項目名
+	Number (####)	番号（####）
+	Date (YYYYMMDD)	日付（YYYYMMDD）
+	Date (YYYY-MM-DD)	日付（YYYY-MM-DD）
+	Time (hhmmss)	時刻（hhmmss）
+	PDF Print	印刷用 PDF
 	Export As	形式を指定して書き出し
 	Export Assets	アセットを書き出し
 	Export CSS	CSS を書き出し
@@ -1413,6 +1451,7 @@
 	Fill and Stroke	塗りと線
 	Fill new strokes	新しいストロークに塗りを適用
 	Keep selected	選択を保持
+	Merge only with selection	選択範囲とのみ結合
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索
@@ -1544,6 +1583,14 @@
 	Hyphenate	ハイフネーション
 	Hyphenation	ハイフネーション
 	Hyphenation…	ハイフネーション…
+	Words Longer Than:	次の文字数を超える単語:
+	After First:	語頭の文字数:
+	Before Last:	語尾の文字数:
+	Hyphen Limit:	連続ハイフンの上限:
+	Hyphenation Zone:	ハイフネーションゾーン:
+	letters	文字
+	hyphens	個
+	Hyphenate Capitalized Words	大文字で始まる単語をハイフネーション
 	ICC Profile	ICC プロファイル
 	Identify Objects By	オブジェクトの識別方法
 	Ignore	無視
@@ -2111,6 +2158,7 @@
 	Pathfinder Options…	パスファインダーオプション…
 	Pathfinders:	パスファインダー:
 	Paths	パス
+	Path Length	パスの長さ
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	パス：{paths}    アンカー：{anchors}    カラー：{colors}
 	Pattern Editing	パターン編集
 	Pattern options are available in pattern editing mode.	パターンオプションはパターン編集モードで使用できます。
@@ -2481,6 +2529,17 @@
 	Screen	スクリーン
 	Screens	スクリーン
 	Search All	すべてを検索
+	Filter	フィルター
+	Clear All	すべてクリア
+	By Object	オブジェクト別
+	By Layer	レイヤー別
+	Images	画像
+	Groups	グループ
+	Linked Files	リンクファイル
+	Locked	ロック
+	Hidden	非表示
+	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
+@msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands and tools	コマンドとツールを検索
 	Search commands and tools…	コマンドとツールを検索…
 	Secondary	セカンダリ
@@ -2564,6 +2623,8 @@
 	Show List View	リスト表示
 	Show Note	メモを表示
 	Show Options	オプションを表示
+	Show Original Path	元のパスを表示
+	Color Panel Options	カラーパネルオプション
 	Show Package	パッケージを表示
 	Show Panel	パネルを表示
 	Show Perspective Grid	遠近グリッドを表示
@@ -3508,6 +3569,10 @@ theme	Appearance	外観
 	Draft	ドラフト
 	Good	標準
 	Best	高品質
+	Mode	モード
+	Blur Mode	ぼかしモード
+	Edge Only	エッジのみ
+	Overlay Edge	エッジをオーバーレイ
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
@@ -3515,6 +3580,52 @@ theme	Appearance	外観
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Japanese: no final 。 (these are status lines, and reasons that follow a colon), unless the English ends
 # with a period; a space between Japanese text and an adjacent Latin word, number or {placeholder}.
+# Swatches panel: the default swatches' names (shown in the UI language; documents keep them)
+swatch	[None]	[なし]
+swatch	[Registration]	[レジストレーション]
+swatch	White	ホワイト
+swatch	Black	ブラック
+swatch	Red	レッド
+swatch	Orange Red	オレンジレッド
+swatch	Orange	オレンジ
+swatch	Amber	アンバー
+swatch	Yellow	イエロー
+swatch	Yellow Green	イエローグリーン
+swatch	Lime	ライム
+swatch	Green	グリーン
+swatch	Emerald	エメラルド
+swatch	Teal	ティール
+swatch	Aqua	アクア
+swatch	Cyan Green	シアングリーン
+swatch	Cyan	シアン
+swatch	Azure	アジュール
+swatch	Blue	ブルー
+swatch	Indigo	インディゴ
+swatch	Violet	バイオレット
+swatch	Purple	パープル
+swatch	Magenta	マゼンタ
+swatch	Rose	ローズ
+swatch	Pink	ピンク
+swatch	Brown	ブラウン
+swatch	Tan	タン
+swatch	Coffee	コーヒー
+swatch	Chocolate	チョコレート
+swatch	Sand	サンド
+swatch	Copper	カッパー
+swatch	Rust	ラスト
+swatch	Walnut	ウォルナット
+swatch	Espresso	エスプレッソ
+swatch	White, Black	ホワイト、ブラック
+swatch	Radial White, Black	円形 ホワイト、ブラック
+swatch	Sunset	サンセット
+swatch	Ocean	オーシャン
+swatch	Grays	グレー
+swatch	Brights	ビビッド
+swatch	Bright Red	ビビッドレッド
+swatch	Bright Yellow	ビビッドイエロー
+swatch	Bright Green	ビビッドグリーン
+swatch	Bright Blue	ビビッドブルー
+swatch	Bright Violet	ビビッドバイオレット
 @msg	Reset {_1}	{_1} をリセットしました
 @msg	Saving	保存中
 @msg	Saving {_1}	{_1} を保存中
@@ -3534,6 +3645,8 @@ theme	Appearance	外観
 @msg	VectorCraft failed to start: {e}	VectorCraft を起動できませんでした: {e}
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	未保存の変更はこのブラウザーに残っています: 復元するにはページを再読み込みしてください。
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で VectorCraft を再起動しました
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の VectorCraft の起動はウィンドウが表示される前に {name} で終了したため、{summary} で起動しました。このグラフィックプロセッサーをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の VectorCraft の起動はグラフィックプロセッサーの一覧を取得している間に終了したため、OpenGL のみを使って {summary} で起動しました。ほかのグラフィックバックエンドをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
 @msg	not a DXF drawing	DXF 図面ではありません
 @msg	scale must be a number from {_1} to {_2}, not {s}	縮尺は {_1} から {_2} までの数値にしてください ({s} は指定できません)
 @msg	the artboard to fit must be a positive size up to {_1} pt	合わせる先のアートボードのサイズは 0 より大きく {_1} pt 以下にしてください
@@ -3594,6 +3707,7 @@ theme	Appearance	外観
 @msg	Make Guides: select paths	ガイドを作成: パスを選択してください
 @msg	Release Guides: no guides	ガイドを解除: ガイドがありません
 @msg	guides are locked	ガイドがロックされています
+@msg	no saved selection recalled	保存した選択範囲を呼び出していません
 @msg	no saved selections	保存した選択範囲はありません
 @msg	no such artboard	指定されたアートボードが見つかりません
 @msg	cannot split an open path at its end point	オープンパスは端点で分割できません
@@ -3731,6 +3845,7 @@ theme	Appearance	外観
 @msg	not in pattern editing mode	パターン編集モードではありません
 @msg	pattern missing	パターンが見つかりません
 @msg	select a repeat	リピートを選択してください
+@msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select the art to repeat	リピートするアートを選択してください
 @msg	the document has no patterns	ドキュメントにパターンがありません
 @msg	no artboard	アートボードがありません
@@ -3880,7 +3995,7 @@ theme	Appearance	外観
 @msg	the PDF is password-protected: give its password	この PDF はパスワードで保護されています: パスワードを入力してください
 @msg	the PDF password is wrong	PDF のパスワードが正しくありません
 @msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	ファイルには仮のページだけが含まれ、アートは含まれていません (PDF 互換なしで保存されています): PDF 互換をオンにして保存し直すか、PDF または SVG として保存してください
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	これは PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) のため、まだ開けません: PDF、PDF 互換の .ai、または SVG として保存してください
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	これは PDF ではなく PostScript ファイル (古い形式または PDF 互換なしで保存された .ai、または EPS ファイル) です: 「ファイル › 開く」と「ファイル › 配置」で EPS として読み込めます
 @msg	unsupported: {0}	対応していません: {0}
 @msg	a page is missing	見つからないページがあります
 @msg	a page tree kid isn't a reference	ページツリーの子要素が参照になっていません
@@ -3935,6 +4050,8 @@ theme	Appearance	外観
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	書き出すものがありません: ドキュメントに表示されているアートがありません (または「アートボードを使用」をオンにしてください)
 @msg	add a format to export	書き出す形式を追加してください
 @msg	check an asset to export	書き出すアセットにチェックを入れてください
+@msg	check a layer to export	書き出すレイヤーにチェックを入れてください
+@msg	select the art to export first	先に書き出すアートを選択してください
 @msg	`{tool}` isn't a freehand tool	`{tool}` はフリーハンドツールではありません
 @msg	bad colour `{hex}` (#rrggbb)	カラー `{hex}` が正しくありません (#rrggbb の形式で指定してください)
 @msg	no gradient stop or freeform point is selected	グラデーションの分岐点またはフリーフォームポイントが選択されていません
@@ -4013,6 +4130,7 @@ theme	Appearance	外観
 @msg	Opened {url}	{url} を開きました
 @msg	No saved views (View → New View…)	保存した表示はありません (表示 → 新規表示…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness には dark|mediumDark|mediumLight|light のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last	index には数値、または first、previous、next、last のいずれかを指定してください
@@ -4226,6 +4344,9 @@ effect	Vertical	垂直
 	Blocks	ブロック
 	Frosted	すりガラス
 	Tiny Lens	小さなレンズ
+	Loaded Texture	読み込んだテクスチャ
+	Load Texture…	テクスチャを読み込み…
+	Texture Image	テクスチャ画像
 	Rename Data Set	データセットの名前を変更
 	Variable Options	変数のオプション
 	Edit Data Set	データセットを編集
@@ -4380,6 +4501,7 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+@msg	the image can't be read as a texture	この画像はテクスチャとして読み込めません
 	Basic	基本
 	Fill and Stroke Controls	塗りと線のコントロール
 	Coloring Controls	カラーのコントロール
@@ -4402,6 +4524,7 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Registration:	基準点:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	寸法を作成
 	Dimension Tool	寸法ツール
@@ -4411,7 +4534,6 @@ lighting	Light	ライト
 	Precision:	精度:
 	Update Dimensions	寸法を更新
 	Display	表示
-
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	寸法
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	図面 : 実寸 — 1:10 では、ページ上の 1 単位を 10 と表示します。
@@ -4454,6 +4576,47 @@ lighting	Light	ライト
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	開いたプロファイルの円形の端を閉じます。部分的な回転では切断面は開いたままです。
 	Distance	距離
+@msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" はグラデーションを配置します: `gradient` を指定してください
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" は線形または円形グラデーションを配置します。フリーグラデーションは配置できません
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" はグラデーション自体を配置します: `start` と `end` は省略してください (これらはすでにドキュメント座標で配置を指定します)
+	Make Image Dynamic	画像を動的にする
+	Import Data Sets…	データセットを読み込み…
+	Export Data Sets…	データセットを書き出し…
+	Make Graph Dynamic	グラフを動的にする
+	Batch…	バッチ…
+	Source Folder:	ソースフォルダー:
+	Destination Folder:	出力先フォルダー:
+	Overrides	上書き
+	Uses every data set of the open document.	開いているドキュメントのすべてのデータセットを使用します。
+@msg	Batch: {count} processed	バッチ: {count} 件を処理しました
+@msg	Batch: {count} processed, {failed} failed	バッチ: {count} 件を処理、{failed} 件が失敗しました
+@msg	choose a destination folder	出力先フォルダーを選択してください
+@msg	choose a source folder	ソースフォルダーを選択してください
+@msg	open a document with data sets	データセットのあるドキュメントを開いてください
+@msg	the action has no steps	アクションにステップがありません
+
+# User Interface › Accent Color
+	Accent Color	アクセントカラー
+	Coral	コーラル
+	Amber	アンバー
+	Violet	バイオレット
+	Pink	ピンク
+	Sketch	スケッチ
+	Halftone Pattern…	ハーフトーンパターン…
+	Halftone Pattern	ハーフトーンパターン
+	Pattern Type	パターンタイプ
+	Dot	ドット
+# User Interface › Color Scheme
+	Color Scheme	配色
+	Modern	モダン
+
+# Symbol Options › Export Type
+	Export Type:	書き出しタイプ:
+	Movie Clip	ムービークリップ
+@msg	name is empty	名前が空です
+@msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	クラウドフォルダーを参照

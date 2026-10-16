@@ -1,13 +1,24 @@
 //! Path dialogs: Average, and Offset Path, Simplify and Split Into Grid with Preview.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::Unit;
+use vectorcraft_doc::{NodeId, NodeKind, Unit};
+use vectorcraft_geom::PathData;
 
 use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
 use crate::state::Dialog;
+use crate::theme::Tokens;
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, ..DialogSpec::FORM };
+
+/// Simplify's Corner Point Angle Threshold when the dialog opens, in degrees. An anchor whose
+/// corner is sharper than the threshold stays a corner, so a higher threshold keeps more corners.
+/// The command's `cornerAngle` is the turn above which an anchor stays a corner, so the dialog
+/// sends 180° less the threshold: 150° sends `object.path.simplify`'s default of 30°.
+pub(crate) const ANGLE_THRESHOLD: f64 = 150.0;
+
+/// The field where Simplify keeps the ids of the paths its last preview ran on.
+const ORIGINAL_IDS: &str = "__ids";
 
 fn title(kind: &str) -> &'static str {
     match kind {
@@ -25,7 +36,10 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         "offsetPath" => {
             ("object.path.offsetPath", json!({"offset": d.f64("offset", 10.0), "joins": d.str("joins"), "miterLimit": d.f64("miterLimit", 4.0)}))
         }
-        "simplify" => ("object.path.simplify", json!({"tolerance": d.f64("tolerance", 1.0)})),
+        "simplify" => {
+            let turn = 180.0 - d.f64("angleThreshold", ANGLE_THRESHOLD).clamp(0.0, 180.0);
+            ("object.path.simplify", json!({"tolerance": d.f64("tolerance", 1.0), "cornerAngle": turn, "straightLines": d.bool("straightLines")}))
+        }
         _ => ("object.path.splitIntoGrid", form::params(d)),
     }
 }
@@ -87,10 +101,48 @@ fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     form::check(ui, d, "addGuides", tl!("Add Guides"));
 }
 
+/// Simplify's fields: Tolerance, Corner Point Angle Threshold (its label above a slider from 0° on
+/// the left, the smoothest, to 180°, the sharpest), Convert to Straight Lines and Show Original
+/// Path.
+fn simplify_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+    let rail = Tokens::get(ui.ctx()).input_border;
+    egui::Grid::new("dlg").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
+        form::length_field(ui, d, "tolerance", &form::humanized("tolerance"), unit);
+    });
+    ui.add_space(8.0);
+    form::row_label(ui, tl!("Corner Point Angle Threshold:"));
+    ui.horizontal(|ui| form::slider_field(ui, d, "angleThreshold", 0.0..=180.0, "°", &|_| rail));
+    ui.add_space(8.0);
+    form::check(ui, d, "straightLines", tl!("Convert to Straight Lines"));
+    form::check(ui, d, "showOriginal", tl!("Show Original Path"));
+}
+
+/// Simplify's Show Original Path: while the dialog previews with it on, every path the preview ran
+/// on, with its id, as it was before the preview (from the interaction's snapshot). Empty
+/// otherwise.
+pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
+    let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == "simplify" && d.bool("showOriginal") && d.bool("preview")) else { return vec![] };
+    let (Some(ids), Some(it)) = (d.fields.get(ORIGINAL_IDS).and_then(Value::as_array), app.session.active().and_then(|st| st.interaction.as_ref()))
+    else {
+        return vec![];
+    };
+    ids.iter()
+        .filter_map(|id| {
+            let id = NodeId(id.as_u64()?);
+            match &it.doc.node(id)?.kind {
+                NodeKind::Path { path, .. } => Some((id, path)),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
     if d.kind == "splitIntoGrid" {
         split_grid(ui, d, unit);
+    } else if d.kind == "simplify" {
+        simplify_fields(ui, d, unit);
     } else {
         form::grid(ui, d, unit);
     }
@@ -98,11 +150,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let (id, params) = command(d);
         if d.fields.get(form::PREVIEWED) != Some(&params) || !d.bool("preview") {
             d.fields.remove("__counts");
+            d.fields.remove(ORIGINAL_IDS);
         }
         if let Some(r) = form::preview_result(app, ui, d, label, id, params)
             && d.kind == "simplify"
         {
             d.fields.insert("__counts".into(), json!({"before": r["before"], "after": r["after"]}));
+            d.fields.insert(ORIGINAL_IDS.into(), r["ids"].clone());
         }
         if d.kind == "simplify"
             && d.bool("preview")

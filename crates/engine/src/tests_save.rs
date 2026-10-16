@@ -299,7 +299,12 @@ fn save_plans_suggest_names_and_folders() {
     let p = plan(&s, SaveMode::Save, json!({}));
     assert_eq!((p.path, p.name.as_str(), p.format.id, p.folder), (None, "Map.vectorcraft", "vectorcraft", None));
     assert_eq!(plan(&s, SaveMode::Copy, json!({"format": "pdf"})).name, "Map copy.pdf");
-    assert_eq!(plan(&s, SaveMode::Template, json!({"format": "svg"})).format.id, "template", "a template is always native");
+    assert_eq!(plan(&s, SaveMode::Template, json!({"format": "svg"})).format.id, "template", "a template is native or .ait");
+    // A native template by default; .ait when the format, else the path, names it.
+    assert_eq!(plan(&s, SaveMode::Template, json!({})).name, "Map template.vctemplate");
+    assert_eq!(plan(&s, SaveMode::Template, json!({"format": "ait"})).name, "Map template.ait");
+    assert_eq!(plan(&s, SaveMode::Template, json!({"path": "/t/Map.ait"})).format.id, "ait");
+    assert_eq!(plan(&s, SaveMode::Template, json!({"path": "/t/Map.ait", "format": "template"})).format.id, "template");
     assert_eq!(SaveMode::of("file.saveCopy"), Some(SaveMode::Copy));
     assert_eq!(crate::cmd::fileio::save_filters("svg")[0], ("SVG", &["svg"][..]));
 }

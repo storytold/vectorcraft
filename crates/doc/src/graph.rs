@@ -422,6 +422,32 @@ impl GraphSpec {
             cells.iter().enumerate().flat_map(|(c, r)| r.iter().enumerate().filter(|(_, v)| v.is_none()).map(move |(s, _)| [c, s])).collect();
         self.rows = cells.into_iter().map(|r| r.into_iter().map(|v| v.unwrap_or(0.0)).collect()).collect();
     }
+
+    /// CSV of this graph's data (header row with series names, then category + values), as Graph
+    /// Data and `graph.setData` use. Always writes a header so a blank first category isn't
+    /// misread as one.
+    pub fn to_csv(&self) -> String {
+        let cells = self.cells();
+        let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(self.series.len());
+        let mut out = String::from(",");
+        out.push_str(&(0..width).map(|s| self.series.get(s).cloned().unwrap_or_default()).collect::<Vec<_>>().join(","));
+        out.push('\n');
+        let labelled = !self.categories.is_empty();
+        for (i, r) in cells.iter().enumerate() {
+            if labelled {
+                let c = self.categories.get(i).map(String::as_str).unwrap_or_default();
+                if c.trim().is_empty() || c.trim().parse::<f64>().is_ok() || c != c.trim() {
+                    out.push_str(&format!("\"{c}\""));
+                } else {
+                    out.push_str(c);
+                }
+                out.push(',');
+            }
+            out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
+            out.push('\n');
+        }
+        out
+    }
 }
 
 impl Default for GraphSpec {

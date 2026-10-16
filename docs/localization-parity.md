@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (Polish: the rows added by the maintainers confirmed by the Polish translator, #1614; tool flyouts fit their translated names, #1616; scores and estimates unchanged; Polish: 4,510 rows counted in the catalog (the row said 4,492), #1498; French: 423 strings added since the catalog was measured and 188 entries reworded, #1511; Hungarian: one message in the informal address, #1474; scores and estimates unchanged; Vietnamese catalog added, complete under the tests; 12-language score 63% → 71%; Czech: 128 strings added since the catalog was completed are translated, #1461; scores and estimates unchanged; Korean catalog added, complete under the tests; 12-language score 54% → 63%; Hungarian catalog added; Czech render-site localization follow-up; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (Bulgarian (`bg`) and Greek (`el`) catalogs complete under the tests, #1909, #2076; Finnish (`fi`) catalog added, complete under the tests; Swedish (`sv`) catalog added, complete under the tests; scores and estimates unchanged; Brazilian Portuguese (`pt-br`) catalog completed under the tests: menus, `tl!` literals and messages; 12-language score 71% → 74%; #1914) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -29,15 +29,15 @@ Chinese by `imachus`). None is recorded as reviewed by a native speaker; the cat
 | Hindi | `hi` | 0 | none | Devanagari: the document's text shapes (HarfRust), untested for Devanagari, but the egui interface does no complex shaping | no | none | 20–30 |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
-| Portuguese | `pt-br` | 2,726 / 4,020 (68%): every menu label and `tl!` literal | messages in English | Latin | no | partial | 4–6 |
+| Portuguese | `pt-br` | 4,707 catalog entries: menus, `tl!` literals and messages complete (tests); one|other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
 | Indonesian | `id` | 0 | none | Latin | no | none | 5–8 |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; tests hold menus, literals and messages complete) | all (602 of 604 message rows; landed 2026-10-10) | Latin | contributor-written, not reviewed | full | — (review) |
 | Korean | `ko` | 4,151 rows: menus, `tl!` literals and messages complete (tests); one plural form | all | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
 | Vietnamese | `vi` | 4,225 rows: menus, `tl!` literals and messages complete (tests); one plural form; 3,548 plain + 13 `@plural` + 12 contextual + 652 `@msg` | all | Latin with Vietnamese diacritics (precomposed forms; glyph tests pass) | contributor is a Vietnamese speaker; AI-assisted draft, further native review welcome | full | — (review) |
 
-**12-language score: ~71%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 68 + 0 + 100 + 98 + 100 + 100, over 12).
-**To `full` for all twelve: ~55–90 h**, most of it Arabic (right-to-left interface) and Hindi (interface
+**12-language score: ~74%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 100 + 0 + 100 + 98 + 100 + 100, over 12).
+**To `full` for all twelve: ~50–85 h**, most of it Arabic (right-to-left interface) and Hindi (interface
 shaping). Each new Latin-script catalog is ~4,000 rows; the existing ones were written in a few agent hours each
 plus review. Native-speaker review is human work and isn't in the hours.
 
@@ -51,9 +51,13 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
 | Hungarian | `hu` | 4,524 rows: menus, `tl!` literals and messages complete (tests); one plural form | full |
 | Polish | `pl` | 4,510 rows (counted 2026-10-13): menus, `tl!` literals and messages complete (tests); one/few/many plurals | full; native review pending |
+| Finnish | `fi` | 4,770 rows: menus, `tl!` literals and messages complete (tests); one/other plurals, 668 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 4,411 catalog entries, including 636 `@msg` rows (measured locally 2026-10-11); menu, literal and message coverage enforced by tests | catalog complete; render-site gaps reduced; native review pending |
+| Swedish | `sv` | 4,770 rows, 668 of them `@msg` (counted 2026-10-15): menus, `tl!` literals and messages complete (tests); one/other plurals | full; native review welcome |
+| Bulgarian | `bg` | 4,910 rows, 703 of them `@msg` (counted 2026-10-16): menus, `tl!` literals and messages complete (tests) | full; AI-drafted, native review pending |
+| Greek | `el` | 4,880 rows, 709 of them `@msg` (counted 2026-10-16): menus, `tl!` literals and messages complete (tests) | full; native review welcome |
 
-Fifteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
+Eighteen non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
@@ -80,6 +84,10 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | Bulgarian (`bg`, #1909) and Greek (`el`, #2076) catalogs added, complete under the tests; Swedish (#2139) and Finnish (#1994) rows for strings added since; eighteen non-English catalogs |
+| 2026-10-16 | minor | Finnish (`fi`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); AI-assisted, native proofreading pending |
+| 2026-10-15 | minor | Swedish (`sv`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); every `sv-*` locale resolves to it; AI-drafted, native review welcome; scores and estimates unchanged |
+| 2026-10-14 | minor | Brazilian Portuguese (`pt-br`, #1914): catalog completed under the tests (menus, literals, messages); 12-language score 71% → 74%, hours 55–90 → 50–85 |
 | 2026-10-13 | minor | The Polish translator confirmed the Polish rows the maintainers had added after the catalog was written (#1614); Tool flyouts are as wide as their longest translated name and shortcut need, so names no longer run into shortcuts in Spanish and other languages (#1650, fixes #1616); scores and estimates unchanged |
 | 2026-10-13 | minor | Polish (`pl`, #1498): the row count is corrected to the 4,510 rows in `pl.tsv` (it said 4,492), 654 of them `@msg` rows; AI-drafted, native review pending; scores and estimates unchanged |
 | 2026-10-13 | minor | French: the 423 strings added since the catalog was last complete are translated, and 188 entries are reworded to the feature names French users know (#1511); Hungarian: one message uses the informal address like the rest of the interface (#1474); the entry counts in the tables are the earlier measurements; native review still pending; scores and estimates unchanged |

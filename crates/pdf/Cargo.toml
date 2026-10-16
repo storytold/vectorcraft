@@ -27,6 +27,8 @@ log = { workspace = true }
 smallvec = "1"
 weezl = "0.1"
 serde = { workspace = true }
+# The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
+roxmltree = "0.21"
 # PDF security (encrypt.rs): pure Rust, MIT OR Apache-2.0, builds for wasm.
 aes = "0.8"
 md-5 = { version = "0.10", default-features = false }

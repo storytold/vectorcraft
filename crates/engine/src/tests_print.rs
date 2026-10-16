@@ -130,3 +130,25 @@ fn type_in_a_missing_family_warns_as_pdf_export_does() {
         assert_eq!(fallback(&v), export, "{settings}");
     }
 }
+
+#[test]
+fn type_that_does_not_fit_its_frame_is_named() {
+    let (mut s, _) = session();
+    let p = json!({"x": 10, "y": 100, "text": "Ab\nCd\nEf\nGh", "size": 12, "area": {"width": 100, "height": 20}});
+    let id = s.execute("text.create", &p).unwrap()["id"].clone();
+    let over = |v: &Value| -> Vec<String> {
+        v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("fit its frame")).map(str::to_string).collect()
+    };
+    let (_, v) = print(&mut s, json!({}));
+    assert_eq!(over(&v), [format!("1 text object doesn't fit its frame: the text past the end of the frame doesn't print (id {id})")]);
+    assert_eq!(over(&v), over(&s.execute("print.preview", &json!({})).unwrap()));
+    // Type printed as an image is named too.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    for settings in [json!({}), json!({"advanced": {"printAsBitmap": true}})] {
+        let (_, v) = print(&mut s, json!({ "settings": settings }));
+        assert_eq!(over(&v).len(), 1, "{settings}");
+    }
+    s.execute("text.areaOptions", &json!({"ids": [id], "height": 150})).unwrap();
+    let (_, v) = print(&mut s, json!({}));
+    assert_eq!(over(&v), Vec::<String>::new());
+}

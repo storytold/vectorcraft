@@ -204,6 +204,12 @@ impl<'a> Recolor<'a> {
         Self { links: Some(links), ..Self::new(Scope { images: false, ..scope }, &same) }
     }
 
+    /// A pass that maps solid colours and gradient stops with their swatch link and tint
+    /// (`links`), and meshes, images and patterns through `f`.
+    pub(crate) fn with_links(scope: Scope, f: &'a dyn Fn(Color) -> Color, links: &'a LinkMap<'a>) -> Self {
+        Self { links: Some(links), ..Self::new(scope, f) }
+    }
+
     /// Recolour the objects `ids` and everything inside them (each once), add the new images and
     /// pattern swatches, and return the number of paints, meshes and images changed.
     pub(crate) fn run(mut self, d: &mut Document, ids: &[NodeId]) -> usize {

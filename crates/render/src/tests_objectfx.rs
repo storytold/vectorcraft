@@ -602,6 +602,83 @@ fn geometry_effects_reshape_type_through_its_outlines() {
     assert!(text == 0 && black > 0, "{art:?}");
 }
 
+/// Pixels that change by more than 8 levels in a channel when the first object of `d` gets
+/// Outline Object.
+fn changed_by_outline_object(d: &Document) -> usize {
+    let mut outlined = d.clone();
+    let id = outlined.layers[0].children().unwrap()[0].id;
+    outlined.node_mut(id).unwrap().appearance.effects.push(fx("path.outlineObject", json!({})));
+    differing(&render(d), &render(&outlined))
+}
+
+#[test]
+fn outline_object_draws_type_as_its_outlines_and_leaves_its_look() {
+    // The type is drawn through its outlines: plain paths painted with the text's fill.
+    let d = text_doc(vec![fx("path.outlineObject", json!({}))]);
+    let n = &d.layers[0].children().unwrap()[0];
+    let art = vectorcraft_effects::reshape(n, None).unwrap();
+    let (mut text, mut black) = (0, 0);
+    art.walk(&mut |m| {
+        text += usize::from(matches!(m.kind, NodeKind::Text(_)));
+        black += usize::from(m.appearance.fill_paint() == Paint::solid(Color::BLACK));
+    });
+    assert!(text == 0 && black > 0, "{art:?}");
+    // Plain, underlined and scaled stroked type, and 50 % type in a group that carries the effect,
+    // look the same with it.
+    let underlined = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), underline: true, ..Default::default() };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let stroked = CharStyle { size: 20.0, fill: Paint::solid(Color::BLACK), stroke: red, stroke_width: 2.0, ..Default::default() };
+    let mut t = text_doc(vec![]).layers[0].children().unwrap()[0].as_ref().clone();
+    t.id = NodeId(500);
+    t.opacity = 0.5;
+    let docs = [
+        text_doc(vec![]),
+        styled_text_doc(underlined, Affine::IDENTITY),
+        styled_text_doc(stroked, Affine::scale(2.0)),
+        doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t)])),
+    ];
+    let changed: Vec<usize> = docs.iter().map(changed_by_outline_object).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn outline_object_leaves_paths_and_images_as_they_are() {
+    let ap = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::BLACK), 4.0);
+    let path = doc_with(Document::new(100.0, 100.0), Node::path(NodeId(0), shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 70.0)), ap));
+    let changed: Vec<usize> = [path, image_doc(vec![])].iter().map(changed_by_outline_object).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+    // The image is drawn through its frame, as under any geometry effect.
+    let d = image_doc(vec![fx("path.outlineObject", json!({}))]);
+    assert!(vectorcraft_effects::reshape(&d.layers[0].children().unwrap()[0], None).is_some());
+}
+
+#[test]
+fn a_rectangle_on_a_fill_below_type_with_outline_object_fits_the_glyphs() {
+    // "IIII" with a red fill of its own below the characters that carries Convert to Shape ›
+    // Rectangle (the default 18 pt extra width and height).
+    let plain = render(&text_doc(vec![]));
+    let inked = inked_columns(&plain);
+    let gap = (inked[0]..*inked.last().unwrap()).find(|x| !inked.contains(x)).unwrap();
+    let mut d = text_doc(vec![fx("path.outlineObject", json!({}))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut fill = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    fill.effects.push(fx("convertToShape.rectangle", json!({})));
+    let ap = &mut d.node_mut(id).unwrap().appearance;
+    ap.items.push(AppearanceItem::Fill(fill));
+    ap.set_contents_at(1);
+    let img = render(&d);
+    // The rectangle is under the glyphs and fills the gap between two of them.
+    assert_eq!(img.pixel(gap, 50), [255, 0, 0, 255], "column {gap}");
+    assert_eq!(lum(img.pixel(inked[0] + 1, 50)), 0);
+    // It reaches 9 pt past the glyph outlines on each side.
+    let glyphs = vectorcraft_effects::outline_text(d.node(id).unwrap()).unwrap().geometric_bounds().unwrap();
+    let (x, y) = (glyphs.center().x as u32, glyphs.center().y as u32);
+    assert_eq!(img.pixel(glyphs.x1 as u32 + 6, y), [255, 0, 0, 255]);
+    assert_eq!(lum(img.pixel(glyphs.x1 as u32 + 12, y)), WHITE);
+    assert_eq!(img.pixel(x, glyphs.y1 as u32 + 6), [255, 0, 0, 255]);
+    assert_eq!(lum(img.pixel(x, glyphs.y1 as u32 + 12)), WHITE);
+}
+
 #[test]
 fn a_strokes_own_glow_paints_around_that_stroke_only() {
     let mut d = Document::new(100.0, 100.0);

@@ -128,6 +128,37 @@ fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
 }
 
+/// A batch passes its `artboard` to each Fit to Artwork Bounds and Fit to Selected Art step that
+/// names no `index`, as their `index` (past the document's last artboard, the last one), and a
+/// step's own `index` is kept. A recorded action leaves out the `index` or `indices` the app
+/// passes them, so the action resizes the artboard active when it plays.
+#[test]
+fn fit_steps_take_the_batchs_artboard_and_actions_leave_out_their_index() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    // Across the three artboards, so it is on each.
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 610, "height": 30})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let (was, art) = (boards(&s), vectorcraft_geom::Rect::new(10.0, 10.0, 620.0, 40.0));
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    s.execute("command.batch", &json!({"artboard": 9, "commands": [step("artboard.fitToArt", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], was[1], art], "artboard 3, the last one, for a batch's artboard past it");
+    s.execute("command.batch", &json!({"artboard": 1, "commands": [step("artboard.fitToSelection", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], art, art], "the batch's artboard 2");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("artboard.fitToArt", json!({"index": 0}))]})).unwrap();
+    assert_eq!(boards(&s)[0], art, "an index the step names is kept");
+    let start = s.journal.len();
+    s.execute("artboard.fitToArt", &json!({"index": 1})).unwrap();
+    s.execute("artboard.fitToArt", &json!({"indices": [1, 2]})).unwrap();
+    s.execute("artboard.fitToSelection", &json!({"index": 1})).unwrap();
+    let kept: Vec<Value> = s.journal.since(start).iter().map(|(_, p)| p.clone()).collect();
+    assert_eq!(kept, [json!({"index": 1}), json!({"indices": [1, 2]}), json!({"index": 1})], "the journal keeps them");
+    let action = s.journal_for_action(start);
+    let fit = |id: &str| (id.to_string(), json!({}));
+    assert_eq!(action, [fit("artboard.fitToArt"), fit("artboard.fitToArt"), fit("artboard.fitToSelection")]);
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
     let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();

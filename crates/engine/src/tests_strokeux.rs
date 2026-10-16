@@ -52,12 +52,15 @@ fn mixed_values_and_align_stroke_follow_the_selection() {
     select(&mut s, &[a, b]);
     let m = s.active().unwrap().stroke_mixed();
     assert!(m.weight && m.join && !m.cap && !m.miter_limit && !m.align && !m.dash && m.can_align, "{m:?}");
-    // An open path or type in the selection can't take an inside or outside stroke.
+    // An open path in the selection can't take an inside or outside stroke; type can (its
+    // characters' stroke goes around the glyphs).
     let line = NodeId(run(&mut s, "shape.line", json!({"x1": 10, "y1": 100, "x2": 90, "y2": 100}))["id"].as_u64().unwrap());
     select(&mut s, &[a, line]);
     assert!(!s.active().unwrap().stroke_mixed().can_align);
     let text = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 200, "text": "Hi"}))["id"].as_u64().unwrap());
     select(&mut s, &[text]);
+    assert!(s.active().unwrap().stroke_mixed().can_align);
+    select(&mut s, &[text, line]);
     assert!(!s.active().unwrap().stroke_mixed().can_align);
     // Grouped closed paths can.
     select(&mut s, &[a, b]);

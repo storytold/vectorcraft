@@ -1,7 +1,7 @@
 //! The appearance of groups, layers and type: a container's own fills and strokes paint its
 //! members' geometry below or above them (the contents slot), its effects apply to the composite
-//! (one combined shadow) and reshape its members as one piece; type's own fills paint under or
-//! over its characters.
+//! (one combined shadow) and reshape its members as one piece; type's own fills and strokes paint
+//! under or over its characters, reshaped by their geometry effects.
 
 use std::sync::Arc;
 
@@ -291,4 +291,60 @@ fn red_pixels(img: &Rendered) -> usize {
 fn a_fill_below_the_characters_is_hidden_by_the_glyphs() {
     assert!(red_pixels(&render(&type_doc(false))) > 50, "above: the red fill covers the glyphs");
     assert_eq!(red_pixels(&render(&type_doc(true))), 0, "below: the black glyphs cover it");
+}
+
+/// "IIII" in black at 40 pt with its own red 2 pt stroke under the characters. The stroke carries
+/// the effects `row`, and the type carries the effects `object`.
+fn stroked_type_doc(row: &[Effect], object: &[Effect]) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    let mut stroke = StrokeLayer::new(solid(1.0, 0.0, 0.0), 2.0);
+    stroke.effects = row.to_vec();
+    n.appearance.items.push(AppearanceItem::Stroke(stroke));
+    n.appearance.set_contents_at(1);
+    n.appearance.effects = object.to_vec();
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// The red pixels more than 2 px outside the box of the black ones.
+fn red_past_the_glyphs(img: &Rendered) -> usize {
+    let all = || (0..100).flat_map(|y| (0..100).map(move |x| (x, y)));
+    let black: Vec<(u32, u32)> = all().filter(|&(x, y)| img.pixel(x, y)[..3].iter().all(|c| *c < 60)).collect();
+    let (x0, x1) = (black.iter().map(|p| p.0).min().unwrap(), black.iter().map(|p| p.0).max().unwrap());
+    let (y0, y1) = (black.iter().map(|p| p.1).min().unwrap(), black.iter().map(|p| p.1).max().unwrap());
+    let past = |x: u32, y: u32| x + 2 < x0 || x > x1 + 2 || y + 2 < y0 || y > y1 + 2;
+    all().filter(|&(x, y)| past(x, y) && matches!(img.pixel(x, y), [r, g, _, _] if r > 200 && g < 60)).count()
+}
+
+#[test]
+fn an_offset_path_on_the_types_own_stroke_draws_the_offset_outline() {
+    assert_eq!(red_past_the_glyphs(&render(&stroked_type_doc(&[], &[]))), 0, "the stroke without the effect stays at the glyphs");
+    let offset = [fx("path.offsetPath", json!({"offset": 4}))];
+    assert!(red_past_the_glyphs(&render(&stroked_type_doc(&offset, &[]))) > 50, "the stroke runs 4 pt outside the glyphs");
+}
+
+#[test]
+fn a_shadow_on_the_type_keeps_the_offset_outline_of_its_own_stroke() {
+    let offset = [fx("path.offsetPath", json!({"offset": 4}))];
+    let shadow = [fx("stylize.dropShadow", json!({"x": 0, "y": 30, "blur": 0, "opacity": 50, "mode": "normal"}))];
+    assert!(red_past_the_glyphs(&render(&stroked_type_doc(&offset, &shadow))) > 50);
+}
+
+#[test]
+fn the_offset_outline_of_the_types_own_stroke_is_drawn_when_only_it_is_in_view() {
+    // The view's right edge is 5 pt left of the glyphs, so only the stroke 8 pt outside them
+    // reaches into it. The second case also gives the type object Offset Path 0, which leaves its
+    // outlines as they are.
+    let offset = [fx("path.offsetPath", json!({"offset": 8}))];
+    for object in [vec![], vec![fx("path.offsetPath", json!({"offset": 0}))]] {
+        let d = stroked_type_doc(&offset, &object);
+        let glyphs = effects::outline_text(&d.layers[0].children().unwrap()[0]).unwrap().geometric_bounds().unwrap();
+        let view = Affine::translate((105.0 - glyphs.x0, 0.0));
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let img = Renderer::new().render(&d, 100, 100, view, &opts);
+        assert!(red_pixels(&img) > 20, "{} object effects: {} red pixels", object.len(), red_pixels(&img));
+    }
 }

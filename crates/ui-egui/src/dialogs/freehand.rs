@@ -2,9 +2,10 @@
 //! Eraser): the options each tool keeps, which last across tool switches and are saved with the
 //! preferences. OK sets them with `tool.setOption {tool, values}`.
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` and `keepSelected`
-//! (Pencil and Paintbrush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and
-//! Paintbrush) and `size` (points; Blob Brush and Eraser).
+//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` (Pencil and
+//! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
+//! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush) and
+//! `size` (points; Blob Brush and Eraser).
 
 use serde_json::{Map, Value, json};
 
@@ -23,7 +24,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 6] = ["fidelity", "size", "fill", "keepSelected", "closeWithin", "editWithin"];
+const KEYS: [&str; 7] = ["fidelity", "size", "fill", "keepSelected", "mergeOnlySelection", "closeWithin", "editWithin"];
 
 /// Width of the label column: wide enough for the tolerances' labels when there are any.
 fn label_w(d: &Dialog) -> f32 {
@@ -101,6 +102,9 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     if d.fields.contains_key("keepSelected") {
         check(ui, d, "keepSelected", tl!("Keep selected"));
+        if d.fields.contains_key("mergeOnlySelection") {
+            check(ui, d, "mergeOnlySelection", tl!("Merge only with selection"));
+        }
         ui.add_space(6.0);
     }
     if d.fields.contains_key("closeWithin") {
@@ -169,7 +173,7 @@ mod tests {
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.f64("fidelity", 0.0), d.bool("fill")), (1.5, false));
         assert!(painted(&mut app).contains("Paintbrush Tool Options"));
-        // Smooth has Fidelity only, the Blob Brush and the Eraser Size only.
+        // Smooth has Fidelity only, the Eraser Size only, and the Blob Brush Size, Keep selected and Merge only with selection.
         app.run("tool.options", json!({"tool": "smooth"})).unwrap();
         let text = painted(&mut app);
         assert!(text.contains("Smooth Tool Options") && text.contains("Fidelity:"), "{text}");
@@ -178,6 +182,9 @@ mod tests {
             app.run("tool.options", json!({"tool": tool})).unwrap();
             let text = painted(&mut app);
             assert!(text.contains("Size:") && !text.contains("Fidelity:"), "{tool}: {text}");
+            // The Blob Brush also has Keep selected and Merge only with selection.
+            let blob = tool == "blobBrush";
+            assert_eq!((text.contains("Keep selected"), text.contains("Merge only with selection")), (blob, blob), "{tool}: {text}");
             app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!(24));
             super::super::confirm(&mut app).unwrap();
             assert_eq!(app.session.tool_options_of(tool)["size"].as_f64(), Some(24.0), "{tool}");
@@ -248,6 +255,43 @@ mod tests {
             assert_ne!(new, id, "{tool} drew a new path");
             assert_eq!(selected, vec![id], "{tool}");
         }
+    }
+
+    #[test]
+    fn the_blob_brush_options_set_what_a_stroke_merges_with_and_selects() {
+        let mut app = app();
+        // A Blob Brush stroke across the canvas at height 100; the ids selected afterwards.
+        let stroke = |app: &mut VectorcraftApp| {
+            app.select_tool("blobBrush");
+            let view = app.view_info();
+            let pointer = |kind, x| vectorcraft_tools::PointerEvent::new(kind, x, 100.0);
+            crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, 20.0), view);
+            for x in [80.0, 140.0, 200.0, 260.0] {
+                crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Drag, x), view);
+            }
+            crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Up, 300.0), view);
+            app.session.doc().unwrap().selection.objects.clone()
+        };
+        let ids = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+        // Two blobs the stroke crosses, drawn with the same color.
+        let blob = |app: &mut VectorcraftApp, x: f64| {
+            let r = app.run("path.blob", json!({"points": [[x, 60], [x, 140]], "size": 20})).unwrap();
+            vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())
+        };
+        let (a, b) = (blob(&mut app, 100.0), blob(&mut app, 240.0));
+        app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        // Both are off by default.
+        assert!(!d.bool("keepSelected") && !d.bool("mergeOnlySelection"));
+        d.fields.insert("keepSelected".into(), json!(true));
+        d.fields.insert("mergeOnlySelection".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let o = app.session.tool_options_of("blobBrush");
+        assert_eq!((o["keepSelected"].as_bool(), o["mergeOnlySelection"].as_bool()), (Some(true), Some(true)));
+        // With `b` selected, the stroke merges into `b` alone, and leaves it selected.
+        app.run("select.set", json!({"ids": [b.0]})).unwrap();
+        assert_eq!(stroke(&mut app), vec![b]);
+        assert_eq!(ids(&app), vec![a, b], "merged into b only");
     }
 
     #[test]

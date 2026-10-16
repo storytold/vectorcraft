@@ -141,6 +141,18 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         }
     }
 
+    /// Drop the entries whose values `keep` returns false for.
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&V) -> bool) {
+        let bytes = &mut self.bytes;
+        self.map.retain(|_, s| {
+            let kept = keep(&s.value);
+            if !kept {
+                *bytes -= s.bytes;
+            }
+            kept
+        });
+    }
+
     /// A new stamp for caches without frames: each request its own, so every other entry may make
     /// room for it (least recently used first).
     pub(crate) fn tick(&mut self) -> u64 {

@@ -82,6 +82,48 @@ fn bleed_grows_the_media_box_around_the_trim_box() {
     assert_eq!(page_box(&bytes, CropTo::Trim), Rect::new(3.0, 2.0, 203.0, 102.0));
 }
 
+/// Each page's `UserUnit` and media box as the file holds them (in its units).
+fn units_and_media(bytes: &[u8]) -> Vec<(f32, Rect)> {
+    let file = crate::pages::open(bytes, None).unwrap();
+    file.pages().iter().map(|p| (p.user_unit(), Rect::new(p.media_box().x0, p.media_box().y0, p.media_box().x1, p.media_box().y1))).collect()
+}
+
+/// A page with a side longer than ISO 32000-1's 14,400 units is written in larger units (its
+/// `UserUnit`), so that its sides are 14,400 units at most, and reads back at its size in points.
+/// Pages up to 14,400 pt, files before PDF 1.6 and PDF/X files keep their sizes in points.
+#[test]
+fn a_page_past_14400_pt_is_written_with_a_user_unit_and_reads_back_at_its_size() {
+    let mut d = doc();
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 20_000.0, 10_000.0);
+    let mut small = d.artboards[0].clone();
+    small.rect = Rect::new(0.0, 11_000.0, 14_400.0, 11_300.0);
+    d.artboards.push(small.clone());
+    small.rect = Rect::new(0.0, 12_000.0, 20_000.0, 12_001.0);
+    d.artboards.push(small);
+    let near = |a: Rect, b: Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() < 0.01);
+    let bytes = pdf(&d, json!({}));
+    let pages = units_and_media(&bytes);
+    // 20,000 / 14,400 = 1.3889, rounded up to 1.389: the page is 14,398.85 × 7,199.42 units.
+    assert_eq!(pages[0].0, 1.389, "{pages:?}");
+    assert!(pages[0].1.width() <= 14_400.0 && near(pages[0].1.scale_from_origin(1.389), Rect::new(0.0, 0.0, 20_000.0, 10_000.0)), "{pages:?}");
+    assert_eq!(pages[1], (1.0, Rect::new(0.0, 0.0, 14_400.0, 300.0)), "a page of 14,400 pt keeps its points");
+    assert!(pages[2].0 == 1.389 && (pages[2].1.height() * 1.389 - 1.0).abs() < 1e-3, "a side of 1 pt stays 1 pt: {pages:?}");
+    assert_eq!(String::from_utf8_lossy(&bytes).matches("/UserUnit").count(), 2);
+    // Read back in points: the page, its trim box and the square reaching 5 pt left of the page.
+    let page = &info(&bytes, None).unwrap().pages[0];
+    assert!((page.width - 20_000.0).abs() < 0.01 && (page.height - 10_000.0).abs() < 0.01, "{page:?}");
+    assert!(near(page_box(&bytes, CropTo::Trim), Rect::new(0.0, 0.0, 20_000.0, 10_000.0)));
+    let back = import(&bytes).unwrap();
+    assert!(near(back.artboards[0].rect, Rect::new(0.0, 0.0, 20_000.0, 10_000.0)), "{:?}", back.artboards[0].rect);
+    let red = painted(&back, |p| rgb(p, [255, 0, 0]));
+    assert!(red.len() == 1 && near(red[0], Rect::new(-5.0, 10.0, 40.0, 50.0)), "{red:?}");
+    // PDF 1.5 and PDF/X-4 files have the page in points, past 14,400.
+    for v in [json!({"compatibility": "1.5"}), json!({"standard": "pdfX4", "compatibility": "1.6"})] {
+        let pages = units_and_media(&pdf(&d, v.clone()));
+        assert_eq!(pages[0], (1.0, Rect::new(0.0, 0.0, 20_000.0, 10_000.0)), "{v}");
+    }
+}
+
 #[test]
 fn art_in_the_bleed_is_kept_and_clipped_to_the_bleed_box() {
     let d = doc();

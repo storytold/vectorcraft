@@ -111,3 +111,17 @@ fn type_in_a_missing_family_is_named_when_its_artboard_prints() {
     let (_, v) = print_ps(&mut s, json!({ "settings": paper }));
     assert_eq!(fallback(&v), 0, "{v}");
 }
+
+#[test]
+fn type_that_does_not_fit_its_frame_is_named_when_its_artboard_prints() {
+    let mut s = session(2);
+    let r = s.doc().unwrap().doc.artboards[1].rect;
+    let p = json!({"x": r.x0 + 10.0, "y": r.y0 + 10.0, "text": "Ab\nCd\nEf\nGh", "size": 12, "area": {"width": 100, "height": 20}});
+    let id = s.execute("text.create", &p).unwrap()["id"].clone();
+    let over = |v: &Value| v["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("fit its frame")).count();
+    let (_, v) = print_ps(&mut s, json!({}));
+    assert_eq!(over(&v), 1, "{v}");
+    assert!(v["warnings"].to_string().contains(&format!("(id {id})")), "{v}");
+    let (_, v) = print_ps(&mut s, json!({"settings": {"artboards": "range", "range": "1"}}));
+    assert_eq!(over(&v), 0, "{v}");
+}

@@ -205,6 +205,221 @@ fn auto_height_in_columns_and_by_hand() {
     assert!(s.execute("text.areaOptions", &json!({"fit": "autoHeight"})).is_err(), "point type has no area options");
 }
 
+/// Typing at the start of a story in Auto Size area type with 2 columns lays the columns out at
+/// most twice a keystroke: the bisection for their height runs on the one column's lines.
+#[test]
+fn auto_height_in_columns_lays_out_the_columns_twice_a_keystroke() {
+    use crate::cmd::typecmd::COLUMN_LAYOUTS;
+    let mut s = session();
+    let story = format!("{STORY}\n").repeat(4);
+    let id = area(&mut s, 300.0, 100.0, &story, json!({"fit": "autoHeight"}));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.areaOptions", &json!({"columns": 2, "gutter": 12})).unwrap();
+    let before = frame(&s, id);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    // The caret goes before the first character.
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 41.0, 45.0), v).unwrap();
+    }
+    let typed = "More words at the start, enough for another line or two in the first column. ";
+    for ch in typed.chars() {
+        let start = COLUMN_LAYOUTS.with(std::cell::Cell::get);
+        s.tool_text(&ch.to_string(), v).unwrap();
+        let laid = COLUMN_LAYOUTS.with(std::cell::Cell::get) - start;
+        assert!(laid <= 2, "{ch:?} laid out the columns {laid} times");
+    }
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(text(&s, id).plain_text(), format!("{typed}{story}"));
+    assert!(frame(&s, id).height() > before.height(), "the frame follows the text: {before:?} → {:?}", frame(&s, id));
+    assert!(!overflows(&s, id));
+}
+
+/// Two sessions run the same keystrokes, edits, restyles, Area Type Options, undos and redos in
+/// Auto Size area type with 2 and then 3 columns, the second with `FULL_SEARCH` on (the columns
+/// laid out at every step of the bisection), and the type is the same in both after each step.
+#[test]
+fn auto_height_in_columns_matches_the_full_search() {
+    use crate::cmd::typecmd::FULL_SEARCH;
+    enum Step {
+        Click(f64, f64),
+        Type(&'static str),
+        Key(ToolKey),
+        Exec(&'static str, Value),
+    }
+    use Step::*;
+    let v = ViewInfo::default();
+    let story = format!("{STORY}\n{STORY} {STORY}\nShort one.\n{STORY}");
+    let make = || {
+        let mut s = session();
+        let id = area(&mut s, 300.0, 100.0, &story, json!({"fit": "autoHeight"}));
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.areaOptions", &json!({"columns": 2, "gutter": 12})).unwrap();
+        (s, id)
+    };
+    let ((mut quick, id), (mut full, full_id)) = (make(), make());
+    assert_eq!(id, full_id);
+    let run = |s: &mut Session, step: &Step| match step {
+        Click(x, y) => {
+            s.select_tool("type", v).unwrap();
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, *x, *y), v).unwrap();
+            }
+        }
+        Type(typed) => {
+            for ch in typed.chars() {
+                s.tool_text(&ch.to_string(), v).unwrap();
+            }
+        }
+        Key(k) => {
+            s.tool_key(*k, Mods::default(), v).unwrap();
+        }
+        Exec(cmd, p) => {
+            s.execute(cmd, p).unwrap();
+        }
+    };
+    let mut steps = vec![
+        // Typing at the start, a new paragraph and Backspace, then typing in the second column.
+        Click(41.0, 45.0),
+        Type("Words typed first "),
+        Key(ToolKey::Enter),
+        Type("A new paragraph of a few words"),
+        Key(ToolKey::Backspace),
+        Key(ToolKey::Backspace),
+        Key(ToolKey::Escape),
+        Click(200.0, 50.0),
+        Type(" and more in the second column"),
+        Key(ToolKey::Escape),
+        // A long insertion and a deletion, larger type, paragraph spacing.
+        Exec("text.editRange", json!({"id": id.0, "start": 20, "end": 20, "insert": format!("{STORY} {STORY}")})),
+        Exec("text.editRange", json!({"id": id.0, "start": 0, "end": 60})),
+        Exec("text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 12, "size": 30})),
+        Exec("text.setRangeStyle", json!({"id": id.0, "start": 150, "end": 170, "size": 20})),
+        Exec("select.set", json!({"ids": [id.0]})),
+        Exec("text.setFormat", json!({"spaceBefore": 6, "spaceAfter": 4})),
+        // Three columns, typing in them, Area Type Options and the leading model.
+        Exec("text.areaOptions", json!({"columns": 3})),
+        Click(41.0, 60.0),
+        Type("More"),
+        Key(ToolKey::Escape),
+        Exec("select.set", json!({"ids": [id.0]})),
+        Exec("text.areaOptions", json!({"gutter": 30, "inset": 6})),
+        Exec("text.areaOptions", json!({"firstBaseline": "capHeight"})),
+        Exec("text.areaOptions", json!({"firstBaseline": "fixed", "firstBaselineMin": 20})),
+        Exec("text.areaOptions", json!({"firstBaseline": "leading", "firstBaselineMin": 0})),
+        Exec("text.setFormat", json!({"leadingModel": "emBoxTop"})),
+    ];
+    let start = undo_len(&quick);
+    for (i, step) in steps.iter().enumerate() {
+        run(&mut quick, step);
+        FULL_SEARCH.with(|c| c.set(true));
+        run(&mut full, step);
+        FULL_SEARCH.with(|c| c.set(false));
+        assert_eq!(text(&quick, id), text(&full, id), "after step {i}");
+    }
+    let edits = undo_len(&quick) - start;
+    assert_eq!(edits, 14, "three typing sessions and eleven edits, one undo step each");
+    steps.clear();
+    steps.extend((0..edits).map(|_| Exec("edit.undo", json!({}))));
+    steps.extend((0..edits).map(|_| Exec("edit.redo", json!({}))));
+    for (i, step) in steps.iter().enumerate() {
+        run(&mut quick, step);
+        FULL_SEARCH.with(|c| c.set(true));
+        run(&mut full, step);
+        FULL_SEARCH.with(|c| c.set(false));
+        assert_eq!(text(&quick, id), text(&full, id), "after undo or redo {i}");
+    }
+    assert_eq!((undo_len(&quick), undo_len(&full)), (start + edits, start + edits));
+}
+
+/// A line that starts with a letter smaller than the rest of it can sit higher or lower at the top
+/// of a column than `columns_hold` places it. When the columns do not hold the text at the upper
+/// height the search ends on, or do hold it at the lower one, Auto Size lays the columns out at
+/// every step, and the frame gets the height the full search gives it. In 2 columns, lines in 6 pt
+/// alternate with lines that start with a 6 pt letter and go on in 30 pt, with auto leading and
+/// with 36 pt leading, and lines in 6 pt are added at the start one at a time.
+#[test]
+fn auto_height_in_columns_matches_the_full_search_when_lines_start_small() {
+    use crate::cmd::typecmd::{COLUMN_LAYOUTS, FULL_SEARCH};
+    let (small, big) = ("small words in six point type\n", "b BIG\n");
+    let story = format!("{small}{big}").repeat(13);
+    for leading in [json!("auto"), json!(36)] {
+        let make = || {
+            let mut s = session();
+            let area = json!({"width": 300, "height": 100, "fit": "autoHeight"});
+            let id = s.execute("text.create", &json!({"x": 40, "y": 40, "size": 6, "area": area, "text": story})).unwrap()["id"].as_u64().unwrap();
+            for k in 0..13 {
+                let start = k * (small.len() + big.len()) + small.len() + 1;
+                s.execute("text.setRangeStyle", &json!({"id": id, "start": start, "end": start + 4, "size": 30})).unwrap();
+            }
+            s.execute("text.setRangeStyle", &json!({"id": id, "leading": leading})).unwrap();
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            s.execute("text.areaOptions", &json!({"columns": 2, "gutter": 12})).unwrap();
+            (s, NodeId(id))
+        };
+        let ((mut quick, id), (mut full, _)) = (make(), make());
+        let mut every_step = 0;
+        for i in 0..12 {
+            let add = json!({"id": id.0, "start": 0, "end": 0, "insert": "more small words\n"});
+            let start = COLUMN_LAYOUTS.with(std::cell::Cell::get);
+            quick.execute("text.editRange", &add).unwrap();
+            let laid = COLUMN_LAYOUTS.with(std::cell::Cell::get) - start;
+            every_step += usize::from(laid > 2);
+            FULL_SEARCH.with(|c| c.set(true));
+            full.execute("text.editRange", &add).unwrap();
+            FULL_SEARCH.with(|c| c.set(false));
+            assert_eq!(text(&quick, id), text(&full, id), "leading {leading}, after line {i}");
+        }
+        assert!(every_step > 0, "leading {leading}: the columns were never laid out at every step");
+    }
+}
+
+/// Time typing at the start of a story of 5,000, 20,000 and 50,000 characters in Auto Size area
+/// type in 2 and 3 columns: 20 letters typed one at a time with the Type tool, with Auto Size as it
+/// runs and with `FULL_SEARCH` on (the columns laid out at every step of the bisection).
+/// Run with `cargo test --release -p vectorcraft-engine --lib auto_height_in_columns_typing_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn auto_height_in_columns_typing_timing() {
+    use crate::cmd::typecmd::{COLUMN_LAYOUTS, FULL_SEARCH};
+    const WORDS: &str = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame of this story. ";
+    let v = ViewInfo::default();
+    for n in [5_000, 20_000, 50_000] {
+        let story = format!("{}\n", WORDS.repeat(6).trim_end()).repeat(n / 600 + 1)[..n].to_string();
+        for cols in [2, 3] {
+            let mut row = format!("{n} characters in {cols} columns:");
+            for full in [false, true] {
+                FULL_SEARCH.with(|c| c.set(full));
+                let mut s = Session::new();
+                s.execute("file.new", &json!({"width": 4400, "height": 1200})).unwrap();
+                let area = json!({"width": 500, "height": 100, "fit": "autoHeight"});
+                let id = s.execute("text.create", &json!({"x": 20, "y": 20, "size": 9, "text": story, "area": area})).unwrap()["id"].clone();
+                s.execute("select.set", &json!({"ids": [id]})).unwrap();
+                s.execute("text.areaOptions", &json!({"columns": cols, "gutter": 12})).unwrap();
+                s.select_tool("type", v).unwrap();
+                for kind in [PointerKind::Down, PointerKind::Up] {
+                    s.pointer(&PointerEvent::new(kind, 21.0, 24.0), v).unwrap();
+                }
+                let layouts = COLUMN_LAYOUTS.with(std::cell::Cell::get);
+                let mut ms: Vec<f64> = "abcdefghijklmnopqrst"
+                    .chars()
+                    .map(|ch| {
+                        let start = std::time::Instant::now();
+                        s.tool_text(&ch.to_string(), v).unwrap();
+                        start.elapsed().as_secs_f64() * 1000.0
+                    })
+                    .collect();
+                let per_key = (COLUMN_LAYOUTS.with(std::cell::Cell::get) - layouts) as f64 / ms.len() as f64;
+                ms.sort_by(f64::total_cmp);
+                let how = if full { "every step laid out" } else { "Auto Size" };
+                row += &format!(" {how} {:.1} ms a keystroke ({per_key:.1} column layouts);", ms[ms.len() / 2]);
+            }
+            FULL_SEARCH.with(|c| c.set(false));
+            println!("{row}");
+        }
+    }
+}
+
 #[test]
 fn shrink_text_round_trips_through_the_native_format() {
     let mut s = session();

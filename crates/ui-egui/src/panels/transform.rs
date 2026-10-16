@@ -55,7 +55,7 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let link = app.session.prefs.constrain_proportions;
+    let link = proportional(app, ui);
     let rp = vectorcraft_geom::reference_point(r, refi);
     let set = |app: &mut VectorcraftApp, x, y, w, h| {
         let n = artboard_rect(r, refi, x, y, w, h, link);
@@ -77,7 +77,7 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
                 set(app, Some(v + origin.x), None, None, None);
             }
             widgets::dim_label(ui, "W:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
+            if let Some(v) = widgets::size_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
                 set(app, None, None, Some(v), None);
             }
             ui.end_row();
@@ -86,7 +86,7 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
                 set(app, None, Some(v + origin.y), None, None);
             }
             widgets::dim_label(ui, "H:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
+            if let Some(v) = widgets::size_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
                 set(app, None, None, None, Some(v));
             }
             ui.end_row();
@@ -149,7 +149,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bx = app.selection_box();
     let bounds = bx.map(|b| b.rect);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let link = app.session.prefs.constrain_proportions;
+    let link = proportional(app, ui);
     let copy = alt_enter_copies(app, ui);
     let has = bounds.is_some();
     let rp = bx.map(|b| b.reference_point(refi));
@@ -165,7 +165,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
                 }
                 widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::num_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
+                if let Some(v) = widgets::size_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
                     app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
                 }
                 ui.end_row();
@@ -174,7 +174,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
                 }
                 widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::num_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
+                if let Some(v) = widgets::size_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
                     app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
                 }
                 ui.end_row();
@@ -346,6 +346,13 @@ pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// and no anchors are selected with Direct Selection.
 pub fn alt_enter_copies(app: &VectorcraftApp, ui: &Ui) -> bool {
     widgets::enter_modifiers(ui).is_some_and(|m| m.alt) && app.session.active().is_some_and(|st| st.selection.anchors.is_empty())
+}
+
+/// The `proportional` param of the W and H fields of the Transform panel (the artboard's too), the
+/// Properties panel's Transform section and the Control bar: the Constrain Width and Height
+/// Proportions link, or true when Ctrl/Cmd+Enter applied the value.
+pub fn proportional(app: &VectorcraftApp, ui: &Ui) -> bool {
+    app.session.prefs.constrain_proportions || widgets::enter_modifiers(ui).is_some_and(|m| m.command)
 }
 
 /// Toggle a boolean preference (through `prefs.set`, as agents do).

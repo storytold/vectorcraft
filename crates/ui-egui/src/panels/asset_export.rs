@@ -67,11 +67,14 @@ pub(crate) fn paint_thumb(ui: &Ui, st: &DocState, a: &ExportAsset, r: Rect) {
     let key = (nodes, px);
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
         let art: Vec<&Node> = ids().iter().filter_map(|id| st.doc.node(*id)).collect();
+        // Same Art Optimized supersample as assets.export (#983): abutting fills leave no seam in
+        // the tile (Layers row thumbs stay cheap without it).
+        let opts = vectorcraft_render::RenderOptions { image_mips: true, precise: true, supersample: true, ..Default::default() };
         let img = RENDERER.with(|rr| match art.as_slice() {
-            [one] => rr.borrow_mut().render_node_thumbnail_with(&st.doc, one, px, None, &super::layers::thumb_options()),
+            [one] => rr.borrow_mut().render_node_thumbnail_with(&st.doc, one, px, None, &opts),
             many => {
                 let group = Node::group(NodeId(0), many.iter().map(|n| Arc::new((*n).clone())).collect());
-                rr.borrow_mut().render_node_thumbnail_with(&st.doc, &group, px, None, &super::layers::thumb_options())
+                rr.borrow_mut().render_node_thumbnail_with(&st.doc, &group, px, None, &opts)
             }
         })?;
         let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);

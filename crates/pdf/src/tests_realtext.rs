@@ -1,9 +1,11 @@
 //! Real text: type exported as selectable, searchable text in embedded subset fonts with a
 //! ToUnicode map, where the outlines would be; fonts whose licence forbids it stay outlines.
 
+use std::sync::Arc;
+
 use serde_json::json;
 use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
-use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Document, Effect, Node, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
 use vectorcraft_text::{FALLBACK_FAMILY, FontDb};
 
@@ -74,6 +76,25 @@ fn type_is_written_as_text_in_embedded_subset_fonts() {
     assert_eq!(texts(&import_as(&r.bytes, TextAs::Text)), ["Hello World"]);
     // Outlined text has no font.
     assert!(!String::from_utf8_lossy(&pdf(&d, true).bytes).contains("/Font"));
+}
+
+/// Type that a Transform effect only moves and copies, on the type or on its group, is written as
+/// text, the copies too.
+#[test]
+fn type_copied_by_a_transform_effect_is_written_as_text() {
+    let copies = Effect { id: "distort.transform".into(), params: json!({"moveH": 200, "copies": 1}), visible: true };
+    for on_group in [false, true] {
+        let mut d = Document::new(400.0, 300.0);
+        let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 60.0), "Hello", style(24.0)))));
+        if on_group {
+            n = Node::group(d.alloc_id(), vec![Arc::new(n)]);
+        }
+        n.appearance.effects.push(copies.clone());
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let back = import_as(&pdf(&d, false).bytes, TextAs::Text);
+        assert_eq!(texts(&back), ["Hello", "Hello"], "on the group: {on_group}");
+    }
 }
 
 /// A curve type runs along.
@@ -245,6 +266,21 @@ fn fonts_whose_licence_forbids_embedding_fall_back_to_outlines() {
     let mut paths = 0;
     back.walk(|n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
     assert!(paths >= 2, "{paths} outlined words");
+}
+
+#[test]
+fn type_with_outline_object_is_written_as_paths_with_no_font() {
+    let mut d = doc(vec![TextObject::point(Point::new(20.0, 60.0), "Hello World", style(24.0))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "path.outlineObject".into(), params: json!({}), visible: true });
+    let r = pdf(&d, false);
+    let text = String::from_utf8_lossy(&r.bytes);
+    assert!(!text.contains("/FontFile") && !text.contains("/Font"), "no font");
+    // Reopened, it is paths, even when type is asked for.
+    let back = import_as(&r.bytes, TextAs::Text);
+    assert!(texts(&back).is_empty());
+    let b = ink(&back);
+    assert!(b.width() > 50.0 && b.height() > 10.0, "{b:?}");
 }
 
 #[test]

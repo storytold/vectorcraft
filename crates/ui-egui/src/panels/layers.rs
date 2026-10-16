@@ -24,6 +24,11 @@
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
 //!   row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
 //!   on the trash clears it.
+//! - Search All and the Filter button at its right (`ui.layersFilter`, lit while a filter is on)
+//!   narrow the rows, and every row that holds others shows open while they do. A row stays when
+//!   its name holds the text typed, it is one of the object kinds ticked under By Object and it is
+//!   in one of the states ticked under By Layer (a section with nothing ticked takes every row), or
+//!   when a row inside it stays. Neither changes the document, its open rows or the selection.
 //!
 //! While an opacity mask is edited the panel lists only its art, under an `<Opacity Mask>` entry.
 //!
@@ -38,7 +43,7 @@ use std::sync::{Arc, Weak};
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, LiveShape, Node, NodeId, NodeKind};
 use vectorcraft_engine::OpenRows;
 
 use crate::theme::Tokens;
@@ -205,6 +210,14 @@ fn painted_name(n: &Node, name: &str, lang: crate::i18n::Lang) -> String {
     name.to_string()
 }
 
+/// The name the panel shows for `n` in `lang`: its XML ID while Identify Objects By is XML ID,
+/// otherwise [`painted_name`].
+pub(crate) fn shown_name(app: &VectorcraftApp, n: &Node, lang: crate::i18n::Lang) -> String {
+    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+    let label = n.identify_label(xml_id);
+    if xml_id { label } else { painted_name(n, &label, lang) }
+}
+
 /// Whether `n` gets rows for what it holds (a compound path's paths are one object).
 fn opens(n: &Node, opts: &PanelOptions) -> bool {
     match n.kind {
@@ -232,6 +245,149 @@ struct Row {
     guide: Option<usize>,
 }
 
+/// An object kind under the Filter's By Object (`ui.layersFilter`'s `objects`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectKind {
+    Paths,
+    Shapes,
+    Text,
+    Images,
+    Effects,
+    Groups,
+    LinkedFiles,
+    Guides,
+}
+
+impl ObjectKind {
+    /// Every kind with its parameter name, in the popup's order.
+    pub const ALL: [(Self, &'static str); 8] = [
+        (Self::Paths, "paths"),
+        (Self::Shapes, "shapes"),
+        (Self::Text, "text"),
+        (Self::Images, "images"),
+        (Self::Effects, "effects"),
+        (Self::Groups, "groups"),
+        (Self::LinkedFiles, "linkedFiles"),
+        (Self::Guides, "guides"),
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Paths => tl!("Paths"),
+            Self::Shapes => tl!("Shapes"),
+            Self::Text => tl!("Text"),
+            Self::Images => tl!("Images"),
+            Self::Effects => tl!("Effects"),
+            Self::Groups => tl!("Groups"),
+            Self::LinkedFiles => tl!("Linked Files"),
+            Self::Guides => tl!("Guides"),
+        }
+    }
+
+    /// Whether `n`'s row is of this kind. Paths take plain paths, the paths whose corners Live
+    /// Corners cut and compound paths; Shapes take live rectangles, ellipses, polygons and lines;
+    /// Paths and Shapes leave out paths made into guides. Effects take a row with an effect, shown
+    /// or hidden, on itself or on one of its fills or strokes. Linked Files take linked images and
+    /// placed documents.
+    fn takes(self, n: &Node) -> bool {
+        match (self, &n.kind) {
+            (Self::Guides, NodeKind::Path { guide, .. }) => *guide,
+            (Self::Paths | Self::Shapes, NodeKind::Path { guide: true, .. }) => false,
+            (Self::Paths, NodeKind::Path { live, .. }) => live.as_deref().is_none_or(|l| matches!(l, LiveShape::Path { .. })),
+            (Self::Shapes, NodeKind::Path { live, .. }) => live.as_deref().is_some_and(|l| !matches!(l, LiveShape::Path { .. })),
+            (Self::Paths, NodeKind::Compound { .. })
+            | (Self::Text, NodeKind::Text(_))
+            | (Self::Images, NodeKind::Image(_))
+            | (Self::Groups, NodeKind::Group { .. })
+            | (Self::LinkedFiles, NodeKind::PlacedDocument(_)) => true,
+            (Self::LinkedFiles, NodeKind::Image(im)) => im.link.is_some(),
+            (Self::Effects, _) => !n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty()),
+            _ => false,
+        }
+    }
+}
+
+/// A row state under the Filter's By Layer (`ui.layersFilter`'s `layers`): the row's own lock or
+/// eye, as its lock and eye columns show them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowState {
+    Locked,
+    Hidden,
+}
+
+impl RowState {
+    /// Every state with its parameter name, in the popup's order.
+    pub const ALL: [(Self, &'static str); 2] = [(Self::Locked, "locked"), (Self::Hidden, "hidden")];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Locked => tl!("Locked"),
+            Self::Hidden => tl!("Hidden"),
+        }
+    }
+
+    fn takes(self, n: &Node) -> bool {
+        match self {
+            Self::Locked => n.locked,
+            Self::Hidden => !n.visible,
+        }
+    }
+}
+
+/// The Layers panel's Filter (`ui.layersFilter`): the object kinds ticked under By Object and the
+/// row states ticked under By Layer, each in the popup's order. A section with nothing ticked takes
+/// every row.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Filter {
+    pub objects: Vec<ObjectKind>,
+    pub layers: Vec<RowState>,
+}
+
+impl Filter {
+    /// Whether anything is ticked.
+    pub fn is_on(&self) -> bool {
+        !self.objects.is_empty() || !self.layers.is_empty()
+    }
+
+    /// Whether `n`'s row is of a ticked kind and in a ticked state.
+    fn keeps(&self, n: &Node) -> bool {
+        (self.objects.is_empty() || self.objects.iter().any(|k| k.takes(n))) && (self.layers.is_empty() || self.layers.iter().any(|s| s.takes(n)))
+    }
+
+    /// Whether the ruler guide rows stay: with no filter on, or with Guides ticked and no row state
+    /// ticked.
+    fn keeps_guides(&self) -> bool {
+        !self.is_on() || (self.objects.contains(&ObjectKind::Guides) && self.layers.is_empty())
+    }
+}
+
+/// The parameter names of the ones of `all` in `on`, in `all`'s order.
+fn names<T: Copy + PartialEq>(all: &[(T, &'static str)], on: &[T]) -> Vec<&'static str> {
+    all.iter().filter(|(t, _)| on.contains(t)).map(|(_, name)| *name).collect()
+}
+
+/// The parameter names of `on` with `t` added, or taken out when it is in `on`.
+fn toggled<T: Copy + PartialEq>(all: &[(T, &'static str)], on: &[T], t: T) -> Vec<&'static str> {
+    all.iter().filter(|(x, _)| if *x == t { !on.contains(x) } else { on.contains(x) }).map(|(_, name)| *name).collect()
+}
+
+/// The list `key` of `p` read by the parameter names of `all`, in `all`'s order: `None` when `p`
+/// leaves it out or sets it to null, and an error when it is anything other than an array of
+/// those names.
+fn parse_names<T: Copy + PartialEq>(p: &Value, key: &str, all: &[(T, &'static str)]) -> Result<Option<Vec<T>>, String> {
+    let given = match p.get(key) {
+        None | Some(Value::Null) => return Ok(None),
+        Some(v) => v
+            .as_array()
+            .and_then(|a| a.iter().map(|name| all.iter().find(|(_, n)| Some(*n) == name.as_str()).map(|(t, _)| *t)).collect::<Option<Vec<T>>>()),
+    };
+    let Some(given) = given else {
+        let names: Vec<&str> = all.iter().map(|(_, n)| *n).collect();
+        return Err(format!("`{key}` must be an array of these names: {}", names.join(", ")));
+    };
+    Ok(Some(all.iter().map(|(t, _)| *t).filter(|t| given.contains(t)).collect()))
+}
+
 /// What the rows were listed from: listed again when any of it changes.
 #[derive(Clone, PartialEq)]
 struct RowsKey {
@@ -240,16 +396,17 @@ struct RowsKey {
     open: u64,
     layers_only: bool,
     query: String,
+    filter: Filter,
 }
 
 /// The rows the panel shows, top down: the layers (only the opacity mask's while one is edited)
-/// with the rows of the open ones inside them. A search shows every row whose name, or the name of
-/// anything inside it, contains `query` (lowercase).
-fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str) -> Vec<Row> {
+/// with the rows of the open ones inside them. A search or a filter shows every row whose name
+/// contains `query` (lowercase) and that `filter` keeps, and every row holding one.
+fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter) -> Vec<Row> {
     let mask_layer = doc.mask_edit.map(|m| m.layer);
     let mut out = vec![];
     for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
-        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, doc), &mut out);
+        push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, filter, doc), &mut out);
     }
     out
 }
@@ -261,10 +418,10 @@ fn push_rows(
     depth: usize,
     clip_path: bool,
     (colour, shown): (Color32, bool),
-    cx: (&OpenRows, &PanelOptions, &str, &Document),
+    cx: (&OpenRows, &PanelOptions, &str, &Filter, &Document),
     out: &mut Vec<Row>,
 ) {
-    let (open_rows, opts, query, doc) = cx;
+    let (open_rows, opts, query, filter, doc) = cx;
     if opts.layers_only && !n.is_layer() {
         return;
     }
@@ -277,10 +434,13 @@ fn push_rows(
     };
     let shown = shown && n.visible;
     let searching = !query.is_empty();
-    // A layer's ruler guides are rows in it, above its art (not while searching).
-    let guides: Vec<usize> = if n.is_layer() && !opts.layers_only && !searching { doc.guides_on(n.id).map(|(i, _)| i).collect() } else { vec![] };
+    let narrowing = searching || filter.is_on();
+    // A layer's ruler guides are rows in it, above its art (not while searching, nor while the
+    // filter leaves them out).
+    let guides: Vec<usize> =
+        if n.is_layer() && !opts.layers_only && !searching && filter.keeps_guides() { doc.guides_on(n.id).map(|(i, _)| i).collect() } else { vec![] };
     let opens = opens(n, opts) || !guides.is_empty();
-    let open = opens && (searching || open_rows.contains(n.id));
+    let open = opens && (narrowing || open_rows.contains(n.id));
     let at = out.len();
     out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template(), guide: None });
     if open {
@@ -293,24 +453,31 @@ fn push_rows(
             push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
         }
     }
-    // Searching, a row stays for its own name or for a row it keeps inside it.
-    if searching && out.len() == at + 1 && !n.display_name().to_lowercase().contains(query) {
+    // Searching or filtering, a row stays for a match of its own (its name holds the search text
+    // and the filter keeps it) or for a row it keeps inside it.
+    if narrowing && out.len() == at + 1 && !(filter.keeps(n) && (!searching || n.display_name().to_lowercase().contains(query))) {
         out.truncate(at);
     }
 }
 
 /// The rows of the active document as [`list_rows`] lists them, listed again only when the
-/// document, its open rows, the search or Show Layers Only changed.
-fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &PanelOptions, query: &str) -> Arc<Vec<Row>> {
-    let now =
-        RowsKey { uid: st.uid, revision: st.revision, open: st.layers_open.generation(), layers_only: opts.layers_only, query: query.to_string() };
+/// document, its open rows, the search, the filter or Show Layers Only changed.
+fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &PanelOptions, query: &str, filter: &Filter) -> Arc<Vec<Row>> {
+    let now = RowsKey {
+        uid: st.uid,
+        revision: st.revision,
+        open: st.layers_open.generation(),
+        layers_only: opts.layers_only,
+        query: query.to_string(),
+        filter: filter.clone(),
+    };
     let id = key("rows");
     if let Some((was, rows)) = ui.data(|d| d.get_temp::<(RowsKey, Arc<Vec<Row>>)>(id))
         && was == now
     {
         return rows;
     }
-    let rows = Arc::new(list_rows(&st.doc, &st.layers_open, opts, query));
+    let rows = Arc::new(list_rows(&st.doc, &st.layers_open, opts, query, filter));
     ui.data_mut(|d| d.insert_temp(id, (now, rows.clone())));
     rows
 }
@@ -365,6 +532,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let doc = st.doc.clone();
     let rows = st.highlighted_rows();
+    let current = st.current_layer();
     // Rows highlighted anew (a click, Locate Object, a new layer): open the layers around them.
     let seen: Vec<NodeId> = ui.data(|d| d.get_temp(key("seen"))).unwrap_or_default();
     let mut reveal = None;
@@ -379,9 +547,37 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         reveal = rows.first().copied();
         ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
     }
-    let query = crate::widgets::search_field(ui, egui::Id::new("layers-search"), tl!("Search All")).trim().to_lowercase();
+    // A new active layer (a canvas selection highlights no row): reveal it too, unless a row
+    // highlighted in the panel holds the view.
+    let seen_current: Option<NodeId> = ui.data(|d| d.get_temp(key("seen-current"))).flatten();
+    if current != seen_current {
+        if rows.is_empty()
+            && let Some(layer) = current
+        {
+            let around = doc.ancestry(layer).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
+            if let Some(st) = app.session.active_mut() {
+                for a in around {
+                    st.layers_open.set(a, true);
+                }
+            }
+            reveal = Some(layer);
+        }
+        ui.data_mut(|d| d.insert_temp(key("seen-current"), current));
+    }
+    // Search All, and the Filter button at its right.
+    let query = ui
+        .horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                filter_button(app, ui);
+                crate::widgets::search_field(ui, egui::Id::new("layers-search"), tl!("Search All"))
+            })
+            .inner
+        })
+        .inner
+        .trim()
+        .to_lowercase();
     let Some(st) = app.session.active() else { return };
-    let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query);
+    let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query, &app.ui.layers_filter);
     let view = View {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
@@ -466,6 +662,39 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {
         app.run(&c, p).ok();
+    }
+}
+
+/// The Filter button, lit while a filter is on, and its popup: Clear All, the object kinds under
+/// By Object and the row states under By Layer, each ticked or not. A tick, or Clear All, runs
+/// `ui.layersFilter`; the popup stays open until a click outside it or Escape.
+fn filter_button(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let f = app.ui.layers_filter.clone();
+    let button = widgets::icon_button(ui, "dc-filter", tl!("Filter"), f.is_on(), 24.0);
+    let mut set = None;
+    egui::Popup::menu(&button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.horizontal(|ui| {
+            widgets::subheader(ui, tl!("Filter"));
+            ui.add_space(12.0);
+            if ui.add_enabled(f.is_on(), egui::Button::new(egui::RichText::new(tl!("Clear All")).size(12.5)).frame(false)).clicked() {
+                set = Some(json!({"objects": [], "layers": []}));
+            }
+        });
+        widgets::subheader(ui, tl!("By Object"));
+        for (k, _) in ObjectKind::ALL {
+            if widgets::check(ui, k.label(), f.objects.contains(&k), true) {
+                set = Some(json!({"objects": toggled(&ObjectKind::ALL, &f.objects, k)}));
+            }
+        }
+        widgets::subheader(ui, tl!("By Layer"));
+        for (s, _) in RowState::ALL {
+            if widgets::check(ui, s.label(), f.layers.contains(&s), true) {
+                set = Some(json!({"layers": toggled(&RowState::ALL, &f.layers, s)}));
+            }
+        }
+    });
+    if let Some(p) = set {
+        app.run("ui.layersFilter", p).ok();
     }
 }
 
@@ -773,6 +1002,13 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
         }
     }
+    // Row menu: Collect for Export on this row (or every highlighted row when this is one of them).
+    let collect_ids: Vec<u64> = if view.rows.contains(&n.id) { view.rows.iter().map(|id| id.0).collect() } else { vec![n.id.0] };
+    resp.context_menu(|ui| {
+        collect_for_export_menu(ui, true, |multiple| {
+            out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
+        });
+    });
     // Dragging rows: the highlighted rows when this is one of them, else this row.
     if resp.drag_started() && view.column.is_none() {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
@@ -1265,6 +1501,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(("Merge Selected", "layer.merge", json!({}), rows.len() >= 2, false)),
         Some(("Flatten Artwork", "layer.flatten", json!({}), true, false)),
         Some(("Collect in New Layer", "layer.collectInNew", json!({}), !rows.is_empty() || has_sel, false)),
+        // Sentinel: rendered as Collect for Export › As Single / As Multiple (assets.add).
+        Some(("Collect for Export", "", json!({}), !targets.is_empty() || has_sel, false)),
         Some(("Release to Layers (Sequence)", "layer.releaseToLayers", json!({}), one_container, false)),
         Some(("Release to Layers (Build)", "layer.releaseToLayersBuild", json!({}), one_container, false)),
         Some(("Reverse Order", "layer.reverse", json!({}), rows.len() >= 2, false)),
@@ -1304,6 +1542,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => {
                 ui.separator();
             }
+            Some(("Collect for Export", _, _, enabled, _)) => {
+                collect_for_export_menu(ui, enabled, |multiple| {
+                    let mut p = json!({ "multiple": multiple });
+                    if !targets.is_empty() {
+                        p["ids"] = json!(targets.iter().map(|id| id.0).collect::<Vec<_>>());
+                    }
+                    app.run("assets.add", p).ok();
+                });
+            }
             Some((label, cmd, p, enabled, checked)) => {
                 if widgets::menu_item(ui, label, enabled, checked) {
                     app.run(cmd, p).ok();
@@ -1311,6 +1558,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+}
+
+/// Collect for Export › As Single Asset / As Multiple Assets (`assets.add`).
+fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl FnMut(bool)) {
+    ui.add_enabled_ui(enabled, |ui| {
+        // English labels match the rest of this panel menu (and Object › Collect for Export).
+        ui.menu_button("Collect for Export", |ui| {
+            if widgets::menu_item(ui, "As Single Asset", true, false) {
+                run(false);
+                ui.close();
+            }
+            if widgets::menu_item(ui, "As Multiple Assets", true, false) {
+                run(true);
+                ui.close();
+            }
+        });
+    });
 }
 
 /// `ui.layersExpand {ids?, open?}`: open (or close) rows of the active document's Layers panel;
@@ -1335,6 +1599,24 @@ pub fn expand(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         st.layers_open.set(NodeId(*i), open);
     }
     Ok(json!({ "count": ids.len() }))
+}
+
+/// `ui.layersFilter {objects?, layers?}`: set the Layers panel's Filter, `objects` to the object
+/// kinds ticked under By Object and `layers` to the row states ticked under By Layer, by parameter
+/// name ([`ObjectKind::ALL`], [`RowState::ALL`]). A key left out or set to null keeps its list; any
+/// other value that is not an array of those names is an error, and then nothing changes.
+/// → {objects, layers}
+pub fn set_filter(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let objects = parse_names(p, "objects", &ObjectKind::ALL)?;
+    let layers = parse_names(p, "layers", &RowState::ALL)?;
+    let f = &mut app.ui.layers_filter;
+    if let Some(objects) = objects {
+        f.objects = objects;
+    }
+    if let Some(layers) = layers {
+        f.layers = layers;
+    }
+    Ok(json!({"objects": names(&ObjectKind::ALL, &f.objects), "layers": names(&RowState::ALL, &f.layers)}))
 }
 
 #[cfg(test)]
@@ -1925,6 +2207,215 @@ mod tests {
         let _ = (layer, sub);
     }
 
+    // ---- Search All and the Filter ----
+
+    /// Layer 1 holding a path, a rectangle, type reading "Sky line", a group of an ellipse with an
+    /// effect, a compound path, a guide, an embedded and a linked image and a ruler guide, and on top
+    /// a sublayer "Sub" holding a hidden path named "Sky" and a locked path; only Layer 1 open and
+    /// nothing selected → (app, the rows' ids by name).
+    fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        let id = |v: serde_json::Value| NodeId(v["id"].as_u64().unwrap());
+        let star = |app: &mut VectorcraftApp, x: u32| id(run(app, "shape.star", json!({"cx": x, "cy": 50, "radius1": 20, "radius2": 10})));
+        run(&mut app, "file.new", json!({"width": 400, "height": 400}));
+        let mut ids = HashMap::from([("layer", app.session.active().unwrap().doc.layers[0].id)]);
+        ids.insert("path", star(&mut app, 50));
+        ids.insert("rect", id(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 100, "width": 20, "height": 20}))));
+        ids.insert("text", id(run(&mut app, "text.create", json!({"x": 10, "y": 200, "text": "Sky line"}))));
+        let ellipse = id(run(&mut app, "shape.ellipse", json!({"x": 100, "y": 100, "width": 20, "height": 20})));
+        run(&mut app, "effect.apply", json!({"effect": "distort.twist", "ids": [ellipse.0]}));
+        run(&mut app, "select.set", json!({"ids": [ellipse.0]}));
+        ids.insert("group", id(run(&mut app, "object.group", json!({}))));
+        ids.insert("ellipse", ellipse);
+        let parts = [star(&mut app, 150), star(&mut app, 160)];
+        run(&mut app, "select.set", json!({"ids": [parts[0].0, parts[1].0]}));
+        ids.insert("compound", id(run(&mut app, "object.compoundPath.make", json!({}))));
+        let guide = id(run(&mut app, "shape.arc", json!({"x1": 0, "y1": 300, "x2": 50, "y2": 350})));
+        run(&mut app, "select.set", json!({"ids": [guide.0]}));
+        run(&mut app, "view.guides.make", json!({}));
+        ids.insert("guide", guide);
+        run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+        let mut png = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let placed = |app: &mut VectorcraftApp, p: serde_json::Value| NodeId(run(app, "file.place", p)["ids"][0].as_u64().unwrap());
+        ids.insert("embedded", placed(&mut app, json!({"name": "pic.png", "dataBase64": vectorcraft_format::base64_encode(&png)})));
+        // One file for every test that calls this, written by the first.
+        static LINKED: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+        let file = LINKED.get_or_init(|| {
+            let file = vectorcraft_testkit::temp_dir("layers-filter").join("linked.png");
+            std::fs::write(&file, &png).unwrap();
+            file
+        });
+        ids.insert("linked", placed(&mut app, json!({"path": file.to_string_lossy()})));
+        ids.insert("sub", id(run(&mut app, "layer.newSublayer", json!({"name": "Sub"}))));
+        let hidden = star(&mut app, 250);
+        run(&mut app, "layer.setProps", json!({"ids": [hidden.0], "name": "Sky", "visible": false}));
+        let locked = star(&mut app, 300);
+        run(&mut app, "layer.setProps", json!({"ids": [locked.0], "locked": true}));
+        ids.extend([("hidden", hidden), ("locked", locked)]);
+        run(&mut app, "select.none", json!({}));
+        (app, ids)
+    }
+
+    /// The rows [`list_rows`] lists for `query` and `filter`, by their names in `ids` ("ruler guide"
+    /// for a guide's row).
+    fn listed(app: &VectorcraftApp, ids: &HashMap<&'static str, NodeId>, query: &str, filter: &Filter) -> Vec<&'static str> {
+        let st = app.session.active().unwrap();
+        let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), query, filter);
+        let name = |r: &Row| match r.guide {
+            Some(_) => "ruler guide",
+            None => ids.iter().find(|(_, id)| **id == r.node.id).map_or("?", |(name, _)| *name),
+        };
+        rows.iter().map(name).collect()
+    }
+
+    fn only(k: ObjectKind) -> Filter {
+        Filter { objects: vec![k], layers: vec![] }
+    }
+
+    /// Each object kind keeps exactly the rows of that kind, with the rows holding them, open or
+    /// closed.
+    #[test]
+    fn each_object_kind_keeps_its_rows_and_the_rows_holding_them() {
+        let (app, ids) = kinds();
+        for (k, want) in [
+            (ObjectKind::Paths, vec!["layer", "sub", "locked", "hidden", "compound", "path"]),
+            (ObjectKind::Shapes, vec!["layer", "group", "ellipse", "rect"]),
+            (ObjectKind::Text, vec!["layer", "text"]),
+            (ObjectKind::Images, vec!["layer", "linked", "embedded"]),
+            (ObjectKind::Effects, vec!["layer", "group", "ellipse"]),
+            (ObjectKind::Groups, vec!["layer", "group"]),
+            (ObjectKind::LinkedFiles, vec!["layer", "linked"]),
+            (ObjectKind::Guides, vec!["layer", "ruler guide", "guide"]),
+        ] {
+            assert_eq!(listed(&app, &ids, "", &only(k)), want, "{k:?}");
+        }
+    }
+
+    /// By Layer keeps the rows that are locked or hidden themselves: in a hidden, locked sublayer a
+    /// row stays only for its own lock or eye. Two choices in a section take either; a choice in
+    /// each section takes rows that are both.
+    #[test]
+    fn row_states_keep_locked_or_hidden_rows_and_combine_with_kinds() {
+        let (mut app, ids) = kinds();
+        let f = |objects: Vec<ObjectKind>, layers: Vec<RowState>| Filter { objects, layers };
+        assert_eq!(listed(&app, &ids, "", &f(vec![], vec![RowState::Hidden])), ["layer", "sub", "hidden"]);
+        assert_eq!(listed(&app, &ids, "", &f(vec![], vec![RowState::Locked])), ["layer", "sub", "locked"]);
+        assert_eq!(listed(&app, &ids, "", &f(vec![], vec![RowState::Locked, RowState::Hidden])), ["layer", "sub", "locked", "hidden"]);
+        assert_eq!(listed(&app, &ids, "", &f(vec![ObjectKind::Text, ObjectKind::Images], vec![])), ["layer", "linked", "embedded", "text"]);
+        assert_eq!(listed(&app, &ids, "", &f(vec![ObjectKind::Paths], vec![RowState::Hidden])), ["layer", "sub", "hidden"]);
+        assert!(listed(&app, &ids, "", &f(vec![ObjectKind::Shapes], vec![RowState::Hidden])).is_empty());
+        // Once Sub is hidden and locked, the rows in it stay only for their own lock or eye.
+        app.session.execute("layer.setProps", &json!({"ids": [ids["sub"].0], "visible": false, "locked": true})).unwrap();
+        assert_eq!(listed(&app, &ids, "", &f(vec![], vec![RowState::Hidden])), ["layer", "sub", "hidden"]);
+        assert_eq!(listed(&app, &ids, "", &f(vec![], vec![RowState::Locked])), ["layer", "sub", "locked"]);
+    }
+
+    /// The filter and the search combine: a row stays when its name holds the text and the filter
+    /// keeps it, or when it holds such a row.
+    #[test]
+    fn the_filter_combines_with_the_search() {
+        let (app, ids) = kinds();
+        assert_eq!(listed(&app, &ids, "sky", &Filter::default()), ["layer", "sub", "hidden", "text"]);
+        assert_eq!(listed(&app, &ids, "sky", &only(ObjectKind::Text)), ["layer", "text"]);
+        assert_eq!(listed(&app, &ids, "sky", &Filter { objects: vec![], layers: vec![RowState::Hidden] }), ["layer", "sub", "hidden"]);
+        assert!(listed(&app, &ids, "sky", &only(ObjectKind::Groups)).is_empty());
+    }
+
+    /// (target circles, lit 24 pt buttons) one frame of the panel draws.
+    fn circles_and_lit_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> (usize, usize) {
+        let lit = Tokens::get(ctx).tool_active;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let circles = out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 5.0)).count();
+        let buttons =
+            out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.fill == lit && (r.rect.width() - 24.0).abs() < 0.01)).count();
+        (circles, buttons)
+    }
+
+    /// `ui.layersFilter` has the panel list its rows again at once and lights the Filter button
+    /// while a filter is on; clearing it lists every row again. The document, its open rows and the
+    /// selection stay as they were.
+    #[test]
+    fn the_panel_lists_its_rows_again_when_the_filter_changes() {
+        let (mut app, ids) = kinds();
+        app.session.execute("select.set", &json!({"ids": [ids["rect"].0]})).unwrap();
+        let ctx = egui::Context::default();
+        let before = circles_and_lit_buttons(&mut app, &ctx);
+        assert_eq!(before.1, 0, "the Filter button is not lit");
+        let st = app.session.active().unwrap();
+        let (revision, open) = (st.revision, st.layers_open.generation());
+        let r = app.run("ui.layersFilter", json!({"objects": ["text"]})).unwrap();
+        assert_eq!(r, json!({"objects": ["text"], "layers": []}));
+        assert_eq!(circles_and_lit_buttons(&mut app, &ctx), (2, 1), "Layer 1 and the type; the button is lit");
+        app.run("ui.layersFilter", json!({"layers": ["hidden"]})).unwrap();
+        assert_eq!(circles_and_lit_buttons(&mut app, &ctx), (0, 1), "no type is hidden");
+        app.run("ui.layersFilter", json!({"objects": [], "layers": []})).unwrap();
+        assert_eq!(circles_and_lit_buttons(&mut app, &ctx), before, "every row again");
+        let st = app.session.active().unwrap();
+        assert_eq!((st.revision, st.layers_open.generation(), st.selection.objects.clone()), (revision, open, vec![ids["rect"]]));
+    }
+
+    /// Clicks in the Filter button's popup tick a kind and a state, and a second click clears the
+    /// kind, while the popup stays open; Clear All turns the filter off.
+    #[test]
+    fn the_filter_popup_ticks_kinds_and_states_and_clear_all_turns_the_filter_off() {
+        let (mut app, _) = kinds();
+        let ctx = egui::Context::default();
+        // The Filter button: the 24 pt square lit while a filter is on.
+        app.run("ui.layersFilter", json!({"layers": ["locked"]})).unwrap();
+        let lit = Tokens::get(&ctx).tool_active;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        let filter = out
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == lit && (r.rect.width() - 24.0).abs() < 0.01 => Some(r.rect.center()),
+                _ => None,
+            })
+            .unwrap();
+        app.run("ui.layersFilter", json!({"layers": []})).unwrap();
+        click_with(&mut app, &ctx, filter, egui::Modifiers::NONE);
+        // Where the popup draws `label` (after a frame for it to settle).
+        let at = |app: &mut VectorcraftApp, label: &str| {
+            super::super::tests_appearance::frame_events(&ctx, app, vec![], show);
+            let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], show);
+            texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} not in {texts:?}"))
+        };
+        let text = at(&mut app, "Text");
+        click_with(&mut app, &ctx, text, egui::Modifiers::NONE);
+        assert_eq!(app.ui.layers_filter, Filter { objects: vec![ObjectKind::Text], layers: vec![] });
+        let hidden = at(&mut app, "Hidden");
+        click_with(&mut app, &ctx, hidden, egui::Modifiers::NONE);
+        assert_eq!(app.ui.layers_filter, Filter { objects: vec![ObjectKind::Text], layers: vec![RowState::Hidden] });
+        click_with(&mut app, &ctx, text, egui::Modifiers::NONE);
+        assert_eq!(app.ui.layers_filter, Filter { objects: vec![], layers: vec![RowState::Hidden] }, "a second click takes it out");
+        let clear = at(&mut app, "Clear All");
+        click_with(&mut app, &ctx, clear, egui::Modifiers::NONE);
+        assert!(!app.ui.layers_filter.is_on());
+    }
+
+    /// `ui.layersFilter` reads its lists by name in the popup's order, keeps a list it is not given,
+    /// and changes nothing when a list holds anything else.
+    #[test]
+    fn the_filter_command_reads_its_lists_by_name() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let r = app.run("ui.layersFilter", json!({"objects": ["guides", "paths", "paths"], "layers": ["hidden"]})).unwrap();
+        assert_eq!(r, json!({"objects": ["paths", "guides"], "layers": ["hidden"]}));
+        let r = app.run("ui.layersFilter", json!({"layers": []})).unwrap();
+        assert_eq!(r, json!({"objects": ["paths", "guides"], "layers": []}));
+        for bad in [json!({"objects": ["paths", "layers"]}), json!({"objects": "paths"}), json!({"objects": [], "layers": ["visible"]})] {
+            let e = app.run("ui.layersFilter", bad.clone()).unwrap_err();
+            let key = if bad["layers"].is_null() { "objects" } else { "layers" };
+            assert!(e.starts_with(&format!("`{key}` must be an array of these names: ")), "{bad}: {e}");
+        }
+        assert_eq!(app.run("ui.layersFilter", json!({})).unwrap(), json!({"objects": ["paths", "guides"], "layers": []}), "unchanged");
+    }
+
     #[test]
     fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
         let (mut app, [layer, sub, g, _, a, c]) = nested();
@@ -2052,6 +2543,7 @@ mod tests {
             "Merge Selected",
             "Flatten Artwork",
             "Collect in New Layer",
+            "Collect for Export",
             "Release to Layers (Sequence)",
             "Release to Layers (Build)",
             "Reverse Order",
@@ -2153,5 +2645,47 @@ mod tests {
         let found = (0..4).any(|_| frame(&mut app).1);
         assert_eq!(app.session.active().unwrap().highlighted_rows(), [needle]);
         assert!(found, "the highlighted row is scrolled into view");
+    }
+
+    /// Selecting art on the canvas scrolls its layer (now the active one) into view, but not away
+    /// from a row highlighted in the panel.
+    #[test]
+    fn a_canvas_selection_reveals_its_active_layer() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let mut rects = vec![run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].as_u64().unwrap()];
+        for _ in 0..59 {
+            run(&mut app, "layer.new", json!({}));
+            rects.push(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].as_u64().unwrap());
+        }
+        run(&mut app, "select.none", json!({}));
+        let doc = app.session.active().unwrap().doc.clone();
+        let name = |id: u64| doc.node(doc.layer_of(NodeId(id)).unwrap()).unwrap().display_name();
+        let (bottom, top) = (name(rects[0]), name(rects[59]));
+        let ctx = egui::Context::default();
+        let mut time = 0.0;
+        // Whether a row with this name is drawn after a few frames.
+        let mut shown = |app: &mut VectorcraftApp, s: &str| {
+            let mut found = false;
+            for _ in 0..4 {
+                time += 1.0;
+                let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 400.0));
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() }, |ui| show(app, ui));
+                out.textures_delta.clear();
+                found = out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == s));
+            }
+            found
+        };
+        assert!(shown(&mut app, &top) && !shown(&mut app, &bottom));
+        run(&mut app, "select.set", json!({"ids": [rects[0]]}));
+        assert_eq!(app.session.active().unwrap().current_layer(), doc.layer_of(NodeId(rects[0])));
+        assert!(shown(&mut app, &bottom), "the active layer is scrolled into view");
+        // A row highlighted in the panel stays in view when the active layer changes.
+        let top_layer = doc.layer_of(NodeId(rects[59])).unwrap();
+        run(&mut app, "layer.highlight", json!({"ids": [top_layer.0], "mode": "set"}));
+        assert!(shown(&mut app, &top));
+        app.session.active_mut().unwrap().active_layer = doc.layer_of(NodeId(rects[0]));
+        assert!(shown(&mut app, &top) && !shown(&mut app, &bottom), "the highlighted row keeps the view");
     }
 }

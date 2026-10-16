@@ -966,6 +966,41 @@ fn drawings_the_export_writes_read_back() {
 }
 
 #[test]
+fn closed_control_point_splines_stay_closed_through_export_and_import() {
+    // (explicitly closed, ends where it starts): coincident endpoints alone do not close a path.
+    let cases = [(true, true), (true, false), (false, true), (false, false)];
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for (i, &(closed, returns)) in cases.iter().enumerate() {
+        let mut b = kurbo::BezPath::new();
+        b.move_to((20.0, 20.0));
+        b.curve_to((80.0, 0.0), (80.0, 80.0), (20.0, 80.0));
+        if returns {
+            b.curve_to((0.0, 80.0), (0.0, 20.0), (20.0, 20.0));
+        }
+        if closed {
+            b.close_path();
+        }
+        let id = doc.alloc_id();
+        let black = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(0, 0, 0)), 1.0);
+        doc.insert(Some(layer), i, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&b), black)).unwrap();
+    }
+    for version in crate::DxfVersion::ALL.into_iter().filter(|v| *v >= crate::DxfVersion::R13) {
+        let opts = crate::DxfOptions { version, unit: Unit::Points, region: doc.artboards[0].rect, ..crate::DxfOptions::default() };
+        let out = crate::export(&doc, &opts).unwrap();
+        let text = std::str::from_utf8(&out.bytes).unwrap();
+        assert_eq!(text.matches("\nSPLINE\n").count(), cases.len(), "{version:?}: curves are written as SPLINE entities");
+        let back = leaves(&open(&out.bytes, &points()).document);
+        assert_eq!(back.len(), cases.len(), "{version:?}");
+        for (n, &(closed, returns)) in back.iter().zip(&cases) {
+            let path = n.path_data().unwrap();
+            assert_eq!(path.subpaths.len(), 1, "{version:?}");
+            assert_eq!(path.subpaths[0].closed, closed, "{version:?}: closed {closed}, returns {returns}");
+        }
+    }
+}
+
+#[test]
 fn info_lists_layers_layouts_and_version() {
     let tables = [(0, "TABLE"), (2, "LAYER"), (0, "LAYER"), (2, "0"), (62, "7"), (0, "LAYER"), (2, "Walls"), (62, "1"), (0, "ENDTAB")];
     let i = info(&drawing(&[(9, "$ACADVER"), (1, "AC1015"), (9, "$INSUNITS"), (70, "6")], &tables, &[], LINE)).unwrap();

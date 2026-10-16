@@ -55,6 +55,10 @@
 	Draft	Черновое
 	Good	Хорошее
 	Best	Наилучшее
+	Mode	Режим
+	Blur Mode	Режим размытия
+	Edge Only	Только края
+	Overlay Edge	Наложение краёв
 
 # Status and error messages too (`@msg` rows at the end, `COMPLETE_MESSAGES` in the tests).
 # A native speaker's review is welcome: keep the placeholders ({name}), the trailing "…" and the
@@ -220,7 +224,6 @@
 	Art	Рисунок
 	Art using a deleted global swatch keeps its colour.	Рисунок с удалённым глобальным образцом сохраняет свой цвет.
 	Artboard Options	Параметры монтажной области
-	Artboard Options: edit with the Artboard tool	Параметры монтажной области: редактируются инструментом «Монтажная область»
 	Artboard Options…	Параметры монтажной области…
 	Artboard Tool	Инструмент «Монтажная область»
 	Artboard {number}	Монтажная область {number}
@@ -571,6 +574,7 @@
 	Convert to RGB	Преобразовать в RGB
 	Convert to Shape	Преобразовать в фигуру
 	Convert to sRGB	Преобразовать в sRGB
+	Convert to Straight Lines	Преобразовать в прямые линии
 	Convert:	Преобразовать:
 	Copied the CSS of {rules} object(s)	Скопирован CSS для {rules} объекта(ов)
 	Copies:	Копии:
@@ -589,6 +593,7 @@
 	Copyright Notice:	Уведомление об авторских правах:
 	Copyright Status:	Статус авторских прав:
 	Copyright Symbol	Символ авторского права
+	Corner Point Angle Threshold:	Пороговый угол угловых точек:
 	Corner Radius	Радиус угла
 	Corner Radius:	Радиус угла:
 	Corner:	Угол:
@@ -968,6 +973,32 @@
 	Export All…	Экспортировать всё…
 	Export and Clipboard Transparency Flattener Settings	Параметры объединения прозрачностей для экспорта и буфера обмена
 	Export Artboard	Экспортировать монтажную область
+	A File per Object	Отдельный файл для каждого объекта
+	Example: {name}	Пример: {name}
+	Export Preset:	Набор настроек экспорта:
+	Folders:	Папки:
+	Insert	Вставить
+	Nothing is selected. Select the art to export, then open this tab again.	Ничего не выделено. Выделите объекты для экспорта и снова откройте эту вкладку.
+	One File of the Selection	Один файл из выделения
+	Start at:	Начать с:
+	{n} objects selected	Выделено объектов: {n}
+	Delete Export Preset	Удалить набор настроек экспорта
+	Export Presets	Наборы настроек экспорта
+	Save Export Preset	Сохранить набор настроек экспорта
+	Export Layer	Экспортировать слой
+	Export Selection	Экспортировать выделение
+	All in One Folder	Всё в одну папку
+	By Size or Row	По размеру или строке
+	By Format	По формату
+	By Artboard or Item	По монтажной области или элементу
+	By Item, Then Format	По элементу, затем по формату
+	Document Name	Имя документа
+	Artboard or Item Name	Имя монтажной области или элемента
+	Number (####)	Номер (####)
+	Date (YYYYMMDD)	Дата (ГГГГММДД)
+	Date (YYYY-MM-DD)	Дата (ГГГГ-ММ-ДД)
+	Time (hhmmss)	Время (ччммсс)
+	PDF Print	PDF для печати
 	Export As	Экспортировать как
 	Export As PNG…	Экспортировать как PNG…
 	Export As SVG…	Экспортировать как SVG…
@@ -1040,6 +1071,7 @@
 	Fill and Stroke	Заливка и обводка
 	Fill new strokes	Заполнять новые обводки
 	Keep selected	Оставлять выбранным
+	Merge only with selection	Объединять только с выделенным
 	Fill Color	Цвет заливки
 	Fill New Type Objects With Placeholder Text	Заполнять новые текстовые объекты текстом-заполнителем
 	Fill Rule	Правило заливки
@@ -1062,8 +1094,11 @@
 	Fit dashes to corners and ends	Подгонять штрихи к углам и концам
 	Fit Headline	Подогнать заголовок
 	Decrease Font Size	Уменьшить размер шрифта
+	Decrease Font Size by Five Steps	Уменьшить размер шрифта на пять шагов
 	Increase Font Size	Увеличить размер шрифта
+	Increase Font Size by Five Steps	Увеличить размер шрифта на пять шагов
 	Reset Tracking and Kerning	Сбросить трекинг и кернинг
+	Reset Horizontal Scale	Сбросить масштаб по горизонтали
 	Spacing	Интервал
 	Step Type	Подгонять текст по шагам
 	Fit in View	Вписать в вид
@@ -1264,6 +1299,7 @@
 	Hide Print Tiling	Скрыть разбиение для печати
 	Hide Rulers	Скрыть линейки
 	Hide Slices	Скрыть фрагменты
+	Hide Template	Скрыть шаблон
 	Hide Text Threads	Скрыть связи текста
 	Hide Thumbnail	Скрыть миниатюру
 	Hide Thumbnails	Скрыть миниатюры
@@ -1302,6 +1338,14 @@
 	Hyphenate	Расставлять переносы
 	Hyphenation	Расстановка переносов
 	Hyphenation…	Расстановка переносов…
+	Words Longer Than:	Слова длиннее:
+	After First:	После первых:
+	Before Last:	Перед последними:
+	Hyphen Limit:	Предел переносов:
+	Hyphenation Zone:	Зона переноса:
+	letters	букв
+	hyphens	переносов
+	Hyphenate Capitalized Words	Переносить слова с прописной буквы
 	ICC Profile	Профиль ICC
 	Identify Objects By	Определять объекты по
 	Ignore	Игнорировать
@@ -1369,6 +1413,8 @@
 	Internal CSS	Внутренний CSS
 	Internet Standard RGB (sRGB)	Стандартный интернет-RGB (sRGB)
 	Intersect	Пересечение
+	Intertwine	Переплетение
+	Arrange Intertwine Area	Упорядочить область переплетения
 	Inverse	Обратный
 	Invert	Инвертировать
 	Invert Colors	Инвертировать цвета
@@ -1977,6 +2023,7 @@
 	Out Tangent Handles	Маркеры исходящей касательной
 	Outer Glow…	Внешнее свечение…
 	Outline	Контур
+	Outline Object	Обвести объект
 	Outline Others	Обвести остальные
 	Outline Stroke	Обвести обводку
 	Outline Text	Обвести текст
@@ -2046,6 +2093,7 @@
 	Pathfinder Options…	Параметры обработки контуров…
 	Pathfinders:	Обработка контуров:
 	Paths	Контуры
+	Path Length	Длина контуров
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Контуры: {paths}    Опорные точки: {anchors}    Цвета: {colors}
 	Pattern	Узор
 	Pattern Editing	Редактирование узора
@@ -2404,7 +2452,9 @@
 	Reset Panel	Сбросить панель
 	Reset Preferences	Сбросить настройки
 	Reset Profiles	Сбросить профили
+	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
+	Rotate View to Selection	Повернуть вид по выделению
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
 	Reset to Default	Сбросить к значениям по умолчанию
 	Reset to White, Black	Сбросить к белому, чёрному
@@ -2514,6 +2564,7 @@
 	Save Save for Web Preset	Сохранить набор «Сохранить для web»
 	Save selected colors as swatches	Сохранить выбранные цвета как образцы
 	Save Selection…	Сохранить выделение…
+	Update Selection	Обновить выделение
 	Save Swatch Library	Сохранить библиотеку образцов
 	Save Swatch Library…	Сохранить библиотеку образцов…
 	Save the current layout under this name	Сохранить текущий макет под этим именем
@@ -2604,6 +2655,17 @@
 	Scripts	Сценарии
 	Search	Поиск
 	Search All	Искать везде
+	Filter	Фильтр
+	Clear All	Очистить всё
+	By Object	По объектам
+	By Layer	По слоям
+	Images	Изображения
+	Groups	Группы
+	Linked Files	Связанные файлы
+	Locked	Заблокированные
+	Hidden	Скрытые
+	Filter Layers Panel Rows	Фильтровать строки панели «Слои»
+@msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
 	Search commands and tools	Поиск команд и инструментов
 	Search commands and tools…	Поиск команд и инструментов…
 	Search Commands…	Поиск команд…
@@ -2741,6 +2803,8 @@
 	Show Modified	Показать изменённые
 	Show Note	Показать примечание
 	Show Options	Показать параметры
+	Show Original Path	Показать исходный контур
+	Color Panel Options	Параметры панели «Цвет»
 	Show Package	Показать пакет
 	Show Panel	Показать панель
 	Show Pattern Swatches	Показать образцы узоров
@@ -2753,6 +2817,7 @@
 	Show Slices	Показать фрагменты
 	Show Swatch Bounds	Показать границы образца
 	Show Swatch Kinds	Показать типы образцов
+	Show Template	Показать шаблон
 	Show Text Threads	Показать связи текста
 	Show The Home Screen When No Documents Are Open	Показывать начальный экран, когда документы не открыты
 	Show Thumbnail	Показать миниатюру
@@ -3612,6 +3677,7 @@ axis	Both	Оба
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` должно быть от {min} до {max} (получено {x})
 @msg	`{key}` must be one of {_1}	`{key}` должно быть одним из: {_1}
 @msg	`{key}` must be true or false	`{key}` должно быть true или false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` должно быть grayscale, rgb, hsb, cmyk или websafe
 @msg	`{k}` must be [x, y]	`{k}` должно быть [x, y]
 @msg	`{name}` has no options	`{name}` не имеет параметров
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` — встроенная рабочая среда; выберите другое имя
@@ -3678,6 +3744,8 @@ axis	Both	Оба
 @msg	cannot split an open path at its end point	нельзя разделить открытый контур в его конечной точке
 @msg	closing needs three anchors	для замыкания нужны три опорные точки
 @msg	check an asset to export	отметьте ресурс для экспорта
+@msg	check a layer to export	отметьте слой для экспорта
+@msg	select the art to export first	сначала выделите объекты для экспорта
 @msg	choice must be "merge" or "add", not `{choice}`	choice должно быть "merge" или "add", а не `{choice}`
 @msg	choose a direction to divide in	выберите направление для разделения
 @msg	choose a folder to export to	выберите папку для экспорта
@@ -3789,6 +3857,7 @@ axis	Both	Оба
 @msg	no saved presets	нет сохранённых наборов
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	нет сохранённого набора печати с именем `{name}` ({DEFAULT_PRESET} защищён: создайте новый на его основе)
 @msg	no saved profiles	нет сохранённых профилей
+@msg	no saved selection recalled	сохранённое выделение не восстановлено
 @msg	no saved selections	нет сохранённых выделений
 @msg	no saved themes	нет сохранённых тем
 @msg	no segment {segment} on line {line}	нет сегмента {segment} на строке {line}
@@ -3881,6 +3950,7 @@ axis	Both	Оба
 @msg	select a gradient mesh	выделите градиентную сетку
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор
+@msg	select an Intertwine group	выделите группу переплетения
 @msg	select a stroke with a variable width	выделите обводку с переменной шириной
 @msg	select a symbol instance	выделите экземпляр символа
 @msg	select an Image Trace object	выделите объект трассировки изображения
@@ -3971,7 +4041,7 @@ axis	Both	Оба
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript этого файла невозможно прочитать ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	этот формат содержит одну монтажную область: экспортируйте несколько как PDF или с помощью document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	это чертёж DWG, который невозможно прочитать: сохраните его из приложения CAD как ASCII DXF и откройте его
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо файл EPS), который пока невозможно открыть: сохраните его как PDF, .ai с совместимостью с PDF или SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо файл EPS), а не PDF: Файл › Открыть и Файл › Поместить читают его как EPS
 @msg	this is not a PostScript file	это не файл PostScript
 @msg	tool shortcuts must be a single key (optionally with Shift)	сочетания инструментов должны быть одной клавишей (необязательно с Shift)
 @msg	truncated	усечено
@@ -4048,6 +4118,8 @@ axis	Both	Оба
 @msg	{_1} files	{_1} файлов
 @msg	The graphics were lost and have been restarted	Графика была потеряна и перезапущена
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Графический процессор, выбранный первым, не смог показать окно, поэтому VectorCraft запустился снова на {summary}
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Прошлый запуск VectorCraft завершился на {name} до появления окна, поэтому VectorCraft запустился на {summary}. Чтобы снова попробовать этот графический процессор, измените Настройки › Производительность › Графический процессор или запустите приложение с заданной переменной WGPU_BACKEND
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Прошлый запуск VectorCraft завершился во время перечисления графических процессоров, поэтому VectorCraft запустился на {summary} только с OpenGL. Чтобы снова попробовать другие графические интерфейсы, измените Настройки › Производительность › Графический процессор или запустите приложение с заданной переменной WGPU_BACKEND
 @msg	Loading VectorCraft…	Загрузка VectorCraft…
 @msg	VectorCraft failed to start: {e}	VectorCraft не удалось запустить: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Требуется браузер с WebGPU или WebGL2.
@@ -4228,6 +4300,9 @@ axis	Both	Оба
 	Blocks	Блоки
 	Frosted	Матовое
 	Tiny Lens	Мелкие линзы
+	Loaded Texture	Загруженная текстура
+	Load Texture…	Загрузить текстуру…
+	Texture Image	Изображение текстуры
 	Rename Data Set	Переименовать набор данных
 	Rename Variable	Переименовать переменную
 	Variable Options	Параметры переменной
@@ -4382,6 +4457,7 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
+@msg	the image can't be read as a texture	изображение не удаётся прочитать как текстуру
 	Basic	Базовый
 	Fill and Stroke Controls	Элементы управления заливкой и обводкой
 	Coloring Controls	Элементы управления цветом
@@ -4404,7 +4480,7 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
-
+	Registration:	Регистрация:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Размер
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Чертёж : реальный размер — при 1:10 1 единица на странице подписывается как 10.
@@ -4455,6 +4531,47 @@ lighting	Light	Свет
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
 	Distance	Расстояние
+@msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" размещает градиент: укажите `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" размещает линейный или радиальный градиент, а не произвольный
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам размещает градиент: уберите `start` и `end` (они уже задают его в координатах документа)
+	Make Image Dynamic	Сделать изображение динамическим
+	Import Data Sets…	Импортировать наборы данных…
+	Export Data Sets…	Экспортировать наборы данных…
+	Make Graph Dynamic	Сделать диаграмму динамической
+	Batch…	Пакетная обработка…
+	Source Folder:	Исходная папка:
+	Destination Folder:	Папка назначения:
+	Overrides	Переопределения
+	Uses every data set of the open document.	Использует каждый набор данных открытого документа.
+@msg	Batch: {count} processed	Пакетная обработка: обработано {count}
+@msg	Batch: {count} processed, {failed} failed	Пакетная обработка: обработано {count}, с ошибкой {failed}
+@msg	choose a destination folder	выберите папку назначения
+@msg	choose a source folder	выберите исходную папку
+@msg	open a document with data sets	откройте документ с наборами данных
+@msg	the action has no steps	в действии нет шагов
+
+# User Interface › Accent Color
+	Accent Color	Цвет акцента
+	Amber	Янтарный
+	Coral	Коралловый
+	Violet	Фиолетовый
+	Pink	Розовый
+	Sketch	Эскиз
+	Halftone Pattern…	Полутоновый узор…
+	Halftone Pattern	Полутоновый узор
+	Pattern Type	Тип узора
+	Dot	Точка
+# User Interface › Color Scheme
+	Color Scheme	Цветовая схема
+	Modern	Современная
+
+# Symbol Options › Export Type
+	Export Type:	Тип экспорта:
+	Movie Clip	Видеоклип
+@msg	name is empty	имя пустое
+@msg	no symbol named `{n}`	нет символа с именем `{n}`
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	Обзор облачной папки

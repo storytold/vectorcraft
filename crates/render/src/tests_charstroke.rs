@@ -81,3 +81,25 @@ fn character_and_object_strokes_on_type_are_dashed() {
     let p = half.pixel(x0, (y0 + y1) / 2);
     assert!(p[0] > 90 && p[0] < 200, "a half-opaque stroke is grey: {p:?}");
 }
+
+/// Align Stroke on live type: an outside character stroke paints its whole weight around the
+/// glyphs and leaves them unpainted, an inside one stays within them, as on paths.
+#[test]
+fn aligned_character_strokes_keep_to_their_side_of_the_glyphs() {
+    use vectorcraft_doc::StrokeAlign;
+    let glyph = ink(&render_text("I", CharStyle::default(), vec![]));
+    let reach = |b: (u32, u32, u32, u32)| {
+        let d = |a: u32, b: u32| a as i64 - b as i64;
+        d(glyph.0, b.0).max(d(glyph.1, b.1)).max(d(b.2, glyph.2)).max(d(b.3, glyph.3))
+    };
+    let style = |align| CharStyle { fill: Paint::None, stroke_align: align, ..stroked(LineJoin::Round) };
+    let centre = render_text("I", style(StrokeAlign::Center), vec![]);
+    let outside = render_text("I", style(StrokeAlign::Outside), vec![]);
+    let inside = render_text("I", style(StrokeAlign::Inside), vec![]);
+    assert!((7..=9).contains(&reach(ink(&centre))), "centred: half the weight past the glyph, {:?}", ink(&centre));
+    assert!((15..=17).contains(&reach(ink(&outside))), "outside: the whole weight past the glyph, {:?}", ink(&outside));
+    assert!(reach(ink(&inside)) <= 0, "inside: within the glyph, {:?}", ink(&inside));
+    let mid = ((glyph.0 + glyph.2) / 2, (glyph.1 + glyph.3) / 2);
+    assert!(!dark(&outside, mid.0, mid.1), "an outside stroke leaves the glyph itself unpainted");
+    assert!(dark(&inside, mid.0, mid.1), "an inside stroke paints into the glyph");
+}

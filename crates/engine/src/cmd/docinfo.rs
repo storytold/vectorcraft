@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its licence lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its licence lets it be embedded)}",
             has_doc,
             info
         ),
@@ -50,7 +50,7 @@ pub const CATEGORIES: [(&str, &str); 11] = [
 ];
 
 /// The object counts of `document.info` and their labels.
-const OBJECT_LABELS: [(&str, &str); 17] = [
+const OBJECT_LABELS: [(&str, &str); 18] = [
     ("paths", "Paths"),
     ("compoundPaths", "Compound Paths"),
     ("groups", "Groups"),
@@ -65,6 +65,7 @@ const OBJECT_LABELS: [(&str, &str); 17] = [
     ("blends", "Blends"),
     ("envelopes", "Envelopes"),
     ("repeats", "Repeats"),
+    ("intertwines", "Intertwine Groups"),
     ("opacityMasks", "Opacity Masks"),
     ("liveEffects", "Objects with Effects"),
     ("guides", "Guides"),
@@ -128,7 +129,13 @@ fn sections(d: &Document, info: &Value, fonts: &BTreeSet<super::fonts::UsedFont>
                     rows
                 }
                 "objects" => {
-                    OBJECT_LABELS.iter().filter_map(|(k, label)| Some((label.to_string(), info["objects"][k].as_u64()?.to_string()))).collect()
+                    let mut rows: Vec<(String, String)> =
+                        OBJECT_LABELS.iter().filter_map(|(k, label)| Some((label.to_string(), info["objects"][k].as_u64()?.to_string()))).collect();
+                    // The paths' total length, in the document's units, right after their count.
+                    if let Some(at) = rows.iter().position(|(label, _)| label == "Paths") {
+                        rows.insert(at + 1, ("Path Length".into(), u.format(info["pathLength"].as_f64().unwrap_or(0.0))));
+                    }
+                    rows
                 }
                 "graphicStyles" => names("graphicStyleNames"),
                 "spotColors" => names("spotColors"),
@@ -229,6 +236,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let roots: Vec<&Node> =
         if selection_only { st.selection.objects.iter().filter_map(|id| d.node(*id)).collect() } else { d.layers.iter().map(|l| &**l).collect() };
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
+    // strip of LEDs along the letters, #1958).
+    let mut path_length = 0.0;
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
@@ -243,7 +253,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
                 NodeKind::Group { .. } => Some("groups"),
                 NodeKind::Path { guide: true, .. } => Some("guides"),
-                NodeKind::Path { .. } => Some("paths"),
+                NodeKind::Path { path, .. } => {
+                    let l = path.length();
+                    if l.is_finite() {
+                        path_length += l;
+                    }
+                    Some("paths")
+                }
                 NodeKind::Compound { .. } => Some("compoundPaths"),
                 NodeKind::Text(t) => {
                     for run in &t.runs {
@@ -269,6 +285,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Mesh(_) => Some("meshes"),
                 NodeKind::Repeat(_) => Some("repeats"),
                 NodeKind::PlacedDocument(_) => Some("placedDocuments"),
+                NodeKind::Intertwine { .. } => Some("intertwines"),
             };
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
@@ -308,6 +325,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({
         "document": document_summary(d),
         "objects": counts,
+        "pathLength": path_length,
         "fonts": font_names,
         "images": images,
         "symbols": symbols,
@@ -354,7 +372,8 @@ fn snap_xf(b: Rect, half: bool) -> Affine {
 }
 
 fn pixel_perfect(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids: Vec<NodeId> = if p.get("ids").is_some() { targets(s, p)? } else { super::edit::selected_roots(s)? };
+    let ids: Vec<NodeId> =
+        if p.get("ids").is_some() { super::edit::outermost(&s.doc()?.doc, targets(s, p)?) } else { super::edit::selected_roots(s)? };
     let n = ids.len();
     s.edit("Make Pixel Perfect", |d, _| {
         for id in &ids {
@@ -403,6 +422,30 @@ mod tests {
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
+    }
+
+    /// Document Info › Objects gives the paths' total length in the document's units (#1958): an
+    /// open line, a closed rectangle's perimeter and a compound path's pieces count, a guide doesn't.
+    #[test]
+    fn info_gives_the_paths_total_length() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400, "units": "Millimeters"})).unwrap();
+        let line = s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 72, "y2": 0})).unwrap()["id"].clone();
+        let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 20})).unwrap()["id"].clone();
+        let length = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["pathLength"].as_f64().unwrap();
+        assert!((length(&mut s, json!({})) - 132.0).abs() < 1e-6);
+        s.execute("select.set", &json!({"ids": [line]})).unwrap();
+        assert!((length(&mut s, json!({"selectionOnly": true})) - 72.0).abs() < 1e-6);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "25.4 mm"]]));
+        // A compound path's pieces are paths: their lengths count.
+        let other = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [rect, other]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((length(&mut s, json!({"selectionOnly": true})) - 80.0).abs() < 1e-6);
+        // Nothing with no paths, and no length row.
+        s.execute("select.none", &json!({})).unwrap();
+        assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
     }
 
     #[test]

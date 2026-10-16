@@ -104,11 +104,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Where the panel docks: along the window's left edge, under the bars.
     let edge = ui.available_rect_before_wrap();
     ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
-    let frame =
-        egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border));
     match app.ui.toolbar_pos {
         None => {
-            egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(frame).show(ui, |ui| body(app, ui, cols, None));
+            let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
+            egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
+                crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
+            });
         }
         Some(pos) => {
             // Floating, kept inside the window, its tools scrolling when they don't fit under it.
@@ -221,11 +222,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
                     let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
+                    let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
                     if is_active {
-                        ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
+                        ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
                     } else if resp.hovered() {
-                        ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
+                        ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
                     }
                     let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
                     icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
@@ -693,9 +694,9 @@ fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String]) -> Option
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
         let well = r.shrink(1.0);
         if active == tool.id {
-            ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
+            ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
         } else if resp.hovered() {
-            ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
+            ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
         }
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });

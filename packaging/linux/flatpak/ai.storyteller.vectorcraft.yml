@@ -26,6 +26,7 @@ finish-args:
   # portal, so broad filesystem access isn't needed. Pictures is granted for opening files by
   # path from the command line.
   - --filesystem=xdg-pictures
+  - --filesystem=~/.fonts:ro
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:

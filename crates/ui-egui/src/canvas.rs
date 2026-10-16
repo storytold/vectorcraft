@@ -12,6 +12,8 @@ use crate::theme::{self, Tokens};
 use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
 const RULER: f32 = 16.0;
+/// The scroll bars' thickness along the window's right and bottom edges.
+const SCROLL_BAR: f32 = 12.0;
 
 /// Screen ↔ document mapping for one frame.
 #[derive(Clone, Copy, Debug)]
@@ -89,6 +91,8 @@ enum Drag {
     Art,
     /// Fingers making a touch gesture ([`crate::touch`]): the first one's press does nothing.
     Gesture,
+    /// A press in Presentation Mode: released as a click, it goes to the next artboard.
+    Present,
 }
 
 fn drag_id() -> egui::Id {
@@ -168,8 +172,11 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
-        let zx = (rect.width() as f64 - 60.0) / target.width().max(1.0);
-        let zy = (rect.height() as f64 - 60.0) / target.height().max(1.0);
+        // The width and height of the box round the target turned with the view, at zoom 1.
+        let (sn, cs) = app.view().map_or(0.0, |v| v.rotation.to_radians()).sin_cos();
+        let (w, h) = (target.width(), target.height());
+        let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
+        let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
         zx.min(zy).clamp(0.0313, 640.0)
     };
     let Some(v) = app.view_mut() else { return };
@@ -199,11 +206,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.painter().rect_filled(full, 0.0, t.panel_darker);
         return;
     }
+    // Normal Screen Mode and Full Screen Mode with Menu Bar keep the scroll bars along the right
+    // and bottom edges; Full Screen and Presentation Mode have none.
+    let outer = full;
+    let bars = app.ui.screen_mode < 2;
+    let full = if bars { egui::Rect::from_min_max(full.min, full.max - vec2(SCROLL_BAR, SCROLL_BAR)) } else { full };
     let rect = if app.ui.view.rulers && app.ui.screen_mode < 3 { egui::Rect::from_min_max(full.min + vec2(RULER, RULER), full.max) } else { full };
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
     if !fitted {
         fit(app, "view.fitArtboard");
+    }
+    // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
+    if bars {
+        scroll_bars(app, ui, rect, outer, &t);
     }
     let resp = ui.interact(rect, egui::Id::new("canvas"), Sense::click_and_drag());
     // A press on the canvas while the context menu is open only closes it (a drag too, which egui
@@ -281,6 +297,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         h,
         outline: app.ui.view.outline,
         trim: app.ui.view.trim_view,
+        templates: app.ui.view.templates,
         ppp,
         hidden: vec![],
         rot: v.rotation,
@@ -329,6 +346,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             proof: vectorcraft_render::proof::active_proof(),
             overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
             trim: app.ui.view.trim_view,
+            hide_templates: !app.ui.view.templates,
             tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
                 let [r, g, b, _] = c.to_rgba8(1.0);
                 [r, g, b]
@@ -407,9 +425,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Artboard edges and names. The Artboard tool labels its active artboard itself (following
     // a move or resize): that one isn't named twice.
-    let active_ab = 0;
+    let active_ab = crate::panels::artboards::selected(app, doc.artboards.len());
     let artboard_tool = app.session.tool_id() == "artboard";
     let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
+    let editing_name = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).map(|e| e.index));
     for (i, ab) in doc.artboards.iter().enumerate() {
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
@@ -417,7 +436,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if doc.setup.has_bleed() {
             painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
         }
-        if (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
+        if editing_name != Some(i) && (artboard_tool || doc.artboards.len() > 1) && tool_labelled != u64::try_from(i).ok() {
             // At the artboard's own top-left corner, which a rotated view turns away from its
             // bounding box's (#1095).
             let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
@@ -429,19 +448,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Selected guides in the selection colour.
         let picked = LineLook { color: t.selection, ..look };
         let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
+        let view = view_bounds(&xf);
         // Guides on a hidden layer hide with it.
         for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
             let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
-            // An artboard guide runs across its artboard, a canvas guide across the window.
+            // An artboard guide runs across its artboard, a canvas guide across the window (the part
+            // of its document line that the canvas shows, turned with the view).
             let (a, b) = match doc.guide_span(g) {
                 Some((from, to)) => (at(from), at(to)),
-                None if g.vertical => {
-                    let x = at(0.0).x;
-                    (pos2(x, rect.top()), pos2(x, rect.bottom()))
-                }
                 None => {
-                    let y = at(0.0).y;
-                    (pos2(rect.left(), y), pos2(rect.right(), y))
+                    let (from, to) = if g.vertical { (view.y0, view.y1) } else { (view.x0, view.x1) };
+                    let Some(ends) = clip_segment(at(from), at(to), rect) else { continue };
+                    ends
                 }
             };
             if selected.contains(&i) { picked } else { look }.guide(&painter, a, b);
@@ -454,6 +472,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
         print_tiling_overlay(app, &painter, &xf);
     }
+    original_path_overlay(app, &painter, &xf);
 
     // Selection visuals and tool overlays.
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
@@ -476,6 +495,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
+    if !revolve_edit {
+        shaper_widget_overlay(app, &painter, &xf);
+    }
     ime_output(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
 
@@ -493,6 +515,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
     }
+    artboard_name_editor(app, ui, &xf);
     // Cursor.
     if resp.hovered() {
         let m = ui.input(|i| i.modifiers);
@@ -526,13 +549,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ui.ctx().zoom_factor() };
             match ui.input(|i| i.pointer.hover_pos()) {
                 // An OS cursor: the system moves it at once, where a painted one trails the pointer
-                // (#444). The system cursor stands in for cursors without a glyph.
+                // (#444). The system cursor stands in for cursors without a glyph. Over a window
+                // without the focus, macOS shows its own pointer whichever cursor the window sets,
+                // and the glyph is not painted there.
                 Some(_) if custom && crate::cursors::os_cursors(crate::cursors::OS_CURSORS, app.services.wayland) => {
                     let ppp = ui.ctx().pixels_per_point() / ui_scale;
                     ui.ctx().set_cursor_image(app.canvas.cursors.get(c, ppp));
                     cursor_icon(c)
                 }
-                Some(hp) if custom && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) => egui::CursorIcon::None,
+                Some(hp)
+                    if custom
+                        && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused))
+                        && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) =>
+                {
+                    egui::CursorIcon::None
+                }
                 _ => cursor_icon(c),
             }
         } else {
@@ -633,6 +664,27 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         }
     }
 
+    // In Presentation Mode a click anywhere goes to the next artboard. The tool receives no press,
+    // drag or hover, and a drag does not pan the view. A drag that began before the mode was turned
+    // on ends as usual.
+    if app.ui.screen_mode == 3 && matches!(drag, None | Some(Drag::Present | Drag::Gesture)) {
+        let pressed = drag.is_none() && pointer.primary_pressed() && resp.hovered() && at.is_some();
+        // `press` is this frame's new press, or else the press held so far. A quick tap can be
+        // pressed and released in one frame.
+        let press = if pressed { Some(Drag::Present) } else { drag };
+        if press.is_some() && !pointer.primary_down() {
+            ui.data_mut(|dd| dd.remove::<Drag>(drag_id()));
+            // A tap of several fingers leaves `Drag::Gesture` (`touch_gestures`), and its release
+            // does not move the view to the next artboard.
+            if press == Some(Drag::Present) && resp.clicked() {
+                crate::shortcuts::presentation_step(app, true);
+            }
+        } else if pressed {
+            ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Present));
+        }
+        return;
+    }
+
     let tool = app.session.tool_id();
     // Held, Space is the Hand tool for the moment, and Cmd+Space the Zoom tool (with Alt, zooming
     // out), whatever the tool.
@@ -648,26 +700,32 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        let d = if crate::touch::finger_navigates_only() {
-            // A finger (or a palm) once a pen has been seen: it navigates, it doesn't draw.
-            Drag::Gesture
-        } else if zoom_mode {
-            if animated_zoom(&app.session.prefs) { Drag::ZoomScrub { start: p, held: 0.0, moved: false } } else { Drag::ZoomBox { start: p } }
-        } else if pan_mode {
-            Drag::Pan { start: p, center: v.center, middle: false }
-        } else if tool == "rotateView" {
-            let c = rect.center();
-            Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation }
+        // The artboard's name sits above its corner. A press there renames on a double-click
+        // and does not start a tool gesture (a fitted artboard, a new one, Artboard Options).
+        if let Some(i) = artboard_name_at(app, ui, &xf, p) {
+            ui.data_mut(|dd| dd.insert_temp(name_press_id(), i));
         } else {
-            // Cmd with another tool drags with the selection tool used last (the session lends it).
-            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
-            dispatch(app, &ev, view);
-            Drag::Tool
-        };
-        ui.data_mut(|dd| {
-            dd.insert_temp(drag_id(), d);
-            dd.insert_temp(drag_pos_id(), p);
-        });
+            let d = if crate::touch::finger_navigates_only() {
+                // A finger (or a palm) once a pen has been seen: it navigates, it doesn't draw.
+                Drag::Gesture
+            } else if zoom_mode {
+                if animated_zoom(&app.session.prefs) { Drag::ZoomScrub { start: p, held: 0.0, moved: false } } else { Drag::ZoomBox { start: p } }
+            } else if pan_mode {
+                Drag::Pan { start: p, center: v.center, middle: false }
+            } else if tool == "rotateView" {
+                let c = rect.center();
+                Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation }
+            } else {
+                // Cmd with another tool drags with the selection tool used last (the session lends it).
+                let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
+                dispatch(app, &ev, view);
+                Drag::Tool
+            };
+            ui.data_mut(|dd| {
+                dd.insert_temp(drag_id(), d);
+                dd.insert_temp(drag_pos_id(), p);
+            });
+        }
     } else if drag.is_none()
         && resp.hovered()
         && pointer.button_pressed(egui::PointerButton::Middle)
@@ -718,7 +776,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     }
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::ZoomScrub { start, held, moved }));
                 }
-                Drag::Art | Drag::Gesture => {}
+                Drag::Art | Drag::Gesture | Drag::Present => {}
                 Drag::Tool if drag_art_out(app, ui, resp, p, view) => {
                     ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art));
                 }
@@ -752,10 +810,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     let r = egui::Rect::from_two_pos(start, p);
                     if let Some(vm) = app.view_mut() {
                         if r.width() > 8.0 && r.height() > 8.0 {
-                            let a = xf.to_doc(r.min);
-                            let b = xf.to_doc(r.max);
-                            vm.center = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
-                            vm.zoom = (rect.width() as f64 / (b.x - a.x)).min(rect.height() as f64 / (b.y - a.y)).clamp(0.0313, 640.0);
+                            // The marquee's center and its size on screen set the view, at any rotation.
+                            vm.center = xf.to_doc(r.center());
+                            let fill = (rect.width() / r.width()).min(rect.height() / r.height());
+                            vm.zoom = (xf.zoom * f64::from(fill)).clamp(0.0313, 640.0);
                         } else {
                             zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt));
                         }
@@ -769,10 +827,16 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::ZoomScrub { .. } => {}
                 Drag::Tool => {
+                    // The second click of a double-click: don't fit another artboard on this release.
+                    // A double-click on an object does not open Artboard Options. Empty artboard
+                    // space still does.
+                    if resp.double_clicked() && app.session.tool_id() == "artboard" {
+                        app.session.set_tool_option("suppressFitClick", &json!(true));
+                    }
                     let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                     dispatch(app, &ev, view);
                 }
-                Drag::Art | Drag::Gesture => {}
+                Drag::Art | Drag::Gesture | Drag::Present => {}
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}
             }
         }
@@ -782,17 +846,27 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
         dispatch(app, &ev, view);
     }
+    if pointer.primary_released()
+        && let Some(i) = ui.data_mut(|d| d.remove_temp::<usize>(name_press_id()))
+    {
+        select_named_artboard(app, i);
+    }
     if resp.double_clicked()
         && let Some(p) = at
     {
-        let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
-        let before = app.session.tool_id().to_string();
-        dispatch(app, &ev, view);
-        // A double-click on type switched a selection tool to the Type tool: the caret goes where
-        // the type was clicked, so typing edits it at once.
-        if before != "type" && app.session.tool_id() == "type" {
-            for kind in [PointerKind::Down, PointerKind::Up] {
-                dispatch(app, &PointerEvent { kind, ..ev }, view);
+        if let Some(i) = artboard_name_at(app, ui, &xf, p) {
+            begin_artboard_name_edit(ui, app, i);
+        } else {
+            let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+            let before = app.session.tool_id().to_string();
+            dispatch(app, &ev, view);
+            // A double-click on type switched a selection tool to the Type tool: the caret goes where
+            // the type was clicked, so typing edits it at once.
+            if before != "type" && app.session.tool_id() == "type" {
+                app.session.set_tool_option("prevTool", &json!(before));
+                for kind in [PointerKind::Down, PointerKind::Up] {
+                    dispatch(app, &PointerEvent { kind, ..ev }, view);
+                }
             }
         }
     }
@@ -846,11 +920,153 @@ fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64) {
     vm.center += before - Xf::new(rect, vm).to_doc(p);
 }
 
+/// One scroll bar along its axis, in screen points: the span it scrolls over (`lo..hi`) and the
+/// part of it the canvas shows (`v0..v1`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Span {
+    lo: f32,
+    hi: f32,
+    v0: f32,
+    v1: f32,
+}
+
+impl Span {
+    /// The thumb on a track `len` long: where it starts and how long it is.
+    fn thumb(self, len: f32) -> (f32, f32) {
+        let total = (self.hi - self.lo).max(1.0);
+        let size = (len * (self.v1 - self.v0) / total).clamp(MIN_THUMB.min(len), len);
+        let room = total - (self.v1 - self.v0);
+        let at = if room > 0.0 { (self.v0 - self.lo) / room * (len - size) } else { 0.0 };
+        (at.clamp(0.0, (len - size).max(0.0)), size)
+    }
+    /// Screen points the view moves for each point the thumb moves on a track `len` long.
+    fn ratio(self, len: f32) -> f32 {
+        let room = (self.hi - self.lo) - (self.v1 - self.v0);
+        let free = len - self.thumb(len).1;
+        if room > 0.0 && free > 0.0 { room / free } else { 0.0 }
+    }
+}
+
+const MIN_THUMB: f32 = 20.0;
+
+/// The scroll bars' spans, horizontal then vertical: the art and the artboards (`content`) as the
+/// view turns them on screen, half a window past each side, and the view itself, so the thumb is
+/// always on its track. The canvas has no edge of its own (no drawing area), so the content sets it.
+fn scroll_spans(xf: &Xf, content: Option<Rect>) -> [Span; 2] {
+    let r = xf.rect;
+    let around = content.map(|c| egui::Rect::from_points(&xf.quad(c)).expand2(r.size() / 2.0)).filter(|b| b.is_finite());
+    let b = around.map_or(r, |b| b.union(r));
+    [Span { lo: b.left(), hi: b.right(), v0: r.left(), v1: r.right() }, Span { lo: b.top(), hi: b.bottom(), v0: r.top(), v1: r.bottom() }]
+}
+
+/// The tracks of the horizontal and the vertical scroll bar, along the bottom and the right edge
+/// of the window (`outer`), as long as the canvas (`rect`) beside them.
+fn scroll_tracks(rect: egui::Rect, outer: egui::Rect) -> [egui::Rect; 2] {
+    let corner = outer.max - vec2(SCROLL_BAR, SCROLL_BAR);
+    [
+        egui::Rect::from_min_max(pos2(rect.left(), corner.y), pos2(corner.x, outer.bottom())),
+        egui::Rect::from_min_max(pos2(corner.x, rect.top()), pos2(outer.right(), corner.y)),
+    ]
+}
+
+/// The window's scroll bars ([`scroll_spans`]): a thumb dragged scrolls the view along the
+/// screen's axis (a turned view too), a click on the track pages towards it, and the wheel over a
+/// bar scrolls along it.
+fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, outer: egui::Rect, t: &Tokens) {
+    let content = app.content_bounds();
+    let Some(v) = app.view().copied() else { return };
+    let xf = Xf::new(rect, &v);
+    let painter = ui.painter();
+    painter.rect_filled(egui::Rect::from_min_max(outer.max - vec2(SCROLL_BAR, SCROLL_BAR), outer.max), 0.0, t.ruler);
+    let hover = ui.input(|i| i.pointer.hover_pos());
+    // Screen points the view moves this frame, or the centre a dragged thumb puts it at.
+    let mut moved = egui::Vec2::ZERO;
+    let mut center = None;
+    for (k, (track, span)) in scroll_tracks(rect, outer).into_iter().zip(scroll_spans(&xf, content)).enumerate() {
+        let horizontal = k == 0;
+        let along = |p: Pos2| if horizontal { p.x - track.left() } else { p.y - track.top() };
+        let axis = if horizontal { vec2(1.0, 0.0) } else { vec2(0.0, 1.0) };
+        let len = if horizontal { track.width() } else { track.height() };
+        let (at, size) = span.thumb(len);
+        let on_thumb = |p: Pos2| (at..=at + size).contains(&along(p));
+        let id = egui::Id::new(("canvas-scroll-bar", k));
+        let resp = ui.interact(track, id, Sense::click_and_drag());
+        if resp.drag_started()
+            && let Some(p) = ui.input(|i| i.pointer.press_origin())
+            && on_thumb(p)
+        {
+            // The span moves with the view: the drag keeps the one it started with.
+            let d = ThumbDrag { from: along(p), center: v.center, ratio: span.ratio(len), min: span.lo - span.v0, max: span.hi - span.v1 };
+            ui.data_mut(|dd| dd.insert_temp(id, d));
+        }
+        let drag: Option<ThumbDrag> = ui.data(|dd| dd.get_temp(id));
+        if let Some(d) = drag {
+            if resp.dragged()
+                && let Some(p) = resp.interact_pointer_pos()
+            {
+                let by = ((along(p) - d.from) * d.ratio).clamp(d.min, d.max);
+                center = Some(d.center + xf.delta_to_doc(axis * by));
+            }
+            if !resp.dragged() || resp.drag_stopped() {
+                ui.data_mut(|dd| dd.remove::<ThumbDrag>(id));
+            }
+        } else if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            // A page is most of the window, and never past the end of the span.
+            let page = 0.9 * (span.v1 - span.v0);
+            if along(p) < at {
+                moved -= axis * page.min(span.v0 - span.lo);
+            } else if along(p) > at + size {
+                moved += axis * page.min(span.hi - span.v1);
+            }
+        }
+        if resp.hovered() {
+            let d = ui.input(|i| i.smooth_scroll_delta);
+            moved -= axis * if horizontal { d.x + d.y } else { d.y };
+        }
+        painter.rect_filled(track, 0.0, t.ruler);
+        let edge = if horizontal { [track.left_top(), track.right_top()] } else { [track.left_top(), track.left_bottom()] };
+        painter.line_segment(edge, Stroke::new(1.0, t.border));
+        let thumb = if horizontal {
+            egui::Rect::from_min_size(pos2(track.left() + at, track.top()), vec2(size, track.height())).shrink2(vec2(1.0, 3.0))
+        } else {
+            egui::Rect::from_min_size(pos2(track.left(), track.top() + at), vec2(track.width(), size)).shrink2(vec2(3.0, 1.0))
+        };
+        let hot = drag.is_some() || hover.is_some_and(|p| thumb.contains(p));
+        painter.rect_filled(thumb, CornerRadius::same(3), if hot { t.text_dim } else { t.text_disabled });
+    }
+    let Some(vm) = app.view_mut() else { return };
+    if let Some(c) = center {
+        vm.center = c;
+    }
+    if moved != egui::Vec2::ZERO {
+        vm.center += xf.delta_to_doc(moved);
+    }
+}
+
+/// A scroll bar thumb being dragged: where along the track it was pressed, and the view's centre,
+/// the span's travel ratio ([`Span::ratio`]) and how far the view could move either way then.
+#[derive(Clone, Copy, Debug)]
+struct ThumbDrag {
+    from: f32,
+    center: Point,
+    ratio: f32,
+    min: f32,
+    max: f32,
+}
+
 /// A marquee around screen rectangle `r`: dark dashes over a light line, so it shows on a white
 /// artboard and on the grey pasteboard alike (#725).
 fn marquee(p: &egui::Painter, r: egui::Rect) {
-    let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
-    p.add(Shape::line(pts.to_vec(), Stroke::new(1.0, Color32::from_white_alpha(230))));
+    marquee_through(p, &[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()]);
+}
+
+/// A [`marquee`] through the screen corners `q` in turn, back to the first: a document rectangle's
+/// [`Xf::quad`] in a rotated view.
+fn marquee_through(p: &egui::Painter, q: &[Pos2]) {
+    let pts: Vec<Pos2> = q.iter().chain(q.first()).copied().collect();
+    p.add(Shape::line(pts.clone(), Stroke::new(1.0, Color32::from_white_alpha(230))));
     for w in pts.windows(2) {
         p.extend(Shape::dashed_line(&[w[0], w[1]], Stroke::new(1.0, Color32::from_gray(40)), 3.0, 3.0));
     }
@@ -1106,15 +1322,38 @@ fn pref_color(hex: &str, fallback: Color32) -> Color32 {
     vectorcraft_color::Color::from_hex(hex).map_or(fallback, |c| crate::panels::c32(&c))
 }
 
+/// The view in document space: the box round the canvas's corners (the view may be rotated).
+fn view_bounds(xf: &Xf) -> Rect {
+    let r = xf.rect;
+    let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|c| xf.to_doc(c));
+    corners.iter().fold(Rect::from_points(corners[0], corners[0]), |b, c| b.union_pt(*c))
+}
+
+/// The part of the segment from `a` to `b` inside `r`, none when the segment misses it.
+fn clip_segment(a: Pos2, b: Pos2, r: egui::Rect) -> Option<(Pos2, Pos2)> {
+    let d = b - a;
+    let (mut t0, mut t1) = (0.0_f32, 1.0_f32);
+    // Each edge as (the run toward it, the room before it).
+    for (run, room) in [(-d.x, a.x - r.left()), (d.x, r.right() - a.x), (-d.y, a.y - r.top()), (d.y, r.bottom() - a.y)] {
+        if run == 0.0 {
+            if room < 0.0 {
+                return None;
+            }
+        } else if run < 0.0 {
+            t0 = t0.max(room / run);
+        } else {
+            t1 = t1.min(room / run);
+        }
+    }
+    (t0 <= t1).then(|| (a + d * t0, a + d * t1))
+}
+
 /// The grid (View → Show Grid): a gridline every `spacing` and `subdiv` lighter lines between
 /// (left out when they would crowd). In the Dots style, a dot where gridlines cross the
 /// subdivisions instead.
 fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook) {
-    let r = xf.rect;
-    // The view in document space: the box round the canvas's corners (the view may be rotated;
-    // the painter clips to the canvas).
-    let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|c| xf.to_doc(c));
-    let view = corners.iter().fold(Rect::from_points(corners[0], corners[0]), |b, c| b.union_pt(*c));
+    // The painter clips to the canvas.
+    let view = view_bounds(xf);
     let sub = spacing / subdiv.max(1) as f64;
     let step = if sub * xf.zoom >= 6.0 { sub } else { spacing };
     // Dots crowd sooner than lines.
@@ -1207,7 +1446,7 @@ fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui
     }
     // Keep previews in the UI: only a release on the canvas edits the document, once. Cancelling
     // never adds an undo step or interferes with the drawing tool's interaction.
-    let drag_id = egui::Id::new("ruler-origin-drag");
+    let drag_id = ruler_origin_drag_id();
     let uid = app.session.active().map(|d| d.uid);
     if corner.drag_started_by(egui::PointerButton::Primary) {
         ui.data_mut(|d| d.insert_temp(drag_id, (uid, false)));
@@ -1234,6 +1473,17 @@ fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui
         }
     }
     preview
+}
+
+/// The key of the ruler origin drag's state in egui's temporary data.
+fn ruler_origin_drag_id() -> egui::Id {
+    egui::Id::new("ruler-origin-drag")
+}
+
+/// Is a drag from the rulers' corner in progress? It stays true after Escape cancels the move, until
+/// the button is released.
+pub(crate) fn ruler_origin_dragging(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<(Option<u64>, bool)>(ruler_origin_drag_id()).is_some())
 }
 
 fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, origin: Point, t: &Tokens) {
@@ -1425,9 +1675,20 @@ fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 }
 
 /// The topmost editable object under document point `p` at `zoom`, as the selection tools pick it
-/// (Selection & Anchor Display › Tolerance and Object Selection by Path Only, Type › Type Object
-/// Selection by Path Only).
+/// ([`hit_with`]).
 fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
+    hit_with(app, p, zoom, vectorcraft_doc::hit::hit_test)
+}
+
+/// `test` on the active document at document point `p`, with the options the selection tools hit
+/// objects with at `zoom` (Selection & Anchor Display › Tolerance and Object Selection by Path Only,
+/// Type › Type Object Selection by Path Only, isolation mode).
+fn hit_with<T>(
+    app: &VectorcraftApp,
+    p: Point,
+    zoom: f64,
+    test: impl FnOnce(&vectorcraft_doc::Document, Point, vectorcraft_doc::hit::HitOptions) -> Option<T>,
+) -> Option<T> {
     let prefs = &app.session.prefs;
     let opt = vectorcraft_doc::hit::HitOptions {
         tol: prefs.selection_tolerance / zoom,
@@ -1436,23 +1697,32 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
         type_path_only: prefs.type_selection_by_path_only,
         scope: app.session.active().and_then(|st| st.isolation),
     };
-    vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
+    test(&app.session.active()?.doc, p, opt)
 }
 
 /// Right-click: the object under the pointer is selected first unless it already is, then the
-/// context menu lists what applies to the selection ([`crate::menus::context_items`]).
+/// context menu lists what applies to the selection ([`crate::menus::context_items`]). The locked
+/// objects under the pointer ([`vectorcraft_doc::hit::locked_objects_at`]) are kept in
+/// `ui.context_locked` while the menu is open, for its Unlock submenu.
 fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
-        && let Some(st) = app.session.active()
-        && let Some(top) = hit_at(app, xf.to_doc(p), xf.zoom).map(|h| h.top_object(st.isolation))
-        && !st.selection.contains(top)
     {
-        // A locked or hidden object can't be selected; the menu is then for the selection as is.
-        let _ = app.run("select.set", json!({ "ids": [top.0] }));
+        let p = xf.to_doc(p);
+        let locked = hit_with(app, p, xf.zoom, |doc, p, opt| Some(vectorcraft_doc::hit::locked_objects_at(doc, p, opt)));
+        app.ui.context_locked = app.session.active().map(|st| st.uid).zip(locked);
+        if let Some(st) = app.session.active()
+            && let Some(top) = hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
+            && !st.selection.contains(top)
+        {
+            // A locked or hidden object can't be selected; the menu is then for the selection as is.
+            let _ = app.run("select.set", json!({ "ids": [top.0] }));
+        }
     }
     let mut clicked = None;
-    resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked));
+    if resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked)).is_none() {
+        app.ui.context_locked = None;
+    }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);
     }
@@ -1620,7 +1890,8 @@ fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     }
     walk(&st.doc.layers, &mut |n| {
         let NodeKind::Text(tx) = &n.kind else { return };
-        if !n.visible || n.geometric_bounds().is_none_or(|b| !xf.rect_to_screen(b).intersects(clip)) {
+        // The box round the object's corners on screen, turned with the view.
+        if !n.visible || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
             return;
         }
         let marks = match last.remove(&n.id) {
@@ -1713,6 +1984,19 @@ fn thread_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     }
 }
 
+/// Simplify's Show Original Path: the paths its preview ran on, as they were before it, in a band
+/// 3 screen points wide of their layer's color at 40%, under the selection's outlines. Nothing is drawn
+/// when they have more than [`OVERLAY_MAX_ANCHORS`] anchor points.
+fn original_path_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let paths = crate::dialogs::path_ops::original_paths(app);
+    let Some(st) = app.session.active().filter(|_| paths.iter().map(|(_, path)| path.anchor_count()).sum::<usize>() <= OVERLAY_MAX_ANCHORS) else {
+        return;
+    };
+    for (id, path) in paths {
+        stroke_path(p, &path.to_bezpath(), xf, Stroke::new(3.0, c32(st.doc.layer_color(id)).gamma_multiply(0.4)));
+    }
+}
+
 /// The slices (unless View → Hide Slices): user and object slices outlined in the Slices
 /// preferences' line colour, auto slices dashed and dimmer, each numbered at its top left (Show
 /// Slice Numbers); selected slices have a bolder outline. The layout is cached per revision.
@@ -1790,6 +2074,23 @@ fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 
 /// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
 const PRINT_TILING: Color32 = Color32::from_gray(96);
+
+/// A Shaper Group's mode widget (Shaper and Selection tools), drawn with selection edges shown or
+/// hidden: an arrow pointing right in Face Selection mode and left in Construction mode.
+fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some(st) = app.session.active() else { return };
+    if matches!(app.session.tool_id(), "shaper" | "selection")
+        && let Some(w) = vectorcraft_tools::shaperwidget::ShaperWidget::of(&st.doc, &st.selection, st.isolation, xf.zoom)
+    {
+        let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::shaperwidget::RADIUS_PX);
+        let color = c32(st.doc.layer_color(w.group));
+        p.circle_filled(c, r, Color32::WHITE);
+        p.circle_stroke(c, r, Stroke::new(1.0, color));
+        let d = if w.construction { -1.0 } else { 1.0 };
+        let arrow = vec![c + vec2(3.0 * d, 0.0), c + vec2(-2.0 * d, -3.0), c + vec2(-2.0 * d, 3.0)];
+        p.add(Shape::convex_polygon(arrow, color, Stroke::NONE));
+    }
+}
 
 fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
@@ -1970,6 +2271,16 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
     }
+    // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
+    // by a line to the outline's point at its angle. They stay while one is dragged.
+    if tool == "selection" && app.ui.view.bounding_box {
+        for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
+            let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
+            p.line_segment([on, c], Stroke::new(1.0, color));
+            p.circle_filled(c, r, Color32::WHITE);
+            p.circle_stroke(c, r, Stroke::new(1.0, color));
+        }
+    }
 }
 
 /// While the Type tool edits, let the system IME compose (egui-winit allows it only in frames that
@@ -1998,16 +2309,163 @@ fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
 /// out rather than spilling over its neighbours.
 const MIN_LABELLED_ARTBOARD: f32 = 24.0;
 
-/// Artboard `name` above its top-left `corner` on screen, no wider than the artboard (`width` on
-/// screen): a longer name ends in "…", and an artboard too narrow shows none (#949).
-fn artboard_label(painter: &egui::Painter, corner: Pos2, width: f32, name: &str, color: Color32) {
+fn name_press_id() -> egui::Id {
+    egui::Id::new("canvas-artboard-name-press")
+}
+
+fn name_edit_id() -> egui::Id {
+    egui::Id::new("canvas-artboard-name-edit")
+}
+
+/// A name being typed above an artboard. `fresh`: this frame opened it, so a focus loss from the
+/// press that started it is not the user leaving the field.
+#[derive(Clone)]
+struct ArtboardNameEdit {
+    index: usize,
+    text: String,
+    fresh: bool,
+}
+
+/// The canvas label for `name`, laid out as [`artboard_label`] draws it.
+fn canvas_name_galley(painter: &egui::Painter, corner: Pos2, width: f32, name: &str, color: Color32) -> Option<(std::sync::Arc<egui::Galley>, Pos2)> {
     if !width.is_finite() || width < MIN_LABELLED_ARTBOARD {
-        return;
+        return None;
     }
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), egui::FontId::proportional(11.0), color);
     job.wrap = egui::text::TextWrapping { max_width: width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     let galley = painter.layout_job(job);
-    painter.galley(corner - vec2(0.0, 4.0 + galley.size().y), galley, color);
+    let at = corner - vec2(0.0, 4.0 + galley.size().y);
+    Some((galley, at))
+}
+
+/// Artboard `name` above its top-left `corner` on screen, no wider than the artboard (`width` on
+/// screen): a longer name ends in "…", and an artboard too narrow shows none (#949).
+fn artboard_label(painter: &egui::Painter, corner: Pos2, width: f32, name: &str, color: Color32) {
+    if let Some((galley, at)) = canvas_name_galley(painter, corner, width, name, color) {
+        painter.galley(at, galley, color);
+    }
+}
+
+fn canvas_name_rect(painter: &egui::Painter, corner: Pos2, width: f32, name: &str) -> Option<egui::Rect> {
+    canvas_name_galley(painter, corner, width, name, Color32::WHITE).map(|(galley, at)| egui::Rect::from_min_size(at, galley.size()).expand(2.0))
+}
+
+/// Where the Artboard tool draws "01 - name" for its active artboard (see its overlay label).
+fn tool_name_rect(painter: &egui::Painter, xf: &Xf, rect: Rect, index: usize, name: &str) -> egui::Rect {
+    let z = xf.zoom.max(1e-9);
+    let anchor = Point::new(rect.x0 - 8.0 / z, rect.y0 - 4.0 / z);
+    let sp = xf.to_screen(anchor) + vec2(8.0, -14.0);
+    let galley = painter.layout(format!("{:02} - {name}", index + 1), egui::FontId::proportional(11.0), Color32::WHITE, f32::INFINITY);
+    egui::Rect::from_min_size(sp, galley.size()).expand(2.0)
+}
+
+/// The artboard whose on-canvas name contains `screen`, if that name is being drawn.
+fn artboard_name_at(app: &VectorcraftApp, ui: &Ui, xf: &Xf, screen: Pos2) -> Option<usize> {
+    let st = app.session.active()?;
+    let artboard_tool = app.session.tool_id() == "artboard";
+    if !artboard_tool && st.doc.artboards.len() <= 1 {
+        return None;
+    }
+    let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
+    let painter = ui.painter();
+    let mut hit = None;
+    for (i, ab) in st.doc.artboards.iter().enumerate() {
+        if tool_labelled == u64::try_from(i).ok() {
+            continue;
+        }
+        let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
+        let width = (ab.rect.width() * xf.zoom) as f32;
+        let text = format!("{:02} - {}", i + 1, ab.name);
+        if canvas_name_rect(painter, corner, width, &text).is_some_and(|r| r.contains(screen)) {
+            hit = Some(i);
+        }
+    }
+    if let Some(i) = tool_labelled.and_then(|i| usize::try_from(i).ok())
+        && let Some(ab) = st.doc.artboards.get(i)
+        && tool_name_rect(painter, xf, ab.rect, i, &ab.name).contains(screen)
+    {
+        return Some(i);
+    }
+    hit
+}
+
+fn select_named_artboard(app: &mut VectorcraftApp, index: usize) {
+    let n = app.session.active().map(|st| st.doc.artboards.len()).unwrap_or(0);
+    if index >= n {
+        return;
+    }
+    if let Some(v) = app.view_mut() {
+        v.artboard = index;
+    }
+    if app.session.tool_id() == "artboard" {
+        app.session.set_tool_option("active", &json!(index));
+    }
+}
+
+fn begin_artboard_name_edit(ui: &Ui, app: &VectorcraftApp, index: usize) {
+    let Some(name) = app.session.active().and_then(|st| st.doc.artboards.get(index).map(|a| a.name.clone())) else { return };
+    ui.data_mut(|d| d.insert_temp(name_edit_id(), ArtboardNameEdit { index, text: name, fresh: true }));
+}
+
+fn commit_artboard_name(app: &mut VectorcraftApp, index: usize, text: &str) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let current = app.session.active().and_then(|st| st.doc.artboards.get(index).map(|a| a.name.clone()));
+    if current.as_deref() == Some(trimmed) {
+        return;
+    }
+    // A refusal is reported by the command; the label just closes.
+    app.run("artboard.setProps", json!({ "index": index, "name": trimmed })).ok();
+}
+
+/// The text field over an artboard name a double-click opened.
+fn artboard_name_editor(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
+    let Some(mut edit) = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id())) else { return };
+    let alive = app.session.active().is_some_and(|st| edit.index < st.doc.artboards.len());
+    if !alive {
+        ui.data_mut(|d| d.remove::<ArtboardNameEdit>(name_edit_id()));
+        return;
+    }
+    let Some(rect) = artboard_name_field_rect(app, ui, xf, edit.index) else {
+        ui.data_mut(|d| d.remove::<ArtboardNameEdit>(name_edit_id()));
+        return;
+    };
+    let fresh = edit.fresh;
+    edit.fresh = false;
+    let te = ui.put(rect, egui::TextEdit::singleline(&mut edit.text).id(name_edit_id().with("field")).font(egui::FontId::proportional(11.0)));
+    if fresh || (!te.has_focus() && !te.lost_focus()) {
+        te.request_focus();
+    }
+    let done = !fresh && te.lost_focus();
+    let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let (index, text) = (edit.index, edit.text.clone());
+    if done {
+        ui.data_mut(|d| d.remove::<ArtboardNameEdit>(name_edit_id()));
+        if !escape {
+            commit_artboard_name(app, index, &text);
+        }
+    } else {
+        ui.data_mut(|d| d.insert_temp(name_edit_id(), edit));
+    }
+}
+
+/// Where the rename field sits: the name label's rectangle, at least wide enough to type in.
+fn artboard_name_field_rect(app: &VectorcraftApp, ui: &Ui, xf: &Xf, index: usize) -> Option<egui::Rect> {
+    let st = app.session.active()?;
+    let ab = st.doc.artboards.get(index)?;
+    let artboard_tool = app.session.tool_id() == "artboard";
+    let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
+    let painter = ui.painter();
+    let rect = if tool_labelled == u64::try_from(index).ok() {
+        tool_name_rect(painter, xf, ab.rect, index, &ab.name)
+    } else {
+        let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
+        let width = (ab.rect.width() * xf.zoom) as f32;
+        canvas_name_rect(painter, corner, width, &format!("{:02} - {}", index + 1, ab.name))?
+    };
+    Some(egui::Rect::from_min_size(rect.min, vec2(rect.width().max(80.0), rect.height().max(16.0))))
 }
 
 /// Is overlay label `text` the Artboard tool's "01 - <artboard name>"? It holds a name, so it is
@@ -2019,7 +2477,8 @@ fn names_an_artboard(text: &str) -> bool {
 fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
     for o in overlays {
         match o {
-            Overlay::Marquee(r) => marquee(p, xf.rect_to_screen(*r)),
+            // Where the tools select: the document rectangle, turned with the view.
+            Overlay::Marquee(r) => marquee_through(p, &xf.quad(*r)),
             Overlay::Path { path, color, width, dashed } => {
                 let s = Stroke::new(*width, c32(*color));
                 if *dashed {
@@ -2209,6 +2668,16 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
     ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
 }
 
+/// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
+/// a gradient's stops or a mesh's points, which Recolor Artwork can change.
+pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
+    ids.iter().filter_map(|id| doc.node(*id)).any(|n| {
+        let mut found = false;
+        vectorcraft_doc::swatches::node_colors(n, &mut |_, _| found = true);
+        found
+    })
+}
+
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
@@ -2225,7 +2694,19 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned();
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
     let is_text = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Text(_)));
+    let is_image = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Image(_)));
+    // An Image Trace object: the group the engine names "Image Trace", its source image first.
+    let is_trace = is_group
+        && first.as_ref().is_some_and(|f| {
+            f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
+        });
     let mut items: Vec<(&str, &str, &str)> = vec![]; // (label, icon, command)
+    // As in the reference app, an image offers Image Trace and Crop Image, and traced art offers
+    // Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>).
+    if n == 1 && is_image {
+        items.push((tl!("Image Trace"), "image", TASK_BAR_IMAGE_TRACE));
+        items.push((tl!("Crop Image"), "dc-pf-crop", "ui.cropImage"));
+    }
     // Direct-selected anchors take the place of a path's Offset Path and Simplify.
     let anchors = !st.selection.anchors.is_empty();
     if anchors {
@@ -2235,19 +2716,27 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     if n > 1 {
         items.push((tl!("Group"), "group", "object.group"));
         items.push((tl!("Unite"), "squares-unite", "object.pathfinder.unite"));
+    } else if is_trace {
+        items.push((tl!("Expand"), "maximize-2", "imageTrace.expand"));
     } else if is_group {
         items.push((tl!("Ungroup"), "ungroup", "object.ungroup"));
         items.push((tl!("Isolate"), "square-dashed", "object.isolate"));
     } else if is_text {
         items.push((tl!("Create Outlines"), "type", "type.createOutlines"));
+    } else if is_image {
+        // Offset Path and Simplify don't apply to an image.
     } else if !anchors {
         items.push((tl!("Offset Path"), "square-dashed", "object.path.offsetPath"));
         items.push((tl!("Simplify"), "spline", "object.path.simplify"));
     }
     items.push((tl!("Duplicate"), "copy", "edit.duplicate"));
     let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
+    let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
-    let anchor = xf.to_screen(Point::new(b.center().x, b.y1));
+    // Under the selection's lowest corner on screen, centered on the selection (the view may be
+    // rotated).
+    let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+    let anchor = pos2(xf.to_screen(b.center()).x, lowest);
     let est_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
     // Its place under the selection, then where the handle moved it, kept on the canvas (with the
     // bar's size last frame, the estimate before it first shows).
@@ -2319,6 +2808,10 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         app.session.fill_active = true;
                         app.ui.open_panel = Some("swatches".into());
                     }
+                    // Recolor Artwork, when the selection has colours to recolour.
+                    if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 30.0).clicked() {
+                        run = Some(("ui.recolorDialog", json!({})));
+                    }
                     if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
                         run = Some(("object.lock", json!({})));
                     }
@@ -2353,10 +2846,17 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         }
         ui.ctx().request_repaint();
     }
-    if let Some((c, p)) = run {
-        crate::menus::invoke(app, c, p);
+    match run {
+        // Image Trace traces the image at once with the Default preset. As a quick trace from
+        // Properties or the Control bar, it leaves the Image Trace panel as it was.
+        Some((TASK_BAR_IMAGE_TRACE, _)) => crate::menus::invoke(app, "imageTrace.make", json!({"preset": "Default"})),
+        Some((c, p)) => crate::menus::invoke(app, c, p),
+        None => {}
     }
 }
+
+/// The Contextual Task Bar's Image Trace button: a trace with the Default preset.
+const TASK_BAR_IMAGE_TRACE: &str = "taskBar.imageTrace";
 
 #[cfg(test)]
 mod tests {
@@ -2486,6 +2986,47 @@ mod tests {
         assert_eq!(node_outline(st.doc.node(line).unwrap(), &symbols).bounding_box().x0, 50.0, "an isolated original still shows its full outline");
     }
 
+    /// A Shaper Group's mode widget, drawn for the Shaper and Selection tools with selection edges
+    /// shown or hidden: its arrow points right in Face Selection mode and left in Construction mode.
+    #[test]
+    fn the_shaper_widget_points_to_the_other_mode() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        for x in [0, 50] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
+        }
+        let points = json!({"points": [[25, 20], [75, 35], [30, 50], [125, 65]]});
+        let g = app.session.execute("shaper.scribble", &points).unwrap()["id"].as_u64().unwrap();
+        let ctx = egui::Context::default();
+        // For each widget drawn, whether its arrow's tip is right of the circle's center.
+        let right = |app: &mut VectorcraftApp| -> Vec<bool> {
+            let drawn = shapes(app, &ctx);
+            let r = vectorcraft_tools::shaperwidget::RADIUS_PX;
+            let centers: Vec<egui::Pos2> = drawn
+                .iter()
+                .filter_map(|s| if let Shape::Circle(c) = s { (c.radius == r && c.fill == Color32::WHITE).then_some(c.center) } else { None })
+                .collect();
+            drawn
+                .iter()
+                .filter_map(|s| match s {
+                    Shape::Path(p) if p.points.len() == 3 => centers.iter().find(|c| c.distance(p.points[0]) <= r).map(|c| p.points[0].x > c.x),
+                    _ => None,
+                })
+                .collect()
+        };
+        app.select_tool("shaper");
+        assert_eq!(right(&mut app), vec![true], "the scribble selects the group");
+        app.session.execute("object.isolate", &json!({"id": g})).unwrap();
+        assert_eq!(right(&mut app), vec![false]);
+        app.select_tool("selection");
+        assert_eq!(right(&mut app), vec![false]);
+        // View › Hide Edges keeps the widget, which still answers clicks.
+        app.ui.view.edges = false;
+        assert_eq!(right(&mut app), vec![false]);
+        app.select_tool("pen");
+        assert!(right(&mut app).is_empty());
+    }
+
     #[test]
     fn a_symbol_instance_is_outlined_around_its_art() {
         // A symbol holding the square of the SVG import tests' `Star` symbol, 20 × 20 from (0, 0),
@@ -2569,6 +3110,56 @@ mod tests {
         assert_eq!(lefts(&app), [boards[1].x0; 2], "an artboard the caller names is kept");
     }
 
+    /// The canvas outlines the active artboard in black, 1 px wide, and outlines the other
+    /// artboards in gray, 0.6 px wide. In the test, the active artboard is Artboard 1 at first,
+    /// then the one Go to Artboard went to, and then, with several artboards selected by the
+    /// Artboard tool, the tool's active one (the one Shift-clicked last).
+    #[test]
+    fn the_active_artboard_is_outlined_in_black() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        let ctx = egui::Context::default();
+        // → each artboard's edge as drawn: (width, color).
+        let edges = |app: &mut VectorcraftApp| {
+            let s = shapes(app, &ctx);
+            let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+            let on = |p: &[Pos2], q: &[Pos2]| p.len() == q.len() && p.iter().zip(q).all(|(a, b)| (*a - *b).length() < 0.01);
+            let boards: Vec<Rect> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+            boards
+                .iter()
+                .map(|r| {
+                    let q = xf.quad(*r);
+                    s.iter()
+                        .find_map(|s| match s {
+                            Shape::Path(p) if p.closed && p.fill == Color32::TRANSPARENT && on(&p.points, &q) => {
+                                Some((p.stroke.width, p.stroke.color.clone()))
+                            }
+                            _ => None,
+                        })
+                        .expect("the artboard's edge")
+                })
+                .collect::<Vec<_>>()
+        };
+        let (black, gray) = (egui::epaint::ColorMode::Solid(Color32::from_gray(0)), egui::epaint::ColorMode::Solid(Color32::from_gray(120)));
+        let active = |i: usize| -> Vec<(f32, egui::epaint::ColorMode)> {
+            (0..3).map(|j| if j == i { (1.0, black.clone()) } else { (0.6, gray.clone()) }).collect()
+        };
+        assert_eq!(edges(&mut app), active(0));
+        app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+        assert_eq!(edges(&mut app), active(1), "Artboard 2 is active: its edge is black and Artboard 1's edge is gray");
+        // The Artboard tool starts on Artboard 2; a Shift-click on Artboard 3 selects it too and
+        // makes it the active one.
+        app.select_tool("artboard");
+        let at = app.session.active().unwrap().doc.artboards[2].rect.center();
+        let view = app.view_info();
+        let shift = Mods { shift: true, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, pressure: 1.0 }, view);
+        }
+        assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
+        assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
+    }
+
     /// Enable Touch Gestures (#585): a two-finger tap undoes and a three-finger one redoes, and the
     /// first finger's press (the pointer egui makes of it) draws nothing. Off, a tap does nothing.
     #[test]
@@ -2609,6 +3200,45 @@ mod tests {
     fn artboard_labels_name_the_artboard() {
         assert!(names_an_artboard("01 - Layers") && names_an_artboard("12 - Artboard 12 - copy"));
         assert!(!names_an_artboard("anchor") && !names_an_artboard("1 - x") && !names_an_artboard("Off the mesh - move closer"));
+    }
+
+    /// Double-clicking the name drawn above an artboard edits that name and does not fit a new
+    /// artboard or open Artboard Options.
+    #[test]
+    fn double_clicking_an_artboard_name_edits_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 100, "height": 80, "name": "Far"})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 30, "height": 20})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let mut target = None;
+        let _ =
+            ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() }, |ui| {
+                let ab = &app.session.active().unwrap().doc.artboards[0];
+                target = Some(tool_name_rect(ui.painter(), &xf, ab.rect, 0, &ab.name).center());
+            });
+        let at = target.unwrap();
+        assert!(rect.contains(at), "the name is in the working area, at {at:?} canvas {rect:?}");
+        let before = app.session.active().unwrap().doc.artboards.len();
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let click = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        click(&mut app);
+        click(&mut app);
+        assert!(ctx.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).is_some()), "the name is being edited");
+        assert_eq!(app.session.active().unwrap().doc.artboards.len(), before, "clicking the name does not fit an artboard");
+        assert!(app.ui.dialog.is_none(), "Artboard Options stays closed");
+        commit_artboard_name(&mut app, 0, "Poster");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Poster");
+        commit_artboard_name(&mut app, 0, "   ");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Poster", "an empty name is left as it is");
     }
 
     /// #949: an artboard's name stays within the artboard's width on screen, ending in "…" when
@@ -3185,6 +3815,38 @@ mod tests {
         assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
     }
 
+    /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
+    /// draws it again, dimmed as before; each re-renders at once.
+    #[test]
+    fn hide_template_leaves_template_layers_off_the_canvas() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+        let layer = app.session.active().unwrap().doc.layers[0].id.0;
+        app.session.execute("layer.template", &json!({"ids": [layer], "on": true})).unwrap();
+        let ctx = egui::Context::default();
+        // How many pixels of the art's raster one frame uploads are painted, None when it was not
+        // re-rendered.
+        let painted = |app: &mut VectorcraftApp| -> Option<usize> {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let n = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                img.pixels.iter().filter(|c| c.a() != 0).count()
+            });
+            delta.clear();
+            n
+        };
+        let shown = painted(&mut app).expect("the first frame renders the art");
+        assert!(shown > 1000, "the template layer's art is drawn: {shown} pixels");
+        assert_eq!(app.run("view.template", json!({})).unwrap(), json!(false));
+        assert_eq!(painted(&mut app), Some(0), "Hide Template re-renders without the template layer");
+        assert_eq!(painted(&mut app), None, "nothing changed: no re-render");
+        assert_eq!(app.run("view.template", json!({})).unwrap(), json!(true));
+        assert_eq!(painted(&mut app), Some(shown), "Show Template draws it again as before");
+    }
+
     /// General › Anti-aliased Artwork (#394): on (the default), the art's edges are smoothed on
     /// screen; off, every pixel is either painted or not, and turning it either way re-renders.
     #[test]
@@ -3523,6 +4185,40 @@ mod tests {
         assert!(s.iter().any(|s| matches!(s, Shape::Circle(c) if c.fill == green)), "the guide dotted");
     }
 
+    /// A canvas guide (on no artboard) is drawn along its document line in a rotated view, where it
+    /// snaps and is picked: both ends of each guide's line are on x = 100 or y = 120. At 0° the
+    /// vertical one runs from the canvas's top to its bottom.
+    #[test]
+    fn canvas_guides_turn_with_the_view() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": false, "pos": 120})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "guideColor", "value": "#123456"})).unwrap();
+        app.ui.view.guides = true;
+        let color = Color32::from_rgb(0x12, 0x34, 0x56);
+        let ctx = egui::Context::default();
+        let lines = |app: &mut VectorcraftApp| -> Vec<[Pos2; 2]> {
+            shapes(app, &ctx)
+                .into_iter()
+                .filter_map(|s| if let Shape::LineSegment { points, stroke } = s { (stroke.color == color).then_some(points) } else { None })
+                .collect()
+        };
+        let s = lines(&mut app);
+        let rect = app.canvas_rect.unwrap();
+        let vertical = s.iter().find(|[a, b]| (a.x - b.x).abs() < 1e-3).expect("the vertical guide");
+        assert!((vertical[0].y - rect.top()).abs() < 0.5 && (vertical[1].y - rect.bottom()).abs() < 0.5, "0°: {vertical:?} in {rect:?}");
+        app.run("view.rotate", json!({"angle": 30})).unwrap();
+        let s = lines(&mut app);
+        let xf = Xf::new(rect, app.view().unwrap());
+        assert_eq!(s.len(), 2, "{s:?}");
+        let on = |v: f64, along_x: bool| {
+            s.iter().any(|ends| ends.iter().all(|e| ((if along_x { xf.to_doc(*e).x } else { xf.to_doc(*e).y }) - v).abs() < 1e-3))
+        };
+        assert!(on(100.0, true), "x = 100: {s:?}");
+        assert!(on(120.0, false), "y = 120: {s:?}");
+    }
+
     /// Selection & Anchor Display › Size (#394): anchors and the bounding box's handles grow.
     #[test]
     fn anchor_size_scales_anchors_and_handles() {
@@ -3724,6 +4420,108 @@ mod tests {
         assert_eq!(widgets(&mut app), 0);
     }
 
+    /// View › Hide Edges hides a live rectangle's corner widgets, and the Selection tool then
+    /// neither shows the corner cursor over one's place nor rounds the corners from it. With
+    /// edges shown, a drag from the same widget rounds them.
+    #[test]
+    fn hidden_corner_widgets_do_not_answer_the_pointer() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let widget = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+        };
+        let radius = |app: &VectorcraftApp| {
+            let c = vectorcraft_doc::LiveCorners::of(app.session.active().unwrap().doc.node(id).unwrap()).unwrap();
+            c.style(&c.all()).0
+        };
+        let drag = |app: &mut VectorcraftApp, from: Point| {
+            let (view, to) = (app.view_info(), from + vectorcraft_geom::Vec2::new(10.0, 10.0));
+            for (kind, at) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+                app.session.pointer(&PointerEvent::new(kind, at.x, at.y), view).unwrap();
+            }
+        };
+        app.ui.view.edges = false;
+        let at = widget(&app);
+        let view = app.view_info();
+        assert_ne!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
+        drag(&mut app, at);
+        assert_eq!(radius(&app), Some(0.0), "a press on a hidden widget does not round the corners");
+        app.ui.view.edges = true;
+        let at = widget(&app);
+        let view = app.view_info();
+        assert_eq!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
+        drag(&mut app, at);
+        assert!(radius(&app).is_some_and(|r| r > 0.0), "{:?}", radius(&app));
+    }
+
+    /// View › Hide Edges hides the bounding box and the type widget beside it, and the Selection
+    /// tool then answers neither: a double-click on the widget's place leaves point type as it is,
+    /// and a drag from a corner handle's place does not scale. With edges shown, both answer.
+    #[test]
+    fn a_hidden_bounding_box_and_type_widget_do_not_answer_the_pointer() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type"})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let bx = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            st.doc.oriented_bounds(&st.selection.objects, app.session.prefs.use_preview_bounds).unwrap()
+        };
+        let widget = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            vectorcraft_tools::typewidget::TypeWidget::of(&st.doc, &st.selection, &bx(app), app.view_info().zoom).unwrap()
+        };
+        let area = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+            NodeKind::Text(t) => matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }),
+            k => panic!("not type: {k:?}"),
+        };
+        let double_click = |app: &mut VectorcraftApp, at: Point| {
+            let view = app.view_info();
+            for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+                app.session.pointer(&PointerEvent::new(kind, at.x, at.y), view).unwrap();
+            }
+        };
+        let width = |app: &VectorcraftApp| bx(app).rect.width();
+        let scale = |app: &mut VectorcraftApp| {
+            let b = bx(app);
+            let corner = b.to_doc() * Point::new(b.rect.x1, b.rect.y1);
+            let (view, to) = (app.view_info(), corner + vectorcraft_geom::Vec2::new(30.0, 0.0));
+            for (kind, at) in [(PointerKind::Down, corner), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+                app.session.pointer(&PointerEvent::new(kind, at.x, at.y), view).unwrap();
+            }
+            app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        };
+        let w = widget(&app);
+        app.ui.view.edges = false;
+        let view = app.view_info();
+        assert_ne!(app.session.cursor(w.at, Mods::default(), view), Cursor::TypeWidget);
+        double_click(&mut app, w.at);
+        assert!(!area(&app), "a double-click on the hidden widget leaves point type");
+        app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let before = width(&app);
+        scale(&mut app);
+        assert!((width(&app) - before).abs() < 1e-6, "a drag from a hidden handle does not scale: {before} -> {}", width(&app));
+        app.ui.view.edges = true;
+        let w = widget(&app);
+        let view = app.view_info();
+        assert_eq!(app.session.cursor(w.at, Mods::default(), view), Cursor::TypeWidget);
+        scale(&mut app);
+        assert!(width(&app) > before + 1.0, "a drag from the handle scales: {before} -> {}", width(&app));
+        let w = widget(&app);
+        double_click(&mut app, w.at);
+        assert!(area(&app), "a double-click on the widget converts to area type");
+    }
+
     /// #511: a star shows a widget in each of its ten corners with Direct Selection (none with
     /// the Selection tool: it isn't a live shape); View → Hide Corner Widget hides them.
     #[test]
@@ -3765,6 +4563,28 @@ mod tests {
         assert_eq!(widget(&mut app), vec![layer]);
         app.ui.view.bounding_box = false;
         assert!(widget(&mut app).is_empty(), "no bounding box, no widget");
+    }
+
+    /// A selected live ellipse shows its two pie widgets with the Selection tool while the
+    /// bounding box shows.
+    #[test]
+    fn a_selected_ellipse_shows_its_pie_widgets() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap();
+        app.session.execute("object.setLiveShape", &json!({"pieStart": 0, "pieEnd": 90})).unwrap();
+        let ctx = egui::Context::default();
+        let widgets = |app: &mut VectorcraftApp| {
+            let r = vectorcraft_tools::pie::RADIUS_PX;
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count()
+        };
+        app.select_tool("selection");
+        assert_eq!(widgets(&mut app), 2);
+        app.select_tool("directSelection");
+        assert_eq!(widgets(&mut app), 0);
+        app.select_tool("selection");
+        app.run("view.boundingBox", json!({})).unwrap();
+        assert_eq!(widgets(&mut app), 0, "no bounding box, no widgets");
     }
 
     /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -3848,6 +4668,27 @@ mod tests {
         assert_ne!(zoomed, edited, "zoomed in");
         assert!(vectorcraft_text::FontDb::global().add_font(vectorcraft_testkit::fonts::renamed(".Hidden Marks")) > 0, "the family is new");
         assert_ne!(drawn(&mut app, &xf), zoomed, "set in the family that arrived");
+    }
+
+    /// In a rotated view Show Hidden Characters draws the marks of type whose turned outline reaches
+    /// into the canvas, also when the box between two of its corners on screen does not.
+    #[test]
+    fn show_hidden_characters_draws_type_partly_on_a_rotated_canvas() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": "a b c d e\nf g h"})).unwrap()["id"].as_u64().unwrap();
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        let ctx = egui::Context::default();
+        let mut xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 2.0, center: b.center(), rot: 45f64.to_radians() };
+        // The screen moves so that the canvas's left edge falls halfway between the right side of
+        // the box and the outline's rightmost corner, level with that corner.
+        let q = xf.quad(b);
+        let right = q.iter().copied().max_by(|a, c| a.x.total_cmp(&c.x)).unwrap();
+        let shift = vec2(-(xf.rect_to_screen(b).right() + right.x) / 2.0, xf.rect.center().y - right.y);
+        xf.center -= xf.delta_to_doc(shift);
+        assert!(!xf.rect_to_screen(b).intersects(xf.rect), "the box is off the canvas");
+        assert!(xf.quad(b).iter().any(|c| xf.rect.contains(*c)), "a corner is on it");
+        assert!(!hidden_chars(&mut app, &ctx, &xf).is_empty(), "the marks are drawn");
     }
 
     /// The shapes Type → Show Hidden Characters draws in one canvas frame ([`show`]).
@@ -4048,6 +4889,28 @@ mod tests {
         assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "an inch is 96 screen points");
     }
 
+    /// Fit Artboard in Window fits the artboard as a rotated view shows it: at 45° every corner is
+    /// on the canvas and one is within the 30-point margin of an edge. At 0° the zoom is unchanged.
+    #[test]
+    fn fit_artboard_fits_the_artboard_turned_with_the_view() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 612, "height": 792})).unwrap();
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
+        app.canvas_rect = Some(rect);
+        app.run("view.fitArtboard", json!({})).unwrap();
+        assert!((app.view().unwrap().zoom - (940.0 / 612.0_f64).min(740.0 / 792.0)).abs() < 1e-12, "0°");
+        app.run("view.rotate", json!({"angle": 45})).unwrap();
+        app.run("view.fitArtboard", json!({})).unwrap();
+        let board = app.session.active().unwrap().doc.artboards[0].rect;
+        let q = Xf::new(rect, app.view().unwrap()).quad(board);
+        assert!(q.iter().all(|c| rect.contains(*c)), "the turned artboard is on the canvas: {q:?}");
+        let gap = q
+            .iter()
+            .map(|c| (c.x - rect.left()).min(rect.right() - c.x).min(c.y - rect.top()).min(rect.bottom() - c.y))
+            .fold(f32::INFINITY, f32::min);
+        assert!(gap < 31.0, "and fills it but for the margin: {gap}");
+    }
+
     /// Performance › Animated Zoom (#394): the Zoom tool dragged sideways zooms about where it was
     /// pressed (right in, left out), held still it zooms on, and a click still steps. Off, or with
     /// GPU Performance off, a drag zooms to the area dragged across.
@@ -4096,6 +4959,72 @@ mod tests {
             let z = app.view().unwrap().zoom;
             assert!((z - z0 * (rect.width() / 100.0).min(rect.height() / 50.0) as f64).abs() < 1e-6, "{key} off: {z0} → {z}");
         }
+    }
+
+    /// With Animated Zoom off, the Zoom tool zooms a rotated view to the area dragged across: at 90°
+    /// and 180° a 100 × 50-point marquee fills the canvas as it does at 0°, centered on the canvas.
+    #[test]
+    fn the_zoom_tool_zooms_a_rotated_view_to_the_area_dragged_across() {
+        use egui::Event;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+        app.select_tool("zoom");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let at = rect.center() - vec2(100.0, 50.0);
+        let to = at + vec2(100.0, 50.0);
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for angle in [90.0, 180.0] {
+            app.run("view.rotate", json!({ "angle": angle })).unwrap();
+            let z0 = app.view().unwrap().zoom;
+            let middle = Xf::new(rect, app.view().unwrap()).to_doc(at + vec2(50.0, 25.0));
+            frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+            frame(&mut app, &ctx, vec![button(at, true)]);
+            frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+            frame(&mut app, &ctx, vec![button(to, false)]);
+            let v = app.view().unwrap();
+            let want = z0 * f64::from((rect.width() / 100.0).min(rect.height() / 50.0));
+            assert!((v.zoom - want).abs() < 1e-6, "{angle}°: {z0} → {}, not {want}", v.zoom);
+            assert!(v.center.distance(middle) < 1e-6, "{angle}°: the marquee's center goes to the canvas's center");
+            app.view_mut().unwrap().zoom = z0;
+        }
+    }
+
+    /// In a rotated view the Selection tool's marquee is drawn where the tool selects: through the
+    /// screen corners of the document rectangle between the press and the pointer.
+    #[test]
+    fn the_selection_marquee_is_drawn_where_it_selects_in_a_rotated_view() {
+        use egui::Event;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.run("view.rotate", json!({"angle": 45})).unwrap();
+        let rect = app.canvas_rect.unwrap();
+        let (from, to) = (rect.center() - vec2(60.0, 20.0), rect.center() + vec2(60.0, 40.0));
+        frame(&mut app, &ctx, vec![Event::PointerMoved(from)]);
+        frame(
+            &mut app,
+            &ctx,
+            vec![Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }],
+        );
+        frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+        let xf = Xf::new(rect, app.view().unwrap());
+        let want = xf.quad(Rect::from_points(xf.to_doc(from), xf.to_doc(to)));
+        let drawn: Vec<Vec<Pos2>> = shapes(&mut app, &ctx)
+            .into_iter()
+            .filter_map(|s| match s {
+                Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(Color32::from_white_alpha(230)) => Some(p.points),
+                _ => None,
+            })
+            .collect();
+        let [line] = &drawn[..] else { panic!("one marquee: {drawn:?}") };
+        assert_eq!(line.len(), 5, "closed: {line:?}");
+        assert!(line.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "{line:?} is not {want:?}");
+        assert_eq!(line[4], line[0]);
     }
 
     /// User Interface › Large Tabs (#394): the document tabs are taller, so the canvas starts lower.
@@ -4235,6 +5164,106 @@ mod tests {
         app.session.tool_text("X", app.view_info()).unwrap();
         let t = text(&app);
         assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+    }
+
+    #[test]
+    fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("directSelection");
+        let ctx = egui::Context::default();
+        let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                show(app, ui)
+            });
+            out.textures_delta.clear();
+        };
+        timed(&mut app, 0.0, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let text = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        // Double-click the middle of the text with Direct Selection.
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        let at = xf.to_screen(b.center());
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 1.1, vec![]);
+        // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
+        // into the text, not to tool shortcuts.
+        assert_eq!(app.session.tool_id(), "type");
+        assert!(app.session.tool_wants_text());
+        let o = app.session.tool_options();
+        assert_eq!(o["editing"], json!(id));
+        let caret = o["caret"].as_u64().unwrap();
+        assert!((1..11).contains(&caret), "caret {caret}");
+        app.session.tool_text("X", app.view_info()).unwrap();
+        let t = text(&app);
+        assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+
+        // Pressing Escape exits text editing and returns to Direct Selection tool.
+        let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        timed(&mut app, 1.2, vec![esc(true), esc(false)]);
+        assert_eq!(app.session.tool_id(), "directSelection");
+        assert!(!app.session.tool_wants_text());
+    }
+
+    #[test]
+    fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolation_until_second_escape() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let tid =
+            app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Nested hello", "size": 24})).unwrap()["id"].as_u64().unwrap();
+        // Group the text inside a group.
+        app.session.execute("select.all", &json!({})).unwrap();
+        app.session.execute("object.group", &json!({})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+                crate::shortcuts::handle(app, ui.ctx());
+                show(app, ui)
+            });
+            out.textures_delta.clear();
+        };
+        timed(&mut app, 0.0, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(tid)).unwrap().geometric_bounds().unwrap();
+        let at = xf.to_screen(b.center());
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+
+        // 1st double-click on group enters isolation mode.
+        timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 1.1, vec![]);
+        assert!(app.session.active().unwrap().isolation.is_some(), "should be in isolation mode");
+        assert_eq!(app.session.tool_id(), "selection");
+
+        // 2nd double-click on the text inside the isolated group enters text editing.
+        timed(&mut app, 2.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(&mut app, 2.1, vec![]);
+        assert_eq!(app.session.tool_id(), "type");
+        assert!(app.session.tool_wants_text());
+        assert!(app.session.active().unwrap().isolation.is_some(), "isolation mode still active while editing text");
+
+        // 1st Escape exits text edit mode, returns to Selection tool, but keeps isolation mode.
+        timed(&mut app, 3.0, vec![esc(true), esc(false)]);
+        timed(&mut app, 3.1, vec![]);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(!app.session.tool_wants_text());
+        assert!(app.session.active().unwrap().isolation.is_some(), "1st Escape must NOT end isolation mode");
+
+        // 2nd Escape exits isolation mode.
+        timed(&mut app, 4.0, vec![esc(true), esc(false)]);
+        timed(&mut app, 4.1, vec![]);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(app.session.active().unwrap().isolation.is_none(), "2nd Escape must exit isolation mode");
     }
 
     #[test]
@@ -4699,6 +5728,85 @@ mod tests {
         assert_eq!(doc.doc.art_bounds(), before, "the tap moved nothing");
     }
 
+    /// The Contextual Task Bar shows Recolor Artwork (a palette) when the selection has colours,
+    /// and it opens the Recolor Artwork dialog; art painted with None has no button.
+    #[test]
+    fn the_task_bar_recolors_coloured_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
+        app.session.execute("paint.setFill", &json!({"ids": [id], "color": "#cc3322"})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let click = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![]);
+            frame(app, &ctx, vec![]);
+            let bar = task_bar_rect(&ctx).expect("the task bar shows");
+            // Right to left: the frame's margin, More Options, Lock, then Recolor.
+            let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 30.0 - 6.0 - 15.0, bar.center().y);
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        let st = app.session.active().unwrap();
+        assert!(has_colors(&st.doc, &st.selection.objects));
+        click(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::recolor::KIND));
+
+        app.ui.dialog = None;
+        app.session.execute("paint.setFill", &json!({"ids": [id], "none": true})).unwrap();
+        app.session.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+        let st = app.session.active().unwrap();
+        assert!(!has_colors(&st.doc, &st.selection.objects), "None paints have no colours");
+        click(&mut app);
+        assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
+    }
+
+    /// The Contextual Task Bar shows Image Trace first for a selected image: it traces the image
+    /// with the Default preset and leaves the Image Trace panel as it was. For the Image Trace
+    /// object it made, the first button is Expand, which keeps only the traced paths.
+    #[test]
+    fn the_task_bar_traces_an_image_then_expands_the_trace() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+        let mut png = vec![];
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let data = vectorcraft_format::base64_encode(&png);
+        app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let click_first = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![]);
+            frame(app, &ctx, vec![]);
+            let bar = task_bar_rect(&ctx).expect("the task bar shows");
+            // Left to right: the frame's margin, the handle and its spacing, then the first button.
+            let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.center().y);
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        let first = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().unwrap()
+        };
+        assert!(matches!(first(&app).kind, NodeKind::Image(_)));
+        click_first(&mut app);
+        assert_eq!(first(&app).name.as_deref(), Some("Image Trace"), "the image was traced");
+        assert_eq!(app.ui.open_panel, None, "the Image Trace panel is left as it was");
+
+        click_first(&mut app);
+        let expanded = first(&app);
+        assert_ne!(expanded.name.as_deref(), Some("Image Trace"), "the trace was expanded");
+        let mut images = 0;
+        expanded.walk(&mut |n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
+        assert_eq!(images, 0, "only the traced paths are kept");
+    }
+
     /// The Contextual Task Bar's handle drags it: unpinned it keeps that offset as it follows the
     /// selection, pinned it stays put when the selection changes, unpinned again it follows from
     /// there, and Reset Bar Position puts it back under the selection. It never leaves the canvas,
@@ -4776,5 +5884,364 @@ mod tests {
         assert!(!app.ui.task_bar_place.pinned);
         near(select(&mut app, &a), under_a);
         near(select(&mut app, &b), under_b);
+    }
+
+    /// In a view turned 180° the Contextual Task Bar shows under the selection's lowest corner on
+    /// screen, not over the selection.
+    #[test]
+    fn the_task_bar_stays_under_the_selection_in_a_rotated_view() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 170, "y": 90, "width": 60, "height": 120})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        app.select_tool("selection");
+        app.run("view.rotate", json!({"angle": 180})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        let bar = task_bar_rect(&ctx).expect("the task bar shows");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let lowest = xf.quad(app.selection_bounds().unwrap()).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+        assert!(bar.top() > lowest, "the bar {bar:?} starts below {lowest}");
+    }
+
+    fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
+        use egui::{Event, Modifiers};
+        for (origin, preview, release) in [
+            (Point::new(17.0, 23.0), Point::new(222.0, 238.0), Point::new(232.0, 243.0)),
+            (Point::new(-17.0, -23.0), Point::new(223.0, 237.0), Point::new(233.0, 242.0)),
+            (Point::ZERO, Point::new(225.0, 235.0), Point::new(230.0, 245.0)),
+        ] {
+            for source_vertical in [false, true] {
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                app.run("document.setRulerOrigin", json!({"x": origin.x, "y": origin.y})).unwrap();
+                app.run("shape.rectangle", json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
+                let redo = app.session.active().unwrap().doc.clone();
+                app.run("edit.undo", json!({})).unwrap();
+                app.session.active_mut().unwrap().mark_saved();
+                app.ui.view.rulers = true;
+                app.ui.view.smart_guides = false;
+                app.ui.view.snap_to_point = false;
+                app.ui.view.snap_to_grid = false;
+                app.ui.view.snap_to_pixel = false;
+                app.select_tool("rectangle");
+                let ctx = egui::Context::default();
+                frame(&mut app, &ctx, vec![]);
+                let view = app.view_mut().unwrap();
+                view.zoom = 1.0;
+                view.rotation = 0.0;
+                view.center = Point::new(200.0, 150.0);
+                frame(&mut app, &ctx, vec![]);
+                let rect = app.canvas_rect.unwrap();
+                let xf = Xf::new(rect, app.view().unwrap());
+                let from =
+                    if source_vertical { pos2(rect.left() - RULER / 2.0, rect.center().y) } else { pos2(rect.center().x, rect.top() - RULER / 2.0) };
+                let to = xf.to_screen(Point::new(223.0, 237.0));
+                let end = xf.to_screen(Point::new(231.0, 244.0));
+                assert!(rect.contains(to) && rect.contains(end));
+                let mods = if alt { Modifiers::SHIFT | Modifiers::ALT } else { Modifiers::SHIFT };
+                let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: mods };
+                let before = app.session.active().unwrap().doc.clone();
+                let selection = app.session.active().unwrap().selection.clone();
+                let history = |app: &VectorcraftApp| {
+                    let st = app.session.active().unwrap();
+                    (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+                };
+                let original_history = history(&app);
+                assert_eq!(original_history.1, 1);
+                frame(&mut app, &ctx, vec![Event::ModifiersChanged(mods), Event::PointerMoved(from)]);
+                frame(&mut app, &ctx, vec![button(from, true)]);
+                frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+                let check = |app: &VectorcraftApp, switched: bool, expected: Point| {
+                    let guides = &app.session.active().unwrap().doc.guides;
+                    assert_eq!(guides.len(), 1);
+                    let vertical = source_vertical != switched;
+                    assert_eq!(guides[0].vertical, vertical);
+                    let want = if vertical { expected.x } else { expected.y };
+                    assert!((guides[0].pos - want).abs() < 1e-4, "origin={origin:?} vertical={vertical}: {:?}, want {want}", guides[0]);
+                };
+                assert_eq!(history(&app).0, original_history.0, "preview has no undo entry");
+                if cancel {
+                    // Cancellation is a baseline positive control, independent of snap correctness.
+                    assert_eq!(app.session.active().unwrap().doc.guides.len(), 1);
+                    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, false)]);
+                    assert_eq!(app.session.active().unwrap().doc, before);
+                    assert_eq!(app.session.active().unwrap().selection, selection);
+                    assert_eq!(history(&app), original_history);
+                    app.run("edit.redo", json!({})).unwrap();
+                    assert_eq!(app.session.active().unwrap().doc, redo);
+                    continue;
+                }
+                check(&app, alt, preview);
+                if alt {
+                    // Used only by the private #1782 compatibility regression, not standalone RED.
+                    frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::SHIFT)]);
+                    check(&app, false, preview);
+                    frame(&mut app, &ctx, vec![Event::ModifiersChanged(mods)]);
+                    check(&app, true, preview);
+                }
+                frame(&mut app, &ctx, vec![Event::PointerMoved(end), button(end, false)]);
+                check(&app, alt, release);
+                let st = app.session.active().unwrap();
+                assert_eq!(st.doc.ruler_origin, origin);
+                assert_eq!(st.doc.layers, before.layers, "the rectangle tool draws no artwork");
+                assert_eq!(st.selection, selection);
+                assert_eq!(history(&app), (original_history.0 + 1, 0, true));
+                assert_eq!(st.history.undo.last().unwrap().label, "New Guide");
+                let after = st.doc.clone();
+                app.run("edit.undo", json!({})).unwrap();
+                assert_eq!(app.session.active().unwrap().doc, before);
+                assert_eq!(history(&app), (original_history.0, 1, false));
+                app.run("edit.redo", json!({})).unwrap();
+                assert_eq!(app.session.active().unwrap().doc, after);
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_shift_origin_preview_release_and_history() {
+        ruler_guide_origin_ui(false, false);
+    }
+
+    #[test]
+    fn ruler_guide_shift_origin_cancel_preserves_redo() {
+        ruler_guide_origin_ui(false, true);
+    }
+
+    #[test]
+    fn ruler_guide_origin_display_fallback_accepts_only_bounded_finite_pairs() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        let max = vectorcraft_engine::MAX_COORD;
+        for (origin, expected) in [
+            (Point::ZERO, Point::ZERO),
+            (Point::new(17.0, -23.0), Point::new(17.0, -23.0)),
+            (Point::new(max, -max), Point::new(max, -max)),
+            (Point::new(f64::NAN, 23.0), Point::ZERO),
+            (Point::new(17.0, f64::INFINITY), Point::ZERO),
+            (Point::new(max + 1.0, 23.0), Point::ZERO),
+            (Point::new(17.0, -max - 1.0), Point::ZERO),
+        ] {
+            std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).ruler_origin = origin;
+            assert_eq!(app.ruler_origin(), expected);
+        }
+    }
+
+    #[test]
+    fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
+        use egui::Event;
+        for (vertical, target, shown) in [(true, 222.0, 205.0), (false, 238.0, 215.0)] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("document.setRulerOrigin", json!({"x": 17, "y": 23})).unwrap();
+            app.run("guide.add", json!({"vertical": vertical, "pos": 100})).unwrap();
+            app.ui.view.guides = true;
+            app.ui.view.smart_guides = false;
+            app.ui.view.snap_to_point = false;
+            app.ui.view.snap_to_grid = false;
+            app.ui.view.snap_to_pixel = false;
+            app.select_tool("selection");
+            let ctx = egui::Context::default();
+            frame(&mut app, &ctx, vec![]);
+            let view = app.view_mut().unwrap();
+            view.zoom = 1.0;
+            view.rotation = 0.0;
+            view.center = Point::new(200.0, 150.0);
+            frame(&mut app, &ctx, vec![]);
+            app.session.active_mut().unwrap().mark_saved();
+            let before = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let rect = app.canvas_rect.unwrap();
+            let xf = Xf::new(rect, app.view().unwrap());
+            let from = xf.to_screen(if vertical { Point::new(100.0, 50.0) } else { Point::new(50.0, 100.0) });
+            let to = xf.to_screen(if vertical { Point::new(target, 50.0) } else { Point::new(50.0, target) });
+            assert!(rect.contains(from) && rect.contains(to));
+            let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(&mut app, &ctx, vec![Event::PointerMoved(from)]);
+            frame(&mut app, &ctx, vec![button(from, true)]);
+            frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+            assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4);
+            assert_eq!(app.session.active().unwrap().selection.guides, vec![0]);
+            // Observe the real selected-guide field; no expected strings are inserted into UI state.
+            let fields = egui::Context::default();
+            crate::theme::install_fonts(&fields);
+            let mut texts = vec![];
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), ..Default::default() };
+                let mut out = fields.run_ui(input, |ui| crate::panels::transform::show(&mut app, ui));
+                out.textures_delta.clear();
+                fn collect(shape: &egui::Shape, texts: &mut Vec<String>) {
+                    match shape {
+                        egui::Shape::Text(t) => texts.push(t.galley.text().to_string()),
+                        egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, texts)),
+                        _ => {}
+                    }
+                }
+                texts.clear();
+                out.shapes.iter().for_each(|s| collect(&s.shape, &mut texts));
+            }
+            assert!(texts.iter().any(|t| t == &Unit::Points.format(shown)), "{texts:?}");
+            let view = app.view_info();
+            let overlays = app.session.overlays(view);
+            let want = format!("{}: {shown:.2} pt", if vertical { "X" } else { "Y" });
+            assert!(
+                overlays.iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Measure { text, .. } if text == &want)),
+                "{overlays:?}, field={shown}"
+            );
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            frame(&mut app, &ctx, vec![button(to, false)]);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+            assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc, before);
+        }
+    }
+
+    /// The 800 × 600 window [`frame`] draws the canvas in.
+    const WINDOW: egui::Rect = egui::Rect { min: Pos2::ZERO, max: Pos2 { x: 800.0, y: 600.0 } };
+
+    /// A 400 × 300 pt document at 400%, turned `rotation` degrees, with the Rectangle tool: a press
+    /// that reached the tool would draw.
+    fn zoomed_in(rotation: f64) -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let v = app.view_mut().unwrap();
+        v.zoom = 4.0;
+        v.rotation = rotation;
+        frame(&mut app, &ctx, vec![]);
+        (app, ctx)
+    }
+
+    /// Where the document's point `p` is on screen.
+    fn on_screen(app: &VectorcraftApp, p: Point) -> Pos2 {
+        Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(p)
+    }
+
+    /// Scroll bar `k` (0 horizontal, 1 vertical): its track, its span and the thumb's centre.
+    fn scroll_bar(app: &mut VectorcraftApp, k: usize) -> (egui::Rect, Span, Pos2) {
+        let rect = app.canvas_rect.unwrap();
+        let track = scroll_tracks(rect, WINDOW)[k];
+        let span = scroll_spans(&Xf::new(rect, app.view().unwrap()), app.content_bounds())[k];
+        let len = if k == 0 { track.width() } else { track.height() };
+        let (at, size) = span.thumb(len);
+        let c = if k == 0 { pos2(track.left() + at + size / 2.0, track.center().y) } else { pos2(track.center().x, track.top() + at + size / 2.0) };
+        (track, span, c)
+    }
+
+    fn primary(pos: Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    /// #2322: the Normal and Full Screen with Menu Bar modes keep the scroll bars along the right
+    /// and bottom edges, beside the rulers; Full Screen and Presentation Mode give the canvas the
+    /// whole window.
+    #[test]
+    fn scroll_bars_take_the_right_and_bottom_edges_in_the_windowed_screen_modes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        let ctx = egui::Context::default();
+        for (mode, max) in
+            [(0, WINDOW.max - vec2(SCROLL_BAR, SCROLL_BAR)), (1, WINDOW.max - vec2(SCROLL_BAR, SCROLL_BAR)), (2, WINDOW.max), (3, WINDOW.max)]
+        {
+            app.ui.screen_mode = mode;
+            frame(&mut app, &ctx, vec![]);
+            assert_eq!(app.canvas_rect.unwrap().max, max, "screen mode {mode}");
+        }
+    }
+
+    /// #2322: the thumb is as long, against its track, as the view against the art and the
+    /// artboards with half a window around them; zoomed in it is shorter.
+    #[test]
+    fn a_scroll_bar_thumb_is_as_long_as_the_view_is_against_the_content() {
+        assert_eq!(Span { lo: 0.0, hi: 100.0, v0: 0.0, v1: 100.0 }.thumb(50.0), (0.0, 50.0), "all in view: the whole track");
+        assert_eq!(Span { lo: 0.0, hi: 400.0, v0: 150.0, v1: 250.0 }.thumb(100.0), (37.5, 25.0));
+        assert_eq!(Span { lo: 0.0, hi: 1000.0, v0: 450.0, v1: 550.0 }.thumb(100.0), (40.0, 20.0), "never shorter than MIN_THUMB");
+        let (mut app, ctx) = zoomed_in(0.0);
+        let len = |app: &mut VectorcraftApp| {
+            let (track, span, _) = scroll_bar(app, 0);
+            span.thumb(track.width()).1
+        };
+        let at_400 = len(&mut app);
+        app.view_mut().unwrap().zoom = 8.0;
+        frame(&mut app, &ctx, vec![]);
+        assert!(len(&mut app) < at_400, "zoomed in, the thumb is shorter");
+    }
+
+    /// #2322: dragging a thumb scrolls the view along the screen's axis, in a turned view too, by
+    /// as much as the thumb's travel stands for; the drag never reaches the tool under the bar.
+    #[test]
+    fn dragging_a_scroll_bar_thumb_scrolls_the_view_and_draws_nothing() {
+        for rotation in [0.0, 90.0, 30.0] {
+            for k in 0..2 {
+                let (mut app, ctx) = zoomed_in(rotation);
+                let p = Point::new(200.0, 150.0);
+                let before = on_screen(&app, p);
+                let (track, span, from) = scroll_bar(&mut app, k);
+                let len = if k == 0 { track.width() } else { track.height() };
+                let step = if k == 0 { vec2(40.0, 0.0) } else { vec2(0.0, 40.0) };
+                let moved = (40.0 * span.ratio(len)).clamp(span.lo - span.v0, span.hi - span.v1);
+                assert!(moved > 40.0, "at 400% the view moves further than the thumb: {moved}");
+                frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+                frame(&mut app, &ctx, vec![primary(from, true)]);
+                frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + step / 2.0)]);
+                frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + step)]);
+                frame(&mut app, &ctx, vec![primary(from + step, false)]);
+                frame(&mut app, &ctx, vec![]);
+                assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the Rectangle tool under the bar drew nothing");
+                let after = on_screen(&app, p);
+                let want = before - step.normalized() * moved;
+                assert!((after - want).length() < 0.5, "rotation {rotation}, bar {k}: {before:?} -> {after:?}, want {want:?}");
+            }
+        }
+    }
+
+    /// #2322: a click on the track beyond the thumb scrolls a page (most of the window) towards it.
+    #[test]
+    fn a_click_on_a_scroll_bar_track_scrolls_a_page() {
+        let (mut app, ctx) = zoomed_in(0.0);
+        let p = Point::new(200.0, 150.0);
+        let before = on_screen(&app, p);
+        let (track, _, _) = scroll_bar(&mut app, 0);
+        let page = 0.9 * app.canvas_rect.unwrap().width();
+        let at = pos2(track.right() - 3.0, track.center().y);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        frame(&mut app, &ctx, vec![primary(at, true)]);
+        frame(&mut app, &ctx, vec![primary(at, false)]);
+        frame(&mut app, &ctx, vec![]);
+        let after = on_screen(&app, p);
+        assert!((after.x - (before.x - page)).abs() < 0.5 && (after.y - before.y).abs() < 0.5, "{before:?} -> {after:?}, page {page}");
+        assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the Rectangle tool drew nothing");
+    }
+
+    /// #2322: the wheel over the horizontal bar scrolls sideways, over the vertical one up and
+    /// down (over the canvas it scrolls up and down).
+    #[test]
+    fn the_wheel_over_a_scroll_bar_scrolls_along_it() {
+        for k in 0..2 {
+            let (mut app, ctx) = zoomed_in(0.0);
+            let p = Point::new(200.0, 150.0);
+            let before = on_screen(&app, p);
+            let (track, _, _) = scroll_bar(&mut app, k);
+            let at = track.center();
+            let wheel = egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -30.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Default::default(),
+            };
+            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(&mut app, &ctx, vec![wheel]);
+            for _ in 0..30 {
+                frame(&mut app, &ctx, vec![]);
+            }
+            let after = on_screen(&app, p);
+            let want = if k == 0 { before - vec2(30.0, 0.0) } else { before - vec2(0.0, 30.0) };
+            assert!((after - want).length() < 0.5, "bar {k}: {before:?} -> {after:?}, want {want:?}");
+        }
     }
 }

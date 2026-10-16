@@ -22,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unite",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Unite)
         ),
@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Minus Front",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::MinusFront)
         ),
@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Intersect",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Intersect)
         ),
@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Exclude",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Exclude)
         ),
@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Divide",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Divide)
         ),
@@ -67,7 +67,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Trim",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Trim)
         ),
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Merge)
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Crop",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_multi,
             |s, _| run_pf(s, PathfinderOp::Crop)
         ),
@@ -94,7 +94,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::Outline)
         ),
@@ -103,7 +103,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Minus Back",
             ["Window", "Pathfinder"],
             None,
-            "{} operate on the selected objects (back → front) → {ids}",
+            "{ids?: [id…] (selected first; default: the selection)} operate on the selected objects (back → front) → {ids}",
             has_selection,
             |s, _| run_pf(s, PathfinderOp::MinusBack)
         ),

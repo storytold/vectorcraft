@@ -66,6 +66,8 @@ type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
+    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
     /// The point type a click just placed (edited now): discarded if empty when editing ends.
@@ -526,11 +528,13 @@ impl Tool for TypeTool {
             self.goal_x = None;
         }
         match key {
-            // Escape ends editing and goes to the Selection tool, the type selected: the keyboard
-            // is free for tool shortcuts again (#1686).
+            // Escape ends editing and goes back to the tool used before double-clicking into type
+            // (or to the Selection tool by default), the type selected: the keyboard is free for
+            // tool shortcuts again (#1686).
             ToolKey::Escape => {
+                let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
                 let mut out = self.finish(cx);
-                out.push(Action::SwitchTool("selection".into()));
+                out.push(Action::SwitchTool(target));
                 out
             }
             ToolKey::Enter => self.replace(cx, "\n", None),
@@ -664,6 +668,7 @@ impl Tool for TypeTool {
         Some((t.xf * a, t.xf * b))
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.prev_tool = None;
         self.finish(cx)
     }
     /// Editing ends when a command takes the text out of the selection (Deselect, another object
@@ -698,15 +703,27 @@ impl Tool for TypeTool {
             Some(id) => {
                 // Offsets may exceed the text after Select All; callers clamp to the text length.
                 let (a, b) = self.sel();
-                json!({"editing": id.0, "start": a, "end": b, "caret": self.caret, "anchor": self.anchor, "typing": self.typing.is_some(), "composing": self.preedit.is_some()})
+                json!({
+                    "editing": id.0,
+                    "start": a,
+                    "end": b,
+                    "caret": self.caret,
+                    "anchor": self.anchor,
+                    "typing": self.typing.is_some(),
+                    "composing": self.preedit.is_some(),
+                    "prevTool": self.prev_tool,
+                })
             }
-            None => json!({"editing": null}),
+            None => json!({"editing": null, "prevTool": self.prev_tool}),
         }
     }
     /// `select {start, end}` / `selectAll` / `copy` (with `runs` of the selection) /
     /// `commitTyping` (the caller commits the engine interaction).
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
+            "prevTool" | "previousTool" => {
+                self.prev_tool = v.as_str().map(String::from);
+            }
             "commitTyping" | "endTyping" => {
                 self.typing = None;
                 self.preedit = None;
@@ -731,6 +748,7 @@ impl Tool for TypeTool {
                 self.typing = None;
                 self.preedit = None;
                 self.editing = None;
+                self.prev_tool = None;
             }
             _ => {}
         }

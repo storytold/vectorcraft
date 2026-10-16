@@ -123,6 +123,45 @@ fn type_fills_go_above_or_below_the_characters() {
 }
 
 #[test]
+fn an_effect_on_the_types_own_stroke_exports_as_the_offset_outline() {
+    let mut s = session();
+    let t = id_of(&run(&mut s, "text.create", json!({"x": 20, "y": 100, "text": "Hi"})));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "paint.setStroke", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "appearance.moveItem", json!({"from": "contents", "to": 1}));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 4}, "item": 0}));
+    let doc = s.doc().unwrap().doc.clone();
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+    // The baked type is its outlines, and the stroke's outline lies 4 pt outside the glyphs on every side.
+    let glyphs = vectorcraft_render::effects::outline_text(&node(&s, t)).unwrap().geometric_bounds().unwrap();
+    let baked = vectorcraft_render::effects::bake_document(&doc).unwrap();
+    let n = baked.node(t).unwrap();
+    assert!(!matches!(n.kind, NodeKind::Text(_)), "{n:?}");
+    let b = n.geometric_bounds().unwrap();
+    let off = [glyphs.x0 - b.x0, glyphs.y0 - b.y0, b.x1 - glyphs.x1, b.y1 - glyphs.y1];
+    assert!(off.iter().all(|o| (o - 4.0).abs() < 0.5), "{off:?}");
+}
+
+#[test]
+fn type_with_an_inline_graphic_stays_type_when_its_own_stroke_has_an_effect() {
+    let mut s = session();
+    run(&mut s, "shape.ellipse", json!({"x": 150, "y": 150, "width": 10, "height": 10}));
+    run(&mut s, "symbol.new", json!({"name": "Dot"}));
+    run(&mut s, "edit.clear", json!({}));
+    let t = id_of(&run(&mut s, "text.create", json!({"x": 20, "y": 100, "text": "Hi"})));
+    run(&mut s, "text.insertInline", json!({"id": t.0, "at": 0, "symbol": "Dot"}));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "paint.setStroke", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 4}, "item": 0}));
+    // Exports keep it as type, with its inline graphic.
+    let baked = vectorcraft_render::effects::bake_document(&s.doc().unwrap().doc).unwrap();
+    assert!(matches!(baked.node(t).unwrap().kind, NodeKind::Text(_)));
+}
+
+#[test]
 fn group_appearance_round_trips_and_expands() {
     let mut s = session();
     let (g, _) = group(&mut s);

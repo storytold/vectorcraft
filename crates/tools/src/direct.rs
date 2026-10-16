@@ -11,7 +11,8 @@
 //! (the selected ones when anchors are selected; Alt-click cycles their kind, double-click opens
 //! the Corners dialog).
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group;
-//! its marquee works as Direct Selection's.
+//! its marquee works as Direct Selection's, and E pressed during the drag makes it select only the
+//! objects entirely inside it (members of groups too), whole.
 //! In isolation mode both pick only the isolated object and what is inside it: anchors, segments,
 //! paths and groups outside it stay put.
 //! Both move objects selected as a whole as the Selection tool does, snapping alike.
@@ -80,6 +81,9 @@ enum State {
         cur: Point,
         /// Shift: the anchors inside leave the selection if selected, else join it.
         toggle: bool,
+        /// Group Selection, E pressed an odd number of times during the drag: the marquee selects
+        /// only the objects that lie entirely inside it, whole.
+        enclosed: bool,
     },
     Corner(CornerDrag),
     /// Dragging a bracket of type on a path.
@@ -162,6 +166,12 @@ impl DirectSelectionTool {
             click: None,
             click_segment: None,
         }
+    }
+
+    /// Is `key` the E that Group Selection takes while a marquee is being dragged? Direct
+    /// Selection takes no letter.
+    fn claims_letter(&self, key: ToolKey) -> bool {
+        self.group && key == ToolKey::Letter('e') && matches!(self.state, State::Marquee { .. })
     }
 }
 
@@ -363,7 +373,18 @@ impl Tool for DirectSelectionTool {
     }
     /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, a
     /// marquee) cancels it: what it moved goes back and the tool waits for the next press (#1743).
+    /// With Group Selection, E during a marquee drag makes the marquee select only the objects
+    /// entirely inside it, whole, and E pressed again makes it select what it selects by default.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if self.claims_letter(key)
+            && let State::Marquee { enclosed, .. } = &mut self.state
+        {
+            *enclosed = !*enclosed;
+            return vec![];
+        }
+        if key == ToolKey::Escape && self.guide.busy() {
+            return self.guide.cancel();
+        }
         if key != ToolKey::Escape || matches!(self.state, State::Idle | State::Mesh | State::Corner(_) | State::Bracket(_)) {
             return vec![];
         }
@@ -372,6 +393,9 @@ impl Tool for DirectSelectionTool {
         (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
         (self.click, self.click_segment) = (None, None);
         vec![Action::Cancel]
+    }
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        self.claims_letter(key)
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.guide.pointer(cx, ev) {
@@ -387,7 +411,7 @@ impl Tool for DirectSelectionTool {
                     return out;
                 }
                 let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
-                    self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift };
+                    self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift, enclosed: false };
                     return vec![];
                 };
                 // Walk up from the leaf: select the first ancestor not yet selected (below the layer).
@@ -407,7 +431,19 @@ impl Tool for DirectSelectionTool {
                     vec![Action::Exec("select.set".into(), json!({"ids": [target.0]}))]
                 }
             }
-            (PointerKind::DoubleClick, _) if !self.group => corners::double_click(cx, p, true).into_iter().collect(),
+            (PointerKind::DoubleClick, _) if !self.group => {
+                self.state = State::Idle;
+                if let Some(a) = corners::double_click(cx, p, true) {
+                    return vec![a];
+                }
+                if crate::rulerguide::guide_at(cx, p).is_some() {
+                    return vec![];
+                }
+                if hit_test(cx.doc, p, cx.hit_options()).and_then(|h| cx.doc.node(h.leaf)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
+                    return vec![Action::SwitchTool("type".into())];
+                }
+                vec![]
+            }
             (PointerKind::Move, State::Idle) => {
                 self.hover = if self.group || !cx.highlight_anchors { None } else { hovered_anchor(cx, p) };
                 vec![]
@@ -524,7 +560,7 @@ impl Tool for DirectSelectionTool {
                     }
                     return vec![];
                 }
-                self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift };
+                self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift, enclosed: false };
                 vec![]
             }
             (PointerKind::Drag, State::MoveAnchors { start, grab, began }) => {
@@ -656,8 +692,8 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 self.mesh.release().unwrap_or_default()
             }
-            (PointerKind::Drag, State::Marquee { start, toggle, .. }) => {
-                self.state = State::Marquee { start, cur: p, toggle };
+            (PointerKind::Drag, State::Marquee { start, toggle, enclosed, .. }) => {
+                self.state = State::Marquee { start, cur: p, toggle, enclosed };
                 vec![]
             }
             (PointerKind::Drag, State::Corner(mut c)) => {
@@ -704,11 +740,20 @@ impl Tool for DirectSelectionTool {
                 self.guides.clear();
                 vec![Action::Commit]
             }
-            (PointerKind::Up, State::Marquee { start, toggle, .. }) => {
+            (PointerKind::Up, State::Marquee { start, toggle, enclosed, .. }) => {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < cx.tol(3.0) && r.height() < cx.tol(3.0) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                }
+                // With Group Selection's enclosed marquee, the tool selects the objects inside it
+                // (members of groups too), each whole, as a click selects one.
+                if enclosed {
+                    let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
+                    touched.retain(|id| cx.doc.is_editable(*id));
+                    let ids: Vec<Value> = crate::select::inside(cx, r, touched).into_iter().map(|id| json!(id.0)).collect();
+                    let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": ids }));
+                    return std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, true)).collect();
                 }
                 // Anchors inside the rect, on editable paths inside isolation mode.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
@@ -731,7 +776,7 @@ impl Tool for DirectSelectionTool {
                 sel.retain(|(id, _)| cx.doc.is_editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
                 let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
-                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r)).collect()
+                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, false)).collect()
             }
             _ => vec![],
         }
@@ -1211,6 +1256,43 @@ mod tests {
         }
     }
 
+    /// Group Selection: E pressed during a marquee drag makes it select the objects entirely inside
+    /// it whole, a group's member without its group. Direct Selection does not take E.
+    #[test]
+    fn e_during_a_group_selection_marquee_selects_the_objects_inside() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let rect = |id, r| Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        let (g, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 1, Node::group(g, vec![])).unwrap();
+        d.insert(Some(g), 0, rect(a, Rect::new(100.0, 220.0, 120.0, 240.0))).unwrap();
+        d.insert(Some(g), 1, rect(b, Rect::new(100.0, 300.0, 120.0, 320.0))).unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let e = ToolKey::Letter('e');
+        let drag = |group: bool, mods: Mods| {
+            let mut t = DirectSelectionTool::new(group);
+            assert!(!t.claims_key(&cx, e), "no marquee yet");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0).with_mods(mods));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 250.0).with_mods(mods));
+            assert_eq!(t.claims_key(&cx, e), group);
+            t.key(&cx, e, Mods::default());
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 250.0).with_mods(mods))
+        };
+        assert_eq!(drag(true, Mods::default()), vec![Action::Exec("select.set".into(), json!({"ids": [id.0, a.0]}))]);
+        let shift = Mods { shift: true, ..Default::default() };
+        assert_eq!(drag(true, shift), vec![Action::Exec("select.toggle".into(), json!({"ids": [id.0, a.0]}))]);
+        // Direct Selection's marquee still selects the anchors inside it.
+        let anchors = |id: NodeId, list: Value| json!({"id": id.0, "anchors": list});
+        let all = json!([[0, 0], [0, 1], [0, 2], [0, 3]]);
+        assert_eq!(
+            drag(false, Mods::default()),
+            vec![Action::Exec("select.anchorsMany".into(), json!({"items": [anchors(id, all.clone()), anchors(a, all)], "mode": "set"}))]
+        );
+    }
+
     /// An open path from (100, 300) to (200, 300) arching up through (150, 262.5).
     fn arch_doc() -> (vectorcraft_doc::Document, NodeId) {
         let (mut d, _) = doc_with_rect();
@@ -1513,6 +1595,29 @@ mod tests {
         assert_eq!(drag(&mut t, &c, (300.0, 300.0), (201.0, 199.0), none).0, json!({"dx": -99.0, "dy": -101.0}));
     }
 
+    /// #2120: the end of a slanted straight line, dragged roughly along it, stays on its direction
+    /// (Line Extension) and the guide runs along it from the other end.
+    #[test]
+    fn dragged_end_of_a_slanted_line_stays_on_its_direction() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::shapes::line(Point::new(300.0, 400.0), Point::new(380.0, 340.0));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let p = paint();
+        let end = anchors_of(id, &[(0, 1)]);
+        let c = cx(&d, &end, &p);
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 380.0, 340.0));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 421.5, 312.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let (dx, dy) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+        assert!((dx - 40.0).abs() < 1e-9 && (dy + 30.0).abs() < 1e-9, "{v}");
+        let guides: Vec<(Point, Point)> =
+            t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Line { a, b, .. } = o { Some((a, b)) } else { None }).collect();
+        assert!(matches!(guides[..], [(a, b)] if a == Point::new(300.0, 400.0) && (b - Point::new(420.0, 310.0)).hypot() < 1e-9), "{guides:?}");
+    }
+
     /// Group Selection (and Direct Selection on a whole path) moves objects snapping as the
     /// Selection tool does: B's left side lines up with A's right one.
     #[test]
@@ -1527,5 +1632,37 @@ mod tests {
             let (v, _) = drag(&mut t, &c, (350.0, 350.0), (253.0, 351.0), Mods::default());
             assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, -100.0, 1.0]), "group: {group}");
         }
+    }
+
+    #[test]
+    fn double_clicking_type_switches_to_type_tool() {
+        use std::sync::Arc;
+        let (mut d, id) = doc_with_area_type();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let b = d.node(id).unwrap().geometric_bounds().unwrap();
+        let mid = b.center();
+        // Direct Selection (shortcut A, group == false) switches to the Type tool on double click.
+        let mut t = DirectSelectionTool::new(false);
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, mid.x, mid.y));
+        assert_eq!(acts, vec![Action::SwitchTool("type".into())]);
+
+        // Group Selection (group == true) does not switch to Type tool.
+        let mut gt = DirectSelectionTool::new(true);
+        let acts_group = gt.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, mid.x, mid.y));
+        assert!(acts_group.is_empty(), "group selection shouldn't switch: {acts_group:?}");
+
+        // Text inside a group also switches to Type tool with Direct Selection.
+        let gid = d.alloc_id();
+        let text_id = d.alloc_id();
+        let text_node = Node::new(
+            text_id,
+            vectorcraft_doc::NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(Point::new(50.0, 50.0), "In group", Default::default()))),
+        );
+        d.insert(Some(d.layers[0].id), 2, Node::group(gid, vec![Arc::new(text_node)])).unwrap();
+        let in_group_b = d.node(gid).unwrap().geometric_bounds().unwrap();
+        let c2 = cx(&d, &s, &p);
+        let acts_group_text = t.pointer(&c2, &PointerEvent::new(PointerKind::DoubleClick, in_group_b.center().x, in_group_b.center().y));
+        assert_eq!(acts_group_text, vec![Action::SwitchTool("type".into())]);
     }
 }

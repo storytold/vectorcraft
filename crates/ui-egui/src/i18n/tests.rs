@@ -35,6 +35,9 @@ fn tags_map_to_languages() {
     for tag in ["vi", "vi-VN", "vi_VN.UTF-8", "VI-vn"] {
         assert_eq!(lang_from_tag(tag), Some(vi()), "{tag}");
     }
+    for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8", "SV-se"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("sv"), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -478,7 +481,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 13] = ["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "uk", "vi"];
+const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -546,6 +549,7 @@ fn toggled_labels() -> Vec<String> {
         "type.hiddenCharacters",
         "view.gradientAnnotator",
         "view.artboards",
+        "view.template",
         "view.rulers",
         "view.boundingBox",
         "view.transparencyGrid",
@@ -721,6 +725,43 @@ fn vietnamese_reads_as_vietnamese() {
     assert_eq!(message(vi(), nested), "lệnh `object.group` hiện không khả dụng: chưa chọn gì");
 }
 
+fn fi() -> Lang {
+    Lang::from_code("fi").expect("fi registered")
+}
+
+/// Finnish has one/other plurals (partitive after numbers other than 1) and covers the complete
+/// interface and messages.
+#[test]
+fn finnish_reads_as_finnish() {
+    assert_eq!(fi().name(), "Suomi");
+    assert!(fi().complete_menus());
+    assert_eq!(Lang::from_pref("fi"), fi());
+    assert_eq!(Lang::from_pref("FI"), fi());
+    for tag in ["fi", "fi-FI", "fi_FI.UTF-8", "FI-fi"] {
+        assert_eq!(lang_from_tag(tag), Some(fi()), "{tag}");
+    }
+    // Filipino (`fil`) and Swedish in Finland (`sv-FI`) don't pick Finnish.
+    assert_ne!(lang_from_tag("fil"), Some(fi()));
+    assert_ne!(lang_from_tag("sv-FI"), Some(fi()));
+    for (en, want) in [
+        ("Artboard Tool", "Piirtoalustatyökalu"),
+        ("Swatches", "Värimallit"),
+        ("Stroke", "Viiva"),
+        ("Fill", "Täyttö"),
+        ("Direct Selection Tool", "Suoravalintatyökalu"),
+        ("Save As…", "Tallenna nimellä…"),
+        ("Undo", "Kumoa"),
+        ("Close", "Sulje"),
+    ] {
+        assert_eq!(tr(fi(), en), want);
+    }
+    for (n, layer) in [(0, "tasoa"), (1, "taso"), (3, "tasoa"), (21, "tasoa")] {
+        assert_eq!(trn(fi(), n, "{n} Layer", "{n} Layers"), format!("{n} {layer}"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(fi(), nested), "komento `object.group` ei ole nyt käytettävissä: mitään ei ole valittu");
+}
+
 /// Ambiguous English terms keep their intended Vietnamese meaning across UI contexts.
 #[test]
 fn vietnamese_domain_terms_are_consistent() {
@@ -750,6 +791,41 @@ fn vietnamese_domain_terms_are_consistent() {
 
 fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
+}
+
+fn pt_br() -> Lang {
+    Lang::from_code("pt-br").expect("pt-br registered")
+}
+
+/// Brazilian Portuguese covers the complete interface and messages, with two plural forms like
+/// English (zero takes the plural).
+#[test]
+fn brazilian_portuguese_reads_as_portuguese() {
+    assert_eq!(pt_br().name(), "Português (Brasil)");
+    assert!(pt_br().complete_menus());
+    assert_eq!(Lang::from_pref("pt-br"), pt_br());
+    assert_eq!(Lang::from_pref("pt-BR"), pt_br());
+    for tag in ["pt-br", "pt_BR.UTF-8", "pt-BR", "pt_BR"] {
+        assert_eq!(lang_from_tag(tag), Some(pt_br()), "{tag}");
+    }
+    for (en, want) in [
+        ("Artboard Tool", "Ferramenta Mesa de Trabalho"),
+        ("Swatches", "Amostras"),
+        ("Pathfinder", "Localizador de Caminhos"),
+        ("Stroke", "Traçado"),
+        ("Fill", "Preenchimento"),
+        ("Direct Selection Tool", "Ferramenta Seleção Direta"),
+        ("Save As…", "Salvar Como…"),
+        ("Undo", "Desfazer"),
+        ("Close", "Fechar"),
+    ] {
+        assert_eq!(tr(pt_br(), en), want, "{en}");
+    }
+    assert_eq!(trn(pt_br(), 1, "{n} Layer", "{n} Layers"), "1 Camada");
+    assert_eq!(trn(pt_br(), 0, "{n} Layer", "{n} Layers"), "0 Camadas");
+    assert_eq!(trn(pt_br(), 3, "{n} Layer", "{n} Layers"), "3 Camadas");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(pt_br(), nested), "o comando `object.group` não está disponível agora: nada selecionado");
 }
 
 /// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
@@ -1007,7 +1083,7 @@ fn russian_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 0, 1, 2, 2, 0]);
 }
 
-/// Czech, German, Spanish, French, Italian, Hungarian and Polish letters (and the punctuation their text uses) come from each family's own first font, not
+/// Czech, German, Spanish, French, Italian, Hungarian, Polish and Swedish letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
 #[test]
@@ -1022,7 +1098,7 @@ fn latin_script_glyphs_are_available_without_system_fonts() {
             let first = first.unwrap();
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
-            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆäöÄÖßőűŐŰąćęłńśźżĄĆĘŁŃŚŹŻ\u{a0}".chars()
+            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆäöÄÖßőűŐŰąćęłńśźżĄĆĘŁŃŚŹŻåÅ\u{a0}".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
@@ -1160,7 +1236,7 @@ fn unknown_parameter_errors_are_translated() {
     for (cmd, p) in [("file.new", json!({"widht": 300})), ("select.all", json!({"zzz": 1})), ("shape.line", json!({"colour": "red"}))] {
         let e = vectorcraft_engine::check_params(cmd, &p).unwrap_err();
         let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{cmd} {p}: {e}") };
-        for code in COMPLETE_MESSAGES.iter().chain(&["pt-br"]) {
+        for code in COMPLETE_MESSAGES {
             let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
             assert!(!shown.contains("unknown parameter") && shown.contains(cmd), "{code}: {shown} ({msg})");
         }
@@ -1206,7 +1282,7 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "es", "fr", "hu", "it", "ja", "ko", "pl", "ru", "uk", "vi"];
+const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
@@ -1392,4 +1468,21 @@ fn polish_reads_as_polish() {
     assert_eq!(tr_id(pl(), "pathfinder.add", "Add"), "Połącz");
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(pl(), nested), "polecenie `object.group` jest teraz niedostępne: nic nie zaznaczono");
+}
+
+/// Japanese names every default swatch and colour group the Swatches panel shows (the greys'
+/// `K=` values read the same in any language); a name the user gave a swatch has no row.
+#[test]
+fn japanese_names_the_default_swatches() {
+    let ja = Lang::from_code("ja").unwrap().catalog();
+    let (swatches, groups) = vectorcraft_color::default_swatches(vectorcraft_color::cms::Model::Rgb);
+    let names = swatches
+        .iter()
+        .map(|s| s.name.clone())
+        .chain(groups.iter().flat_map(|g| std::iter::once(g.name.clone()).chain(g.swatches.iter().map(|s| s.name.clone()))))
+        .chain([vectorcraft_color::swatch::REGISTRATION.to_string()]);
+    let missing: Vec<String> = names.filter(|n| !n.starts_with("K=") && ja.contextual("swatch", n).is_none()).collect();
+    assert!(missing.is_empty(), "{missing:?}");
+    assert_eq!(ja.contextual("swatch", "White"), Some("ホワイト"));
+    assert_eq!(ja.contextual("swatch", "My Red"), None);
 }

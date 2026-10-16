@@ -37,9 +37,23 @@
 //! and the app stayed in the background without a window (#964). [`watch_first_frame`] gives the
 //! first frame [`FIRST_FRAME_TIMEOUT`] once the app is created and, when it doesn't come, starts
 //! the app again without that adapter in the same way.
+//!
+//! A driver can also crash the whole process, and then no code in it runs to start it again:
+//! Intel's Direct3D 12 driver (`igd12umd64.dll`) ended 0.9.0 before its window appeared (#2243).
+//! So each start writes [`START_FILE`] in the log folder before the graphics start, adds the
+//! adapter once one is picked, and clears both once the first frame reaches the screen or the app
+//! ends without crashing ([`Startup::track`]). The next start that finds a start still recorded
+//! there leaves that adapter out, as a restart does, and keeps leaving it out; when the crash came
+//! while the adapters were being listed, before one was picked, it lists OpenGL's adapters alone
+//! (except on macOS, where wgpu has none). A start that `WGPU_BACKEND` or `WGPU_ADAPTER_NAME`
+//! chooses leaves nothing out, and the crashes are forgotten when the app version or
+//! Preferences › Performance › Graphics Processor changes, when a start shows its first frame on
+//! the adapter that crashed, or when no adapter is left to show the window.
 
+use std::io::{Read as _, Seek as _, Write as _};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use eframe::egui_wgpu::NativeAdapterSelectorMethod;
@@ -49,6 +63,14 @@ use eframe::wgpu::{self, Backend, Backends, DeviceType, PowerPreference};
 /// (`Vulkan:1002:164e`, `Metal:Intel Iris Pro Graphics`). Set by the app itself when it starts
 /// again.
 pub const SKIP_ENV: &str = "VECTORCRAFT_GPU_SKIP";
+
+/// The file in the log folder that records each start of the window until its first frame
+/// reaches the screen, and the adapters earlier starts crashed on ([`Startup::track`]).
+pub const START_FILE: &str = "graphics-start.json";
+
+/// The most bytes of [`START_FILE`] read, and the most crashed adapters it keeps.
+const START_FILE_LIMIT: u64 = 64 * 1024;
+const CRASHED_LIMIT: usize = 16;
 
 /// wgpu's variable for choosing an adapter by (part of) its name, any case.
 const NAME_ENV: &str = "WGPU_ADAPTER_NAME";
@@ -348,6 +370,226 @@ fn parse_skip(v: &str) -> Vec<String> {
     v.split(',').map(str::trim).filter(|k| !k.is_empty()).map(String::from).collect()
 }
 
+/// Whether `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` is set: then a start uses the backends and the
+/// adapter they name, and leaves out none that earlier starts crashed on.
+pub fn explicit_choice() -> bool {
+    std::env::var_os("WGPU_BACKEND").is_some() || std::env::var_os(NAME_ENV).is_some()
+}
+
+/// How the last start ended when it ended before the window's first frame reached the screen,
+/// with no error or panic to report: a crash in the graphics driver (#2243), or the process was
+/// ended from outside.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Crash {
+    /// While the adapters were being listed, before one was picked.
+    Listing,
+    /// On the adapter with this [`key`] and name.
+    Adapter { key: String, name: String },
+}
+
+/// What a start leaves out because earlier starts crashed ([`Startup::track`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LeftOut {
+    /// The adapters ([`key`]s) that crashed a start.
+    pub adapters: Vec<String>,
+    /// A start crashed while listing the adapters: list OpenGL's alone. Never on macOS, where wgpu
+    /// has no OpenGL adapters to fall back to.
+    pub opengl_only: bool,
+    /// The crash the last start ended in, when this start leaves something out for it.
+    pub crash: Option<Crash>,
+}
+
+impl LeftOut {
+    /// `backends` to list: OpenGL alone after a crash while listing, when it is among them;
+    /// otherwise `backends`.
+    pub fn backends(&self, backends: Backends) -> Backends {
+        if self.opengl_only && backends.contains(Backends::GL) { Backends::GL } else { backends }
+    }
+}
+
+/// An adapter in [`START_FILE`]: its [`key`] and name.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Recorded {
+    key: String,
+    name: String,
+}
+
+/// The start in progress, in [`START_FILE`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Starting {
+    /// The adapter picked; `None` while the adapters are being listed.
+    adapter: Option<Recorded>,
+    /// The listing found an adapter of a backend other than OpenGL.
+    native: bool,
+}
+
+/// What [`START_FILE`] holds.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct StartRecord {
+    /// The app version and the Graphics Processor preference (`gpuPreference`) it was written
+    /// under: the crashes count only for the same ones.
+    version: String,
+    preference: String,
+    /// The start in progress, from before the graphics start until its first frame reaches the
+    /// screen or the app ends without crashing.
+    starting: Option<Starting>,
+    /// The adapters that crashed a start, oldest first.
+    crashed: Vec<Recorded>,
+    /// A start crashed while listing the adapters.
+    listing_crashed: bool,
+}
+
+impl StartRecord {
+    /// This start's record, made from the one the last start left (`previous`; `None` when there
+    /// is none or it can't be read), and the crash that start ended in, if it did. A record
+    /// written by another version or under another `preference` is dropped.
+    fn begin(previous: Option<Self>, version: &str, preference: &str) -> (Self, Option<Crash>) {
+        let mut record = previous.filter(|r| r.version == version && r.preference == preference).unwrap_or_default();
+        let crash = record.starting.take().map(|s| match s.adapter {
+            Some(Recorded { key, name }) => Crash::Adapter { key, name },
+            None => Crash::Listing,
+        });
+        match &crash {
+            Some(Crash::Adapter { key, name }) if !record.crashed.iter().any(|c| &c.key == key) => {
+                record.crashed.push(Recorded { key: key.clone(), name: name.clone() });
+                if record.crashed.len() > CRASHED_LIMIT {
+                    record.crashed.remove(0);
+                }
+            }
+            Some(Crash::Listing) => record.listing_crashed = true,
+            _ => {}
+        }
+        record.version = version.to_string();
+        record.preference = preference.to_string();
+        record.starting = Some(Starting::default());
+        (record, crash)
+    }
+
+    /// What this start leaves out: nothing when `explicit` ([`explicit_choice`]). `crash` is the
+    /// one [`begin`](Self::begin) found.
+    fn left_out(&self, crash: Option<Crash>, explicit: bool) -> LeftOut {
+        if explicit {
+            return LeftOut::default();
+        }
+        let opengl_only = self.listing_crashed && !cfg!(target_os = "macos");
+        let crash = crash.filter(|c| matches!(c, Crash::Adapter { .. }) || opengl_only);
+        LeftOut { adapters: self.crashed.iter().map(|c| c.key.clone()).collect(), opengl_only, crash }
+    }
+
+    /// The adapter this start picked, after a listing that found one of a backend other than
+    /// OpenGL when `native`.
+    fn picked(&mut self, key: &str, name: &str, native: bool) {
+        self.starting = Some(Starting { adapter: Some(Recorded { key: key.to_string(), name: name.trim().to_string() }), native });
+    }
+
+    /// The listing found no adapter that can show the window: nothing is left to leave out, so the
+    /// crashes are forgotten and the next start tries every adapter again.
+    fn none_left(&mut self) {
+        self.crashed.clear();
+        self.listing_crashed = false;
+    }
+
+    /// The window's first frame reached the screen: the adapter it was drawn on, and the listing
+    /// when it found an adapter of a backend other than OpenGL, no longer count as crashed.
+    fn presented(&mut self) {
+        let Some(starting) = self.starting.take() else { return };
+        if let Some(adapter) = starting.adapter {
+            self.crashed.retain(|c| c.key != adapter.key);
+        }
+        if starting.native {
+            self.listing_crashed = false;
+        }
+    }
+
+    /// The start ended without crashing: a normal exit, an error, or a restart on another adapter.
+    fn ended(&mut self) {
+        self.starting = None;
+    }
+
+    fn to_json(&self) -> String {
+        let recorded = |r: &Recorded| serde_json::json!({ "key": r.key, "name": r.name });
+        let mut v = serde_json::json!({
+            "version": self.version,
+            "gpuPreference": self.preference,
+            "crashed": self.crashed.iter().map(recorded).collect::<Vec<_>>(),
+            "listingCrashed": self.listing_crashed,
+        });
+        if let (Some(s), Some(map)) = (&self.starting, v.as_object_mut()) {
+            map.insert("starting".into(), serde_json::json!({ "adapter": s.adapter.as_ref().map(recorded), "native": s.native }));
+        }
+        v.to_string()
+    }
+
+    /// The record in `text`; `None` when it isn't one.
+    fn parse(text: &str) -> Option<Self> {
+        let v: serde_json::Value = serde_json::from_str(text).ok()?;
+        let recorded = |v: &serde_json::Value| -> Option<Recorded> {
+            Some(Recorded { key: v.get("key")?.as_str()?.to_string(), name: v.get("name")?.as_str()?.to_string() })
+        };
+        let starting = match v.get("starting") {
+            None => None,
+            Some(s) => Some(Starting {
+                adapter: match s.get("adapter") {
+                    None | Some(serde_json::Value::Null) => None,
+                    Some(a) => Some(recorded(a)?),
+                },
+                native: s.get("native")?.as_bool()?,
+            }),
+        };
+        let crashed = v.get("crashed")?.as_array()?;
+        Some(Self {
+            version: v.get("version")?.as_str()?.to_string(),
+            preference: v.get("gpuPreference")?.as_str()?.to_string(),
+            starting,
+            crashed: crashed.iter().take(CRASHED_LIMIT).map(recorded).collect::<Option<_>>()?,
+            listing_crashed: v.get("listingCrashed")?.as_bool()?,
+        })
+    }
+}
+
+/// [`START_FILE`], open and locked while the start runs, so that a second copy of the app starting
+/// at the same time doesn't take it for the record of a start that crashed.
+struct StartFile {
+    file: std::fs::File,
+    record: StartRecord,
+}
+
+impl StartFile {
+    /// Open `dir`'s [`START_FILE`], with the record the last start left in it (`None` when there is
+    /// none or it can't be read). `Ok(None)` when another copy of the app holds it.
+    fn open(dir: &Path) -> std::io::Result<Option<(std::fs::File, Option<StartRecord>)>> {
+        std::fs::create_dir_all(dir)?;
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(dir.join(START_FILE))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => return Err(e),
+        }
+        let mut text = String::new();
+        // Text that isn't UTF-8, or is longer than any record, is ignored like a damaged record.
+        let previous = (&file).take(START_FILE_LIMIT).read_to_string(&mut text).ok().and_then(|_| StartRecord::parse(&text));
+        Ok(Some((file, previous)))
+    }
+
+    fn write(&mut self) {
+        let text = self.record.to_json();
+        let written = self.file.set_len(0).and_then(|()| self.file.rewind()).and_then(|()| self.file.write_all(text.as_bytes()));
+        if let Err(e) = written {
+            log::warn!("{START_FILE}: {e}");
+        }
+    }
+}
+
+/// The value of `gpuPreference` the crashes are recorded under: any value this version doesn't
+/// know reads as `automatic`, as in [`power_preference`].
+fn preference_name(pref: Option<&str>) -> &'static str {
+    match pref {
+        Some("highPerformance") => "highPerformance",
+        Some("lowPower") => "lowPower",
+        _ => "automatic",
+    }
+}
+
 /// What the window's start-up leaves for [`finish`].
 #[derive(Default)]
 pub struct Startup {
@@ -357,6 +599,8 @@ pub struct Startup {
     ui: OnceLock<egui::Context>,
     /// When the app was created, the files named at the start opened: the first frame is due.
     ready: OnceLock<Instant>,
+    /// [`START_FILE`] while the start runs ([`Self::track`]).
+    start: Mutex<Option<StartFile>>,
 }
 
 impl Startup {
@@ -370,6 +614,82 @@ impl Startup {
     pub fn ready(&self) {
         // Set once, like `created`.
         let _ = self.ready.set(Instant::now());
+    }
+
+    /// Record this start in `dir`'s [`START_FILE`] until the window's first frame reaches the
+    /// screen or the app ends without crashing, and say what it leaves out for the starts that
+    /// crashed before (see the module docs). `preference` is Preferences › Performance › Graphics
+    /// Processor, and `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
+    /// written, or another copy of the app is starting), nothing is recorded or left out.
+    pub fn track(&self, dir: &Path, preference: Option<&str>, explicit: bool) -> LeftOut {
+        let (file, previous) = match StartFile::open(dir) {
+            Ok(Some(opened)) => opened,
+            Ok(None) => {
+                log::info!("{START_FILE}: another VectorCraft is starting, so this start isn't recorded");
+                return LeftOut::default();
+            }
+            Err(e) => {
+                log::warn!("{START_FILE}: {e}");
+                return LeftOut::default();
+            }
+        };
+        let (record, crash) = StartRecord::begin(previous, env!("CARGO_PKG_VERSION"), preference_name(preference));
+        let left_out = record.left_out(crash.clone(), explicit);
+        match &crash {
+            Some(Crash::Adapter { key, name }) => {
+                log::warn!("the last start ended on graphics adapter {name} ({key}) before the window's first frame reached the screen")
+            }
+            Some(Crash::Listing) => log::warn!("the last start ended while it listed the graphics adapters"),
+            None => {}
+        }
+        if explicit && (!record.crashed.is_empty() || record.listing_crashed) {
+            log::info!("WGPU_BACKEND or WGPU_ADAPTER_NAME is set: no adapter is left out for the starts that crashed");
+        }
+        if !left_out.adapters.is_empty() {
+            log::warn!("leaving out the graphics adapters earlier starts crashed on: {}", left_out.adapters.join(", "));
+        }
+        if left_out.opengl_only {
+            log::warn!("an earlier start crashed while it listed the graphics adapters: listing OpenGL's alone");
+        }
+        let mut file = StartFile { file, record };
+        file.write();
+        *self.start.lock().unwrap_or_else(PoisonError::into_inner) = Some(file);
+        left_out
+    }
+
+    /// [`selector`] picked the adapter with this [`key`] and name; `native` when the listing found
+    /// an adapter of a backend other than OpenGL.
+    fn picked(&self, key: &str, name: &str, native: bool) {
+        // Set once; eframe picks the adapter once.
+        let _ = self.adapter.set(key.to_string());
+        self.update(|r| r.picked(key, name, native), false);
+    }
+
+    /// [`selector`] found no adapter that can show the window.
+    fn none_left(&self) {
+        self.update(StartRecord::none_left, false);
+    }
+
+    /// The window's first frame reached the screen, or the window started minimized.
+    fn presented(&self) {
+        self.update(StartRecord::presented, true);
+    }
+
+    /// The app ends, or starts again, without crashing.
+    fn ended(&self) {
+        self.update(StartRecord::ended, true);
+    }
+
+    /// Change the record and write it; `last` releases the file for the next start.
+    fn update(&self, change: impl FnOnce(&mut StartRecord), last: bool) {
+        let mut start = self.start.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(file) = start.as_mut() {
+            change(&mut file.record);
+            file.write();
+        }
+        if last {
+            *start = None;
+        }
     }
 }
 
@@ -396,10 +716,10 @@ fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
     }
 }
 
-/// Watch the window's first frame from another thread: when it hasn't reached the screen
-/// [`FIRST_FRAME_TIMEOUT`] after the app was created ([`Startup::ready`]), start the app again
-/// without the adapter, as [`finish`] does for one that failed, and end this process, whose UI
-/// thread is stuck in the graphics driver.
+/// Watch the window's first frame from another thread: once it reaches the screen, clear the start
+/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after the app was
+/// created ([`Startup::ready`]), start the app again without the adapter, as [`finish`] does for
+/// one that failed, and end this process, whose UI thread is stuck in the graphics driver.
 pub fn watch_first_frame(startup: Arc<Startup>) {
     let watch = move || loop {
         std::thread::sleep(Duration::from_millis(250));
@@ -409,7 +729,10 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
         let minimized = ui.and_then(|c| c.input(|i| i.viewport().minimized)).unwrap_or(false);
         match first_frame(frames, due.elapsed(), minimized) {
             FirstFrame::Wait => continue,
-            FirstFrame::Shown => return,
+            FirstFrame::Shown => {
+                startup.presented();
+                return;
+            }
             FirstFrame::Hung => {}
         }
         let mut skip = skipped();
@@ -418,6 +741,8 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
             "the window's first frame didn't reach the screen in {}s on graphics adapter {failed}: starting again without it",
             FIRST_FRAME_TIMEOUT.as_secs()
         );
+        // The new app records its own start.
+        startup.ended();
         skip.push(failed.to_string());
         match restart(&skip.join(",")) {
             Ok(()) => std::process::exit(0),
@@ -433,20 +758,22 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
 }
 
 /// eframe's adapter choice: the first of [`adapter_order`] for `power`, the GPU the `compositor`
-/// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME` and the adapters a restart
-/// left out. Every adapter, the displays and the choice are logged: which GPU draws is the first
-/// question in every black-window report.
+/// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME`, the adapters a restart
+/// left out and those `crashed` ([`LeftOut::adapters`]). Every adapter, the displays and the
+/// choice are logged: which GPU draws is the first question in every black-window report.
 pub fn selector(
     power: PowerPreference,
     displays: Vec<DisplayGpu>,
     compositor: Option<(u32, u32)>,
+    crashed: Vec<String>,
     startup: Arc<Startup>,
 ) -> NativeAdapterSelectorMethod {
     let named = std::env::var(NAME_ENV).ok();
     let skip = skipped();
+    let left_out: Vec<String> = skip.iter().chain(&crashed).cloned().collect();
     Arc::new(move |adapters, surface| {
         let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::new(a, surface)).collect();
-        let order = adapter_order(&candidates, power, &displays, compositor, named.as_deref(), &skip);
+        let order = adapter_order(&candidates, power, &displays, compositor, named.as_deref(), &left_out);
         let listed: Vec<String> = candidates
             .iter()
             .map(|c| {
@@ -455,6 +782,8 @@ pub fn selector(
                     ", can't show the window"
                 } else if skip.contains(&c.key) {
                     ", failed before"
+                } else if crashed.contains(&c.key) {
+                    ", crashed an earlier start"
                 } else if c.composites(compositor) {
                     ", the compositor draws with it"
                 } else if drives_primary {
@@ -470,6 +799,7 @@ pub fn selector(
         log::info!("graphics adapters: {}", listed.join("; "));
         let first = order.first().and_then(|&i| adapters.get(i).zip(candidates.get(i)));
         let Some((adapter, chosen)) = first else {
+            startup.none_left();
             return Err(format!("no graphics adapter can show the window (power preference {power:?}, {} adapters)", adapters.len()));
         };
         let why = match chosen.drives(&displays) {
@@ -480,8 +810,7 @@ pub fn selector(
             (false, false) => format!("no adapter matches a display GPU, so power preference {power:?}"),
         };
         log::info!("drawing on {} ({:?}, {:?}): {why}", chosen.name.trim(), chosen.backend, chosen.device_type);
-        // Set once; eframe picks the adapter once.
-        let _ = startup.adapter.set(chosen.key.clone());
+        startup.picked(&chosen.key, &chosen.name, candidates.iter().any(|c| c.backend != Backend::Gl));
         Ok(adapter.clone())
     })
 }
@@ -514,6 +843,8 @@ fn restart_without<'a>(graphics_failed: bool, frames: u64, picked: Option<&'a st
 /// docs), otherwise why it failed. `outcome` is eframe's result, or the message of a panic that
 /// ended it.
 pub fn finish(outcome: Result<eframe::Result, String>, startup: &Startup) -> Result<(), String> {
+    // Whatever follows, this start didn't crash; a new app records its own start.
+    startup.ended();
     let (why, graphics_failed) = match outcome {
         Ok(Ok(())) => return Ok(()),
         Ok(Err(e @ eframe::Error::Wgpu(_))) => (e.to_string(), true),
@@ -1100,5 +1431,200 @@ mod tests {
         let _ = startup.adapter.set("Vulkan:1002:164e".into());
         GRAPHICS_PANIC.store(false, Ordering::Relaxed);
         assert_eq!(finish(Err("a bug".into()), &startup), Err("a bug".into()));
+    }
+
+    /// A log folder of its own for each test.
+    fn start_dir(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("vectorcraft-gpu-start-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    /// What a start in `dir` leaves out; it then ends without crashing.
+    fn next_start(dir: &std::path::Path, explicit: bool) -> LeftOut {
+        let s = Startup::default();
+        let left_out = s.track(dir, None, explicit);
+        s.ended();
+        left_out
+    }
+
+    /// The machine of #2243: one Intel UHD Graphics 605, listed through DX12 and OpenGL, and
+    /// Windows' software adapter.
+    fn issue_2243() -> Vec<Candidate> {
+        vec![
+            pci_gpu("Intel(R) UHD Graphics 605", Backend::Dx12, DeviceType::IntegratedGpu, (0x8086, 0x3184)),
+            pci_gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu, (0x1414, 0x008c)),
+            pci_gpu("Intel(R) UHD Graphics 605", Backend::Gl, DeviceType::Other, (0x8086, 0)),
+        ]
+    }
+
+    /// #2243: the driver ends the process after the adapter was picked, before the first frame.
+    /// The next start leaves that adapter out and draws through OpenGL, and so do the starts after
+    /// it, without a status-bar note.
+    #[test]
+    fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
+        let dir = start_dir("crash");
+        let c = issue_2243();
+        let first = Startup::default();
+        assert_eq!(first.track(&dir, None, false), LeftOut::default());
+        first.picked(&c[0].key, &c[0].name, true);
+        // The process ends here: its file is closed and unlocked, and the start is still recorded.
+        drop(first);
+
+        let second = Startup::default();
+        let left_out = second.track(&dir, Some("automatic"), false);
+        assert_eq!(left_out.adapters, ["Dx12:8086:3184"]);
+        assert_eq!(left_out.crash, Some(Crash::Adapter { key: "Dx12:8086:3184".into(), name: "Intel(R) UHD Graphics 605".into() }));
+        assert!(!left_out.opengl_only);
+        assert_eq!(left_out.backends(Backends::DX12 | Backends::GL), Backends::DX12 | Backends::GL);
+        let order = adapter_order(&c, AUTOMATIC, &[], None, None, &left_out.adapters);
+        assert_eq!(order, [2, 1], "OpenGL on the same GPU before the software adapter");
+        second.picked(&c[2].key, &c[2].name, true);
+        second.presented();
+
+        let third = Startup::default();
+        let left_out = third.track(&dir, None, false);
+        assert_eq!(left_out.adapters, ["Dx12:8086:3184"], "kept");
+        assert_eq!(left_out.crash, None, "the note is shown once");
+        third.ended();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A start whose first frame reached the screen, or that ended without crashing (a normal exit,
+    /// an error, a restart on another adapter), leaves nothing out of the next.
+    #[test]
+    fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
+        let dir = start_dir("shown");
+        let c = issue_2243();
+        for end in [Startup::presented as fn(&Startup), Startup::ended] {
+            let first = Startup::default();
+            first.track(&dir, None, false);
+            first.picked(&c[0].key, &c[0].name, true);
+            end(&first);
+            drop(first);
+            assert_eq!(next_start(&dir, false), LeftOut::default());
+        }
+        // So does a start that ended before it picked an adapter.
+        let first = Startup::default();
+        first.track(&dir, None, false);
+        assert!(finish(Ok(Ok(())), &first).is_ok());
+        drop(first);
+        assert_eq!(next_start(&dir, false), LeftOut::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The process ended while the adapters were being listed (wgpu's DX12 backend creates a
+    /// device on each GPU to list it): the next starts list OpenGL's adapters alone, except on
+    /// macOS, where wgpu has none.
+    #[test]
+    fn a_crash_while_listing_lists_opengl_alone() {
+        let dir = start_dir("listing");
+        let first = Startup::default();
+        first.track(&dir, None, false);
+        drop(first);
+        let second = Startup::default();
+        let left_out = second.track(&dir, None, false);
+        assert!(left_out.adapters.is_empty());
+        if cfg!(target_os = "macos") {
+            assert_eq!(left_out, LeftOut::default());
+        } else {
+            assert_eq!(left_out.crash, Some(Crash::Listing));
+            assert_eq!(left_out.backends(Backends::DX12 | Backends::GL), Backends::GL);
+            assert_eq!(left_out.backends(Backends::PRIMARY | Backends::GL), Backends::GL);
+            assert_eq!(left_out.backends(Backends::METAL), Backends::METAL, "no OpenGL to fall back to");
+        }
+        // Listing OpenGL alone found nothing that can show the window: the next start lists every
+        // backend again.
+        second.none_left();
+        second.ended();
+        assert_eq!(next_start(&dir, false), LeftOut::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` choose for a start whatever crashed before; when that
+    /// start shows its first frame on the adapter that crashed, the adapter counts again.
+    #[test]
+    fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
+        let dir = start_dir("explicit");
+        let c = issue_2243();
+        let first = Startup::default();
+        first.track(&dir, None, false);
+        first.picked(&c[0].key, &c[0].name, true);
+        drop(first);
+        assert_eq!(next_start(&dir, true), LeftOut::default());
+        assert_eq!(next_start(&dir, false).adapters, ["Dx12:8086:3184"], "still left out without them");
+
+        let explicit = Startup::default();
+        explicit.track(&dir, None, true);
+        explicit.picked(&c[0].key, &c[0].name, true);
+        explicit.presented();
+        assert_eq!(next_start(&dir, false), LeftOut::default(), "a new driver shows the window");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A damaged record, a file that can't be opened and one another starting copy of the app holds
+    /// are ignored: the start goes on with nothing left out.
+    #[test]
+    fn a_damaged_or_unreadable_start_file_is_ignored() {
+        let dir = start_dir("damaged");
+        std::fs::create_dir_all(&dir).unwrap();
+        let damaged: [&[u8]; 9] = [
+            b"",
+            b"{",
+            b"[]",
+            b"null",
+            b"{\"version\":1}",
+            b"{\"starting\":{}}",
+            b"\xef\xbb\xbf\0",
+            b"\xff\xfe{",
+            &[b' '; START_FILE_LIMIT as usize + 1],
+        ];
+        for text in damaged {
+            std::fs::write(dir.join(START_FILE), text).unwrap();
+            assert_eq!(next_start(&dir, false), LeftOut::default(), "{:?}", String::from_utf8_lossy(&text[..text.len().min(20)]));
+        }
+
+        // Another copy of the app is starting: this start neither reads nor writes the file.
+        let c = issue_2243();
+        let starting = Startup::default();
+        starting.track(&dir, None, false);
+        starting.picked(&c[0].key, &c[0].name, true);
+        assert_eq!(next_start(&dir, false), LeftOut::default());
+        drop(starting);
+        assert_eq!(next_start(&dir, false).adapters, ["Dx12:8086:3184"]);
+
+        // A folder in the file's place.
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(START_FILE)).unwrap();
+        assert_eq!(next_start(&dir, false), LeftOut::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
+        let starting = |key: &str| Starting { adapter: Some(Recorded { key: key.into(), name: "GPU".into() }), native: true };
+        let (mut record, crash) = StartRecord::begin(None, "0.9.0", "automatic");
+        assert_eq!(crash, None);
+        record.starting = Some(starting("Dx12:8086:3184"));
+        let (record, crash) = StartRecord::begin(Some(record), "0.9.0", "automatic");
+        assert_eq!(crash, Some(Crash::Adapter { key: "Dx12:8086:3184".into(), name: "GPU".into() }));
+        assert_eq!(record.left_out(None, false).adapters, ["Dx12:8086:3184"]);
+        // Written and read back.
+        assert_eq!(StartRecord::parse(&record.to_json()), Some(record.clone()));
+        assert!(StartRecord::begin(Some(record.clone()), "0.9.1", "automatic").0.crashed.is_empty());
+        assert!(StartRecord::begin(Some(record.clone()), "0.9.0", "highPerformance").0.crashed.is_empty());
+        assert_eq!(preference_name(None), "automatic");
+        assert_eq!(preference_name(Some("powerSaving")), "automatic");
+        assert_eq!(preference_name(Some("lowPower")), "lowPower");
+        // An adapter is listed once, and the list is bounded.
+        let mut record = record;
+        for n in 0..CRASHED_LIMIT + 4 {
+            for _ in 0..2 {
+                record.starting = Some(starting(&format!("Dx12:10de:{n:04x}")));
+                record = StartRecord::begin(Some(record), "0.9.0", "automatic").0;
+            }
+        }
+        assert_eq!(record.crashed.len(), CRASHED_LIMIT);
+        assert_eq!(record.crashed.last().map(|c| c.key.as_str()), Some("Dx12:10de:0013"));
     }
 }

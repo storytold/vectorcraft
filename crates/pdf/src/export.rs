@@ -73,14 +73,23 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions) -> Result<ExportR
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
     let bleed = set.bleed_of(doc);
     let marks = set.marks.printer_marks();
+    // In PDF 1.6 and later files that aren't PDF/X files, a page with a side longer than
+    // [`MAX_PAGE_SIDE`] is written in larger units; other files have every page in points.
+    let scales = set.compatibility.has_user_unit() && !set.standard.is_pdfx();
+    let mut units = Vec::with_capacity(pages.len());
     for (i, boxes) in pages {
         let (m, r) = (boxes.media, boxes.bleed);
         let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
         let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
-        // The page is the media box, y down from its top-left corner (like ours).
-        let view = Affine::translate((-m.x0, -m.y0));
+        // The page is the media box, y down from its top-left corner (like ours), in units of
+        // `unit` points.
+        let unit = if scales { user_unit(m.width(), m.height()) } else { 1.0 };
+        units.push(unit);
+        let shift = Affine::translate((-m.x0, -m.y0));
+        let view = if unit > 1.0 { Affine::scale(1.0 / unit) * shift } else { shift };
         let sheet = Sheet {
-            size: (m.width(), m.height()),
+            size: (m.width() / unit, m.height() / unit),
+            unit,
             trim: view.transform_rect_bbox(boxes.trim),
             bleed: view.transform_rect_bbox(r),
             view,
@@ -99,6 +108,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions) -> Result<ExportR
     let (bytes, more) = w.finish()?;
     let bytes = crate::forms::finish(bytes, doc, set, layers, overprinted)?;
     warnings.extend(more);
+    let bytes = crate::post::user_units(bytes, &units)?;
     let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
@@ -125,6 +135,18 @@ pub fn page_areas(doc: &Document, opts: &PdfOptions) -> Result<Vec<Rect>, PdfErr
     Ok(pages(doc, opts)?.into_iter().map(|(_, b)| b.media).collect())
 }
 
+/// The largest side of a page in units of its default user space that ISO 32000-1 (Annex C.2)
+/// gives: 14,400 (200 inches in units of 1/72 inch).
+pub(crate) const MAX_PAGE_SIDE: f64 = 14_400.0;
+
+/// The `UserUnit` (PDF 1.6) of a page `w` × `h` points large: 1 when both sides are at most
+/// [`MAX_PAGE_SIDE`], else the longer side divided by it, rounded up to the next thousandth, so
+/// that both sides are at most [`MAX_PAGE_SIDE`] units.
+fn user_unit(w: f64, h: f64) -> f64 {
+    let side = w.abs().max(h.abs());
+    if side.is_finite() && side > MAX_PAGE_SIDE { (side / MAX_PAGE_SIDE * 1000.0).ceil() / 1000.0 } else { 1.0 }
+}
+
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then
 /// its pages ([`Self::page`]), each drawn by an [`Exporter`].
 pub(crate) struct Writer {
@@ -144,8 +166,11 @@ pub(crate) struct Writer {
 /// One page as [`Writer::page`] draws it: the art placed in a drawing space ([`Self::place`]),
 /// which [`Self::view`] maps onto the page.
 pub(crate) struct Sheet<'a> {
-    /// The page's size in points.
+    /// The page's size in its units.
     pub size: (f64, f64),
+    /// The size of the page's unit in points (its `UserUnit`): a page in points has 1. A side is
+    /// written at least 1 pt long.
+    pub unit: f64,
     /// The TrimBox and BleedBox, in page space (y down from the top-left corner).
     pub trim: Rect,
     pub bleed: Rect,
@@ -215,7 +240,8 @@ impl Writer {
     /// Draw one page: the art of `ex`'s document placed as `sheet` says, then its marks.
     pub(crate) fn page(&mut self, ex: &mut Exporter, sheet: &Sheet) -> Result<(), PdfError> {
         let (w, h) = sheet.size;
-        let size = Size::from_wh(w.max(1.0) as f32, h.max(1.0) as f32).ok_or_else(|| PdfError::BadSetting(format!("page size {w} × {h}")))?;
+        let least = 1.0 / sheet.unit;
+        let size = Size::from_wh(w.max(least) as f32, h.max(least) as f32).ok_or_else(|| PdfError::BadSetting(format!("page size {w} × {h}")))?;
         let at = |b: Rect| krilla::geom::Rect::from_ltrb(b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32);
         let mut page = self.pdf.document_mut().start_page_with(PageSettings::new(size).with_trim_box(at(sheet.trim)).with_bleed_box(at(sheet.bleed)));
         let mut s = page.surface();
@@ -1050,7 +1076,12 @@ impl Exporter<'_> {
                 }
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 for c in g.children().into_iter().flatten() {
                     self.node(s, c, page, false);

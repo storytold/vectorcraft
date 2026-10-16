@@ -24,7 +24,7 @@ use vectorcraft_tools::builder::{
 };
 use vectorcraft_trace as tr;
 
-use super::edit::selected_roots;
+use super::edit::{outermost, selected_roots};
 use super::paint::paint_from;
 use super::pathops::{Beside, shape_node};
 use super::*;
@@ -192,7 +192,7 @@ fn root_ids(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     if ids.is_empty() {
         return Err(EngineError::Other("select objects, not layers".into()));
     }
-    Ok(sorted_roots(d, &ids))
+    Ok(outermost(d, sorted_roots(d, &ids)))
 }
 
 fn points_param(p: &Value, key: &str) -> Option<Vec<Point>> {

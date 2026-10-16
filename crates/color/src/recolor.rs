@@ -282,6 +282,23 @@ impl RowMap {
         self.key
     }
 
+    /// The tint (0..1) of the new colour current colour `c` takes, when it is a tint of the new
+    /// colour: what a colour linked to a global or spot swatch keeps as its tint. `None` when the
+    /// method makes it something else (a shade, or another hue).
+    pub fn tint(&self, c: Color) -> Option<f32> {
+        match self.method {
+            Method::Exact => Some(1.0),
+            Method::PreserveTints if is_tint(c, self.key) => Some(tint_of(c, self.key)),
+            Method::PreserveTints => Some(1.0),
+            Method::ScaleTints => Some(tint_of(c, self.key)),
+            Method::TintsShades => {
+                let d = c.to_lab().l - self.mean_l;
+                (d >= 0.0).then(|| 1.0 - d / (100.0 - self.mean_l).max(1e-3))
+            }
+            Method::HueShift => (c == self.key).then_some(1.0),
+        }
+    }
+
     /// The new colour of current colour `c`, in `c`'s model.
     pub fn map(&self, c: Color) -> Color {
         let to = keep_model(c, self.to);

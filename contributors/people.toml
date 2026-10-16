@@ -110,3 +110,13 @@ real_name = "Giang Nguyen"
 [people.Silvertree2010]
 display_name = "Netter"
 sync_github_name = false
+
+[people.limackk]
+real_name = "Kamil Kwiatkowski"
+display_name = "Kamil Kwiatkowski"
+sync_github_name = false
+
+[people.marcoarnulfo]
+real_name = "Marco Arnulfo"
+display_name = "Marco Arnulfo"
+sync_github_name = false

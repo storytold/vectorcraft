@@ -206,6 +206,7 @@
 	Join	결합
 	Average…	평균…
 	Outline Stroke	선 윤곽선화
+	Outline Object	개체 윤곽선화
 	Offset Path…	패스 오프셋…
 	Reverse Path Direction	패스 방향 반전
 	Simplify…	단순화…
@@ -324,8 +325,11 @@
 	Remove Threading	연결 제거
 	Fit Headline	제목에 맞추기
 	Decrease Font Size	글꼴 크기 줄이기
+	Decrease Font Size by Five Steps	글꼴 크기 5단계 줄이기
 	Increase Font Size	글꼴 크기 키우기
+	Increase Font Size by Five Steps	글꼴 크기 5단계 키우기
 	Reset Tracking and Kerning	자간 및 커닝 재설정
+	Reset Horizontal Scale	가로 비율 재설정
 	Step Type	단계별 문자
 	Find Font…	글꼴 찾기…
 	Change Case	대소문자 변경
@@ -389,6 +393,7 @@
 	Area Text Objects	영역 문자 개체
 	Start Global Edit	전체 편집 시작
 	Save Selection…	선택 영역 저장…
+	Update Selection	선택 영역 업데이트
 	Edit Selection…	선택 영역 편집…
 	Effect	효과
 	Apply Last Effect	마지막 효과 적용
@@ -422,6 +427,8 @@
 	Pathfinder	패스파인더
 	Add	더하기
 	Intersect	교차
+	Intertwine	교차
+	Arrange Intertwine Area	교차 영역 정렬
 	Exclude	제외
 	Subtract	빼기
 	Minus Back	뒤 개체 빼기
@@ -479,7 +486,9 @@
 	Fit Artboard in Window	창에 아트보드 맞추기
 	Fit All in Window	창에 모두 맞추기
 	Actual Size	실제 크기
+	Rotate View	보기 회전
 	Reset Rotate View	회전 보기 재설정
+	Rotate View to Selection	선택 영역에 맞춰 보기 회전
 	Hide Edges	가장자리 숨기기
 	Hide Artboards	아트보드 숨기기
 	Show Print Tiling	인쇄 타일 표시
@@ -493,6 +502,7 @@
 	Show Video Rulers	비디오 눈금자 표시
 	Hide Bounding Box	경계 상자 숨기기
 	Show Transparency Grid	투명도 격자 표시
+	Hide Template	템플릿 숨기기
 	Hide Text Threads	문자 연결선 숨기기
 	Hide Gradient Annotator	그레이디언트 주석 숨기기
 	Hide Corner Widget	모퉁이 위젯 숨기기
@@ -653,6 +663,7 @@
 	Preview	미리 보기
 	Show Edges	가장자리 표시
 	Show Corner Widget	모퉁이 위젯 표시
+	Show Template	템플릿 표시
 	Show Text Threads	문자 스레드 표시
 	Hide Hidden Characters	숨겨진 문자 숨기기
 	Show Gradient Annotator	그레이디언트 주석 도구 표시
@@ -854,7 +865,6 @@
 	Art using a deleted global swatch keeps its colour.	삭제된 글로벌 견본을 사용한 아트워크는 색상을 유지합니다.
 	ArtCraft website	ArtCraft 웹사이트
 	Artboard Options	아트보드 옵션
-	Artboard Options: edit with the Artboard tool	아트보드 옵션: 아트보드 도구로 편집
 	Artboard Options…	아트보드 옵션…
 	Artboard Tool	아트보드 도구
 	Artboard {number}	아트보드 {number}
@@ -1080,6 +1090,7 @@
 	Convert Process to Global	프로세스 색상을 글로벌로 변환
 	Convert text to outlines	문자를 윤곽선으로 변환
 	Convert to sRGB	sRGB로 변환
+	Convert to Straight Lines	직선으로 변환
 	Copies:	매수:
 	Copy (make a transformed copy)	복사(변형된 복사본 만들기)
 	Copy All Styles	모든 스타일 복사
@@ -1091,6 +1102,7 @@
 	Copyright Info URL:	저작권 정보 URL:
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
+	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:
 	Corner Radius	모퉁이 반지름
 	Corner Radius:	모퉁이 반지름:
 	Corner:	모퉁이:
@@ -1353,6 +1365,32 @@
 	Expand:	확장:
 	Export All…	모두 내보내기…
 	Export Artboard	아트보드 내보내기
+	A File per Object	오브젝트마다 파일 1개
+	Example: {name}	예: {name}
+	Export Preset:	내보내기 사전 설정:
+	Folders:	폴더:
+	Insert	삽입
+	Nothing is selected. Select the art to export, then open this tab again.	선택된 항목이 없습니다. 내보낼 아트를 선택한 다음 이 탭을 다시 여십시오.
+	One File of the Selection	선택 영역을 파일 1개로
+	Start at:	시작 번호:
+	{n} objects selected	오브젝트 {n}개 선택됨
+	Delete Export Preset	내보내기 사전 설정 삭제
+	Export Presets	내보내기 사전 설정
+	Save Export Preset	내보내기 사전 설정 저장
+	Export Layer	레이어 내보내기
+	Export Selection	선택 영역 내보내기
+	All in One Folder	모두 폴더 하나에
+	By Size or Row	크기 또는 행별
+	By Format	형식별
+	By Artboard or Item	대지 또는 항목별
+	By Item, Then Format	항목별, 그다음 형식별
+	Document Name	문서 이름
+	Artboard or Item Name	대지 또는 항목 이름
+	Number (####)	번호(####)
+	Date (YYYYMMDD)	날짜(YYYYMMDD)
+	Date (YYYY-MM-DD)	날짜(YYYY-MM-DD)
+	Time (hhmmss)	시간(hhmmss)
+	PDF Print	인쇄용 PDF
 	Export As	다른 형식으로 내보내기
 	Export Assets	에셋 내보내기
 	Export CSS	CSS 내보내기
@@ -1408,6 +1446,7 @@
 	Fill and Stroke	칠과 선
 	Fill new strokes	새 선 칠하기
 	Keep selected	선택 유지
+	Merge only with selection	선택 영역과만 병합
 	Fill:	칠:
 	Find	찾기
 	Find Font	글꼴 찾기
@@ -1539,6 +1578,14 @@
 	Hyphenate	하이픈 넣기
 	Hyphenation	하이픈 넣기
 	Hyphenation…	하이픈 넣기…
+	Words Longer Than:	다음보다 긴 단어:
+	After First:	앞부분 최소:
+	Before Last:	뒷부분 최소:
+	Hyphen Limit:	연속 하이픈 제한:
+	Hyphenation Zone:	하이픈 넣기 영역:
+	letters	글자
+	hyphens	개
+	Hyphenate Capitalized Words	대문자로 시작하는 단어에 하이픈 넣기
 	ICC Profile	ICC 프로파일
 	Identify Objects By	개체 식별 기준
 	Ignore	무시
@@ -2106,6 +2153,7 @@
 	Pathfinder Options…	패스파인더 옵션…
 	Pathfinders:	패스파인더:
 	Paths	패스
+	Path Length	패스 길이
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	패스: {paths}    앵커: {anchors}    색상: {colors}
 	Pattern Editing	패턴 편집
 	Pattern options are available in pattern editing mode.	패턴 옵션은 패턴 편집 모드에서 사용할 수 있습니다.
@@ -2475,6 +2523,17 @@
 	Screen	스크린
 	Screens	화면
 	Search All	모두 검색
+	Filter	필터
+	Clear All	모두 지우기
+	By Object	개체별
+	By Layer	레이어별
+	Images	이미지
+	Groups	그룹
+	Linked Files	연결된 파일
+	Locked	잠김
+	Hidden	숨김
+	Filter Layers Panel Rows	레이어 패널 행 필터링
+@msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
 	Search commands and tools	명령 및 도구 검색
 	Search commands and tools…	명령 및 도구 검색…
 	Secondary	보조
@@ -2558,6 +2617,8 @@
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show Original Path	원래 패스 표시
+	Color Panel Options	색상 패널 옵션
 	Show Package	패키지 표시
 	Show Panel	패널 표시
 	Show Perspective Grid	원근 격자 표시
@@ -3493,6 +3554,10 @@ theme	Appearance	외관
 	Draft	초안
 	Good	좋음
 	Best	최상
+	Mode	모드
+	Blur Mode	흐림 모드
+	Edge Only	가장자리만
+	Overlay Edge	가장자리 오버레이
 @msg	Reset {_1}	{_1}을(를) 재설정했습니다
 @msg	Saving	저장 중
 @msg	Saving {_1}	{_1} 저장 중
@@ -3512,6 +3577,8 @@ theme	Appearance	외관
 @msg	VectorCraft failed to start: {e}	VectorCraft를 시작하지 못했습니다: {e}
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	저장하지 않은 변경 내용은 이 브라우저에 보관되어 있습니다. 페이지를 새로 고치면 복원할 수 있습니다.
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 VectorCraft를 다시 시작했습니다
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 창이 나타나기 전에 {name}에서 끝나서 {summary}에서 시작했습니다. 이 그래픽 프로세서를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 그래픽 프로세서 목록을 가져오는 중에 끝나서 OpenGL만 사용해 {summary}에서 시작했습니다. 다른 그래픽 백엔드를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
 @msg	not a DXF drawing	DXF 도면이 아닙니다
 @msg	scale must be a number from {_1} to {_2}, not {s}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	맞출 아트보드는 최대 {_1} pt까지의 양수 크기여야 합니다
@@ -3572,6 +3639,7 @@ theme	Appearance	외관
 @msg	Make Guides: select paths	안내선 만들기: 패스를 선택하세요
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	guides are locked	안내선이 잠겨 있습니다
+@msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
 @msg	no saved selections	저장된 선택 영역이 없습니다
 @msg	no such artboard	해당 아트보드가 없습니다
 @msg	cannot split an open path at its end point	열린 패스는 끝점에서 나눌 수 없습니다
@@ -3709,6 +3777,7 @@ theme	Appearance	외관
 @msg	not in pattern editing mode	패턴 편집 모드가 아닙니다
 @msg	pattern missing	패턴이 없습니다
 @msg	select a repeat	반복을 선택하세요
+@msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select the art to repeat	반복할 아트웍을 선택하세요
 @msg	the document has no patterns	문서에 패턴이 없습니다
 @msg	no artboard	아트보드가 없습니다
@@ -3858,7 +3927,7 @@ theme	Appearance	외관
 @msg	the PDF is password-protected: give its password	PDF가 암호로 보호되어 있습니다: 암호를 입력하세요
 @msg	the PDF password is wrong	PDF 암호가 올바르지 않습니다
 @msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	파일에 아트웍 없이 대체 페이지만 들어 있습니다(PDF 호환 없이 저장됨): PDF 호환을 켜고 다시 저장하거나 PDF나 SVG로 저장하세요
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	PostScript 파일(이전 형식이나 PDF 호환 없이 저장한 .ai, 또는 EPS 파일)이라 아직 열 수 없습니다: PDF, PDF 호환 .ai 또는 SVG로 저장하세요
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	PDF가 아니라 PostScript 파일(이전 형식이나 PDF 호환 없이 저장한 .ai, 또는 EPS 파일)입니다: 파일 › 열기와 파일 › 가져오기는 이 파일을 EPS로 읽습니다
 @msg	unsupported: {0}	지원되지 않음: {0}
 @msg	a page is missing	페이지가 없습니다
 @msg	a page tree kid isn't a reference	페이지 트리 하위 항목이 참조가 아닙니다
@@ -3913,6 +3982,8 @@ theme	Appearance	외관
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	내보낼 항목이 없습니다: 문서에 보이는 아트웍이 없습니다(또는 아트보드 사용을 켜세요)
 @msg	add a format to export	내보낼 형식을 추가하세요
 @msg	check an asset to export	내보낼 자산을 체크하세요
+@msg	check a layer to export	내보낼 레이어를 선택하십시오
+@msg	select the art to export first	먼저 내보낼 아트를 선택하십시오
 @msg	`{tool}` isn't a freehand tool	`{tool}`은(는) 프리핸드 도구가 아닙니다
 @msg	bad colour `{hex}` (#rrggbb)	잘못된 색상 `{hex}`(#rrggbb)
 @msg	no gradient stop or freeform point is selected	선택된 그레이디언트 정지점이나 자유형 점이 없습니다
@@ -3991,6 +4062,7 @@ theme	Appearance	외관
 @msg	Opened {url}	{url}을(를) 열었습니다
 @msg	No saved views (View → New View…)	저장된 보기가 없습니다(보기 → 새 보기…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command`는 메뉴 항목이 대화상자를 여는 명령이어야 합니다(ui.menuDialog 참조)
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness는 dark|mediumDark|mediumLight|light 중 하나여야 합니다
 @msg	index must be a number or first, previous, next or last	index는 숫자이거나 first, previous, next, last 중 하나여야 합니다
@@ -4204,6 +4276,9 @@ effect	Vertical	세로
 	Blocks	블록
 	Frosted	서리 낀 유리
 	Tiny Lens	작은 렌즈
+	Loaded Texture	불러온 텍스처
+	Load Texture…	텍스처 불러오기…
+	Texture Image	텍스처 이미지
 	Rename Data Set	데이터 세트 이름 바꾸기
 	Variable Options	변수 옵션
 	Edit Data Set	데이터 세트 편집
@@ -4350,6 +4425,7 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
+@msg	the image can't be read as a texture	이미지를 텍스처로 읽을 수 없습니다
 	Basic	기본
 	Fill and Stroke Controls	칠 및 획 컨트롤
 	Coloring Controls	색상 컨트롤
@@ -4372,7 +4448,7 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
-
+	Registration:	기준점:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	치수
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	도면 : 실제 크기 — 1:10은 페이지의 1단위를 10으로 표시합니다.
@@ -4423,6 +4499,47 @@ lighting	Light	광원
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
 	Distance	거리
+@msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection"은 그레이디언트를 배치합니다: `gradient`를 지정하세요
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection"은 선형 또는 방사형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection"은 그레이디언트 자체를 배치합니다: `start`와 `end`를 빼세요 (이미 문서 좌표로 배치합니다)
+	Make Image Dynamic	이미지를 동적으로 만들기
+	Import Data Sets…	데이터 세트 가져오기…
+	Export Data Sets…	데이터 세트 내보내기…
+	Make Graph Dynamic	그래프를 동적으로 만들기
+	Batch…	일괄 처리…
+	Source Folder:	소스 폴더:
+	Destination Folder:	대상 폴더:
+	Overrides	재정의
+	Uses every data set of the open document.	열린 문서의 모든 데이터 세트를 사용합니다.
+@msg	Batch: {count} processed	일괄 처리: {count}개 처리됨
+@msg	Batch: {count} processed, {failed} failed	일괄 처리: {count}개 처리됨, {failed}개 실패
+@msg	choose a destination folder	대상 폴더를 선택하세요
+@msg	choose a source folder	소스 폴더를 선택하세요
+@msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
+@msg	the action has no steps	액션에 단계가 없습니다
+
+# User Interface › Accent Color
+	Accent Color	강조 색상
+	Amber	호박색
+	Coral	코럴
+	Violet	보라
+	Pink	분홍
+	Sketch	스케치
+	Halftone Pattern…	하프톤 패턴…
+	Halftone Pattern	하프톤 패턴
+	Pattern Type	패턴 유형
+	Dot	점
+# User Interface › Color Scheme
+	Color Scheme	색 구성표
+	Modern	모던
+
+# Symbol Options › Export Type
+	Export Type:	내보내기 유형:
+	Movie Clip	무비 클립
+@msg	name is empty	이름이 비어 있습니다
+@msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	클라우드 폴더 찾아보기

@@ -127,6 +127,18 @@ fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
     report(app, r, |v| format!("Relinked {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
 }
 
+/// Replace images `ids` with a picked file (Control bar, Properties): it keeps its own aspect
+/// ratio, fitted inside the old bounds (Placement Options: Fit), whatever their Placement Options
+/// say.
+pub(crate) fn replace(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    crate::picks::button(app, move |app| {
+        let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::place_filters().collect(), ..Default::default() };
+        let Some(path) = crate::picks::open(app, &pick) else { return };
+        let r = app.run("links.relink", json!({ "ids": ids.clone(), "path": path, "preserve": "fit" }));
+        report(app, r, |v| format!("Replaced {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
+    });
+}
+
 /// Relink images `ids` (none: every missing one) to the files of their names in a picked folder.
 fn relink_to_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     crate::picks::button(app, move |app| relink_to_picked_folder(app, ids.clone()));

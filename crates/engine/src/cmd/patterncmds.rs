@@ -17,7 +17,7 @@ use vectorcraft_doc::pattern::{self, Overlap, PATTERN_EDIT_LAYER, PatternDef, Pa
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Rect;
 
-use super::edit::selected_roots;
+use super::edit::{outermost, selected_roots};
 use super::pathops::Beside;
 use super::*;
 
@@ -203,7 +203,7 @@ fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
             let st = s.doc()?;
             let mut sel = Selection::default();
             sel.set(ids.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer())));
-            Ok(sel.in_paint_order(&st.doc))
+            Ok(outermost(&st.doc, sel.in_paint_order(&st.doc)))
         }
         None => selected_roots(s),
     }

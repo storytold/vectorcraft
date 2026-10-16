@@ -238,6 +238,11 @@ impl Instance {
         }
     }
 
+    /// Does it carry a matrix of its own (`Xm` or `Bm`) rather than only `Bg`'s numbers?
+    pub fn has_matrix(&self) -> bool {
+        self.xm.is_some() || self.bm.is_some()
+    }
+
     /// The paint, through `to_doc` (art space → the document), when the gradient is defined.
     pub fn paint(&self, defs: &HashMap<String, Gradient>, to_doc: Affine) -> Option<Paint> {
         let name = self.name.as_ref()?;

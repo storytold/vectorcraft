@@ -145,7 +145,7 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
         let skip = |id| seen.contains(&id);
         let mut chain = Vec::new();
         let hit = match &c.kind {
-            NodeKind::Group { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some(),
+            NodeKind::Group { .. } | NodeKind::Intertwine { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some(),
             NodeKind::Blend { .. } => hit_children(c, p, opt, symbols, &skip, &mut chain, true).is_some() || hit_leaf(c, p, opt, symbols).is_some(),
             _ => hit_leaf(c, p, opt, symbols).is_some(),
         };
@@ -167,6 +167,80 @@ fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<
         tops.push(top);
     }
     tops
+}
+
+/// The most objects [`locked_objects_at`] lists.
+pub const MAX_LOCKED_AT: usize = 20;
+
+/// The locked objects under `p`, topmost first, at most [`MAX_LOCKED_AT`]: each object whose own
+/// lock is on and that a click at `p` would hit if it were not locked. A locked group is listed,
+/// not what it holds. Hidden objects and everything on hidden, locked and template layers are left
+/// out. While a pattern is edited only its tile layer is searched, and in isolation mode
+/// (`opt.scope`) only what is inside the isolated group or object.
+pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeId> {
+    let symbols = doc.symbol_boxes();
+    let mut out = Vec::new();
+    if let Some(scope) = opt.scope
+        && let Some(isolated) = doc.node(scope)
+    {
+        if isolated.is_container() {
+            locked_children(isolated, p, opt, &symbols, &mut out);
+        } else if isolated.visible && isolated.locked && locked_hit(isolated, p, opt, &symbols) {
+            out.push(isolated.id);
+        }
+        return out;
+    }
+    for layer in doc.layers.iter().rev() {
+        if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
+            continue;
+        }
+        let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
+        locked_children(layer, p, opt, &symbols, &mut out);
+    }
+    out
+}
+
+/// [`locked_objects_at`] through the children of `parent`, front first: a locked child is tested
+/// whole, and an unlocked layer, group, blend or envelope in Edit Contents is searched inside.
+fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, out: &mut Vec<NodeId>) {
+    let Some(children) = parent.children() else { return };
+    if parent.clips() && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
+        return;
+    }
+    for i in hit_order(parent, children, p) {
+        if out.len() >= MAX_LOCKED_AT {
+            return;
+        }
+        let Some(c) = children.get(i) else { continue };
+        if !may_hit(parent, i, c, p, opt, symbols, false) || c.is_layer() && (c.locked || c.is_template()) {
+            continue;
+        }
+        if c.locked {
+            if locked_hit(c, p, opt, symbols) {
+                out.push(c.id);
+            }
+            continue;
+        }
+        match &c.kind {
+            NodeKind::Layer { preview: false, .. } => locked_children(c, p, HitOptions { outline: true, ..opt }, symbols, out),
+            NodeKind::Layer { .. }
+            | NodeKind::Group { .. }
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Blend { .. }
+            | NodeKind::Envelope { editing: true, .. } => locked_children(c, p, opt, symbols, out),
+            _ => {}
+        }
+    }
+}
+
+/// Would a click at `p` hit the locked object `n` if it were not locked?
+fn locked_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> bool {
+    let inside = || hit_children(n, p, opt, symbols, &|_| false, &mut Vec::new(), false).is_some();
+    match &n.kind {
+        NodeKind::Group { .. } | NodeKind::Intertwine { .. } | NodeKind::Envelope { editing: true, .. } => inside(),
+        NodeKind::Blend { .. } => inside() || hit_leaf(n, p, opt, symbols).is_some(),
+        _ => hit_leaf(n, p, opt, symbols).is_some(),
+    }
 }
 
 /// [`hit_test`] passing over the nodes `skip` names (and their contents). Symbol instances are
@@ -262,7 +336,8 @@ fn hit_children(
     {
         return None;
     }
-    for (i, c) in children.iter().enumerate().rev() {
+    for i in hit_order(parent, children, p) {
+        let Some(c) = children.get(i) else { continue };
         if !may_hit(parent, i, c, p, opt, symbols, editable_only) || skip(c.id) {
             continue;
         }
@@ -270,7 +345,9 @@ fn hit_children(
         let hit = match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
             NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, symbols, skip, chain, editable_only),
+            NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+                hit_children(c, p, opt, symbols, skip, chain, editable_only)
+            }
             // Edit Contents: the envelope's content hits, undistorted.
             NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, symbols, skip, chain, editable_only),
             // A blend's key objects first (Direct and Group Selection pick them); its steps hit
@@ -285,6 +362,23 @@ fn hit_children(
         chain.pop();
     }
     None
+}
+
+/// The order a click at `p` tries the children of `parent` in, front first: their stacking order
+/// from the top, except that in an Intertwine group the members drawn over the others at `p`
+/// come first (from the top among them too).
+fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
+    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
+        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
+    } else {
+        vec![]
+    };
+    let rest = (0..children.len()).rev().filter({
+        let over = over.clone();
+        move |i| !over.contains(i)
+    });
+    over.into_iter().chain(rest)
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke
@@ -879,6 +973,69 @@ world",
         d.node_mut(a).unwrap().locked = false;
         d.node_mut(l).unwrap().visible = false;
         assert!(hit_test(&d, Point::new(10.0, 10.0), HitOptions::default()).is_none());
+    }
+
+    /// Insert `n` locked at the top of `parent`.
+    fn insert_locked(d: &mut Document, parent: NodeId, mut n: Node) -> NodeId {
+        let id = n.id;
+        n.locked = true;
+        d.insert(Some(parent), usize::MAX, n).unwrap();
+        id
+    }
+
+    /// `locked_objects_at`: the locked objects under the point, topmost first. A locked group is
+    /// listed rather than its contents, and a locked object in an unlocked group is listed itself.
+    /// Hidden objects, locked layers and the art outside an isolated group are left out.
+    #[test]
+    fn locked_objects_at_lists_the_locked_stack() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let rect =
+            |d: &mut Document, x: f64| Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::default_art());
+        let (a, b) = (rect(&mut d, 0.0), rect(&mut d, 10.0));
+        let (a, b) = (insert_locked(&mut d, l, a), insert_locked(&mut d, l, b));
+        let (mut inner, locked_group) = (rect(&mut d, 20.0), d.alloc_id());
+        inner.locked = true;
+        let inner_id = inner.id;
+        let mut g = Node::group(locked_group, vec![Arc::new(inner)]);
+        g.locked = true;
+        d.insert(Some(l), usize::MAX, g).unwrap();
+        let open_group = d.alloc_id();
+        let mut child = rect(&mut d, 25.0);
+        child.locked = true;
+        let child_id = child.id;
+        let free = rect(&mut d, 25.0);
+        d.insert(Some(l), usize::MAX, Node::group(open_group, vec![Arc::new(child), Arc::new(free)])).unwrap();
+        let at = |d: &Document, x: f64, scope| locked_objects_at(d, Point::new(x, 25.0), HitOptions { scope, ..HitOptions::default() });
+        assert_eq!(at(&d, 30.0, None), [child_id, locked_group, b, a]);
+        assert!(!at(&d, 30.0, None).contains(&inner_id), "the locked group stands for what it holds");
+        assert_eq!(at(&d, 5.0, None), [a]);
+        assert!(at(&d, 150.0, None).is_empty());
+        // Isolated, only the group's own objects are looked at.
+        assert_eq!(at(&d, 30.0, Some(open_group)), [child_id]);
+        // A hidden object is left out, and nothing on a locked or hidden layer is listed.
+        d.node_mut(b).unwrap().visible = false;
+        assert_eq!(at(&d, 30.0, None), [child_id, locked_group, a]);
+        d.node_mut(l).unwrap().locked = true;
+        assert!(at(&d, 30.0, None).is_empty());
+        d.node_mut(l).unwrap().locked = false;
+        d.node_mut(l).unwrap().visible = false;
+        assert!(at(&d, 30.0, None).is_empty());
+    }
+
+    /// `locked_objects_at` lists at most `MAX_LOCKED_AT` objects, the topmost ones.
+    #[test]
+    fn locked_objects_at_stops_at_its_limit() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let ids: Vec<NodeId> = (0..MAX_LOCKED_AT + 5)
+            .map(|_| {
+                let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art());
+                insert_locked(&mut d, l, n)
+            })
+            .collect();
+        let found = locked_objects_at(&d, Point::new(25.0, 25.0), HitOptions::default());
+        assert_eq!(found, ids.iter().rev().take(MAX_LOCKED_AT).copied().collect::<Vec<_>>());
     }
 
     #[test]

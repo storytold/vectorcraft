@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Dash, LineCap, LineJoin, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{CharStyle, Dash, LineCap, LineJoin, NodeId, NodeKind, StrokeAlign, TextObject};
 
 use super::*;
 
@@ -132,4 +132,65 @@ fn character_stroke_options_round_trip_natively_and_old_files_load() {
     let st: CharStyle = serde_json::from_value(old).unwrap();
     assert_eq!((st.stroke_cap, st.stroke_join, st.stroke_miter_limit, st.stroke_dash), (LineCap::Butt, LineJoin::Miter, 10.0, None));
     assert!(serde_json::to_value(CharStyle::default()).unwrap().get("stroke_miter_limit").is_none(), "defaults aren't written");
+}
+
+/// Align Stroke on live type (Reddit redd.it/1dwhos6): the characters' stroke goes inside or
+/// outside the glyphs without creating outlines, for every run or a range, and is kept by the
+/// native format and Create Outlines.
+#[test]
+fn align_stroke_reaches_the_characters_stroke() {
+    let mut s = session();
+    let id = stroked_text(&mut s);
+    assert!(s.active().unwrap().stroke_mixed().can_align, "type can take an inside or outside stroke");
+    run(&mut s, "text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 2, "size": 60}));
+    run(&mut s, "stroke.set", json!({"align": "outside"}));
+    let t = text(&s, id);
+    assert!(t.runs.iter().all(|r| r.style.stroke_align == StrokeAlign::Outside), "every run");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().appearance.items.is_empty(), "no object-level stroke is added");
+    assert_eq!(s.shown_stroke().unwrap().align, StrokeAlign::Outside, "the Stroke panel shows it");
+    let m = s.active().unwrap().stroke_mixed();
+    assert!(!m.align && m.can_align, "{m:?}");
+    // A range takes its own alignment through strokeOptions; the runs then differ.
+    run(&mut s, "text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 2, "strokeOptions": {"align": "inside"}}));
+    let t = text(&s, id);
+    assert_eq!(t.runs[0].style.stroke_align, StrokeAlign::Inside);
+    assert_eq!(t.runs.last().unwrap().style.stroke_align, StrokeAlign::Outside);
+    assert!(s.active().unwrap().stroke_mixed().align, "mixed alignments light no button");
+    // document.inspect reports it, as for paths.
+    let doc = run(&mut s, "document.inspect", json!({}));
+    assert_eq!(doc["layers"][0]["children"][0]["strokeOptions"]["align"], "inside", "{doc}");
+    // Saved and reopened.
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    let NodeKind::Text(b) = &back.node(id).unwrap().kind else { panic!("not type") };
+    assert_eq!(b.runs, text(&s, id).runs);
+    // Create Outlines keeps it on the glyphs.
+    run(&mut s, "select.set", json!({ "ids": [id.0] }));
+    let g = run(&mut s, "type.createOutlines", json!({}))["ids"][0].as_u64().unwrap();
+    let d = &s.doc().unwrap().doc;
+    let mut aligns = vec![];
+    d.node(NodeId(g)).unwrap().walk(&mut |n: &vectorcraft_doc::Node| aligns.extend(n.appearance.stroke().map(|st| st.align)));
+    assert!(aligns.contains(&StrokeAlign::Inside) && aligns.contains(&StrokeAlign::Outside), "{aligns:?}");
+}
+
+/// Copying type's appearance onto a path keeps its characters' stroke alignment (the Eyedropper's
+/// own stroke attributes have none, on paths as on type).
+#[test]
+fn a_path_copying_types_appearance_takes_its_stroke_alignment() {
+    let mut s = session();
+    let id = stroked_text(&mut s);
+    run(&mut s, "stroke.set", json!({"align": "inside"}));
+    let rect = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 150, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut s, "appearance.copyFrom", json!({"source": id.0, "ids": [rect]}));
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(rect)).unwrap().appearance.stroke().unwrap().align, StrokeAlign::Inside);
+}
+
+#[test]
+fn a_centred_character_stroke_writes_no_alignment() {
+    assert!(serde_json::to_value(CharStyle::default()).unwrap().get("stroke_align").is_none(), "the default isn't written");
+    let mut old = serde_json::to_value(CharStyle { stroke_align: StrokeAlign::Outside, ..Default::default() }).unwrap();
+    assert_eq!(old["stroke_align"], "Outside");
+    old.as_object_mut().unwrap().remove("stroke_align");
+    let st: CharStyle = serde_json::from_value(old).unwrap();
+    assert_eq!(st.stroke_align, StrokeAlign::Center, "files written before it existed stroke centred");
 }

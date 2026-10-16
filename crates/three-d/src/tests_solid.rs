@@ -91,11 +91,15 @@ fn taper_shrinks_the_back_and_twist_turns_it() {
     let (flo, fhi) = at_front.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
     let (back_h, front_h) = (hi - lo, fhi - flo);
     assert!(close(front_h, 100.0, 1e-6) && close(back_h, 50.0, 1e-6), "front {front_h}, back {back_h}");
-    // Seen from behind, a 45° twist shows the back cap turned into a diamond.
+    // Seen from behind, a 45° twist shows the back cap turned into a diamond, drawn last, and the
+    // corners of the walls nearer the front reaching past it.
     let back = View { rotation_y: 180.0, ..front() };
     let twisted = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 45.0, cap: true, ..o }, back).unwrap();
-    assert_eq!(twisted.len(), 1, "only the back cap faces the viewer");
+    let cap = twisted.last().unwrap();
+    assert_eq!(cap.contours[0].len(), 4);
+    assert!(close(extent(std::slice::from_ref(cap)).width(), 100.0 * 2f64.sqrt(), 1e-6), "{:?}", extent(&twisted));
     assert!(close(extent(&twisted).width(), 100.0 * 2f64.sqrt(), 1e-6), "{:?}", extent(&twisted));
+    assert!(depth_at(cap, Point::new(94.0, 94.0)).is_none() && twisted.iter().any(|f| depth_at(f, Point::new(94.0, 94.0)).is_some()));
     // Its walls are cut into slices that follow the turn.
     let open = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 45.0, ..o }, View { rotation_x: -20.0, rotation_y: 30.0, ..front() }).unwrap();
     assert!(open.len() > 2 * 8, "{}", open.len());
@@ -369,6 +373,16 @@ fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
     assert!(ring.len() > 4 * 16, "a 100 pt circle within 0.05 pt: {}", ring.len());
 }
 
+/// The pieces twisted walls and bevels are cut into stay within the facet limit: 200 bumps with
+/// a rounded bevel, turned 360°, give no more facets than the limit.
+#[test]
+fn twisted_pieces_stay_within_the_facet_limit() {
+    let (p, r) = bumps(200);
+    let o = Extrude { twist: 360.0, bevel: Some(Bevel { shape: BevelShape::Rounded, ..Bevel::default() }), ..Extrude::default() };
+    let f = extrude(&p, FillRule::EvenOdd, r, o, View { rotation_x: -18.0, rotation_y: -26.0, rotation_z: 8.0, ..front() });
+    assert!(f.is_ok_and(|f| f.len() <= MAX_FACES));
+}
+
 /// The bucketed nearest-edge search agrees with checking every edge, inside, outside and far
 /// beyond the shape.
 #[test]
@@ -410,10 +424,19 @@ fn twist_holds_between_0_and_360_degrees() {
 
 /// A twisted extrusion shows every wall facing the viewer: a twist bends each strip between two
 /// slices into a saddle, and its normal from one corner's triangle leaned so far back that from
-/// 60° on every wall was dropped. Checked against each strip's average normal, oriented away from
-/// the square's axis.
+/// 60° on every wall was dropped. Checked against the average normal of each piece the strip is
+/// cut into along its edge ([`cuts`]), oriented away from the square's axis.
 #[test]
 fn twisted_walls_face_the_way_they_turn() {
+    let lerp = |p: V3, q: V3, s: f64| {
+        if s <= 0.0 {
+            p
+        } else if s >= 1.0 {
+            q
+        } else {
+            V3(p.0 + (q.0 - p.0) * s, p.1 + (q.1 - p.1) * s, p.2 + (q.2 - p.2) * s)
+        }
+    };
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let c = b.center();
     for twist in [60.0, 120.0, 180.0, 300.0] {
@@ -427,6 +450,8 @@ fn twisted_walls_face_the_way_they_turn() {
             let ring = &rings(&p, FillRule::EvenOdd, b.width().max(b.height()), MAX_SOLID_POINTS).unwrap()[0];
             let slices = ((twist / 6.0).ceil() as usize).clamp(8, 64);
             let z = |t: f64| o.depth / 2.0 - o.depth * t;
+            let placed = |t: f64| -> Vec<V3> { section(ring, b, &o, t).iter().map(|p| camera.place(*p, z(t))).collect() };
+            let pieces = cuts(&placed(0.0), &placed(1.0 / slices as f64));
             let mut expected = 0;
             for k in 0..slices {
                 let (t0, t1) = (k as f64 / slices as f64, (k + 1) as f64 / slices as f64);
@@ -434,17 +459,24 @@ fn twisted_walls_face_the_way_they_turn() {
                 for i in 0..ring.len() {
                     let j = (i + 1) % ring.len();
                     let q = [camera.place(r0[i], z(t0)), camera.place(r0[j], z(t0)), camera.place(r1[j], z(t1)), camera.place(r1[i], z(t1))];
-                    let mut n = newell(&[q.to_vec()]).unit();
-                    let mid = r0[i].midpoint(r1[j]);
-                    let away = camera.rotate(V3(mid.x - c.x, mid.y - c.y, 0.0));
-                    if n.dot(away) < 0.0 {
-                        n = V3(-n.0, -n.1, -n.2);
-                    }
-                    let centre = V3((q[0].0 + q[2].0) / 2.0, (q[0].1 + q[2].1) / 2.0, (q[0].2 + q[2].2) / 2.0);
-                    // Kept as the builder keeps them: facing, or seen almost edge-on, with an area.
-                    let projected: Vec<Point> = q.iter().map(|v| camera.project(*v)).collect();
-                    if camera.facing(centre, n) > -0.02 && signed_area(&projected).abs() >= 1e-10 {
-                        expected += 1;
+                    let pieces = pieces[i];
+                    for k in 0..pieces {
+                        let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
+                        let q = [lerp(q[0], q[1], s0), lerp(q[0], q[1], s1), lerp(q[3], q[2], s1), lerp(q[3], q[2], s0)];
+                        let mut n = newell(&[q.to_vec()]).unit();
+                        let s = (s0 + s1) / 2.0;
+                        let mid = r0[i].lerp(r0[j], s).midpoint(r1[i].lerp(r1[j], s));
+                        let away = camera.rotate(V3(mid.x - c.x, mid.y - c.y, 0.0));
+                        if n.dot(away) < 0.0 {
+                            n = V3(-n.0, -n.1, -n.2);
+                        }
+                        let sum = q.iter().fold(V3::default(), |s, v| V3(s.0 + v.0, s.1 + v.1, s.2 + v.2));
+                        let centre = V3(sum.0 / 4.0, sum.1 / 4.0, sum.2 / 4.0);
+                        // Kept as the builder keeps them: facing, or seen almost edge-on, with an area.
+                        let projected: Vec<Point> = q.iter().map(|v| camera.project(*v)).collect();
+                        if camera.facing(centre, n) > -0.02 && signed_area(&projected).abs() >= 1e-10 {
+                            expected += 1;
+                        }
                     }
                 }
             }
@@ -455,6 +487,142 @@ fn twisted_walls_face_the_way_they_turn() {
                 }
             }
             assert_eq!(got.len(), expected, "twist {twist}, view ({x}, {y})");
+        }
+    }
+}
+
+/// The depth (larger is nearer the eye) of `f`'s own surface over the page point `p`, seen without
+/// perspective, or `None` where `f` doesn't cover `p`. A flat facet is its plane, a four-cornered
+/// one that isn't flat is the bilinear patch between its corners, and any other is a fan of
+/// triangles from its center.
+fn depth_at(f: &Facet, p: Point) -> Option<f64> {
+    let winding: i32 = f
+        .contours
+        .iter()
+        .flat_map(|c| c.iter().zip(c.iter().cycle().skip(1)).take(c.len()))
+        .map(|(a, b)| {
+            let side = (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y);
+            if a.y <= p.y && b.y > p.y && side > 0.0 {
+                1
+            } else if a.y > p.y && b.y <= p.y && side < 0.0 {
+                -1
+            } else {
+                0
+            }
+        })
+        .sum();
+    if winding == 0 {
+        return None;
+    }
+    // Without perspective a projected point is its view-space point moved by one offset.
+    let pairs: Vec<Vec<(Point, f64)>> = f.contours.iter().zip(&f.view).map(|(c, v)| c.iter().zip(v).map(|(q, v)| (*q, v.2)).collect()).collect();
+    let n = newell(&f.view);
+    let (anchor, z0) = pairs[0][0];
+    let flat = n.2.abs() > 1e-12
+        && pairs.iter().flatten().all(|(q, z)| (n.0 * (q.x - anchor.x) + n.1 * (q.y - anchor.y) + n.2 * (z - z0)).abs() < 1e-9 * n.dot(n).sqrt());
+    if flat {
+        return Some(z0 - (n.0 * (p.x - anchor.x) + n.1 * (p.y - anchor.y)) / n.2);
+    }
+    let c = &pairs[0];
+    if pairs.len() == 1 && c.len() == 4 {
+        let at = |u: f64, v: f64| {
+            let w = [(1.0 - u) * (1.0 - v), u * (1.0 - v), u * v, (1.0 - u) * v];
+            c.iter().zip(w).fold((0.0, 0.0, 0.0), |s, ((q, z), w)| (s.0 + w * q.x, s.1 + w * q.y, s.2 + w * z))
+        };
+        // Newton's method for the patch point over `p`.
+        let (mut u, mut v) = (0.5, 0.5);
+        for _ in 0..50 {
+            let (x, y, _) = at(u, v);
+            let h = 1e-7;
+            let (xu, yu, _) = at(u + h, v);
+            let (xv, yv, _) = at(u, v + h);
+            let (a, b, cc, d) = ((xu - x) / h, (xv - x) / h, (yu - y) / h, (yv - y) / h);
+            let det = a * d - b * cc;
+            if det.abs() < 1e-18 {
+                return None;
+            }
+            let (ex, ey) = (p.x - x, p.y - y);
+            u += (d * ex - b * ey) / det;
+            v += (a * ey - cc * ex) / det;
+        }
+        return (u > -1e-6 && u < 1.0 + 1e-6 && v > -1e-6 && v < 1.0 + 1e-6).then(|| at(u, v).2);
+    }
+    let m = c.iter().fold((0.0, 0.0, 0.0), |s, (q, z)| (s.0 + q.x, s.1 + q.y, s.2 + z));
+    let k = c.len() as f64;
+    let (mx, my, mz) = (m.0 / k, m.1 / k, m.2 / k);
+    for ((a, za), (b, zb)) in c.iter().zip(c.iter().cycle().skip(1)).take(c.len()) {
+        let det = (a.x - mx) * (b.y - my) - (b.x - mx) * (a.y - my);
+        if det.abs() < 1e-18 {
+            continue;
+        }
+        let s = ((p.x - mx) * (b.y - my) - (b.x - mx) * (p.y - my)) / det;
+        let t = ((a.x - mx) * (p.y - my) - (p.x - mx) * (a.y - my)) / det;
+        if s >= -1e-9 && t >= -1e-9 && s + t <= 1.0 + 1e-9 {
+            return Some(mz + s * (za - mz) + t * (zb - mz));
+        }
+    }
+    None
+}
+
+/// Over a grid of `samples` × `samples` points across the facets, seen without perspective: how
+/// far, at most, the facet drawn last over a point (the one seen) is behind a facet drawn before
+/// it there, counting only facets it lies wholly behind the plane of (which must be drawn after
+/// it), and at which point.
+fn worst_misorder(facets: &[Facet], samples: usize) -> (f64, Point) {
+    let e = extent(facets);
+    let boxes: Vec<Rect> = facets.iter().map(|f| extent(std::slice::from_ref(f))).collect();
+    let behind = |f: &Facet, other: &Facet| {
+        // The other facet's plane through its corners' average, its normal toward the eye (+z).
+        let n = newell(&other.view);
+        let n = if n.2 < 0.0 { V3(-n.0, -n.1, -n.2) } else { n }.unit();
+        let count = other.view.iter().map(Vec::len).sum::<usize>() as f64;
+        let c = other.view.iter().flatten().fold(V3::default(), |s, v| V3(s.0 + v.0 / count, s.1 + v.1 / count, s.2 + v.2 / count));
+        n.2 > 1e-9 && f.view.iter().flatten().all(|v| v.sub(c).dot(n) < -1e-3)
+    };
+    let mut worst = (0.0, e.origin());
+    for j in 0..samples {
+        for i in 0..samples {
+            let p = Point::new(e.x0 + (i as f64 + 0.5) / samples as f64 * e.width(), e.y0 + (j as f64 + 0.5) / samples as f64 * e.height());
+            let covering: Vec<(&Facet, f64)> =
+                facets.iter().zip(&boxes).filter(|(_, r)| r.contains(p)).filter_map(|(f, _)| depth_at(f, p).map(|d| (f, d))).collect();
+            let Some(((seen, depth), under)) = covering.split_last() else { continue };
+            for (f, d) in under {
+                if d - depth > worst.0 && behind(seen, f) {
+                    worst = (d - depth, p);
+                }
+            }
+        }
+    }
+    worst
+}
+
+/// A twist of 180° or 360° turns a square's walls into a twisted bar, whose ridges pass in front
+/// of the walls between them, in front of its bevels and in front of its caps. Over every point
+/// the facet drawn last is less than 6 pt behind any facet drawn before it whose plane it lies
+/// wholly behind. Inflate's walls twist the same way (at 0 % volume its front is flat).
+#[test]
+fn twisted_walls_are_drawn_back_to_front() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let rounded = Bevel { shape: BevelShape::Rounded, width: 8.0, height: 8.0, both_sides: true, ..Bevel::default() };
+    for (x, y, z) in [(-18.0, -26.0, 8.0), (-60.0, 20.0, 0.0), (75.0, 10.0, 30.0), (-20.0, 150.0, 10.0), (30.0, 200.0, 0.0)] {
+        let v = View { rotation_x: x, rotation_y: y, rotation_z: z, ..front() };
+        for twist in [180.0, 360.0] {
+            for depth in [50.0, 200.0] {
+                let solids = [
+                    ("Extrude", extrude(&p, FillRule::EvenOdd, b, Extrude { depth, twist, ..Extrude::default() }, v)),
+                    ("beveled", extrude(&p, FillRule::EvenOdd, b, Extrude { depth, twist, bevel: Some(rounded), ..Extrude::default() }, v)),
+                    ("Inflate", inflate(&p, FillRule::EvenOdd, b, Inflate { depth, twist, volume: 0.0, ..Inflate::default() }, v)),
+                    // 10 pt deep, the bevels take all of it; 40 pt deep, they leave a wall.
+                    (
+                        "bevels alone",
+                        extrude(&p, FillRule::EvenOdd, b, Extrude { depth: depth / 5.0, twist, bevel: Some(rounded), ..Extrude::default() }, v),
+                    ),
+                ];
+                for (kind, f) in solids {
+                    let (gap, at) = worst_misorder(&f.unwrap(), 120);
+                    assert!(gap < 6.0, "{kind}, view ({x}, {y}, {z}), twist {twist}, depth {depth}: {gap} pt behind at {at:?}");
+                }
+            }
         }
     }
 }

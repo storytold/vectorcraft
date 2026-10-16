@@ -228,6 +228,45 @@ fn writes_the_documented_operators() {
     assert!(text.contains("] 0 0 2 1 2 1 8 3 0 0 0 0 XI\n%FF00000000FF\n%AI5_EndRaster\n"), "{text}");
 }
 
+/// An image's matrix (§8) is an art-space matrix applied to its pixels with their rows running
+/// downwards, `(u, -v)`: a rotated image is written with the matrix the reader and other apps
+/// place it by, prints where it is, and reads back where it was (#2269).
+#[test]
+fn a_rotated_image_keeps_its_place() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut png = vec![];
+    image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255])
+        .unwrap()
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    // Turned 90° clockwise on the page: the pixel rows run down, the next row is to the left.
+    let xf = Affine::new([0.0, 10.0, -10.0, 0.0, 100.0, 40.0]);
+    let im =
+        Node::new(doc.alloc_id(), NodeKind::Image(Box::new(ImageObject { key, width: 2, height: 1, xf, link: None, placement: Default::default() })));
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    // In art space (y up) the rows run down, (0, -10) a pixel, and the next row is to the left,
+    // (-10, 0): [a b] = (0, -10) and [c d] = (10, 0), as the matrix takes (u, -v).
+    let line = text.lines().find(|l| l.ends_with(" XI")).unwrap();
+    let m: Vec<f64> = line.trim_start_matches('[').split(']').next().unwrap().split_whitespace().map(|v| v.parse().unwrap()).collect();
+    assert_eq!(m[..4], [0.0, -10.0, 10.0, 0.0], "{line}");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut found = None;
+    read.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            found = Some(im.xf);
+        }
+    });
+    let back = found.unwrap();
+    assert!(back.as_coeffs().iter().zip(xf.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{back:?}");
+}
+
 #[test]
 fn a_gradient_fill_and_its_stroke_are_one_object() {
     let mut doc = Document::new(100.0, 100.0);

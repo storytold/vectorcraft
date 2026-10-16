@@ -78,3 +78,27 @@ fn a_run_without_the_first_runs_stroke_resets_it() {
     );
     assert!(svg.contains("stroke-linejoin=\"round\"") && svg.contains("stroke-dasharray=\"3 1\""), "{svg}");
 }
+
+/// Align Stroke on live type: the text stays live (filled, without the stroke) and the aligned
+/// stroke is drawn on the glyph outlines, twice as wide and clipped (inside) or masked (outside),
+/// as aligned strokes on paths are; outlined type carries it on its glyphs.
+#[test]
+fn an_aligned_character_stroke_keeps_the_text_live() {
+    use vectorcraft_doc::StrokeAlign;
+    for (align, side) in [(StrokeAlign::Outside, "mask=\"url(#"), (StrokeAlign::Inside, "clip-path=\"url(#")] {
+        let style = CharStyle { size: 40.0, stroke: Paint::solid(Color::BLACK), stroke_width: 2.0, stroke_align: align, ..Default::default() };
+        let mut t = TextObject::point(Point::new(20.0, 100.0), "Live", style);
+        t.runs.push(TextRun { text: " plain".into(), style: CharStyle { size: 40.0, ..stroked() }, inline: None });
+        for outline_text in [false, true] {
+            let svg = export(&text_doc(t.clone(), vec![]), &ExportOptions { outline_text, ..Default::default() });
+            assert_eq!(svg.contains("<text"), !outline_text, "{svg}");
+            assert!(svg.contains("stroke-width=\"4\"") && svg.contains(side), "{align:?} {outline_text}: {svg}");
+            if !outline_text {
+                let text = &svg[svg.find("<text").unwrap()..svg.find("</text>").unwrap()];
+                assert!(!text.contains("stroke-width=\"4\""), "the live text doesn't stroke the aligned run: {text}");
+                assert!(text.contains("stroke-width=\"2\""), "a centred run keeps its stroke on the text: {text}");
+                assert!(svg[svg.find("</text>").unwrap()..].contains("stroke-width=\"4\""), "the aligned stroke lies over the text");
+            }
+        }
+    }
+}

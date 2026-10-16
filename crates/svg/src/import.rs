@@ -1091,13 +1091,11 @@ impl Importer {
         Some(n)
     }
 
-    /// `<mask>` → opacity mask (luminance; alpha masks are approximated by their luminance). A
-    /// mask our export wrote gets its options back ([`mask_flags`]) and its art without what
-    /// stands for them: the inverting filter group and the backdrop rectangle.
+    /// `<mask>` → opacity mask. An alpha mask's art comes in white with its opacity kept, so its
+    /// luminance is its alpha (images in it keep their colours, with a warning). A mask our export wrote gets its
+    /// options back ([`mask_flags`]) and its art without what stands for them: the inverting
+    /// filter group and the backdrop rectangle.
     fn opacity_mask(&mut self, m: &usvg::Mask, ts: Affine, label: &str) -> Option<Box<vectorcraft_doc::OpacityMask>> {
-        if m.kind() == usvg::MaskType::Alpha {
-            self.warn(format!("alpha mask on {label} imported as a luminance opacity mask"));
-        }
         if m.mask().is_some() {
             self.warn(format!("nested mask on {label} ignored"));
         }
@@ -1115,6 +1113,14 @@ impl Importer {
             nodes = rest;
         }
         let mut children: Vec<Arc<Node>> = nodes.iter().filter_map(|c| self.node(c, ts)).map(Arc::new).collect();
+        if m.kind() == usvg::MaskType::Alpha {
+            children.iter_mut().for_each(|c| vectorcraft_doc::node::whiten(Arc::make_mut(c)));
+            let mut image = false;
+            children.iter().for_each(|c| c.walk(&mut |n| image |= matches!(n.kind, NodeKind::Image(_))));
+            if image {
+                self.warn(format!("image in the alpha mask on {label} counts by its luminance"));
+            }
+        }
         // Mask art that is all hidden draws nothing: that is an empty mask, not no mask (black all
         // over when clipped, white when not, inverted when the mask is).
         let art = match children.len() {

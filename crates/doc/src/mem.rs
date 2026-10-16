@@ -251,10 +251,14 @@ fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
+        b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
     }
     b += match &n.kind {
         NodeKind::Path { path, live, .. } => path_bytes(path) + boxed(live),
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => vec_bytes(children),
+        NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Compound { children, .. }
+        | NodeKind::Intertwine { children } => vec_bytes(children),
         NodeKind::Blend { children, .. } => vec_bytes(children) + ALLOC + size_of::<BlendSpec>(),
         NodeKind::Envelope { content, .. } => vec_bytes(content) + 2 * ALLOC + size_of::<EnvelopeKind>() + size_of::<Affine>(),
         NodeKind::Repeat(r) => vec_bytes(&r.source) + OTHER_KIND,

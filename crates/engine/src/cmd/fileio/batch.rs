@@ -55,7 +55,8 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 /// starts (one for all the steps in that document), so a step may open, switch or close documents.
 /// A step that acts on the active artboard ([`crate::ON_ACTIVE_ARTBOARD`]) and names none gets
 /// `artboard`, as the Artboards panel shows it in the document the step runs in: past that
-/// document's last artboard, the last one.
+/// document's last artboard, the last one. A step that resizes the active artboard
+/// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` gets that artboard as its `index`.
 fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Value]) -> Result<Vec<Value>> {
     let mut results = Vec::with_capacity(cmds.len());
     for c in cmds {
@@ -67,13 +68,18 @@ fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Va
             s.begin_interaction(label)?;
         }
         let mut params = c.get("params").cloned().unwrap_or(json!({}));
+        let key = if crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str()) {
+            Some("artboard")
+        } else {
+            crate::FIT_ACTIVE_ARTBOARD.contains(&id.as_str()).then_some("index")
+        };
         if let Some(a) = artboard
-            && crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str())
-            && params.get("artboard").is_none()
+            && let Some(key) = key
+            && params.get(key).is_none()
             && let Some(last) = s.active().and_then(|d| d.doc.artboards.len().checked_sub(1))
             && let Some(o) = params.as_object_mut()
         {
-            o.insert("artboard".into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
+            o.insert(key.into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
         }
         let (v, noted) =
             s.execute_step(&id, &params).map_err(|e| EngineError::Other(format!("batch step {} (`{id}`) failed: {e}", results.len())))?;

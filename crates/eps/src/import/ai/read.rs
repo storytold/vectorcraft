@@ -14,7 +14,9 @@
 //!   the art size around the template box's centre, else (a file in the legacy format another
 //!   app wrote) the bounding box.
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
-//!   and the samples after `XI`.
+//!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
+//!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
+//!   become an RGBA PNG.
 //! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
 //!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
 //!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
@@ -22,7 +24,8 @@
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
-//!   effects, brushes) comes first as that look, drawn (a group), then the object itself on `%_`
+//!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
+//!   rasterizes it), then the object itself on `%_`
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
@@ -45,9 +48,10 @@ use kurbo::{Affine, BezPath, PathEl, Point, Rect};
 use vectorcraft_color::gradient::Gradient;
 use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
@@ -373,6 +377,8 @@ struct Reader<'a> {
     hidden_ids: HashSet<NodeId>,
     /// A group just ended, its state (`Xy`, `Xd`, `XW`) not yet read.
     group_ended: bool,
+    /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
+    layer_state: Option<(f32, BlendMode, bool, Knockout)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
@@ -524,6 +530,7 @@ impl<'a> Reader<'a> {
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
             group_ended: false,
+            layer_state: None,
             styles: HashMap::new(),
             mesh: None,
             cmyk_cache: HashMap::new(),
@@ -728,6 +735,7 @@ impl<'a> Reader<'a> {
         // The gradients defined so far, lent (and those it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.nodes = self.nodes;
+        sub.template = self.template;
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
@@ -829,6 +837,21 @@ impl<'a> Reader<'a> {
             _ => self.close(what, |k| matches!(k, Kind::Clip))?,
         };
         let Frame { kind, children: kids, gs, clips, hidden: opened_hidden, .. } = f;
+        // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
+        // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        if matches!(kind, Kind::Group)
+            && !clips.is_empty()
+            && clips.len() == kids.len()
+            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+        {
+            for kid in kids {
+                if let Some(parent) = self.frames.last_mut() {
+                    parent.clips.push(parent.children.len());
+                }
+                self.add(kid, opened_hidden || hidden)?;
+            }
+            return Ok(());
+        }
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         self.group_ended = !matches!(kind, Kind::Compound);
@@ -915,6 +938,10 @@ impl<'a> Reader<'a> {
         layer.name = Some(a.name.clone());
         layer.visible = a.visible;
         layer.locked = a.locked;
+        // The layer's own opacity, blend and knockout, written after its art (#2003).
+        if let Some((opacity, blend, isolate, knockout)) = self.layer_state.take() {
+            (layer.opacity, layer.blend, layer.isolate, layer.knockout) = (opacity, blend, isolate, knockout);
+        }
         match self.frames.last_mut() {
             Some(parent) => {
                 parent.children.push(layer);
@@ -969,9 +996,11 @@ impl<'a> Reader<'a> {
             ";" => return self.end_obj(),
             _ => {}
         }
-        // What follows an object (its name, transparency and style) ends with anything else.
-        if !matches!(w, "Xy" | "Xd" | "XW" | "BB") {
+        // What follows an object (its name, transparency and style) ends with anything else. The
+        // state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the `LB`.
+        if !matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
             self.after_object = false;
+            self.layer_state = None;
         }
         let group_ended = std::mem::take(&mut self.group_ended);
         let vals = self.operands();
@@ -1347,8 +1376,17 @@ impl<'a> Reader<'a> {
         self.frames.iter().all(|f| !matches!(&f.kind, Kind::Layer(a) if !a.visible))
     }
 
-    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`).
+    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
+    /// opacity mask it may carry.
     fn art_dictionary(&mut self, o: &Obj) {
+        // A mask (`/Mask`, keyed `AI9_Mask`): its art is on `X=` … `X+` lines, and drawing the
+        // object without it shows what the mask hides, so it must be named (#2004). A mask that
+        // is disabled changes nothing.
+        if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask"))
+            && mask.nums("Disabled").first().copied() != Some(1.0)
+        {
+            self.unreadable("opacity masks");
+        }
         let name = match o.text("AIArtName") {
             Some(name) => name,
             None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {
@@ -1479,13 +1517,20 @@ impl<'a> Reader<'a> {
         };
         gs.knockout_shape = rest.get(2).is_some_and(|v| *v != 0.0);
         let gs = self.gs.clone();
-        if let Some(n) = self.last_object()
-            && matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })
-        {
-            n.opacity = gs.opacity;
-            n.blend = gs.blend;
-            n.isolate = gs.isolate;
-            n.knockout = gs.knockout;
+        if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+            if let Some(n) = self.last_object() {
+                n.opacity = gs.opacity;
+                n.blend = gs.blend;
+                n.isolate = gs.isolate;
+                n.knockout = gs.knockout;
+            }
+            self.layer_state = None;
+        } else {
+            // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
+            // an operator that isn't part of the state block (or the `LB` that takes it) says the
+            // art moves on, so a path's state before its paint isn't read as its layer's.
+            self.layer_state =
+                matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. })).then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
     }
 
@@ -1509,17 +1554,20 @@ impl<'a> Reader<'a> {
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
             return;
         };
+        // The look is a group of paths, or one image where an effect (a blur, a shadow) rasterizes it.
         if !self.hidden_ids.contains(&object.id)
             || self.hidden_ids.contains(&look.id) != hidden
-            || !matches!(look.kind, NodeKind::Group { clip: false, .. })
+            || !matches!(look.kind, NodeKind::Group { clip: false, .. } | NodeKind::Image(_))
         {
             return;
         }
         // A style read here: the object, painted as it says.
         if let Some(appearance) = self.styles.get(&style).and_then(|st| styled(object, st)) {
             let Some(mut object) = f.children.pop() else { return };
-            f.children.pop();
+            let Some(look) = f.children.pop() else { return };
             object.appearance = appearance.into();
+            // The object's transparency is written on its look, after the look's group ends.
+            (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
             f.children.push(object);
@@ -1710,7 +1758,16 @@ impl<'a> Reader<'a> {
     }
 
     fn set_instance(&mut self, i: &Instance) {
-        let to_doc = self.space();
+        let mut to_doc = self.space();
+        // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
+        // origin, as the file's PDF part draws them.
+        if self.pattern.is_some()
+            && i.has_matrix()
+            && let Some(t) = self.template
+        {
+            let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
+            to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
+        }
         match i.paint(&self.gradients, to_doc) {
             Some(p) if i.stroke => self.pending_stroke = Some(p),
             Some(p) => self.pending_fill = Some(p),
@@ -1772,27 +1829,34 @@ impl<'a> Reader<'a> {
             return Ok(());
         };
         let opacity = opacity.filter(|_| alpha_len > 0);
+        // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps a CMYK
+        // image's, and an alpha channel that hides part of the image becomes its opacity mask.
+        if channels == 4
+            && *bits == 8.0
+            && let Some(blob) = Inks::new(w as u32, h as u32, samples.to_vec()).and_then(|i| ImageBlob::cmyk_tiff(&i))
+        {
+            return self.add_raster(blob, opacity, &m, (w as u32, h as u32));
+        }
         let mut rgba = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h as usize {
             let line = samples.get(y * row..(y + 1) * row).unwrap_or_default();
             for x in 0..w as usize {
-                let px = if *bits == 1.0 {
-                    let bit = line.get(x / 8).map_or(0, |b| (b >> (7 - x % 8)) & 1);
-                    let v = if bit == 1 { 255 } else { 0 };
-                    [v, v, v]
-                } else {
-                    let s = |c: usize| line.get(x * channels + c).copied().unwrap_or(0);
-                    match channels {
-                        1 => [s(0); 3],
-                        4 => {
-                            let key = [s(0), s(1), s(2), s(3)];
-                            if self.cmyk_cache.len() > 1 << 16 {
-                                self.cmyk_cache.clear();
-                            }
-                            *self.cmyk_cache.entry(key).or_insert_with(|| cmyk_rgb(key))
+                // A 1-bit row holds each pixel's channels in turn, a bit each, padded to a whole
+                // byte (`row`); a set bit is the channel at full strength (255).
+                let s = |c: usize| {
+                    let i = x * channels + c;
+                    if *bits == 1.0 { line.get(i / 8).map_or(0, |b| ((b >> (7 - i % 8)) & 1) * 255) } else { line.get(i).copied().unwrap_or(0) }
+                };
+                let px = match channels {
+                    1 => [s(0); 3],
+                    4 => {
+                        let key = [s(0), s(1), s(2), s(3)];
+                        if self.cmyk_cache.len() > 1 << 16 {
+                            self.cmyk_cache.clear();
                         }
-                        _ => [s(0), s(1), s(2)],
+                        *self.cmyk_cache.entry(key).or_insert_with(|| cmyk_rgb(key))
                     }
+                    _ => [s(0), s(1), s(2)],
                 };
                 let a = opacity.and_then(|o| o.get(y * w as usize + x)).copied().unwrap_or(255);
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
@@ -1804,25 +1868,58 @@ impl<'a> Reader<'a> {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         }
-        // The matrix maps pixels (y down) into art space with its y flipped.
-        let [a, b, c, d, tx, ty] = m.as_slice() else { return Ok(()) };
+        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32))
+    }
+
+    /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
+    /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
+    /// image.
+    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+        // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
+        // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
+        // gives the same place only when the image isn't rotated (b = c = 0).
+        let [a, b, c, d, tx, ty] = m else { return Ok(()) };
         let to_doc = self.space();
-        let xf = to_doc * FLIP * Affine::new([*a, *b, *c, *d, *tx, -*ty]);
+        let xf = to_doc * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
             return Ok(());
         }
+        let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
+        let key = blob.content_key();
+        self.doc.images.entry(key.clone()).or_insert(blob);
+        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() }, mask, false)
+    }
+
+    /// An image's alpha channel (`w` × `h` bytes) as a grayscale image over the image (`xf`): its
+    /// opacity mask, as in PDF import. `None` when it hides nothing.
+    fn alpha_mask(&mut self, alpha: &[u8], w: u32, h: u32, xf: Affine) -> Option<OpacityMask> {
+        if alpha.iter().all(|v| *v == 255) {
+            return None;
+        }
+        let mut png = Vec::new();
+        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.add_image(ImageObject { key, width: w as u32, height: h as u32, xf, link: None, placement: Default::default() }, false)
+        let art = Node::new(
+            self.doc.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })),
+        );
+        Some(OpacityMask::new(art, true))
     }
 
     /// Add an image object with the state's transparency.
     fn add_image(&mut self, im: ImageObject, hidden: bool) -> Result<(), String> {
+        self.add_image_masked(im, None, hidden)
+    }
+
+    /// Add an image object with the state's transparency and `mask` as its opacity mask.
+    fn add_image_masked(&mut self, im: ImageObject, mask: Option<OpacityMask>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.extras_mut().mask = mask.map(Box::new);
         self.add(node, hidden)
     }
 

@@ -318,6 +318,7 @@ impl PlannedSheet {
     fn sheet(&self) -> Sheet<'_> {
         Sheet {
             size: self.size,
+            unit: 1.0,
             trim: self.trim,
             bleed: self.bleed,
             view: self.view,

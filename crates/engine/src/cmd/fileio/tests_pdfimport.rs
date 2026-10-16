@@ -166,6 +166,26 @@ fn a_postscript_ai_file_says_it_cannot_be_opened_yet() {
     assert!(s.active().is_none());
 }
 
+/// PostScript given where a PDF is read (`document.pdfInfo`, `clipboard.importPdf`) is refused
+/// with an error that names File › Open and File › Place, and both of those read the file.
+#[test]
+fn postscript_read_as_a_pdf_names_open_and_place() {
+    let ps = b"%!PS-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    for cmd in ["document.pdfInfo", "clipboard.importPdf"] {
+        let e = s.execute(cmd, &json!({"dataBase64": b64(ps)})).unwrap_err().to_string();
+        assert!(e.contains("PostScript") && e.contains("not a PDF: File › Open and File › Place read it as EPS"), "{cmd}: {e}");
+        assert!(!e.contains("can't be opened"), "{cmd}: {e}");
+    }
+    for name in ["legacy.ai", "art.eps"] {
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": b64(ps)})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{name}: {r}");
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": b64(ps)})).unwrap();
+        assert_eq!(r["ids"].as_array().map(Vec::len), Some(1), "{name}: {r}");
+    }
+}
+
 /// A page showing only text, with an editor's private data when `private`.
 fn text_page(private: bool, also: &str) -> PdfPage {
     PdfPage {

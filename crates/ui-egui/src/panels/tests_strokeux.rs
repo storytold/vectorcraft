@@ -1,5 +1,6 @@
 //! Headless frames of the Stroke panel's reach: Units > Stroke in the panel, the Control bar and
-//! the Properties panel, mixed values shown blank, Align Stroke for open paths and type, and the
+//! the Properties panel, mixed values shown blank, Align Stroke for open paths and type (also
+//! while the Type tool edits it), and the
 //! weight presets.
 
 use serde_json::json;
@@ -82,7 +83,7 @@ fn mixed_weights_show_blank() {
 }
 
 #[test]
-fn inside_and_outside_are_off_for_open_paths_and_type() {
+fn inside_and_outside_are_off_for_open_paths_and_on_for_type() {
     let ctx = egui::Context::default();
     let mut app = app_with_rect();
     let align = |app: &VectorcraftApp| current_stroke(app).unwrap().align;
@@ -95,9 +96,29 @@ fn inside_and_outside_are_off_for_open_paths_and_type() {
     let id = run(&mut app, "text.create", json!({"x": 10, "y": 190, "text": "Hi"}))["id"].as_u64().unwrap();
     run(&mut app, "select.set", json!({ "ids": [id] }));
     run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
-    let undo = app.session.active().unwrap().history.undo.len();
     click(&ctx, &mut app, at, stroke::show);
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "type doesn't");
+    assert_eq!(align(&app), vectorcraft_doc::StrokeAlign::Inside, "type's characters do, around their glyphs");
+}
+
+/// While the Type tool edits text, Align Stroke styles the selected characters' stroke.
+#[test]
+fn align_stroke_styles_the_characters_the_type_tool_selects() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_rect();
+    let at = row_button(&ctx, &texts(&ctx, &mut app, stroke::show), "Align Stroke:", 2);
+    app.session.select_tool("type", Default::default()).unwrap();
+    let id = run(&mut app, "text.create", json!({"x": 10, "y": 190, "text": "Hello"}))["id"].as_u64().unwrap();
+    run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    assert!(character::text_editing(&app).is_some());
+    assert!(stroke_mixed(&app, &ctx).can_align, "the buttons are on");
+    click(&ctx, &mut app, at, stroke::show);
+    let vectorcraft_doc::NodeKind::Text(t) = &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else {
+        panic!("not type")
+    };
+    let aligns: Vec<_> = t.runs.iter().map(|r| r.style.stroke_align).collect();
+    assert_eq!(aligns, [vectorcraft_doc::StrokeAlign::Outside, vectorcraft_doc::StrokeAlign::Center], "only the selected characters");
 }
 
 #[test]

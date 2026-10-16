@@ -538,6 +538,36 @@ fn image_roundtrip() {
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
 }
 
+/// #2023: a group's Transform effect copies an image among its members as it does the paths: the
+/// PDF draws the image three times, where the effect put it.
+#[test]
+fn a_group_transform_effect_exports_its_image_copies() {
+    let mut d = doc(200.0, 100.0);
+    d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+    let im = ImageObject {
+        key: "img1".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::translate((20.0, 30.0)) * Affine::scale(5.0),
+        link: None,
+        placement: Default::default(),
+    };
+    let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
+    let mut square = rect_node(Rect::new(20.0, 60.0, 30.0, 70.0), Color::BLACK);
+    square.id = d.alloc_id();
+    let mut g = Node::group(NodeId(0), vec![Arc::new(square), image]);
+    g.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 50, "copies": 2}),
+        visible: true,
+    });
+    add(&mut d, g);
+    let out = roundtrip(&d);
+    let lefts: Vec<f64> =
+        leaves(&out).iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).filter_map(|n| n.geometric_bounds()).map(|b| b.x0.round()).collect();
+    assert_eq!(lefts, [20.0, 70.0, 120.0]);
+}
+
 /// Build a PDF with a correct xref table from object bodies.
 fn handmade_pdf(content: &str, media: &str) -> Vec<u8> {
     let objs = [

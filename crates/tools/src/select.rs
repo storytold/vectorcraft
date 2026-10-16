@@ -3,14 +3,18 @@
 //! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
-//! double-click opens the Corners dialog), double-click a group or an object to enter isolation
+//! double-click opens the Corners dialog), drag a live ellipse's pie widgets to set its pie angles
+//! (double-click makes it whole again: [`crate::pie`]), double-click a group or an object to enter isolation
 //! mode (Double Click To Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
 //! ([`crate::pathtype`]), double-click the type widget to convert point type to area type and back
-//! ([`crate::typewidget`]).
+//! ([`crate::typewidget`]), click a Shaper Group's mode widget to switch between Face Selection and
+//! Construction mode ([`crate::shaperwidget`]).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
+//! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
+//! E pressed again makes it take the objects it touches.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{hit_test, marquee, objects_at};
@@ -21,9 +25,11 @@ use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_dra
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::Targets;
 use crate::pathtype::{self, BracketDrag, over_bracket};
+use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
+use crate::shaperwidget;
 use crate::typewidget;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
 #[derive(Clone, Debug, Default)]
 enum State {
@@ -56,9 +62,14 @@ enum State {
         cur: Point,
         /// Shift: the objects inside leave the selection if selected, else join it.
         toggle: bool,
+        /// E pressed an odd number of times during the drag: the marquee takes only the objects
+        /// that lie entirely inside it.
+        enclosed: bool,
     },
     /// Dragging a Live Corners widget.
     Corner(CornerDrag),
+    /// Dragging a live ellipse's pie widget.
+    Pie(PieDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
 }
@@ -181,6 +192,15 @@ pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
     cx.doc.oriented_bounds(&cx.selection.objects, cx.preview_bounds)
 }
 
+/// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
+/// geometric bounds with symbol instances measured by their art
+/// ([`vectorcraft_doc::Node::geometric_bounds_with`]).
+pub(crate) fn inside(cx: &ToolContext, r: Rect, ids: Vec<NodeId>) -> Vec<NodeId> {
+    let symbols = cx.doc.symbol_boxes();
+    let within = |b: Rect| r.min_x() <= b.min_x() && b.max_x() <= r.max_x() && r.min_y() <= b.min_y() && b.max_y() <= r.max_y();
+    ids.into_iter().filter(|id| cx.doc.node(*id).and_then(|n| n.geometric_bounds_with(&symbols)).is_some_and(within)).collect()
+}
+
 /// What of the bounding box is under the pointer.
 enum BoxHit {
     Handle(Handle),
@@ -245,10 +265,27 @@ impl Tool for SelectionTool {
         !matches!(self.state, State::Idle) || self.guide.busy()
     }
 
+    /// E during a marquee drag switches the marquee between the objects it touches and only the
+    /// objects inside it.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Letter('e')
+            && let State::Marquee { enclosed, .. } = &mut self.state
+        {
+            *enclosed = !*enclosed;
+            return vec![];
+        }
+        if key == ToolKey::Escape { self.guide.cancel() } else { vec![] }
+    }
+
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Letter('e') && matches!(self.state, State::Marquee { .. })
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
+            State::Pie(d) => d.adjusting(),
             _ => false,
         }
     }
@@ -268,8 +305,13 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
-                if let Some(a) = corners::double_click(cx, p, false).or_else(|| typewidget::double_click(cx, p)) {
+                if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p))
+                {
                     return vec![a];
+                }
+                // The Shaper Group's mode widget answers each click of a double-click on it.
+                if shaperwidget::over_widget(cx, p) {
+                    return vec![];
                 }
                 if crate::rulerguide::guide_at(cx, p).is_some() {
                     return vec![];
@@ -289,15 +331,23 @@ impl Tool for SelectionTool {
                 vec![]
             }
             (PointerKind::Down, _) => {
-                // 1. Live Corners widgets and type on a path's brackets, then the bounding-box
-                // handles of the current selection.
+                // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
+                // bounding-box handles of the current selection.
                 if let Some(c) = CornerDrag::hit(cx, ev, false) {
                     self.state = State::Corner(c);
+                    return vec![];
+                }
+                if let Some(d) = PieDrag::hit(cx, ev) {
+                    self.state = State::Pie(d);
                     return vec![];
                 }
                 if let Some(b) = BracketDrag::hit(cx, ev) {
                     self.state = State::Bracket(b);
                     return vec![];
+                }
+                if let Some(a) = shaperwidget::click(cx, p) {
+                    self.state = State::Idle;
+                    return vec![a];
                 }
                 // The type widget answers a double-click only: its clicks neither drag nor deselect.
                 if typewidget::over_widget(cx, p) {
@@ -360,7 +410,7 @@ impl Tool for SelectionTool {
                         out
                     }
                     None => {
-                        self.state = State::Marquee { start: p, cur: p, toggle: m.shift };
+                        self.state = State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false };
                         vec![]
                     }
                 }
@@ -403,8 +453,8 @@ impl Tool for SelectionTool {
                 self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
                 vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(a), "copy": false }))]
             }
-            (PointerKind::Drag, State::Marquee { start, toggle, .. }) => {
-                self.state = State::Marquee { start, cur: p, toggle };
+            (PointerKind::Drag, State::Marquee { start, toggle, enclosed, .. }) => {
+                self.state = State::Marquee { start, cur: p, toggle, enclosed };
                 vec![]
             }
             (PointerKind::Drag, State::Corner(mut c)) => {
@@ -415,6 +465,15 @@ impl Tool for SelectionTool {
             (PointerKind::Up, State::Corner(c)) => {
                 self.state = State::Idle;
                 c.finish()
+            }
+            (PointerKind::Drag, State::Pie(mut d)) => {
+                let out = d.drag(cx, p);
+                self.state = State::Pie(d);
+                out
+            }
+            (PointerKind::Up, State::Pie(d)) => {
+                self.state = State::Idle;
+                d.finish()
             }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
@@ -446,15 +505,16 @@ impl Tool for SelectionTool {
                 self.targets = None;
                 vec![Action::Commit]
             }
-            (PointerKind::Up, State::Marquee { start, toggle, .. }) => {
+            (PointerKind::Up, State::Marquee { start, toggle, enclosed, .. }) => {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                let ids: Vec<NodeId> = marquee(cx.doc, r, cx.isolation, false);
+                let touched = marquee(cx.doc, r, cx.isolation, false);
+                let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
-                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r)).collect()
+                std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, enclosed)).collect()
             }
             _ => vec![],
         }
@@ -472,6 +532,7 @@ impl Tool for SelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
+            State::Pie(d) => o.extend(d.overlays()),
             _ => {}
         }
         o.extend(self.guides.iter().cloned());
@@ -494,6 +555,7 @@ impl Tool for SelectionTool {
             State::Scaling { handle, bx, .. } => return handle_cursor(handle, bx.angle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
             State::Corner(_) => return Cursor::CornerRadius,
+            State::Pie(_) => return Cursor::ArrowHollow,
             State::Bracket(_) => return Cursor::PathBracket,
             _ => {}
         }
@@ -502,6 +564,9 @@ impl Tool for SelectionTool {
         }
         if over_widget(cx, p, false) {
             return Cursor::CornerRadius;
+        }
+        if pie::over_widget(cx, p) {
+            return Cursor::ArrowHollow;
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -994,6 +1059,84 @@ mod tests {
         assert_eq!(a, vec![Action::Exec("select.toggle".into(), json!({"ids": [id.0]}))]);
         t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0).with_mods(shift));
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0).with_mods(shift)).is_empty());
+    }
+
+    /// E pressed during a marquee drag makes the marquee take only the objects entirely inside it
+    /// (a group whole), and E pressed again makes it take what it touches. Only a marquee takes E.
+    #[test]
+    fn e_during_a_marquee_takes_only_the_objects_inside() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, inside) = doc_with_rect();
+        let l = d.layers[0].id;
+        let rect = |id, r| Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        let (touched, g, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 1, rect(touched, Rect::new(250.0, 100.0, 350.0, 200.0))).unwrap();
+        // A group with one member inside the marquee and one outside it.
+        d.insert(Some(l), 2, Node::group(g, vec![])).unwrap();
+        d.insert(Some(g), 0, rect(a, Rect::new(100.0, 220.0, 120.0, 240.0))).unwrap();
+        d.insert(Some(g), 1, rect(b, Rect::new(100.0, 300.0, 120.0, 320.0))).unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let e = ToolKey::Letter('e');
+        let drag = |presses: usize, mods: Mods| {
+            let mut t = SelectionTool::default();
+            assert!(!t.claims_key(&cx, e), "no marquee yet");
+            t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0).with_mods(mods));
+            t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 250.0).with_mods(mods));
+            for _ in 0..presses {
+                assert!(t.claims_key(&cx, e));
+                assert!(t.key(&cx, e, Mods::default()).is_empty());
+            }
+            let out = t.pointer(&cx, &ev(PointerKind::Up, 300.0, 250.0).with_mods(mods));
+            assert!(!t.claims_key(&cx, e), "the marquee is over");
+            out
+        };
+        let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(ids) }))];
+        assert_eq!(drag(0, Mods::default()), set(&[inside, touched, g]));
+        assert_eq!(drag(1, Mods::default()), set(&[inside]));
+        assert_eq!(drag(2, Mods::default()), set(&[inside, touched, g]), "E again: what it touches");
+        let shift = Mods { shift: true, ..Mods::default() };
+        assert_eq!(drag(1, shift), vec![Action::Exec("select.toggle".into(), json!({ "ids": [inside.0] }))]);
+        // The next marquee starts out taking what it touches.
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 250.0));
+        t.key(&cx, e, Mods::default());
+        t.pointer(&cx, &ev(PointerKind::Up, 300.0, 250.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 250.0)), set(&[inside, touched, g]));
+        // A press on an object starts a move, which does not take E.
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+        assert!(t.busy() && !t.claims_key(&cx, e));
+    }
+
+    /// With E pressed during the drag, a marquee takes only the artboard guides that lie entirely
+    /// inside it, and no canvas guide, which runs across the whole canvas.
+    #[test]
+    fn e_during_a_marquee_takes_only_the_guides_inside() {
+        let (mut d, id) = doc_with_rect();
+        let board = d.artboards[0].id;
+        d.guides.push(vectorcraft_doc::Guide::new(true, 150.0));
+        d.guides.push(vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, 150.0) });
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let marquee = |to: f64| {
+            let mut t = SelectionTool::default();
+            t.pointer(&cx, &ev(PointerKind::Down, -10.0, -10.0));
+            t.pointer(&cx, &ev(PointerKind::Drag, to, to));
+            t.key(&cx, ToolKey::Letter('e'), Mods::default());
+            t.pointer(&cx, &ev(PointerKind::Up, to, to))
+        };
+        let guides = |a: &[Action]| a.iter().find_map(|a| matches!(a, Action::Exec(c, _) if c == "guide.select").then(|| a.clone()));
+        // The artboard runs from 0 to 500: a marquee to (510, 510) holds its guide.
+        let a = marquee(510.0);
+        assert_eq!(a.first(), Some(&Action::Exec("select.set".into(), json!({ "ids": [id.0] }))));
+        assert_eq!(guides(&a), Some(Action::Exec("guide.select".into(), json!({ "indexes": [1], "toggle": true }))));
+        // A marquee to (250, 250) crosses both guides and holds neither.
+        assert_eq!(guides(&marquee(250.0)), None);
     }
 
     #[test]

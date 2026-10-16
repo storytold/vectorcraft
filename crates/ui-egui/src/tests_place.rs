@@ -494,6 +494,44 @@ fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     click_control(app, ctx, p);
 }
 
+/// The Control bar's file name opens the link menu: Replace… puts the picked file in the image's
+/// place (an embedded image becomes linked) with the new file's own aspect ratio, fitted inside the
+/// old bounds; Placement Options… opens its dialog.
+#[test]
+fn the_control_bars_file_name_relinks_the_image() {
+    use crate::tests_removeanchors::{click_control, control_frame};
+    // Menu items are drawn after the space a check mark takes.
+    let item = |app: &mut VectorcraftApp, ctx: &egui::Context, label: &str| {
+        let texts = control_frame(app, ctx, vec![]);
+        texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let mut app = app();
+    let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
+    app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
+    let before = selected_image(&app).geometric_bounds().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    click_label(&mut app, &ctx, "red.png");
+    for s in ["Replace…", "Go To Link", "Edit Original", "Update Link", "Placement Options…"] {
+        item(&mut app, &ctx, s);
+    }
+    let other = temp_file("blue.png", &png(60, 30, 72.0));
+    let picked = other.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    let p = item(&mut app, &ctx, "Replace…");
+    click_control(&mut app, &ctx, p);
+    let image = selected_image(&app);
+    let NodeKind::Image(im) = &image.kind else { panic!("an image") };
+    assert!(im.link.as_ref().is_some_and(|l| l.name() == "blue.png"), "relinked to the picked file");
+    let after = image.geometric_bounds().unwrap();
+    assert!((after.width() - before.width()).abs() < 1e-6 && (after.height() - before.height() / 2.0).abs() < 1e-6, "2:1, fitted: {after:?}");
+    assert!((after.center() - before.center()).hypot() < 1e-6, "centred where the old image was");
+    click_label(&mut app, &ctx, "blue.png");
+    let p = item(&mut app, &ctx, "Placement Options…");
+    click_control(&mut app, &ctx, p);
+    assert!(app.ui.dialog.is_some(), "Placement Options opens");
+}
+
 #[test]
 fn the_control_bar_and_properties_trace_a_selected_image() {
     use crate::panels::image_trace::{TRACE_BUTTON_W, selected_trace};

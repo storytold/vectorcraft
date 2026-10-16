@@ -417,6 +417,38 @@ fn new_symbol_of_an_object_and_the_group_that_holds_it_keeps_order_and_ids() {
     assert!(*s.doc().unwrap().doc == *before, "Undo gives back the document");
 }
 
+/// New Symbol given `ids` that list an object and a group that holds it (directly, or inside
+/// another group) makes the symbol of the outer group, whose art holds the object once, as it does
+/// with those objects selected.
+#[test]
+fn new_symbol_of_an_object_and_a_group_that_holds_it_has_the_object_once() {
+    let nested = || {
+        let mut s = session();
+        let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0, 10.0));
+        select(&mut s, &[a, b]);
+        let inner = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        let c = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+        select(&mut s, &[inner, c]);
+        let outer = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.none", &json!({})).unwrap();
+        (s, [a, inner, outer])
+    };
+    for (picks, paths) in [(&[0, 1][..], 2), (&[1, 0, 2], 3)] {
+        let (mut given, ids) = nested();
+        let list: Vec<NodeId> = picks.iter().map(|i| ids[*i]).collect();
+        given.execute("symbol.new", &json!({"name": "Pair", "ids": list.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        let d = &given.doc().unwrap().doc;
+        let mut n = 0;
+        d.symbols[0].art.walk(&mut |c| n += usize::from(matches!(c.kind, NodeKind::Path { .. })));
+        assert_eq!(n, paths, "ids {list:?}");
+        let (mut selected, _) = nested();
+        select(&mut selected, &list);
+        selected.execute("symbol.new", &json!({"name": "Pair"})).unwrap();
+        let e = &selected.doc().unwrap().doc;
+        assert!(d.symbols == e.symbols && d.layers == e.layers, "ids {list:?}");
+    }
+}
+
 #[test]
 fn place_and_break_link_round_trip_geometry() {
     let mut s = session();
@@ -471,6 +503,33 @@ fn delete_duplicate_and_replace_symbols() {
     doc.walk(|n| plain += matches!(n.kind, NodeKind::Path { .. }) as i32);
     assert_eq!(plain, 2, "both instances of Small were expanded");
     assert!(s.execute("symbol.delete", &json!({"name": "Small"})).is_err());
+}
+
+#[test]
+fn symbol_export_type_defaults_to_movie_clip_and_round_trips() {
+    let mut s = session();
+    let (_, name, _) = make_symbol(&mut s);
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!(list["symbols"][0]["exportType"], "movieClip");
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).is_none());
+    s.execute("symbol.options", &json!({"name": name, "exportType": "graphic"})).unwrap();
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["symbols"][0]["exportType"], "graphic");
+    assert_eq!(s.doc().unwrap().doc.unknown[vectorcraft_doc::SYMBOL_EXPORT_TYPE][&name], json!("graphic"));
+    let copy = s.execute("symbol.duplicate", &json!({"name": name})).unwrap();
+    assert_eq!(copy["exportType"], "graphic");
+    s.execute("symbol.options", &json!({"name": name, "newName": "Renamed", "exportType": "movieClip"})).unwrap();
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    let renamed = list["symbols"].as_array().unwrap().iter().find(|x| x["name"] == "Renamed").unwrap();
+    assert_eq!(renamed["exportType"], "movieClip");
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).and_then(|m| m.get("Renamed")).is_none());
+    assert_eq!(s.doc().unwrap().doc.unknown[vectorcraft_doc::SYMBOL_EXPORT_TYPE]["Box copy"], json!("graphic"));
+    s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_EXPORT_TYPE).is_none());
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let r = s.execute("symbol.new", &json!({"name": "Icon", "exportType": "graphic"})).unwrap();
+    assert_eq!(r["exportType"], "graphic");
+    assert!(s.execute("symbol.new", &json!({"exportType": "bogus"})).is_err());
+    assert!(s.execute("symbol.options", &json!({"name": "Renamed"})).is_err());
 }
 
 #[test]
@@ -581,6 +640,7 @@ fn brushes_and_symbols_survive_vectorcraft_round_trip() {
     assert_eq!(vectorcraft_brush::find(&back, "Mine").map(|b| b.kind.type_id()), Some("calligraphic"));
     assert_eq!(back.symbols, doc.symbols);
     assert_eq!(back.unknown.get("symbolSizes"), doc.unknown.get("symbolSizes"));
+    assert_eq!(back.unknown.get(vectorcraft_doc::SYMBOL_REGISTRATION), doc.unknown.get(vectorcraft_doc::SYMBOL_REGISTRATION));
     let bl = back.node(l).unwrap();
     assert_eq!(bl.appearance.stroke().unwrap().brush.as_deref(), Some("Mine"));
     // A reloaded document places instances at the natural size.
@@ -589,4 +649,20 @@ fn brushes_and_symbols_survive_vectorcraft_round_trip() {
     let r = s2.execute("symbol.place", &json!({"name": "Box", "x": 100, "y": 100})).unwrap();
     let b = s2.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
     assert!(close(b, Rect::new(60.0, 80.0, 140.0, 120.0), 1e-9));
+}
+
+/// Symbol Options › Registration: place puts the chosen 9-point grid point on (x, y).
+#[test]
+fn symbol_registration_places_the_chosen_point_on_xy() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 80.0, 40.0);
+    let r = s.execute("symbol.new", &json!({"name": "Corner", "registration": 0})).unwrap();
+    assert_eq!(r["registration"], 0);
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["symbols"][0]["registration"], 0);
+    // Creating kept the art where it was (top-left still at the origin of the selection).
+    let inst = NodeId(r["id"].as_u64().unwrap());
+    assert!(close(bounds(&s, inst), Rect::new(0.0, 0.0, 80.0, 40.0), 1e-9), "{:?}", bounds(&s, inst));
+    let p = NodeId(s.execute("symbol.place", &json!({"name": "Corner", "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    assert!(close(bounds(&s, p), Rect::new(300.0, 200.0, 380.0, 240.0), 1e-9), "{:?}", bounds(&s, p));
+    assert!(s.execute("symbol.new", &json!({"registration": 9})).is_err());
 }

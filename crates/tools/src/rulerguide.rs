@@ -35,9 +35,13 @@ pub fn guide_at(cx: &ToolContext, p: Point) -> Option<usize> {
 
 /// What a selection tool's marquee `r` does to the ruler guides, after its action selecting the
 /// art: the guides it crosses join the selection (with a Shift marquee, the selected ones leave
-/// it, as with a Shift-click on a guide).
-pub fn marquee_select(cx: &ToolContext, r: Rect) -> Option<Action> {
-    let guides = guides_in_rect(cx, r);
+/// it, as with a Shift-click on a guide). With `enclosed` (E pressed during the drag), only the
+/// artboard guides that lie entirely inside the marquee are taken; a canvas guide is never taken.
+pub fn marquee_select(cx: &ToolContext, r: Rect, enclosed: bool) -> Option<Action> {
+    let mut guides = guides_in_rect(cx, r);
+    if enclosed {
+        guides.retain(|i| cx.doc.guides.get(*i).is_some_and(|g| guide_inside(cx, r, g)));
+    }
     (!guides.is_empty()).then(|| Action::Exec("guide.select".into(), json!({ "indexes": guides, "toggle": true })))
 }
 
@@ -60,6 +64,15 @@ fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
         })
         .map(|(i, _)| i)
         .collect()
+}
+
+/// Does ruler guide `g`, crossed by marquee `r`, run along its line within the marquee? An artboard
+/// guide does when the marquee spans its artboard; a canvas guide runs across the whole canvas and
+/// never does.
+fn guide_inside(cx: &ToolContext, r: Rect, g: &vectorcraft_doc::Guide) -> bool {
+    let Some((a, b)) = cx.doc.guide_span(g) else { return false };
+    let (lo, hi) = if g.vertical { (r.min_y(), r.max_y()) } else { (r.min_x(), r.max_x()) };
+    lo <= a.min(b) && a.max(b) <= hi
 }
 
 /// The pointer for a guide: it moves sideways if vertical, up and down if horizontal.
@@ -112,7 +125,9 @@ impl GuideSnap {
     fn snap(&mut self, cx: &ToolContext, vertical: bool, v: f64, shift: bool) -> f64 {
         self.snapped.clear();
         if shift {
-            return cx.unit.snap_to_ruler_tick(v, cx.zoom);
+            let origin = cx.doc.ruler_origin_or_zero();
+            let origin = if vertical { origin.x } else { origin.y };
+            return origin + cx.unit.snap_to_ruler_tick(v - origin, cx.zoom);
         }
         if cx.snap_to_pixel {
             return v.round();
@@ -130,8 +145,9 @@ impl GuideSnap {
     fn overlays(&self, cx: &ToolContext, vertical: bool, at: f64, pointer: Point) -> Vec<Overlay> {
         let mut o = self.snapped.clone();
         if cx.measurement_labels {
-            let axis = if vertical { "X" } else { "Y" };
-            o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at)) });
+            let origin = cx.doc.ruler_origin_or_zero();
+            let (axis, zero) = if vertical { ("X", origin.x) } else { ("Y", origin.y) };
+            o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at - zero)) });
         }
         o
     }
@@ -206,6 +222,13 @@ impl GuideEdit {
     /// Is a guide pressed or being dragged?
     pub fn busy(&self) -> bool {
         self.drag.is_some()
+    }
+
+    /// Escape drops a pressed guide; a begun preview is rolled back without a history step.
+    pub fn cancel(&mut self) -> Vec<Action> {
+        let drag = self.drag.take();
+        self.snap = GuideSnap::default();
+        if drag.is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }
 
     /// A press `ev` on a ruler guide: it gets selected and the drag starts. None (and nothing
@@ -623,5 +646,206 @@ mod tests {
         g.press(&c, &ev(PointerKind::Down, 50.0, 400.0, m));
         g.pointer(&c, &ev(PointerKind::Drag, 50.0, -6.0, m));
         assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 50.0, -6.0, m)), Some(vec![Action::Commit]));
+    }
+
+    // Tick positions are explicit fixtures in each unit, independent of the snap implementation.
+    fn origin_tick_cases() -> Vec<(vectorcraft_doc::Unit, f64, Point, Point, Point, f64)> {
+        use vectorcraft_doc::Unit;
+        let mm = |v| Unit::Millimeters.to_pt(v);
+        let inch = |v| Unit::Inches.to_pt(v);
+        vec![
+            (Unit::Points, 1.0, Point::new(17.0, 23.0), Point::new(223.0, 237.0), Point::new(222.0, 238.0), 5.0),
+            (Unit::Points, 1.0, Point::new(-17.0, -23.0), Point::new(223.0, 237.0), Point::new(223.0, 237.0), 5.0),
+            (Unit::Points, 5.0, Point::new(17.25, 23.75), Point::new(223.4, 237.2), Point::new(223.25, 236.75), 1.0),
+            (Unit::Millimeters, 1.0, Point::new(mm(1.0), mm(-1.0)), Point::new(mm(78.7), mm(83.6)), Point::new(mm(78.5), mm(84.0)), mm(2.5)),
+            (
+                Unit::Inches,
+                2.0,
+                Point::new(inch(0.01), inch(0.03)),
+                Point::new(inch(3.07), inch(3.27)),
+                Point::new(inch(3.06), inch(3.28)),
+                inch(0.05),
+            ),
+        ]
+    }
+
+    fn guide_preview_position(actions: &[Action], vertical: bool, from: Option<f64>) -> f64 {
+        let Some(Action::Preview(command, p)) = actions.iter().find(|a| matches!(a, Action::Preview(_, _))) else {
+            panic!("missing guide preview: {actions:?}");
+        };
+        if let Some(from) = from {
+            assert_eq!(command, "guide.move");
+            from + p[if vertical { "dx" } else { "dy" }].as_f64().unwrap()
+        } else {
+            assert_eq!(command, "guide.add");
+            assert_eq!(p["vertical"], json!(vertical));
+            p["pos"].as_f64().unwrap()
+        }
+    }
+
+    #[test]
+    fn ruler_guide_shift_new_uses_document_origin() {
+        for (unit, zoom, origin, pointer, expected, tick) in origin_tick_cases() {
+            let (mut doc, _) = doc_with_rect();
+            doc.ruler_origin = origin;
+            let (selection, paint) = (Selection::default(), paint());
+            let c = ToolContext { unit, zoom, smart_guides: false, snap_to_point: false, ..cx(&doc, &selection, &paint) };
+            for vertical in [false, true] {
+                let mut guide = NewGuide::new(&c, vertical, None);
+                let mods = Mods { shift: true, ..Default::default() };
+                let actions = guide.pointer(&c, &ev(PointerKind::Drag, pointer.x, pointer.y, mods), true);
+                assert_eq!(actions.first(), Some(&Action::Begin("New Guide".into())));
+                let want = if vertical { expected.x } else { expected.y };
+                let actual = guide_preview_position(&actions, vertical, None);
+                assert!((actual - want).abs() < 1e-8, "{unit:?} {origin:?} vertical={vertical} actual={actual} want={want}");
+                assert!(guide.pointer(&c, &ev(PointerKind::Drag, pointer.x, pointer.y, mods), true).is_empty());
+                // Release updates to its own tick rather than committing a stale preview.
+                let actions = guide.pointer(&c, &ev(PointerKind::Up, pointer.x + tick * 2.0, pointer.y + tick * 2.0, mods), true);
+                assert!((guide_preview_position(&actions, vertical, None) - (want + tick * 2.0)).abs() < 1e-8);
+                assert_eq!(actions.last(), Some(&Action::Commit));
+                assert!(guide.overlays(&c).is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_shift_move_uses_document_origin() {
+        for (unit, zoom, origin, pointer, expected, _) in origin_tick_cases() {
+            let mut doc = guides_doc();
+            doc.ruler_origin = origin;
+            let paint = paint();
+            for (index, vertical, from) in [(0, true, 300.0), (1, false, 400.0)] {
+                let mut selection = Selection::default();
+                selection.set_guides([index]);
+                let c = ToolContext { unit, zoom, smart_guides: false, snap_to_point: false, ..cx(&doc, &selection, &paint) };
+                for copy in [false, true] {
+                    let mut guide = GuideEdit::default();
+                    let (start, to, want) = if vertical {
+                        (Point::new(from, 50.0), Point::new(pointer.x, 50.0), expected.x)
+                    } else {
+                        (Point::new(50.0, from), Point::new(50.0, pointer.y), expected.y)
+                    };
+                    assert!(guide.press(&c, &ev(PointerKind::Down, start.x, start.y, Mods::default())).unwrap().is_empty());
+                    let mods = Mods { shift: true, alt: copy, ..Default::default() };
+                    let actions = guide.pointer(&c, &ev(PointerKind::Drag, to.x, to.y, mods)).unwrap();
+                    assert_eq!(actions.first(), Some(&Action::Begin(if copy { "Copy Guide" } else { "Move Guide" }.into())));
+                    let actual = guide_preview_position(&actions, vertical, Some(from));
+                    assert!((actual - want).abs() < 1e-8, "{unit:?} {origin:?} vertical={vertical} copy={copy} actual={actual} want={want}");
+                    assert!(matches!(actions.last(), Some(Action::Preview(_, p)) if p["copy"] == json!(copy)));
+                    assert_eq!(guide.pointer(&c, &ev(PointerKind::Up, to.x, to.y, mods)), Some(vec![Action::Commit]));
+                    assert!(!guide.busy());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_shift_zero_and_invalid_origins_use_zero() {
+        // One bad axis invalidates the entire origin, matching the app's ruler display.
+        for origin in [
+            Point::ZERO,
+            Point::new(f64::NAN, 23.0),
+            Point::new(17.0, f64::NAN),
+            Point::new(f64::INFINITY, 23.0),
+            Point::new(17.0, f64::NEG_INFINITY),
+            Point::new(4_000_001.0, 23.0),
+            Point::new(17.0, -4_000_001.0),
+        ] {
+            let mut doc = guides_doc();
+            doc.ruler_origin = origin;
+            let paint = paint();
+            for (index, vertical, from, want) in [(0, true, 300.0, 225.0), (1, false, 400.0, 235.0)] {
+                let mut selection = Selection::default();
+                selection.set_guides([index]);
+                let c = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&doc, &selection, &paint) };
+                let mods = Mods { shift: true, ..Default::default() };
+                let mut new = NewGuide::new(&c, vertical, None);
+                let actions = new.pointer(&c, &ev(PointerKind::Drag, 223.0, 237.0, mods), true);
+                assert_eq!(guide_preview_position(&actions, vertical, None), want);
+                let mut moved = GuideEdit::default();
+                let (start, to) = if vertical { ((from, 50.0), (223.0, 50.0)) } else { ((50.0, from), (50.0, 237.0)) };
+                moved.press(&c, &ev(PointerKind::Down, start.0, start.1, Mods::default())).unwrap();
+                let actions = moved.pointer(&c, &ev(PointerKind::Drag, to.0, to.1, mods)).unwrap();
+                assert_eq!(guide_preview_position(&actions, vertical, Some(from)), want);
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_origin_leaves_other_snap_modes_unchanged() {
+        for origin in [Point::ZERO, Point::new(17.0, 23.0), Point::new(-17.0, -23.0)] {
+            let mut doc = guides_doc();
+            doc.ruler_origin = origin;
+            let paint = paint();
+            for (index, vertical, from) in [(0, true, 300.0), (1, false, 400.0)] {
+                let mut selection = Selection::default();
+                selection.set_guides([index]);
+                let off = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&doc, &selection, &paint) };
+                for (c, pointer, expected) in [
+                    (ToolContext { ..off }, Point::new(226.4, 237.6), Point::new(226.4, 237.6)),
+                    (ToolContext { snap_to_pixel: true, ..off }, Point::new(226.4, 237.6), Point::new(226.0, 238.0)),
+                    (ToolContext { snap_to_grid: true, ..off }, Point::new(226.4, 237.6), Point::new(225.0, 234.0)),
+                    (ToolContext { smart_guides: true, ..off }, Point::new(203.0, 102.0), Point::new(200.0, 100.0)),
+                    (ToolContext { snap_to_point: true, ..off }, Point::new(201.0, 102.0), Point::new(200.0, 100.0)),
+                ] {
+                    let want = if vertical { expected.x } else { expected.y };
+                    let mut new = NewGuide::new(&c, vertical, None);
+                    let actions = new.pointer(&c, &ev(PointerKind::Drag, pointer.x, pointer.y, Mods::default()), true);
+                    assert!((guide_preview_position(&actions, vertical, None) - want).abs() < 1e-8);
+                    let mut moved = GuideEdit::default();
+                    let (start, to) =
+                        if vertical { ((from, pointer.y), (pointer.x, pointer.y)) } else { ((pointer.x, from), (pointer.x, pointer.y)) };
+                    moved.press(&c, &ev(PointerKind::Down, start.0, start.1, Mods::default())).unwrap();
+                    let actions = moved.pointer(&c, &ev(PointerKind::Drag, to.0, to.1, Mods::default())).unwrap();
+                    assert!((guide_preview_position(&actions, vertical, Some(from)) - want).abs() < 1e-8);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ruler_guide_origin_readouts_are_relative_for_new_and_moved_guides() {
+        for (origin, expected) in [
+            (Point::new(17.0, 23.0), Point::new(205.0, 215.0)),
+            (Point::new(-17.0, -23.0), Point::new(239.0, 261.0)),
+            (Point::ZERO, Point::new(222.0, 238.0)),
+            (Point::new(f64::NAN, 23.0), Point::new(222.0, 238.0)),
+            (Point::new(17.0, 4_000_001.0), Point::new(222.0, 238.0)),
+        ] {
+            let mut doc = guides_doc();
+            doc.ruler_origin = origin;
+            let paint = paint();
+            for unit in [vectorcraft_doc::Unit::Points, vectorcraft_doc::Unit::Millimeters] {
+                for (index, vertical, from) in [(0, true, 300.0), (1, false, 400.0)] {
+                    let mut selection = Selection::default();
+                    selection.set_guides([index]);
+                    let c = ToolContext { unit, smart_guides: false, snap_to_point: false, ..cx(&doc, &selection, &paint) };
+                    let want = format!("{}: {}", if vertical { "X" } else { "Y" }, c.len(if vertical { expected.x } else { expected.y }));
+                    let check = |overlays: Vec<Overlay>| {
+                        assert!(
+                            matches!(overlays.last(), Some(Overlay::Measure { text, .. }) if text == &want),
+                            "{origin:?} {unit:?}: {overlays:?}, want {want}"
+                        );
+                    };
+                    let mut new = NewGuide::new(&c, vertical, None);
+                    let actions = new.pointer(&c, &ev(PointerKind::Drag, 222.0, 238.0, Mods::default()), true);
+                    assert_eq!(
+                        guide_preview_position(&actions, vertical, None),
+                        if vertical { 222.0 } else { 238.0 },
+                        "commands keep absolute coordinates"
+                    );
+                    check(new.overlays(&c));
+                    for copy in [false, true] {
+                        let mut moved = GuideEdit::default();
+                        let (start, to) = if vertical { ((from, 50.0), (222.0, 50.0)) } else { ((50.0, from), (50.0, 238.0)) };
+                        moved.press(&c, &ev(PointerKind::Down, start.0, start.1, Mods::default())).unwrap();
+                        moved.pointer(&c, &ev(PointerKind::Drag, to.0, to.1, Mods { alt: copy, ..Default::default() })).unwrap();
+                        check(moved.overlays(&c));
+                    }
+                    let quiet = ToolContext { measurement_labels: false, ..c };
+                    assert!(new.overlays(&quiet).is_empty(), "measurement-label preference is preserved");
+                }
+            }
+        }
     }
 }

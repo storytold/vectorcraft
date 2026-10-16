@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Preview",
             [],
             None,
-            "{settings?: {…settings of print.setup} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %], transform: [a, b, c, d, e, f] (document space → the page, pt, y down), area: [x0, y0, x1, y1] (the document region the page prints), trim: [x0, y0, x1, y1] (the artboard on the page)}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, type that prints in the fallback font, options not applied yet…), settings} without printing",
+            "{settings?: {…settings of print.setup} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %], transform: [a, b, c, d, e, f] (document space → the page, pt, y down), area: [x0, y0, x1, y1] (the document region the page prints), trim: [x0, y0, x1, y1] (the artboard on the page)}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, type that prints in the fallback font, type that doesn't fit its frame, options not applied yet…), settings} without printing",
             has_doc,
             preview
         ),
@@ -92,7 +92,7 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     let set = settings(C, doc, p)?;
     super::printadvanced::flattener(C, &set, &s.prefs.flattener_presets)?;
     let mut pv = vectorcraft_pdf::preview(doc, &set).map_err(|e| pdf_error(C, e))?;
-    pv.warnings.extend(fonts_warning(doc, set.print_layers, &areas(&pv)));
+    pv.warnings.extend(type_warnings(doc, set.print_layers, &areas(&pv)));
     let mut v = serde_json::to_value(pv).map_err(|e| EngineError::Other(e.to_string()))?;
     v["settings"] = to_json(&set)?;
     Ok(v)
@@ -118,14 +118,16 @@ fn on_page(area: Rect, to_page: Affine, (w, h): (f64, f64)) -> Option<Rect> {
     (r.area() > 0.0).then_some(r)
 }
 
-/// The warning about type in `doc` that prints in the fallback font: on the layers `which` prints,
-/// on pages that print `areas`.
-fn fonts_warning(doc: &Document, which: PrintLayers, areas: &[Rect]) -> Option<String> {
+/// The warnings about the type in `doc` that prints (on the layers `which` prints, on pages that
+/// print `areas`): type in the fallback font, and type that doesn't fit its frame.
+fn type_warnings(doc: &Document, which: PrintLayers, areas: &[Rect]) -> Vec<String> {
     // Placed documents print their files' art, which names the resources this adds.
     let doc = doc.with_placed_art();
     let mut layers = doc.layers.clone();
     vectorcraft_pdf::keep_layers(&mut layers, which);
-    super::fonts::substitution_warning_of(super::fonts::printed_fonts(&doc, &layers, areas))
+    let (fonts, overflow) = super::fonts::printed_type(&doc, &layers, areas);
+    let overflow: Vec<_> = overflow.into_iter().collect();
+    super::fonts::substitution_warning_of(fonts).into_iter().chain(super::typecmd::overflow_warning(&overflow)).collect()
 }
 
 const PRINT: &str = "file.print";
@@ -162,13 +164,13 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
     let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");
-    // Fonts are read from the type before raster effects and Print as Bitmap turn it into images.
+    // The type is read before raster effects and Print as Bitmap turn it into images.
     let which = set.print_layers;
     if !postscript {
         let printed = prepared.as_ref().unwrap_or(doc);
-        let fonts = fonts_warning(&full, which, &areas(&vectorcraft_pdf::preview(printed, &set).map_err(|e| pdf_error(PRINT, e))?));
+        let typed = type_warnings(&full, which, &areas(&vectorcraft_pdf::preview(printed, &set).map_err(|e| pdf_error(PRINT, e))?));
         let mut r = vectorcraft_pdf::print(printed, &PrintOptions { settings: set, ..Default::default() }).map_err(|e| pdf_error(PRINT, e))?;
-        r.warnings.extend(fonts);
+        r.warnings.extend(typed);
         return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
     }
     let level = match p.get("level").filter(|v| !v.is_null()) {
@@ -212,6 +214,6 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let areas: Vec<Rect> = plan.sheets.iter().filter_map(|sh| on_page(sh.area, sh.view * sh.place, sh.size)).collect();
-    warnings.extend(fonts_warning(&full, which, &areas));
+    warnings.extend(type_warnings(&full, which, &areas));
     write_or_return(path, &out.bytes, json!({ "pages": plan.order.len(), "format": "postscript", "warnings": warnings }))
 }

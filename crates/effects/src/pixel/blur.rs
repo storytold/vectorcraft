@@ -1,8 +1,8 @@
-//! Blur › Radial Blur and Smart Blur.
+//! Blur › Radial Blur and Smart Blur (Normal, Edge Only and Overlay Edge).
 
 use vectorcraft_geom::{Affine, Point, Vec2};
 
-use super::{PixelSpace, Px16, box_blur, to8, to16};
+use super::{PixelSpace, Px16, box_blur, pick, to8, to16};
 
 /// Zoom's total spread, in log scale: `amount` 100 scales the content between 1/√2 and √2.
 pub(super) fn zoom_extent(amount: f64) -> f64 {
@@ -69,6 +69,39 @@ pub(super) fn radial(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace,
 /// The largest radius (pixels) Smart Blur looks over: farther neighbours are as good as gone.
 const MAX_SMART: f64 = 4096.0;
 
+/// Smart Blur's modes, in its Mode menu's order: (label, parameter value).
+pub const SMART_BLUR_MODES: [(&str, &str); 3] = [("Normal", "normal"), ("Edge Only", "edgeOnly"), ("Overlay Edge", "overlayEdge")];
+
+/// What Smart Blur draws ([`SMART_BLUR_MODES`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SmartBlurMode {
+    /// The object blurred.
+    Normal,
+    /// The edges in white on black.
+    EdgeOnly,
+    /// The edges in white over the object blurred.
+    OverlayEdge,
+}
+
+impl SmartBlurMode {
+    const ALL: [SmartBlurMode; 3] = [SmartBlurMode::Normal, SmartBlurMode::EdgeOnly, SmartBlurMode::OverlayEdge];
+
+    /// The mode of `value` (a [`SMART_BLUR_MODES`] value, any case); Normal otherwise.
+    pub fn parse(value: &str) -> Self {
+        pick(&SMART_BLUR_MODES, &Self::ALL, value, SmartBlurMode::Normal)
+    }
+}
+
+/// Smart Blur's `threshold` (8-bit levels) in the levels of [`Px16`].
+fn levels(threshold: f64) -> i32 {
+    (threshold.clamp(0.0, 255.0) * 257.0) as i32
+}
+
+/// Do all of `a`'s channels lie within `t` levels of `b`'s?
+fn close(a: &Px16, b: &Px16, t: i32) -> bool {
+    a.iter().zip(b).all(|(a, b)| (*a as i32 - *b as i32).abs() <= t)
+}
+
 /// Smart Blur (Normal mode): each pixel averaged with itself and the neighbours within `radius`
 /// pixels whose premultiplied channels all lie within `threshold` levels of its own. Wide radii
 /// look at `samples` × `samples` neighbours spread over the disc, read from a copy box-blurred
@@ -102,7 +135,7 @@ pub(super) fn smart(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, thresho
     } else {
         &src
     };
-    let t = (threshold.clamp(0.0, 255.0) * 257.0) as i32;
+    let t = levels(threshold);
     for (y, (row, out)) in src.chunks_exact(w).zip(px.chunks_exact_mut(w)).enumerate().take(h) {
         for (x, (c, o)) in row.iter().zip(out.iter_mut()).enumerate() {
             let mut acc = c.map(u64::from);
@@ -115,8 +148,7 @@ pub(super) fn smart(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, thresho
                 let i = sy as usize * w + sx as usize;
                 let (Some(s), Some(own)) = (near.get(i), src.get(i)) else { continue };
                 // The neighbour itself and its surroundings both close enough: edges stay sharp.
-                let close = |p: &Px16| p.iter().zip(c).all(|(a, b)| (*a as i32 - *b as i32).abs() <= t);
-                if close(own) && close(s) {
+                if close(own, c, t) && close(s, c, t) {
                     for (a, v) in acc.iter_mut().zip(s) {
                         *a += *v as u64;
                     }
@@ -124,6 +156,48 @@ pub(super) fn smart(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, thresho
                 }
             }
             *o = acc.map(|a| to8(((a + count / 2) / count).min(65535) as u16));
+        }
+    }
+}
+
+/// Smart Blur's Edge Only (`overlay` false) and Overlay Edge (`overlay` true) modes: the pixels on
+/// an edge drawn white, over black or over the Normal mode's result ([`smart`]). A pixel is on an
+/// edge when one of its four nearest neighbors (transparent beyond the raster) has a premultiplied
+/// channel more than `threshold` levels from its own and its channels add up to at least the
+/// neighbor's, so a step between two colors gives a line one pixel wide on the side whose channels
+/// add up to more, and two pixels wide when the sums are equal. The white and the black keep the
+/// pixel's coverage.
+pub(super) fn smart_edges(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, threshold: f64, samples: u32, overlay: bool) {
+    let src = to16(px);
+    let t = levels(threshold);
+    let sum = |p: &Px16| p.iter().map(|v| u32::from(*v)).sum::<u32>();
+    let at = |x: usize, y: usize, dx: isize, dy: isize| -> Px16 {
+        let (Some(x), Some(y)) = (x.checked_add_signed(dx), y.checked_add_signed(dy)) else { return [0; 4] };
+        if x >= w || y >= h {
+            return [0; 4];
+        }
+        src.get(y * w + x).copied().unwrap_or([0; 4])
+    };
+    let edge: Vec<bool> = src
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let (x, y) = (i % w.max(1), i / w.max(1));
+            [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|(dx, dy)| {
+                let n = at(x, y, *dx, *dy);
+                !close(&n, c, t) && sum(c) >= sum(&n)
+            })
+        })
+        .collect();
+    if overlay {
+        smart(px, w, h, radius, threshold, samples);
+    }
+    for ((p, c), on_edge) in px.iter_mut().zip(&src).zip(&edge) {
+        let a = to8(c[3]);
+        if *on_edge {
+            *p = [a; 4];
+        } else if !overlay {
+            *p = [0, 0, 0, a];
         }
     }
 }

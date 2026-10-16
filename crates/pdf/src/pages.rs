@@ -16,13 +16,14 @@ use crate::{Choice, CropTo, ImportOptions, PdfError};
 /// What `info` tells about one page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PageInfo {
-    /// The page's size in points as viewers show it (its crop box, rotated).
+    /// The page's size in points as viewers show it (its crop box, rotated, times the `UserUnit`
+    /// the PDF reader applies to the page).
     pub width: f64,
     pub height: f64,
     /// The page's rotation in degrees (0, 90, 180 or 270).
     pub rotation: u16,
-    /// Every box but Bounding, in PDF user space (y up), clipped to the media box. A missing
-    /// bleed, trim or art box is the crop box.
+    /// Every box but Bounding, in PDF user space (y up), clipped to the media box, times the same
+    /// `UserUnit` (in points, as the size). A missing bleed, trim or art box is the crop box.
     pub boxes: Vec<(CropTo, Rect)>,
 }
 
@@ -221,7 +222,8 @@ pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
                 craft_pdf::syntax::page::Rotation::Flipped => 180,
                 craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
-            let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c))).collect();
+            let unit = f64::from(page.user_unit());
+            let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c).scale_from_origin(unit))).collect();
             PageInfo { width: w as f64, height: h as f64, rotation, boxes }
         })
         .collect();

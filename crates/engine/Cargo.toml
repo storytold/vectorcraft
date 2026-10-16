@@ -8,6 +8,12 @@ description = "VectorCraft engine: sessions, history, selection, the command reg
 [lints]
 workspace = true
 
+[features]
+default = ["bundled-fonts"]
+# The fonts vectorcraft-text bundles (see its `bundled-fonts`). Embedders that supply every font at
+# run time (`vectorcraft_text::FontDb::add_font`) build with `default-features = false`.
+bundled-fonts = ["vectorcraft-text/bundled-fonts"]
+
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }

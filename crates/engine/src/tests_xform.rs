@@ -2,9 +2,13 @@
 
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_doc::{Appearance, Node};
+use vectorcraft_geom::{Point, Rect, Vec2, shapes};
+use vectorcraft_tools::distort::perspective::{self as persp, Plane};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
+use super::tests_large_edits::{soon, undo_gives_back};
+use super::tests_persp_select::{bounds_of, grid, persp_session, plane_pts};
 use super::*;
 
 fn session() -> Session {
@@ -248,6 +252,201 @@ fn canceling_an_alt_drag_leaves_the_document_as_it_was() {
     assert_eq!(st.selection, selection);
     assert_eq!(undo_len(&s), undo);
     assert!(s.doc().unwrap().interaction.is_none());
+}
+
+/// Returns a session with the grid and the square of [`persp_session`], the grid shown with its
+/// right plane active, and a group of two squares attached to the right plane beside the square,
+/// with the square and the group selected; and the square's id.
+fn square_and_group_in_perspective() -> (Session, NodeId) {
+    let (mut s, square) = persp_session();
+    let a = rect(&mut s, 525.0, 390.0, 20.0, 20.0);
+    let b = rect(&mut s, 550.0, 390.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("perspective.attach", &json!({"ids": [group], "plane": "right"})).unwrap();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "right"})).unwrap();
+    s.execute("select.set", &json!({"ids": [square.0, group]})).unwrap();
+    (s, square)
+}
+
+/// Returns the press and the three moves of an Alt-drag on [`square_and_group_in_perspective`]: from
+/// the middle of `square`, 10 pt apart along the right plane, or with `widget`, from the right
+/// plane's widget, 4 pt apart to the left.
+fn persp_drag(s: &Session, square: NodeId, widget: bool) -> [(f64, f64); 4] {
+    let g = grid(s);
+    let xy = |p: Point| (p.x, p.y);
+    if widget {
+        let (_, w) = g.plane_widgets().into_iter().find(|(p, _)| *p == Plane::Right).unwrap();
+        [0.0, 4.0, 8.0, 12.0].map(|dx| xy(w + Vec2::new(-dx, 0.0)))
+    } else {
+        let c = bounds_of(&plane_pts(s, square, Plane::Right, 0.0)).center();
+        let h = g.homography(Plane::Right).unwrap();
+        [0.0, 10.0, 20.0, 30.0].map(|du| xy(h.apply(c + Vec2::new(du, 0.0)).unwrap()))
+    }
+}
+
+/// An Alt-drag of objects in perspective with the Perspective Selection tool, and an Alt-drag of a
+/// plane widget with that tool or the Perspective Grid tool, copy the objects on the first move, and
+/// the moves after it map those copies: the interaction keeps them, made once, until the drag ends.
+#[test]
+fn an_alt_drag_in_perspective_copies_the_objects_once() {
+    let kept = |s: &Session| s.doc().unwrap().interaction.as_ref().and_then(|it| it.copies.clone());
+    for (tool, widget) in [("perspectiveSelection", false), ("perspectiveSelection", true), ("perspectiveGrid", true)] {
+        let what = if widget { "plane widget" } else { "objects" };
+        let (mut s, square) = square_and_group_in_perspective();
+        let [press, moves @ ..] = persp_drag(&s, square, widget);
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        drag_at(&mut s, PointerKind::Down, press, true);
+        let mut first = None;
+        for at in moves {
+            drag_at(&mut s, PointerKind::Drag, at, true);
+            let k = kept(&s).unwrap_or_else(|| panic!("{tool}, {what}: the move to {at:?} keeps its copies"));
+            assert!(Arc::ptr_eq(first.get_or_insert_with(|| k.clone()), &k), "{tool}, {what}: the move to {at:?} maps the first move's copies");
+        }
+        drag_at(&mut s, PointerKind::Up, moves[2], true);
+        assert!(s.doc().unwrap().interaction.is_none());
+        assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 4, "{tool}, {what}: the objects and their copies");
+    }
+}
+
+/// Each move of an Alt-drag with the Perspective Selection tool leaves the document and the selected
+/// objects that one command with that move's params gives: `perspective.move` for objects and
+/// `perspective.plane.move` for a plane widget. A move with Alt released moves the objects (or the
+/// plane alone), and the next move with Alt copies them again with the first copies' ids. The
+/// release keeps the last move as one undo step, Undo gives back the document, and a drag canceled
+/// after its moves leaves the document as it was.
+#[test]
+fn each_move_of_an_alt_drag_in_perspective_gives_what_one_command_gives() {
+    let by_one_command = |cmd: &str, params: &Value| {
+        let (mut t, _) = square_and_group_in_perspective();
+        t.execute(cmd, params).unwrap();
+        let st = t.doc().unwrap();
+        (Document::clone(&st.doc), st.selection.objects.clone())
+    };
+    for (widget, label) in [(false, "Copy in Perspective"), (true, "Move Plane")] {
+        let (mut s, square) = square_and_group_in_perspective();
+        let (before, originals, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.objects.clone(), undo_len(&s));
+        let [press, moves @ ..] = persp_drag(&s, square, widget);
+        s.select_tool("perspectiveSelection", ViewInfo::default()).unwrap();
+        drag_at(&mut s, PointerKind::Down, press, true);
+        let mut copies = None;
+        for (at, alt) in moves.into_iter().zip([true, false, true]) {
+            drag_at(&mut s, PointerKind::Drag, at, alt);
+            let (cmd, params) = previewed(&s);
+            assert!(shows(&s, &by_one_command(&cmd, &params)), "{label}: the move to {at:?}, Alt: {alt}");
+            let selected = s.doc().unwrap().selection.objects.clone();
+            if alt {
+                assert_eq!(copies.get_or_insert_with(|| selected.clone()), &selected, "{label}: the copies keep their ids");
+            } else {
+                assert_eq!(selected, originals, "{label}: the objects themselves");
+            }
+        }
+        drag_at(&mut s, PointerKind::Up, moves[2], true);
+        let (cmd, params) = s.journal.last().cloned().unwrap();
+        assert!(shows(&s, &by_one_command(&cmd, &params)), "{label}: the release");
+        assert_eq!(undo_len(&s), undo + 1);
+        assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some(label));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(*s.doc().unwrap().doc == *before, "{label}: Undo gives back the document");
+        let doc = s.doc().unwrap().doc.clone();
+        drag_at(&mut s, PointerKind::Down, press, true);
+        for at in moves {
+            drag_at(&mut s, PointerKind::Drag, at, true);
+        }
+        s.cancel_interaction().unwrap();
+        assert!(Arc::ptr_eq(&s.doc().unwrap().doc, &doc), "{label}: Cancel puts back the document");
+        assert_eq!(s.doc().unwrap().selection.objects, originals);
+        assert_eq!(undo_len(&s), undo);
+    }
+}
+
+/// On a grid as files from before attachments were kept on the objects store it (the grid lists the
+/// attachments, and the objects have none of their own), each move of an Alt-drag with the
+/// Perspective Selection tool, of the objects or of a plane widget, leaves what one command with
+/// that move's params gives, with the copies attached to the right plane.
+#[test]
+fn an_alt_drag_in_perspective_on_a_grid_from_an_older_file_attaches_the_copies() {
+    let older = || {
+        let (s, square) = square_and_group_in_perspective();
+        let ids = s.doc().unwrap().selection.objects.clone();
+        let mut d = Document::clone(&s.doc().unwrap().doc);
+        let mut attached = serde_json::Map::new();
+        for id in &ids {
+            persp::release(d.node_mut(*id).unwrap());
+            attached.insert(id.0.to_string(), json!("right"));
+        }
+        d.unknown.get_mut(persp::DOC_KEY).unwrap()["attached"] = Value::Object(attached);
+        let mut t = Session::new();
+        t.add_document(d, None);
+        t.execute("select.set", &json!({"ids": ids})).unwrap();
+        (t, square)
+    };
+    for (what, widget) in [("objects", false), ("plane widget", true)] {
+        let (mut s, square) = older();
+        let [press, moves @ ..] = persp_drag(&s, square, widget);
+        s.select_tool("perspectiveSelection", ViewInfo::default()).unwrap();
+        drag_at(&mut s, PointerKind::Down, press, true);
+        for at in moves {
+            drag_at(&mut s, PointerKind::Drag, at, true);
+            let (cmd, params) = previewed(&s);
+            let (mut t, _) = older();
+            t.execute(&cmd, &params).unwrap();
+            let st = t.doc().unwrap();
+            assert!(shows(&s, &(Document::clone(&st.doc), st.selection.objects.clone())), "{what}: the move to {at:?}");
+            let d = &s.doc().unwrap().doc;
+            for copy in &s.doc().unwrap().selection.objects {
+                assert_eq!(persp::attachment(d.node(*copy).unwrap()).map(|a| a.0), Some(Plane::Right), "{what}: the copy {copy:?} is attached");
+            }
+        }
+    }
+}
+
+/// With Alt held, a Perspective Selection tool press on one of 30,000 squares on the left plane,
+/// four moves of 20 pt and the release copy the squares once: each move maps the copies that the
+/// first one kept, and the drag leaves what one `perspective.move` with copy leaves, as one undo
+/// step.
+#[test]
+fn alt_drag_in_perspective_of_30000_objects_finishes_within_20_s() {
+    // The squares are 6 pt wide and 10 pt apart, in rows of 150, between the left vanishing point
+    // of the two-point grid and its origin.
+    let on_the_left = |d: &mut Document, k: usize| {
+        let (x, y) = (300.0 + (k % 150) as f64 * 10.0, 100.0 + (k / 150) as f64 * 10.0);
+        Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 6.0, y + 6.0)), Appearance::default_art())
+    };
+    let in_perspective = || {
+        let mut s = super::tests_large_edits::session(30_000, on_the_left);
+        s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        s.execute("perspective.attach", &json!({"plane": "left"})).unwrap();
+        s
+    };
+    let s = in_perspective();
+    let before = s.doc().unwrap().doc.clone();
+    // The press lands on a square in the middle of the art.
+    let grab = bounds(&s, s.doc().unwrap().selection.objects[15_075]).center();
+    let (mut s, kept) = soon(s, "the Alt-drag in perspective", move |s| {
+        let (v, alt) = (ViewInfo::default(), Mods { alt: true, ..Mods::default() });
+        s.select_tool("perspectiveSelection", v)?;
+        let at = |kind, dx: f64| PointerEvent::new(kind, grab.x + dx, grab.y).with_mods(alt);
+        s.pointer(&at(PointerKind::Down, 0.0), v)?;
+        let mut kept = vec![];
+        for dx in [20.0, 40.0, 60.0, 80.0] {
+            s.pointer(&at(PointerKind::Drag, dx), v)?;
+            kept.push(s.doc()?.interaction.as_ref().and_then(|it| it.copies.clone()));
+        }
+        s.pointer(&at(PointerKind::Up, 80.0), v)?;
+        Ok::<_, EngineError>(kept)
+    });
+    let kept = kept.unwrap();
+    let first = kept[0].clone().expect("the first move keeps its copies");
+    assert!(kept.iter().all(|k| k.as_ref().is_some_and(|k| Arc::ptr_eq(k, &first))), "each move maps the copies the first one kept");
+    let (cmd, params) = s.journal.last().cloned().unwrap();
+    let mut want = in_perspective();
+    want.execute(&cmd, &params).unwrap();
+    assert!(*s.doc().unwrap().doc == *want.doc().unwrap().doc, "the document one perspective.move with copy leaves");
+    assert!(s.doc().unwrap().selection.objects == want.doc().unwrap().selection.objects, "the copies are selected");
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Copy in Perspective"));
+    undo_gives_back(&mut s, &before);
 }
 
 #[test]

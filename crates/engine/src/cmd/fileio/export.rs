@@ -94,11 +94,12 @@ fn selected_part(n: &Node, keep: &HashSet<NodeId>) -> Option<Node> {
 }
 
 /// `doc` with only the art over `rect` (an artboard): objects whose visual bounds miss it are left
-/// out, at any depth of layers, sublayers and groups that don't clip, and objects that reach it
-/// stay whole (the file's bounds clip them), as DXF's crop leaves them. Symbol instances are
-/// measured by their art, and the box of one whose art holds brushed strokes grows by as far as
-/// their brush art can paint ([`SymbolBoxes::with_brush_art`]). An object that holds a symbol
-/// instance also stays when what the canvas paints for it reaches `rect`
+/// out, at any depth of layers, sublayers and groups that don't clip, unless what the renderer
+/// draws for them, their effects included ([`vectorcraft_render::effect_bounds`]), reaches it.
+/// Objects that reach it stay whole (the file's bounds clip them), as DXF's crop leaves them.
+/// Symbol instances are measured by their art, and the box of one whose art holds brushed strokes
+/// grows by as far as their brush art can paint ([`SymbolBoxes::with_brush_art`]). An object that
+/// holds a symbol instance also stays when what the canvas paints for it reaches `rect`
 /// ([`vectorcraft_render::painted_bounds`]: the effects in the symbols' art and its own effects). A
 /// clipping layer keeps every object, its clipping path among them. An artboard's file then holds
 /// its own art, not a whole document of artboards.
@@ -122,8 +123,9 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document
         let over = |b: vectorcraft_geom::Rect| b.x0 <= rect.x1 && rect.x0 <= b.x1 && b.y0 <= rect.y1 && rect.y0 <= b.y1;
         let mut holds_instance = false;
         n.walk(&mut |c| holds_instance |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+        let drawn = || vectorcraft_render::effect_bounds(symbols, n).is_some_and(over);
         let painted = || holds_instance && vectorcraft_render::painted_bounds(doc, n).is_some_and(over);
-        (n.visual_bounds_with(symbols).is_none_or(over) || painted()).then(|| n.clone())
+        (n.visual_bounds_with(symbols).is_none_or(over) || drawn() || painted()).then(|| n.clone())
     }
     let symbols = doc.symbol_boxes().with_brush_art();
     let mut d = doc.clone();
@@ -165,13 +167,19 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Co
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their
 /// visual bounds.
 fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::Rect)> {
+    let ids = selected_artwork(s)?;
+    isolated(&s.doc()?.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
+}
+
+/// The selected objects (their top-most selected ancestors) that are artwork: those on template
+/// layers are guides and are left out.
+pub(crate) fn selected_artwork(s: &mut Session) -> Result<Vec<NodeId>> {
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !on_template(*id)).collect();
-    isolated(&st.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
+    Ok(ids.into_iter().filter(|id| !on_template(*id)).collect())
 }
 
 /// The crop of an export of objects `ids` of `doc` alone: the bounds the renderer measures for what

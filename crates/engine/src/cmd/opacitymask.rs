@@ -173,7 +173,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(id) = ids.iter().find(|id| d.node(**id).is_none()) {
                 return Err(EngineError::NoNode(*id));
             }
-            Selection { objects: ids, ..Default::default() }.in_paint_order(d)
+            super::edit::outermost(d, Selection { objects: ids, ..Default::default() }.in_paint_order(d))
         }
         None => super::appearance::subject_roots(s)?,
     };

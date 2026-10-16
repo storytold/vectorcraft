@@ -276,6 +276,18 @@ fn focus_selects_the_whole_field_so_typing_replaces_it() {
 }
 
 #[test]
+fn a_percentage_typed_in_a_field_is_a_share_of_the_value_before_it() {
+    let mut f = Field::new();
+    let cm = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(72.0), Unit::Centimeters, 80.0);
+    f.frame(vec![], &cm);
+    f.frame(f.click(1), &cm);
+    f.frame(vec![], &cm);
+    f.frame(vec![Event::Text("3cm*50%".into())], &cm);
+    let got = f.frame(vec![enter()], &cm).expect("the field reads `3cm*50%`");
+    assert!((got - Unit::Centimeters.to_pt(1.5)).abs() < 1e-9, "{got}");
+}
+
+#[test]
 fn double_click_selects_the_whole_field() {
     let mut f = Field::new();
     f.num(vec![]);

@@ -6,6 +6,60 @@ What Image Trace (`crates/trace`) makes of images whose right answer is known, m
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
 with any other product except the open tracer named under [Yardstick](#4-yardstick).
 
+
+## Noise threshold stability (local development, 2026-10-14)
+
+Noise must merge whole 4-connected regions, including pixels absorbed by an earlier merge.
+A count of regions alone cannot establish this: one old region may split while others disappear.
+The repeated-pass implementation at `a0671777` fails a partition regression at case 0, Noise 3.
+
+The replacement discovers the initial regions, processes them in deterministic increasing-area
+order, and keeps their membership current. All adjacent regions of the chosen colour join the
+merge, with ties resolved by label and region id. Increasing Noise continues the same merge
+sequence: every lower-threshold region remains wholly inside one higher-threshold region.
+Regions exactly at the threshold stay; an opaque island surrounded by transparency stays;
+transparent pixels are never recoloured. A merged region is tested at its current area, so a
+1-pixel speck joining a 2-pixel region meets Noise 3 and is retained as one 3-pixel region.
+
+Tests generate 64 multicolour 7 × 7 grids with transparent barriers and check every threshold
+from 0 through 24 with an independent component traversal. They assert nested partitions,
+non-increasing region counts and unchanged transparency. Separate cases check the strict
+threshold, isolated opaque islands and invalid or overflowing grid dimensions. The existing
+no-small-region and traced-path regressions remain active.
+
+This uses region and heap bookkeeping instead of repeated full-image passes, so memory and
+photo quality must also be checked. Local photo/scan validation uses fixed hashed inputs and
+identical settings on unchanged current source and the candidate, including separate portrait
+crops and white-composited PNG comparisons. These local fixtures are not repository assets.
+The parity score is unchanged.
+
+## Pieces returning to a junction
+An outline piece can return to its starting junction while being fitted as an open chain. At loose
+Corners/Paths settings, a nonzero positioned boundary could collapse to one cubic and lose a small
+corner-touching mark. Fixed-end pieces with identical endpoints and fewer than two fitted segments
+now retain their positioned boundary when its area is finite and nonzero. Fitting the shared piece
+this way also gives an abutting fill exactly the reversed boundary, including within a compound path.
+Six source-generated regressions check 1- and 2-pixel regions through four rotations, both windings
+and large translations; fixed junctions; zero positioned area; free ends; Noise controls; and shared
+edges through four rotations and black/white inversion. Noise 2 still removes the 1-pixel mark.
+The white-hole Noise check is a control, not a reproduced returning-hole case. Defaults are unchanged;
+these tests establish survival and edge consistency, not a new artistic-quality or parity score.
+This is separate from the closed-contour recovery in #2012 and straightening guard in #2025.
+## Thin closed outlines with Snap Curves To Lines
+
+A four-pixel stair-step mark can fit as two straight cubics along the same diagonal, leaving a closed path with zero area. The outline-distance checks accept this because both sides are close to the chord. Closed fitting now checks analytic curve area after straightening and upright levelling; if a nondegenerate source loop has lost its interior, it retains the positioned boundary as an unsimplified polygon. The area integral is translated to a local origin to reduce cancellation. This numerical degeneracy check is not a new Noise or minimum-feature-area setting.
+
+`fit::snap_area_tests` covers the mark at two positions and five Corners settings, a white stair-step hole, reversed/rotated closed boundaries with exactly matching opposite curves, and a narrow filled rectangle. Noise still removes the four-pixel mark or hole when set to 5. It does not change open-piece fitting, global Snap tolerances or defaults, and it does not address every possible zero-area compound outline. The preset quality table below is the previous measurement, not a rerun of that full report.
+
+## Tiny closed contours
+A coarse fit can reduce a small closed outline to one cubic, which the editable-path builder cannot
+represent as a closed subpath with two anchors. Previously that dropped the component or hole after
+it survived Noise. The fitter now retains the positioned contour without further simplification when
+that minimum is not met. Corners and Noise defaults are unchanged.
+Three source-generated regressions cover a one-pixel island, a one-pixel hole with opposite winding,
+and a stepped seven-pixel region across Corners values. They also check that Noise still removes the
+island and fills the hole when its threshold requests that. These are survival and winding checks,
+not a new quality-harness baseline or a general claim about small-feature fidelity.
 ## How it is measured
 
 `crates/trace/tests/quality` draws its own inputs from vector art (no image files), traces each with every
@@ -21,6 +75,7 @@ anti-aliasing):
 
 | kind | inputs |
 |:--|:--|
+| 2026-10-15 | Fixed-end pieces returning to their junction retain their positioned nonzero boundary when fitted to fewer than two cubics; source-generated tests cover survival, winding, shared-edge equality, translations and Noise controls. Defaults and parity scores unchanged. |
 | curved shapes | a circle; two ellipses; a rounded badge with a round hole; a letter D with its counter |
 | polygons | a triangle, a turned square and a hexagon; a five-pointed star; a letter A with its counter |
 | thin lines | five lines 0.5, 1, 2, 3 and 5 units wide (of a 256-unit square), a few degrees off the pixel grid |
@@ -955,6 +1010,8 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 | date | change |
 |:--|:--|
+| 2026-10-14 | Closed fitting retains the positioned boundary when straightening collapses a nonzero-area loop; four generated regressions; preset scores unchanged |
+| 2026-10-14 | Tiny closed fits retain their positioned outlines instead of losing islands/holes; three generated regression tests; quality-harness baseline unchanged |
 | 2026-10-14 | Gradients: a gradient that noise or a soft rim broke into pieces is found in its largest piece and grown over the rest (blurred and noisy linear gradients: 3 to 11 paths beside the gradient down to 0.5 with 6 Colors, 24 to 56 down to 0.5 to 1.5 with High Fidelity Photo) |
 | 2026-10-14 | Enhanced versions of the presets (Auto Grouping, and Shapes in all but High Fidelity Photo; Flat Logo has none), each measured beside its preset; a hole that one colour fills is the same shape as what fills it, rectangles are sized by where their sides lie, and a group keeps its paths in the order they were traced in (grouped, a letter with a counter was painted with a light seam: Default with Auto Grouping, edge ΔE 10.24 to 9.88) |
 | 2026-10-14 | Create: Strokes: a line whose ink is cut square at its ends gets square caps, and a wide line whose skeleton hooks towards a corner of its end ends on the line it was following (Outline: largest distance 2.94 px to 0.88; aliased lines 0.88 to 0.81) |

@@ -79,6 +79,7 @@ fn tool_key(name: &str) -> Option<ToolKey> {
         "[" | "bracketleft" | "openbracket" => ToolKey::BracketLeft,
         "]" | "bracketright" | "closebracket" => ToolKey::BracketRight,
         "tab" => ToolKey::Tab,
+        k if k.len() == 1 && k.bytes().all(|b| b.is_ascii_lowercase()) => ToolKey::Letter(k.chars().next()?),
         k if k.len() == 1 => ToolKey::Digit(k.parse().ok()?),
         _ => return None,
     })
@@ -204,7 +205,14 @@ impl Headless {
         let key = s(p, "key").ok_or("missing `key`")?;
         let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
         let mods = Mods { shift: b("shift"), alt: b("alt"), cmd: b("cmd"), ctrl: b("ctrl"), ..Mods::default() };
-        let tk = tool_key(key);
+        // A letter reaches the tool only when the tool claims it without Cmd, Ctrl or Alt (E while
+        // a selection marquee is dragged); otherwise it is a shortcut.
+        let mut tk = tool_key(key);
+        if let Some(k @ ToolKey::Letter(_)) = tk
+            && (mods.cmd || mods.ctrl || mods.alt || !self.session.tool_claims_key(k, self.view))
+        {
+            tk = None;
+        }
         // A busy tool (pen path in progress, shape being dragged) gets its keys first, as do keys
         // the tool claims (the Gradient tool's selected stop takes Delete and the arrows).
         if let Some(k) = tk

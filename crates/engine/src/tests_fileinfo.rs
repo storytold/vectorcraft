@@ -127,6 +127,43 @@ fn pdf_info_carries_author_subject_and_keywords() {
 }
 
 #[test]
+fn an_exported_pdf_opens_with_its_file_info() {
+    let mut s = session();
+    s.execute("file.info", &info()).unwrap();
+    let exported = s.execute("document.export", &json!({"format": "pdf", "preserveEditing": false})).unwrap();
+    let r = s.execute("document.open", &json!({"name": "poster.pdf", "dataBase64": exported["dataBase64"]})).unwrap();
+    assert_eq!(r["restored"], false, "opened from its pages");
+    let back = s.execute("file.info", &json!({})).unwrap();
+    assert_eq!(back["author"], "Ada Lovelace");
+    assert_eq!(back["description"], "A poster\nfor the fair");
+    assert_eq!(back["keywords"], json!(["fair", "Poster", "print"]));
+    assert!(back["created"].as_str().is_some_and(|c| c.ends_with('Z')), "the file's creation date: {}", back["created"]);
+    assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
+}
+
+#[test]
+fn a_pdf_compatible_ai_opens_with_the_file_info_of_its_xmp_packet() {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+               <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmpRights=\"http://ns.adobe.com/xap/1.0/rights/\" xmpRights:Marked=\"False\">\
+               <dc:creator><rdf:Seq><rdf:li>Grace Hopper</rdf:li></rdf:Seq></dc:creator>\
+               <dc:subject><rdf:Bag><rdf:li>navy</rdf:li><rdf:li>cobol</rdf:li></rdf:Bag></dc:subject>\
+               <dc:rights><rdf:Alt><rdf:li xml:lang=\"x-default\">No rights reserved</rdf:li></rdf:Alt></dc:rights>\
+               <xmpRights:WebStatement>https://example.com/a page</xmpRights:WebStatement>\
+               </rdf:Description></rdf:RDF></x:xmpmeta>";
+    let stream = format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{xmp}\nendstream", xmp.len());
+    let catalog = format!("/Metadata {} 0 R ", first_extra(1));
+    let bytes = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &[&stream], &catalog, None);
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "notes.ai", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    let m = &s.doc().unwrap().doc.metadata;
+    assert_eq!((m.author.as_str(), m.keywords.clone()), ("Grace Hopper", vec!["navy".to_string(), "cobol".into()]));
+    assert_eq!((m.copyright_status, m.copyright_notice.as_str()), (CopyrightStatus::PublicDomain, "No rights reserved"));
+    // A URL with a space is one `file.info` refuses: it is left out.
+    assert_eq!(m.copyright_url, "");
+}
+
+#[test]
 fn png_exports_carry_text_chunks() {
     let mut s = session();
     s.execute("file.info", &info()).unwrap();

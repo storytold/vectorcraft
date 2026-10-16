@@ -82,6 +82,10 @@ pub struct Targets {
     /// The bounds of the objects a moved selection spaces itself evenly with (Spacing Guides):
     /// gathered only for moves ([`Self::for_move`]).
     boxes: Vec<Rect>,
+    /// Line Extension: the lines a single dragged anchor keeps to, along the straight segments
+    /// it ends, as the end that stays put and the unit direction towards the dragged one
+    /// ([`Self::for_anchor_drag`]).
+    extensions: Vec<(Point, Vec2)>,
     /// How the guides these targets produce look.
     style: GuideStyle,
 }
@@ -264,10 +268,14 @@ impl Targets {
 
     /// Targets for dragging the direct-selected anchors of `sel` (and its objects selected as a
     /// whole): the other art, its path segments too, and the anchors and segments that stay put on
-    /// the paths being reshaped (their bounds move along, so they are no targets).
+    /// the paths being reshaped (their bounds move along, so they are no targets). A single anchor
+    /// also keeps to the extensions of the straight segments it ends (#2120).
     pub fn for_anchor_drag(doc: &Document, sel: &Selection) -> Self {
         let mut t = Self::collect_inner(doc, &sel.objects, None, None, Gather::Segments);
         let (mut anchors, mut segments) = (BUDGET, BUDGET);
+        // With several anchors moving, the one under the pointer is not known here, and the
+        // others' extensions don't run through it.
+        let single = sel.objects.len() <= 1 && sel.anchors.values().map(|s| s.len()).sum::<usize>() == 1;
         for (id, set) in &sel.anchors {
             let Some(path) = doc.node(*id).and_then(|n| n.path_data()) else { continue };
             for (si, sp) in path.subpaths.iter().enumerate() {
@@ -277,9 +285,28 @@ impl Targets {
                     anchors -= 1;
                 }
                 t.push_segments(sp, moving, &mut segments);
+                if single {
+                    t.push_extensions(sp, moving);
+                }
             }
         }
         t.index()
+    }
+
+    /// The extensions of the straight segments of `sp` with one end among the anchors `moving`
+    /// accepts and the other staying put. Horizontal and vertical ones are left out: lining up
+    /// with the other end already keeps the point on them, and says "align".
+    fn push_extensions(&mut self, sp: &SubPath, moving: impl Fn(usize) -> bool) {
+        let n = sp.anchors.len();
+        for seg in (0..sp.segment_count()).filter(|&seg| moving(seg) != moving((seg + 1) % n) && sp.segment_is_line(seg)) {
+            let c = sp.segment(seg);
+            let (fixed, dragged) = if moving(seg) { (c.p3, c.p0) } else { (c.p0, c.p3) };
+            let d = dragged - fixed;
+            let len = d.hypot();
+            if len.is_finite() && d.x.abs() > 1e-9 * len && d.y.abs() > 1e-9 * len {
+                self.extensions.push((fixed, d / len));
+            }
+        }
     }
 
     /// The segments of `sp` that stay put while the anchors `moving` accepts move, as targets, at
@@ -360,6 +387,7 @@ impl Targets {
         self.xs.clear();
         self.ys.clear();
         self.segments.clear();
+        self.extensions.clear();
         self
     }
 
@@ -446,11 +474,11 @@ impl Targets {
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
         }
-        if let Some(f) = from
-            && let Some((dir, q)) = f.construction(p, tol)
-        {
-            let construction = |q: Point| Overlay::Line { a: f.at, b: q, color: self.style.color, dashed: false };
-            return match self.slide(f.at, dir, q, tol, false) {
+        // A construction guide through the point it leaves, else a dragged segment's extension:
+        // it lands on the guide, sliding into line with a target crossing it nearby.
+        if let Some((at, dir, q)) = from.and_then(|f| f.construction(p, tol).map(|(dir, q)| (f.at, dir, q))).or_else(|| self.extension(p, tol)) {
+            let construction = |q: Point| Overlay::Line { a: at, b: q, color: self.style.color, dashed: false };
+            return match self.slide(at, dir, q, tol, false) {
                 Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect()),
                 None => (q, vec![construction(q)]),
             };
@@ -483,6 +511,21 @@ impl Targets {
             ov.extend(self.label(out, "align"));
         }
         (out, ov)
+    }
+
+    /// The segment extension nearest `p`, within `tol` of it (and `p` farther than that from the
+    /// end it starts at): that end, its direction and where `p` lands on it. Where `p` is nearer
+    /// the horizontal or the vertical through that end there is none: lining up with it ("align")
+    /// is what straightens a segment that is nearly level or upright.
+    fn extension(&self, p: Point, tol: f64) -> Option<(Point, Vec2, Point)> {
+        self.extensions
+            .iter()
+            .filter(|(at, _)| at.distance(p) > tol)
+            .map(|&(at, d)| (at, d, at + d * (p - at).dot(d)))
+            .map(|(at, d, q)| (at, d, q, q.distance(p)))
+            .filter(|(at, .., dist)| *dist <= tol && (p.x - at.x).abs().min((p.y - at.y).abs()) > *dist)
+            .min_by(|a, b| a.3.total_cmp(&b.3))
+            .map(|(at, d, q, _)| (at, d, q))
     }
 
     /// The anchor or centre nearest `p`, within `tol`.
@@ -1380,6 +1423,72 @@ mod tests {
         assert_eq!(t.segments.len(), 2);
         assert!(!t.points.iter().any(|(p, k)| *k == Kind::Center && *p == Point::new(150.0, 150.0)), "the rect's centre moves");
         assert_eq!(t.snap_point(Point::new(101.0, 99.0), 4.0).0, Point::new(100.0, 100.0), "in line with its neighbours, not on itself");
+    }
+
+    /// #2120: the dragged end of a straight segment at any angle lands on the segment's own
+    /// extension (Line Extension), past its other end or short of it, the guide drawn from that
+    /// end; with two anchors moving there is none to keep to.
+    #[test]
+    fn dragged_end_of_a_slanted_line_keeps_to_its_extension() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        // From (300, 400) up to (380, 340): along (4, -3), about 37° up.
+        d.insert(
+            Some(l),
+            1,
+            Node::path(id, vectorcraft_geom::shapes::line(Point::new(300.0, 400.0), Point::new(380.0, 340.0)), Appearance::default_art()),
+        )
+        .unwrap();
+        let (mut s, p) = (Selection::default(), paint());
+        s.set([id]);
+        s.anchors.insert(id, [(0, 1)].into_iter().collect());
+        let t = Targets::for_anchor_drag(&d, &s).styled(&cx(&d, &s, &p));
+        // 150 along it (2.5 off), and 50 along it (shorter).
+        for (pointer, on) in [(Point::new(421.5, 312.0), Point::new(420.0, 310.0)), (Point::new(341.5, 372.0), Point::new(340.0, 370.0))] {
+            let (q, ov) = t.snap_point(pointer, 4.0);
+            assert!((q - on).hypot() < 1e-9, "{q:?}");
+            assert_eq!(lines(&ov), vec![(Point::new(300.0, 400.0), q)]);
+        }
+        // Two anchors moving, the middle one staying put: no telling which one the pointer drags,
+        // so neither keeps to the extension of its segment.
+        let id = d.alloc_id();
+        let bent = vectorcraft_geom::PathData::single(SubPath::polyline(
+            &[Point::new(250.0, 450.0), Point::new(300.0, 400.0), Point::new(380.0, 340.0)],
+            false,
+        ));
+        d.insert(Some(l), 1, Node::path(id, bent, Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        s.anchors.insert(id, [(0, 0), (0, 2)].into_iter().collect());
+        let t = Targets::for_anchor_drag(&d, &s);
+        assert_eq!(t.snap_point(Point::new(421.5, 312.0), 4.0), (Point::new(421.5, 312.0), vec![]));
+    }
+
+    /// A segment nearly level (0.3°) is still straightened by dragging its end into line with
+    /// the other one; along its own direction, farther from level, it keeps to its extension.
+    #[test]
+    fn a_nearly_level_segment_still_lines_up_with_its_other_end() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(
+            Some(l),
+            1,
+            Node::path(id, vectorcraft_geom::shapes::line(Point::new(100.0, 300.0), Point::new(300.0, 301.0)), Appearance::default_art()),
+        )
+        .unwrap();
+        let (mut s, p) = (Selection::default(), paint());
+        s.set([id]);
+        s.anchors.insert(id, [(0, 1)].into_iter().collect());
+        let t = Targets::for_anchor_drag(&d, &s).styled(&cx(&d, &s, &p));
+        let (q, ov) = t.snap_point(Point::new(300.0, 300.0), 4.0);
+        assert_eq!((q, labels(&ov)), (Point::new(300.0, 300.0), vec!["align"]));
+        let (q, ov) = t.snap_point(Point::new(400.0, 301.5), 4.0);
+        assert!((q - Point::new(400.0, 301.5)).hypot() < 1e-9, "{q:?}");
+        assert_eq!(lines(&ov), vec![(Point::new(100.0, 300.0), q)]);
     }
 
     fn labels(ov: &[Overlay]) -> Vec<&str> {

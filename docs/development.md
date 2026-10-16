@@ -1,6 +1,7 @@
 # Development
 
-> **Last updated:** 2026-10-13 · **Change:** verified PngSuite downloads (#1729).
+> **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
+> **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
 
 ## Web build
 
@@ -49,7 +50,7 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (wgpu, through eframe) only composites the canvas texture and draws the UI, so any GPU that can show the window will do. The desktop app picks the window's adapter itself (`apps/vectorcraft/src/gpu.rs`, eframe's `native_adapter_selector`) and logs every adapter it found and the one it uses.
 
 - **Order:** adapters that report they can't present to the window are never tried; then the one `WGPU_ADAPTER_NAME` names; hardware before software (llvmpipe, WARP); the native backends (Vulkan, Metal, DX12) before OpenGL; with Automatic, the GPU the Wayland compositor draws with, then the GPU that drives a display, and among those the one that drives the primary display; then the power preference; then a GPU's DX12 adapter before its Vulkan one (Intel's Vulkan driver made the whole window flicker black, #545), keeping the system's order among equals.
-- **Windows backends:** Direct3D 12, falling back to OpenGL. Vulkan isn't started at all unless `WGPU_BACKEND` asks for it (`WGPU_BACKEND=vulkan`): creating a Vulkan instance loads every installed Vulkan driver into the process, and a faulty one (Intel's `igvk64.dll`, #806) crashed the app before its window appeared.
+- **Windows backends:** Direct3D 12, falling back to OpenGL. Vulkan isn't started at all unless `WGPU_BACKEND` asks for it (`WGPU_BACKEND=vulkan`): creating a Vulkan instance loads every installed Vulkan driver into the process, and a faulty one (Intel's `igvk64.dll`, #806) crashed the app before its window appeared. After a start that crashed while it listed the Direct3D 12 adapters, later starts list OpenGL's alone (see the crash bullet below).
 - **The GPU that drives the display.** A GPU without a monitor is the wrong one even when it says it can show the window: on a desktop with a Ryzen's integrated GPU (no monitor) and an NVIDIA card driving both monitors, power saving picked the integrated GPU, Windows had to present every frame across adapters, and the integrated GPU's driver reset under that: the graphics device was lost, or the desktop's compositor went down and every monitor stayed black for minutes (pdfcraft#378). So Automatic asks the system which GPU drives which display and puts that GPU first; the power preference only orders the rest, and decides alone where the system can't say.
   - **Windows:** `EnumDisplayDevices` (the display devices attached to the desktop, and the primary one), through the `winsafe` crate; the PCI ids in each device id are matched against wgpu's adapters. The registry doesn't tell a user which adapter drives a display, and WMI reports a resolution for a GPU without a monitor, so neither is used.
   - **Linux:** the connected connectors in `/sys/class/drm` and their cards' PCI ids; a built-in panel (`eDP`, `LVDS`, `DSI`) counts as the primary display.
@@ -62,6 +63,7 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - 0.5.0 saved `powerSaving`, its default, for everyone; it reads as `automatic`.
 - **If the window fails on its adapter while starting up** (an error from wgpu, or a panic inside wgpu or egui-wgpu during the first frames), the app starts again without that adapter and tries the next one, telling which in the status bar; the run that failed keeps its log as `vectorcraft.1.log`. On Unix the new app replaces the process (an AppImage stays mounted); on Windows it starts beside it. Adapters are told apart by backend and PCI ids, or by name where the backend reports no ids (Metal lists every GPU of a dual-GPU Mac as `0000:0000`, #651). The adapters left out travel in `VECTORCRAFT_GPU_SKIP` (`backend:vendor:device`, such as `Vulkan:1002:164e`), one more on each restart, so the restarts end. When no adapter is left, the app logs why and exits with an error instead of panicking.
 - **If the window's first frame never reaches the screen** within 20 seconds of the app being created (the files named at the start opened), the adapter counts as hanging and the app starts again without it in the same way (#964: High Performance on a hybrid laptop left the app running in the background with no window and nothing in the log). A window minimized at the start isn't counted. When the processor that hung was chosen in Preferences, the status bar points to Automatic.
+- **If the app crashes while the window starts**, as when Intel's Direct3D 12 driver (`igd12umd64.dll`) ended 0.9.0 before its window appeared on an Intel UHD Graphics 605 (#2243), no code in the process runs to start it again, so the next start leaves the adapter out. Each start writes `graphics-start.json` in the log folder before the graphics start and adds the adapter once one is picked; when the first frame reaches the screen or the app ends without crashing, the start is cleared from the file. A start that finds an earlier start still recorded there logs the adapter, leaves it out and shows a note in the status bar. When the crash came while the adapters were being listed (wgpu's Direct3D 12 backend creates a device on each GPU to list it), the next start lists OpenGL's adapters alone; on macOS, where wgpu has no OpenGL adapters, it lists them all. Later starts keep leaving them out until the app version or Preferences › Performance › Graphics Processor changes, a start shows its first frame on the adapter that crashed, or no adapter is left that can show the window. `WGPU_BACKEND` and `WGPU_ADAPTER_NAME` choose regardless of the file: a start with `WGPU_BACKEND=dx12` tries Direct3D 12 again, and when its first frame appears, the crash is cleared. A process ended from outside during the start (Task Manager, `kill`) counts as a crash. Runs without preferences (`VECTORCRAFT_NO_PREFS`) record nothing, and a start made while another copy of the app is starting neither reads nor writes the file.
 - **To recover from a Graphics Processor choice that doesn't work** without editing files: start once with `WGPU_POWER_PREF=low` (or `WGPU_ADAPTER_NAME=…`), which overrides the preference for that start while settings still save, and set Graphics Processor back to Automatic. `VECTORCRAFT_NO_PREFS=1` also starts without it, but saves nothing.
 - **Environment variables** for when the choice still goes wrong, all read at startup and stronger than the preference:
   - `WGPU_POWER_PREF`: `low`, `high` or `none` (the system's order).
@@ -105,7 +107,7 @@ The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On 
 
 - **Clipboard:** under Wayland arboard talks to the compositor through the data-control protocol (wlroots compositors such as Sway and Hyprland, KDE Plasma), so bitmaps (`image/png`), SVG markup and text copied in any app paste (#398). Where the compositor lacks the protocol (GNOME's Mutter, [arboard#223](https://github.com/1Password/arboard/issues/223)), arboard falls back to the X11 clipboard through XWayland, which only holds what X11 apps copied. egui's own text paste into fields goes through smithay-clipboard and works either way.
 - **Clipboard owners that never answer (#510):** reading the clipboard waits on the app that owns it: arboard gives up on an X11 owner after 4 s, and a Wayland read waits for the owner to send its data. So on Linux the check that enables the Paste menu items runs on a background thread with a second clipboard handle (`crates/ui-egui/src/clipboard_probe.rs`, installed as `Services::clipboard_probe`), only while nothing is copied in the app and a document is open, and the window keeps drawing. A paste itself still reads on the UI thread, so pasting from such an owner waits for it once. Windows and macOS keep the check on the UI thread: Windows only asks which formats the clipboard holds, macOS asks the pasteboard server.
-- **Copied files:** files copied in a file manager (`text/uri-list`; `CF_HDROP` on Windows, file URLs on macOS) paste as the first one that is art (SVG, PDF, EMF/WMF or a bitmap), before the clipboard's other formats (which include the files' paths as text).
+- **Copied files:** files copied in a file manager (`text/uri-list`; `CF_HDROP` on Windows, file URLs on macOS) paste as the first one that is art (SVG, PDF, EPS, EMF/WMF or a bitmap; a `.ai` or `.ait` file as the PDF or PostScript it holds), before the clipboard's other formats (which include the files' paths as text).
 - **Dropping files on the window does not work under Wayland:** winit 0.30, which eframe 0.36 runs on, has no Wayland drag and drop ([winit#1881](https://github.com/rust-windowing/winit/issues/1881), added in winit 0.31; [egui#1563](https://github.com/emilk/egui/issues/1563)), so no `dropped_files` arrive. Until eframe moves to winit 0.31: copy the files in the file manager and paste them, use File › Place or Open, or open the window through XWayland, where drops work: set **Preferences › Performance › Linux Display Server** to **X11 (XWayland)** and restart (#1151), or start the app with `WAYLAND_DISPLAY= vectorcraft`. The preference (`linuxDisplayServer`, read at startup in `apps/vectorcraft/src/main.rs`, shown on Linux only) has winit open the window on X11 (`EventLoopBuilderExtX11::with_x11`) when the session is Wayland, `DISPLAY` is set and the X11 libraries winit loads are installed (`apps/vectorcraft/src/xwayland.rs` reads `ldconfig -p` and the usual library directories); otherwise the window opens on Wayland and the log says why. Unlike clearing `WAYLAND_DISPLAY`, it leaves the clipboard on the compositor's own.
 - **Pens and pen displays under Wayland (#491):** winit 0.30 doesn't bind the Wayland tablet protocol (`zwp_tablet_v2`; tablet input arrives in winit 0.31, [winit#4318](https://github.com/rust-windowing/winit/pull/4318), [egui#7731](https://github.com/emilk/egui/pull/7731)). Since Plasma 6.3, KWin no longer turns tablet input into pointer input for such apps ([kwin!6336](https://invent.kde.org/plasma/kwin/-/merge_requests/6336)): the pen moves the compositor's cursor over the window, but the app gets no motion or presses and shows none of its own cursors. Until eframe moves to winit 0.31, either run the app under XWayland, which supports the tablet protocol and hands the pen to X11 apps as a pointer (Preferences › Performance › Linux Display Server › X11 (XWayland), `WAYLAND_DISPLAY= vectorcraft`, or `env -u WAYLAND_DISPLAY vectorcraft`; for a desktop launcher, put `env WAYLAND_DISPLAY=` before the command in its `Exec=` line), or turn KWin's deprecated emulation back on for the whole session by setting `KWIN_WAYLAND_EMULATE_TABLET=1` in KWin's environment (for example in a file under `~/.config/environment.d/` or in `/etc/environment`) and logging in again. The pen then works as a mouse, without pressure: winit 0.30 reads pen pressure on Windows only (Windows Ink, which reaches the Liquify tools' Use Pressure Pen). Other compositors that don't emulate a pointer for tablets behave the same way.
 
@@ -139,11 +141,30 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   so they are the fallback for Japanese after the requested font; installed system fonts come after.
   Noto Sans Thai (when the checkout has it) is the fallback for Thai where no Thai font is
   installed, and the web build fetches it before the app starts (`crates/text/web-fonts.txt`).
+  All other supplied faces follow those existing document fallbacks in manifest order, so they
+  can also be selected by family name. This does not change which faces the web build embeds
+  or fetches, and no craft-fonts faces are registered when the optional input is absent.
 - UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
   the UI fonts and before the installed fonts `ui_fonts.rs` discovers for other scripts.
 - Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
+
+### Leaving out the bundled fonts (embedders)
+
+The Latin fonts in `assets/fonts/` are compiled into `vectorcraft-text` by its `bundled-fonts`
+feature (3.4 MB of the binary). It is on by default, and `vectorcraft-engine`'s default
+`bundled-fonts` feature turns it on, so the apps and anything built on the engine have them. An
+embedder that brings every font itself at run time (`FontDb::add_font`, say a web app serving its
+own font catalogue) depends on the engine with `default-features = false` and doesn't ship them
+twice. Its font database starts without them: on the web and without craft-fonts it starts empty,
+and text has no glyphs until a font is added.
+
+- The workspace declares `vectorcraft-text` without default features, so no library crate turns the
+  fonts back on; a crate whose tests lay type out asks for `bundled-fonts` in its
+  dev-dependencies (or gets it through `vectorcraft-testkit`, which uses the engine).
+- `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
+  configuration without them.
 
 ### Arabic fonts and the web build
 
@@ -174,7 +195,7 @@ always use the English ids and labels, so agents and scripts never see translate
 Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
 in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
 complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
-so the two scripts never mix), Japanese (`ja`, complete), Korean (`ko`, complete; every `ko-*` locale resolves to it; a count takes no plural, and Hangul is drawn with an installed system font), Vietnamese (`vi`, complete; every `vi-*` locale resolves to it; a count takes no plural, so plurals have one form), German (`de`, complete; `de-DE`, `de-AT`, `de-CH` and every
+so the two scripts never mix), Japanese (`ja`, complete), Korean (`ko`, complete; every `ko-*` locale resolves to it; a count takes no plural, and Hangul is drawn with an installed system font), Vietnamese (`vi`, complete; every `vi-*` locale resolves to it; a count takes no plural, so plurals have one form), Finnish (`fi`, complete; every `fi-*` locale resolves to it; one/other plurals with the partitive after numbers other than 1), German (`de`, complete; `de-DE`, `de-AT`, `de-CH` and every
 other `de-*` locale resolve to it), Spanish (`es`, complete, in neutral
 international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), French (`fr`,
 complete; `fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` and every other `fr-*` locale resolve to it), Italian (`it`,
@@ -182,8 +203,9 @@ complete; `it-IT`, `it-CH` and every other `it-*` locale resolve to it), Russian
 locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Ukrainian (`uk`, complete; `uk-UA`,
 `uk_UA.UTF-8` and every other `uk-*` locale resolve to it; integer plurals use one/few/many), Hungarian (`hu`, complete;
 `hu-HU` and every other `hu-*` locale resolve to it; a count takes the singular, so plurals have one form), Polish (`pl`, complete; `pl-PL` and every other `pl-*`
-locale resolve to it; plurals use one/few/many, with 21, 31 … taking many), Czech (`cs`, every menu label) and Brazilian Portuguese
-(`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
+locale resolve to it; plurals use one/few/many, with 21, 31 … taking many), Swedish (`sv`, complete; `sv-SE`, `sv-FI` and every
+other `sv-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian Portuguese
+(`pt-br`, complete; `pt-BR`, `pt_BR.UTF-8` and other tags that resolve to `pt-br` through `candidates`). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
   `&str`. `tr(lang, s)` takes the language; `tr_ctx` when one English word needs different translations;
@@ -210,7 +232,7 @@ locale resolve to it; plurals use one/few/many, with 21, 31 … taking many), Cz
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Spanish, French, Hungarian, Italian, Japanese, Korean, Polish, Russian, Ukrainian and Vietnamese cover every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Spanish, French, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Vietnamese and Finnish cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
   `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs a row in each of those catalogs (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English
@@ -343,4 +365,6 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
+| 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |

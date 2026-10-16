@@ -31,6 +31,9 @@ vello_cpu = { workspace = true, features = ["multithreading"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
+# Live-effect plug-ins the cache tests install, written in WebAssembly text.
+vectorcraft-plugins = { workspace = true }
+wat = { workspace = true }
 # Decoders the export tests read their files back with.
 image = { workspace = true, features = ["tga"] }
 tiff = "0.11"

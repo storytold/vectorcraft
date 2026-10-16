@@ -7,7 +7,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Node, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use super::edit::selected_roots;
+use super::edit::{outermost, selected_roots};
 use super::*;
 use crate::EngineError;
 
@@ -140,7 +140,8 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
         .filter(|a| a.len() == 4)
         .and_then(|a| a.iter().map(|c| finite_numbers(c).map(|[x, y]| Point::new(x, y))).collect());
     let Some(&[tl, tr, br, bl]) = corners.as_deref() else { return Err(bad(C, "corners must be 4 [x, y] points (TL, TR, BR, BL)")) };
-    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_roots(s)? };
+    let ids =
+        if p.get("ids").is_some_and(|v| !v.is_null()) { outermost(&s.doc()?.doc, checked_ids_param(s, p, "ids", C)?) } else { selected_roots(s)? };
     if ids.is_empty() {
         return Err(bad(C, "nothing to distort"));
     }

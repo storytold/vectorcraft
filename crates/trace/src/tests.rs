@@ -651,10 +651,11 @@ fn components(labels: &[u16], w: usize, h: usize) -> Vec<(usize, bool)> {
 /// island of the small region's old label.
 #[test]
 fn denoise_leaves_no_island_behind_a_merged_region() {
-    // One row: a 1-pixel speck, a 2-pixel region, then a large one; nothing under 3 pixels may stay.
+    // The speck joins the 2-pixel region, which now meets the strict 3-pixel threshold.
+    // Its pixels must stay together rather than forcing a merge based on the old area.
     let mut labels = vec![0, 1, 1, 2, 2, 2, 2, 2];
     denoise(&mut labels, 8, 1, 3);
-    assert_eq!(labels, vec![2; 8]);
+    assert_eq!(labels, vec![1, 1, 1, 2, 2, 2, 2, 2]);
 }
 
 /// On noise, Remove Noise leaves no region under the minimum that could be merged, and a larger
@@ -1294,4 +1295,118 @@ fn stroke_caps_are_square_or_round_as_the_ink_is() {
     };
     assert!(line(true));
     assert!(!line(false));
+}
+
+// Return the actual 4-connected regions, independent of the denoiser's bookkeeping.
+fn noise_regions(labels: &[u16], w: usize, h: usize) -> Vec<Vec<usize>> {
+    let mut seen = vec![false; labels.len()];
+    let mut result = Vec::new();
+    for start in 0..labels.len() {
+        if seen[start] || labels[start] == TRANSPARENT {
+            continue;
+        }
+        let mut region = vec![start];
+        seen[start] = true;
+        let mut cursor = 0;
+        while cursor < region.len() {
+            let i = region[cursor];
+            let (x, y) = (i % w, i / w);
+            for j in [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)].into_iter().flatten() {
+                if !seen[j] && labels[j] == labels[start] {
+                    seen[j] = true;
+                    region.push(j);
+                }
+            }
+            cursor += 1;
+        }
+        result.push(region);
+    }
+    result
+}
+
+#[test]
+fn raising_noise_only_merges_whole_regions() {
+    // Multicolour islands and transparent barriers exercise the stale-visited-pixel bug.
+    // Check the partition, not only the count: no region at a lower Noise may be split.
+    let mut seed = 819u64;
+    for case in 0..64 {
+        let original: Vec<u16> = (0..49)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                match (seed >> 32) % 5 {
+                    4 => TRANSPARENT,
+                    colour => colour as u16,
+                }
+            })
+            .collect();
+        let mut previous = noise_regions(&original, 7, 7);
+        for noise in 0..=24 {
+            let mut labels = original.clone();
+            denoise(&mut labels, 7, 7, noise);
+            for region in &previous {
+                assert!(region.iter().all(|&i| labels[i] == labels[region[0]]), "case {case}, noise {noise}: split {region:?}");
+            }
+            for (before, after) in original.iter().zip(&labels) {
+                assert_eq!(*before == TRANSPARENT, *after == TRANSPARENT);
+            }
+            let current = noise_regions(&labels, 7, 7);
+            assert!(current.len() <= previous.len(), "case {case}, noise {noise}: {} -> {}", previous.len(), current.len());
+            previous = current;
+        }
+    }
+}
+
+#[test]
+fn noise_threshold_is_strict_and_transparent_islands_survive() {
+    let original = vec![0, 0, 1, 1, 1, TRANSPARENT, 2];
+    let mut labels = original.clone();
+    denoise(&mut labels, 7, 1, 2);
+    assert_eq!(labels, original, "regions equal to Noise are retained");
+    denoise(&mut labels, 7, 1, 3);
+    assert_eq!(labels, [1, 1, 1, 1, 1, TRANSPARENT, 2]);
+    denoise(&mut labels, 7, 1, 100);
+    assert_eq!(labels, [1, 1, 1, 1, 1, TRANSPARENT, 2]);
+}
+
+#[test]
+fn denoise_invalid_grid_is_left_unchanged() {
+    let original = vec![0, 1, 1];
+    for (w, h) in [(0, 3), (3, 0), (2, 2), (usize::MAX, 2), (1, 2)] {
+        let mut labels = original.clone();
+        denoise(&mut labels, w, h, 10);
+        assert_eq!(labels, original);
+    }
+}
+
+/// A blue-to-orange sky over flat colours, and a green-to-magenta ramp in a rectangle on them.
+fn sky_and_ramp() -> Raster {
+    Raster::from_fn(240, 160, |x, y| {
+        let (fx, fy) = (f64::from(x), f64::from(y));
+        let mix = |a: [f64; 3], b: [f64; 3], t: f64| [0, 1, 2].map(|k| (a[k] + (b[k] - a[k]) * t).round() as u8);
+        if (20..100).contains(&x) && (100..150).contains(&y) {
+            let [r, g, b] = mix([40.0, 200.0, 60.0], [220.0, 40.0, 200.0], (fx - 20.0) / 80.0);
+            [r, g, b, 255]
+        } else if y >= 90 {
+            if x >= 140 { [200, 30, 40, 255] } else { [30, 120, 50, 255] }
+        } else {
+            let [r, g, b] = mix([30.0, 60.0, 200.0], [250.0, 140.0, 30.0], fy / 90.0);
+            [r, g, b, 255]
+        }
+    })
+}
+
+#[test]
+fn grayscale_gradients_are_grey() {
+    let img = sky_and_ramp();
+    let params = TraceParams { mode: Mode::Grayscale, colors: 4, gradients: true, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    let grey = |c: [u8; 3]| c[0] == c[1] && c[1] == c[2];
+    assert!(res.paths.iter().any(|p| p.gradient.is_some()), "a gradient is still found");
+    for p in &res.paths {
+        assert!(grey(p.color), "{:?}", p.color);
+        for stop in p.gradient.iter().flat_map(|g| &g.stops) {
+            assert!(grey(stop.1), "{:?}", p.gradient);
+        }
+    }
+    assert!(res.palette.iter().all(|&c| grey(c)), "{:?}", res.palette);
 }

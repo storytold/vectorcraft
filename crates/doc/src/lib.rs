@@ -18,9 +18,14 @@ pub mod hit;
 mod id_index;
 pub mod inks;
 mod inline;
+pub mod intertwine;
 pub mod shared;
+mod symbol_export_type;
+mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
+pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
+pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
 pub mod marks;
@@ -107,9 +112,9 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::{
-    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, InlineArt, Justify, Kinsoku, LeadingModel,
-    Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef,
-    TextWrap, VerticalAlign, WrapShape,
+    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt, Justify,
+    Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject,
+    TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
 };
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
@@ -119,6 +124,9 @@ pub use vectorcraft_geom as geom;
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Swatch, SwatchGroup};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
+
+/// Coordinates beyond this many points exceed the supported document range.
+pub const MAX_COORD: f64 = 4.0e6;
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DocError {
@@ -233,7 +241,10 @@ impl Unit {
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
     ///
     /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
-    /// math typed before a field's unit suffix works.
+    /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
+    /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
+    /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
+    /// percentage on its own (`50%`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
         parse_measure(s, self).filter(|v| v.is_finite())
     }
@@ -270,8 +281,9 @@ impl Unit {
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
     // Simple arithmetic on the right (Illustrator fields accept "10+5", "100/2", "3in*2").
-    // `*` and `/` share one precedence level, so they split at the last of either (left to right).
-    for ops in [&['+'][..], &['-'][..], &['*', '/'][..]] {
+    // `+` and `-` share one precedence level, as do `*` and `/`, so each level splits at the last
+    // of its operators (left to right).
+    for ops in [&['+', '-'][..], &['*', '/'][..]] {
         // Past the first character, so a leading sign isn't an operator.
         let skip = s.chars().next().map_or(0, char::len_utf8);
         // A `+` or `-` right after another operator is the sign of its operand (`10*-2`, `5--3`).
@@ -287,11 +299,23 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
             }
             let Some(op) = s[i..].chars().next() else { continue };
             return match op {
-                '+' => Some(parse_measure(l, default)? + parse_measure(r, default)?),
-                '-' => Some(parse_measure(l, default)? - parse_measure(r, default)?),
+                '+' | '-' => {
+                    let a = parse_measure(l, default)?;
+                    // A percentage added or taken away is a share of everything before it:
+                    // `50pt+25%` is 62.5 pt, `100pt+20%-10pt` is 110 pt.
+                    let b = match percent(r) {
+                        Some(k) => a * k,
+                        None => parse_measure(r, default)?,
+                    };
+                    Some(if op == '+' { a + b } else { a - b })
+                }
                 _ => {
-                    // A factor or divisor is a plain number; a unit after it is the expression's.
-                    let (k, unit) = number_unit(r)?;
+                    // A factor or divisor is a plain number or a percentage (`3cm*50%` is 1.5 cm);
+                    // a unit after it is the expression's.
+                    let (k, unit) = match percent(r) {
+                        Some(k) => (k, None),
+                        None => number_unit(r)?,
+                    };
                     let a = parse_measure(l, unit.unwrap_or(default))?;
                     if op == '*' {
                         Some(a * k)
@@ -339,6 +363,14 @@ fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
         _ => return None,
     };
     Some((v, unit))
+}
+
+/// A number followed by `%` (`50%`, `12.5 %`) → its fraction (`0.5`, `0.125`).
+fn percent(s: &str) -> Option<f64> {
+    match number_unit(s.trim().strip_suffix('%')?)? {
+        (p, None) => Some(p / 100.0),
+        _ => None,
+    }
 }
 
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
@@ -722,6 +754,13 @@ type Places = BTreeMap<Vec<usize>, Vec<(usize, usize)>>;
 pub const FORMAT_VERSION: u32 = 1;
 
 impl Document {
+    /// The ruler zero point, or zero on both axes when either stored coordinate is invalid.
+    /// Rulers, coordinate fields and guide snapping use the same supported range.
+    pub fn ruler_origin_or_zero(&self) -> Point {
+        let origin = self.ruler_origin;
+        if origin.is_finite() && origin.x.abs() <= MAX_COORD && origin.y.abs() <= MAX_COORD { origin } else { Point::ZERO }
+    }
+
     /// A new RGB document with one artboard of `size` and one layer ("Layer 1").
     pub fn new(width: f64, height: f64) -> Self {
         Self::new_with_mode(width, height, ColorMode::Rgb)
@@ -1516,6 +1555,76 @@ impl Document {
             return base.to_string();
         }
         (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+    }
+
+    /// Symbol Options › Registration for `name` (default: centre).
+    pub fn symbol_registration(&self, name: &str) -> SymbolRegistration {
+        self.unknown
+            .get(SYMBOL_REGISTRATION)
+            .and_then(|m| m.get(name))
+            .and_then(|v| v.as_u64())
+            .and_then(SymbolRegistration::from_u64)
+            .unwrap_or_default()
+    }
+
+    /// Set or clear (when centre) the registration point stored for `name`.
+    pub fn set_symbol_registration(&mut self, name: &str, reg: SymbolRegistration) {
+        let m = self.unknown.entry(SYMBOL_REGISTRATION.to_string()).or_insert_with(|| serde_json::json!({}));
+        let Some(o) = m.as_object_mut() else { return };
+        if reg.is_center() {
+            o.remove(name);
+            if o.is_empty() {
+                self.unknown.remove(SYMBOL_REGISTRATION);
+            }
+        } else {
+            o.insert(name.into(), serde_json::json!(reg.0));
+        }
+    }
+
+    /// Move the stored registration when a symbol is renamed.
+    pub fn rename_symbol_registration(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        let reg = self.symbol_registration(from);
+        self.set_symbol_registration(from, SymbolRegistration::CENTER);
+        self.set_symbol_registration(to, reg);
+    }
+
+    /// Symbol Options › Export Type for `name` (default: Movie Clip).
+    pub fn symbol_export_type(&self, name: &str) -> SymbolExportType {
+        self.unknown.get(SYMBOL_EXPORT_TYPE).and_then(|m| m.get(name)).and_then(SymbolExportType::from_value).unwrap_or_default()
+    }
+
+    /// Set or clear (when Movie Clip, the default) the export type stored for `name`.
+    pub fn set_symbol_export_type(&mut self, name: &str, kind: SymbolExportType) {
+        if kind.is_default() {
+            self.clear_symbol_export_type(name);
+            return;
+        }
+        let m = self.unknown.entry(SYMBOL_EXPORT_TYPE.to_string()).or_insert_with(|| serde_json::json!({}));
+        let Some(o) = m.as_object_mut() else { return };
+        o.insert(name.into(), serde_json::json!(kind.id()));
+    }
+
+    /// Drop any stored export type for `name` (Movie Clip default).
+    pub fn clear_symbol_export_type(&mut self, name: &str) {
+        let Some(m) = self.unknown.get_mut(SYMBOL_EXPORT_TYPE) else { return };
+        let Some(o) = m.as_object_mut() else { return };
+        o.remove(name);
+        if o.is_empty() {
+            self.unknown.remove(SYMBOL_EXPORT_TYPE);
+        }
+    }
+
+    /// Move the stored export type when a symbol is renamed.
+    pub fn rename_symbol_export_type(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        let kind = self.symbol_export_type(from);
+        self.clear_symbol_export_type(from);
+        self.set_symbol_export_type(to, kind);
     }
 }
 

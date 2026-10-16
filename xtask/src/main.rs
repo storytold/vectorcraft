@@ -28,7 +28,7 @@ commands:
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
-  ci              fmt --check, clippy -D warnings, test, pdf-deps, assets, brands, layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, no-bundled-fonts, pdf-deps, assets, brands, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -201,6 +201,15 @@ fn cmd_ci() -> Result<(), String> {
                 let mut c = cargo();
                 c.args(["test", "--workspace"]);
                 run(c, "cargo test --workspace")
+            }),
+        ),
+        (
+            "no-bundled-fonts",
+            Box::new(|| {
+                // vectorcraft-text as embedders that bring their own fonts build it.
+                let mut c = cargo();
+                c.args(["test", "-p", "vectorcraft-text", "--no-default-features", "--test", "without_bundled_fonts"]);
+                run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts")
             }),
         ),
         ("pdf-deps", Box::new(|| pdf_deps::run(&root()))),

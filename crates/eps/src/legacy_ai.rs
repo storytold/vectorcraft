@@ -91,7 +91,7 @@ const FREEFORM: &str = "freeform gradients are written as their average colour";
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
-const LIVE: &str = "symbols, blends, envelopes, meshes, repeats and placed documents are written as their art";
+const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
 const UNREADABLE_IMAGE: &str = "an image that can't be decoded or is too large was left out";
 const ELLIPTICAL: &str = "elliptical radial gradients are written circular";
 
@@ -313,7 +313,7 @@ VCLegacy begin
 /_row {{currentfile _l readline not {exit} if dup length 1 gt {exit} if pop} loop
  dup length 1 gt {dup length 1 sub 1 exch getinterval /ASCIIHexDecode filter _s readstring pop} {pop ()} ifelse} bd
 /XI {pop pop pop pop /_ic exch def /_ib exch def /_ih exch def /_iw exch def pop pop pop pop
- aload pop neg 6 array astore [1 0 0 -1 0 0] matrix concatmatrix
+ [1 0 0 -1 0 0] exch matrix concatmatrix
  _on {gsave concat _iw _ih _ib [1 0 0 1 0 0] /_row load false _ic 1 eq {1} {_ic} ifelse colorimage grestore} {pop} ifelse} bd
 % Type (15) is set by the app that reads the file: its operators take their operands and mark
 % nothing; encodings (3.3) are skipped.
@@ -605,7 +605,12 @@ impl<'a> Writer<'a> {
                     self.nest -= 1;
                 }
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
@@ -1196,11 +1201,12 @@ impl<'a> Writer<'a> {
 
     // ---------- images ----------
 
-    /// An image (§8): `%AI5_BeginRaster`, its matrix (pixels, y down, → art space with y flipped)
-    /// and operands with `XI`, its RGB samples in hex on comment lines, `%AI5_EndRaster`.
+    /// An image (§8): `%AI5_BeginRaster`, its matrix (an art-space matrix applied to the pixels
+    /// with their rows running downwards, `(u, -v)`) and operands with `XI`, its RGB samples in hex
+    /// on comment lines, `%AI5_EndRaster`.
     fn image(&mut self, im: &ImageObject) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
-        let m = flip * self.to_art * im.xf;
+        let m = self.to_art * im.xf * flip;
         if !invertible(m) {
             return;
         }
@@ -1215,7 +1221,7 @@ impl<'a> Writer<'a> {
         }
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(w), f64::from(im.height.max(1)) / f64::from(h));
-        let m = flip * self.to_art * im.xf * fit;
+        let m = self.to_art * im.xf * fit * flip;
         let rgba = img.to_rgba8();
         let mut hex = String::with_capacity(rgba.len() / 4 * 7);
         hex.push('%');
@@ -1248,7 +1254,7 @@ impl<'a> Writer<'a> {
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[");
-        ps::push_nums(s, &[a, b, c, d, e, -f]);
+        ps::push_nums(s, &[a, b, c, d, e, f]);
         s.pop();
         let _ = writeln!(s, "] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI");
         s.push_str(&hex);

@@ -37,3 +37,21 @@ fn text_strokes_keep_cap_join_miter_dashes_and_alignment() {
     // An inside stroke is drawn twice as wide, clipped to the glyphs.
     assert!(strokes.iter().any(|s| s.dash.is_none() && (s.width - 6.0).abs() < 1e-3), "{strokes:?}");
 }
+
+/// Align Stroke on live type: the characters' stroke drawn twice as wide, clipped inside or
+/// outside the glyphs, as on the canvas; the type stays text.
+#[test]
+fn an_aligned_character_stroke_is_clipped_to_its_side_of_the_glyphs() {
+    for (align, clip) in [(StrokeAlign::Inside, false), (StrokeAlign::Outside, true)] {
+        let style = CharStyle { size: 48.0, stroke: Paint::solid(Color::BLACK), stroke_width: 1.5, stroke_align: align, ..Default::default() };
+        let mut d = Document::new(240.0, 100.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 70.0), "Wave", style))));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let pdf = String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned();
+        let ops: Vec<&str> = pdf.split_ascii_whitespace().collect();
+        assert!(ops.windows(2).any(|w| w == ["3", "w"]), "{align:?}: twice the weight");
+        assert!(ops.contains(&"BT"), "{align:?}: the type stays text");
+        assert!(ops.contains(&if clip { "W*" } else { "W" }), "{align:?}: clipped to its side");
+    }
+}

@@ -175,21 +175,26 @@ impl Clipboard {
         d.fix_next_id();
         d
     }
-}
 
-impl Session {
-    /// The internal clipboard as standalone SVG (`None` when it is empty).
-    pub fn clipboard_svg(&self) -> Option<String> {
-        if self.clipboard.is_empty() {
+    /// The objects as standalone SVG (`None` when there are none).
+    pub fn svg(&self) -> Option<String> {
+        if self.is_empty() {
             return None;
         }
-        let d = self.clipboard.to_document();
+        let d = self.to_document();
         // SVG has no filters for the Photoshop-style effects: their objects go in as images.
         let flat = super::rasterfx::flatten_pixel_effects(&d);
         Some(vectorcraft_svg::export(
             flat.as_ref().unwrap_or(&d),
             &vectorcraft_svg::ExportOptions { artboard: None, object_ids: vectorcraft_svg::ObjectIds::Minimal, ..Default::default() },
         ))
+    }
+}
+
+impl Session {
+    /// The internal clipboard as standalone SVG (`None` when it is empty).
+    pub fn clipboard_svg(&self) -> Option<String> {
+        self.clipboard.svg()
     }
 }
 

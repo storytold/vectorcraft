@@ -405,6 +405,26 @@ fn fallback_font_per_character() {
     assert_eq!(l.glyphs[2].font_id, primary.id());
 }
 
+/// A space the primary font doesn't map goes to the fallback face like any other character
+/// (#1844): an ideographic space in a face without U+3000 keeps its em, so an indent made with it
+/// isn't lost. A tab, which the layout handles itself, stays with the primary face. Needs a bundled
+/// face with U+3000 and あ (craft-fonts; skipped without it).
+#[test]
+fn whitespace_the_primary_font_lacks_takes_the_fallback_face() {
+    let primary = db().face("Source Sans 3", "Regular").unwrap();
+    assert!(!primary.covers('\u{3000}'));
+    if ['\u{3000}', 'あ'].iter().any(|&c| db().fallback_for(c, primary.id()).is_none()) {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let l = layout(db(), &point("あ\u{3000}あ", style(20.0)));
+    let width: f64 = l.glyphs.iter().map(|g| g.advance).sum();
+    assert!((width - 60.0).abs() < 0.01, "あ　あ sets at 3 em: {:?}", l.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    assert_ne!(l.glyphs[1].font_id, primary.id());
+    let l = layout(db(), &point("a\tb", style(20.0)));
+    assert!(l.glyphs.iter().all(|g| g.font_id == primary.id()));
+}
+
 #[test]
 fn multiple_runs_and_styles() {
     let mut t = point("", style(10.0));
@@ -516,6 +536,19 @@ fn japanese_text_uses_the_craft_fonts_mincho_after_the_bundled_fonts() {
     assert!(CRAFT_FONTS.iter().any(|f| f.family == face.family));
     // Latin keeps the bundled fallback family.
     assert_eq!(db().face_covering('a').unwrap().family, FALLBACK_FAMILY);
+}
+
+#[test]
+fn all_supplied_craft_font_families_are_registered_without_system_fonts() {
+    if CRAFT_FONTS.is_empty() {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a checkout)");
+        return;
+    }
+    let db = FontDb::with_font_dirs(vec![]);
+    for font in CRAFT_FONTS {
+        let face = db.face(font.family, font.style).unwrap();
+        assert_eq!(face.family, font.family, "{} {}", font.family, font.style);
+    }
 }
 
 #[test]

@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, copy?: false (with path, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used)} link images (or placed documents, each showing the same artboard of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, copy?: false (with path, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
             has_doc,
             relink
         ),
@@ -371,21 +371,21 @@ fn read_for(f: &mut Found, g: &Group, cmd: &str) -> Result<Read> {
 }
 
 /// Objects `ids` show what was read (see [`install`], [`install_document`]).
-fn install_read(d: &mut Document, ids: &[NodeId], read: Read, keep_bounds: bool) -> Result<()> {
+fn install_read(d: &mut Document, ids: &[NodeId], read: Read, force: Option<Preserve>) -> Result<()> {
     match read {
-        Read::Image(r) => install(d, ids, r, keep_bounds),
-        Read::Document(link, src) => install_document(d, ids, &link, &src, keep_bounds),
+        Read::Image(r) => install(d, ids, r, force),
+        Read::Document(link, src) => install_document(d, ids, &link, &src, force),
     }
 }
 
 /// Placed documents `ids` show `src`, read from the file `link` points at, each placed as its
-/// Placement Options say (`keep_bounds`: in its bounds, whatever they say).
-fn install_document(d: &mut Document, ids: &[NodeId], link: &LinkInfo, src: &super::place::document::Source, keep_bounds: bool) -> Result<()> {
+/// Placement Options say (`force`: as that Preserve choice says, whatever they say).
+fn install_document(d: &mut Document, ids: &[NodeId], link: &LinkInfo, src: &super::place::document::Source, force: Option<Preserve>) -> Result<()> {
     let mut clips = vec![];
     let (w, h) = (src.frame.width(), src.frame.height());
     for id in ids {
         let Some(NodeKind::PlacedDocument(p)) = d.node(*id).map(|n| &n.kind) else { continue };
-        let o = if keep_bounds { PlacementOptions { preserve: Preserve::Bounds, ..p.placement } } else { p.placement };
+        let o = PlacementOptions { preserve: force.unwrap_or(p.placement.preserve), ..p.placement };
         let (xf, clip) = placed_xf(p.xf, (p.width, p.height), (1.0, 1.0), (w, h), (1.0, 1.0), o);
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::PlacedDocument(p) = &mut n.kind
@@ -479,14 +479,24 @@ fn clip_image(d: &mut Document, id: NodeId, (frame, room): Clip) -> Result<()> {
     Ok(())
 }
 
+/// Replace image `id` with the raster at `path`, keeping the object's bounds (what an image
+/// variable does on `dataset.select`). The file is linked; a missing or unreadable path is an
+/// error so the dataset application can skip that binding.
+pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str) -> Result<()> {
+    let path = absolute_path(path);
+    let bytes = read_file(&path)?;
+    let read = (link_info(&path, &bytes), fileio::raster_image(&bytes)?);
+    install(d, &[id], read, Some(Preserve::Bounds))
+}
+
 /// Image objects `ids` show the file read for `link` (`img`), each placed as its Placement
-/// Options say (`keep_bounds`: in its bounds, whatever they say).
-fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, keep_bounds: bool) -> Result<()> {
+/// Options say (`force`: as that Preserve choice says, whatever they say).
+fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>) -> Result<()> {
     let new_pt = super::place::pt_per_px(img.ppi);
     let mut clips = vec![];
     for id in ids {
         let Some(NodeKind::Image(im)) = d.node(*id).map(|n| &n.kind) else { continue };
-        let o = if keep_bounds { PlacementOptions { preserve: Preserve::Bounds, ..im.placement } } else { im.placement };
+        let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
         let size = |w: u32, h: u32| (w as f64, h as f64);
         let (xf, clip) = placed_xf(im.xf, size(im.width, im.height), file_pt(d, &im.key), size(img.width, img.height), new_pt, o);
         if let Some(n) = d.node_mut(*id)
@@ -540,7 +550,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool) -> Resolv
         match probe(&g, folder(doc_path)) {
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
-                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread)) {
+                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread.then_some(Preserve::Bounds))) {
                     Ok(()) if unread => {}
                     Ok(()) => out.updated.extend(row),
                     Err(_) => out.missing.extend(row),
@@ -552,7 +562,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool) -> Resolv
                 let read = if stale(d, &g) { Some(read_for(&mut f, &g, "document.open")) } else { None };
                 match read {
                     Some(Ok(read)) => {
-                        if install_read(d, &g.ids, read, true).is_err() {
+                        if install_read(d, &g.ids, read, Some(Preserve::Bounds)).is_err() {
                             out.missing.extend(row);
                         }
                     }
@@ -737,13 +747,18 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let updated: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
     if !reads.is_empty() {
-        s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, false)))?;
+        s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, None)))?;
     }
     Ok(json!({ "updated": updated, "missing": missing }))
 }
 
 fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.relink";
+    // How the new file takes the image's place this time (default: its Placement Options).
+    let preserve = match str_param(p, "preserve") {
+        None => None,
+        Some(v) => Some(Preserve::from_id(v).ok_or_else(|| bad(C, format!("preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill")))?),
+    };
     let st = s.doc()?;
     let folder_param = str_param(p, "folder");
     // With copy: the saved document's folder, which the file is copied into.
@@ -852,7 +867,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let relinked: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
     if !reads.is_empty() {
-        s.edit("Relink", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, false)))?;
+        s.edit("Relink", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve)))?;
     }
     not_found.sort();
     not_found.dedup();
@@ -1109,7 +1124,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if !done.is_empty() || !documents.is_empty() {
         s.edit("Embed", |d, _| {
             for (ids, read) in reads {
-                install(d, &ids, read, true)?;
+                install(d, &ids, read, Some(Preserve::Bounds))?;
             }
             for id in &done {
                 if let Some(Node { kind: NodeKind::Image(im), .. }) = d.node_mut(*id) {
@@ -1164,7 +1179,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     let path = absolute_path(&if fileio::extension(path).is_empty() { format!("{path}.{ext}") } else { path.to_string() });
     write_file(&path, &bytes)?;
     let read = (link_info(&path, &bytes), fileio::raster_image(&bytes)?);
-    s.edit("Unembed", |d, _| install(d, &[id], read, true))?;
+    s.edit("Unembed", |d, _| install(d, &[id], read, Some(Preserve::Bounds)))?;
     Ok(json!({ "id": id.0, "path": path }))
 }
 

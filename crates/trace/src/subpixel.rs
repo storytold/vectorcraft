@@ -185,10 +185,13 @@ pub(crate) fn outline(
                 continue;
             }
             let (before, edge) = (&edges[b], &edges[e]);
-            if before.len >= 3 {
+            // The three cracks must belong to the same shared piece. A junction
+            // can split a long raw edge near this corner; the opposite region
+            // then sees a shorter edge and would not make this correction.
+            if before.len >= 3 && !(1..=2).any(|k| junction(before.first + before.len - k)) {
                 shifts[before.first + before.len - 1] = shifts[before.first + before.len - 2];
             }
-            if edge.len >= 3 {
+            if edge.len >= 3 && !(1..=2).any(|k| junction(edge.first + k)) {
                 shifts[edge.first] = shifts[edge.first + 1];
             }
         }
@@ -360,6 +363,71 @@ mod tests {
         let (pts, _) = whole(&loop_of(&mask, 4, 2), 4, 2, &|_| f64::NAN);
         assert_eq!(pts.len(), 4);
         assert!(pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+    }
+
+    fn check_junction_near_corner(distance: usize) {
+        // The bottom region's long top run crosses a junction near its corner.
+        // Its neighbour sees only the short shared part after the junction.
+        let (w, h) = (12, 12);
+        for turns in 0..4 {
+            for palette in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+                let mut labels = vec![0u32; w * h];
+                for y in 0..h {
+                    for x in 0..w {
+                        let label = if y < 4 && x < 5 - distance {
+                            0
+                        } else if y >= 4 && x < 5 {
+                            2
+                        } else {
+                            1
+                        };
+                        let (mut xx, mut yy) = (x, y);
+                        for _ in 0..turns {
+                            (xx, yy) = (h - 1 - yy, xx);
+                        }
+                        labels[yy * w + xx] = palette[label];
+                    }
+                }
+                let across = |c: Crack| {
+                    let (a, b) = (c.at(0).unwrap(), c.at(1).unwrap());
+                    let wave = 0.4 * ((a + b) as f64).sin();
+                    (if labels[a] < labels[b] { wave } else { -wave }, labels[b])
+                };
+                let pieces = |label| {
+                    let mask: Vec<bool> = labels.iter().map(|&l| l == label).collect();
+                    outline(&loop_of(&mask, w, h), w, h, &across, &grid)
+                };
+                let rotate = |mut p: Point| {
+                    for _ in 0..turns {
+                        p = Point::new(h as f64 - p.y, p.x);
+                    }
+                    p
+                };
+                let (start, end) = (rotate(Point::new((5 - distance) as f64, 4.0)), rotate(Point::new(5.0, 12.0)));
+                let edge = |pieces: &[Piece]| {
+                    pieces
+                        .iter()
+                        .find(|p| {
+                            p.pts.first() == Some(&start) && p.pts.last() == Some(&end) || p.pts.last() == Some(&start) && p.pts.first() == Some(&end)
+                        })
+                        .unwrap()
+                        .clone()
+                };
+                let (mut ours, theirs) = (edge(&pieces(palette[1])), edge(&pieces(palette[2])));
+                ours.pts.reverse();
+                assert_eq!(ours, theirs, "distance={distance}, turns={turns}, palette={palette:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn junction_one_pixel_before_corner_keeps_shared_edge_equal() {
+        check_junction_near_corner(1);
+    }
+
+    #[test]
+    fn junction_two_pixels_before_corner_keeps_shared_edge_equal() {
+        check_junction_near_corner(2);
     }
 
     #[test]

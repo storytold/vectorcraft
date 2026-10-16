@@ -3,8 +3,9 @@
 //!
 //! One dialog covers all of them: what it shows is what the command takes. A variable is a
 //! name and a kind; a dataset is a name and one field per variable — a text field for a
-//! `text` variable, a checkbox for a `visibility` one. `dataset.set` opens with the row's
-//! current values, so editing a row is editing what it already says.
+//! `text`, `image` (a path) or `graph` (CSV) variable, a checkbox for a `visibility` one.
+//! `dataset.set` opens with the row's current values, so editing a row is editing what it
+//! already says.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{DataValue, VariableKind, Variables};
@@ -19,11 +20,11 @@ use crate::widgets;
 pub const KIND: &str = "variables";
 
 /// The kinds a variable can have, as `variable.define` names them.
-const KINDS: [&str; 2] = ["text", "visibility"];
+const KINDS: [&str; 4] = ["text", "visibility", "image", "graph"];
 
 /// What the dialog shows for each of [`KINDS`].
-fn kind_labels() -> [&'static str; 2] {
-    [tl!("Text"), tl!("Visibility")]
+fn kind_labels() -> [&'static str; 4] {
+    [tl!("Text"), tl!("Visibility"), tl!("Image"), tl!("Graph")]
 }
 
 pub(super) const SPEC: DialogSpec =
@@ -123,9 +124,12 @@ fn value_fields(vars: &Variables, current: Option<&std::collections::BTreeMap<St
         let value = match (current.and_then(|c| c.get(&v.name)), v.kind) {
             (Some(DataValue::Text(t)), _) => json!(t),
             (Some(DataValue::Visible(b)), _) => json!(b),
-            // Without a value in the row a text field starts empty (no value in this row) and
-            // a visibility one starts shown: its false is a value, so it is never "unset".
-            (None, VariableKind::Text) => json!(""),
+            (Some(DataValue::Image(p)), _) => json!(p),
+            (Some(DataValue::Graph(c)), _) => json!(c),
+            // Without a value in the row a text, image or graph field starts empty (no value in
+            // this row) and a visibility one starts shown: its false is a value, so it is never
+            // "unset".
+            (None, VariableKind::Text | VariableKind::Image | VariableKind::Graph) => json!(""),
             (None, VariableKind::Visibility) => json!(true),
         };
         out.insert(value_key(&v.name), value);
@@ -202,8 +206,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     label(ui, &v.name);
                     let key = value_key(&v.name);
                     match v.kind {
-                        VariableKind::Text => {
+                        VariableKind::Text | VariableKind::Image => {
                             text(ui, d, &key, 220.0);
+                        }
+                        VariableKind::Graph => {
+                            text_area(ui, d, &key, 220.0);
                         }
                         VariableKind::Visibility => checkbox(ui, d, &key),
                     }
@@ -248,22 +255,35 @@ fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[&str], widt
     }
 }
 
-/// The `values` object the dialog's fields mean: a text variable whose field is empty carries
-/// no value in this row, and a visibility checkbox is always a value — its false, too.
+/// The `values` object the dialog's fields mean: a text, image or graph variable whose field is
+/// empty carries no value in this row, and a visibility checkbox is always a value — its false,
+/// too.
 fn values_of(d: &Dialog, vars: &Variables) -> Value {
     let mut out = serde_json::Map::new();
     for v in &vars.variables {
         let key = value_key(&v.name);
-        if v.kind == VariableKind::Text {
-            let text = d.str(&key);
-            if !text.is_empty() {
-                out.insert(v.name.clone(), json!(text));
+        match v.kind {
+            VariableKind::Text | VariableKind::Image | VariableKind::Graph => {
+                let text = d.str(&key);
+                if !text.is_empty() {
+                    out.insert(v.name.clone(), json!(text));
+                }
             }
-        } else {
-            out.insert(v.name.clone(), json!(d.bool(&key)));
+            VariableKind::Visibility => {
+                out.insert(v.name.clone(), json!(d.bool(&key)));
+            }
         }
     }
     Value::Object(out)
+}
+
+/// A multiline field for graph CSV.
+fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) {
+    let mut s = d.str(key);
+    let r = ui.add(egui::TextEdit::multiline(&mut s).desired_width(width).desired_rows(4));
+    if r.changed() {
+        d.fields.insert(key.into(), json!(s));
+    }
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {

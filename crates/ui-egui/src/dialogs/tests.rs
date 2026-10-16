@@ -179,11 +179,13 @@ fn raster_filter_dialogs_preview_and_apply() {
     for (effect, key, value) in [
         ("blur.radial", "method", "zoom"),
         ("blur.smart", "quality", "high"),
+        ("blur.smart", "blurMode", "overlayEdge"),
         ("sharpen.unsharpMask", "amount", "120"),
         ("pixelate.colorHalftone", "channel1", "30"),
         ("pixelate.crystallize", "cellSize", "20"),
         ("pixelate.mezzotint", "type", "longLines"),
         ("pixelate.pointillize", "cellSize", "12"),
+        ("sketch.halftonePattern", "patternType", "line"),
         ("texture.craquelure", "crackDepth", "9"),
         ("texture.grain", "grainType", "stippled"),
         ("texture.mosaicTiles", "tileSize", "20"),
@@ -207,14 +209,15 @@ fn raster_filter_dialogs_preview_and_apply() {
     }
     // Fields follow the effect's documented order (its dialog's), not the alphabet.
     let doc = vectorcraft_effects::effect_info("blur.smart").unwrap().params;
-    let ranks: Vec<usize> = ["radius", "threshold", "quality"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
-    assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
+    let ranks: Vec<usize> = ["radius", "threshold", "quality", "blurMode"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[3] < usize::MAX, "{ranks:?}");
     assert_eq!(super::effect::doc_rank(doc, "nope"), usize::MAX);
     let doc = vectorcraft_effects::effect_info("pixelate.colorHalftone").unwrap().params;
     let ranks: Vec<usize> = ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
     // Labels as the dialogs show them.
     assert_eq!(super::form::humanize("maxRadius"), "Max. Radius:");
+    assert_eq!(super::form::humanize("blurMode"), "Mode:");
     assert_eq!(super::form::humanize("channel3"), "Channel 3:");
     assert_eq!(super::form::humanize("cellSize"), "Cell Size:");
     assert_eq!(super::form::humanize("lightDirection"), "Light Direction:");
@@ -234,6 +237,28 @@ fn effect_dialog_applies_to_its_appearance_item() {
     let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
     assert_eq!(n.appearance.items[1].effects().len(), 1, "the effect goes to the stroke");
     assert!(n.appearance.effects.is_empty() && n.appearance.items[0].effects().is_empty());
+}
+
+#[test]
+fn scribble_dialog_shows_the_angle_as_stored_and_each_variation() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "stylize.scribble"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(270));
+    frame(&mut app, Default::default());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["angle"].as_f64(), Some(-90.0), "the field reads what is stored");
+    confirm(&mut app).unwrap();
+    let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert_eq!(n.appearance.effects[0].params["angle"].as_f64(), Some(-90.0));
+    // Each variation follows the option it varies, as in the reference app's Scribble Options.
+    let doc = vectorcraft_effects::effect_info("stylize.scribble").unwrap().params;
+    let order = ["angle", "overlap", "overlapVariation", "strokeWidth", "curviness", "curvinessVariation", "spacing", "spacingVariation", "seed"];
+    let ranks: Vec<usize> = order.iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[8] < usize::MAX, "{ranks:?}");
+    for key in ["overlapVariation", "curvinessVariation", "spacingVariation"] {
+        assert_eq!(super::form::humanize(key), "Variation:");
+    }
 }
 
 #[test]
@@ -884,6 +909,28 @@ fn artboard_options_position_moves_art_only_with_the_tool_option_on() {
     }
 }
 
+/// Opened while another tool is in use, as the Artboards panel opens it (#1876), Artboard Options
+/// moves the art with a new X only when the Artboard tool's Move Artwork with Artboard option is
+/// on.
+#[test]
+fn artboard_options_position_follows_the_tool_option_with_another_tool() {
+    for move_art in [false, true] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("tool.setOption", json!({"tool": "artboard", "key": "moveArt", "value": move_art})).unwrap();
+        app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+        assert_ne!(app.session.tool_id(), "artboard");
+        app.ui.dialog.as_mut().unwrap().fields.insert("x".into(), json!(50));
+        frame(&mut app, Default::default());
+        super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect.x0, 50.0);
+        assert_eq!(
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0,
+            if move_art { 60.0 } else { 10.0 }
+        );
+    }
+}
+
 /// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
 /// Corner as radio buttons, not dropdowns (#1133).
 #[test]
@@ -897,6 +944,128 @@ fn zig_zag_has_sliders_and_radio_buttons() {
         assert!(lines.contains(&want), "no {want:?} in {lines:?}");
     }
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
+}
+
+/// Frames of the dialog layer on one context (so a drag and the keyboard focus last from frame to
+/// frame), with the screen-reader tree turned on.
+struct Frames {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Frames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        Self { ctx, time: 0.0 }
+    }
+
+    fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The center of the button that screen readers name `label`.
+    fn button(&mut self, app: &mut VectorcraftApp, label: &str) -> egui::Pos2 {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let node = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == egui::accesskit::Role::Button);
+        let b = node.unwrap_or_else(|| panic!("no button named {label:?}")).1.bounds().expect("bounds");
+        egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+    }
+
+    fn press(&mut self, app: &mut VectorcraftApp, at: egui::Pos2, pressed: bool) {
+        let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        self.run(app, vec![egui::Event::PointerMoved(at), button]);
+    }
+
+    fn drag(&mut self, app: &mut VectorcraftApp, from: egui::Pos2, by: egui::Vec2) {
+        self.press(app, from, true);
+        for k in 1..=4 {
+            self.run(app, vec![egui::Event::PointerMoved(from + by * k as f32 / 4.0)]);
+        }
+        self.press(app, from + by, false);
+    }
+
+    fn key(&mut self, app: &mut VectorcraftApp, key: egui::Key, modifiers: egui::Modifiers) {
+        let event = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        self.run(app, vec![egui::Event::ModifiersChanged(modifiers), event]);
+        self.run(app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    }
+}
+
+/// The corners in the open dialog, and those of the first object's first effect.
+fn free_distort_corners(app: &VectorcraftApp) -> (serde_json::Value, serde_json::Value) {
+    let s = app.session.active().unwrap();
+    let node = s.doc.node(s.selection.objects[0]).unwrap();
+    (app.ui.dialog.as_ref().unwrap().fields["corners"].clone(), node.appearance.effects[0].params["corners"].clone())
+}
+
+/// Free Distort's dialog moves the corner whose handle is dragged and leaves the other three; the
+/// preview and OK apply them, and the arrow keys move the handle that a click focused.
+#[test]
+fn free_distort_drags_one_corner_and_previews_it() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("effect.dialog", json!({"effect": "distort.freeDistort"})).unwrap();
+    let mut f = Frames::new();
+    // The box keeps the object's 2:1 proportions: 180 by 90 screen points.
+    let top_right = f.button(&mut app, "Top Right");
+    f.drag(&mut app, top_right, egui::vec2(27.0, 9.0));
+    let want = json!([[0.0, 0.0], [1.15, 0.1], [1.0, 1.0], [0.0, 1.0]]);
+    assert_eq!(free_distort_corners(&app), (want.clone(), want.clone()), "the dragged corner alone moves, and the preview follows");
+    let bottom_left = f.button(&mut app, "Bottom Left");
+    f.press(&mut app, bottom_left, true);
+    f.press(&mut app, bottom_left, false);
+    f.key(&mut app, egui::Key::ArrowLeft, egui::Modifiers::NONE);
+    f.key(&mut app, egui::Key::ArrowDown, egui::Modifiers::SHIFT);
+    let want = json!([[0.0, 0.0], [1.15, 0.1], [1.0, 1.0], [-0.01, 1.1]]);
+    assert_eq!(free_distort_corners(&app), (want.clone(), want.clone()));
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    let s = app.session.active().unwrap();
+    assert_eq!(s.doc.node(s.selection.objects[0]).unwrap().appearance.effects[0].params["corners"], want);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before, "one undo step");
+}
+
+/// An arrow key moves a corner that lies outside the dialog's area by one step, and Reset puts the
+/// corners of an applied Free Distort back on the box; OK keeps that.
+#[test]
+fn free_distort_reset_puts_the_corners_back() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let moved = json!([[0.2, 0.1], [0.9, 0.0], [1.0, 3.0], [0.0, 1.0]]);
+    app.run("effect.apply", json!({"effect": "distort.freeDistort", "params": {"corners": moved}})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.freeDistort", "index": 0})).unwrap();
+    let mut f = Frames::new();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["corners"], moved);
+    let bottom_right = f.button(&mut app, "Bottom Right");
+    f.press(&mut app, bottom_right, true);
+    f.press(&mut app, bottom_right, false);
+    f.key(&mut app, egui::Key::ArrowUp, egui::Modifiers::NONE);
+    let stepped = json!([[0.2, 0.1], [0.9, 0.0], [1.0, 2.99], [0.0, 1.0]]);
+    assert_eq!(free_distort_corners(&app), (stepped.clone(), stepped));
+    let reset = f.button(&mut app, "Reset");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    f.run(&mut app, vec![]);
+    let rest = json!(super::free_distort::IDENTITY);
+    assert_eq!(free_distort_corners(&app), (rest.clone(), rest.clone()));
+    confirm(&mut app).unwrap();
+    let s = app.session.active().unwrap();
+    let effects = &s.doc.node(s.selection.objects[0]).unwrap().appearance.effects;
+    assert_eq!((effects.len(), effects[0].params["corners"].clone()), (1, rest));
 }
 
 #[test]

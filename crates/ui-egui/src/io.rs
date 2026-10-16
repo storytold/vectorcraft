@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
 use vectorcraft_engine::EngineError;
-use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan};
+use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan, TEMPLATE_FORMATS};
 
 use crate::background::{self, Writer};
 use crate::dialogs::svg_options;
@@ -349,10 +349,11 @@ pub fn remember_view(app: &mut VectorcraftApp) {
     }
 }
 
-/// A path typed in a save panel: kept when its extension names a save format (the panel's file
-/// type), else `f`'s extension is added.
-fn with_save_extension(path: &str, f: &Format) -> String {
-    with_extension(path, f.extensions[0], |g| SAVE_FORMATS.contains(&g.id))
+/// A path typed in a save panel: kept when its extension names a save format, or, for Save as
+/// Template (`mode`), when it names a template format (the panel's file type); otherwise `f`'s
+/// extension is added.
+fn with_save_extension(path: &str, f: &Format, mode: SaveMode) -> String {
+    with_extension(path, f.extensions[0], |g| SAVE_FORMATS.contains(&g.id) || (mode == SaveMode::Template && TEMPLATE_FORMATS.contains(&g.id)))
 }
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
@@ -372,8 +373,9 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
 /// engine command's `{path?, format?, options?, svg?}`.
 ///
-/// When no path is known, desktop asks with a save panel (one file type per save format) and the
-/// web opens the Save As dialog (file name and format). With `ask_options` and no options in `p`,
+/// When no path is known, desktop asks with a save panel (one file type per save format, or one
+/// per template format for Save as Template) and the web opens the Save As dialog (file name and
+/// format). With `ask_options` and no options in `p`,
 /// a format picked that way that has options asks for them before anything is written (SVG
 /// Options, the Save PDF dialog, or the save options dialog: native and `.ai` files on Save As
 /// only), and so does Save As or Save a Copy to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
@@ -396,7 +398,7 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         return Ok(open_options(app, mode.command(), first.format, &first.name, true));
     }
     let filters = match mode {
-        SaveMode::Template => vec![(first.format.label, first.format.extensions)],
+        SaveMode::Template => fileio::template_filters(first.format.id),
         _ => fileio::save_filters(first.format.id),
     };
     let picked = pick_path(app, &FilePick { name: first.name.clone(), folder: first.folder.clone(), filters })?;
@@ -404,7 +406,7 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.remove("format");
-        o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
+        o.insert("path".into(), json!(with_save_extension(&picked, first.format, mode)));
     }
     let chosen = plan(app, mode, &acknowledged(&q))?;
     if let Some(r) = chosen.path.as_deref().and_then(|path| ask_before_losing(app, path, save_command(mode), &q)) {
@@ -464,7 +466,7 @@ fn asks_options(mode: SaveMode, f: &Format) -> bool {
     !f.options.is_empty()
         && match f.id {
             "vectorcraft" | "ai" => mode == SaveMode::SaveAs,
-            "template" => false,
+            "template" | "ait" => false,
             _ => true,
         }
 }

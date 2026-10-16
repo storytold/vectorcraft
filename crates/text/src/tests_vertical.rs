@@ -43,6 +43,50 @@ fn upright_marks_stand_and_letters_lie_on_their_side() {
     assert!(vl.width() > vl.height(), "a tall l lies across the column");
 }
 
+/// Unicode Vertical_Orientation Tu: without a vertical alternate, fullwidth !/? stay upright.
+/// Tr controls (a bracket and the long vowel mark) still rotate when they have no alternate.
+#[test]
+fn fullwidth_punctuation_stays_upright_without_vertical_alternates() {
+    check_fullwidth_punctuation(false);
+}
+
+#[test]
+fn fullwidth_punctuation_keeps_vertical_alternates_upright() {
+    check_fullwidth_punctuation(true);
+}
+
+fn check_fullwidth_punctuation(alternates: bool) {
+    use crate::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(vertical_punctuation_font(alternates).unwrap());
+    let style = CharStyle { font_family: VERTICAL_PUNCTUATION_FAMILY.into(), size: 20.0, ..CharStyle::default() };
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").unwrap();
+    for (ch, nominal, alternate) in [('！', '!', 'I'), ('？', '?', 'J'), ('「', 'L', 'L'), ('ー', '-', '-')] {
+        let upright = matches!(ch, '！' | '？');
+        let expected = if alternates { alternate } else { nominal };
+        let h = layout(&db, &TextObject::point(Point::ZERO, &expected.to_string(), style.clone()));
+        for area in [false, true] {
+            let mut t = vertical_styled(&ch.to_string(), style.clone());
+            if area {
+                t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1)) };
+            }
+            let v = layout(&db, &t);
+            assert_eq!(v.glyphs.len(), 1, "{ch} area {area}");
+            assert!(!v.overflow);
+            let g = &v.glyphs[0];
+            assert_eq!(g.font_id, face.id());
+            assert_eq!(g.gid, face.glyph_for(expected), "{ch}: the expected nominal or vert glyph");
+            let reference = if upright { h.glyphs[0].xf } else { Affine::rotate(std::f64::consts::FRAC_PI_2) * h.glyphs[0].xf };
+            for (actual, expected) in g.xf.as_coeffs().iter().zip(reference.as_coeffs().iter()).take(4) {
+                assert!((actual - expected).abs() < 1e-9, "{ch} area {area}, alternates {alternates}: {:?} vs {reference:?}", g.xf);
+            }
+        }
+        // Vertical substitutions must not change horizontal type.
+        let h = layout(&db, &TextObject::point(Point::ZERO, &ch.to_string(), style.clone()));
+        assert_eq!(h.glyphs[0].gid, face.glyph_for(nominal));
+    }
+}
+
 #[test]
 fn caret_and_selection_turn_with_the_columns() {
     let l = layout(FontDb::global(), &vertical("§§§"));

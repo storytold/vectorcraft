@@ -6,7 +6,7 @@
 //! - **Geometry effects** (Distort & Transform, Path, Convert to Shape, Round Corners, Scribble,
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, and the
-//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize,
+//!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize, Halftone Pattern,
 //!   Unsharp Mask and Glowing Edges) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
@@ -69,7 +69,7 @@ pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RasterFx, outset, raster_effects};
-pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};
+pub use reshape::{expand_outlined, has_item_geometry, needs_outline, outline_art, outline_text, reshape};
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
     EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, extrude_options, has_solid, inflate_options, is_three_d, solid_art, validate_solid,
@@ -134,7 +134,7 @@ fn lengths_of(id: &str) -> Lengths {
         "threeD.inflate" => always(&["depth"]),
         "path.outlineStroke" => always(&["width"]),
         "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" | "blur.smart" | "sharpen.unsharpMask" => always(&["radius"]),
-        "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
+        "stylize.scribble" => always(&["overlap", "overlapVariation", "strokeWidth", "spacing", "spacingVariation"]),
         "stylize.dropShadow" => always(&["x", "y", "blur"]),
         "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
@@ -149,6 +149,7 @@ fn lengths_of(id: &str) -> Lengths {
         "texture.mosaicTiles" => always(&["tileSize"]),
         "texture.patchwork" => always(&["squareSize"]),
         "texture.stainedGlass" => always(&["cellSize"]),
+        "sketch.halftonePattern" => always(&["size"]),
         _ => Lengths::default(),
     }
 }
@@ -165,6 +166,7 @@ const ARTISTIC: &[&str] = &["Effect", "Artistic"];
 const BRUSH_STROKES: &[&str] = &["Effect", "Brush Strokes"];
 const DISTORT: &[&str] = &["Effect", "Distort"];
 const SHARPEN: &[&str] = &["Effect", "Sharpen"];
+const SKETCH: &[&str] = &["Effect", "Sketch"];
 const PIXELATE: &[&str] = &["Effect", "Pixelate"];
 const TEXTURE: &[&str] = &["Effect", "Texture"];
 const VIDEO: &[&str] = &["Effect", "Video"];
@@ -290,6 +292,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"offset": 10.0, "joins": "miter", "miterLimit": 4.0}),
         ),
         g(
+            "path.outlineObject",
+            "Outline Object",
+            PATH,
+            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change",
+            json!({}),
+        ),
+        g(
             "path.outlineStroke",
             "Outline Stroke",
             PATH,
@@ -301,8 +310,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.scribble",
             "Scribble…",
             STYLIZE,
-            "{angle: deg (30), overlap: pt (0), strokeWidth: pt (3), curviness: % (5), spacing: pt (5), variation: pt (0.5), seed: int (0)} (simplified: a single hatching scribble outlined to a filled shape)",
-            json!({"angle": 30.0, "overlap": 0.0, "strokeWidth": 3.0, "curviness": 5.0, "spacing": 5.0, "variation": 0.5, "seed": 0}),
+            "{angle: deg (30; stored above -180 and up to 180: 270 becomes -90, -180 becomes 180), overlap: pt (0; Path Overlap: a positive value extends each line beyond the path, a negative one ends it inside), overlapVariation: pt (0..100, 0.5; how far each line's ends move along it), strokeWidth: pt (3), curviness: % (5), curvinessVariation: % (0..100, 0; how far each turn's curviness moves from curviness), spacing: pt (5), spacingVariation: pt (0..100, 0.5; how far each line's ends move across it), variation: pt (the earlier form, read as overlapVariation and spacingVariation unless those are given), seed: int (0)} (simplified: a single hatching scribble outlined to a filled shape)",
+            json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 5.0, "spacingVariation": 0.5, "seed": 0}),
         ),
         r(
             "stylize.dropShadow",
@@ -345,8 +354,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "blur.smart",
             "Smart Blur…",
             BLUR,
-            "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across)} (Normal mode)",
-            json!({"radius": 3.0, "threshold": 25.0, "quality": "medium"}),
+            "{radius: pt 0.1..100 (3), threshold: levels 0.1..100 (25; only colours closer than this blur together, so edges stay sharp), quality: \"low\"|\"medium\"|\"high\" (\"medium\"; 5, 7 or 9 samples across), blurMode: \"normal\"|\"edgeOnly\"|\"overlayEdge\" (\"normal\"; edgeOnly: the edges in white on black, overlayEdge: the edges in white over the blur)}. A pixel is on an edge when one of its four nearest pixels differs from it by more than the threshold in a channel and its channels (alpha included) add up to at least that pixel's; the white and the black keep each pixel's coverage, and the radius changes only the blur",
+            json!({"radius": 3.0, "threshold": 25.0, "quality": "medium", "blurMode": "normal"}),
         ),
         r(
             "brushStrokes.accentedEdges",
@@ -415,7 +424,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.glass",
             "Glass…",
             DISTORT,
-            "{distortion: 0..20 (5), smoothness: 1..15 (3), texture: \"blocks\"|\"canvas\"|\"frosted\"|\"tinyLens\" (\"frosted\"; surfaces made in code), scaling: % 50..200 (100), invert: bool (false; turns the surface's heights over)} makes the object look as if seen through glass",
+            "{distortion: 0..20 (5), smoothness: 1..15 (3), texture: \"blocks\"|\"canvas\"|\"frosted\"|\"tinyLens\"|\"loaded\" (\"frosted\"; \"loaded\" draws the image in textureImage and draws Frosted when there is none; the others are surfaces made in code), textureImage?: {path} | {name?, dataBase64} | string (Load Texture…: an image file that File › Place reads, within the renderer's pixel allowance, stored as its gray levels in a grayscale PNG in base64; a file sets texture to \"loaded\" unless texture is given, and the stored string, as effect.list gives it, is kept as it is), scaling: % 50..200 (100), invert: bool (false; turns the surface's heights over)} makes the object look as if seen through glass. A loaded texture lies one image pixel per point at 100 %, centered on the object's center and repeated; each pixel's luma is the surface's height, from 0 for black to 1 pt for white, and a transparent pixel counts as middle gray",
             json!({"distortion": 5.0, "smoothness": 3.0, "texture": "frosted", "scaling": 100.0, "invert": false}),
         ),
         r(
@@ -431,6 +440,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             SHARPEN,
             "{amount: % 1..500 (50), radius: pt 0.1..250 (1; σ of the blur edges are found against), threshold: levels 0..255 (0; smaller differences are left alone)}",
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
+        ),
+        r(
+            "sketch.halftonePattern",
+            "Halftone Pattern…",
+            SKETCH,
+            "{size: pt 1..12 (1; how far apart the screen's dots, rings or lines are), contrast: 0..50 (5; 50 draws pure black and white), patternType: \"circle\"|\"dot\"|\"line\" (\"dot\"; rings round the object's centre, dots on a square grid, horizontal lines)} redraws the object in black ink on white paper through a halftone screen whose ink covers as much as the colour is dark, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"size": 1.0, "contrast": 5.0, "patternType": "dot"}),
         ),
         r(
             "stylize.glowingEdges",
@@ -642,8 +658,9 @@ pub fn default_params(id: &str) -> Option<Value> {
     }
 }
 
-/// `params` layered over the defaults of `id` (unknown keys are kept), with the 3D effects'
-/// earlier `perspective` read as `perspectiveAngle` (see [`upgrade_params`]).
+/// `params` layered over the defaults of `id` (unknown keys are kept), in their current form (see
+/// [`upgrade_params`]). The 3D effects' earlier `perspective` is read as `perspectiveAngle`, and
+/// Scribble's earlier `variation` is read as `overlapVariation` and `spacingVariation`.
 pub fn merged_params(id: &str, params: &Value) -> Value {
     let mut out = match catalog_index().get(id).map(|e| &e.defaults) {
         Some(Value::Object(m)) => m.clone(),
@@ -660,14 +677,17 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 /// `params` for effect `id` in their current form. The 3D effects took Perspective as a 0–100 %
 /// strength, `perspective`, before the documented 0°–160° angle, `perspectiveAngle`, and the light
 /// as `lightAzimuth` and `lightElevation` before the documented Rotation and Height
-/// (`lightRotation`, `lightHeight`, `lightBehind`). Earlier values (from a file or a script of
+/// (`lightRotation`, `lightHeight`, `lightBehind`). Scribble took one `variation` before its
+/// separate `overlapVariation` and `spacingVariation`. Earlier values (from a file or a script of
 /// then) become the current ones that show exactly the same, unless those are given too, which win.
+/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°).
 pub fn upgrade_params(id: &str, params: &Value) -> Value {
     match params {
         Value::Object(m) => {
             let mut m = m.clone();
             upgrade_perspective(id, &mut m);
             upgrade_light(id, &mut m);
+            upgrade_scribble(id, &mut m);
             Value::Object(m)
         }
         other => other.clone(),
@@ -697,6 +717,21 @@ fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
     if !m.contains_key("perspectiveAngle") {
         let angle = vectorcraft_three_d::perspective_from_strength(strength.as_f64().unwrap_or(0.0) / 100.0);
         m.insert("perspectiveAngle".into(), json!(angle));
+    }
+}
+
+fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
+    if id != "stylize.scribble" {
+        return;
+    }
+    if let Some(variation) = m.remove("variation") {
+        for key in ["overlapVariation", "spacingVariation"] {
+            m.entry(key).or_insert_with(|| variation.clone());
+        }
+    }
+    if let Some(angle) = m.get("angle").and_then(Value::as_f64).filter(|a| a.is_finite() && (*a <= -180.0 || *a > 180.0)) {
+        let wrapped = angle.rem_euclid(360.0);
+        m.insert("angle".into(), json!(if wrapped > 180.0 { wrapped - 360.0 } else { wrapped }));
     }
 }
 
@@ -747,6 +782,18 @@ pub fn is_geometry(id: &str) -> bool {
 /// Any visible geometry effect in the list?
 pub fn has_geometry(effects: &[Effect]) -> bool {
     effects.iter().any(|e| e.visible && is_geometry(&e.id))
+}
+
+/// Does `n` have a visible plug-in effect, its own or a fill's or stroke's? Such an effect draws
+/// what the plug-in installed under its id draws ([`plugin_revision`]).
+pub fn has_plugin_effect(n: &Node) -> bool {
+    let plugin = |e: &Effect| e.visible && vectorcraft_plugins::effect::plugin_id(&e.id).is_some();
+    n.appearance.effects.iter().any(plugin) || n.appearance.items.iter().any(|i| i.effects().iter().any(plugin))
+}
+
+/// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
+pub fn plugin_revision() -> u64 {
+    vectorcraft_plugins::registry::revision()
 }
 
 /// Context the geometry effects may need from the object's appearance.
@@ -834,6 +881,9 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
             }
             vectorcraft_pathops::offset_path(path, off, join(p, "joins"), num(p, "miterLimit", 4.0).clamp(1.0, 500.0))
         }
+        // Outline Object returns the geometry unchanged. Type reaches every geometry effect as its
+        // glyph outlines (`reshape::reshape`), so type that carries it is drawn as those outlines.
+        "path.outlineObject" => path.clone(),
         "path.outlineStroke" => {
             let fallback;
             let base = match ctx.stroke {

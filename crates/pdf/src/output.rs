@@ -14,13 +14,13 @@
 //!   with the CMYK profile in effect (the destination when converting to CMYK, else the
 //!   document's), RGB with sRGB (colours of another RGB space as their sRGB equivalents) and grey
 //!   with the sRGB tone curve. Otherwise they are device colours. PDF/A, PDF/X-3 and PDF/X-4
-//!   always tag them; PDF/X-1a never does, and always converts to a CMYK destination (see
-//!   [`crate::pdfx`]).
+//!   always tag them, whatever `profiles` says; PDF/X-1a never does, and always converts to a
+//!   CMYK destination (see [`crate::pdfx`]).
 //! - Output intent: the profile `outputIntent` names, embedded as the `/GTS_PDFX` output intent
 //!   of the catalog with the condition, identifier and registry; Trapped goes in the document
 //!   information (`/False` when an output intent is written untrapped). PDF/A files carry their
 //!   own output intent: neither is written there. PDF/X files always have one: blank, the CMYK
-//!   profile in effect.
+//!   profile in effect. A profile that also tags colours is embedded once, shared by both.
 
 use std::sync::{Arc, OnceLock};
 
@@ -327,11 +327,19 @@ impl ColorOut {
                 }
                 if let Some((name, n)) = profile {
                     let icc = cms::icc_bytes(name).map_err(|e| PdfError::Write(format!("output intent profile: {e}")))?;
-                    let data = deflate(&icc).map_err(|e| PdfError::Write(format!("output intent profile: {e}")))?;
-                    let mut stream = format!("<</N {n}/Length {}/Filter/FlateDecode>>\nstream\n", data.len()).into_bytes();
-                    stream.extend_from_slice(&data);
-                    stream.extend_from_slice(b"\nendstream");
-                    dict.push_str(&format!("/DestOutputProfile {} 0 R", patch.add_object(stream)));
+                    // The profile tagging the colours is often this one: both share its stream.
+                    let shared = if self.tagged { tagging_stream(&pdf, &xref, &icc) } else { None };
+                    let stream = match shared {
+                        Some(s) => s,
+                        None => {
+                            let data = deflate(&icc).map_err(|e| PdfError::Write(format!("output intent profile: {e}")))?;
+                            let mut stream = format!("<</N {n}/Length {}/Filter/FlateDecode>>\nstream\n", data.len()).into_bytes();
+                            stream.extend_from_slice(&data);
+                            stream.extend_from_slice(b"\nendstream");
+                            patch.add_object(stream)
+                        }
+                    };
+                    dict.push_str(&format!("/DestOutputProfile {stream} 0 R"));
                 }
                 dict.push_str(">>");
                 let oi = patch.add_object(dict.into_bytes());
@@ -417,6 +425,36 @@ fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
     });
     let trapped = (o.trapped || intent.is_some()).then_some(o.trapped);
     (intent.is_some() || trapped.is_some()).then_some(Catalog { intent, trapped })
+}
+
+/// The object number of the stream of an ICC-based colour space of `pdf` that holds profile `icc`
+/// (its data as it is, or Flate-compressed); `None` when no colour space uses that profile.
+fn tagging_stream(pdf: &[u8], xref: &Xref, icc: &[u8]) -> Option<u32> {
+    use std::io::Read;
+    const ICC: &[u8] = b"[/ICCBased ";
+    let mut from = 0;
+    while let Some(at) = crate::lab_spot::find(pdf, ICC, from) {
+        from = at + ICC.len();
+        let Some(n) = crate::patch::number(pdf, from).and_then(|(n, _)| u32::try_from(n).ok()) else { continue };
+        let Some(obj) = xref.dict(pdf, n).and_then(|(s, e)| pdf.get(s..e)) else { continue };
+        let Some(length) = crate::lab_spot::find(obj, b"/Length", 0).and_then(|i| crate::patch::number(obj, i + b"/Length".len())) else {
+            continue;
+        };
+        let Some(data) = crate::lab_spot::find(obj, b"stream", length.1).map(|i| i + b"stream".len()) else { continue };
+        let data = data + obj.get(data..).map_or(0, |r| r.iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count());
+        let Some(raw) = data.checked_add(length.0).and_then(|e| obj.get(data..e)) else { continue };
+        let same = if crate::lab_spot::find(obj.get(..data).unwrap_or_default(), b"/FlateDecode", 0).is_some() {
+            let mut out = vec![];
+            // One byte more than the profile is enough to tell a longer one apart.
+            flate2::read::ZlibDecoder::new(raw).take(icc.len() as u64 + 1).read_to_end(&mut out).is_ok() && out == icc
+        } else {
+            raw == icc
+        };
+        if same {
+            return Some(n);
+        }
+    }
+    None
 }
 
 /// `s` as a PDF text string: a literal string when it is printable ASCII, else UTF-16BE (with its

@@ -393,6 +393,17 @@ pub fn library_colors(s: &Session, key: &str) -> Option<Vec<Color>> {
     Some(library(s, key)?.1.iter().filter_map(colors).collect())
 }
 
+/// The colour swatches of library `key` (an id or name) or, for [`DOCUMENT_SWATCHES`], of the
+/// active document (tint swatches left out: they stand for their base). `None` when there is no
+/// such library (or document).
+pub fn library_swatches(s: &Session, key: &str) -> Option<Vec<Swatch>> {
+    let own = |sw: &&Swatch| matches!(sw.paint, Paint::Solid { swatch: None, .. });
+    if key == DOCUMENT_SWATCHES {
+        return Some(s.active()?.doc.swatches_iter().filter(own).cloned().collect());
+    }
+    Some(library(s, key)?.1.iter().filter(own).cloned().collect())
+}
+
 /// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "").
 pub(crate) fn limit_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Palette>> {
     let Some(key) = str_param(p, "limitTo").filter(|k| !k.is_empty()) else { return Ok(None) };

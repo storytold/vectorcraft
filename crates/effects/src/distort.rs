@@ -103,6 +103,39 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value) -> PathData {
     PathData::new(subs)
 }
 
+/// The move and the number of copies of a Transform effect with params `p` that only moves what
+/// it applies to, as [`transform_map`] reads them; `None` when it also scales, rotates or reflects,
+/// or moves by a random share.
+pub(crate) fn transform_move(p: &Value) -> Option<(Vec2, usize)> {
+    let (m, copies) = transform_map(Rect::ZERO, p, 0);
+    let [a, b, c, d, x, y] = m.as_coeffs();
+    (!flag(p, "random", false) && [a, b, c, d] == [1.0, 0.0, 0.0, 1.0]).then_some((Vec2::new(x, y), copies))
+}
+
+/// The offsets at which Transform effects with params `ps`, applied in order, place `path`, the
+/// original's place first, when each of them only moves it ([`transform_move`]): each effect moves
+/// every place it is given, or with copies keeps them and adds each copy's. `None` when one of
+/// them does more than move, or when [`transform`] stops its copies of `path` early.
+pub(crate) fn transform_offsets(ps: &[Value], path: &PathData) -> Option<Vec<Vec2>> {
+    let mut offsets = vec![Vec2::ZERO];
+    let mut all = path.clone();
+    for p in ps {
+        let (v, copies) = transform_move(p)?;
+        let next = transform(&all, Rect::ZERO, p, 0);
+        if next.anchor_count() != all.anchor_count().saturating_mul(copies + 1) {
+            return None;
+        }
+        all = next;
+        if copies == 0 {
+            offsets.iter_mut().for_each(|o| *o += v);
+            continue;
+        }
+        let from = offsets.clone();
+        offsets.extend((1..=copies).flat_map(|k| from.iter().map(move |o| *o + v * k as f64)));
+    }
+    Some(offsets)
+}
+
 /// Largest scale (%) and move (pt) the Transform effect takes.
 const MAX_SCALE: f64 = 100_000.0;
 const MAX_MOVE: f64 = 1.0e7;
@@ -112,11 +145,17 @@ const MAX_REACH: f64 = 1.0e9;
 /// a 2000-anchor path. Stacked Transform effects multiply their copies (three of 1000 copies make
 /// a thousand million of one square), so the limit is on the result, not on each effect's count.
 pub(crate) const MAX_COPY_ANCHORS: usize = 2_000_000;
-/// Most image nodes a Transform effect's copies make of an art, the originals included: 1000
-/// copies of a 2000-image art. Stacked Transform effects multiply their copies (three of 1000
-/// copies make a thousand million of one image), so the limit is on the result, not on each
-/// effect's count.
-pub(crate) const MAX_COPY_IMAGES: usize = 2_000_000;
+/// Most image and symbol instance nodes a Transform effect's copies make of an art, the originals
+/// included: 1000 copies of a 2000-image art. Stacked Transform effects multiply their copies
+/// (three of 1000 copies make a thousand million of one image), so the limit is on the result,
+/// not on each effect's count.
+pub(crate) const MAX_COPY_OBJECTS: usize = 2_000_000;
+
+/// Does `r` stay within [`MAX_REACH`] of the origin? A Transform effect's copies stop before one
+/// doesn't.
+pub(crate) fn within_reach(r: Rect) -> bool {
+    [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_REACH)
+}
 
 /// Transform effect: scale, rotate and reflect about reference point `reference` of the bounds
 /// (the 9-point grid, 4 = centre), then move; `copies` more times, each from the last. With
@@ -133,7 +172,6 @@ pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, m
     if copies == 0 {
         return path.transformed(m);
     }
-    let within = |r: Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_REACH);
     // Each copy adds the path once more, and a Transform after this one copies the lot again:
     // copies stop where the result would pass [`MAX_COPY_ANCHORS`] (#1705).
     let each = path.anchor_count();
@@ -146,7 +184,7 @@ pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, m
             break;
         }
         cur = cur.transformed(m);
-        if !cur.bounds().is_some_and(within) {
+        if !cur.bounds().is_some_and(within_reach) {
             break;
         }
         out.subpaths.extend(cur.subpaths.iter().cloned());
@@ -158,7 +196,7 @@ pub(crate) fn transform_within(path: &PathData, b: Rect, p: &Value, seed: u64, m
 /// `b` (the reference point lies on them), params `p` and the object's `seed` for Random: the map
 /// applies to the object itself when `copies` is 0, and once more to each of `copies` copies
 /// otherwise (see [`transform_within`], and images, whose copies count nodes against
-/// [`MAX_COPY_IMAGES`]).
+/// [`MAX_COPY_OBJECTS`]).
 pub(crate) fn transform_map(b: Rect, p: &Value, seed: u64) -> (Affine, usize) {
     let random = flag(p, "random", false);
     // The share (0..1) of value `k` applied.

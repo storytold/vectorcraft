@@ -73,3 +73,38 @@ fn a_paste_takes_the_command_of_the_v_chord_held() {
 fn no_two_commands_tools_or_panels_share_a_default_shortcut() {
     assert_eq!(shortcut_editor::all_conflicts(&BTreeMap::new()), vec![]);
 }
+
+/// egui-winit reports every Cmd+C chord as a Copy, Shift and Alt held too, never as its key: the
+/// Cmd+Shift+C alignment fired on a Mac (the menu's key equivalent) but copied elsewhere (#1940).
+#[test]
+fn a_copy_with_more_modifiers_is_the_c_chord_held() {
+    use vectorcraft_doc::{Justify, NodeId, NodeKind};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    let justify = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).justify).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let copied = |out: &egui::FullOutput| out.platform_output.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(_)));
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let out = frame(&mut app, Modifiers::COMMAND | Modifiers::SHIFT, vec![Event::Copy]);
+    assert_eq!(justify(&app), [Justify::Center, Justify::Center]);
+    assert!(!copied(&out), "Cmd+Shift+C doesn't copy");
+    // Cmd+C still copies.
+    let out = frame(&mut app, Modifiers::COMMAND, vec![Event::Copy]);
+    assert!(copied(&out));
+    // While the Type tool edits text, it aligns the paragraph the caret is in.
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 5, "end": 5}));
+    assert!(app.session.tool_wants_text());
+    frame(
+        &mut app,
+        Modifiers::COMMAND | Modifiers::SHIFT,
+        vec![Event::Key { key: Key::R, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | Modifiers::SHIFT }],
+    );
+    assert_eq!(justify(&app), [Justify::Center, Justify::Right]);
+    frame(&mut app, Modifiers::COMMAND | Modifiers::SHIFT, vec![Event::Copy]);
+    assert_eq!(justify(&app), [Justify::Center, Justify::Center]);
+}

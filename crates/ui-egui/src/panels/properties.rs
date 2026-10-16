@@ -153,8 +153,8 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let links = crate::panels::links::ID;
     ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
     ui.horizontal(|ui| {
-        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Relink…"), w).clicked() {
-            crate::panels::links::relink(app, vec![id]);
+        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
+            crate::panels::links::replace(app, vec![id]);
         }
         if widgets::flat_button(ui, tl!("Links"), w).clicked() {
             app.ui.open_panel = Some(links.into());
@@ -200,7 +200,8 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-/// Edit Artboards (the Artboard tool): the active artboard's name, position and size, its preset and
+/// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
+/// it, and the Artboard Options icon; its position and size, its preset and
 /// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602), Move
 /// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
 /// Exit back to the Selection tool (#530).
@@ -212,8 +213,20 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let scale_art = super::artboards::scale_art(app);
     let move_art = super::artboards::move_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
-        // Its name as it is (names are never translated).
-        ui.label(egui::RichText::new(&ab.name).size(13.0).color(Tokens::get(ui.ctx()).text));
+        // The field shows the artboard's name as it is (names are never translated). Typing a new
+        // name and pressing Enter or clicking elsewhere renames the artboard as the Artboards panel's
+        // rename does; pressing Escape or leaving the field empty keeps the old name. A click on
+        // the icon opens the artboard's Artboard Options, as double-clicking the Artboard tool's
+        // button does.
+        ui.horizontal(|ui| {
+            let w = (ui.available_width() - 26.0 - ui.spacing().item_spacing.x).max(80.0);
+            if let Some(name) = widgets::text_field(ui, ("ab", "name"), Some(&ab.name), w, 1).filter(|n| !n.is_empty()) {
+                app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
+            }
+            if widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 26.0).clicked() {
+                app.run("tool.options", json!({"tool": "artboard"})).ok();
+            }
+        });
         let fw = super::field_width(ui);
         egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             let r = ab.rect;
@@ -423,14 +436,14 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
         }
         ui.add_space(6.0);
-        let link = app.session.prefs.constrain_proportions;
+        let link = super::transform::proportional(app, ui);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw) {
                 app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "W:");
-            if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
+            if let Some(v) = widgets::size_field(ui, "tw", Some(b.width()), units, fw) {
                 app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
@@ -439,7 +452,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "H:");
-            if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
+            if let Some(v) = widgets::size_field(ui, "th", Some(b.height()), units, fw) {
                 app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
@@ -820,6 +833,98 @@ mod tests {
         let texts = frame(&mut app, &ctx, vec![]);
         click(&mut app, &ctx, &texts, "Exit");
         assert_eq!(app.session.tool_id(), "selection");
+    }
+
+    /// Typing a name into Edit Artboards' name field and pressing Enter renames the active artboard
+    /// alone, trimmed as the Artboards panel's rename trims it, with one command and one undo step;
+    /// a click elsewhere in the panel renames it too. Pressing Escape or leaving the field empty
+    /// keeps the name and runs no command.
+    #[test]
+    fn edit_artboards_renames_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 1);
+        app.session.doc_mut().unwrap().mark_saved();
+        let before = app.session.doc().unwrap().doc.artboards.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        let key = |key, modifiers| vec![Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }];
+        // Click the field showing Artboard 2's name, select all of it, type `typed`, then send each
+        // frame's events of `end` → the number of commands run.
+        let rename = |app: &mut VectorcraftApp, typed: Vec<Event>, end: Vec<Vec<Event>>| {
+            frame(app, &ctx, vec![]);
+            let texts = frame(app, &ctx, vec![]);
+            let name = app.session.doc().unwrap().doc.artboards[1].name.clone();
+            click(app, &ctx, &texts, &name);
+            frame(app, &ctx, key(egui::Key::A, egui::Modifiers::COMMAND));
+            let commands = app.run_count;
+            frame(app, &ctx, typed);
+            for events in end {
+                frame(app, &ctx, events);
+            }
+            frame(app, &ctx, vec![]);
+            app.run_count.wrapping_sub(commands)
+        };
+        let enter = || vec![key(egui::Key::Enter, egui::Modifiers::NONE)];
+        let text = |s: &str| vec![Event::Text(s.into())];
+        assert_eq!(rename(&mut app, text("Cover"), vec![key(egui::Key::Escape, egui::Modifiers::NONE)]), 0, "Escape");
+        assert_eq!(rename(&mut app, key(egui::Key::Backspace, egui::Modifiers::NONE), enter()), 0, "an empty field");
+        assert_eq!(app.session.doc().unwrap().doc.artboards, before);
+        assert_eq!(rename(&mut app, text(" Cover "), enter()), 1);
+        let mut renamed = before.clone();
+        renamed[1].name = "Cover".into();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, renamed, "Artboard 2 alone is renamed");
+        assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.artboards, before);
+        assert!(!st.is_dirty());
+        // The click elsewhere is a press and release on the panel's "Artboard" heading, outside
+        // the field.
+        let at = frame(&mut app, &ctx, vec![]).iter().find(|(t, _)| t == "Artboard").map(|(_, r)| r.center()).unwrap();
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        assert_eq!(rename(&mut app, text("Back"), vec![vec![Event::PointerMoved(at), b(true)], vec![b(false)]]), 1, "a click elsewhere");
+        renamed[1].name = "Back".into();
+        assert_eq!(app.session.doc().unwrap().doc.artboards, renamed);
+    }
+
+    /// A click on Edit Artboards' Artboard Options icon opens Artboard Options for the active
+    /// artboard, as double-clicking the Artboard tool's button does (`tool.options {tool: "artboard"}`).
+    #[test]
+    fn edit_artboards_opens_the_active_artboards_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 1);
+        app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+        let want = app.ui.dialog.take().unwrap().fields;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        // The icon is the rightmost clickable widget on the name's line.
+        let name = texts.iter().find(|(t, _)| t == "Artboard 2").map(|(_, r)| *r).unwrap();
+        let icon = ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.y_range().contains(name.center().y))
+                .map(|w| w.rect)
+                .max_by(|a, b| a.left().total_cmp(&b.left()))
+                .unwrap()
+                .center()
+        });
+        let commands = app.run_count;
+        let press = |pressed| Event::PointerButton { pos: icon, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(icon), press(true)]);
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.run_count, commands.wrapping_add(1), "one command");
+        let d = app.ui.dialog.take().expect("Artboard Options");
+        assert_eq!((d.kind.as_str(), d.f64("index", 9.0), d.str("name").as_str()), (crate::dialogs::artboard_options::KIND, 1.0, "Artboard 2"));
+        assert_eq!(d.fields, want, "the fields the tool's double-click shows");
+        assert_eq!(app.session.tool_id(), "artboard");
     }
 
     fn artboard_deletion_app(count: usize) -> VectorcraftApp {

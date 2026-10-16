@@ -4,7 +4,7 @@ members = ["crates/*", "apps/*", "xtask"]
 default-members = ["crates/*", "apps/vectorcraft", "apps/vectorcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -33,7 +33,9 @@ vectorcraft-doc = { path = "crates/doc" }
 vectorcraft-pathops = { path = "crates/pathops" }
 vectorcraft-brush = { path = "crates/brush" }
 vectorcraft-trace = { path = "crates/trace" }
-vectorcraft-text = { path = "crates/text" }
+# Without its default `bundled-fonts`: the engine turns them on (its own default feature), so a
+# library crate never forces them on an embedder that supplies its fonts at run time.
+vectorcraft-text = { path = "crates/text", default-features = false }
 vectorcraft-effects = { path = "crates/effects" }
 vectorcraft-three-d = { path = "crates/three-d" }
 vectorcraft-render = { path = "crates/render" }
@@ -71,9 +73,14 @@ wasmi = { version = "2.0.0", default-features = false, features = ["std", "valid
 wat = "1.228"
 
 # rendering / formats
-vello_cpu = { version = "0.2", features = ["f32_pipeline"] }
+# Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
+# vectorcraft-text gives it. The other default features stay.
+vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
-usvg = "0.48"
+# Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
+# SVG import reads `<text>` from the XML itself and never gives usvg a font. A test of the SVG
+# crate turns `text` on.
+usvg = { version = "0.48", default-features = false, features = ["svgz"] }
 # Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
 # unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
 krilla = { version = "0.8", default-features = false, features = ["raster-images"] }

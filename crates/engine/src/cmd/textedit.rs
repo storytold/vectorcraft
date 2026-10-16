@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -86,6 +86,24 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| type_step(s, &json!({"attribute": "size", "by": -f64_or(p, "by", 1.0)}))
         ),
         cmd!(
+            "type.size.increaseByFive",
+            "Increase Font Size by Five Steps",
+            [],
+            Some("Cmd+Alt+Shift+."),
+            "{} type.step {attribute: size, by: 5}: five times the Size/Leading increment (typeSizeIncrement)",
+            has_selection,
+            |s, _| type_step(s, &json!({"attribute": "size", "by": 5.0}))
+        ),
+        cmd!(
+            "type.size.decreaseByFive",
+            "Decrease Font Size by Five Steps",
+            [],
+            Some("Cmd+Alt+Shift+,"),
+            "{} type.step {attribute: size, by: -5}: five times the Size/Leading increment (typeSizeIncrement)",
+            has_selection,
+            |s, _| type_step(s, &json!({"attribute": "size", "by": -5.0}))
+        ),
+        cmd!(
             "type.resetTracking",
             "Reset Tracking and Kerning",
             [],
@@ -93,6 +111,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: [id…]} set tracking to 0 and kerning to Auto (the font's own kerning, which the Character panel shows as 0) in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning of the character before it), else in every selected type object, as one undo step → {ids}",
             has_selection,
             reset_tracking
+        ),
+        cmd!(
+            "type.resetHorizontalScale",
+            "Reset Horizontal Scale",
+            [],
+            Some("Cmd+Shift+X"),
+            "{ids?: [id…]} set the horizontal scale to 100% (as the Character panel shows it, the object's own transform included) in all the text of the type objects in `ids`, else in the text the Type tool has selected (nothing at a caret), else in every selected type object, as one undo step → {ids}",
+            has_selection,
+            reset_horizontal_scale
         ),
         cmd!(
             "text.discardEmpty",
@@ -726,6 +753,26 @@ fn reset_tracking(s: &mut Session, p: &Value) -> Result<Value> {
                         st.tracking = 0.0;
                     }
                 });
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "ids": ranges.iter().map(|(id, ..)| id.0).collect::<Vec<_>>() }))
+}
+
+/// Cmd/Ctrl+Shift+X: horizontal scale 100% (the Character panel's value, which includes the
+/// object's own transform) in the type objects in `ids`, else in the Type tool's selected text,
+/// else in every selected type object. At a caret the command leaves the text as it is.
+fn reset_horizontal_scale(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "type.resetHorizontalScale";
+    let ranges = type_ranges(s, p, C, |_, _| None)?;
+    if !ranges.is_empty() {
+        s.edit("Reset Horizontal Scale", |d, _| {
+            for &(id, a, b, _) in &ranges {
+                let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+                let h_scale = super::typecmd::local_type_value(t, 100.0, (1.0, 10000.0), true, C)?;
+                edit::style_range(&mut t.runs, a, b, |st| st.h_scale = h_scale);
                 refresh_bounds(t);
             }
             Ok(())

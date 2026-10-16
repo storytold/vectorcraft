@@ -1,6 +1,6 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), indents,
 //! space before/after, Hyphenate, Mojikumi Set and Kinsoku Set (with the East Asian options); the panel menu
-//! picks the Single-line or Every-line Composer.
+//! opens Hyphenation… and picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
@@ -46,14 +46,19 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
     Ok(Value::Null)
 }
 
-fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
+fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
+    run_on_paragraphs(app, cmd, p).ok();
+}
+
+/// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result.
+pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
         p["ids"] = json!([id.0]);
         p["start"] = json!(a);
         p["end"] = json!(b);
     }
-    app.run(cmd, p).ok();
+    app.run(cmd, p)
 }
 
 /// Does the paragraph being edited (at the caret), else the selected text's first paragraph, run
@@ -277,8 +282,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), "pa-hide-options", !hidden);
     }
     ui.separator();
-    for l in [tl!("Roman Hanging Punctuation"), tl!("Justification…"), tl!("Hyphenation…")] {
+    for l in [tl!("Roman Hanging Punctuation"), tl!("Justification…")] {
         menu_item(ui, l, false, false);
+    }
+    if menu_item(ui, tl!("Hyphenation…"), has, false)
+        && let Err(e) = app.run("ui.hyphenation", json!({}))
+    {
+        app.status(e);
     }
     // How leading is measured (Japanese layout measures it from em box top to em box top), with
     // the East Asian options.

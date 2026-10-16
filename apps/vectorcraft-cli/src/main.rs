@@ -114,7 +114,8 @@ USAGE:
       Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
       and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
       budget is exceeded, unless the report says the machine is busy. --deep also times work with
-      no budget yet and prints memory use (the working set on Windows).
+      no budget yet and prints memory use (the working set on Windows), with the peak so far on
+      Windows and Linux.
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.

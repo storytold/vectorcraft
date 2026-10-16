@@ -136,7 +136,7 @@ fn the_menus_reach_asset_export() {
     assert_eq!(find("assets.add", "As Single Asset"), Some(vec!["Object".to_string(), "Collect for Export".to_string()]));
     assert_eq!(find("assets.add", "As Multiple Assets"), Some(vec!["Object".to_string(), "Collect for Export".to_string()]));
     let window = entries.iter().find(|e| e.label == "Asset Export").unwrap();
-    assert_eq!(window.params, json!({"panel": crate::panels::asset_export::ID}));
+    assert_eq!(window.params, json!({"panel": crate::panels::asset_export::ID, "toggle": true}));
     app.run("window.panel", window.params.clone()).unwrap();
     assert_eq!(app.ui.open_panel.as_deref(), Some(crate::panels::asset_export::ID));
     app.run("assets.add", json!({"multiple": false})).unwrap();

@@ -1,7 +1,8 @@
 //! The window's own title bar on Windows and Linux, where the window has no OS decorations
 //! ([`VectorcraftApp::custom_titlebar`]): empty space in the app bar drags the window and a
 //! double-click there maximizes it, caption buttons at the far right minimize, maximize/restore and
-//! close, and thin invisible zones along the window's edges resize it.
+//! close, and thin invisible zones along the window's edges resize it. On macOS the app bar sits
+//! under the system's transparent title bar and only its [`drag_area`] is used.
 
 use egui::{CursorIcon, Id, LayerId, Order, PointerButton, Rect, ResizeDirection, Sense, Stroke, Ui, ViewportCommand, pos2, vec2};
 use serde_json::json;
@@ -345,6 +346,21 @@ mod tests {
         let file = file.expect("the File menu title");
         let cmds = w.gesture(&[file, file + vec2(12.0, 4.0), file + vec2(30.0, 8.0)]);
         assert!(!cmds.iter().any(|c| matches!(c, ViewportCommand::StartDrag)), "{cmds:?}");
+    }
+
+    #[test]
+    fn a_double_click_on_the_macos_app_bar_zooms_the_window() {
+        // macOS keeps the system decorations, with the app bar under its transparent title bar
+        // (#1932); Windows and Linux with the system title bar leave it to the OS's bar.
+        let mut w = Win::new(1440.0);
+        w.app.custom_titlebar = false;
+        w.frame(vec![]);
+        let empty = pos2(700.0, 16.0);
+        assert!(w.bar_widgets().iter().all(|r| !r.contains(empty)), "the probe point must be empty bar space");
+        let mut cmds = w.click(empty);
+        cmds.extend(w.click(empty));
+        assert_eq!(cmds.contains(&ViewportCommand::Maximized(true)), cfg!(target_os = "macos"), "{cmds:?}");
+        assert!(!cmds.iter().any(|c| matches!(c, ViewportCommand::Maximized(false))), "{cmds:?}");
     }
 
     #[test]

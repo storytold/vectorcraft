@@ -56,6 +56,9 @@ pub(crate) struct Params {
     /// Lines from this index on all have the same width, so their line numbers are interchangeable
     /// (keeps the number of active breakpoints small).
     pub uniform_from: usize,
+    /// Hyphen Limit: the most consecutive lines that may end with a hyphen before a hyphenation
+    /// point is no longer a break; 0 sets no limit. A soft hyphen stays a break and counts.
+    pub hyphen_limit: usize,
 }
 
 struct Node {
@@ -64,7 +67,9 @@ struct Node {
     line: usize,
     fitness: u8,
     demerits: f64,
-    hyphenated: bool,
+    /// Lines in a row ending with a hyphen up to this break (at most `hyphen_limit`, or 1 with no
+    /// limit); 0 when this break has no hyphen.
+    hyphens: usize,
     prev: Option<usize>,
 }
 
@@ -120,11 +125,14 @@ pub(crate) fn compose(
     all.push(Breakpoint { end: n, hyphen: 0.0 });
     let (adj_demerits, hyphen_penalty) =
         if p.ragged { (ADJ_DEMERITS_RAGGED, HYPHEN_PENALTY_RAGGED) } else { (ADJ_DEMERITS_JUSTIFIED, HYPHEN_PENALTY) };
-    let mut nodes = vec![Node { pos: 0, line: 0, fitness: 1, demerits: 0.0, hyphenated: false, prev: None }];
+    let mut nodes = vec![Node { pos: 0, line: 0, fitness: 1, demerits: 0.0, hyphens: 0, prev: None }];
     let mut active: Vec<usize> = vec![0];
     for bp in &all {
         let last = bp.end == n;
-        let mut best: Vec<(usize, u8, f64, usize)> = vec![]; // (line, fitness, demerits, from)
+        let hyphen = bp.hyphen > 0.0;
+        // `automatic` is true for a hyphenation point and false for a soft hyphen typed in the text.
+        let automatic = hyphen && !bp.end.checked_sub(1).and_then(|k| g.get(k)).is_some_and(SGlyph::is_soft_hyphen);
+        let mut best: Vec<(usize, u8, usize, f64, usize)> = vec![]; // (line, fitness, hyphens, demerits, from)
         let mut keep = Vec::with_capacity(active.len());
         for &ai in &active {
             let Some(a) = nodes.get(ai) else { continue };
@@ -164,14 +172,17 @@ pub(crate) fn compose(
                 continue;
             }
             keep.push(ai);
+            if automatic && p.hyphen_limit > 0 && a.hyphens >= p.hyphen_limit {
+                continue;
+            }
             let free_last = last && (p.ragged || !p.justify_last);
             if ratio > p.tolerance && !(last && (p.ragged || (ratio.is_infinite() && p.justify_last))) {
                 continue;
             }
             let badness = if ratio.is_finite() { (100.0 * ratio.abs().powi(3)).min(10_000.0) } else { 10_000.0 };
-            let penalty = if bp.hyphen > 0.0 { hyphen_penalty } else { 0.0 };
+            let penalty = if hyphen { hyphen_penalty } else { 0.0 };
             let mut d = (LINE_PENALTY + badness).powi(2) + penalty * penalty;
-            if bp.hyphen > 0.0 && a.hyphenated {
+            if hyphen && a.hyphens > 0 {
                 d += DOUBLE_HYPHEN_DEMERITS;
             }
             // A ragged last line's length says nothing about the rag: it keeps its neighbour's class.
@@ -181,15 +192,21 @@ pub(crate) fn compose(
             }
             let total = a.demerits + d;
             let line = (a.line + 1).min(p.uniform_from);
-            match best.iter_mut().find(|b| b.0 == line && b.1 == fit) {
-                Some(b) if b.2 <= total => {}
-                Some(b) => *b = (line, fit, total, ai),
-                None => best.push((line, fit, total, ai)),
+            // With a limit, breaks reached with different runs of hyphenated lines stay apart.
+            let hyphens = match (hyphen, p.hyphen_limit) {
+                (false, _) => 0,
+                (true, 0) => 1,
+                (true, limit) => (a.hyphens + 1).min(limit),
+            };
+            match best.iter_mut().find(|b| b.0 == line && b.1 == fit && b.2 == hyphens) {
+                Some(b) if b.3 <= total => {}
+                Some(b) => *b = (line, fit, hyphens, total, ai),
+                None => best.push((line, fit, hyphens, total, ai)),
             }
         }
         active = keep;
-        for (line, fitness, demerits, from) in best {
-            nodes.push(Node { pos: bp.end, line, fitness, demerits, hyphenated: bp.hyphen > 0.0, prev: Some(from) });
+        for (line, fitness, hyphens, demerits, from) in best {
+            nodes.push(Node { pos: bp.end, line, fitness, demerits, hyphens, prev: Some(from) });
             active.push(nodes.len() - 1);
         }
         if active.is_empty() || active.len() > MAX_ACTIVE {
@@ -202,7 +219,7 @@ pub(crate) fn compose(
     while let Some(i) = cur {
         let nd = nodes.get(i)?;
         if nd.prev.is_some() {
-            out.push((nd.pos, nd.hyphenated));
+            out.push((nd.pos, nd.hyphens > 0));
         }
         cur = nd.prev;
         if out.len() > n {

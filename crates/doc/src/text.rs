@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
-use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeLayer};
+use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {
@@ -84,6 +84,10 @@ pub struct CharStyle {
     pub stroke_miter_limit: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke_dash: Option<Dash>,
+    /// Align Stroke of the character stroke (Stroke panel, with type selected): centred on the
+    /// glyph outlines, inside or outside them, as for object strokes; the type stays live.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub stroke_align: StrokeAlign,
     /// Superscript or subscript (Character panel).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub position: CharPosition,
@@ -249,6 +253,7 @@ impl Default for CharStyle {
             stroke_join: LineJoin::Miter,
             stroke_miter_limit: 10.0,
             stroke_dash: None,
+            stroke_align: StrokeAlign::Center,
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
             proportional_metrics: false,
@@ -266,8 +271,9 @@ impl CharStyle {
     pub fn has_stroke(&self) -> bool {
         !self.stroke.is_none() && self.stroke_width > 0.0
     }
-    /// The character stroke as a stroke layer (paint, weight, cap, join, miter limit, dashes and
-    /// overprint), so type strokes share the object strokes' geometry, rendering and export.
+    /// The character stroke as a stroke layer (paint, weight, cap, join, miter limit, dashes,
+    /// alignment and overprint), so type strokes share the object strokes' geometry, rendering
+    /// and export.
     pub fn stroke_layer(&self) -> StrokeLayer {
         StrokeLayer {
             overprint: self.overprint_stroke,
@@ -275,11 +281,13 @@ impl CharStyle {
             join: self.stroke_join,
             miter_limit: self.stroke_miter_limit,
             dash: self.stroke_dash.clone(),
+            align: self.stroke_align,
             ..StrokeLayer::new(self.stroke.clone(), self.stroke_width)
         }
     }
-    /// Take the paint, weight, cap, join, miter limit and dashes of `st` as the character stroke
-    /// (the options characters have no use for, such as alignment and arrowheads, are dropped).
+    /// Take the paint, weight, cap, join, miter limit, dashes and alignment of `st` as the
+    /// character stroke (the options characters have no use for, such as arrowheads and width
+    /// profiles, are dropped).
     pub fn set_stroke_layer(&mut self, st: &StrokeLayer) {
         self.stroke = st.paint.clone();
         self.stroke_width = st.width;
@@ -287,6 +295,19 @@ impl CharStyle {
         self.stroke_join = st.join;
         self.stroke_miter_limit = st.miter_limit;
         self.stroke_dash = st.dash.clone();
+        self.stroke_align = st.align;
+    }
+    /// How far the character stroke paints past the glyph outlines (text space): half the weight
+    /// centred, the whole weight outside, nothing inside (miter spikes aside).
+    pub fn stroke_outset(&self) -> f64 {
+        if !self.has_stroke() {
+            return 0.0;
+        }
+        match self.stroke_align {
+            StrokeAlign::Center => self.stroke_width / 2.0,
+            StrokeAlign::Outside => self.stroke_width,
+            StrokeAlign::Inside => 0.0,
+        }
     }
     /// The character fill as a fill layer, overprinting as the characters do.
     fn fill_layer(&self) -> FillLayer {
@@ -360,6 +381,37 @@ impl Composer {
     }
 }
 
+/// A paragraph's hyphenation options (Paragraph panel menu › Hyphenation…): which words automatic
+/// hyphenation may break, where, and on how many lines in a row. Saved only when they differ from
+/// the defaults: words longer than 5 letters, 3 letters on each side of the hyphen, no hyphen
+/// limit, no hyphenation zone, and capitalized words hyphenated.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HyphenationOptions {
+    /// Words Longer Than: only words with more letters than this are hyphenated.
+    pub words_longer_than: u32,
+    /// After First: the fewest letters a word keeps before the hyphen.
+    pub after_first: u32,
+    /// Before Last: the fewest letters a word keeps after the hyphen.
+    pub before_last: u32,
+    /// Hyphen Limit: the most consecutive lines that automatic hyphenation may end with a hyphen;
+    /// 0 sets no limit.
+    pub hyphen_limit: u32,
+    /// Hyphenation Zone (pt): with the Single-line Composer, a line whose text before the next
+    /// word already ends within this distance of its right edge breaks before that word instead
+    /// of hyphenating it. 0 allows every hyphenation.
+    pub zone: f64,
+    /// Hyphenate Capitalized Words: when it is off, words that start with a capital letter are not
+    /// hyphenated. Words in capitals only are never hyphenated.
+    pub capitalized: bool,
+}
+
+impl Default for HyphenationOptions {
+    fn default() -> Self {
+        Self { words_longer_than: 5, after_first: 3, before_last: 3, hyphen_limit: 0, zone: 0.0, capitalized: true }
+    }
+}
+
 /// Paragraph attributes (the Paragraph panel).
 ///
 /// Saved through [`ParaStyleFile`], which keeps files with text openable by builds from before
@@ -374,6 +426,8 @@ pub struct ParaStyle {
     pub space_before: f64,
     pub space_after: f64,
     pub hyphenate: bool,
+    /// The limits automatic hyphenation keeps to (Paragraph panel menu › Hyphenation…).
+    pub hyphenation: HyphenationOptions,
     /// Line breaking: Single-line or Every-line Composer.
     pub composer: Composer,
     /// Tab stops (Tabs panel), sorted by position.
@@ -421,6 +475,8 @@ struct ParaStyleFile {
     space_after: f64,
     #[serde(default)]
     hyphenate: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    hyphenation: HyphenationOptions,
     #[serde(default, skip_serializing_if = "Composer::is_default")]
     composer: Composer,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -454,6 +510,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            hyphenation,
             composer,
             tabs,
             style_name,
@@ -473,6 +530,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            hyphenation,
             composer,
             tabs,
             style_name,
@@ -495,6 +553,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            hyphenation,
             composer,
             tabs,
             style_name,
@@ -513,6 +572,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            hyphenation,
             composer,
             tabs,
             style_name,

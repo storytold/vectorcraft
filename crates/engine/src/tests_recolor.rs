@@ -316,3 +316,54 @@ fn cmyk_object_reads_one_scale_for_every_component() {
     assert!(close(k(json!({"c": 0.1, "m": 0.5, "y": 0.9, "k": 0.2})), [0.1, 0.5, 0.9, 0.2]));
     assert!(close(k(json!({"c": 0, "m": 1, "y": 1, "k": 0})), [0.0, 1.0, 1.0, 0.0]));
 }
+
+/// Recolouring to a library's spot colour (Limit to Library) applies the spot colour itself, linked
+/// to it (tints keep their tint), and adds it to the document's swatches; a process swatch of the
+/// library gives its colour in its own model.
+#[test]
+fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
+    let mut s = session();
+    // A library with a Lab spot colour and a CMYK process colour (made here, then removed).
+    run(&mut s, "swatch.new", json!({"name": "Ink 101", "color": {"l": 50.0, "a": 70.0, "b": 40.0}, "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 0.6, "m": 0.0, "y": 1.0, "k": 0.1}}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink 101", "Leaf"], "name": "Inks"}))["data"].as_str().unwrap().to_string();
+    let lib = run(&mut s, "swatch.library.load", json!({"data": data, "name": "inks.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Ink 101", "Leaf"]}));
+    let red = rect(&mut s, json!("#e02010"));
+    let pink = rect(&mut s, json!("#f09088"));
+    let green = rect(&mut s, json!("#20c040"));
+    select_all(&mut s);
+    let map = json!([
+        {"from": ["rgb 224 32 16", "rgb 240 144 136"], "to": "#e02010"},
+        {"from": ["rgb 32 192 64"], "to": "#20c040"},
+    ]);
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "limitTo": lib}));
+    assert_eq!(r["swatches"], json!(["Ink 101", "Leaf"]), "{r}");
+    let d = &s.doc().unwrap().doc;
+    let ink = d.swatch("Ink 101").unwrap();
+    assert!(ink.spot && ink.global, "the spot colour joined the document's swatches");
+    let paint = |id: NodeId| d.node(id).unwrap().appearance.fill_paint();
+    match paint(red) {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => {
+            assert_eq!(swatch.as_deref(), Some("Ink 101"), "linked to the spot colour");
+            assert_eq!(tint, 1.0);
+            assert_eq!(color, Color::lab(50.0, 70.0, 40.0), "in the spot colour's own model");
+        }
+        p => panic!("{p:?}"),
+    }
+    match paint(pink) {
+        vectorcraft_color::Paint::Solid { swatch, tint, .. } => {
+            assert_eq!(swatch.as_deref(), Some("Ink 101"));
+            assert!(tint > 0.1 && tint < 0.9, "a tint of the spot colour: {tint}");
+        }
+        p => panic!("{p:?}"),
+    }
+    assert_eq!(paint(green), vectorcraft_color::Paint::solid(Color::cmyk(0.6, 0.0, 1.0, 0.1)), "a process swatch's colour, in CMYK");
+    // Again: the document's swatch is used, not added twice.
+    run(&mut s, "edit.undo", json!({}));
+    select_all(&mut s);
+    run(&mut s, "swatch.library.add", json!({"library": lib, "names": ["Ink 101"]}));
+    select_all(&mut s);
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "limitTo": lib}));
+    assert_eq!(r["swatches"], json!(["Leaf"]));
+}

@@ -157,6 +157,38 @@ pub fn thumb_to_doc(region: DRect, thumb: Rect, p: egui::Pos2) -> Point {
     Point::new(region.x0 + (p.x as f64 - ox) / s, region.y0 + (p.y as f64 - oy) / s)
 }
 
+/// The red view box in the thumbnail: the corners of the canvas `canvas` showing view `v`, mapped
+/// into the document (turned with the view) and then into the thumbnail, cut to the thumbnail
+/// grown by a point. Fewer than three points when the view is outside the thumbnail.
+fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View) -> Vec<egui::Pos2> {
+    let xf = crate::canvas::Xf::new(canvas, v);
+    let mut pts: Vec<egui::Pos2> = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()]
+        .iter()
+        .map(|c| doc_to_thumb(region, thumb, xf.to_doc(*c)))
+        .collect();
+    let b = thumb.expand(1.0);
+    // One edge of `b` at a time: how far a point is inside it (negative outside).
+    let edges: [fn(egui::Pos2, Rect) -> f32; 4] = [|p, b| p.x - b.left(), |p, b| b.right() - p.x, |p, b| p.y - b.top(), |p, b| b.bottom() - p.y];
+    for inside in edges {
+        let Some(&last) = pts.last() else { break };
+        let mut out = vec![];
+        let mut prev = last;
+        for &p in &pts {
+            let (s0, s1) = (inside(prev, b), inside(p, b));
+            if (s0 >= 0.0) != (s1 >= 0.0) {
+                // Where the side from `prev` to `p` crosses the edge.
+                out.push(prev + (p - prev) * (s0 / (s0 - s1)));
+            }
+            if s1 >= 0.0 {
+                out.push(p);
+            }
+            prev = p;
+        }
+        pts = out;
+    }
+    pts
+}
+
 /// Slider position (0..1) ↔ zoom percent on Illustrator's log range 3.13 %–64 000 %.
 pub fn zoom_to_slider(z: f64) -> f64 {
     ((z.clamp(3.13, 64000.0)).ln() - 3.13f64.ln()) / (64000f64.ln() - 3.13f64.ln())
@@ -203,15 +235,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let br = doc_to_thumb(region, thumb, Point::new(tex_region.x1, tex_region.y1));
         ui.painter().image(tex.id(), Rect::from_min_max(tl, br), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     }
-    // The view box.
+    // The view box: the canvas's corners in the document, turned with the view, cut to the thumbnail.
     let view = app.view().copied();
     if let (Some(v), Some(cr)) = (view, app.canvas_rect) {
-        let hw = cr.width() as f64 / 2.0 / v.zoom;
-        let hh = cr.height() as f64 / 2.0 / v.zoom;
-        let a = doc_to_thumb(region, thumb, Point::new(v.center.x - hw, v.center.y - hh));
-        let b = doc_to_thumb(region, thumb, Point::new(v.center.x + hw, v.center.y + hh));
-        let vr = Rect::from_min_max(a, b).intersect(thumb.expand(1.0));
-        ui.painter().with_clip_rect(thumb).rect_stroke(vr, 0.0, Stroke::new(1.5, Color32::from_rgb(0xff, 0x30, 0x30)), StrokeKind::Middle);
+        let box_points = view_box(region, thumb, cr, &v);
+        if box_points.len() > 2 {
+            ui.painter().with_clip_rect(thumb).add(egui::Shape::closed_line(box_points, Stroke::new(1.5, Color32::from_rgb(0xff, 0x30, 0x30))));
+        }
         if (resp.dragged() || resp.clicked())
             && let Some(p) = resp.interact_pointer_pos()
         {
@@ -267,6 +297,48 @@ mod tests {
         assert!((p.x - 60.0).abs() < 1e-3 && (p.y - 60.0).abs() < 1e-3);
         let q = thumb_to_doc(region, thumb, p);
         assert!((q.x - 100.0).abs() < 1e-6 && (q.y - 50.0).abs() < 1e-6);
+    }
+
+    /// In a view turned 90° the red view box outlines what the canvas shows: the canvas's corners
+    /// mapped into the document and then into the thumbnail.
+    #[test]
+    fn the_view_box_turns_with_the_view() {
+        use vectorcraft_engine::Session;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        app.canvas_rect = Some(canvas);
+        app.run("view.setZoom", json!({"zoom": 400, "center": [200, 150]})).unwrap();
+        app.run("view.rotate", json!({"angle": 90})).unwrap();
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        // The thumbnail is the rectangle filled with the pasteboard color.
+        let pasteboard = Tokens::get(&ctx).pasteboard;
+        let thumb = out
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == pasteboard => Some(r.rect),
+                _ => None,
+            })
+            .expect("the thumbnail");
+        let red = egui::epaint::ColorMode::Solid(Color32::from_rgb(0xff, 0x30, 0x30));
+        let drawn: Vec<Vec<egui::Pos2>> = out
+            .shapes
+            .into_iter()
+            .filter_map(|c| match c.shape {
+                egui::Shape::Path(p) if p.closed && p.stroke.color == red => Some(p.points),
+                _ => None,
+            })
+            .collect();
+        let [points] = &drawn[..] else { panic!("one view box: {drawn:?}") };
+        let region = CACHE.with(|c| c.borrow().region.unwrap().1);
+        let xf = crate::canvas::Xf::new(canvas, app.view().unwrap());
+        let want =
+            [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| doc_to_thumb(region, thumb, xf.to_doc(c)));
+        assert_eq!(points.len(), 4, "{points:?}");
+        assert!(points.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "{points:?} is not {want:?}");
     }
 
     #[test]

@@ -46,7 +46,6 @@ pub fn set_collapsed(app: &mut VectorcraftApp, collapsed: bool) {
 pub(crate) fn collapse_header(ui: &mut Ui, collapsed: bool) -> bool {
     let t = Tokens::get(ui.ctx());
     let (hdr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER), Sense::click());
-    ui.painter().rect_filled(hdr, 0.0, t.tab_strip);
     let arrow = Rect::from_min_size(hdr.right_top() + vec2(-16.0, 1.0), vec2(12.0, 12.0));
     if resp.hovered() {
         ui.painter().rect_filled(arrow, CornerRadius::same(2), t.hover);
@@ -90,22 +89,27 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .resizable(true)
             .default_size(DOCK_WIDTH)
             .size_range(230.0..=520.0)
-            .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.5, t.border)))
+            .frame(egui::Frame::NONE)
             .show(ui, |ui| {
-                if collapse_header(ui, false) {
-                    toggle(app, true);
-                }
-                if tab_strip(app, ui, active) {
-                    // It floats from this frame on.
-                    return;
-                }
-                egui::Frame::NONE.inner_margin(egui::Margin { left: 12, right: 10, top: 10, bottom: 8 }).show(ui, |ui| match active {
-                    DockTab::Properties => {
-                        egui::ScrollArea::vertical().id_salt("props").auto_shrink([false, false]).show(ui, |ui| panels::properties::show(app, ui));
+                crate::theme::card(ui, &t, egui::Margin { left: 0, right: 6, top: 6, bottom: 6 }, |ui| {
+                    if collapse_header(ui, false) {
+                        toggle(app, true);
                     }
-                    DockTab::Layers => panels::layers::show(app, ui),
-                    DockTab::Libraries => panels::libraries(app, ui),
-                });
+                    if tab_strip(app, ui, active) {
+                        // It floats from this frame on.
+                        return;
+                    }
+                    egui::Frame::NONE.inner_margin(egui::Margin { left: 12, right: 10, top: 10, bottom: 8 }).show(ui, |ui| match active {
+                        DockTab::Properties => {
+                            egui::ScrollArea::vertical()
+                                .id_salt("props")
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| panels::properties::show(app, ui));
+                        }
+                        DockTab::Layers => panels::layers::show(app, ui),
+                        DockTab::Libraries => panels::libraries(app, ui),
+                    });
+                })
             })
             .response
             .rect
@@ -114,16 +118,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // collapsed group's panels head it, under the « that expands them again. Floating panels leave
     // it.
     let collapsed = app.ui.dock_collapsed && shown.is_some();
-    let column = egui::Panel::right("icon_column")
-        .resizable(false)
-        .exact_size(ICON_COL)
-        .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.5, t.border)))
-        .show(ui, |ui| {
+    let column = egui::Panel::right("icon_column").resizable(false).exact_size(ICON_COL).frame(egui::Frame::NONE).show(ui, |ui| {
+        crate::theme::card(ui, &t, egui::Margin { left: 3, right: 3, top: 6, bottom: 6 }, |ui| {
             let bounds = ui.max_rect();
             if collapsed && collapse_header(ui, true) {
                 toggle(app, false);
             }
-            egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 6)).show(ui, |ui| {
+            egui::Frame::NONE.inner_margin(egui::Margin::symmetric(1, 4)).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 // The icons scroll in a window too short for them.
                 widgets::strip_scroll(ui, "icon_column", |ui| {
@@ -154,7 +155,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 });
             });
-        });
+        })
+    });
     let column = column.response.rect;
     let dock = group.map_or(column, |g| g.union(column));
     // Floating sets docked as columns, left of the icon column.
@@ -173,8 +175,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn tab_strip(app: &mut VectorcraftApp, ui: &mut Ui, active: DockTab) -> bool {
     let t = Tokens::get(ui.ctx());
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 33.0), Sense::hover());
-    ui.painter().rect_filled(strip, 0.0, t.tab_strip);
-    ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
+    ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.divider));
     let outside = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| !strip.contains(p));
     // What a drag out of the strip floats: the panels, the one shown, where its tab began.
     let mut tear: Option<(Vec<&'static str>, &'static str, f32)> = None;
@@ -264,12 +265,10 @@ pub(crate) fn panel_tabs(
             .focus_stroke(Stroke::new(1.0, t.accent))
             .show_at(ui, rect, |ui, _| {
                 if i == selected {
-                    ui.painter().rect_filled(rect, 0.0, t.panel);
+                    ui.painter().rect_filled(rect.shrink2(vec2(3.0, 5.0)), 6.0, t.button);
                 }
                 ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).galley(rect.center() - galley.size() / 2.0, galley, t.text);
-                if separators {
-                    ui.painter().line_segment([rect.right_top(), rect.right_bottom()], Stroke::new(1.0, t.border));
-                }
+                let _ = separators;
             });
         out.responses.push((i, if shrunk { resp.on_hover_text(*label) } else { resp }));
         out.right = rect.right();

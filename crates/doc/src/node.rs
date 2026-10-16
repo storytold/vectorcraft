@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::BlendMode;
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_geom::corners::cut_corners;
 use vectorcraft_geom::shapes::{self, CornerKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
@@ -486,6 +486,12 @@ pub enum NodeKind {
     /// A placed document: an artboard of another VectorCraft file, linked and locked (see
     /// [`crate::placed_document`]).
     PlacedDocument(Box<crate::placed_document::PlacedDocument>),
+    /// Object › Intertwine: the objects keep their own stacking order, except where one of them
+    /// is drawn over the others: the area [`NodeExtras::intertwine`] of that member (see
+    /// [`crate::intertwine`]).
+    Intertwine {
+        children: Vec<Arc<Node>>,
+    },
 }
 
 fn yes() -> bool {
@@ -561,6 +567,9 @@ pub struct NodeExtras {
     /// Dimension object: the live measurement it draws; its ordinary group children hold its
     /// exportable appearance (Object › Dimensions, the Dimension tool).
     pub dimension: Option<Box<crate::dimension::Dimension>>,
+    /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
+    /// filled non-zero) where this object is drawn over the group's other members.
+    pub intertwine: Option<Box<PathData>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -577,6 +586,7 @@ static NO_EXTRAS: NodeExtras = NodeExtras {
     slice: None,
     perspective: None,
     dimension: None,
+    intertwine: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
@@ -709,6 +719,7 @@ impl Serialize for Node {
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
             e.dimension.is_none(),
+            e.intertwine.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -745,6 +756,7 @@ impl Serialize for Node {
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
+        field!("intertwine", &e.intertwine);
         st.end()
     }
 }
@@ -800,6 +812,8 @@ struct NodeWire {
     perspective: Option<Box<crate::PerspectiveAttachment>>,
     #[serde(default)]
     dimension: Option<Box<crate::dimension::Dimension>>,
+    #[serde(default)]
+    intertwine: Option<Box<PathData>>,
 }
 
 impl From<NodeWire> for Node {
@@ -817,6 +831,7 @@ impl From<NodeWire> for Node {
             slice: w.slice,
             perspective: w.perspective,
             dimension: w.dimension,
+            intertwine: w.intertwine,
         };
         Node {
             id: w.id,
@@ -861,6 +876,38 @@ impl OpacityMask {
     }
 }
 
+/// Every paint of `n` (and its children) white, opacities kept: an alpha mask's art as an opacity
+/// mask's, whose luminance over the black outside the art is then the art's alpha.
+pub fn whiten(n: &mut Node) {
+    let white = |p: &mut Paint| match p {
+        Paint::Solid { color, swatch, tint } => {
+            (*color, *swatch, *tint) = (Color::WHITE, None, 1.0);
+        }
+        Paint::Gradient(g) => {
+            for s in &mut g.gradient.stops {
+                (s.color, s.swatch, s.tint) = (Color::WHITE, None, 1.0);
+            }
+        }
+        Paint::None | Paint::Pattern { .. } => {}
+    };
+    for item in &mut n.appearance.items {
+        white(item.paint_mut());
+    }
+    match &mut n.kind {
+        NodeKind::Mesh(m) => m.points.iter_mut().for_each(|p| p.color = Color::WHITE),
+        NodeKind::Text(t) => t.runs.iter_mut().for_each(|r| {
+            white(&mut r.style.fill);
+            white(&mut r.style.stroke);
+        }),
+        _ => {}
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch {
+            whiten(Arc::make_mut(c));
+        }
+    }
+}
+
 impl Node {
     pub fn new(id: NodeId, kind: NodeKind) -> Self {
         Self {
@@ -902,7 +949,8 @@ impl Node {
             | NodeKind::Compound { children, .. }
             | NodeKind::Blend { children, .. }
             | NodeKind::Envelope { content: children, .. }
-            | NodeKind::Repeat(RepeatSpec { source: children, .. }) => Some(children),
+            | NodeKind::Repeat(RepeatSpec { source: children, .. })
+            | NodeKind::Intertwine { children } => Some(children),
             _ => None,
         }
     }
@@ -913,7 +961,8 @@ impl Node {
             | NodeKind::Compound { children, .. }
             | NodeKind::Blend { children, .. }
             | NodeKind::Envelope { content: children, .. }
-            | NodeKind::Repeat(RepeatSpec { source: children, .. }) => Some(children),
+            | NodeKind::Repeat(RepeatSpec { source: children, .. })
+            | NodeKind::Intertwine { children } => Some(children),
             _ => None,
         }
     }
@@ -981,6 +1030,7 @@ impl Node {
             NodeKind::Mesh(_) => "Mesh",
             NodeKind::Repeat(r) => r.kind.label(),
             NodeKind::PlacedDocument(_) => "Placed Document",
+            NodeKind::Intertwine { .. } => "Intertwine",
         }
     }
     /// Name shown in the Layers panel: explicit name or `<Kind>`.
@@ -1092,6 +1142,8 @@ impl Node {
             // copies out by the source's bounds measured without the document.
             NodeKind::Repeat(r) => r.copies_bounds(union(&r.source)?),
             NodeKind::PlacedDocument(p) => Some(p.bounds()),
+            // The members drawn over the others are drawn where they are.
+            NodeKind::Intertwine { children } => union(children),
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
@@ -1126,6 +1178,7 @@ impl Node {
                     clip.geometric(symbols)
                 }
             }
+            NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))),
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
                 // The container's own strokes paint around its members.
                 let o = self.appearance.outset();
@@ -1163,6 +1216,13 @@ impl Node {
                 };
                 let o = self.appearance.outset() + symbols.map_or(0.0, |s| s.brush_pad(symbol));
                 self.projected(Some(b)).map(|b| b.inflate(o, o))
+            }
+            NodeKind::Text(t) => {
+                // The characters' strokes paint around the glyphs, scaled with the type.
+                let k = Scaling::factor(t.xf).unwrap_or(1.0);
+                let chars = t.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k;
+                let o = self.appearance.outset().max(chars);
+                self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             _ => {
                 let o = self.appearance.outset();
@@ -1221,7 +1281,10 @@ impl Node {
                     }
                 }
             }
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            NodeKind::Layer { children, .. }
+            | NodeKind::Group { children, .. }
+            | NodeKind::Compound { children, .. }
+            | NodeKind::Intertwine { children } => {
                 for c in children.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }
@@ -1274,6 +1337,10 @@ impl Node {
             && m.linked
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
+        }
+        // The area where an Intertwine member is drawn over the others moves with it.
+        if let Some(area) = self.extras_if_any().and_then(|e| e.intertwine.as_mut()) {
+            area.transform(a);
         }
     }
     /// Visit this node and all descendants depth first (paint order).
@@ -1403,7 +1470,7 @@ impl Node {
                 let frame = shapes::rectangle(p.natural()).transformed(p.xf);
                 out.push((frame.to_bezpath(), FillRule::NonZero));
             }
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
                 crate::live::expand_deep(self, text).push_clip_shapes(text, out);
             }
         }
@@ -1818,6 +1885,9 @@ mod kind_de {
         Mesh(GradientMesh),
         Repeat(RepeatSpec),
         PlacedDocument(Box<crate::placed_document::PlacedDocument>),
+        Intertwine {
+            children: Vec<Arc<Node>>,
+        },
     }
 
     impl<'de> Deserialize<'de> for NodeKind {
@@ -2271,6 +2341,25 @@ mod tests {
         let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
         assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+    }
+
+    /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
+    /// weight centred, the whole weight outside, nothing inside; scaled with the type.
+    #[test]
+    fn type_visual_bounds_grow_with_the_character_stroke() {
+        use crate::appearance::StrokeAlign;
+        use crate::text::{CharStyle, TextObject};
+        let style = CharStyle { stroke: vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), stroke_width: 4.0, ..Default::default() };
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(0.0, 0.0), "Ab", style);
+        t.xf = Affine::scale(2.0) * t.xf;
+        let node = |t: &TextObject| Node::new(NodeId(1), NodeKind::Text(Box::new(t.clone())));
+        let g = node(&t).geometric_bounds().unwrap();
+        for (align, grow) in [(StrokeAlign::Center, 4.0), (StrokeAlign::Outside, 8.0), (StrokeAlign::Inside, 0.0)] {
+            t.runs[0].style.stroke_align = align;
+            assert_eq!(node(&t).visual_bounds(), Some(g.inflate(grow, grow)), "{align:?}");
+        }
+        t.runs[0].style.stroke = vectorcraft_color::Paint::None;
+        assert_eq!(node(&t).visual_bounds(), Some(g), "no stroke, no growth");
     }
 
     /// A group holding a path, a compound, an image and a nested group, as a file writes it.

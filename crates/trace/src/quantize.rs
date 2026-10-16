@@ -14,7 +14,8 @@ pub struct Quantized {
     pub palette: Vec<[u8; 3]>,
 }
 
-fn luma(p: [u8; 4]) -> u8 {
+/// A pixel's gray (Rec. 601 luma): what Grayscale traces it as.
+pub(crate) fn luma(p: [u8; 4]) -> u8 {
     ((p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114 + 500) / 1000) as u8
 }
 
@@ -686,83 +687,96 @@ fn refine(used: &[Used], mut centers: Vec<[f64; 3]>) -> Vec<[f64; 3]> {
     centers
 }
 
-/// Merge 4-connected same-label components smaller than `min_area` pixels into their most common
-/// neighbouring label. Transparent pixels are never relabelled.
-///
-/// A pass can merge a speck into a small region that it merges away later, leaving the speck behind
-/// as a new island of that region's old label (#819: more noise removal gave more paths). Passes
-/// repeat until one changes nothing: each merge joins two components, so they always end.
+/// Merge whole 4-connected regions, smallest first, into their most common neighbouring label.
+/// The merge order does not depend on `min_area`: a higher threshold continues the same sequence
+/// instead of splitting a region already merged at a lower threshold. Transparency is a barrier.
 pub fn denoise(labels: &mut [u16], w: usize, h: usize, min_area: usize) {
-    if min_area <= 1 || w == 0 || h == 0 || labels.len() < w.saturating_mul(h) {
+    use std::cmp::Reverse;
+    use std::collections::{BTreeMap, BinaryHeap};
+
+    if min_area <= 1 || w == 0 || h == 0 || w.checked_mul(h) != Some(labels.len()) {
         return;
     }
-    // A backstop only: real images settle in a few passes.
-    const MAX_PASSES: usize = 64;
-    for _ in 0..MAX_PASSES {
-        if !denoise_pass(labels, w, h, min_area) {
-            break;
-        }
+    struct Region {
+        label: u16,
+        pixels: Vec<usize>,
     }
-}
-
-/// One [`denoise`] pass over every component; true when it relabelled any.
-fn denoise_pass(labels: &mut [u16], w: usize, h: usize, min_area: usize) -> bool {
-    let mut changed = false;
-    let mut seen = vec![false; w * h];
-    let mut stack: Vec<usize> = Vec::new();
-    let mut comp: Vec<usize> = Vec::new();
-    let mut neigh: Vec<(u16, u32)> = Vec::new();
-    for start in 0..w * h {
-        if seen[start] || labels[start] == TRANSPARENT {
+    // Region membership is kept current after every merge. In particular, no stale `seen`
+    // flags can exclude previously recoloured pixels from a subsequent connected component.
+    let mut at = vec![usize::MAX; labels.len()];
+    let mut regions: Vec<Region> = Vec::new();
+    let neighbours = |i: usize| {
+        let (x, y) = (i % w, i / w);
+        [(x > 0).then(|| i - 1), (x + 1 < w).then(|| i + 1), (y > 0).then(|| i - w), (y + 1 < h).then(|| i + w)]
+    };
+    for start in 0..labels.len() {
+        if at[start] != usize::MAX || labels[start] == TRANSPARENT {
             continue;
         }
-        let l = labels[start];
-        comp.clear();
-        neigh.clear();
-        stack.push(start);
-        seen[start] = true;
-        let mut small = true;
-        while let Some(i) = stack.pop() {
-            if small {
-                comp.push(i);
-                if comp.len() >= min_area {
-                    small = false;
+        let id = regions.len();
+        let label = labels[start];
+        let mut pixels = vec![start];
+        at[start] = id;
+        let mut cursor = 0;
+        while let Some(&i) = pixels.get(cursor) {
+            for j in neighbours(i).into_iter().flatten() {
+                if at[j] == usize::MAX && labels[j] == label {
+                    at[j] = id;
+                    pixels.push(j);
                 }
             }
-            let (x, y) = (i % w, i / w);
-            let mut visit = |j: usize| {
-                let lj = labels[j];
-                if lj == l {
-                    if !seen[j] {
-                        seen[j] = true;
-                        stack.push(j);
-                    }
-                } else if lj != TRANSPARENT {
-                    match neigh.iter_mut().find(|(n, _)| *n == lj) {
-                        Some(e) => e.1 += 1,
-                        None => neigh.push((lj, 1)),
-                    }
+            cursor += 1;
+        }
+        regions.push(Region { label, pixels });
+    }
+    let mut pending: BinaryHeap<_> = regions.iter().enumerate().map(|(id, r)| Reverse((r.pixels.len(), id))).collect();
+    while let Some(Reverse((area, id))) = pending.pop() {
+        if area >= min_area {
+            break;
+        }
+        if regions[id].pixels.len() != area {
+            continue; // absorbed region or an old heap entry for a region that grew
+        }
+        let mut borders: BTreeMap<usize, usize> = BTreeMap::new();
+        for &i in &regions[id].pixels {
+            for j in neighbours(i).into_iter().flatten() {
+                let other = at[j];
+                if other != id && other != usize::MAX {
+                    *borders.entry(other).or_default() += 1;
                 }
-            };
-            if x > 0 {
-                visit(i - 1);
-            }
-            if x + 1 < w {
-                visit(i + 1);
-            }
-            if y > 0 {
-                visit(i - w);
-            }
-            if y + 1 < h {
-                visit(i + w);
             }
         }
-        if small && let Some(&(to, _)) = neigh.iter().max_by_key(|(n, c)| (*c, u16::MAX - *n)) {
-            for &i in &comp {
-                labels[i] = to;
+        let mut colours: BTreeMap<u16, usize> = BTreeMap::new();
+        for (&other, &border) in &borders {
+            *colours.entry(regions[other].label).or_default() += border;
+        }
+        let Some((&colour, _)) = colours.iter().max_by_key(|(label, border)| (**border, Reverse(**label))) else {
+            continue; // an opaque island surrounded only by transparency stays intact
+        };
+        // All adjacent regions of the chosen colour become connected by this merge. Absorb
+        // them together, keeping the largest one's storage to avoid repeatedly moving it.
+        let Some(target) = borders
+            .keys()
+            .copied()
+            .filter(|&other| regions[other].label == colour)
+            .max_by_key(|&other| (regions[other].pixels.len(), Reverse(other)))
+        else {
+            continue;
+        };
+        let sources: Vec<_> =
+            std::iter::once(id).chain(borders.keys().copied().filter(|&other| other != target && regions[other].label == colour)).collect();
+        for source in sources {
+            let pixels = std::mem::take(&mut regions[source].pixels);
+            for &i in &pixels {
+                at[i] = target;
             }
-            changed = true;
+            regions[target].pixels.extend(pixels);
+        }
+        pending.push(Reverse((regions[target].pixels.len(), target)));
+    }
+    for region in regions {
+        for i in region.pixels {
+            labels[i] = region.label;
         }
     }
-    changed
 }

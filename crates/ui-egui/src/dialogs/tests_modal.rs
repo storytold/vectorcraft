@@ -297,6 +297,86 @@ fn simplify_dialog_ok_keeps_exactly_one_undo_with_or_without_preview() {
     }
 }
 
+/// Whether every segment of every path in `app`'s document is straight (false with no segments).
+fn only_straight_segments(app: &VectorcraftApp) -> bool {
+    let mut lines = vec![];
+    app.session.doc().unwrap().doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Path { path, .. } = &n.kind {
+            for sp in &path.subpaths {
+                lines.extend((0..sp.segment_count()).map(|i| sp.segment_is_line(i)));
+            }
+        }
+    });
+    !lines.is_empty() && lines.iter().all(|l| *l)
+}
+
+/// Simplify's dialog sends Corner Point Angle Threshold and Convert to Straight Lines with the
+/// tolerance, and ticking Convert to Straight Lines previews straight segments only.
+#[test]
+fn simplify_dialog_sends_corner_angle_and_straight_lines() {
+    let (ctx, mut app) = (ctx(), app_with_selection());
+    app.run("shape.ellipse", json!({"x": 100, "y": 200, "width": 160, "height": 90})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    settle(&ctx, &mut app);
+    let texts = frame(&ctx, &mut app, vec![]);
+    assert!(texts.iter().any(|(t, _)| t == "Corner Point Angle Threshold:"), "{texts:?}");
+    let previewed = |app: &VectorcraftApp| app.session.doc().unwrap().interaction.as_ref().and_then(|it| it.preview.clone()).expect("a preview").1;
+    assert_eq!((&previewed(&app)["cornerAngle"], &previewed(&app)["straightLines"]), (&json!(30.0), &json!(false)));
+    assert!(!only_straight_segments(&app), "the fit keeps the ellipse's curves");
+    let straight = texts.iter().find(|(t, _)| t == "Convert to Straight Lines").map(|(_, r)| *r).expect("a Convert to Straight Lines checkbox");
+    click(&ctx, &mut app, straight.center());
+    assert_eq!(previewed(&app)["straightLines"], json!(true));
+    assert!(only_straight_segments(&app), "Convert to Straight Lines previews straight segments only");
+    // A higher threshold keeps more corners: the command's turn angle goes down as it goes up.
+    app.ui.dialog.as_mut().unwrap().fields.insert("angleThreshold".into(), json!(170));
+    frame(&ctx, &mut app, vec![]);
+    assert_eq!(previewed(&app)["cornerAngle"], json!(10.0));
+    confirm(&mut app).unwrap();
+    assert!(only_straight_segments(&app), "OK keeps the straight segments");
+}
+
+/// Corner Point Angle Threshold: an octagon's 135° corners stay corners at the 150° the dialog opens
+/// with, and a threshold below 135° smooths them into curves.
+#[test]
+fn simplify_dialog_corner_point_angle_threshold_keeps_or_smooths_corners() {
+    let (ctx, mut app) = (ctx(), app_with_selection());
+    app.run("edit.clear", json!({})).unwrap();
+    app.run("shape.polygon", json!({"cx": 200, "cy": 200, "radius": 100, "sides": 8})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("tolerance".into(), json!("10 pt"));
+    settle(&ctx, &mut app);
+    assert!(only_straight_segments(&app), "the corners stay and the sides stay straight");
+    app.ui.dialog.as_mut().unwrap().fields.insert("angleThreshold".into(), json!(120));
+    frame(&ctx, &mut app, vec![]);
+    assert!(!only_straight_segments(&app), "the corners are smoothed into curves");
+}
+
+/// Show Original Path: while Simplify previews with it on, the canvas outlines the paths as they
+/// were before the preview.
+#[test]
+fn simplify_dialog_show_original_path_outlines_the_paths_before_the_preview() {
+    let (ctx, mut app) = (ctx(), app_with_dense_path());
+    let st = app.session.doc().unwrap();
+    let (id, original) = match st.doc.node(st.selection.objects[0]).map(|n| (n.id, &n.kind)) {
+        Some((id, vectorcraft_doc::NodeKind::Path { path, .. })) => (id, path.clone()),
+        _ => panic!("a path is selected"),
+    };
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    settle(&ctx, &mut app);
+    let texts = frame(&ctx, &mut app, vec![]);
+    assert!(super::path_ops::original_paths(&app).is_empty(), "Show Original Path is off as the dialog opens");
+    let show = texts.iter().find(|(t, _)| t == "Show Original Path").map(|(_, r)| *r).expect("a Show Original Path checkbox");
+    click(&ctx, &mut app, show.center());
+    assert_eq!(super::path_ops::original_paths(&app), vec![(id, &original)]);
+    let simplified = app.session.doc().unwrap().doc.node(id).map(|n| n.kind.clone());
+    assert!(!matches!(simplified, Some(vectorcraft_doc::NodeKind::Path { path, .. }) if path == original), "the preview changed the path");
+    let preview = frame(&ctx, &mut app, vec![]).into_iter().find(|(t, _)| t == "Preview").map(|(_, r)| r).expect("a Preview checkbox");
+    click(&ctx, &mut app, preview.center());
+    assert!(super::path_ops::original_paths(&app).is_empty(), "nothing to compare with while Preview is off");
+    cancel(&mut app);
+    assert!(super::path_ops::original_paths(&app).is_empty());
+}
+
 #[test]
 fn printer_mark_labels_are_distinct_from_language_names() {
     let cs = crate::i18n::Lang::from_code("cs").unwrap();

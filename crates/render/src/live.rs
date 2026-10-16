@@ -3,7 +3,8 @@
 //! Blends and envelopes are evaluated by `vectorcraft_doc::live` (through
 //! `vectorcraft_effects::expand_live`, as the exporters do) and the resulting objects cached by
 //! `Arc` identity of the live node and by the inputs from outside it that [`resources_key`] hashes:
-//! the symbols, patterns and placed files it shows, the fonts for type, and the color settings (so the steps keep
+//! the symbols, patterns and placed files it shows, the fonts for type, the plug-ins for plug-in
+//! effects, and the color settings (so the steps keep
 //! stable `Arc`s and hit the geometry cache frame after frame, and editing a symbol redraws an
 //! envelope around an instance of it). Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
@@ -69,18 +70,22 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 
 /// What the evaluation of `n` (a live node, or an object whose effect art can be made from
 /// evaluated live objects, see [`Renderer::live_found`]) reads from the document, placed files,
-/// the fonts and the color settings, hashed: the art of the symbols, the tilings of the patterns
-/// and the reads of the placed files it shows ([`hash_resources`]), the font generation
-/// ([`vectorcraft_text::FontDb::generation`]) when it shows type or a placed file, and the color
-/// settings (`cms`, their address). Art is hashed by the addresses of its `Arc`s, which copies of
-/// the document share: a copy of the document has the same key. It also returns weak references
-/// to the reads found.
+/// the fonts, the plug-ins and the color settings, hashed: the art of the symbols, the tilings of
+/// the patterns and the reads of the placed files it shows ([`hash_resources`]), the font
+/// generation ([`vectorcraft_text::FontDb::generation`]) when it shows type or a placed file, the
+/// plug-in revision ([`crate::effects::plugin_revision`]) when it shows an object with a plug-in
+/// effect, and the color settings (`cms`, their address). Art is hashed by the addresses of its
+/// `Arc`s, which copies of the document share: a copy of the document has the same key. It also
+/// returns weak references to the reads found.
 fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>) {
     let mut h = DefaultHasher::new();
     let mut shown = Shown::default();
     hash_resources(doc, n, &mut shown, &mut h);
     if shown.text {
         vectorcraft_text::FontDb::global().generation().hash(&mut h);
+    }
+    if shown.plugins {
+        crate::effects::plugin_revision().hash(&mut h);
     }
     cms.hash(&mut h);
     (h.finish(), shown.reads)
@@ -93,6 +98,8 @@ struct Shown {
     seen: Vec<usize>,
     /// Whether type or a placed file was found.
     text: bool,
+    /// Whether an object with a visible plug-in effect was found.
+    plugins: bool,
     /// Weak references to the reads of the placed files found.
     reads: Vec<Weak<ReadDocument>>,
 }
@@ -103,12 +110,13 @@ struct Shown {
 /// the read of each placed file that [`vectorcraft_doc::PlacedDocument::art`] shows (none before
 /// the file is read). It walks `n` and then, one at a time from a list, the opacity-mask, pattern
 /// and symbol art it finds, each pattern and each symbol's art once ([`first_seen`]). `shown`
-/// records the type, placed files and reads found.
+/// records the type, placed files, reads and plug-in effects found.
 fn hash_resources<'a>(doc: &'a Document, n: &'a Node, shown: &mut Shown, h: &mut DefaultHasher) {
     let mut todo = vec![];
     let mut next = Some(n);
     while let Some(art) = next {
         art.walk(&mut |c| {
+            shown.plugins |= crate::effects::has_plugin_effect(c);
             let runs = match &c.kind {
                 NodeKind::Text(t) => t.runs.as_slice(),
                 _ => &[],
@@ -241,7 +249,12 @@ impl Renderer {
         match &a.kind {
             NodeKind::PlacedDocument(p) => self.draw_placed(ctx, f, p),
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Repeat(_)
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Group { .. }
+            | NodeKind::Layer { .. } => {
                 let items = self.live_expanded(f.doc, a, cache);
                 // An evaluation the cache did not keep is made again in the next frame.
                 let kept = cache && self.live.expanded.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &items));

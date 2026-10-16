@@ -1,6 +1,7 @@
 //! File → File Info (`file.info`): the document title and its descriptive metadata (author,
 //! description, keywords, rating, copyright), with the read-only created and modified dates. The
-//! SVG (with `metadata`), PDF and PNG writers carry it.
+//! SVG (with `metadata`), PDF and PNG writers carry it, and a PDF or `.ai` opens with the File Info
+//! it gives ([`read_pdf`]).
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::metadata::{MAX_RATING, iso8601};
@@ -60,6 +61,30 @@ pub(crate) fn file_info(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
     }
     Ok(info_json(&s.doc()?.doc))
+}
+
+/// The File Info a PDF or PDF-compatible `.ai` gives ([`vectorcraft_pdf::file_info`]) into `m`: each
+/// field that `file.info` would take (a value it refuses is left out), and the created and
+/// modified dates.
+pub(crate) fn read_pdf(m: &mut DocMetadata, f: vectorcraft_pdf::FileInfo) {
+    let status = f.copyrighted.map(|c| if c { CopyrightStatus::Copyrighted } else { CopyrightStatus::PublicDomain });
+    let fields = [
+        ("author", f.author.map(Value::from)),
+        ("description", f.description.map(Value::from)),
+        ("keywords", f.keywords.map(Value::from)),
+        ("copyrightStatus", status.map(|s| Value::from(s.id()))),
+        ("copyrightNotice", f.copyright_notice.map(Value::from)),
+        ("copyrightUrl", f.copyright_url.map(Value::from)),
+    ];
+    // `apply` changes the field only when it takes the value.
+    let mut title = String::new();
+    for (k, v) in fields {
+        if let Some(v) = v {
+            let _ = apply(&mut title, m, k, &v);
+        }
+    }
+    m.created = f.created.or(m.created);
+    m.modified = f.modified.or(m.modified);
 }
 
 fn apply(title: &mut String, m: &mut DocMetadata, k: &str, v: &Value) -> Result<()> {

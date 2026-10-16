@@ -164,17 +164,199 @@ fn device_n_inks_become_spot_swatches_and_process_plates_cmyk() {
     assert_eq!(d.swatches.iter().filter(|s| s.spot).count(), 2);
 }
 
+/// The spaces `/CS1` and `/CS2` of two inks (`[/{kind} {a} …]`, `[/{kind} {b} …]`) with the same
+/// alternate and tint transform, blue at 100 %: they look the same to the interpreter.
+fn blues(kind: &str, a: &str, b: &str) -> String {
+    let tint = "/DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0 1] /N 1 >>";
+    format!("/CS1 [/{kind} {a} {tint}] /CS2 [/{kind} {b} {tint}]")
+}
+
+/// The swatch each fill, stroke and type run links to, in paint order (a gradient's: its first
+/// stop's).
+fn links(d: &Document) -> Vec<Option<String>> {
+    let mut out = vec![];
+    d.walk(|n: &Node| {
+        let runs: Vec<&Paint> = match &n.kind {
+            NodeKind::Text(t) => t.runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]).filter(|p| !p.is_none()).collect(),
+            _ => vec![],
+        };
+        for p in n.appearance.items.iter().map(|i| i.paint()).chain(runs) {
+            out.push(match p {
+                Paint::Solid { swatch, .. } => swatch.clone(),
+                Paint::Gradient(g) => g.gradient.stops.first().and_then(|s| s.swatch.clone()),
+                _ => None,
+            });
+        }
+    });
+    out
+}
+
+fn named(names: &[Option<&str>]) -> Vec<Option<String>> {
+    names.iter().map(|n| n.map(String::from)).collect()
+}
+
+#[test]
+fn spot_inks_with_the_same_values_keep_their_own_swatches() {
+    // The page's walk names the ink each path is painted in: Blue1 and Blue2 fills, then a fill of
+    // Blue1 stroked in Blue2.
+    for (kind, a, b) in [("Separation", "/Blue1", "/Blue2"), ("DeviceN", "[/Blue1]", "[/Blue2]")] {
+        let content = "/CS1 cs 1 scn 0 0 10 10 re f /CS2 cs 0.5 scn 12 0 10 10 re f /CS2 CS 1 SCN /CS1 cs 1 scn 24 0 10 10 re B";
+        let page = PdfPage { resources: format!("/ColorSpace << {} >>", blues(kind, a, b)), ..PdfPage::new(200.0, 50.0, content) };
+        let d = import(&pdf(&[page], None)).unwrap();
+        assert_eq!(links(&d), named(&[Some("Blue1"), Some("Blue2"), Some("Blue1"), Some("Blue2")]), "{kind}");
+        assert!((solid(&fills(&d)[1]).2 - 0.5).abs() < 1e-6, "{kind}: Blue2 keeps its tint");
+        for name in ["Blue1", "Blue2"] {
+            let sw = d.swatch(name).unwrap_or_else(|| panic!("{kind}: no {name}"));
+            assert!(sw.spot && sw.global, "{kind}: {name} is a spot swatch");
+            assert!(near(sw.paint.color().unwrap(), Color::rgb(0.0, 0.0, 1.0)), "{kind}: {name}");
+        }
+    }
+}
+
+#[test]
+fn inks_with_the_same_values_on_different_pages_keep_their_own_swatches() {
+    // Each page names its own ink `/CS0`.
+    let page = |ink: &str| {
+        let tint = "/DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0 1] /N 1 >>";
+        PdfPage {
+            resources: format!("/ColorSpace << /CS0 [/Separation /{ink} {tint}] >>"),
+            ..PdfPage::new(100.0, 50.0, "/CS0 cs 1 scn 0 0 10 10 re f")
+        }
+    };
+    let d = import(&pdf(&[page("Blue1"), page("Blue2")], None)).unwrap();
+    assert_eq!(links(&d), named(&[Some("Blue1"), Some("Blue2")]));
+    assert_eq!(d.swatches.iter().filter(|s| s.spot).count(), 2);
+}
+
+#[test]
+fn inks_set_before_a_content_window_ends_reach_the_paths_after_it() {
+    // The inks are set in the first 64 KiB window of the content and a path is painted in them
+    // two windows later, then a fill in Blue2 after the state saved before the windows is
+    // restored.
+    let filler = "q Q ".repeat(40_000);
+    let content = format!("/CS1 cs 1 scn /CS2 CS 1 SCN q {filler}0 0 10 10 re B Q /CS2 cs 1 scn 12 0 10 10 re f");
+    let page = PdfPage { resources: format!("/ColorSpace << {} >>", blues("Separation", "/Blue1", "/Blue2")), ..PdfPage::new(200.0, 50.0, &content) };
+    let d = import(&pdf(&[page], None)).unwrap();
+    assert_eq!(links(&d), named(&[Some("Blue1"), Some("Blue2"), Some("Blue2")]));
+}
+
+#[test]
+fn type_in_spot_inks_with_the_same_values_keeps_its_own_ink() {
+    // Type filled in Blue1, a black square, type stroked in Blue2: type or its outlines, as the
+    // fonts of the machine allow.
+    let content =
+        "/CS1 cs 1 scn BT /F1 36 Tf 10 50 Td (Ink) Tj ET 0 g 0 0 5 5 re f /CS1 cs 1 scn /CS2 CS 1 SCN BT /F1 36 Tf 1 Tr 10 10 Td (Line) Tj ET";
+    let resources = format!(
+        "/ColorSpace << {} >> /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>",
+        blues("Separation", "/Blue1", "/Blue2")
+    );
+    let d = import(&pdf(&[PdfPage { resources, ..PdfPage::new(300.0, 100.0, content) }], None)).unwrap();
+    let mut seen = links(&d);
+    seen.dedup();
+    assert_eq!(seen, named(&[Some("Blue1"), None, Some("Blue2")]));
+}
+
+#[test]
+fn gradients_in_spot_inks_with_the_same_values_keep_their_own_ink() {
+    // A shading in Blue2 drawn by `sh`, then a shading pattern in Blue1 filling a square.
+    let shading = |ink: &str| {
+        format!(
+            "<< /ShadingType 2 /ColorSpace [/Separation /{ink} /DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0 1] /N 1 >>] /Coords [0 0 50 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> /Extend [true true] >>"
+        )
+    };
+    let resources = format!("/Shading << /Sh0 {} >> /Pattern << /P0 << /PatternType 2 /Shading {} >> >>", shading("Blue2"), shading("Blue1"));
+    let content = "q 0 0 50 50 re W n /Sh0 sh Q /Pattern cs /P0 scn 60 0 50 50 re f";
+    let d = import(&pdf(&[PdfPage { resources, ..PdfPage::new(200.0, 50.0, content) }], None)).unwrap();
+    let mut stops = vec![];
+    d.walk(|n: &Node| {
+        for i in &n.appearance.items {
+            if let Paint::Gradient(g) = i.paint() {
+                stops.push(g.gradient.stops.iter().map(|s| s.swatch.clone()).collect::<Vec<_>>());
+            }
+        }
+    });
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(stops[0].iter().all(|s| s.as_deref() == Some("Blue2")), "{stops:?}");
+    assert!(stops[1].iter().all(|s| s.as_deref() == Some("Blue1")), "{stops:?}");
+}
+
+#[test]
+fn a_color_set_after_a_pattern_is_in_the_ink_of_its_space() {
+    // Blue1's space is set, `/P0 scn` names a shading pattern in Blue2, and `1 scn` sets a color
+    // without a pattern: the interpreter fills in Blue1, the color space's ink.
+    let tint = "/DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0 1] /N 1 >>";
+    let shading = format!(
+        "<< /ShadingType 2 /ColorSpace [/Separation /Blue2 {tint}] /Coords [0 0 50 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> >>"
+    );
+    let resources =
+        format!("/ColorSpace << {} >> /Pattern << /P0 << /PatternType 2 /Shading {shading} >> >>", blues("Separation", "/Blue1", "/Blue2"));
+    let d = import(&pdf(&[PdfPage { resources, ..PdfPage::new(100.0, 50.0, "/CS1 cs /P0 scn 1 scn 0 0 10 10 re f") }], None)).unwrap();
+    assert_eq!(links(&d), named(&[Some("Blue1")]));
+}
+
+#[test]
+fn a_mesh_in_one_of_two_inks_with_the_same_values_keeps_the_ink() {
+    // A patch mesh in Plum, which looks the same to the interpreter as Wine: its points keep
+    // Plum's CMYK values, and Plum is a spot swatch.
+    let tint = "/DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0.5 1 0 0] /N 1 >>";
+    let data = "000A0A0A250A3F0A5A255A3F5A5A5A5A3F5A255A0A3F0A250AFFFFFFFF>";
+    let mesh = format!(
+        "<< /ShadingType 6 /ColorSpace [/Separation /Plum {tint}] /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1] /Filter /ASCIIHexDecode /Length {} >>\nstream\n{data}\nendstream",
+        data.len()
+    );
+    let resources = format!("/ColorSpace << /CS1 [/Separation /Wine {tint}] >> /Shading << /Sh0 {} 0 R >>", first_extra(1));
+    let d = import(&pdf_with(&[PdfPage { resources, ..PdfPage::new(100.0, 100.0, "/Sh0 sh") }], &[&mesh], None)).unwrap();
+    let mut points = vec![];
+    d.walk(|n: &Node| {
+        if let NodeKind::Mesh(m) = &n.kind {
+            points.extend(m.points.iter().map(|p| p.color));
+        }
+    });
+    assert!(!points.is_empty());
+    assert!(points.iter().all(|c| near(*c, Color::cmyk(0.5, 1.0, 0.0, 0.0))), "{points:?}");
+    assert!(d.swatch("Plum").is_some_and(|s| s.spot));
+}
+
 #[test]
 fn inks_that_cannot_be_told_apart_import_as_rgb() {
-    // Two spaces of other inks with the same alternate and tint transform.
+    // Two spaces of other inks with the same alternate and tint transform, on a page with a
+    // shading the interpreter can't read: it draws nothing for it, so the page's walk counts one
+    // path more than the interpreter draws, and its ink names are left out.
     let tint = "/DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 0 0] /N 1 >>";
     let spaces = format!("/CS0 [/Separation /Tealish {tint}] /CS1 [/Separation /Rubyish {tint}] /CS2 [/Separation /Tealish {tint}]");
-    let d = import(&pdf(&[page_with(&spaces, &[("CS0", "1")])], None)).unwrap();
-    assert!(matches!(solid(&fills(&d)[0]), (Color::Rgb { .. }, None, _)));
+    let page = PdfPage {
+        resources: format!("/ColorSpace << {spaces} >> /Shading << /Sh0 << /ShadingType 99 >> >>"),
+        ..PdfPage::new(200.0, 50.0, "/Sh0 sh /CS0 cs 1 scn 0 0 10 10 re f /CS1 cs 1 scn 12 0 10 10 re f")
+    };
+    let d = import(&pdf(&[page], None)).unwrap();
+    assert_eq!(fills(&d).len(), 2);
+    assert!(fills(&d).iter().all(|p| matches!(solid(p), (Color::Rgb { .. }, None, _))), "{:?}", fills(&d));
+    assert!(d.swatches.iter().all(|s| !s.spot));
     // The same ink defined twice is still that ink.
     let spaces = format!("/CS0 [/Separation /Tealish {tint}] /CS2 [/Separation /Tealish {tint}]");
     let d = import(&pdf(&[page_with(&spaces, &[("CS2", "0.5")])], None)).unwrap();
     assert_eq!(solid(&fills(&d)[0]).1, Some("Tealish"));
+}
+
+#[test]
+fn ai_files_read_through_their_pdf_part_keep_inks_with_the_same_values_apart() {
+    // A page with an editor's private data, read as a `.ai` is.
+    let mut page = page_with(&blues("Separation", "/Blue1", "/Blue2"), &[("CS1", "1"), ("CS2", "1")]);
+    page.entries = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into();
+    let r = import_with_report(&pdf(&[page], None), &ImportOptions { uncalibrated_rgb: true, ..Default::default() }).unwrap();
+    assert_eq!(links(&r.document), named(&[Some("Blue1"), Some("Blue2")]));
+}
+
+#[test]
+fn inks_with_the_same_values_export_as_separations_of_their_own() {
+    let page = page_with(&blues("Separation", "/Blue1", "/Blue2"), &[("CS1", "1"), ("CS2", "0.4")]);
+    let d = import(&pdf(&[page], None)).unwrap();
+    let out = export(&d, &PdfOptions::uncompressed()).unwrap();
+    let text = String::from_utf8_lossy(&out);
+    assert!(text.contains("/Separation/Blue1") && text.contains("/Separation/Blue2"), "each ink is a separation");
+    let back = import(&out).unwrap();
+    assert_eq!(links(&back), named(&[Some("Blue1"), Some("Blue2")]));
+    assert!((solid(&fills(&back)[1]).2 - 0.4).abs() <= Q);
 }
 
 #[test]
@@ -208,7 +390,7 @@ fn colour_spaces_are_read_from_the_interpreters_debug_form() {
         ("ColorSpace(Separation(Separation { tint_transform: Function(Type2(..)) }))", 1, Space::Other),
         ("ColorSpace(DeviceCmyk)", 3, Space::Other),
     ] {
-        assert_eq!(c.space_of(text, n), want, "{text}");
+        assert_eq!(c.space_of(text, n, None), want, "{text}");
     }
     let t = "Color { color_space: ColorSpace(DeviceCmyk), components: [0.101960786, 0.2, 0.3, 0.4], opacity: 1.0 }";
     let (space, comps) = crate::import_color::split_color(t).unwrap();
@@ -229,7 +411,7 @@ fn inks_are_found_past_dictionary_values_the_reader_cannot_parse() {
         // Opened by the reader alone, without the checks of `pages::open`.
         let pdf = craft_pdf::syntax::Pdf::new(pdf(&[page], None)).unwrap();
         let mut c = Colors::new(&pdf, vec![]);
-        let space = c.space_of(&format!("ColorSpace(Separation(Separation {{ tint_transform: {key} }}))"), 1);
+        let space = c.space_of(&format!("ColorSpace(Separation(Separation {{ tint_transform: {key} }}))"), 1, None);
         assert_eq!(space, Space::Inks(0), "{junk}");
         let gold = c.native(space, &[1.0]).unwrap();
         assert_eq!(gold.link, Some(("Gold".to_string(), 1.0)), "{junk}");

@@ -126,6 +126,27 @@ fn svg_images_import_as_vector_art() {
     assert!((boxes[1].x0 - 100.0).abs() < 1e-6 && (boxes[1].height() - 20.0).abs() < 1e-6, "{boxes:?}");
 }
 
+/// usvg unpacks gzipped SVG images itself (its `svgz` feature, which the workspace keeps).
+#[test]
+fn svgz_images_import_as_vector_art() {
+    let dir = folder("svgzimage");
+    let inner =
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10" viewBox="0 0 20 10"><rect width="10" height="10" fill="#f00"/></svg>"##;
+    let gz = vectorcraft_svg::compress(inner);
+    std::fs::write(dir.join("img").join("logo.svgz"), &gz).unwrap();
+    let data = format!("data:image/svg+xml;base64,{}", vectorcraft_svg::base64_encode(&gz));
+    let body =
+        format!(r#"<image href="img/logo.svgz" x="10" y="10" width="40" height="20"/><image href="{data}" x="100" y="10" width="40" height="20"/>"#);
+    let (d, w) = open_in(&dir, &body);
+    assert!(w.is_empty(), "{w:?}");
+    assert!(images(&d).is_empty());
+    let mut boxes: Vec<Rect> = art(&d).iter().filter(|n| n.path_data().is_some()).filter_map(|n| n.geometric_bounds()).collect();
+    boxes.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+    assert_eq!(boxes.len(), 2, "{:?}", art(&d));
+    assert!((boxes[0].x0 - 10.0).abs() < 1e-6 && (boxes[0].width() - 20.0).abs() < 1e-6, "{boxes:?}");
+    assert!((boxes[1].x0 - 100.0).abs() < 1e-6 && (boxes[1].height() - 20.0).abs() < 1e-6, "{boxes:?}");
+}
+
 #[test]
 fn nested_clips_intersect() {
     let body = r##"<defs><clipPath id="inner"><rect x="60" y="0" width="200" height="200"/></clipPath>

@@ -70,6 +70,8 @@ try {
   Copy-Item vendor/windows-link/license-mit (Join-Path $Stage 'LICENSE-windows-link-MIT')
   Copy-Item vendor/windows-link/license-apache-2.0 (Join-Path $Stage 'LICENSE-windows-link-Apache-2.0')
   Copy-Item docs/windows7.md (Join-Path $Stage 'WINDOWS7.md')
+  # portable.txt switches on portable mode, as in the regular portable zip (#1366).
+  Copy-Item (Join-Path $PSScriptRoot 'portable.txt') $Stage
   if ($env:CRAFT_FONTS_DIR) {
     foreach ($ofl in Get-ChildItem (Join-Path $env:CRAFT_FONTS_DIR 'fonts\*\OFL.txt')) {
       Copy-Item $ofl.FullName (Join-Path $Stage "OFL-$($ofl.Directory.Name).txt")

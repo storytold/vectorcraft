@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeId, NodeKind};
+use vectorcraft_doc::cmyk::{Inks, jpeg_components};
+use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::Affine;
 
 use super::graphics::{Space, process};
@@ -33,7 +34,8 @@ pub(crate) enum Stream {
     Buf {
         data: Vec<u8>,
         pos: usize,
-        /// The samples are 8-bit RGB (or grey) whatever the image's colour space: a decoded JPEG.
+        /// The samples are 8-bit gray, RGB or CMYK (1, 3 or 4 channels) whatever the image's
+        /// color space: a decoded JPEG.
         rgb: Option<u8>,
     },
 }
@@ -146,12 +148,19 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
     }
 }
 
-/// A JPEG's pixels (grey or RGB, 8 bits) with its channel count, and how many bytes of `raw` it
-/// took.
+/// A JPEG's pixels (gray, RGB or CMYK, 8 bits) with its channel count, and how many bytes of
+/// `raw` it took. A CMYK JPEG gives its samples as stored, for the image's Decode array to read
+/// (Adobe's CMYK JPEGs store them inverted, which a Decode array of `[1 0 1 0 1 0 1 0]` undoes).
 fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
     let end = find(raw, &[0xFF, 0xD9]).map_or(raw.len(), |e| e + 2);
-    let img = image::load_from_memory_with_format(raw.get(..end).unwrap_or_default(), image::ImageFormat::Jpeg)
-        .map_err(|_| PsError::Ps("ioerror", "DCTDecode".into()))?;
+    let jpeg = raw.get(..end).unwrap_or_default();
+    // `cmyk` gives the ink amounts of inverted samples: inverted back, they are the samples.
+    if jpeg_components(jpeg) == Some(4)
+        && let Some(inks) = ImageBlob::new("image/jpeg", jpeg.to_vec()).cmyk()
+    {
+        return Ok((inks.data.into_iter().map(|v| 255 - v).collect(), end, 4));
+    }
+    let img = image::load_from_memory_with_format(jpeg, image::ImageFormat::Jpeg).map_err(|_| PsError::Ps("ioerror", "DCTDecode".into()))?;
     if img.color().channel_count() == 1 { Ok((img.to_luma8().into_raw(), end, 1)) } else { Ok((img.to_rgb8().into_raw(), end, 3)) }
 }
 
@@ -834,7 +843,8 @@ impl Interp<'_> {
         Ok(Spec { w, h, bpc, space, decode: vec![], matrix, sources, mask_color: None, stencil })
     }
 
-    /// The image's pixels, straight RGBA, rows from the first one read.
+    /// The image's pixels, straight RGBA, rows from the first one read, and a CMYK image's ink
+    /// amounts.
     fn decode_image(&mut self, s: Spec) -> Res<Option<Pixels>> {
         if !matches!(s.bpc, 1 | 2 | 4 | 8 | 12 | 16) {
             return ps_err("rangecheck", "BitsPerComponent");
@@ -851,7 +861,7 @@ impl Interp<'_> {
                 self.materialize(f)?;
             }
         }
-        // A decoded JPEG gives 8-bit grey or RGB samples whatever the colour space says.
+        // A decoded JPEG gives 8-bit gray, RGB or CMYK samples whatever the color space says.
         let jpeg = s.sources.iter().find_map(|src| match src {
             Source::File(f) => match &*f.borrow() {
                 Stream::Buf { rgb, .. } => *rgb,
@@ -861,6 +871,7 @@ impl Interp<'_> {
         });
         let (n, bpc, space) = match jpeg {
             Some(3) => (3, 8, Space::Rgb),
+            Some(4) => (4, 8, Space::Cmyk),
             Some(_) => (1, 8, Space::Gray),
             None => (n, bpc, s.space.clone()),
         };
@@ -891,9 +902,18 @@ impl Interp<'_> {
             Space::Indexed { .. } => vec![0.0, max],
             _ => (0..n).flat_map(|_| [0.0, 1.0]).collect(),
         };
-        let decode = if s.decode.len() >= 2 * n && jpeg.is_none() { s.decode.clone() } else { default_decode };
+        // The Decode array applies to a CMYK JPEG's samples as stored; gray and RGB JPEGs are read
+        // with the default Decode array.
+        let decode = if s.decode.len() >= 2 * n && jpeg.is_none_or(|c| c == 4) { s.decode.clone() } else { default_decode };
         let paint = self.g.paint.color().map(|c| c.to_rgba8(1.0));
         let mut rgba = Vec::with_capacity(s.w * s.h * 4);
+        // CMYK samples keep their ink amounts, as the Decode array reads them.
+        let mut inks = if matches!(space, Space::Cmyk) && s.stencil.is_none() {
+            self.alloc(s.w * s.h * 4)?;
+            Some(Vec::with_capacity(s.w * s.h * 4))
+        } else {
+            None
+        };
         let mut cache: HashMap<Vec<u32>, [u8; 3]> = HashMap::new();
         let mut raw = vec![0u32; n];
         let mut comps = vec![0f64; n];
@@ -916,6 +936,9 @@ impl Interp<'_> {
                     let (d0, d1) = (decode.get(2 * c).copied().unwrap_or(0.0), decode.get(2 * c + 1).copied().unwrap_or(1.0));
                     *slot = d0 + f64::from(*raw.get(c).unwrap_or(&0)) * (d1 - d0) / max;
                 }
+                if let Some(inks) = inks.as_mut() {
+                    inks.extend(comps.iter().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
+                }
                 let rgb = match (&space, raw.as_slice()) {
                     (Space::Gray, [v]) if bpc == 8 && decode == [0.0, 1.0] => [*v as u8; 3],
                     (Space::Rgb, [r, g, b]) if bpc == 8 && decode == [0.0, 1.0, 0.0, 1.0, 0.0, 1.0] => [*r as u8, *g as u8, *b as u8],
@@ -933,7 +956,7 @@ impl Interp<'_> {
                 rgba.extend([rgb[0], rgb[1], rgb[2], if masked { 0 } else { 255 }]);
             }
         }
-        Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, matrix: s.matrix }))
+        Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix }))
     }
 
     /// One pixel's colour in `space` as display RGB.
@@ -962,19 +985,47 @@ impl Interp<'_> {
         if self.g.null {
             return Ok(());
         }
+        // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps an 8- or
+        // 16-bit CMYK image's samples, and transparent pixels (`MaskColor`, an ImageType 3 mask)
+        // become its opacity mask.
+        if let Some(blob) = img.inks.and_then(|i| Inks::new(img.w, img.h, i)).and_then(|i| ImageBlob::cmyk_tiff(&i)) {
+            let alpha: Vec<u8> = img.rgba.iter().skip(3).step_by(4).copied().collect();
+            let mask = self.alpha_mask(&alpha, img.w, img.h, xf);
+            return self.add_image(blob, img.w, img.h, xf, mask);
+        }
         let Some(rgba) = image::RgbaImage::from_raw(img.w, img.h, img.rgba) else { return Ok(()) };
         let mut png = vec![];
         if rgba.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
             self.out.warn("an image that couldn't be read was left out");
             return Ok(());
         }
+        self.add_image(ImageBlob::new("image/png", png), img.w, img.h, xf, None)
+    }
+
+    /// Add image `blob` (`w` × `h` pixels, mapped into user space by `xf`) with `mask` as its
+    /// opacity mask.
+    fn add_image(&mut self, blob: ImageBlob, w: u32, h: u32, xf: Affine, mask: Option<OpacityMask>) -> Res {
+        let key = blob.content_key();
+        self.out.doc.images.entry(key.clone()).or_insert(blob);
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() };
+        let clips = self.g.clips.clone();
+        self.out.push(Node::new(NodeId(0), NodeKind::Image(Box::new(im))).with_mask(mask.map(Box::new)), &clips);
+        Ok(())
+    }
+
+    /// An image's alpha (`w` × `h` bytes) as a grayscale image over the image (`xf`): its opacity
+    /// mask, as in PDF import. `None` when it hides nothing.
+    fn alpha_mask(&mut self, alpha: &[u8], w: u32, h: u32, xf: Affine) -> Option<OpacityMask> {
+        if alpha.iter().all(|v| *v == 255) {
+            return None;
+        }
+        let mut png = Vec::new();
+        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);
-        let im = ImageObject { key, width: img.w, height: img.h, xf, link: None, placement: Default::default() };
-        let clips = self.g.clips.clone();
-        self.out.push(Node::new(NodeId(0), NodeKind::Image(Box::new(im))), &clips);
-        Ok(())
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() };
+        Some(OpacityMask::new(Node::new(self.out.doc.alloc_id(), NodeKind::Image(Box::new(im))), true))
     }
 }
 
@@ -1059,6 +1110,8 @@ struct Pixels {
     w: u32,
     h: u32,
     rgba: Vec<u8>,
+    /// A CMYK image's ink amounts: C, M, Y and K bytes a pixel, 0 is no ink.
+    inks: Option<Vec<u8>>,
     matrix: Affine,
 }
 

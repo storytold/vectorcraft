@@ -109,6 +109,11 @@ impl Compatibility {
     pub fn has_layers(self) -> bool {
         matches!(self, Self::Pdf15 | Self::Pdf16 | Self::Pdf17 | Self::Pdf20)
     }
+
+    /// The version has a page's `UserUnit` (PDF 1.6).
+    pub fn has_user_unit(self) -> bool {
+        matches!(self, Self::Pdf16 | Self::Pdf17 | Self::Pdf20)
+    }
 }
 
 choice! {

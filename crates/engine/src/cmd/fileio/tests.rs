@@ -378,7 +378,9 @@ fn export_for_screens_one_page_per_pdf_unique_names() {
     let r = s.execute("document.exportForScreens", &json!({"range": "3", "formats": [{"format": "jpg", "scale": 0.5}]})).unwrap();
     assert_eq!(r["files"][0]["name"], "Artboard-3@0.5x.jpg");
     assert_eq!(image::load_from_memory(&b64(&r["files"][0])).unwrap().width(), 50);
-    assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "vectorcraft"}]})).is_err());
+    // A native row: each artboard as a document of its own to edit.
+    let r = s.execute("document.exportForScreens", &json!({"range": "1", "formats": [{"format": "vectorcraft"}]})).unwrap();
+    assert!(r["files"][0]["name"].as_str().unwrap().ends_with(".vectorcraft"), "{r}");
     let _ = std::fs::remove_dir_all(dir);
 }
 

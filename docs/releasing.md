@@ -113,6 +113,21 @@ to the target triple, so host build scripts aren't affected.
 - Before packaging, the script checks each binary's PE machine type against `-Arch` (an x64 build
   can never ship labelled arm64), that `vectorcraft.exe` is a GUI program (no console window) and
   that `vectorcraft-cli.exe` is a console program.
+- **Portable zip:** it ships `packaging/windows/portable.txt` beside `vectorcraft.exe`. That
+  marker (or a `VectorCraft.portable` file) switches on portable mode, as in PhotoCraft: `ui.json`
+  and the folders next to it (Swatches, Graphic Styles, Fonts, Data Recovery, logs…) go to
+  `VectorCraftData\` next to the exe instead of `%APPDATA%\VectorCraft`. The first time
+  `VectorCraftData` is created, the settings already in `%APPDATA%\VectorCraft` are copied into it
+  (the originals stay), so someone updating a portable zip from before the marker keeps their
+  settings. If that folder isn't writable the app logs a warning and uses `%APPDATA%`. Deleting
+  `portable.txt` returns settings to the user profile (the `VectorCraftData` folder is left as it
+  is). The MSI has no marker. `VECTORCRAFT_CONFIG_DIR` still wins, `VECTORCRAFT_NO_PREFS` never
+  looks for the marker, and a portable copy skips the one-time read of the old DrawCraft settings.
+  The logic is in `apps/vectorcraft/src/profile.rs`. On the other platforms the marker goes where
+  the user sees the app, never inside it: on macOS next to `VectorCraft.app` (nothing is written
+  inside the signed bundle), for an AppImage next to the `.AppImage` file (`$APPIMAGE`; the mounted
+  executable's own folder is read-only). Flatpak isn't supported: `/app` is read-only and the
+  sandbox has no folder "beside the app", so a Flatpak install always uses its own config folder.
 - `vectorcraft.wxs` (WiX) is a per-machine install into Program Files with a Start Menu shortcut
   and an App Paths entry (Win+R `vectorcraft`). Same-version upgrades are allowed, so release
   candidates replace each other.
@@ -150,12 +165,14 @@ image raises that floor, so do it deliberately. After packaging, the job prints 
 metadata and contents, runs `ldd` on the binary and runs each AppImage with `--version`.
 
 **RPM dependencies.** The x86_64 and aarch64 RPMs require 64-bit shared-library
-capabilities rather than distribution-specific package names: glibc's `GLIBC_2.35`,
-`libm`, `libgcc_s`, `libxkbcommon`, and either Vulkan or EGL. Windowing and GPU
+capabilities rather than distribution-specific package names: `libc`, libm's `GLIBC_2.35`,
+`libgcc_s`, `libxkbcommon`, and either Vulkan or EGL. Windowing and GPU
 libraries are loaded at runtime, so `ldd` alone does not list every requirement.
 The glibc capability enforces the same floor as the `.deb`; a distribution with
-an older glibc is not supported by these binaries. Weak recommendations still use
-package names and do not block installation.
+an older glibc is not supported by these binaries. It names libm, whose `hypot` and `hypotf`
+are the binaries' GLIBC_2.35 symbols: RHEL 9's glibc 2.34 provides `libc.so.6(GLIBC_2.35)`
+through backports, so a libc capability let it install binaries that can't start. Weak
+recommendations still use package names and do not block installation.
 
 Before publishing a Linux release:
 
@@ -224,4 +241,6 @@ warning, never a failed build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | RPM glibc floor names libm's `GLIBC_2.35`: RHEL 9's glibc 2.34 provides libc's through backports |
 | 2026-10-12 | minor | RPM dependencies use 64-bit runtime capabilities and enforce glibc 2.35 (#1275); real distro install/start-up checks remain pending |
+| 2026-10-12 | minor | Portable mode (#1366): the Windows portable zip ships `portable.txt`; where the marker goes on macOS and Linux, and what Flatpak can't do |

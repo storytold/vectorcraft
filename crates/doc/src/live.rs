@@ -1437,7 +1437,7 @@ fn map_node(n: &Node, w: &Warper) -> Node {
             }
         }
         NodeKind::Mesh(m) => m.map(w.f),
-        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
             if let Some(d) = &deeper {
                 return map_node(&expanded_group_hooks(n, w.hooks), d);
             }
@@ -1616,7 +1616,15 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
 
 /// Is this one of the live kinds?
 pub fn is_live(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_))
+    matches!(
+        n.kind,
+        NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. }
+    )
 }
 
 /// Mesh tessellation as filled quad paths (no stroke), `n`×`n` per patch.
@@ -1651,6 +1659,7 @@ pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
         NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
         NodeKind::Repeat(r) => r.expand(),
         NodeKind::PlacedDocument(p) => p.art(n),
+        NodeKind::Intertwine { children } => crate::intertwine::expand(children),
         _ => vec![n.clone()],
     }
 }

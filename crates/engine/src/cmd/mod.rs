@@ -34,6 +34,7 @@ mod halftone;
 pub mod help;
 pub mod importmatches;
 pub(crate) mod inline;
+mod intertwine;
 mod layer;
 mod layerpanel;
 pub mod library;
@@ -250,6 +251,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(shaper::specs());
         v.extend(brushsym::specs());
         v.extend(patterncmds::specs());
+        v.extend(intertwine::specs());
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
         v.extend(paint::proxy_specs());
@@ -338,9 +340,10 @@ pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str
     values.iter().map(|value| checked_id(s, value, command)).collect()
 }
 
-/// The objects a command acts on: `ids` when given (every one checked), else the selected objects.
+/// The objects a command acts on: `ids` when given (every one checked, and those inside another
+/// given one dropped), else the selected objects.
 pub(crate) fn checked_ids_or_selection(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
-    if p.get("ids").is_some() { checked_ids_param(s, p, "ids", command) } else { edit::selected_roots(s) }
+    if p.get("ids").is_some() { Ok(edit::outermost(&s.doc()?.doc, checked_ids_param(s, p, "ids", command)?)) } else { edit::selected_roots(s) }
 }
 
 pub(crate) fn checked_id(s: &Session, value: &Value, command: &str) -> Result<NodeId> {

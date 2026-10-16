@@ -222,6 +222,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         asset_export::ID => asset_export::menu(app, ui),
         css_properties::ID => css_properties::menu(app, ui),
         variables::ID => variables::menu(app, ui),
+        "actions" => actions::menu(app, ui),
         _ => return false,
     }
     true
@@ -318,9 +319,12 @@ pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
 
 /// Which Stroke panel values the selection doesn't share and whether Align Stroke applies
 /// ([`vectorcraft_engine::DocState::stroke_mixed`]), cached per document revision. While the Type
-/// tool edits text, the selected characters' stroke shows as it is.
+/// tool edits text, the selected characters' stroke shows as it is, and aligns to their glyphs.
 pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeMixed {
-    let Some(st) = app.session.active().filter(|_| character::text_editing(app).is_none()) else { return StrokeMixed::default() };
+    if character::text_editing(app).is_some() {
+        return StrokeMixed { can_align: true, ..Default::default() };
+    }
+    let Some(st) = app.session.active() else { return StrokeMixed::default() };
     let key = (st.uid, st.revision);
     match pstate::<Option<((u64, u64), StrokeMixed)>>(ctx, "stroke-mixed") {
         Some((k, mixed)) if k == key => mixed,

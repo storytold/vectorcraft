@@ -422,6 +422,24 @@ fn a_shading_that_does_not_extend_paints_only_between_its_ends() {
     assert!(b.x0 <= 0.0 && (b.x1 - 80.0).abs() < 0.01, "{b:?}");
 }
 
+/// GUARDS: an exponential function with N off 1 (how a gradient midpoint is written) keeps its
+/// curve: sampled stops must follow it, not collapse to the two ends because neighbouring samples
+/// look straight.
+#[test]
+fn a_shading_with_an_exponent_keeps_its_curve() {
+    let shading = "/Shading << /Sh0 << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1.4234 >> >> >>";
+    let d = open(&one_page("/Sh0 sh", shading, &[]));
+    let g = all(&d)
+        .into_iter()
+        .find_map(|n| n.appearance.items.iter().find_map(|i| if let Paint::Gradient(g) = i.paint() { Some(g.clone()) } else { None }))
+        .expect("a gradient");
+    assert!(g.gradient.stops.len() > 2, "{:?}", g.gradient.stops);
+    // Halfway along, the curve is at 0.5^1.4234 ≈ 0.373, well off the straight 0.5.
+    let (c, _) = g.gradient.sample(0.5);
+    let v = c.to_rgb()[0];
+    assert!((v - 0.5f32.powf(1.4234)).abs() < 0.01, "{v}");
+}
+
 /// A diamond (10–90 × 10–90) clipping `paint`, which fills its bounds: how a shape filled with a
 /// gradient is written (`W n`, then `sh`).
 fn clipped_diamond(paint: &str) -> Document {

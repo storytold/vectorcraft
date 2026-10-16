@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Node};
-use vectorcraft_geom::{Rect, shapes};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, ImageObject, Node, NodeKind};
+use vectorcraft_geom::{Affine, Rect, shapes};
 use vectorcraft_svg::{ExportOptions, export};
 
 /// A group of a red and a blue square with a green fill of its own (`below`: under the members).
@@ -62,4 +62,29 @@ fn group_effects_bake_into_the_members_and_filter_the_group() {
     let mut ids = std::collections::HashSet::new();
     g.walk(&mut |n| assert!(ids.insert(n.id), "duplicate id {}", n.id));
     assert!(g.appearance.items.is_empty() && g.appearance.effects.is_empty());
+}
+
+/// #2023: a group's Transform effect copies an image among its members, as it does the paths: the
+/// exported file draws the image three times, where the effect put it.
+#[test]
+fn a_group_transform_copies_its_images() {
+    let mut d = Document::new(200.0, 100.0);
+    d.images.insert("red".into(), ImageBlob::new("image/png", vec![1, 2, 3]));
+    let im = ImageObject { key: "red".into(), width: 20, height: 20, xf: Affine::translate((20.0, 20.0)), link: None, placement: Default::default() };
+    let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
+    let black = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let square = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 60.0, 30.0, 70.0)), black));
+    let mut g = Node::group(d.alloc_id(), vec![square, image]);
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 40, "copies": 2}), visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    // Each drawing of the image: an `<image>`, or a `<use>` of one the defs share.
+    let placed: Vec<&str> = svg
+        .lines()
+        .map(str::trim_start)
+        .filter(|l| l.starts_with("<image") || l.starts_with("<use"))
+        .filter_map(|l| l.split("transform=\"").nth(1)?.split('"').next())
+        .collect();
+    assert_eq!(placed, ["matrix(1 0 0 1 20 20)", "matrix(1 0 0 1 60 20)", "matrix(1 0 0 1 100 20)"], "{svg}");
 }

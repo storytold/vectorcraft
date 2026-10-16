@@ -121,6 +121,9 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, the rest drawn back to
   front. Concave solids seen at steep angles can overlap wrongly; open (hollow) solids show both sides.
+  Twisted walls and bevels are drawn in pieces about as long as a wall slice is wide (fewer near the limit of
+  32,768 facets), and a cap or flat back turned toward the viewer is drawn over them. The piece drawn on top can
+  still lie a few points behind another nearby piece.
 - Shading is flat per facet: an inflated rim seen almost edge-on shows faint banding where the facets get finer.
 - Paths and compound paths only: convert type, images and groups to outlines first. One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points

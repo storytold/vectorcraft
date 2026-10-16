@@ -1,7 +1,7 @@
 {
   "format": "vectorcraft",
-  "version": 1,
-  "generator": "VectorCraft 0.1.0",
+  "version": 4,
+  "generator": "VectorCraft 0.11.0",
   "document": {
     "version": 1,
     "title": "Ribbons",
@@ -25,15 +25,6 @@
       {
         "id": 1,
         "name": "Layer 1",
-        "visible": true,
-        "locked": false,
-        "opacity": 1.0,
-        "blend": "Normal",
-        "isolate": false,
-        "knockout": false,
-        "appearance": {
-          "items": []
-        },
         "kind": {
           "type": "layer",
           "color": {
@@ -45,12 +36,6 @@
             {
               "id": 2,
               "name": "Background",
-              "visible": true,
-              "locked": false,
-              "opacity": 1.0,
-              "blend": "Normal",
-              "isolate": false,
-              "knockout": false,
               "appearance": {
                 "items": [
                   {
@@ -85,28 +70,14 @@
                         ]
                       },
                       "angle": 0.0
-                    },
-                    "opacity": 1.0,
-                    "blend": "Normal",
-                    "visible": true
+                    }
                   },
                   {
                     "kind": "stroke",
                     "paint": {
                       "type": "none"
                     },
-                    "width": 2.2,
-                    "cap": "Butt",
-                    "join": "Miter",
-                    "miter_limit": 10.0,
-                    "align": "Center",
-                    "arrow_scale": [
-                      100.0,
-                      100.0
-                    ],
-                    "opacity": 1.0,
-                    "blend": "Normal",
-                    "visible": true
+                    "width": 2.2
                   }
                 ]
               },
@@ -117,71 +88,34 @@
                     {
                       "anchors": [
                         {
-                          "p": {
-                            "x": 0.0,
-                            "y": 0.0
-                          },
-                          "in": {
-                            "x": 0.0,
-                            "y": 0.0
-                          },
-                          "out": {
-                            "x": 0.0,
-                            "y": 0.0
-                          },
-                          "kind": "Corner"
+                          "p": [
+                            0.0,
+                            0.0
+                          ]
                         },
                         {
-                          "p": {
-                            "x": 1600.0,
-                            "y": 0.0
-                          },
-                          "in": {
-                            "x": 1600.0,
-                            "y": 0.0
-                          },
-                          "out": {
-                            "x": 1600.0,
-                            "y": 0.0
-                          },
-                          "kind": "Corner"
+                          "p": [
+                            1600.0,
+                            0.0
+                          ]
                         },
                         {
-                          "p": {
-                            "x": 1600.0,
-                            "y": 1000.0
-                          },
-                          "in": {
-                            "x": 1600.0,
-                            "y": 1000.0
-                          },
-                          "out": {
-                            "x": 1600.0,
-                            "y": 1000.0
-                          },
-                          "kind": "Corner"
+                          "p": [
+                            1600.0,
+                            1000.0
+                          ]
                         },
                         {
-                          "p": {
-                            "x": 0.0,
-                            "y": 1000.0
-                          },
-                          "in": {
-                            "x": 0.0,
-                            "y": 1000.0
-                          },
-                          "out": {
-                            "x": 0.0,
-                            "y": 1000.0
-                          },
-                          "kind": "Corner"
+                          "p": [
+                            0.0,
+                            1000.0
+                          ]
                         }
                       ],
                       "closed": true
                     }
                   ]
                 },
-                "rule": "NonZero",
                 "live": {
                   "shape": "rectangle",
                   "w": 1600.0,
@@ -200,61 +134,30 @@
                     0.0,
                     0.0
                   ]
-                },
-                "clipping": false,
-                "guide": false
+                }
               }
             },
             {
               "id": 15,
-              "visible": true,
-              "locked": false,
-              "opacity": 1.0,
-              "blend": "Normal",
-              "isolate": false,
-              "knockout": false,
-              "appearance": {
-                "items": []
-              },
               "kind": {
                 "type": "group",
                 "children": [
                   {
                     "id": 14,
-                    "visible": true,
-                    "locked": false,
-                    "opacity": 1.0,
-                    "blend": "Normal",
-                    "isolate": false,
-                    "knockout": false,
                     "appearance": {
                       "items": [
                         {
                           "kind": "fill",
                           "paint": {
                             "type": "none"
-                          },
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "visible": true
+                          }
                         },
                         {
                           "kind": "stroke",
                           "paint": {
                             "type": "none"
                           },
-                          "width": 0.0,
-                          "cap": "Butt",
-                          "join": "Miter",
-                          "miter_limit": 10.0,
-                          "align": "Center",
-                          "arrow_scale": [
-                            100.0,
-                            100.0
-                          ],
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "visible": true
+                          "width": 0.0
                         }
                       ]
                     },
@@ -265,71 +168,34 @@
                           {
                             "anchors": [
                               {
-                                "p": {
-                                  "x": 0.0,
-                                  "y": 0.0
-                                },
-                                "in": {
-                                  "x": 0.0,
-                                  "y": 0.0
-                                },
-                                "out": {
-                                  "x": 0.0,
-                                  "y": 0.0
-                                },
-                                "kind": "Corner"
+                                "p": [
+                                  0.0,
+                                  0.0
+                                ]
                               },
                               {
-                                "p": {
-                                  "x": 1600.0,
-                                  "y": 0.0
-                                },
-                                "in": {
-                                  "x": 1600.0,
-                                  "y": 0.0
-                                },
-                                "out": {
-                                  "x": 1600.0,
-                                  "y": 0.0
-                                },
-                                "kind": "Corner"
+                                "p": [
+                                  1600.0,
+                                  0.0
+                                ]
                               },
                               {
-                                "p": {
-                                  "x": 1600.0,
-                                  "y": 1000.0
-                                },
-                                "in": {
-                                  "x": 1600.0,
-                                  "y": 1000.0
-                                },
-                                "out": {
-                                  "x": 1600.0,
-                                  "y": 1000.0
-                                },
-                                "kind": "Corner"
+                                "p": [
+                                  1600.0,
+                                  1000.0
+                                ]
                               },
                               {
-                                "p": {
-                                  "x": 0.0,
-                                  "y": 1000.0
-                                },
-                                "in": {
-                                  "x": 0.0,
-                                  "y": 1000.0
-                                },
-                                "out": {
-                                  "x": 0.0,
-                                  "y": 1000.0
-                                },
-                                "kind": "Corner"
+                                "p": [
+                                  0.0,
+                                  1000.0
+                                ]
                               }
                             ],
                             "closed": true
                           }
                         ]
                       },
-                      "rule": "NonZero",
                       "live": {
                         "shape": "rectangle",
                         "w": 1600.0,
@@ -349,42 +215,24 @@
                           0.0
                         ]
                       },
-                      "clipping": true,
-                      "guide": false
+                      "clipping": true
                     }
                   },
                   {
                     "id": 5,
-                    "visible": true,
-                    "locked": false,
                     "opacity": 0.9,
-                    "blend": "Normal",
-                    "isolate": false,
-                    "knockout": false,
-                    "appearance": {
-                      "items": []
-                    },
                     "kind": {
                       "type": "blend",
                       "children": [
                         {
                           "id": 3,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -397,18 +245,7 @@
                                     "b": 0.83137256
                                   }
                                 },
-                                "width": 2.5,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 2.5
                               }
                             ]
                           },
@@ -419,78 +256,56 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": -50.0,
-                                        "y": 760.0
-                                      },
-                                      "in": {
-                                        "x": -50.0,
-                                        "y": 760.0
-                                      },
-                                      "out": {
-                                        "x": 300.0,
-                                        "y": 380.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        -50.0,
+                                        760.0
+                                      ],
+                                      "out": [
+                                        300.0,
+                                        380.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 900.0,
-                                        "y": 560.0
-                                      },
-                                      "in": {
-                                        "x": 600.0,
-                                        "y": 980.0
-                                      },
-                                      "out": {
-                                        "x": 1200.0,
-                                        "y": 140.0
-                                      },
+                                      "p": [
+                                        900.0,
+                                        560.0
+                                      ],
+                                      "in": [
+                                        600.0,
+                                        980.0
+                                      ],
+                                      "out": [
+                                        1200.0,
+                                        140.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1650.0,
-                                        "y": 420.0
-                                      },
-                                      "in": {
-                                        "x": 1400.0,
-                                        "y": 260.0
-                                      },
-                                      "out": {
-                                        "x": 1650.0,
-                                        "y": 420.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1650.0,
+                                        420.0
+                                      ],
+                                      "in": [
+                                        1400.0,
+                                        260.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         },
                         {
                           "id": 4,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -503,18 +318,7 @@
                                     "b": 0.8980392
                                   }
                                 },
-                                "width": 2.5,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 2.5
                               }
                             ]
                           },
@@ -525,58 +329,45 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": -50.0,
-                                        "y": 900.0
-                                      },
-                                      "in": {
-                                        "x": -50.0,
-                                        "y": 900.0
-                                      },
-                                      "out": {
-                                        "x": 350.0,
-                                        "y": 620.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        -50.0,
+                                        900.0
+                                      ],
+                                      "out": [
+                                        350.0,
+                                        620.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 950.0,
-                                        "y": 760.0
-                                      },
-                                      "in": {
-                                        "x": 650.0,
-                                        "y": 1080.0
-                                      },
-                                      "out": {
-                                        "x": 1250.0,
-                                        "y": 440.0
-                                      },
+                                      "p": [
+                                        950.0,
+                                        760.0
+                                      ],
+                                      "in": [
+                                        650.0,
+                                        1080.0
+                                      ],
+                                      "out": [
+                                        1250.0,
+                                        440.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1650.0,
-                                        "y": 700.0
-                                      },
-                                      "in": {
-                                        "x": 1450.0,
-                                        "y": 520.0
-                                      },
-                                      "out": {
-                                        "x": 1650.0,
-                                        "y": 700.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1650.0,
+                                        700.0
+                                      ],
+                                      "in": [
+                                        1450.0,
+                                        520.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         }
                       ],
@@ -590,36 +381,19 @@
                   },
                   {
                     "id": 8,
-                    "visible": true,
-                    "locked": false,
                     "opacity": 0.9,
-                    "blend": "Normal",
-                    "isolate": false,
-                    "knockout": false,
-                    "appearance": {
-                      "items": []
-                    },
                     "kind": {
                       "type": "blend",
                       "children": [
                         {
                           "id": 6,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -632,18 +406,7 @@
                                     "b": 0.2509804
                                   }
                                 },
-                                "width": 2.5,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 2.5
                               }
                             ]
                           },
@@ -654,78 +417,56 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": -50.0,
-                                        "y": 180.0
-                                      },
-                                      "in": {
-                                        "x": -50.0,
-                                        "y": 180.0
-                                      },
-                                      "out": {
-                                        "x": 250.0,
-                                        "y": 420.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        -50.0,
+                                        180.0
+                                      ],
+                                      "out": [
+                                        250.0,
+                                        420.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 900.0,
-                                        "y": 300.0
-                                      },
-                                      "in": {
-                                        "x": 600.0,
-                                        "y": 60.0
-                                      },
-                                      "out": {
-                                        "x": 1200.0,
-                                        "y": 540.0
-                                      },
+                                      "p": [
+                                        900.0,
+                                        300.0
+                                      ],
+                                      "in": [
+                                        600.0,
+                                        60.0
+                                      ],
+                                      "out": [
+                                        1200.0,
+                                        540.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1650.0,
-                                        "y": 360.0
-                                      },
-                                      "in": {
-                                        "x": 1300.0,
-                                        "y": 620.0
-                                      },
-                                      "out": {
-                                        "x": 1650.0,
-                                        "y": 360.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1650.0,
+                                        360.0
+                                      ],
+                                      "in": [
+                                        1300.0,
+                                        620.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         },
                         {
                           "id": 7,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -738,18 +479,7 @@
                                     "b": 0.70980394
                                   }
                                 },
-                                "width": 2.5,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 2.5
                               }
                             ]
                           },
@@ -760,58 +490,45 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": -50.0,
-                                        "y": 380.0
-                                      },
-                                      "in": {
-                                        "x": -50.0,
-                                        "y": 380.0
-                                      },
-                                      "out": {
-                                        "x": 300.0,
-                                        "y": 640.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        -50.0,
+                                        380.0
+                                      ],
+                                      "out": [
+                                        300.0,
+                                        640.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 950.0,
-                                        "y": 480.0
-                                      },
-                                      "in": {
-                                        "x": 650.0,
-                                        "y": 180.0
-                                      },
-                                      "out": {
-                                        "x": 1250.0,
-                                        "y": 780.0
-                                      },
+                                      "p": [
+                                        950.0,
+                                        480.0
+                                      ],
+                                      "in": [
+                                        650.0,
+                                        180.0
+                                      ],
+                                      "out": [
+                                        1250.0,
+                                        780.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1650.0,
-                                        "y": 560.0
-                                      },
-                                      "in": {
-                                        "x": 1350.0,
-                                        "y": 760.0
-                                      },
-                                      "out": {
-                                        "x": 1650.0,
-                                        "y": 560.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1650.0,
+                                        560.0
+                                      ],
+                                      "in": [
+                                        1350.0,
+                                        760.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         }
                       ],
@@ -825,36 +542,19 @@
                   },
                   {
                     "id": 11,
-                    "visible": true,
-                    "locked": false,
                     "opacity": 0.75,
-                    "blend": "Normal",
-                    "isolate": false,
-                    "knockout": false,
-                    "appearance": {
-                      "items": []
-                    },
                     "kind": {
                       "type": "blend",
                       "children": [
                         {
                           "id": 9,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -867,18 +567,7 @@
                                     "b": 0.9764706
                                   }
                                 },
-                                "width": 1.6,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 1.6
                               }
                             ]
                           },
@@ -889,78 +578,56 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": 200.0,
-                                        "y": 1050.0
-                                      },
-                                      "in": {
-                                        "x": 200.0,
-                                        "y": 1050.0
-                                      },
-                                      "out": {
-                                        "x": 400.0,
-                                        "y": 700.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        200.0,
+                                        1050.0
+                                      ],
+                                      "out": [
+                                        400.0,
+                                        700.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 800.0,
-                                        "y": 500.0
-                                      },
-                                      "in": {
-                                        "x": 700.0,
-                                        "y": 900.0
-                                      },
-                                      "out": {
-                                        "x": 900.0,
-                                        "y": 100.0
-                                      },
+                                      "p": [
+                                        800.0,
+                                        500.0
+                                      ],
+                                      "in": [
+                                        700.0,
+                                        900.0
+                                      ],
+                                      "out": [
+                                        900.0,
+                                        100.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1300.0,
-                                        "y": -50.0
-                                      },
-                                      "in": {
-                                        "x": 1100.0,
-                                        "y": 100.0
-                                      },
-                                      "out": {
-                                        "x": 1300.0,
-                                        "y": -50.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1300.0,
+                                        -50.0
+                                      ],
+                                      "in": [
+                                        1100.0,
+                                        100.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         },
                         {
                           "id": 10,
-                          "visible": true,
-                          "locked": false,
-                          "opacity": 1.0,
-                          "blend": "Normal",
-                          "isolate": false,
-                          "knockout": false,
                           "appearance": {
                             "items": [
                               {
                                 "kind": "fill",
                                 "paint": {
                                   "type": "none"
-                                },
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                }
                               },
                               {
                                 "kind": "stroke",
@@ -973,18 +640,7 @@
                                     "b": 0.83137256
                                   }
                                 },
-                                "width": 1.6,
-                                "cap": "Butt",
-                                "join": "Miter",
-                                "miter_limit": 10.0,
-                                "align": "Center",
-                                "arrow_scale": [
-                                  100.0,
-                                  100.0
-                                ],
-                                "opacity": 1.0,
-                                "blend": "Normal",
-                                "visible": true
+                                "width": 1.6
                               }
                             ]
                           },
@@ -995,58 +651,45 @@
                                 {
                                   "anchors": [
                                     {
-                                      "p": {
-                                        "x": 420.0,
-                                        "y": 1050.0
-                                      },
-                                      "in": {
-                                        "x": 420.0,
-                                        "y": 1050.0
-                                      },
-                                      "out": {
-                                        "x": 600.0,
-                                        "y": 760.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        420.0,
+                                        1050.0
+                                      ],
+                                      "out": [
+                                        600.0,
+                                        760.0
+                                      ]
                                     },
                                     {
-                                      "p": {
-                                        "x": 960.0,
-                                        "y": 560.0
-                                      },
-                                      "in": {
-                                        "x": 850.0,
-                                        "y": 980.0
-                                      },
-                                      "out": {
-                                        "x": 1070.0,
-                                        "y": 140.0
-                                      },
+                                      "p": [
+                                        960.0,
+                                        560.0
+                                      ],
+                                      "in": [
+                                        850.0,
+                                        980.0
+                                      ],
+                                      "out": [
+                                        1070.0,
+                                        140.0
+                                      ],
                                       "kind": "Smooth"
                                     },
                                     {
-                                      "p": {
-                                        "x": 1480.0,
-                                        "y": -50.0
-                                      },
-                                      "in": {
-                                        "x": 1250.0,
-                                        "y": 180.0
-                                      },
-                                      "out": {
-                                        "x": 1480.0,
-                                        "y": -50.0
-                                      },
-                                      "kind": "Corner"
+                                      "p": [
+                                        1480.0,
+                                        -50.0
+                                      ],
+                                      "in": [
+                                        1250.0,
+                                        180.0
+                                      ]
                                     }
                                   ],
                                   "closed": false
                                 }
                               ]
-                            },
-                            "rule": "NonZero",
-                            "clipping": false,
-                            "guide": false
+                            }
                           }
                         }
                       ],
@@ -1064,15 +707,6 @@
             },
             {
               "id": 12,
-              "visible": true,
-              "locked": false,
-              "opacity": 1.0,
-              "blend": "Normal",
-              "isolate": false,
-              "knockout": false,
-              "appearance": {
-                "items": []
-              },
               "kind": {
                 "type": "text",
                 "kind": {
@@ -1130,15 +764,6 @@
             },
             {
               "id": 13,
-              "visible": true,
-              "locked": false,
-              "opacity": 1.0,
-              "blend": "Normal",
-              "isolate": false,
-              "knockout": false,
-              "appearance": {
-                "items": []
-              },
               "kind": {
                 "type": "text",
                 "kind": {
@@ -2005,10 +1630,7 @@
                   "g": 1.0,
                   "b": 1.0
                 }
-              },
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              }
             },
             {
               "kind": "stroke",
@@ -2021,18 +1643,7 @@
                   "b": 0.0
                 }
               },
-              "width": 1.0,
-              "cap": "Butt",
-              "join": "Miter",
-              "miter_limit": 10.0,
-              "align": "Center",
-              "arrow_scale": [
-                100.0,
-                100.0
-              ],
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              "width": 1.0
             }
           ]
         }
@@ -2045,10 +1656,7 @@
               "kind": "fill",
               "paint": {
                 "type": "none"
-              },
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              }
             },
             {
               "kind": "stroke",
@@ -2061,18 +1669,7 @@
                   "b": 0.0
                 }
               },
-              "width": 1.0,
-              "cap": "Butt",
-              "join": "Miter",
-              "miter_limit": 10.0,
-              "align": "Center",
-              "arrow_scale": [
-                100.0,
-                100.0
-              ],
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              "width": 1.0
             }
           ]
         }
@@ -2091,10 +1688,7 @@
                   "g": 0.078431375,
                   "b": 0.39215687
                 }
-              },
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              }
             },
             {
               "kind": "stroke",
@@ -2107,18 +1701,7 @@
                   "b": 0.0
                 }
               },
-              "width": 4.0,
-              "cap": "Butt",
-              "join": "Miter",
-              "miter_limit": 10.0,
-              "align": "Center",
-              "arrow_scale": [
-                100.0,
-                100.0
-              ],
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              "width": 4.0
             }
           ]
         }
@@ -2137,10 +1720,7 @@
                   "g": 0.6901961,
                   "b": 0.23137255
                 }
-              },
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              }
             },
             {
               "kind": "stroke",
@@ -2153,18 +1733,7 @@
                   "b": 0.14117648
                 }
               },
-              "width": 2.0,
-              "cap": "Butt",
-              "join": "Miter",
-              "miter_limit": 10.0,
-              "align": "Center",
-              "arrow_scale": [
-                100.0,
-                100.0
-              ],
-              "opacity": 1.0,
-              "blend": "Normal",
-              "visible": true
+              "width": 2.0
             }
           ]
         }
@@ -2178,7 +1747,19 @@
     },
     "raster_effects_ppi": 72.0,
     "images": {},
-    "next_id": 16
+    "next_id": 16,
+    "metadata": {
+      "author": "",
+      "authorTitle": "",
+      "description": "",
+      "keywords": [],
+      "rating": 0,
+      "copyrightStatus": "unknown",
+      "copyrightNotice": "",
+      "copyrightUrl": "",
+      "created": 1792118977,
+      "modified": 1792118977
+    }
   },
   "images": {}
 }

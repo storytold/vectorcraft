@@ -387,3 +387,16 @@ fn layout_cache_follows_fonts_added_later() {
     assert!(FontDb::global().add_font(font) > 0, "the test font is new to this process");
     assert!(!Arc::ptr_eq(&before, &tool.layout(t)), "a font added after the layout must refresh it");
 }
+
+#[test]
+fn escape_returns_to_previous_tool_when_set() {
+    let (d, _id, mut tool) = editing("Hello");
+    tool.set_option("prevTool", &json!("directSelection"));
+    let acts = key(&mut tool, &d, ToolKey::Escape, Mods::default());
+    assert_eq!(acts.last(), Some(&Action::SwitchTool("directSelection".into())));
+
+    // Without prevTool set, Escape defaults to Selection tool.
+    let (d2, _id2, mut tool2) = editing("World");
+    let acts2 = key(&mut tool2, &d2, ToolKey::Escape, Mods::default());
+    assert_eq!(acts2.last(), Some(&Action::SwitchTool("selection".into())));
+}

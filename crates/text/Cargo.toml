@@ -33,6 +33,12 @@ unicode-segmentation = "1.13"
 write-fonts = { version = "0.48", optional = true }
 
 [features]
+default = ["bundled-fonts"]
+# The OFL fonts of `assets/fonts` (Source Sans 3, Source Serif 4, Inter, JetBrains Mono) compiled
+# in: 3.4 MB of the binary. Off, the font database starts without them (craft-fonts and system
+# fonts are unaffected), for an embedder that adds its own with `FontDb::add_font` and would ship
+# these twice. vectorcraft-engine turns it on by default (its `bundled-fonts` feature).
+bundled-fonts = []
 # `vectorcraft_text::test_fonts` for other crates' tests (dev-dependencies only).
 test-fonts = ["dep:write-fonts"]
 

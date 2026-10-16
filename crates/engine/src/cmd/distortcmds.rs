@@ -13,7 +13,7 @@ use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sam
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
-use super::edit::{duplicate_in, selected_roots};
+use super::edit::{duplicate_in, outermost, selected_roots};
 use super::*;
 use crate::EngineError;
 
@@ -706,7 +706,8 @@ fn puppet_warp(s: &mut Session, p: &Value) -> Result<Value> {
     if pins.iter().chain(&moved).any(|q| !q.x.is_finite() || !q.y.is_finite()) {
         return Err(bad(C, "pins must be finite"));
     }
-    let ids = if rest { puppet_ids(p, || Ok(s.doc()?.selection.objects.clone()))? } else { puppet_ids(p, || selected_roots(s))? };
+    let ids =
+        if rest { puppet_ids(p, || Ok(s.doc()?.selection.objects.clone()))? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
     let expand = f64_or(p, "expand", 3.0).clamp(0.0, 1000.0);
     let angles: Vec<Option<f64>> = match p.get("angles") {
         None | Some(Value::Null) => vec![None; pins.len()],
@@ -846,7 +847,7 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
 
 fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
-        Some(v) => Ok(v),
+        Some(v) => Ok(outermost(&s.doc()?.doc, v)),
         None => selected_roots(s),
     }
 }
@@ -936,9 +937,18 @@ fn beyond_horizon() -> EngineError {
     EngineError::Other("the pointer is beyond the plane's horizon".into())
 }
 
+/// Whether the grid stored in `d` lists attachments of its own, as grids stored before attachments
+/// were kept on the objects do ([`PerspectiveGrid::adopt_stored_attachments`]).
+fn stores_attachments(d: &Document) -> bool {
+    !PerspectiveGrid::current(d).attached.is_empty()
+}
+
 /// Edit objects in perspective (one undo step `label`): with `copy` their duplicates (which stay
 /// attached), each mapped by `step` for its own plane and depth; objects not in perspective attach
-/// to `fallback` first. → the edited objects and where the first one was (plane, depth).
+/// to `fallback` first. → the edited objects and where the first one was (plane, depth). In an
+/// interaction whose document is still its snapshot, the duplicates are the copies the interaction
+/// keeps ([`super::object::preview_copies`]), unless the snapshot's grid lists attachments of its
+/// own ([`stores_attachments`]).
 fn persp_edit(
     s: &mut Session,
     label: &str,
@@ -951,9 +961,20 @@ fn persp_edit(
         return Err(EngineError::Other("select the objects to transform in perspective".into()));
     }
     let mut g = grid_of(&s.doc()?.doc);
+    let kept = if copy && !stores_attachments(&s.doc()?.doc) { super::object::preview_copies(s, ids, false)? } else { None };
     s.edit(label, |d, sel| {
         g.adopt_stored_attachments(d);
-        let targets = if copy { duplicate_in(d, sel, ids, Affine::IDENTITY)? } else { ids.to_vec() };
+        let targets = match &kept {
+            // The document becomes the snapshot with the kept copies, not yet mapped, and the loop
+            // below maps only the copies.
+            Some(k) => {
+                *d = Document::clone(&k.doc);
+                sel.clone_from(&k.selection);
+                k.ids.clone()
+            }
+            None if copy => duplicate_in(d, sel, ids, Affine::IDENTITY)?,
+            None => ids.to_vec(),
+        };
         let mut first = None;
         for id in &targets {
             let (plane, depth) = match g.attachment_of(d, *id) {
@@ -1139,12 +1160,32 @@ fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
         let ids = if objects == "move" { on_plane(&s.doc()?.doc) } else { vec![] };
         return Ok(json!({ "plane": plane.id(), "offset": to, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
     }
+    // In an interaction whose document is still its snapshot, the copies of the objects on the
+    // plane are the copies the interaction keeps (`preview_copies`), unless the snapshot's grid
+    // lists attachments of its own (`stores_attachments`).
+    let kept = if objects == "copy" && s.in_interaction() && !stores_attachments(&s.doc()?.doc) {
+        let on = on_plane(&s.doc()?.doc);
+        super::object::preview_copies(s, &on, false)?
+    } else {
+        None
+    };
     let ids = s.edit(label, |d, sel| {
         old.adopt_stored_attachments(d);
         let mut ids = vec![];
         if objects != "none" {
-            let on = on_plane(d);
-            ids = if objects == "copy" { duplicate_in(d, sel, &on, Affine::IDENTITY)? } else { on };
+            ids = match &kept {
+                // The document becomes the snapshot with the kept copies, not yet moved, and the
+                // loop below moves only the copies.
+                Some(k) => {
+                    *d = Document::clone(&k.doc);
+                    sel.clone_from(&k.selection);
+                    k.ids.clone()
+                }
+                None => {
+                    let on = on_plane(d);
+                    if objects == "copy" { duplicate_in(d, sel, &on, Affine::IDENTITY)? } else { on }
+                }
+            };
             let m = old.transform_map(plane, from, Affine::IDENTITY, to - from).ok_or_else(beyond_horizon)?;
             for id in &ids {
                 warp_checked(d, *id, &m)?;

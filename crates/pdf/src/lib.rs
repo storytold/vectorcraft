@@ -31,7 +31,8 @@
 //!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
 //!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
-//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]).
+//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]),
+//!   and [`file_info()`] reads its File Info (the information dictionary and the XMP packet).
 //! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
 //! - [`print()`] lays a document out on paper as File → Print does ([`PrintSettings`]) and writes
 //!   the job as a print-ready PDF: composite or one page per ink.
@@ -43,6 +44,7 @@
 mod editing;
 mod encrypt;
 mod export;
+mod file_info;
 mod forms;
 mod images;
 mod import;
@@ -70,6 +72,7 @@ mod syntax;
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
 pub use export::{export, export_with_report, page_areas};
+pub use file_info::{FileInfo, file_info};
 pub use import::{OFF_ARTBOARD_NOTE, PAST_PAGE_NOTE, import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
@@ -179,6 +182,10 @@ pub struct ImportReport {
     /// Every page shows only text, over an editor's private data: that data, where it reads,
     /// is the file's art (a file saved without its PDF part shows a notice there instead).
     pub only_text: bool,
+    /// The size in points of a unit of the first page read's user space: the `UserUnit` the PDF
+    /// reader applies to that page (1 for a page without one). The page came in at its size in
+    /// points, its numbers times this.
+    pub user_unit: f64,
 }
 
 /// Result of an export with non-fatal warnings (features approximated or dropped).
@@ -211,7 +218,7 @@ pub enum PdfError {
     #[error("page {0} does not exist (the PDF has {1})")]
     BadPage(usize, usize),
     #[error(
-        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG"
+        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS"
     )]
     PostScript,
     #[error(
@@ -244,6 +251,8 @@ mod tests_dashalign;
 mod tests_editing;
 #[cfg(test)]
 mod tests_encrypt;
+#[cfg(test)]
+mod tests_file_info;
 #[cfg(test)]
 mod tests_focal;
 #[cfg(test)]

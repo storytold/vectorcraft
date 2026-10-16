@@ -17,7 +17,7 @@
 use std::sync::OnceLock;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode};
+use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode, TEMPLATE_FORMATS};
 
 use super::{DialogResult, DialogSpec, form};
 use crate::state::Dialog;
@@ -84,7 +84,7 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
         !(matches!(o.ty, "array" | "object")
             || (range && o.name == "artboard")
             || (separate && o.name == "range")
-            || (f.id == "ai" && o.name == "useArtboards"))
+            || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards"))
     })
 }
 
@@ -133,6 +133,12 @@ fn save_labels() -> &'static [&'static str] {
     LABELS.get_or_init(|| SAVE_FORMATS.iter().filter_map(|id| fileio::format(id)).map(|f| f.label).collect())
 }
 
+/// The Save as Template format menu (labels in [`TEMPLATE_FORMATS`] order).
+fn template_labels() -> &'static [&'static str] {
+    static LABELS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    LABELS.get_or_init(|| TEMPLATE_FORMATS.iter().filter_map(|id| fileio::format(id)).map(|f| f.label).collect())
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let Some(f) = fileio::format(&d.str("format")) else { return false };
@@ -140,11 +146,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     egui::Grid::new("save-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         if d.bool("__pick") {
             form::field_w(ui, d, "path", tl!("File Name:"), 240.0);
-            if SaveMode::of(&d.str("__action")) != Some(SaveMode::Template) {
-                ui.label(egui::RichText::new(tl!("Format:")).color(t.text_dim));
-                switch = widgets::dropdown(ui, "save-format", f.label, save_labels(), 254.0).and_then(|i| SAVE_FORMATS.get(i).copied());
-                ui.end_row();
-            }
+            let (ids, labels) = if SaveMode::of(&d.str("__action")) == Some(SaveMode::Template) {
+                (TEMPLATE_FORMATS, template_labels())
+            } else {
+                (SAVE_FORMATS, save_labels())
+            };
+            ui.label(egui::RichText::new(tl!("Format:")).color(t.text_dim));
+            switch = widgets::dropdown(ui, "save-format", f.label, labels, 254.0).and_then(|i| ids.get(i).copied());
+            ui.end_row();
         }
         // Version first; the legacy version takes only its own options.
         let legacy = legacy_ai(d);
@@ -687,8 +696,34 @@ mod tests {
         let pick = &picks.borrow()[1];
         assert_eq!(pick.name, "Untitled-1 template.vctemplate");
         assert_eq!(pick.folder.as_deref().map(std::path::Path::new), Some(folder.as_path()));
-        assert_eq!(pick.filters, [("VectorCraft Template", &["vctemplate"][..])]);
+        assert_eq!(pick.filters, [("VectorCraft Template", &["vctemplate"][..]), ("PDF-compatible .ait template", &["ait"][..])]);
         assert_eq!(written.borrow()[1].0, "copy.vectorcraft", "the picked name is kept");
+    }
+
+    #[test]
+    fn save_as_template_writes_ait_when_it_is_picked() {
+        let (mut app, written, _) = desktop("flyer.ait");
+        app.session.prefs.templates_folder = vectorcraft_testkit::temp_dir("save-template-ait").to_string_lossy().into_owned();
+        app.run("file.saveAsTemplate", json!({})).unwrap();
+        assert!(app.ui.dialog.is_none(), "a template asks no options");
+        let (path, bytes) = written.borrow()[0].clone();
+        assert_eq!(path, "flyer.ait", "the picked name is kept");
+        assert!(bytes.starts_with(b"%PDF") && vectorcraft_pdf::editing(&bytes).is_some(), "a PDF carrying the document");
+        assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
+        // The web's dialog picks the format: .vctemplate first, .ait beside it.
+        let (mut app, written) = web();
+        app.run("file.saveAsTemplate", json!({})).unwrap();
+        assert_eq!((heading(dialog(&app)).as_str(), dialog(&app).str("format").as_str()), ("Save as Template", "template"));
+        assert_eq!(template_labels(), ["VectorCraft Template", "PDF-compatible .ait template"]);
+        frame(&mut app, false);
+        let mut d = app.ui.dialog.take().unwrap();
+        switch_format(&mut app, &mut d, "ait");
+        assert_eq!((d.str("path").as_str(), d.fields["pdfCompatible"].clone()), ("Untitled-1 template.ait", json!(true)));
+        app.ui.dialog = Some(d);
+        frame(&mut app, true);
+        let (name, bytes) = written.borrow()[0].clone();
+        assert_eq!(name, "Untitled-1 template.ait");
+        assert!(bytes.starts_with(b"%PDF"));
     }
 
     #[test]

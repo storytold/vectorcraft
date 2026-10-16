@@ -22,7 +22,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, FillLayer, Node, NodeKind, ParaStyle, StrokeLayer};
 use vectorcraft_geom::Rect;
 
-use super::edit::selected_roots;
+use super::edit::{outermost, selected_roots};
 use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::*;
@@ -294,15 +294,15 @@ pub(crate) fn subject_roots(s: &Session) -> Result<Vec<NodeId>> {
     }
 }
 
-/// Objects whose own appearance stack a command edits: `ids`/`id` (layers too), else the
-/// [`subject_roots`]; with `target: "contents"` the painted objects inside the groups and layers
-/// among them ([`leaf_targets`]).
+/// Objects whose own appearance stack a command edits: `ids`/`id` (layers too; an id inside
+/// another given one is dropped), else the [`subject_roots`]; with `target: "contents"` the painted
+/// objects inside the groups and layers among them ([`leaf_targets`]).
 pub(crate) fn appearance_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let roots = if p.get("ids").is_none() && p.get("id").is_none() {
         subject_roots(s)?
     } else {
         let d = &s.doc()?.doc;
-        targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some()).collect()
+        outermost(d, targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some()).collect())
     };
     if targets_contents(p)? { leaf_targets(s, &roots) } else { Ok(roots) }
 }
@@ -745,7 +745,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let (reverse, append) = (bool_or(p, "reverse", false), bool_or(p, "append", false));
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
     let selected = match ids_param(p, "ids") {
-        Some(v) => v,
+        Some(v) => outermost(&s.doc()?.doc, v),
         None => selected_roots(s)?,
     };
     // Reversed, the first selected object's attributes go onto the clicked object.

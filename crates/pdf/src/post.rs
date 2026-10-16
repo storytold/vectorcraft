@@ -2,7 +2,8 @@
 //! (General › Embed page thumbnails), the seal of the editing data, fast web view (a linearised
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
 //! through between its two steps so that it stays linearised. Also here: what makes a file say it
-//! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files.
+//! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, and the pages'
+//! user units ([`user_units`]), which the export writes before the thumbnails.
 
 use std::borrow::Cow;
 
@@ -56,6 +57,22 @@ fn thumbnails(pdf: Vec<u8>, thumbs: &[Thumbnail], gray: bool) -> Result<Vec<u8>,
         let (dict, _) = xref.dict(&pdf, *page).ok_or_else(|| failed("a page can't be read"))?;
         let n = patch.add_object(thumb.object(gray)?);
         patch.replace(dict, dict, format!("/Thumb {n} 0 R").into_bytes());
+    }
+    patch.apply(&pdf, &xref)
+}
+
+/// `pdf` with `units` as the `UserUnit` entries of its pages, in page order (a unit of 1 writes
+/// none); unchanged when every unit is 1.
+pub(crate) fn user_units(pdf: Vec<u8>, units: &[f64]) -> Result<Vec<u8>, PdfError> {
+    if units.iter().all(|u| *u == 1.0) {
+        return Ok(pdf);
+    }
+    let failed = |why: &str| PdfError::Write(format!("can't write the pages' user units: {why}"));
+    let Parsed { xref, pages, .. } = linearize::parse(&pdf).map_err(failed)?;
+    let mut patch = Patch::new(&xref);
+    for (page, unit) in pages.iter().zip(units).filter(|(_, u)| **u != 1.0) {
+        let (dict, _) = xref.dict(&pdf, *page).ok_or_else(|| failed("a page can't be read"))?;
+        patch.replace(dict, dict, format!("/UserUnit {unit}").into_bytes());
     }
     patch.apply(&pdf, &xref)
 }

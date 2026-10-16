@@ -14,10 +14,14 @@ use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, 
 /// million, 4 bytes each).
 pub(crate) const MAX_DECODED: usize = 256 << 20;
 
+/// The most an image XObject may decode to when its own size asks for more than
+/// [`MAX_DECODED`]: 1 GB (an A0 sheet scanned at 300 ppi is 418 MB in RGB, 557 MB in CMYK).
+const MAX_IMAGE_DECODED: usize = 1 << 30;
+
 /// The longest row a predictor may have, in bytes.
 const MAX_ROW: usize = 1 << 24;
 
-/// A stream that decodes to more than [`MAX_DECODED`].
+/// A stream that decodes to more than its [`budget`].
 struct TooBig;
 
 /// The filters of the stream with dictionary `dict`, by name (`Filter` or `F`: a name or an array).
@@ -54,43 +58,43 @@ fn bad_predictor(params: &Dict<'_>) -> bool {
     !(matches!(bits, 1 | 2 | 4 | 8 | 16) && colors > 0 && pixel <= 255 && columns > 0 && row.is_some_and(|r| r <= MAX_ROW))
 }
 
-/// `data` inflated, up to one byte past [`MAX_DECODED`] (zlib, or raw deflate as the reader also
-/// takes); `None` when it is damaged before that.
-fn inflate(data: &[u8]) -> Option<Vec<u8>> {
+/// `data` inflated, up to one byte past `max` (zlib, or raw deflate as the reader also takes);
+/// `None` when it is damaged before that.
+fn inflate(data: &[u8], max: usize) -> Option<Vec<u8>> {
     let read = |mut r: Box<dyn Read + '_>| {
         let mut out = vec![];
         // (Damaged data: what came out before the damage still counts.)
-        let done = r.by_ref().take(MAX_DECODED as u64 + 1).read_to_end(&mut out).is_ok();
-        (done || out.len() > MAX_DECODED).then_some(out)
+        let done = r.by_ref().take(max as u64 + 1).read_to_end(&mut out).is_ok();
+        (done || out.len() > max).then_some(out)
     };
     read(Box::new(flate2::read::ZlibDecoder::new(data))).or_else(|| read(Box::new(flate2::read::DeflateDecoder::new(data))))
 }
 
-/// `data` decoded from LZW, up to one byte past [`MAX_DECODED`]. `early`: the code length grows
-/// one code early (`EarlyChange`, 1 by default).
-fn lzw(data: &[u8], early: bool) -> Option<Vec<u8>> {
+/// `data` decoded from LZW, up to one byte past `max`. `early`: the code length grows one code
+/// early (`EarlyChange`, 1 by default).
+fn lzw(data: &[u8], early: bool, max: usize) -> Option<Vec<u8>> {
     use weezl::{BitOrder, LzwStatus, decode::Decoder};
     let mut decoder = if early { Decoder::with_tiff_size_switch(BitOrder::Msb, 8) } else { Decoder::new(BitOrder::Msb, 8) };
     let (mut out, mut chunk, mut input) = (vec![], vec![0; 1 << 16], data);
-    while out.len() <= MAX_DECODED {
+    while out.len() <= max {
         let r = decoder.decode_bytes(input, &mut chunk);
         input = input.get(r.consumed_in..).unwrap_or_default();
         out.extend_from_slice(chunk.get(..r.consumed_out).unwrap_or_default());
         match r.status {
             Ok(LzwStatus::Ok) => {}
             Ok(LzwStatus::Done | LzwStatus::NoProgress) => break,
-            Err(_) => return (out.len() > MAX_DECODED).then_some(out),
+            Err(_) => return (out.len() > max).then_some(out),
         }
     }
     Some(out)
 }
 
-/// `data` decoded from run-length encoding, up to one byte past [`MAX_DECODED`].
-fn run_length(data: &[u8]) -> Vec<u8> {
+/// `data` decoded from run-length encoding, up to one byte past `max`.
+fn run_length(data: &[u8], max: usize) -> Vec<u8> {
     let (mut out, mut at) = (vec![], 0);
     while let Some(&n) = data.get(at)
         && n != 128
-        && out.len() <= MAX_DECODED
+        && out.len() <= max
     {
         if n < 128 {
             let take = usize::from(n) + 1;
@@ -151,13 +155,52 @@ fn most_after(len: usize, filters: &[Name<'_>]) -> u128 {
     })
 }
 
+/// The number of colour components of the image with dictionary `dict`, from its colour space
+/// (4 when it can't be told).
+fn components(dict: &Dict<'_>) -> u64 {
+    let named = |n: &[u8]| match n {
+        b"DeviceGray" | b"G" | b"CalGray" | b"Indexed" | b"I" | b"Separation" => 1,
+        b"DeviceRGB" | b"RGB" | b"CalRGB" | b"Lab" => 3,
+        _ => 4,
+    };
+    if let Some(n) = dict.get::<Name<'_>>(b"ColorSpace") {
+        return named(n.as_ref());
+    }
+    let Some(a) = dict.get::<Array<'_>>(b"ColorSpace") else { return 4 };
+    let mut it = a.flex_iter();
+    let any = |n: Option<usize>| n.filter(|n| (1..=32).contains(n)).map_or(4, |n| n as u64);
+    match it.next::<Name<'_>>() {
+        Some(n) if n.as_ref() == b"ICCBased" => any(it.next::<Stream<'_>>().and_then(|s| s.dict().get::<usize>(b"N"))),
+        Some(n) if n.as_ref() == b"DeviceN" => any(it.next::<Array<'_>>().map(|names| names.iter::<Object<'_>>().count())),
+        Some(n) => named(n.as_ref()),
+        None => 4,
+    }
+}
+
+/// The most the stream with dictionary `dict` may decode to: [`MAX_DECODED`], or for an image
+/// XObject the size its width, height, components and bits declare (each row with a predictor's
+/// tag byte), up to [`MAX_IMAGE_DECODED`]: an image's size is known before it is decoded.
+fn budget(dict: &Dict<'_>) -> usize {
+    if dict.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Image") {
+        return MAX_DECODED;
+    }
+    let side = |key: &[u8]| dict.get::<u32>(key).map_or(0, u64::from);
+    let mask = dict.get::<bool>(b"ImageMask") == Some(true);
+    let bits = if mask { 1 } else { dict.get::<u8>(b"BitsPerComponent").map_or(8, |b| u64::from(b.min(16))) };
+    let channels = if mask { 1 } else { components(dict) };
+    let row = side(b"Width").saturating_mul(channels).saturating_mul(bits).div_ceil(8).saturating_add(1);
+    let declared = usize::try_from(side(b"Height").saturating_mul(row)).unwrap_or(usize::MAX);
+    declared.clamp(MAX_DECODED, MAX_IMAGE_DECODED)
+}
+
 /// `data` (of the stream with dictionary `dict`) through its filters, as far as this reads them:
-/// Flate, LZW, run-length and the ASCII encodings. Not decoded when it can't decode past
-/// [`MAX_DECODED`] and `keep` doesn't ask for it, or when an image codec or damaged data comes
-/// first (an image's own decoder knows its size).
+/// Flate, LZW, run-length and the ASCII encodings. Not decoded when it can't decode past its
+/// [`budget`] and `keep` doesn't ask for it, or when an image codec or damaged data comes first
+/// (an image's own decoder knows its size).
 fn decode(data: &[u8], dict: &Dict<'_>, keep: bool) -> Result<Option<Vec<u8>>, TooBig> {
     let filters = filters(dict);
-    if !keep && most_after(data.len(), &filters) <= MAX_DECODED as u128 {
+    let max = budget(dict);
+    if !keep && most_after(data.len(), &filters) <= max as u128 {
         return Ok(None);
     }
     let params = params(dict);
@@ -165,15 +208,15 @@ fn decode(data: &[u8], dict: &Dict<'_>, keep: bool) -> Result<Option<Vec<u8>>, T
     for (i, f) in filters.iter().enumerate() {
         let early = params.get(i).and_then(|p| p.get::<u8>(b"EarlyChange")).is_none_or(|e| e != 0);
         let out = match f.as_ref() {
-            b"FlateDecode" | b"Fl" => inflate(&data),
-            b"LZWDecode" | b"LZW" => lzw(&data, early),
-            b"RunLengthDecode" | b"RL" => Some(run_length(&data)),
+            b"FlateDecode" | b"Fl" => inflate(&data, max),
+            b"LZWDecode" | b"LZW" => lzw(&data, early, max),
+            b"RunLengthDecode" | b"RL" => Some(run_length(&data, max)),
             b"ASCIIHexDecode" | b"AHx" => Some(hex(&data)),
             b"ASCII85Decode" | b"A85" => Some(base85(&data)),
             _ => None,
         };
         match out {
-            Some(out) if out.len() > MAX_DECODED => return Err(TooBig),
+            Some(out) if out.len() > max => return Err(TooBig),
             Some(out) => data = Cow::Owned(out),
             None => return Ok(None),
         }
@@ -191,7 +234,7 @@ fn maybe_content(dict: &Dict<'_>) -> bool {
 }
 
 /// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
-/// predictor it can't apply, or more than [`MAX_DECODED`] decoded?
+/// predictor it can't apply, or more than its [`budget`] decoded?
 pub(crate) fn unsafe_stream(stream: &Stream<'_>) -> bool {
     unsafe_data(stream, true)
 }
@@ -314,13 +357,13 @@ mod tests {
         assert_eq!(hex(b"48 65 6c6C6\n>junk"), b"Hell`");
         assert_eq!(base85(b"87cURD]i,\"Ebo80~>"), b"Hello World!");
         assert_eq!(base85(b"z!!~>"), [0, 0, 0, 0, 0]);
-        assert_eq!(run_length(&[2, b'a', b'b', b'c', 254, b'x', 128, b'q']), b"abcxxx");
+        assert_eq!(run_length(&[2, b'a', b'b', b'c', 254, b'x', 128, b'q'], MAX_DECODED), b"abcxxx");
         let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         std::io::Write::write_all(&mut e, &[7; 1000]).unwrap();
-        assert_eq!(inflate(&e.finish().unwrap()).unwrap(), [7; 1000]);
+        assert_eq!(inflate(&e.finish().unwrap(), MAX_DECODED).unwrap(), [7; 1000]);
         // "-----A---B" in LZW, as the specification's example writes it (7.4.4.2).
         let lzw_example = [0x80, 0x0B, 0x60, 0x50, 0x22, 0x0C, 0x0C, 0x85, 0x01];
-        assert_eq!(lzw(&lzw_example, true).unwrap(), b"-----A---B");
+        assert_eq!(lzw(&lzw_example, true, MAX_DECODED).unwrap(), b"-----A---B");
     }
 
     /// Zeros past the cap, compressed.
@@ -337,11 +380,68 @@ mod tests {
         // Inflated in pieces: never more than one byte past the cap is held.
         let bomb = zeros_past_the_cap();
         assert!(bomb.len() < MAX_DECODED / 500);
-        assert_eq!(inflate(&bomb).map(|d| d.len()), Some(MAX_DECODED + 1));
+        assert_eq!(inflate(&bomb, MAX_DECODED).map(|d| d.len()), Some(MAX_DECODED + 1));
         let d = dict("<< /Filter /FlateDecode >>");
         assert!(matches!(decode(&bomb, &d, false), Err(TooBig)));
         // Small enough that it can't get there: not decoded at all.
         assert!(matches!(decode(&[1, 2, 3], &d, false), Ok(None)));
+        // An image may decode to its declared size, and no further.
+        let image =
+            |w: u32, h: u32| format!("<< /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode >>");
+        assert!(decode(&bomb, &dict(&image(1 << 15, 1 << 14)), false).is_ok());
+        assert!(matches!(decode(&bomb, &dict(&image(16, 16)), false), Err(TooBig)));
+        assert_eq!(budget(&dict(&image(1 << 20, 1 << 20))), MAX_IMAGE_DECODED);
+    }
+
+    /// A one-page PDF drawing one flat 8-bit DeviceRGB image of `w` × `h` pixels, Flate-compressed.
+    fn one_image_pdf(w: usize, h: usize) -> Vec<u8> {
+        let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        let row: Vec<u8> = [200, 180, 150].repeat(w);
+        for _ in 0..h {
+            std::io::Write::write_all(&mut e, &row).unwrap();
+        }
+        let image = e.finish().unwrap();
+        let content = b"q 595 0 0 842 0 0 cm /Im0 Do Q";
+        let mut out = b"%PDF-1.6\n".to_vec();
+        let mut offsets = vec![];
+        let objects: Vec<Vec<u8>> = vec![
+            b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
+            [format!("<< /Length {} >>\nstream\n", content.len()).as_bytes(), content, b"\nendstream"].concat(),
+            [
+                format!(
+                    "<< /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
+                    image.len()
+                )
+                .as_bytes(),
+                &image,
+                b"\nendstream",
+            ]
+            .concat(),
+        ];
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+            out.extend_from_slice(o);
+            out.extend_from_slice(b"\nendobj\n");
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        out
+    }
+
+    #[test]
+    fn an_image_past_the_stream_cap_within_its_declared_size_opens() {
+        // An A0 sheet scanned at 300 ppi: 9930 × 14040 RGB pixels, 418 MB decoded (#2005).
+        let pdf = one_image_pdf(9930, 14040);
+        let info = crate::info(&pdf, None);
+        assert!(info.is_ok(), "{:?}", info.err());
+        assert_eq!(info.map(|i| i.pages.len()).unwrap(), 1);
     }
 
     #[test]

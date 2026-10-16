@@ -74,6 +74,16 @@
 </tr>
 <tr>
 <td width="50%" valign="top">
+  <img src="docs/images/shot-6-revolve.png" alt="A still life of a vase, a bowl, a sphere and a bottle made with 3D Revolve; the vase is selected and the Revolve dialog shows its rotation, cap and view settings beside the rotation gizmo" width="100%">
+  <p align="center"><sub><b>3D Revolve</b>: smooth vector shading, caps and a rotation gizmo · <code>examples/still-life.vectorcraft</code></sub></p>
+</td>
+<td width="50%" valign="top">
+  <img src="docs/images/shot-7-dimensions.png" alt="A bracket drawing in the light theme with linear, angular, diameter and radius dimensions; the Dimension tool is active and the Properties panel shows the selected dimension's units, precision and style" width="100%">
+  <p align="center"><sub><b>Dimension tool</b>: lengths, angles and radii that follow the art they measure · <code>examples/bracket-drawing.vectorcraft</code></sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
   <img src="docs/images/shot-5-perspective.png" alt="Two lit building facades drawn on the left and right planes of a two-point perspective grid at sunset, with the Perspective Selection tool and the Plane Switching Widget" width="100%">
   <p align="center"><sub><b>Perspective Grid</b>: art attached to its planes stays editable in perspective · <code>examples/perspective-city.vectorcraft</code></sub></p>
 </td>
@@ -105,6 +115,12 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 <td colspan="2" valign="top">
   <img src="docs/images/art-ribbons.png" alt="Live Blends: three wide ribbons blending yellow to pink and teal to purple, crossing over a dark background" width="100%">
   <p align="center"><sub><b>Live Blends</b>: 70 steps, smooth colour, editable spines</sub></p>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+  <img src="docs/images/art-still-life.png" alt="Still life: a teal vase, a coral bowl, a white sphere and a mustard bottle on a warm table, all made with 3D Revolve" width="100%">
+  <p align="center"><sub><b>Still Life</b>: four revolved profiles with smooth vector shading</sub></p>
 </td>
 </tr>
 <tr>
@@ -220,7 +236,7 @@ doesn't write Affinity files. Current `.af` validation includes 33 pinned files,
 and every-board SVG/PDF/PSD export, with fixes for Affinity 3 artboards, source-backed JPEGs and text runs.
 [Scope and limits](crates/affinity/README.md); [source audit and remaining gaps](docs/affinity-validation.md).
 The interface
-speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified Chinese, Spanish, French, Hungarian, Italian, Polish, Russian and Ukrainian (and Czech and Brazilian Portuguese in the menus);
+speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified Chinese, Spanish, French, Hungarian, Italian, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Finnish, Bulgarian, Greek and Czech;
 [localization-parity.md](docs/localization-parity.md) has the details.
 The scores are self-assessed from our code against Illustrator's public documentation;
 [target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.
@@ -229,7 +245,7 @@ The scores are self-assessed from our code against Illustrator's public document
 - reliable exchange of Illustrator's own `.ai` files (layer structure in real files; Illustrator's editing data isn't written);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
-- about half of the Photoshop-style raster effects (28 of 57 still missing; Film Grain is available under Artistic) and the Effect Gallery;
+- about half of the Photoshop-style raster effects (27 of 57 still missing; Film Grain is available under Artistic, Halftone Pattern under Sketch) and the Effect Gallery;
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.

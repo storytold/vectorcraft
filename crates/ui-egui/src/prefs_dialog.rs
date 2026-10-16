@@ -9,7 +9,7 @@ use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
 
 use crate::state::Dialog;
-use crate::theme::{self, Brightness, Tokens};
+use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
 use crate::{VectorcraftApp, widgets};
 
 /// UI-only fields shown in the dialog (backed by `UiState`, not engine prefs).
@@ -81,6 +81,8 @@ pub fn restore(app: &mut VectorcraftApp) {
 #[derive(Clone, Copy, PartialEq)]
 struct Applied {
     brightness: Brightness,
+    accent: Accent,
+    scheme: Scheme,
     /// User Interface › Canvas Color, unless it matches the interface brightness.
     canvas: Option<egui::Color32>,
     threads: i32,
@@ -111,6 +113,8 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let want = Applied {
         brightness: app.ui.brightness,
+        accent: Accent::parse(&p.ui_accent).unwrap_or_default(),
+        scheme: Scheme::parse(&p.ui_color_scheme).unwrap_or_default(),
         canvas: canvas_color(&p.canvas_color),
         threads: p.render_threads,
         tool_tips: p.show_tool_tips,
@@ -120,7 +124,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let id = egui::Id::new("dc-applied-prefs");
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
     if prev != Some(want) {
-        theme::apply(ctx, want.brightness);
+        theme::apply_with(ctx, want.brightness, want.accent, want.scheme);
         // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
         // due), whichever widget asks for one.
         let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
@@ -309,15 +313,13 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             }
             // Linux only: the other platforms have a single display server.
             PrefKind::Choice(_) if sp.key == "linuxDisplayServer" && !cfg!(target_os = "linux") => {}
+            // The Classic colour scheme has its own accent: dimmed while it is chosen.
+            PrefKind::Choice(opts) if sp.key == "uiAccent" => {
+                let modern = Scheme::parse(&d.str("uiColorScheme")).unwrap_or_default() == Scheme::Modern;
+                ui.add_enabled_ui(modern, |ui| choice_row(ui, d, sp.key, sp.label, opts, &v));
+            }
             PrefKind::Choice(opts) => {
-                labeled(ui, sp.label, |ui| {
-                    let cur = v.as_str().unwrap_or("");
-                    let cur_label = opts.iter().find(|o| o.0 == cur).map(|o| o.1).unwrap_or(cur);
-                    let labels: Vec<&str> = opts.iter().map(|o| o.1).collect();
-                    if let Some(i) = widgets::dropdown(ui, sp.key, cur_label, &labels, 260.0) {
-                        d.fields.insert(sp.key.into(), json!(opts[i].0));
-                    }
-                });
+                choice_row(ui, d, sp.key, sp.label, opts, &v);
                 if sp.key == "gpuPreference" || sp.key == "linuxDisplayServer" {
                     // The window's graphics device and display server are chosen once, when the app starts.
                     ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
@@ -363,6 +365,19 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
 /// Is one of the dialog's Units (General, Stroke, Type, East Asian Type) Picas?
 fn picas_in_use(d: &Dialog) -> bool {
     ["unitsGeneral", "unitsStroke", "unitsType", "unitsAsianType"].iter().any(|k| d.str(k) == vectorcraft_doc::Unit::Picas.key())
+}
+
+fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &[(&str, &str)], v: &Value) {
+    labeled(ui, label, |ui| {
+        let cur = v.as_str().unwrap_or("");
+        let cur_label = opts.iter().find(|o| o.0 == cur).map(|o| o.1).unwrap_or(cur);
+        let labels: Vec<&str> = opts.iter().map(|o| o.1).collect();
+        if let Some(i) = widgets::dropdown(ui, key, cur_label, &labels, 260.0)
+            && let Some(o) = opts.get(i)
+        {
+            d.fields.insert(key.into(), json!(o.0));
+        }
+    });
 }
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {

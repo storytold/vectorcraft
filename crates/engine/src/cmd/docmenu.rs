@@ -101,6 +101,15 @@ pub fn specs() -> Vec<CommandSpec> {
             save_selection
         ),
         cmd!(
+            "select.update",
+            "Update Selection",
+            ["Select"],
+            None,
+            "{} make the saved selection last recalled (`select.recall`) hold the selected objects instead of its own, in one undo step → {name}",
+            has_recalled_selection,
+            update_selection
+        ),
+        cmd!(
             "select.recall",
             "Recall Selection",
             ["Select"],
@@ -135,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release Guides",
             ["View", "Guides"],
             Some("Cmd+Alt+5"),
-            "{} turn the selected guides (or, with none selected, all guide paths) back into paths → {count}",
+            "{index?: a ruler guide's index, ids?: [guide path id…]} turn guides into paths: index releases that ruler guide and ids release those guide paths (and the guide paths inside them); otherwise the selected guide paths and ruler guides are released, and with no guide selected every guide path is released; a ruler guide becomes a straight path with no fill or stroke, across its artboard or, for a canvas guide, across the bounds of all the artboards; index and ids need guides unlocked; one undo step, the released paths selected → {count}",
             has_doc,
             release_guides
         ),
@@ -342,6 +351,7 @@ fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
     if existing.is_none() && saved.len() >= SavedSelection::MAX {
         return Err(bad(C, format!("a document keeps at most {} saved selections", SavedSelection::MAX)));
     }
+    let mut slots = saved_ids(s)?;
     s.edit("Save Selection", |d, _| {
         let entry = SavedSelection { name: name.clone(), objects: ids };
         match existing.and_then(|i| d.saved_selections.get_mut(i)) {
@@ -350,24 +360,68 @@ fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    let st = s.doc_mut()?;
+    if existing.is_none() {
+        slots.push(st.recalled_selection.new_id());
+    }
+    st.recalled_selection.remember(&st.doc.saved_selections, slots);
     Ok(json!({ "name": name }))
 }
 
 fn recall_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "select.recall";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing name"))?;
-    let ids = s.doc()?.doc.saved_selections.iter().find(|x| x.name == name).map(|x| x.objects.clone());
-    let ids = ids.ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
+    let saved = &s.doc()?.doc.saved_selections;
+    let i = saved.iter().position(|x| x.name == name).ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
+    let ids = saved.get(i).map(|x| x.objects.clone()).unwrap_or_default();
     let st = s.doc()?;
     let can = selectable_ids(&st.doc, st.isolation);
     s.select(|_, sel| sel.set(ids.into_iter().filter(|id| can.contains(id))))?;
-    Ok(json!({ "count": s.doc()?.selection.len() }))
+    let st = s.doc_mut()?;
+    st.recalled_selection.recall(&st.doc.saved_selections, i);
+    Ok(json!({ "count": st.selection.len() }))
 }
 
 /// Recall and Edit Selection… need a document with at least one saved selection.
 fn has_saved_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.doc.saved_selections.is_empty() { Err("no saved selections".into()) } else { Ok(()) }
+}
+
+/// The session ids of the active document's saved selections ([`crate::RecalledSelection`]).
+fn saved_ids(s: &mut Session) -> Result<Vec<u64>> {
+    let st = s.doc_mut()?;
+    Ok(st.recalled_selection.ids(&st.doc.saved_selections))
+}
+
+/// Where the saved selection last recalled is, while the document has it.
+fn recalled_index(st: &crate::DocState) -> Option<usize> {
+    st.recalled_selection.index_in(&st.doc.saved_selections)
+}
+
+/// Update Selection needs selected objects and a recalled saved selection the document still has.
+fn has_recalled_selection(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    if recalled_index(st).is_some() { Ok(()) } else { Err("no saved selection recalled".into()) }
+}
+
+fn update_selection(s: &mut Session, _: &Value) -> Result<Value> {
+    const C: &str = "select.update";
+    let st = s.doc()?;
+    let i = recalled_index(st).ok_or_else(|| bad(C, "no saved selection recalled"))?;
+    let ids = st.selection.objects.clone();
+    let name = st.doc.saved_selections.get(i).map(|x| x.name.clone()).unwrap_or_default();
+    let slots = saved_ids(s)?;
+    s.edit("Update Selection", |d, _| {
+        if let Some(x) = d.saved_selections.get_mut(i) {
+            x.objects = ids;
+        }
+        Ok(())
+    })?;
+    let st = s.doc_mut()?;
+    st.recalled_selection.remember(&st.doc.saved_selections, slots);
+    Ok(json!({ "name": name }))
 }
 
 fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
@@ -396,6 +450,7 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
             x.name = n;
         }
     }
+    let slots: Vec<u64> = saved_ids(s)?.into_iter().zip(&after).filter(|(_, x)| x.is_some()).map(|(id, _)| id).collect();
     let after: Vec<SavedSelection> = after.into_iter().flatten().collect();
     let mut names = std::collections::HashSet::with_capacity(after.len());
     for x in &after {
@@ -408,6 +463,8 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
             d.saved_selections = after.into();
             Ok(())
         })?;
+        let st = s.doc_mut()?;
+        st.recalled_selection.remember(&st.doc.saved_selections, slots);
     }
     ok()
 }
@@ -465,22 +522,77 @@ fn guide_paths(d: &vectorcraft_doc::Document) -> Vec<NodeId> {
     v
 }
 
-fn release_guides(s: &mut Session, _: &Value) -> Result<Value> {
+/// Turn guides into paths: ruler guide `index` and the guide paths in `ids`, else the selected
+/// guide paths and ruler guides, else every guide path, in one undo step.
+fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "view.guides.release";
+    let (index, ids) = (p.get("index"), p.get("ids"));
+    if (index.is_some() || ids.is_some()) && s.menu.guides_locked {
+        return Err(EngineError::Other("guides are locked".into()));
+    }
+    let (rulers, paths): (Vec<usize>, Vec<NodeId>) = if index.is_some() || ids.is_some() {
+        let rulers = match index {
+            Some(v) => vec![editable_guide_index(s, Some(v), C)?],
+            None => vec![],
+        };
+        let roots = if ids.is_some() { checked_ids_param(s, p, "ids", C)? } else { vec![] };
+        let d = &s.doc()?.doc;
+        let mut paths = vec![];
+        for r in roots {
+            if let Some(n) = d.node(r) {
+                n.walk(&mut |c| {
+                    if matches!(c.kind, NodeKind::Path { guide: true, .. }) && d.is_editable(c.id) && !paths.contains(&c.id) {
+                        paths.push(c.id);
+                    }
+                });
+            }
+        }
+        (rulers, paths)
+    } else {
+        let st = s.doc()?;
+        let all = guide_paths(&st.doc);
+        let sel: Vec<NodeId> = all.iter().copied().filter(|id| st.selection.contains(*id)).collect();
+        let rulers: Vec<usize> = if s.menu.guides_locked {
+            vec![]
+        } else {
+            st.selection.guides.iter().copied().filter(|i| st.doc.guides.get(*i).is_some_and(|g| st.doc.guide_editable(g))).collect()
+        };
+        if sel.is_empty() && rulers.is_empty() { (vec![], all.into_iter().filter(|id| st.doc.is_editable(*id)).collect()) } else { (rulers, sel) }
+    };
+    // Find each ruler guide's line and its parent: the guide's layer, else where new art goes.
     let st = s.doc()?;
-    let all = guide_paths(&st.doc);
-    let sel: Vec<NodeId> = all.iter().copied().filter(|id| st.selection.contains(*id)).collect();
-    let targets: Vec<NodeId> = if sel.is_empty() { all.into_iter().filter(|id| st.doc.is_editable(*id)).collect() } else { sel };
-    if targets.is_empty() {
+    let artboards = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b));
+    let mut lines = Vec::with_capacity(rulers.len());
+    for &i in &rulers {
+        let Some(g) = st.doc.guides.get(i) else { continue };
+        let span = st.doc.guide_span(g).or_else(|| artboards.map(|r| if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) }));
+        let Some((a, b)) = span else { continue };
+        let (a, b) = if g.vertical { (Point::new(g.pos, a), Point::new(g.pos, b)) } else { (Point::new(a, g.pos), Point::new(b, g.pos)) };
+        let parent = match g.layer.filter(|l| st.doc.node(*l).is_some_and(Node::is_layer)) {
+            Some(l) => Some(l),
+            None => st.target_parent()?,
+        };
+        lines.push((i, parent, a, b));
+    }
+    let n = paths.len() + lines.len();
+    if n == 0 {
         return Err(EngineError::Other("Release Guides: no guides".into()));
     }
-    let n = targets.len();
     s.edit("Release Guides", |d, sel| {
-        for id in &targets {
+        for id in &paths {
             if let Some(NodeKind::Path { guide, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
                 *guide = false;
             }
         }
-        sel.set(targets.iter().copied());
+        let mut made = Vec::with_capacity(lines.len());
+        for &(_, parent, a, b) in &lines {
+            let id = d.alloc_id();
+            let look = vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0);
+            d.insert(parent, usize::MAX, Node::path(id, vectorcraft_geom::shapes::line(a, b), look))?;
+            made.push(id);
+        }
+        d.retain_guides(sel, |i, _| !lines.iter().any(|l| l.0 == i));
+        sel.set(paths.iter().copied().chain(made));
         Ok(())
     })?;
     Ok(json!({ "count": n }))
@@ -659,6 +771,17 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("guide.move", "no guide selected (or give an index)"));
     }
     let (dx, dy, copy) = (f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0), bool_or(p, "copy", false));
+    if !s.doc()?.selection.is_empty() {
+        let ids = super::edit::selected_roots(s)?;
+        return super::object::apply_transform(
+            s,
+            if copy { "Copy Guide" } else { "Move Guide" },
+            ids,
+            vectorcraft_geom::Affine::translate((dx, dy)),
+            p,
+            true,
+        );
+    }
     s.edit(if copy { "Copy Guide" } else { "Move Guide" }, |d, sel| {
         let mut copies = vec![];
         for &i in &moving {

@@ -77,6 +77,14 @@ fn every_setting_reaches_the_document() {
 }
 
 #[test]
+fn a_length_with_a_percentage_is_a_share_of_the_value_before_it() {
+    let s = new_doc(json!({"width": "200mm*50%", "height": "100mm+25%", "units": "Millimeters"}));
+    let r = boards(&s)[0];
+    assert!((r.width() - Unit::Millimeters.to_pt(100.0)).abs() < 1e-9, "{}", r.width());
+    assert!((r.height() - Unit::Millimeters.to_pt(125.0)).abs() < 1e-9, "{}", r.height());
+}
+
+#[test]
 fn a_white_background_exports_opaque() {
     let alpha = |bg: &str| {
         let mut s = new_doc(json!({"width": 20, "height": 20, "backgroundContents": bg}));

@@ -55,7 +55,6 @@ fn lengths(kind: &str) -> &'static [&'static str] {
         "star" => &["radius1", "radius2"],
         "lineSegment" => &["length"],
         "offsetPath" => &["offset"],
-        "simplify" => &["tolerance"],
         _ => &[],
     }
 }
@@ -425,12 +424,14 @@ pub(super) fn humanize(k: &str) -> String {
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
         "Max Radius" => "Max. Radius:".into(),
+        "Blur Mode" => "Mode:".into(),
         "Channel1" => "Channel 1:".into(),
         "Channel2" => "Channel 2:".into(),
         "Channel3" => "Channel 3:".into(),
         "Channel4" => "Channel 4:".into(),
         "Include Cmy Blacks" => "Include Blacks with CMY:".into(),
         "Align To Path" => "Align to Path:".into(),
+        "Overlap Variation" | "Curviness Variation" | "Spacing Variation" => "Variation:".into(),
         "Create" => "Create New Fields by:".into(),
         _ => format!("{s}:"),
     }

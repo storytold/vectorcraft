@@ -9,18 +9,26 @@
 //! Colour adjustments recolour the objects ([`adjust_in_document`]; recoloured embedded images
 //! become images of their own).
 //!
+//! Type that Transform effects on it, or on its group or layer, only move and copy stays type in
+//! each place when its characters are in solid colors and the copies do not overlap ([`moved_type`]
+//! and [`container_keeping_type`] list the other conditions). The renderer still draws its outlines.
+//!
 //! Object → Expand Appearance goes further ([`expand_leaf`]): every fill and stroke becomes an
 //! object of its own, strokes turned into filled art by the caller (their outlines or brush art).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind, StrokeLayer};
-use vectorcraft_geom::{FillRule, PathData};
+use vectorcraft_doc::color::Paint;
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Knockout, Node, NodeKind, StrokeLayer};
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 
+use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
+use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_with, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_pathfinder, is_geometry, needs_outline, reshape,
+    has_item_geometry, has_pathfinder, is_geometry, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -98,8 +106,13 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         let m = evaluate_container(&m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
-    // Type, images, symbol instances and live objects: reshaped through their outlines.
-    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some()) {
+    // Type, images, symbol instances and live objects: reshaped through their outlines, and so is
+    // type whose own fills or strokes have geometry effects ([`has_item_geometry`]). Type that
+    // Transform effects only move and copy stays type, moved to each place.
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
+        if let Some(m) = moved_type_group(n) {
+            return Some(bake_pieces(d, m));
+        }
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
             _ => None,
@@ -107,9 +120,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         let m = reshape(n, symbol.as_deref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
-    // Groups and layers: Pathfinder, geometry effects and their own fills and strokes. The new
-    // pieces (results, outlines, the fills' and strokes' art) get ids of their own.
-    if let Some(m) = evaluate_container(n) {
+    // Groups and layers: Pathfinder, geometry effects and their own fills and strokes (type that
+    // Transform effects only move stays type). The new pieces (results, outlines, copies, the
+    // fills' and strokes' art) get ids of their own.
+    if let Some(m) = container_keeping_type(n).or_else(|| evaluate_container(n)) {
         return Some(bake_pieces(d, m));
     }
     if let Some(ch) = n.children() {
@@ -157,6 +171,201 @@ pub fn fresh_ids(d: &mut Document, n: &mut Node, seen: &mut std::collections::Ha
     for c in n.children_mut().into_iter().flatten() {
         fresh_ids(d, Arc::make_mut(c), seen);
     }
+}
+
+/// Most copies of one type object that stay type, the original included ([`moved_type`]).
+const MAX_TYPE_COPIES: usize = 10_000;
+/// Most bytes that the copies of one type object that stay type take together in the document's
+/// JSON form, the original included ([`moved_type`]): its text, frame or path, wrap shapes and the
+/// rest of the object, once per copy.
+const MAX_TYPE_COPY_BYTES: usize = 20_000_000;
+
+/// The params of geometry effects `fx` when there are some and they are all Transform effects that
+/// only move ([`transform_move`]), in order; `None` otherwise.
+fn transform_moves(fx: &[&Effect]) -> Option<Vec<serde_json::Value>> {
+    if fx.is_empty() {
+        return None;
+    }
+    fx.iter().map(|e| (e.id == "distort.transform").then(|| merged_params(&e.id, &e.params)).filter(|p| transform_move(p).is_some())).collect()
+}
+
+/// Type `n` in each place that Transform effects that only move ([`transform_moves`]) copy its
+/// glyph outlines to: `n` moved there, the original's place first. `None` for other objects; for
+/// type that is hidden, in perspective, has effects, transparency, an opacity mask or fills and
+/// strokes of its own (beyond its characters'), has characters painted with a gradient or pattern,
+/// underlined or struck through, has character strokes and is scaled or sheared, holds inline
+/// graphics or has no glyphs; when the effects would stop copies of its outlines early
+/// ([`transform_offsets`]); when the copies would pass [`MAX_TYPE_COPIES`] or
+/// [`MAX_TYPE_COPY_BYTES`]; and when the copies overlap: what one copy paints (its
+/// character strokes included) reaches into another's box.
+fn moved_type(n: &Node, moves: &[serde_json::Value]) -> Option<Vec<Node>> {
+    let NodeKind::Text(t) = &n.kind else { return None };
+    let flat = |p: &Paint| matches!(p, Paint::None | Paint::Solid { .. });
+    let [a, b, c, d, _, _] = t.xf.as_coeffs();
+    let rigid = (a * a + b * b - 1.0).abs() < 1e-9 && (c * c + d * d - 1.0).abs() < 1e-9 && (a * c + b * d).abs() < 1e-9;
+    let stroked = t.runs.iter().any(|r| r.style.has_stroke());
+    if !n.visible
+        || (stroked && !rigid)
+        || n.projection().is_some()
+        || !n.has_default_transparency()
+        || !n.appearance.effects.is_empty()
+        || n.appearance.items.iter().any(|i| paints(i) || !item_effects(i).is_empty())
+        || t.runs.iter().any(|r| r.inline.is_some() || r.style.underline || r.style.strikethrough || !flat(&r.style.fill) || !flat(&r.style.stroke))
+    {
+        return None;
+    }
+    let (_, all) = glyph_outlines(t);
+    let outline = PathData::from_bezpath(&all).transformed(t.xf);
+    let ink = outline.bounds()?;
+    let offsets = transform_offsets(moves, &outline)?;
+    if offsets.len() > MAX_TYPE_COPIES {
+        return None;
+    }
+    let size = serde_json::to_vec(n).ok()?.len();
+    if size.saturating_mul(offsets.len()) > MAX_TYPE_COPY_BYTES {
+        return None;
+    }
+    let strokes = t.runs.iter().map(|r| r.style.appearance().outset()).fold(0.0, f64::max);
+    if !apart(&offsets, ink.inflate(strokes, strokes)) {
+        return None;
+    }
+    Some(
+        offsets
+            .into_iter()
+            .map(|o| {
+                let mut c = n.clone();
+                c.transform(Affine::translate(o), false);
+                c
+            })
+            .collect(),
+    )
+}
+
+/// Do the copies of box `b` moved by each of `offsets` stay clear of each other? Copies may touch.
+/// False as well when an offset is 10^15 or more times the box's width or height.
+fn apart(offsets: &[Vec2], b: Rect) -> bool {
+    let (w, h) = (b.width(), b.height());
+    if offsets.len() < 2 {
+        return true;
+    }
+    if !(w > 0.0 && h > 0.0 && w.is_finite() && h.is_finite()) {
+        return false;
+    }
+    // Copies closer than `w` across and `h` down lie in the same or a neighboring cell.
+    let cell = |o: Vec2| {
+        let (x, y) = ((o.x / w).floor(), (o.y / h).floor());
+        (x.abs() < 1e15 && y.abs() < 1e15).then_some((x as i64, y as i64))
+    };
+    let mut cells: HashMap<(i64, i64), Vec2> = HashMap::new();
+    for &o in offsets {
+        let Some((x, y)) = cell(o) else { return false };
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if let Some(p) = cells.get(&(x + dx, y + dy))
+                    && (p.x - o.x).abs() < w
+                    && (p.y - o.y).abs() < h
+                {
+                    return false;
+                }
+            }
+        }
+        cells.insert((x, y), o);
+    }
+    true
+}
+
+/// Type `n` whose own geometry effects only move it ([`transform_moves`]) as a group of the moved
+/// type ([`moved_type`]). The group keeps `n`'s id, name, visibility, transparency, opacity mask and
+/// remaining (raster) effects, and the type in it has none of them. `None` otherwise.
+fn moved_type_group(n: &Node) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::Text(_)) {
+        return None;
+    }
+    let moves = transform_moves(&geometry_effects(n))?;
+    let mut plain = n.clone();
+    plain.visible = true;
+    plain.opacity = 1.0;
+    plain.blend = Default::default();
+    plain.isolate = false;
+    plain.knockout_shape = false;
+    plain.extras_mut().mask = None;
+    plain.appearance.effects.clear();
+    let copies = moved_type(&plain, &moves)?;
+    let mut g = Node::group(n.id, copies.into_iter().map(Arc::new).collect());
+    g.name = n.name.clone();
+    g.visible = n.visible;
+    g.opacity = n.opacity;
+    g.blend = n.blend;
+    g.isolate = n.isolate;
+    // One element: its pieces never knock each other out.
+    g.knockout = Knockout::Off;
+    g.knockout_shape = n.knockout_shape;
+    g.extras_mut().mask = n.extras().mask.clone();
+    g.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
+    Some(g)
+}
+
+/// `n`, a group or layer without Pathfinder effects or fills and strokes that paint, whose geometry
+/// effects only move its members ([`transform_moves`]), as plain art in which the type it holds
+/// stays type: each type object moved, or replaced by a group of its copies ([`moved_type`]).
+/// Type in a clipping path, other type that [`moved_type`] doesn't copy, and type inside live
+/// objects or inside groups with Pathfinder or geometry effects or fills and strokes that paint, is
+/// outlined as [`evaluate_container`] outlines it, and the other members become what it makes of
+/// them. `None` when no type stays type.
+fn container_keeping_type(n: &Node) -> Option<Node> {
+    fn keep(n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
+        let clips = n.clips();
+        let Some(ch) = n.children_mut() else { return };
+        for (i, c) in ch.iter_mut().enumerate() {
+            let clipping = clipping || (clips && i == 0);
+            if !matches!(c.kind, NodeKind::Text(_)) {
+                if has_pathfinder(c) || has_own_paint(c) || !geometry_effects(c).is_empty() {
+                    outline_nested_text(Arc::make_mut(c), clipping);
+                } else if c.children().is_some() {
+                    keep(Arc::make_mut(c), moves, clipping, kept);
+                }
+                continue;
+            }
+            // Type that isn't copied is outlined as `outline_nested_text` outlines it.
+            let copies = if clipping { None } else { moved_type(c, moves) };
+            let art = match copies {
+                Some(mut copies) => {
+                    *kept = true;
+                    match copies.pop() {
+                        Some(only) if copies.is_empty() => Some(only),
+                        last => Some(Node::group(c.id, copies.into_iter().chain(last).map(Arc::new).collect())),
+                    }
+                }
+                None if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+                None => as_art(c, None),
+            };
+            if let Some(o) = art {
+                *c = Arc::new(o);
+            }
+        }
+    }
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || has_pathfinder(n) || has_own_paint(n) {
+        return None;
+    }
+    let fx = geometry_effects(n);
+    let moves = transform_moves(&fx)?;
+    let mut text = false;
+    n.walk(&mut |c| text |= matches!(c.kind, NodeKind::Text(_)));
+    if !text {
+        return None;
+    }
+    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
+    let mut m = vectorcraft_doc::live::expand_deep(n, Some(hook));
+    let mut kept = false;
+    keep(&mut m, &moves, false, &mut kept);
+    if !kept {
+        return None;
+    }
+    reshape_leaves(&mut m, &fx);
+    m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !is_geometry(&e.id));
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    Some(m)
 }
 
 /// A new path of `n`'s (its geometry `path`, filled under `rule`) painted by `item` alone, with
@@ -359,8 +568,9 @@ pub fn bake_document(doc: &Document) -> Option<Document> {
 mod tests {
     use super::*;
     use serde_json::json;
-    use vectorcraft_doc::{Effect, NodeId};
-    use vectorcraft_geom::{Rect, shapes};
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+    use vectorcraft_geom::{Point, Rect, shapes};
 
     fn fx(id: &str, params: serde_json::Value) -> Effect {
         Effect { id: id.into(), params, visible: true }
@@ -407,5 +617,319 @@ mod tests {
         assert!((ch[0].geometric_bounds().unwrap().width() - 100.0).abs() < 1e-6);
         assert!((ch[1].geometric_bounds().unwrap().width() - 110.0).abs() < 0.5);
         assert!(ch[0].id != ch[1].id && ch[0].id != NodeId(50));
+    }
+
+    /// Black 24 pt "Type" with its baseline at (20, 60).
+    fn type_node(id: u64) -> Node {
+        let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+        Node::new(NodeId(id), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 60.0), "Type", style))))
+    }
+
+    /// The origins of the type objects in `d`, in paint order.
+    fn type_origins(d: &Document) -> Vec<(f64, f64)> {
+        let mut out = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                let c = t.xf.as_coeffs();
+                out.push((c[4], c[5]));
+            }
+        });
+        out
+    }
+
+    /// A group of the type and a 10 pt square with `effects`.
+    fn type_group(effects: Vec<Effect>) -> Node {
+        let square = Node::path(NodeId(51), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        let mut g = Node::group(NodeId(52), vec![Arc::new(type_node(50)), Arc::new(square)]);
+        g.appearance.effects = effects;
+        g
+    }
+
+    #[test]
+    fn type_moved_or_copied_by_a_groups_transform_effect_stays_type() {
+        for (params, origins, square) in [
+            (json!({"moveH": 30}), vec![(50.0, 60.0)], Rect::new(30.0, 0.0, 40.0, 10.0)),
+            (json!({"moveH": 200, "copies": 1}), vec![(20.0, 60.0), (220.0, 60.0)], Rect::new(0.0, 0.0, 210.0, 10.0)),
+            (json!({"moveV": 50, "copies": 2}), vec![(20.0, 60.0), (20.0, 110.0), (20.0, 160.0)], Rect::new(0.0, 0.0, 10.0, 110.0)),
+        ] {
+            let g = type_group(vec![fx("distort.transform", params.clone()), fx("stylize.dropShadow", json!({}))]);
+            let d = bake_document(&doc_with(g.clone())).unwrap();
+            assert_eq!(type_origins(&d), origins, "{params}");
+            let baked = d.node(NodeId(52)).unwrap();
+            assert_eq!(baked.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+            // The square moves with the type, as one path holding its copies.
+            let b = baked.children().unwrap().last().and_then(|s| s.geometric_bounds()).unwrap();
+            assert!([b.x0 - square.x0, b.y0 - square.y0, b.x1 - square.x1, b.y1 - square.y1].iter().all(|v| v.abs() < 1e-9), "{params}: {b:?}");
+            let mut ids = std::collections::HashSet::new();
+            baked.walk(&mut |n| assert!(ids.insert(n.id), "{params}: duplicate id {}", n.id));
+            // The renderer and Expand Appearance still draw it as outlines.
+            let mut text = 0;
+            evaluate_container(&g).unwrap().walk(&mut |n| text += usize::from(matches!(n.kind, NodeKind::Text(_))));
+            assert_eq!(text, 0, "{params}");
+        }
+        // Stacked effects that only move: every copy of a copy.
+        let d = bake_document(&doc_with(type_group(vec![
+            fx("distort.transform", json!({"moveH": 100, "copies": 1})),
+            fx("distort.transform", json!({"moveV": 100, "copies": 1})),
+        ])))
+        .unwrap();
+        assert_eq!(type_origins(&d), [(20.0, 60.0), (120.0, 60.0), (20.0, 160.0), (120.0, 160.0)]);
+    }
+
+    #[test]
+    fn hidden_type_in_a_group_that_keeps_its_type_stays_hidden() {
+        let mut g = type_group(vec![fx("distort.transform", json!({"moveH": 200, "copies": 1}))]);
+        let mut hidden = type_node(55);
+        hidden.visible = false;
+        g.children_mut().unwrap().push(Arc::new(hidden));
+        let d = bake_document(&doc_with(g)).unwrap();
+        assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
+        assert!(!d.node(NodeId(55)).unwrap().visible);
+    }
+
+    #[test]
+    fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
+        let mut g = type_group(vec![fx("distort.transform", json!({"moveH": 200, "copies": 1}))]);
+        let mut shadowed = type_node(55);
+        shadowed.opacity = 0.5;
+        shadowed.appearance.effects.push(fx("stylize.dropShadow", json!({})));
+        // Type that clips a group is outlined as the plain outlines it clips by.
+        let square = Node::path(NodeId(57), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        let clip = Node::new(NodeId(58), NodeKind::Group { children: vec![Arc::new(type_node(56)), Arc::new(square)], clip: true });
+        g.children_mut().unwrap().extend([Arc::new(shadowed), Arc::new(clip)]);
+        let d = bake_document(&doc_with(g)).unwrap();
+        assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
+        let o = d.node(NodeId(55)).unwrap();
+        assert!(matches!(o.kind, NodeKind::Group { .. }) && o.opacity == 0.5, "{o:?}");
+        assert_eq!(o.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+        // The outlines are copied with the type.
+        let b = o.geometric_bounds().unwrap();
+        assert!(b.x0 < 30.0 && b.x1 > 220.0, "{b:?}");
+        let clipped = d.node(NodeId(58)).and_then(|n| n.children()).and_then(|c| c.first()).unwrap();
+        assert!(matches!(clipped.kind, NodeKind::Group { .. }) && clipped.opacity == 1.0, "{clipped:?}");
+    }
+
+    #[test]
+    fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
+        let mut g = type_group(vec![fx("distort.transform", json!({"moveH": 200, "copies": 1}))]);
+        // The clipping path is a group with a fill of its own, holding type with an effect of its own.
+        let mut moved = type_node(60);
+        moved.appearance.effects.push(fx("distort.transform", json!({"moveV": 300})));
+        let mut path = Node::group(NodeId(59), vec![Arc::new(moved)]);
+        path.appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::BLACK))));
+        let square = Node::path(NodeId(57), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        let clip = Node::new(NodeId(58), NodeKind::Group { children: vec![Arc::new(path), Arc::new(square)], clip: true });
+        g.children_mut().unwrap().push(Arc::new(clip));
+        let d = bake_document(&doc_with(g)).unwrap();
+        assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
+        // The type clips by its plain outlines, as the canvas clips by them: its own effect is left out.
+        let b = d.node(NodeId(59)).and_then(|n| n.geometric_bounds()).unwrap();
+        assert!(b.y0 > 30.0 && b.y1 < 70.0, "{b:?}");
+    }
+
+    #[test]
+    fn type_with_its_own_transform_effect_copies_stays_type() {
+        let mut n = type_node(50);
+        n.opacity = 0.5;
+        n.appearance.effects = vec![fx("distort.transform", json!({"moveV": 50, "copies": 2})), fx("stylize.dropShadow", json!({}))];
+        let d = bake_document(&doc_with(n)).unwrap();
+        assert_eq!(type_origins(&d), [(20.0, 60.0), (20.0, 110.0), (20.0, 160.0)]);
+        // One group keeps the object's transparency and its other effects; the copies are plain.
+        let g = d.node(NodeId(50)).unwrap();
+        assert!(matches!(g.kind, NodeKind::Group { .. }) && g.opacity == 0.5);
+        assert_eq!(g.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+        for c in g.children().unwrap() {
+            assert!(c.opacity == 1.0 && c.appearance.effects.is_empty() && c.id != g.id, "{c:?}");
+        }
+        // Hidden type stays hidden.
+        let mut n = type_node(50);
+        n.visible = false;
+        n.appearance.effects = vec![fx("distort.transform", json!({"moveV": 50, "copies": 1}))];
+        let d = bake_document(&doc_with(n)).unwrap();
+        assert_eq!(type_origins(&d).len(), 2);
+        assert!(!d.node(NodeId(50)).unwrap().visible);
+    }
+
+    #[test]
+    fn type_under_other_geometry_effects_is_still_outlined() {
+        for effects in [
+            vec![fx("distort.transform", json!({"moveH": 30, "random": true}))],
+            vec![fx("distort.transform", json!({"moveH": 30, "scaleH": 50}))],
+            vec![fx("distort.transform", json!({"moveH": 30, "rotate": 10, "copies": 1}))],
+            vec![fx("distort.transform", json!({"moveH": 30, "reflectX": true}))],
+            vec![fx("distort.transform", json!({"moveH": 30})), fx("distort.roughen", json!({"size": 4}))],
+            // Copies that would reach past the effect's limit, which stops them early.
+            vec![fx("distort.transform", json!({"moveH": 1.0e7, "copies": 1000}))],
+            // Copies that overlap, or land on each other.
+            vec![fx("distort.transform", json!({"moveH": 5, "copies": 1}))],
+            vec![fx("distort.transform", json!({"moveH": 100, "copies": 1})), fx("distort.transform", json!({"moveH": -100, "copies": 1}))],
+        ] {
+            let mut own = type_node(50);
+            own.appearance.effects = effects.clone();
+            for n in [type_group(effects.clone()), own] {
+                let d = bake_document(&doc_with(n)).unwrap();
+                assert!(type_origins(&d).is_empty(), "{effects:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn type_whose_copies_paint_over_each_other_is_still_outlined() {
+        let moves = vec![fx("distort.transform", json!({"moveV": 40, "copies": 1}))];
+        assert_eq!(type_origins(&bake_document(&doc_with(type_group(moves.clone()))).unwrap()).len(), 2);
+        // A 20 pt stroke on the characters reaches the copy below.
+        let mut stroked = type_node(50);
+        if let NodeKind::Text(t) = &mut stroked.kind {
+            t.runs[0].style.stroke = Paint::solid(Color::BLACK);
+            t.runs[0].style.stroke_width = 20.0;
+        }
+        let mut g = type_group(moves);
+        g.children_mut().unwrap()[0] = Arc::new(stroked);
+        assert!(type_origins(&bake_document(&doc_with(g)).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn type_with_a_look_of_its_own_in_a_moved_group_is_still_outlined() {
+        let moves = vec![fx("distort.transform", json!({"moveV": 40, "copies": 1}))];
+        let mut translucent = type_node(50);
+        translucent.opacity = 0.5;
+        let mut underlined = type_node(50);
+        if let NodeKind::Text(t) = &mut underlined.kind {
+            t.runs[0].style.underline = true;
+        }
+        let mut shadowed = type_node(50);
+        shadowed.appearance.effects.push(fx("stylize.dropShadow", json!({})));
+        let mut gradient = type_node(50);
+        if let NodeKind::Text(t) = &mut gradient.kind {
+            t.runs[0].style.fill = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+        }
+        let mut reshaped = type_node(50);
+        let mut fill = FillLayer::new(Paint::solid(Color::BLACK));
+        fill.effects.push(fx("path.offsetPath", json!({"offset": 2})));
+        reshaped.appearance.items.push(AppearanceItem::Fill(fill));
+        // A stroke of the type object's own (beyond its characters').
+        let mut stroked = type_node(50);
+        stroked.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0)));
+        // Character strokes scale with type scaled by its transform, where the outlines keep theirs.
+        let mut scaled = type_node(50);
+        if let NodeKind::Text(t) = &mut scaled.kind {
+            t.runs[0].style.stroke = Paint::solid(Color::BLACK);
+            t.runs[0].style.stroke_width = 1.0;
+            t.xf *= Affine::scale(2.0);
+        }
+        let mut turned = scaled.clone();
+        if let NodeKind::Text(t) = &mut turned.kind {
+            t.xf = Affine::translate((20.0, 60.0)) * Affine::rotate(0.5);
+        }
+        let far = vec![fx("distort.transform", json!({"moveH": 300, "copies": 1}))];
+        for (t, kept) in [(turned, 2), (scaled, 0)] {
+            let mut g = type_group(far.clone());
+            g.children_mut().unwrap()[0] = Arc::new(t);
+            assert_eq!(type_origins(&bake_document(&doc_with(g)).unwrap()).len(), kept);
+        }
+        for t in [translucent, underlined, shadowed, gradient, reshaped, stroked] {
+            let mut g = type_group(moves.clone());
+            g.children_mut().unwrap()[0] = Arc::new(t);
+            assert!(type_origins(&bake_document(&doc_with(g)).unwrap()).is_empty());
+        }
+    }
+
+    #[test]
+    fn type_in_a_moved_group_with_a_fill_of_its_own_is_still_outlined() {
+        let moves = vec![fx("distort.transform", json!({"moveV": 100, "copies": 1}))];
+        let fill = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::BLACK)));
+        let mut g = type_group(moves.clone());
+        g.appearance.items.push(fill.clone());
+        assert!(type_origins(&bake_document(&doc_with(g)).unwrap()).is_empty());
+        // A group with a fill of its own inside the moved group.
+        let mut inner = type_group(vec![]);
+        inner.id = NodeId(53);
+        inner.appearance.items.push(fill);
+        let mut outer = Node::group(NodeId(54), vec![Arc::new(inner)]);
+        outer.appearance.effects = moves;
+        assert!(type_origins(&bake_document(&doc_with(outer)).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn type_in_a_moved_group_inside_a_moved_group_is_still_outlined() {
+        // The inner copy lands back on the original.
+        let mut inner = type_group(vec![fx("distort.transform", json!({"moveH": -200, "copies": 1}))]);
+        inner.id = NodeId(53);
+        let mut outer = Node::group(NodeId(54), vec![Arc::new(inner)]);
+        outer.appearance.effects.push(fx("distort.transform", json!({"moveH": 200, "copies": 1})));
+        assert!(type_origins(&bake_document(&doc_with(outer)).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn type_whose_copies_hold_too_much_is_still_outlined() {
+        let spaced = |spaces: usize| {
+            let mut n = type_node(50);
+            if let NodeKind::Text(t) = &mut n.kind {
+                t.runs[0].text = format!("a{}", " ".repeat(spaces));
+            }
+            Arc::new(n)
+        };
+        // 1001 copies of about 2,000 bytes stay type; of about 21,000 bytes each, past 20,000,000
+        // bytes together, they are outlined.
+        let copies = vec![fx("distort.transform", json!({"moveH": 100, "copies": 1000}))];
+        for (spaces, kept) in [(1000, 1001), (20_000, 0)] {
+            let mut g = type_group(copies.clone());
+            g.children_mut().unwrap()[0] = spaced(spaces);
+            assert_eq!(type_origins(&bake_document(&doc_with(g)).unwrap()).len(), kept, "{spaces} spaces");
+        }
+        // 1001 × 21 copies, past 10,000.
+        let mut g = type_group(vec![
+            fx("distort.transform", json!({"moveH": 100, "copies": 1000})),
+            fx("distort.transform", json!({"moveV": 100, "copies": 20})),
+        ]);
+        g.children_mut().unwrap()[0] = spaced(0);
+        assert!(type_origins(&bake_document(&doc_with(g)).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn copies_are_apart_when_their_boxes_only_touch() {
+        let b = Rect::new(0.0, 0.0, 10.0, 5.0);
+        assert!(apart(&[Vec2::ZERO, Vec2::new(10.0, 0.0), Vec2::new(0.0, 5.0), Vec2::new(-10.0, -5.0)], b));
+        assert!(!apart(&[Vec2::ZERO, Vec2::new(9.0, 4.0)], b));
+        assert!(!apart(&[Vec2::new(100.0, 0.0), Vec2::new(30.0, 0.0), Vec2::new(100.0, 0.0)], b));
+        assert!(!apart(&[Vec2::new(-1.0, -1.0), Vec2::new(8.5, 3.5)], b));
+        // Offsets too far for the cells' range count as overlapping.
+        assert!(!apart(&[Vec2::ZERO, Vec2::new(1.0e9, 0.0)], Rect::new(0.0, 0.0, 1.0e-9, 1.0)));
+    }
+
+    #[test]
+    fn type_in_a_pathfinder_group_inside_a_moved_group_is_still_outlined() {
+        let mut inner = type_group(vec![fx("pathfinder.add", json!({}))]);
+        inner.id = NodeId(53);
+        let mut outer = Node::group(NodeId(54), vec![Arc::new(inner)]);
+        outer.appearance.effects.push(fx("distort.transform", json!({"moveV": 100, "copies": 1})));
+        let d = bake_document(&doc_with(outer)).unwrap();
+        assert!(type_origins(&d).is_empty());
+        // The glyphs take part in Add: the result reaches past the 10 pt square.
+        let b = d.node(NodeId(54)).and_then(|n| n.geometric_bounds()).unwrap();
+        assert!(b.width() > 30.0, "{b:?}");
+    }
+
+    #[test]
+    fn type_is_copied_only_when_the_effect_makes_every_copy() {
+        // A 10 pt line with `n` anchors.
+        let line = |n: usize| {
+            let pts: Vec<Point> = (0..n).map(|i| Point::new(i as f64 * 10.0 / n as f64, 0.0)).collect();
+            PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, false)])
+        };
+        let right = json!({"moveH": 10, "copies": 1000});
+        let down = json!({"moveV": 10, "copies": 1});
+        // 1000 copies of a path stay within 2,000,000 anchors up to 1998 anchors.
+        assert_eq!(transform_offsets(std::slice::from_ref(&right), &line(1998)).map(|o| o.len()), Some(1001));
+        assert!(transform_offsets(std::slice::from_ref(&right), &line(1999)).is_none());
+        // A second effect copies every copy.
+        assert_eq!(transform_offsets(&[right.clone(), down.clone()], &line(999)).map(|o| o.len()), Some(2002));
+        assert!(transform_offsets(&[right, down], &line(1000)).is_none());
+        // Copies stop before one reaches 1,000,000,000 pt from the origin.
+        let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        assert_eq!(transform_offsets(&[json!({"moveH": 1.0e7, "copies": 99})], &square).map(|o| o.len()), Some(100));
+        assert!(transform_offsets(&[json!({"moveH": 1.0e7, "copies": 100})], &square).is_none());
+        // An effect that also scales.
+        assert!(transform_offsets(&[json!({"moveH": 10, "scaleH": 50})], &square).is_none());
     }
 }

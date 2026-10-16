@@ -127,29 +127,22 @@ fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
 }
 
 fn to_csv(g: &GraphSpec) -> String {
-    // Always a header row (empty first cell), so a first data row starting with a blank isn't read as one.
-    let cells = g.cells();
-    let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(g.series.len());
-    let mut out = String::from(",");
-    out.push_str(&(0..width).map(|s| g.series.get(s).cloned().unwrap_or_default()).collect::<Vec<_>>().join(","));
-    out.push('\n');
-    let labelled = !g.categories.is_empty();
-    for (i, r) in cells.iter().enumerate() {
-        if labelled {
-            // An empty label, one that reads as a number or one with spaces around it goes in quotes, so it reads back
-            // as the same label.
-            let c = g.categories.get(i).map(String::as_str).unwrap_or_default();
-            if c.trim().is_empty() || c.trim().parse::<f64>().is_ok() || c != c.trim() {
-                out.push_str(&format!("\"{c}\""));
-            } else {
-                out.push_str(c);
-            }
-            out.push(',');
-        }
-        out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
-        out.push('\n');
-    }
-    out
+    g.to_csv()
+}
+
+/// Apply CSV graph data to the graph root `id` and rebuild its art (Variables data merge).
+pub(crate) fn apply_csv(d: &mut Document, id: NodeId, csv: &str) -> Result<()> {
+    let Some(node) = d.node(id) else {
+        return Err(EngineError::NoNode(id));
+    };
+    let Some(mut spec) = node.extras().graph.as_deref().cloned() else {
+        return Err(bad("graph.applyCsv", format!("node {} is not a graph", id.0)));
+    };
+    let (series, categories, rows) = parse_csv(csv);
+    spec.series = series;
+    spec.categories = categories;
+    spec.set_cells(rows);
+    regenerate(d, id, spec)
 }
 
 fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {

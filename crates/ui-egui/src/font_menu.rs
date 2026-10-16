@@ -372,6 +372,9 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
     let mut toggled: Option<String> = None;
     let mut starred: Option<String> = None;
     ui.spacing_mut().item_spacing.y = 0.0;
+    // The scroll bar beside the rows, not over them: a floating one covered the stars at their
+    // right ends, so a favourite was hard to click (#2277).
+    ui.spacing_mut().scroll = widgets::list_scroll_style();
     let shown = area.show_rows(ui, row_h, rows.len(), |ui, range| {
         for i in range {
             let Some(row) = rows.get(i) else { continue };
@@ -773,6 +776,45 @@ mod tests {
         assert_eq!(passing(japanese), [0, 1]);
         assert_eq!(passing(latin), [0, 2]);
         assert_eq!(super::script_label(3), "Thai");
+    }
+
+    /// #2277: the list's scroll bar has a column of its own, so the stars at the rows' right ends
+    /// stay clear of it.
+    #[test]
+    fn the_scroll_bar_leaves_the_stars_clear() {
+        // Every family starred, so each row draws its star.
+        let all = vectorcraft_text::FontDb::global().families();
+        let families = all.len();
+        let ctx = egui::Context::default();
+        let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
+        let mut st = super::MenuState::default();
+        let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
+        let mut stars = vec![];
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(area), ..Default::default() }, |ui| {
+                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+                super::list(&mut child, egui::Id::new("fonts"), &mut st, "", None, look);
+            });
+            out.textures_delta.clear();
+            stars = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    // The rows' stars, not the ★ filter button at the top left.
+                    egui::Shape::Text(t) if t.galley.text() == "★" && t.pos.x > area.center().x => Some(t.visual_bounding_rect().right()),
+                    _ => None,
+                })
+                .collect();
+        }
+        assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
+        // The rows don't fill the list without enough families to scroll, and then there is no bar.
+        if families as f32 * look.row > area.height() {
+            let bar = super::widgets::list_scroll_style();
+            let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
+            for right in stars {
+                assert!(right <= area.right() - column + 0.5, "a star at {right} runs under the scroll bar");
+            }
+        }
     }
 
     use super::{Row, remap_highlight};

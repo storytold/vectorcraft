@@ -16,6 +16,8 @@ use skrifa::{GlyphId, MetadataProvider, Tag};
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
+/// The fonts every database starts with (feature `bundled-fonts`, on by default).
+#[cfg(feature = "bundled-fonts")]
 static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"),
     include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"),
@@ -27,6 +29,10 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
 ];
+/// Without `bundled-fonts` a database starts with none: the embedder adds its fonts
+/// ([`FontDb::add_font`]); until then text has no glyphs.
+#[cfg(not(feature = "bundled-fonts"))]
+static BUNDLED: &[&[u8]] = &[];
 
 /// An axis setting of a variable font: the axis tag (`wght`) and its value in user units (700).
 pub type Variation = ([u8; 4], f32);
@@ -1492,9 +1498,9 @@ impl FontDb {
 
     fn new(font_paths: FontPaths) -> Self {
         let mut faces = Vec::new();
-        // The bundled fonts, then the craft-fonts faces (when built with them): Japanese, Mincho
-        // first, then Arabic with Noto Sans Arabic first. They are fallbacks for those scripts
-        // after the requested and bundled fonts, and families users can pick by name.
+        // Bundled fonts first, then explicitly supplied craft-fonts faces: Japanese (Mincho
+        // first), Arabic, Thai, then remaining faces in manifest order. Existing script fallback
+        // priorities stay ahead of the additional families users can now pick by name.
         let craft = crate::craft_fonts::document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
             for (i, spec) in enumerate_faces(data) {
@@ -1698,8 +1704,9 @@ impl FontDb {
     }
 
     /// Scan the font folders again (fonts installed or removed since), cataloging the faces
-    /// found (native only). Font data is loaded when a cataloged family is first resolved.
-    /// Returns the number of faces cataloged.
+    /// found (native only). Font data is loaded when a cataloged family is first resolved. Faces
+    /// loaded from files the scan no longer finds are dropped. Returns the number of faces
+    /// cataloged.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_system_fonts(&self) -> usize {
         // The first scan, or a rescan once it is done (never both at once).
@@ -1787,10 +1794,27 @@ impl FontDb {
             }
         }
         log::debug!("cataloged {n} system font faces");
+        let installed: std::collections::HashSet<PathBuf> = catalog.values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         *self.stamp.lock().unwrap_or_else(|e| e.into_inner()) = Some(ScanStamp { paths, modified: modified_at });
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
+        // Faces loaded from a file this scan did not catalog (the font was removed, or its folder
+        // is no longer read) are dropped with their outlines. A family with no face left and no
+        // cataloged file leaves the lists, and type set in it resolves to the fallback font. A face
+        // without a file (bundled, or added as bytes) stays.
+        let mut dropped = std::collections::HashSet::new();
+        self.faces.write().unwrap_or_else(|e| e.into_inner()).retain(|f| {
+            let keep = f.path.as_ref().is_none_or(|p| installed.contains(p));
+            if !keep {
+                dropped.insert(f.id);
+            }
+            keep
+        });
+        if !dropped.is_empty() {
+            log::debug!("dropped {} font faces whose files are no longer installed", dropped.len());
+            self.outlines.lock().unwrap_or_else(|e| e.into_inner()).retain(|(id, _), _| !dropped.contains(id));
+        }
         // A font installed since may cover the characters no font did: they are looked for again.
         {
             let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
@@ -1919,8 +1943,8 @@ impl FontDb {
 
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular. Installed system fonts are found by name whatever ran before. `None`
-    /// only if no font at all is loaded (the bundled fonts failed to parse), in which case text has
-    /// no glyphs.
+    /// only if no font at all is loaded (the bundled fonts failed to parse, or were left out with
+    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs.
     pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
         let (family, style) = self.canonical(family, style);
         let (family, style) = (family.as_str(), style.as_str());

@@ -374,7 +374,10 @@ pub(crate) fn shape_range(
             // Digits are drawn in the style's numeral system: the font must cover that digit.
             let c = st.digits.map(c);
             let level = level_at(i);
-            let covered = c.is_whitespace() || c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
+            // Whitespace the primary font doesn't map goes to the fallback face like any other
+            // character (#1844): an ideographic space set at zero width would remove an indent.
+            // What the layout handles itself (tab, line and paragraph breaks) stays.
+            let covered = c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
             let face = if covered {
                 primary.clone()
             } else if let Some((_, f)) = cache.iter().find(|(k, _)| *k == c) {

@@ -9,7 +9,8 @@
 //! rasterized from (art `Arc` identity, tile, tile type, overlap): the pattern's "revision", and,
 //! when its art shows more than itself (a symbol, another pattern, an image, type, a brush), while
 //! what the document holds of those is what it held then ([`Deps`]), and while the color settings
-//! are the ones it was drawn through.
+//! are the ones it was drawn through. A tile whose art has a plug-in effect, or shows symbols or
+//! patterns, is also dropped when a plug-in is installed or removed.
 //!
 //! Pattern editing mode (`Document::pattern_edit`) draws only the temporary tile layer, with
 //! dimmed copies of it at the neighbouring tile positions and the tile edge.
@@ -95,11 +96,30 @@ struct PatternCache {
     tiles: [FrameCache<TileKey, TileEntry>; 4],
     renderer: Option<Box<Renderer>>,
     depth: u32,
+    /// The plug-in revision ([`crate::effects::plugin_revision`]) the tiles were last checked
+    /// against (see [`PatternCache::check_plugins`]).
+    plugin_revision: u64,
 }
 
 impl Default for PatternCache {
     fn default() -> Self {
-        Self { tiles: std::array::from_fn(|_| FrameCache::new(lru::PATTERN_BUDGET, usize::MAX)), renderer: None, depth: 0 }
+        Self { tiles: std::array::from_fn(|_| FrameCache::new(lru::PATTERN_BUDGET, usize::MAX)), renderer: None, depth: 0, plugin_revision: 0 }
+    }
+}
+
+impl PatternCache {
+    /// When a plug-in has been installed or removed since the last check, drop the tiles whose art
+    /// can draw differently with it: art with a plug-in effect, and art that shows symbols or
+    /// patterns ([`crate::fx::Reads::plugins_can_change`]).
+    fn check_plugins(&mut self) {
+        let revision = crate::effects::plugin_revision();
+        if revision == self.plugin_revision {
+            return;
+        }
+        self.plugin_revision = revision;
+        for tiles in &mut self.tiles {
+            tiles.retain(|e| !e.art.iter().any(|a| crate::fx::Reads::of(a).plugins_can_change()));
+        }
     }
 }
 
@@ -141,6 +161,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
     let view = Affine::scale_non_uniform(w as f64 / region.width().max(1e-9), h as f64 / region.height().max(1e-9))
         * Affine::translate(-region.origin().to_vec2());
     let opts = RenderOptions::default();
+    r.check_plugins();
     r.check_symbols(doc);
     let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;
@@ -212,6 +233,7 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
     let cms = vectorcraft_color::cms::active();
     let hit = CACHE.with(|c| {
         let mut c = c.borrow_mut();
+        c.check_plugins();
         let tiles = &mut c.tiles[ink as usize];
         let t = tiles.tick();
         tiles

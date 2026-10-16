@@ -72,6 +72,40 @@ fn an_effect_name_opens_its_dialog_prefilled_and_ok_edits_it_in_place() {
     assert_eq!(effects(&app, None)[0].params["size"], json!(9));
 }
 
+/// The inline editor shows Glass's loaded texture by its size, not as its stored text.
+#[test]
+fn the_inline_editor_shows_a_loaded_texture_by_its_size() {
+    let mut app = app_with_rect();
+    let mut png = Vec::new();
+    image::GrayImage::from_fn(5, 3, |x, _| image::Luma([(x * 60) as u8]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let file = json!({"name": "t.png", "dataBase64": vectorcraft_format::base64_encode(&png)});
+    run(&mut app, "effect.apply", json!({"effect": "distort.glass", "params": {"textureImage": file}}));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, "ap-fx-open-None-0", true);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let stored = effects(&app, None)[0].params["textureImage"].as_str().unwrap().to_string();
+    assert!(texts.iter().any(|(t, _)| t == "5 × 3 px"), "{texts:?}");
+    assert!(!texts.iter().any(|(t, _)| t.contains(&stored[..24])), "the stored text isn't shown");
+}
+
+#[test]
+fn free_distorts_inline_editor_opens_its_dialog_for_the_corners() {
+    let mut app = app_with_rect();
+    let corners = json!([[0.2, 0.0], [1.0, 0.1], [1.0, 1.0], [0.0, 1.0]]);
+    run(&mut app, "effect.apply", json!({"effect": "distort.freeDistort", "params": {"corners": corners}}));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, "ap-fx-open-None-0", true);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    click(&ctx, &mut app, text_rect(&texts, "Edit…").center(), appearance::show);
+    let d = app.ui.dialog.clone().expect("Free Distort's dialog");
+    assert_eq!((d.kind.as_str(), d.str("__effect"), d.fields["__index"].clone()), ("effect", "distort.freeDistort".into(), json!(0)));
+    assert_eq!(d.fields["corners"], corners);
+}
+
 #[test]
 fn choosing_an_applied_effect_asks_to_edit_it_or_add_another() {
     let mut app = app_with_rect();

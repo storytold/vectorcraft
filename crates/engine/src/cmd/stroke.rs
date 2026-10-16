@@ -3,7 +3,9 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, SavedProfile, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{
+    ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, SavedProfile, StrokeAlign, StrokeLayer, Unit, WidthProfile,
+};
 
 use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::painted;
@@ -18,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, target?: \"object\"|\"contents\"} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does)",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, target?: \"object\"|\"contents\"} Without a stroke item, type takes weight, cap, join, miterLimit, align (around its glyph outlines; the type stays live) and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does)",
             has_doc,
             stroke_set
         ),
@@ -82,6 +84,8 @@ pub(crate) struct StrokeChange {
     dash: Option<Option<Vec<f64>>>,
     dash_offset: Option<f64>,
     align_dashes: Option<bool>,
+    /// Align Stroke: centred, inside or outside the shape (or the glyphs, on type).
+    align: Option<StrokeAlign>,
 }
 
 /// The value param `key` names in `table` (see [`crate::inspect::CAPS`]); `None` when absent.
@@ -116,6 +120,7 @@ impl StrokeChange {
             dash,
             dash_offset: num("dashOffset"),
             align_dashes: p.get("alignDashes").and_then(Value::as_bool),
+            align: named(&ALIGNS, p, "align", cmd)?,
         })
     }
 
@@ -127,11 +132,15 @@ impl StrokeChange {
             && self.dash.is_none()
             && self.dash_offset.is_none()
             && self.align_dashes.is_none()
+            && self.align.is_none()
     }
 
     pub(crate) fn apply(&self, st: &mut StrokeLayer) {
         if let Some(w) = self.weight {
             st.width = w;
+        }
+        if let Some(a) = self.align {
+            st.align = a;
         }
         if let Some(c) = self.cap {
             st.cap = c;
@@ -189,7 +198,6 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let (sa, ea) = (arrow("startArrow")?, arrow("endArrow")?);
-    let align = named(&ALIGNS, p, "align", C)?;
     let arrow_align = match str_param(p, "arrowAlign") {
         None => None,
         Some("extend") => Some(ArrowAlign::Extend),
@@ -202,9 +210,6 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let set = |st: &mut StrokeLayer| {
         change.apply(st);
-        if let Some(a) = align {
-            st.align = a;
-        }
         if let Some(a) = sa {
             st.start_arrow = a;
         }
@@ -270,8 +275,8 @@ impl Session {
 
 impl DocState {
     /// Which Stroke panel values the selected objects' strokes (type: every run's) don't share,
-    /// and whether Align Stroke applies to them. One walk of the selection, so callers that ask
-    /// every frame cache it by revision.
+    /// and whether Align Stroke applies to them (no open path among them). One walk of the
+    /// selection, so callers that ask every frame cache it by revision.
     pub fn stroke_mixed(&self) -> StrokeMixed {
         let mut nodes = vec![];
         for id in &self.selection.objects {
@@ -284,7 +289,7 @@ impl DocState {
         for n in &nodes {
             match &n.kind {
                 NodeKind::Text(t) => {
-                    can_align = false;
+                    // The characters' stroke aligns to the glyph outlines, which are closed.
                     strokes.extend(t.runs.iter().map(|r| r.style.stroke_layer()));
                 }
                 _ => {

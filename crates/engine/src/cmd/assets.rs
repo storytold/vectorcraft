@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Collect for Export",
             ["Object", "Collect for Export"],
             None,
-            "{ids?: [id…] (default: the selected objects), multiple?: true (an asset per object; false: one asset of them all), name?: (the asset's name, when it makes one)} collect art as assets for Window › Asset Export and Export for Screens' Assets tab, named after the object (else Asset 1, Asset 2…); art already collected as such an asset keeps it → {assets: [asset id…] (in order), added: n}. Assets follow their art: moving it moves the crop, deleting it removes it from the asset",
+            "{ids?: [id…] (default: the selected objects; a layer id collects the art under it, including in its sublayers), multiple?: true (an asset per object; false: one asset of them all), name?: (the asset's name, when it makes one)} collect art as assets for Window › Asset Export and Export for Screens' Assets tab, named after the object (else Asset 1, Asset 2…); art already collected as such an asset keeps it → {assets: [asset id…] (in order), added: n}. Assets follow their art: moving it moves the crop, deleting it removes it from the asset",
             has_doc,
             add
         ),
@@ -78,13 +78,32 @@ fn clean_name(name: &str) -> Option<String> {
     (!n.is_empty()).then_some(n)
 }
 
+/// Ids of art under `id`: the id itself when it is not a layer, else every non-layer under it
+/// (sublayers unfolded). Layers alone have nothing to collect.
+pub(crate) fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
+    let Some(n) = doc.node(id) else { return };
+    if n.is_layer() {
+        if let Some(kids) = n.children() {
+            for c in kids {
+                art_under(doc, c.id, out);
+            }
+        }
+        return;
+    }
+    out.push(id);
+}
+
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.add";
     let ids = if p.get("ids").is_some_and(|v| !v.is_null()) {
         // An explicit list is authoritative: never silently drop malformed or stale ids.
         let ids = checked_ids_param(s, p, "ids", C)?;
         let d = &s.doc()?.doc;
-        roots_of(d, d.paint_order(ids))
+        let mut art = Vec::new();
+        for id in &ids {
+            art_under(d, *id, &mut art);
+        }
+        roots_of(d, d.paint_order(art))
     } else {
         selected_roots(s)?
     };

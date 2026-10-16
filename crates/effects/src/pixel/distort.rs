@@ -7,8 +7,11 @@
 //! white grain. Every surface lies in document space around the object's centre, as the Texture
 //! filters' do.
 
+use std::sync::Arc;
+
 use vectorcraft_geom::{Point, Vec2};
 
+use super::loaded::{LOADED, LoadedTexture, texture};
 use super::pixelate::{Place, value_noise};
 use super::texture::{Texture, cell_noise, luma, premultiply, smooth_noise, straight};
 use super::{PixelSpace, blur_plane, pick};
@@ -20,13 +23,19 @@ const SALT_RIPPLE: u64 = 136;
 /// Glass's surfaces, in its Texture menu's order: (label, parameter value).
 pub const GLASS_TEXTURES: [(&str, &str); 4] = [("Blocks", "blocks"), ("Canvas", "canvas"), ("Frosted", "frosted"), ("Tiny Lens", "tinyLens")];
 
+/// Glass's Texture menu once a texture is loaded: [`GLASS_TEXTURES`], then the loaded one.
+pub const GLASS_TEXTURES_LOADED: [(&str, &str); 5] =
+    [("Blocks", "blocks"), ("Canvas", "canvas"), ("Frosted", "frosted"), ("Tiny Lens", "tinyLens"), ("Loaded Texture", LOADED)];
+
 /// A Glass surface.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GlassTexture {
     Blocks,
     Canvas,
     Frosted,
     TinyLens,
+    /// An image the user loaded ([`LoadedTexture`]).
+    Loaded(Arc<LoadedTexture>),
 }
 
 impl GlassTexture {
@@ -37,13 +46,23 @@ impl GlassTexture {
         pick(&GLASS_TEXTURES, &Self::ALL, value, GlassTexture::Frosted)
     }
 
+    /// The surface of `value` with `stored` the effect's `textureImage`: the loaded texture
+    /// for [`LOADED`] (any case) when `stored` holds one, else as [`GlassTexture::parse`].
+    pub fn parse_with(value: &str, stored: Option<&str>) -> Self {
+        match stored.filter(|_| value.eq_ignore_ascii_case(LOADED)).and_then(texture) {
+            Some(t) => GlassTexture::Loaded(t),
+            None => Self::parse(value),
+        }
+    }
+
     /// The surface's height at `p` (points at 100 %), in points: slopes of about 1 at most.
-    fn height(self, p: Point) -> f64 {
+    fn height(&self, p: Point) -> f64 {
         match self {
             GlassTexture::Blocks => blocks(p),
             GlassTexture::Canvas => Texture::Canvas.height(p),
             GlassTexture::Frosted => frosted(p),
             GlassTexture::TinyLens => tiny_lens(p),
+            GlassTexture::Loaded(t) => t.height(p),
         }
     }
 }
@@ -103,7 +122,7 @@ pub(super) fn glass(
     space: &PixelSpace,
     distortion: f64,
     smoothness: f64,
-    texture: GlassTexture,
+    texture: &GlassTexture,
     scaling: f64,
     invert: bool,
 ) {

@@ -394,9 +394,12 @@ impl Reuse {
             }
         }
         match &n.kind {
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
-                (self.turns, self.scales) = (false, false)
-            }
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
                 if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
                     self.scan(doc, &s.art, depth + 1);
@@ -1462,7 +1465,12 @@ impl Writer<'_> {
                 (self.xf, self.instance_xf) = saved;
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) => {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 self.share_images(&g);
                 self.node_body(&g);
@@ -1708,7 +1716,9 @@ impl Writer<'_> {
         let saved = std::mem::replace(&mut self.xf, to_user);
         let fill = self.paint(&st.fill, Some(bounds));
         p.push(("fill", fill));
-        if st.has_stroke() {
+        // An inside or outside stroke is drawn on the glyph outlines instead
+        // ([`Self::aligned_char_strokes`]): SVG strokes text centred only.
+        if st.has_stroke() && !aligned(st) {
             // Weight, cap, join, miter limit and dashes as for object strokes; a gradient spans
             // the text grown by half the weight, as on the canvas.
             let layer = st.stroke_layer();
@@ -1736,7 +1746,10 @@ impl Writer<'_> {
         let outlined = self.opts.outline_text || t.vertical || (inline && matches!(t.kind, TextKind::OnPath { .. }));
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
         let painted = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
-        if !painted && !inline {
+        // Live type with an inside or outside character stroke writes that stroke apart from the
+        // text, in the group.
+        let apart = !outlined && t.runs.iter().any(|r| aligned(&r.style));
+        if !painted && !inline && !apart {
             return chars(self, n);
         }
         let id = self.id_attr(n);
@@ -1890,6 +1903,40 @@ impl Writer<'_> {
         }
         s.push_str("</text>");
         self.line(&s);
+        self.aligned_char_strokes(t);
+    }
+
+    /// The inside and outside character strokes of live type `t`, over its text (which goes
+    /// without them, see [`Self::char_props`]): each such run's stroke on its glyph outlines, drawn
+    /// twice as wide and clipped or masked to its side as aligned path strokes are
+    /// ([`Self::side_attr`]). The text stays live; only the stroke follows the outlines.
+    fn aligned_char_strokes(&mut self, t: &TextObject) {
+        if !t.runs.iter().any(|r| aligned(&r.style)) {
+            return;
+        }
+        let db = vectorcraft_text::FontDb::global();
+        let lay = vectorcraft_text::layout(db, t);
+        let bars = vectorcraft_text::decorations(&lay, db, t);
+        // The glyphs stay in text space; the text's transform joins the document's meanwhile.
+        let saved = self.xf;
+        self.xf = saved * t.xf;
+        for (i, run) in t.runs.iter().enumerate().filter(|(_, r)| aligned(&r.style)) {
+            let mut bp = BezPath::new();
+            for g in lay.glyphs.iter().filter(|g| g.run == i) {
+                bp.extend(g.outline.iter());
+            }
+            for (_, bar) in bars.iter().filter(|(r, _)| *r == i) {
+                bp.extend(bar.iter());
+            }
+            if bp.elements().is_empty() {
+                continue;
+            }
+            let pd = PathData::from_bezpath(&bp);
+            let ap = vectorcraft_doc::Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
+            let d = self.path_d(&pd, self.xf);
+            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
+        }
+        self.xf = saved;
     }
 
     /// One line of laid-out text starting at `start`. Default: a positioned `<tspan>` per segment
@@ -2038,7 +2085,13 @@ impl Writer<'_> {
         }
         s.push_str("</textPath></text>");
         self.line(&s);
+        self.aligned_char_strokes(t);
     }
+}
+
+/// Does a character style stroke inside or outside its glyphs (not centred)?
+fn aligned(st: &CharStyle) -> bool {
+    st.has_stroke() && st.stroke_align != StrokeAlign::Center
 }
 
 /// What the `<tspan>` of a run whose properties are `run` sets over its `<text>`'s `base`: the

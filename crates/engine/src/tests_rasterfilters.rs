@@ -1,5 +1,5 @@
 //! The Photoshop-style raster effects (Effect › Blur › Radial Blur and Smart Blur, Brush Strokes,
-//! Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Texture ›
+//! Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Sketch › Halftone Pattern, Texture ›
 //! Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, Video): applied and
 //! edited as commands, listed in the catalogue, drawn on the canvas, and written to PDF and SVG
 //! as images of the effected object.
@@ -41,6 +41,9 @@ const DISTORT: [(&str, &str); 3] =
 /// Effect › Pixelate, at their defaults.
 const PIXELATE: [(&str, &str); 4] =
     [("pixelate.colorHalftone", "{}"), ("pixelate.crystallize", "{}"), ("pixelate.mezzotint", "{}"), ("pixelate.pointillize", "{}")];
+
+/// Effect › Sketch, at their defaults.
+const SKETCH: [(&str, &str); 1] = [("sketch.halftonePattern", "{}")];
 
 /// Effect › Texture, at their defaults.
 const TEXTURE: [(&str, &str); 6] = [
@@ -97,6 +100,7 @@ fn listed_applied_edited_and_undone() {
         (BRUSH_STROKES.as_slice(), "Brush Strokes"),
         (DISTORT.as_slice(), "Distort"),
         (PIXELATE.as_slice(), "Pixelate"),
+        (SKETCH.as_slice(), "Sketch"),
         (TEXTURE.as_slice(), "Texture"),
         (VIDEO.as_slice(), "Video"),
         ([("video.ntscColors", "{}")].as_slice(), "Video"),
@@ -134,7 +138,9 @@ fn listed_applied_edited_and_undone() {
 
 #[test]
 fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
-    for (id, params) in EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in
+        EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(SKETCH).chain(TEXTURE).chain(VIDEO)
+    {
         let (mut s, g) = striped();
         let plain = render(&s);
         let params: Value = serde_json::from_str(params).unwrap();
@@ -150,6 +156,113 @@ fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
     }
 }
 
+/// Halftone Pattern's Size, Contrast and Pattern Type are saved with the document and draw the same
+/// when it opens again.
+#[test]
+fn halftone_pattern_settings_survive_a_save_and_open() {
+    let (mut s, g) = striped();
+    let set = json!({"size": 7.0, "contrast": 20.0, "patternType": "line"});
+    s.execute("effect.apply", &json!({"effect": "sketch.halftonePattern", "ids": [g], "params": set})).unwrap();
+    let drawn = render(&s);
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, set);
+    assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, drawn.pixels);
+    // Each setting shows: changing any one draws differently.
+    for change in [json!({"size": 3.0}), json!({"contrast": 50.0}), json!({"patternType": "dot"})] {
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": change})).unwrap();
+        assert!(mean_diff(&drawn, &render(&s)) > 0.001, "{change}");
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": set})).unwrap();
+    }
+}
+
+/// A PNG of rings around its center, 12 × 10 pixels.
+fn rings_png() -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(12, 10, |x, y| {
+        let v = ((f64::from(x) - 5.5).hypot(f64::from(y) - 4.5) * 50.0) as u32 % 256;
+        image::Rgba([v as u8, v as u8, 255 - v as u8, 255])
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png
+}
+
+/// Glass's parameters on the striped group.
+fn glass_params(s: &Session, g: u64) -> Value {
+    s.doc().unwrap().doc.node(NodeId(g)).unwrap().appearance.effects[0].params.clone()
+}
+
+/// Effect › Distort › Glass › Load Texture: an image file, given by path or as bytes, is stored
+/// with the effect as its gray levels and picked; the canvas draws it, and a save and open keeps it.
+#[test]
+fn glass_loads_a_texture_saves_it_and_draws_it() {
+    let png = rings_png();
+    let data = vectorcraft_format::base64_encode(&png);
+    let (mut s, g) = striped();
+    let file = json!({"name": "rings.png", "dataBase64": data});
+    s.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [g], "params": {"distortion": 12, "textureImage": file}})).unwrap();
+    let p = glass_params(&s, g);
+    assert_eq!(p["texture"], json!("loaded"), "loading a texture picks it");
+    let stored = p["textureImage"].as_str().unwrap().to_string();
+    let texture = vectorcraft_render::effects::pixel::texture(&stored).unwrap();
+    assert_eq!(texture.size(), (12, 10));
+    let loaded = render(&s);
+    // The same Glass with each built-in texture draws differently.
+    for (_, builtin) in vectorcraft_render::effects::pixel::GLASS_TEXTURES {
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": builtin}})).unwrap();
+        assert!(mean_diff(&loaded, &render(&s)) > 0.001, "{builtin}");
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": "loaded"}})).unwrap();
+    assert_eq!(render(&s).pixels, loaded.pixels, "the texture stayed with the effect");
+    // Saved and opened again: the same texture, drawn the same.
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
+    assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
+    // The same file by path, through Effect Options, stores the same texture.
+    let dir = std::env::temp_dir().join(format!("vc-glass-texture-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("rings.png");
+    std::fs::write(&path, &png).unwrap();
+    let (mut t, h) = striped();
+    t.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [h], "params": {"distortion": 12}})).unwrap();
+    assert!(glass_params(&t, h).get("textureImage").is_none(), "a Glass without a loaded texture has no textureImage");
+    t.execute("effect.setParams", &json!({"index": 0, "ids": [h], "params": {"textureImage": {"path": path.to_string_lossy()}}})).unwrap();
+    assert_eq!(glass_params(&t, h)["textureImage"], json!(stored));
+    assert_eq!(glass_params(&t, h)["texture"], json!("loaded"));
+    assert_eq!(render(&t).pixels, loaded.pixels);
+    let _ = std::fs::remove_dir_all(&dir);
+    // The stored string is taken as it is (as effect.list gives it, and a graphic style copies it).
+    t.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [h], "params": {"textureImage": stored, "texture": "frosted"}})).unwrap();
+    let second = t.doc().unwrap().doc.node(NodeId(h)).unwrap().appearance.effects[1].params.clone();
+    assert_eq!((&second["textureImage"], &second["texture"]), (&json!(stored), &json!("frosted")), "kept, not picked: texture was given");
+    t.execute("edit.undo", &json!({})).unwrap();
+    t.execute("edit.undo", &json!({})).unwrap();
+    assert!(glass_params(&t, h).get("textureImage").is_none(), "undone");
+}
+
+/// A texture that isn't an image file, or isn't one Glass stored, is refused and changes nothing.
+#[test]
+fn glass_refuses_a_texture_that_is_not_an_image() {
+    let (mut s, g) = striped();
+    let junk = vectorcraft_format::base64_encode(b"not an image");
+    let not_stored = "textureImage: give {path} or {name, dataBase64}";
+    let refused = [
+        (json!({"name": "a.png", "dataBase64": junk}), "not an image VectorCraft reads"),
+        (json!("bm90IGEgdGV4dHVyZQ=="), not_stored),
+        (json!(5), not_stored),
+        (json!({"path": "C:/no/such/texture.png"}), "texture.png"),
+    ];
+    for (texture, says) in refused {
+        let e = s.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [g], "params": {"textureImage": texture}})).unwrap_err();
+        assert!(e.to_string().contains(says), "{texture}: {e}");
+        assert!(s.doc().unwrap().doc.node(NodeId(g)).unwrap().appearance.effects.is_empty(), "{texture}");
+    }
+    s.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [g]})).unwrap();
+    let before = glass_params(&s, g);
+    let e = s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"textureImage": {"dataBase64": junk}}})).unwrap_err();
+    assert!(e.to_string().contains("textureImage"), "{e}");
+    assert_eq!(glass_params(&s, g), before);
+}
+
 #[test]
 fn spin_blur_reaches_past_the_corners() {
     let (mut s, g) = striped();
@@ -163,7 +276,9 @@ fn spin_blur_reaches_past_the_corners() {
 
 #[test]
 fn pdf_and_svg_write_the_effected_object_as_an_image() {
-    for (id, params) in EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(TEXTURE).chain(VIDEO) {
+    for (id, params) in
+        EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(SKETCH).chain(TEXTURE).chain(VIDEO)
+    {
         let (mut s, g) = striped();
         let params: Value = serde_json::from_str(params).unwrap();
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();

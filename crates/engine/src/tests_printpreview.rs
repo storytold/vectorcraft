@@ -140,6 +140,97 @@ fn type_that_does_not_fit_its_frame_counts_only_where_it_shows() {
     assert_eq!(preview_fallback(&mut s, json!({})), Vec::<String>::new());
 }
 
+/// Area type 100 × 20 pt at (`x`, `y`) holding four lines, of which the first shows → its id.
+fn overset(s: &mut Session, x: f64, y: f64) -> u64 {
+    let v = s.execute("text.create", &json!({"x": x, "y": y, "text": "Ab\nCd\nEf\nGh", "size": 12, "area": {"width": 100, "height": 20}})).unwrap();
+    assert_eq!(v["overflow"], json!([v["id"]]), "{v}");
+    v["id"].as_u64().unwrap()
+}
+
+/// `print.preview {settings}`'s warnings about type that doesn't fit its frame.
+fn preview_overflow(s: &mut Session, settings: Value) -> Vec<String> {
+    let v = s.execute("print.preview", &json!({ "settings": settings })).unwrap();
+    let over = |w: &&str| w.contains("fit its frame") || w.contains("fit their frames");
+    v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(over).map(str::to_string).collect()
+}
+
+#[test]
+fn type_that_does_not_fit_its_frame_is_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    let id = overset(&mut s, 10.0, 10.0);
+    let one = format!("1 text object doesn't fit its frame: the text past the end of the frame doesn't print (id {id})");
+    assert_eq!(preview_overflow(&mut s, json!({})), [one]);
+    // A frame that holds its text, or a hidden object, leaves nothing out.
+    s.execute("text.areaOptions", &json!({"ids": [id], "height": 150})).unwrap();
+    assert_eq!(preview_overflow(&mut s, json!({})), Vec::<String>::new());
+    s.execute("text.areaOptions", &json!({"ids": [id], "height": 20})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [id], "visible": false})).unwrap();
+    assert_eq!(preview_overflow(&mut s, json!({})), Vec::<String>::new());
+    s.execute("object.setProps", &json!({"ids": [id], "visible": true})).unwrap();
+    // Type on a path that runs past the path's end.
+    let path = s.execute("path.create", &json!({"d": "M10 150 L60 150"})).unwrap()["id"].clone();
+    let on = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "Longer than its path"})).unwrap();
+    assert_eq!(on["overflow"], json!([on["id"]]), "{on}");
+    let both = format!("2 text objects don't fit their frames: the text past the end of each frame doesn't print (ids {id}, {})", on["id"]);
+    assert_eq!(preview_overflow(&mut s, json!({})), [both]);
+    // Past 20, the first 20 ids and how many more.
+    let mut ids = vec![id, on["id"].as_u64().unwrap()];
+    ids.extend((0..20).map(|i| overset(&mut s, 150.0, f64::from(i) * 5.0)));
+    let named: Vec<String> = ids[..20].iter().map(u64::to_string).collect();
+    let many =
+        format!("22 text objects don't fit their frames: the text past the end of each frame doesn't print (ids {} and 2 more)", named.join(", "));
+    assert_eq!(preview_overflow(&mut s, json!({})), [many]);
+}
+
+#[test]
+fn type_that_does_not_fit_counts_only_layers_and_artboards_that_print() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200, "artboards": 2})).unwrap();
+    let r = s.doc().unwrap().doc.artboards[1].rect;
+    overset(&mut s, r.x0 + 10.0, r.y0 + 10.0);
+    assert_eq!(preview_overflow(&mut s, json!({"artboards": "range", "range": "1"})), Vec::<String>::new());
+    assert_eq!(preview_overflow(&mut s, json!({"artboards": "range", "range": "2"})).len(), 1);
+    // On a hidden layer, the type prints only with Print Layers: All.
+    let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    overset(&mut s, 10.0, 10.0);
+    s.execute("layer.setProps", &json!({"id": layer, "visible": false})).unwrap();
+    for (layers, warns) in [("visiblePrintable", false), ("visible", false), ("all", true)] {
+        let warned = preview_overflow(&mut s, json!({"artboards": "range", "range": "1", "printLayers": layers}));
+        assert_eq!(!warned.is_empty(), warns, "{layers}");
+    }
+    // A layer that doesn't print.
+    s.execute("layer.setProps", &json!({"id": layer, "visible": true, "printable": false})).unwrap();
+    assert_eq!(preview_overflow(&mut s, json!({"artboards": "range", "range": "1"})), Vec::<String>::new());
+    assert_eq!(preview_overflow(&mut s, json!({"artboards": "range", "range": "1", "printLayers": "visible"})).len(), 1);
+}
+
+#[test]
+fn type_that_does_not_fit_is_named_only_among_the_objects_of_the_document() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    let id = overset(&mut s, 10.0, 10.0);
+    assert_eq!(preview_overflow(&mut s, json!({})).len(), 1);
+    s.execute("symbol.new", &json!({"name": "Label", "ids": [id]})).unwrap();
+    assert_eq!(preview_overflow(&mut s, json!({})), Vec::<String>::new(), "the art of a symbol");
+}
+
+#[test]
+fn a_threaded_story_is_named_only_when_its_last_frame_does_not_hold_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog. ".repeat(8);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap();
+    assert_eq!(a["overflow"], json!([a["id"]]), "{a}");
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a["id"], b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!(preview_overflow(&mut s, json!({})), Vec::<String>::new(), "the second frame holds the rest");
+    s.execute("text.editRange", &json!({"id": a["id"], "start": 0, "end": 0, "insert": story.repeat(4)})).unwrap();
+    let warned = preview_overflow(&mut s, json!({}));
+    assert!(warned.len() == 1 && warned[0].ends_with(&format!("(id {b})")), "{warned:?}");
+}
+
 #[test]
 fn type_of_an_artboard_larger_than_the_paper_counts_only_on_the_paper() {
     let mut s = Session::new();

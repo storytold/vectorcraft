@@ -152,6 +152,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.toolbar_advanced = w.toolbar_advanced;
     ui.task_bar = w.task_bar;
     ui.dock = w.dock;
+    ui.tab_hid = None;
     ui.dock_tab = w.dock_tab;
     ui.dock_collapsed = w.dock_collapsed;
     ui.open_panel = w.open_panel.clone();

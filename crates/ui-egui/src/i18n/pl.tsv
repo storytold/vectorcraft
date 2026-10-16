@@ -177,6 +177,7 @@
 	Join	Połącz
 	Average…	Uśrednij…
 	Outline Stroke	Obrys konturu
+	Outline Object	Kontur obiektu
 	Offset Path…	Odsuń ścieżkę…
 	Reverse Path Direction	Odwróć kierunek ścieżki
 	Simplify…	Uprość…
@@ -351,6 +352,7 @@
 	Area Text Objects	Obiekty tekstu akapitowego
 	Start Global Edit	Rozpocznij edycję globalną
 	Save Selection…	Zapisz zaznaczenie…
+	Update Selection	Aktualizuj zaznaczenie
 	Edit Selection…	Edytuj zaznaczenie…
 	Effect	Efekt
 	Apply Last Effect	Zastosuj ostatni efekt
@@ -385,6 +387,8 @@
 	Add	Dodaj
 @id	pathfinder.add	Połącz
 	Intersect	Przetnij
+	Intertwine	Przeplatanie
+	Arrange Intertwine Area	Ułóż obszar przeplotu
 	Exclude	Wyklucz
 	Subtract	Odejmij
 	Minus Back	Odejmij tył
@@ -444,7 +448,9 @@
 	Fit Artboard in Window	Dopasuj obszar kompozycji do okna
 	Fit All in Window	Dopasuj wszystko do okna
 	Actual Size	Rzeczywisty rozmiar
+	Rotate View	Obróć widok
 	Reset Rotate View	Resetuj obrót widoku
+	Rotate View to Selection	Obróć widok do zaznaczenia
 	Hide Edges	Ukryj krawędzie
 	Show Edges	Pokaż krawędzie
 	Hide Artboards	Ukryj obszary kompozycji
@@ -463,7 +469,9 @@
 	Show Bounding Box	Pokaż obwiednię
 	Show Transparency Grid	Pokaż siatkę przezroczystości
 	Hide Transparency Grid	Ukryj siatkę przezroczystości
+	Hide Template	Ukryj szablon
 	Hide Text Threads	Ukryj wątki tekstu
+	Show Template	Pokaż szablon
 	Show Text Threads	Pokaż wątki tekstu
 	Hide Gradient Annotator	Ukryj wskaźnik gradientu
 	Show Gradient Annotator	Pokaż wskaźnik gradientu
@@ -1192,7 +1200,6 @@ lighting	Light	Światło
 	Rectangle: Sunshine	Prostokąt: Słońce
 	Redefine Graphic Style “{name}”	Zdefiniuj ponownie styl graficzny „{name}”
 	Show Thumbnail	Pokaż miniaturę
-	Artboard Options: edit with the Artboard tool	Opcje obszaru kompozycji: edytuj narzędziem Obszar kompozycji
 	Delete Artboards	Usuń obszary kompozycji
 	Delete Empty Artboards	Usuń puste obszary kompozycji
 	Duplicate Artboards	Powiel obszary kompozycji
@@ -1256,6 +1263,7 @@ lighting	Light	Światło
 	Roman Baseline	Linia bazowa łacińska
 	Select a text object to edit its character attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty znaków.
 	Show Options	Pokaż opcje
+	Color Panel Options	Opcje panelu Kolor
 	Small Caps	Kapitaliki
 	Small Caps (on the roadmap)	Kapitaliki (w planach)
 	Standard Vertical Roman Alignment	Standardowe pionowe wyrównanie łacińskie
@@ -1412,6 +1420,17 @@ lighting	Light	Światło
 	Create New Layer	Utwórz nową warstwę
 	Create New Sublayer	Utwórz nową podwarstwę
 	Search All	Szukaj wszędzie
+	Filter	Filtr
+	Clear All	Wyczyść wszystko
+	By Object	Według obiektu
+	By Layer	Według warstwy
+	Images	Obrazy
+	Groups	Grupy
+	Linked Files	Połączone pliki
+	Locked	Zablokowane
+	Hidden	Ukryte
+	Filter Layers Panel Rows	Filtruj wiersze panelu Warstwy
+@msg	`{key}` must be an array of these names: {_1}	`{key}` musi być tablicą tych nazw: {_1}
 	Graphics	Grafiki
 	Local Libraries	Biblioteki lokalne
 	Add Content	Dodaj zawartość
@@ -1477,6 +1496,9 @@ lighting	Light	Światło
 	Updated {} image(s)	Zaktualizowane obrazy: {}
 	Break Link	Zerwij łącze
 	Tolerance:	Tolerancja:
+	Corner Point Angle Threshold:	Próg kąta punktów narożnych:
+	Convert to Straight Lines	Konwertuj na linie proste
+	Show Original Path	Pokaż oryginalną ścieżkę
 	Transparency Options	Opcje przezroczystości
 	Color Mixer (Shift-click the chip)	Mikser kolorów (kliknij próbkę z Shift)
 	Fill: click for swatches, Shift-click for the color mixer	Wypełnienie: kliknij, aby wybrać próbkę, z Shift — mikser kolorów
@@ -1501,6 +1523,14 @@ lighting	Light	Światło
 	Every-line Composer	Kompozytor wielowierszowy
 	First-line Left Indent	Wcięcie pierwszego wiersza
 	Hyphenation…	Dzielenie wyrazów…
+	Words Longer Than:	Wyrazy dłuższe niż:
+	After First:	Po pierwszych:
+	Before Last:	Przed ostatnimi:
+	Hyphen Limit:	Limit łączników:
+	Hyphenation Zone:	Strefa dzielenia:
+	letters	liter
+	hyphens	łączników
+	Hyphenate Capitalized Words	Dziel wyrazy pisane wielką literą
 	Justification…	Justowanie…
 	Justify with last line aligned center	Justuj z ostatnim wierszem do środka
 	Justify with last line aligned right	Justuj z ostatnim wierszem do prawej
@@ -1868,6 +1898,10 @@ lighting	Light	Światło
 	Spin	Wirowanie
 	Good	Dobra
 	Best	Najlepsza
+	Mode	Tryb
+	Blur Mode	Tryb rozmycia
+	Edge Only	Tylko krawędzie
+	Overlay Edge	Nakładka krawędzi
 	Amount	Wartość
 	Contrast	Kontrast
 	Edit the applied effect, or add another one?	Edytować zastosowany efekt czy dodać kolejny?
@@ -1997,6 +2031,7 @@ lighting	Light	Światło
 	Fidelity:	Wierność:
 	Fill new strokes	Wypełniaj nowe pociągnięcia
 	Keep selected	Zachowaj zaznaczenie
+	Merge only with selection	Scalaj tylko z zaznaczeniem
 	The document has no colour swatches.	Dokument nie zawiera próbek kolorów.
 	Style Name:	Nazwa stylu:
 	Crop To	Kadruj do
@@ -2508,6 +2543,32 @@ lighting	Light	Światło
 	Summary	Podsumowanie
 	Download	Pobierz
 	Export Artboard	Eksportuj obszar kompozycji
+	A File per Object	Jeden plik na obiekt
+	Example: {name}	Przykład: {name}
+	Export Preset:	Ustawienie eksportu:
+	Folders:	Foldery:
+	Insert	Wstaw
+	Nothing is selected. Select the art to export, then open this tab again.	Nic nie zaznaczono. Zaznacz grafikę do eksportu i ponownie otwórz tę kartę.
+	One File of the Selection	Jeden plik z zaznaczenia
+	Start at:	Zacznij od:
+	{n} objects selected	Zaznaczone obiekty: {n}
+	Delete Export Preset	Usuń ustawienie eksportu
+	Export Presets	Ustawienia eksportu
+	Save Export Preset	Zapisz ustawienie eksportu
+	Export Layer	Eksportuj warstwę
+	Export Selection	Eksportuj zaznaczenie
+	All in One Folder	Wszystko w jednym folderze
+	By Size or Row	Według rozmiaru lub wiersza
+	By Format	Według formatu
+	By Artboard or Item	Według obszaru roboczego lub elementu
+	By Item, Then Format	Według elementu, potem formatu
+	Document Name	Nazwa dokumentu
+	Artboard or Item Name	Nazwa obszaru roboczego lub elementu
+	Number (####)	Numer (####)
+	Date (YYYYMMDD)	Data (RRRRMMDD)
+	Date (YYYY-MM-DD)	Data (RRRR-MM-DD)
+	Time (hhmmss)	Godzina (hhmmss)
+	PDF Print	PDF do druku
 	Encoding:	Kodowanie:
 	Line Endings:	Znaki końca wiersza:
 	Text Export Options	Opcje eksportu tekstu
@@ -2595,6 +2656,9 @@ effect	Soft	Miękkie
 	Blocks	Bloki
 	Frosted	Matowe szkło
 	Tiny Lens	Mała soczewka
+	Loaded Texture	Wczytana tekstura
+	Load Texture…	Wczytaj teksturę…
+	Texture Image	Obraz tekstury
 	Right Diagonal	Przekątna w prawo
 	Left Diagonal	Przekątna w lewo
 effect	Horizontal	Poziomo
@@ -2711,6 +2775,7 @@ theme	Appearance	Wygląd
 	Width Profile	Profil szerokości
 	Objects	Obiekty
 	Paths	Ścieżki
+	Path Length	Długość ścieżek
 	Add Guide	Dodaj linię pomocniczą
 	Edit Selection	Edytuj zaznaczenie
 	Recall Selection	Przywołaj zaznaczenie
@@ -3289,8 +3354,11 @@ axis	Both	Obie
 	Duplicate Artboard	Powiel obszar kompozycji
 	Area / Path Type	Tekst akapitowy / na ścieżce
 	Decrease Font Size	Zmniejsz rozmiar czcionki
+	Decrease Font Size by Five Steps	Zmniejsz rozmiar czcionki o pięć kroków
 	Increase Font Size	Zwiększ rozmiar czcionki
+	Increase Font Size by Five Steps	Zwiększ rozmiar czcionki o pięć kroków
 	Reset Tracking and Kerning	Resetuj światło i kerning
+	Reset Horizontal Scale	Resetuj skalę poziomą
 	Step Type	Krok tekstu
 	Get Text Range	Pobierz zakres tekstu
 	Punctuation	Interpunkcja
@@ -3724,6 +3792,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
 @msg	`{key}` must be one of {_1}	`{key}` musi mieć jedną z wartości: {_1}
 @msg	`{key}` must be true or false	`{key}` musi mieć wartość true lub false
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę
@@ -3790,6 +3859,8 @@ imageTrace	Outline	Kontur
 @msg	cannot split an open path at its end point	nie można podzielić otwartej ścieżki w jej punkcie końcowym
 @msg	closing needs three anchors	zamknięcie wymaga trzech punktów
 @msg	check an asset to export	zaznacz zasób do eksportu
+@msg	check a layer to export	zaznacz warstwę do eksportu
+@msg	select the art to export first	najpierw zaznacz grafikę do eksportu
 @msg	choice must be "merge" or "add", not `{choice}`	wybór musi mieć wartość "merge" lub "add", nie `{choice}`
 @msg	choose a direction to divide in	wybierz kierunek podziału
 @msg	choose a folder to export to	wybierz folder docelowy eksportu
@@ -3901,6 +3972,7 @@ imageTrace	Outline	Kontur
 @msg	no saved presets	brak zapisanych ustawień
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	brak zapisanego ustawienia drukowania o nazwie `{name}` ({DEFAULT_PRESET} jest chronione: utwórz na jego podstawie nowe)
 @msg	no saved profiles	brak zapisanych profili
+@msg	no saved selection recalled	nie przywołano zapisanego zaznaczenia
 @msg	no saved selections	brak zapisanych zaznaczeń
 @msg	no saved themes	brak zapisanych motywów
 @msg	no segment {segment} on line {line}	brak segmentu {segment} na linii {line}
@@ -3994,11 +4066,13 @@ imageTrace	Outline	Kontur
 @msg	select a gradient mesh	zaznacz siatkę gradientową
 @msg	select a linked image: an embedded one has no file	zaznacz obraz połączony: osadzony nie ma pliku
 @msg	select a repeat	zaznacz powtórzenie
+@msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select a stroke with a variable width	zaznacz obrys o zmiennej szerokości
 @msg	select a symbol instance	zaznacz wystąpienie symbolu
 @msg	select an Image Trace object	zaznacz obiekt obrysu obrazu
 @msg	could not decode image: {0}	nie udało się zdekodować obrazu: {0}
 @msg	image is empty	obraz jest pusty
+@msg	the image can't be read as a texture	nie można odczytać obrazu jako tekstury
 @msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	obraz ma {width} × {height} pikseli, więcej niż przyjmuje obrys obrazu ({max} megapikseli)
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ten obrys utworzyłby ponad {max} punktów kontrolnych, więcej niż dokument może płynnie wyświetlić: zwiększ Szum, zmniejsz Ścieżki lub Kolory albo wybierz ustawienie o niższej wierności
 @msg	select an envelope	zaznacz kopertę
@@ -4084,7 +4158,7 @@ imageTrace	Outline	Kontur
 @msg	this file's PostScript couldn't be read ({why}): {what}	nie udało się odczytać kodu PostScript tego pliku ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	ten format mieści jeden obszar kompozycji: kilka wyeksportuj jako PDF lub za pomocą document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	to rysunek DWG, którego nie można odczytać: zapisz go w programie CAD jako ASCII DXF i otwórz ten plik
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	to plik PostScript (.ai zapisany w starszym formacie lub bez zgodności z PDF albo plik EPS), którego nie można jeszcze otworzyć: zapisz go jako PDF, .ai zgodny z PDF lub SVG
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	to plik PostScript (.ai zapisany w starszym formacie lub bez zgodności z PDF albo plik EPS), a nie PDF: Plik › Otwórz i Plik › Umieść odczytują go jako EPS
 @msg	this is not a PostScript file	to nie jest plik PostScript
 @msg	tool shortcuts must be a single key (optionally with Shift)	skróty narzędzi muszą być pojedynczym klawiszem (opcjonalnie z Shift)
 @msg	truncated	obcięty
@@ -4160,6 +4234,8 @@ imageTrace	Outline	Kontur
 @msg	{_1} files	Pliki {_1}
 @msg	The graphics were lost and have been restarted	Utracono grafikę i uruchomiono ją ponownie
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	Pierwszy wypróbowany procesor graficzny nie mógł wyświetlić okna, więc VectorCraft uruchomił się ponownie na {summary}
+@msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Ostatnie uruchomienie VectorCraft zakończyło się na {name}, zanim pojawiło się okno, więc VectorCraft uruchomił się na {summary}. Aby ponownie wypróbować ten procesor graficzny, zmień Preferencje › Wydajność › Procesor graficzny lub uruchom z ustawioną zmienną WGPU_BACKEND
+@msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	Ostatnie uruchomienie VectorCraft zakończyło się podczas wyliczania procesorów graficznych, więc VectorCraft uruchomił się na {summary} tylko z OpenGL. Aby ponownie wypróbować pozostałe interfejsy graficzne, zmień Preferencje › Wydajność › Procesor graficzny lub uruchom z ustawioną zmienną WGPU_BACKEND
 @msg	Loading VectorCraft…	Wczytywanie VectorCraft…
 @msg	VectorCraft failed to start: {e}	Nie udało się uruchomić VectorCraft: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Wymagana jest przeglądarka z obsługą WebGPU lub WebGL2.
@@ -4665,6 +4741,7 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Registration:	Punkt rejestracji:
 	Legacy (version 7)	Starsza (wersja 7)
 	Transparent Images:	Przezroczyste obrazy:
 	Flatten	Spłaszcz
@@ -4726,6 +4803,47 @@ mark-style	Japanese	Japońskie
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.
 	Distance	Odległość
+@msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
+@msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
+@msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" umieszcza gradient liniowy lub radialny, a nie dowolny
+@msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
+	Make Image Dynamic	Uczyń obraz dynamicznym
+	Import Data Sets…	Importuj zestawy danych…
+	Export Data Sets…	Eksportuj zestawy danych…
+	Make Graph Dynamic	Uczyń wykres dynamicznym
+	Batch…	Przetwarzanie wsadowe…
+	Source Folder:	Folder źródłowy:
+	Destination Folder:	Folder docelowy:
+	Overrides	Zastąpienia
+	Uses every data set of the open document.	Używa każdego zestawu danych otwartego dokumentu.
+@msg	Batch: {count} processed	Przetwarzanie wsadowe: przetworzono {count}
+@msg	Batch: {count} processed, {failed} failed	Przetwarzanie wsadowe: przetworzono {count}, niepowodzenia: {failed}
+@msg	choose a destination folder	wybierz folder docelowy
+@msg	choose a source folder	wybierz folder źródłowy
+@msg	open a document with data sets	otwórz dokument z zestawami danych
+@msg	the action has no steps	operacja nie ma kroków
+
+# User Interface › Accent Color
+	Accent Color	Kolor akcentu
+	Amber	Bursztynowy
+	Coral	Koralowy
+	Violet	Fioletowy
+	Pink	Różowy
+	Sketch	Szkic
+	Halftone Pattern…	Wzór rastra…
+	Halftone Pattern	Wzór rastra
+	Pattern Type	Typ wzoru
+	Dot	Kropka
+# User Interface › Color Scheme
+	Color Scheme	Schemat kolorów
+	Modern	Nowoczesny
+
+# Symbol Options › Export Type
+	Export Type:	Typ eksportu:
+	Movie Clip	Klip filmowy
+@msg	name is empty	nazwa jest pusta
+@msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 
 # CollabCraft cloud Open / Save / Share
 	Browse a Cloud Folder	Przeglądaj folder w chmurze

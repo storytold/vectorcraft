@@ -110,6 +110,38 @@ fn right_click_on_empty_canvas_offers_the_view_and_a_dismissing_click_does_nothi
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
 }
 
+/// A right-click over a locked object adds an Unlock submenu that lists the object by its name.
+/// Choosing the name unlocks the object in one undo step; once the menu is closed, the menu lists
+/// no Unlock items.
+#[test]
+fn right_click_on_a_locked_object_offers_unlock_by_its_name() {
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    app.run("layer.setProps", json!({"ids": [id.0], "name": "Sky", "locked": true})).unwrap();
+    let steps = app.session.active().unwrap().history.undo.len();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 100.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Unlock"), "{texts:?}");
+    // Agents see the item under the Unlock path, by the object's name.
+    let entries = menus::context_entries(&app);
+    let item = entries.iter().find(|e| e.path == ["Unlock"]).unwrap();
+    assert_eq!((item.label.as_str(), item.command.as_deref()), ("Sky", Some("layer.setProps")));
+    assert_eq!(item.params, json!({"ids": [id.0], "locked": false}));
+    // Hovering Unlock opens the submenu.
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Unlock"))]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    let texts = click(&mut app, &ctx, at(&texts, "Sky"), PointerButton::Primary);
+    let st = app.session.active().unwrap();
+    assert!(!st.doc.node(id).unwrap().locked, "the object is unlocked");
+    assert_eq!(st.history.undo.len(), steps + 1, "in one undo step");
+    assert!(!has(&texts, "Unlock"), "the menu closed: {texts:?}");
+    // Locked again, it is not listed until the next right-click over it.
+    app.run("layer.setProps", json!({"ids": [id.0], "locked": true})).unwrap();
+    assert!(menus::context_entries(&app).iter().all(|e| e.path.first().map(String::as_str) != Some("Unlock")));
+}
+
 /// #528: right-clicking a ruler offers the document units, the current one checked, and choosing one
 /// swaps them — the same effect as Preferences ▸ Units ▸ General (`document.setUnits`).
 #[test]
@@ -198,6 +230,11 @@ fn every_context_label_is_a_menu_string() {
     app.run("object.group", json!({})).unwrap();
     shown.extend(labels(&menus::context_items(&app)));
     menus::invoke(&mut app, "object.isolate", json!({}));
+    shown.extend(labels(&menus::context_items(&app)));
+    // The Unlock submenu that a right-click over a locked object adds.
+    menus::invoke(&mut app, "object.exitIsolation", json!({}));
+    app.run("layer.setProps", json!({"ids": [a.0], "locked": true})).unwrap();
+    app.ui.context_locked = Some((app.session.active().unwrap().uid, vec![a]));
     shown.extend(labels(&menus::context_items(&app)));
     let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(**l)).collect();
     assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");

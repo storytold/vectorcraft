@@ -60,7 +60,11 @@ impl CraftFont {
 /// The craft-fonts faces for Japanese text, best for document text first: Mincho (serif) families,
 /// then the others, regular weights before bold. Empty when built without craft-fonts.
 pub fn japanese_document_fonts() -> Vec<&'static CraftFont> {
-    let mut v: Vec<&'static CraftFont> = CRAFT_FONTS.iter().filter(|f| f.is_japanese()).collect();
+    japanese_document_fonts_from(CRAFT_FONTS)
+}
+
+fn japanese_document_fonts_from(fonts: &[CraftFont]) -> Vec<&CraftFont> {
+    let mut v: Vec<_> = fonts.iter().filter(|f| f.is_japanese()).collect();
     v.sort_by_key(|f| (!f.is_mincho(), f.is_bold()));
     v
 }
@@ -69,11 +73,17 @@ pub fn japanese_document_fonts() -> Vec<&'static CraftFont> {
 /// [`japanese_document_fonts`] order, then the Arabic ones in manifest order (Noto Sans Arabic
 /// first: the fallback for Arabic text; the other families are picked by name), then the Thai ones
 /// (Noto Sans Thai: the fallback for Thai text where no Thai font is installed, and on the web).
+/// Remaining faces follow in manifest order, so every explicitly supplied family can be selected.
 /// Empty when built without craft-fonts.
 pub fn document_fonts() -> Vec<&'static CraftFont> {
-    let mut v = japanese_document_fonts();
-    v.extend(CRAFT_FONTS.iter().filter(|f| f.is_arabic() && !f.is_japanese()));
-    v.extend(CRAFT_FONTS.iter().filter(|f| f.is_thai() && !f.is_japanese() && !f.is_arabic()));
+    document_fonts_from(CRAFT_FONTS)
+}
+
+fn document_fonts_from(fonts: &[CraftFont]) -> Vec<&CraftFont> {
+    let mut v = japanese_document_fonts_from(fonts);
+    v.extend(fonts.iter().filter(|f| f.is_arabic() && !f.is_japanese()));
+    v.extend(fonts.iter().filter(|f| f.is_thai() && !f.is_japanese() && !f.is_arabic()));
+    v.extend(fonts.iter().filter(|f| !f.is_japanese() && !f.is_arabic() && !f.is_thai()));
     v
 }
 
@@ -88,6 +98,36 @@ pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static CraftFont> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn document_fonts_keep_script_priority_and_include_every_face_once() {
+        let font = |family, style, scripts| CraftFont { family, style, scripts, bytes: &[] };
+        let fonts = [
+            font("Chinese", "Regular", &["Hans"]),
+            font("Thai", "Regular", &["Thai", "Arab"]),
+            font("Gothic", "Regular", &["Jpan"]),
+            font("Mincho", "Bold", &["Jpan"]),
+            font("Arabic", "Regular", &["Arab"]),
+            font("Mincho", "Regular", &["Jpan", "Hans"]),
+            font("Thai only", "Regular", &["Thai"]),
+            font("Latin", "Regular", &["Latn"]),
+        ];
+        let ordered: Vec<_> = document_fonts_from(&fonts).into_iter().map(|f| (f.family, f.style)).collect();
+        assert_eq!(
+            ordered,
+            [
+                ("Mincho", "Regular"),
+                ("Mincho", "Bold"),
+                ("Gothic", "Regular"),
+                ("Thai", "Regular"),
+                ("Arabic", "Regular"),
+                ("Thai only", "Regular"),
+                ("Chinese", "Regular"),
+                ("Latin", "Regular"),
+            ]
+        );
+        assert!(document_fonts_from(&[]).is_empty());
+    }
 
     #[test]
     fn web_fonts_follow_the_list() {

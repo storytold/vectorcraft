@@ -244,6 +244,87 @@ fn art_bounds_take_in_the_effects_in_a_symbols_art() {
     assert!(b.x0 <= 20.0 && b.x1 >= 38.0, "the art from x 20 and its shadow to x 38: {b:?}");
 }
 
+/// A drop shadow 8 pt to the right, without blur.
+fn shadow_right() -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true }
+}
+
+#[test]
+fn art_bounds_take_in_the_effects_of_groups_type_and_images() {
+    let black = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let mut d = Document::new(100.0, 100.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), black);
+    let group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(square)]);
+    let t = TextObject::point(Point::new(10.0, 40.0), "Hill", CharStyle { size: 12.0, ..CharStyle::default() });
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let im = vectorcraft_doc::ImageObject {
+        key: "image".into(),
+        width: 30,
+        height: 30,
+        xf: vectorcraft_geom::Affine::translate((20.0, 50.0)),
+        link: None,
+        placement: Default::default(),
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    let cut_off: Vec<_> = [("group", group), ("type", text), ("image", image)]
+        .into_iter()
+        .filter_map(|(what, mut n)| {
+            let mut d = d.clone();
+            let plain = n.visual_bounds().unwrap();
+            n.appearance.effects.push(shadow_right());
+            let l = d.layers[0].id;
+            d.insert(Some(l), 0, n).unwrap();
+            let b = art_bounds(&d).unwrap();
+            (b.x0 > plain.x0 || b.x1 < plain.x1 + 8.0).then(|| format!("{what}: {b:?}, the shadow 8 pt right of {plain:?}"))
+        })
+        .collect();
+    assert!(cut_off.is_empty(), "{cut_off:?}");
+}
+
+#[test]
+fn art_bounds_leave_out_the_hidden_members_of_a_group_with_effects() {
+    let black = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let mut d = Document::new(100.0, 100.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), black.clone());
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 10.0, 220.0, 20.0)), black.clone());
+    hidden.visible = false;
+    let mut guide = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-300.0, 10.0, -200.0, 20.0)), black);
+    if let NodeKind::Path { guide: g, .. } = &mut guide.kind {
+        *g = true;
+    }
+    let mut group = Node::group(d.alloc_id(), [square, hidden, guide].map(std::sync::Arc::new).to_vec());
+    // A geometry effect on the group's own fill that is turned off.
+    group.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+    group.appearance.effects.push(shadow_right());
+    let off = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 50}), visible: false };
+    group.appearance.fill_mut().unwrap().effects.push(off);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let b = art_bounds(&d).unwrap();
+    assert!(b.x0 >= 0.0 && (28.0..50.0).contains(&b.x1), "the square and its shadow, not the hidden square or the guide: {b:?}");
+}
+
+#[test]
+fn art_bounds_hold_a_groups_geometry_effect_measured_with_its_hidden_members() {
+    // The Transform effect halves the group's width about the center of all its members, the
+    // hidden one too: the visible rectangle is drawn from x 30 to x 80.
+    let black = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let mut d = Document::new(200.0, 100.0);
+    let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 10.0, 100.0, 20.0)), black.clone());
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(110.0, 10.0, 120.0, 20.0)), black);
+    hidden.visible = false;
+    let mut group = Node::group(d.alloc_id(), [shown, hidden].map(std::sync::Arc::new).to_vec());
+    let half = serde_json::json!({"scaleH": 50, "scaleV": 100});
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: half, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let b = art_bounds(&d).unwrap();
+    assert!(b.x0 <= 30.0 && b.x1 >= 80.0, "{b:?}");
+    let img = Renderer::new().render_region(&d, Rect::new(0.0, 0.0, 200.0, 100.0), 1.0, false);
+    let drawn = |x: u32| (0..100).any(|y| img.pixels[((y * 200 + x) * 4 + 3) as usize] > 0);
+    assert!(drawn(31) && drawn(78) && !drawn(28) && !drawn(82), "the rectangle is drawn from x 30 to x 80");
+}
+
 /// A black path round `r` in the first layer of `d`, made a guide when `guide`.
 fn add_rect(d: &mut Document, r: Rect, guide: bool) {
     let id = d.alloc_id();

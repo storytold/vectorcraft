@@ -2,7 +2,8 @@
 //! delete; a row dragged onto New Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
-//! fits it in the window.
+//! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
+//! the active artboard's icon, or a double-click on another row's icon.
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -30,9 +31,10 @@ pub(crate) fn scale_art(app: &VectorcraftApp) -> bool {
     app.session.tool_id() == "artboard" && app.session.tool_options()["scaleArt"].as_bool().unwrap_or(false)
 }
 
-/// Whether position edits take their art along, matching the Artboard tool's move option.
+/// Whether position edits take their art along, matching the Artboard tool's move option. The tool
+/// keeps the option while another tool is in use, as when this panel opens Artboard Options.
 pub(crate) fn move_art(app: &VectorcraftApp) -> bool {
-    app.session.tool_id() == "artboard" && app.session.tool_options()["moveArt"].as_bool().unwrap_or(true)
+    app.session.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true)
 }
 
 /// The active artboard (of `n`).
@@ -170,9 +172,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let opt = egui::Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0));
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
                 icons::paint(ui, "dc-artboard-options", opt, if oresp.hovered() { t.text_strong } else { t.icon });
-                if oresp.on_hover_text(tl!("Artboard Options: edit with the Artboard tool")).clicked() {
-                    app.select_tool("artboard");
+                let oresp = oresp.on_hover_text(tl!("Artboard Options"));
+                // A click on the active artboard's icon opens its Artboard Options. A click on
+                // another row's icon makes that artboard active, so a double-click opens its options.
+                if oresp.clicked() {
                     select(app, i);
+                    if i == sel || oresp.double_clicked() {
+                        app.run("tool.options", json!({ "tool": "artboard" })).ok();
+                    }
                 }
                 let several = ui.input(|inp| inp.modifiers.shift || inp.modifiers.command);
                 if resp.clicked() && several && app.session.tool_id() == "artboard" {
@@ -246,14 +253,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     menu_item(ui, tl!("Convert to Artboards"), false, false);
     if menu_item(ui, tl!("Artboard Options…"), n > 0, false) {
-        app.select_tool("artboard");
+        app.run("tool.options", json!({ "tool": "artboard" })).ok();
     }
     if menu_item(ui, tl!("Rearrange All Artboards…"), n > 1, false) {
         open_rearrange(app);
     }
     ui.separator();
     if menu_item(ui, tl!("Fit to Artwork Bounds"), n > 0, false) {
-        app.run("artboard.fitToArt", json!({"index": sel})).ok();
+        app.run("artboard.fitToArt", json!({ "indices": picked(app, n) })).ok();
     }
 }
 
@@ -312,6 +319,49 @@ mod tests {
         assert_eq!(picked(&mut app, json!({})), json!([a]));
         assert_eq!(picked(&mut app, json!({"artboard": 1})), json!([b]));
     }
+
+    /// Object › Artboards › Fit to Artwork Bounds and Fit to Selected Art resize the artboard made
+    /// active here, as the panel menu's Fit to Artwork Bounds does, and leave artboard 1 as it was;
+    /// an explicit index still wins.
+    #[test]
+    fn fit_to_artwork_bounds_and_selected_art_resize_the_active_artboard() {
+        for id in ["artboard.fitToArt", "artboard.fitToSelection"] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
+            // Partly on artboard 1 and partly on artboard 2.
+            app.session.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 60, "height": 30})).unwrap();
+            app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+            let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+            let (first, art) = (boards(&app)[0], vectorcraft_geom::Rect::new(90.0, 10.0, 150.0, 40.0));
+            select(&mut app, 1);
+            crate::menus::invoke(&mut app, id, json!({}));
+            assert_eq!(boards(&app), [first, art], "{id} resizes Artboard 2, the active one");
+            crate::menus::invoke(&mut app, id, json!({"index": 0}));
+            assert_eq!(boards(&app), [art, art], "{id} with an index resizes that artboard");
+        }
+    }
+
+    /// With artboards 1 and 3 selected with the Artboard tool, Object › Artboards › Fit to Artwork
+    /// Bounds fits each of them to the art on it and leaves artboard 2 as it was.
+    #[test]
+    fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+        for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+        }
+        app.session.execute("select.all", &json!({})).unwrap();
+        app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        let was = boards(&app);
+        app.select_tool("artboard");
+        select(&mut app, 0);
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        crate::menus::invoke(&mut app, "artboard.fitToArt", json!({}));
+        let rect = vectorcraft_geom::Rect::new;
+        assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
+    }
+
     /// With the Artboard tool, Shift-click on a row adds its artboard to the tool's selection or
     /// takes it out (#1139), and every selected row is highlighted.
     #[test]
@@ -355,9 +405,9 @@ mod tests {
         assert_eq!(picked(&app, 3), [0]);
     }
 
-    /// Double-clicking a row's number goes to its artboard and its name renames it; a row's
-    /// Options button edits that artboard with the Artboard tool, and the tool's artboard is the
-    /// active one.
+    /// Double-clicking a row's number goes to its artboard and its name renames it; a click on
+    /// another row's options icon makes that artboard the active one, and the Artboard tool's
+    /// artboard is the active one.
     #[test]
     fn double_clicks_go_to_or_rename_and_options_edits_the_rows_artboard() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -401,9 +451,10 @@ mod tests {
         assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), Some(1));
         set_pstate::<Option<usize>>(&ctx, "ab-edit", None);
         frame(&mut app, 3.0, vec![]);
-        // Artboard 1's Options button: the Artboard tool, editing Artboard 1.
+        // A click on Artboard 1's options icon makes Artboard 1 active, and the Artboard tool,
+        // chosen next, starts on it.
         frame(&mut app, 4.0, events(egui::pos2(row.right() - 14.0, row.center().y), 1));
-        assert_eq!(app.session.tool_id(), "artboard");
+        app.select_tool("artboard");
         assert_eq!((app.view().unwrap().artboard, app.session.tool_options()["active"].clone()), (0, json!(0)));
         // While the Artboard tool is chosen, clicking a row moves the tool to that artboard too.
         frame(&mut app, 5.0, events(name, 1));
@@ -414,6 +465,88 @@ mod tests {
             crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(kind, 100.0, 100.0), view);
         }
         assert_eq!((app.session.tool_options()["active"].clone(), selected(&app, 2)), (json!(0), 0));
+    }
+
+    /// A row's options icon opens Artboard Options for that row's artboard and leaves the tool as
+    /// it is (#1876): a click on the active artboard's icon, or a double-click on another row's
+    /// icon, whose first click only makes that artboard active. With the Artboard tool in use, the
+    /// tool moves to that artboard too.
+    #[test]
+    fn the_options_icon_opens_artboard_options_for_its_rows_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
+        app.view_mut().unwrap().artboard = 0;
+        let tool = app.session.tool_id().to_string();
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        // The highlighted row (Artboard 1's). The rows are 24 points apart, and each icon's
+        // center is 14 points in from the row's right end.
+        let row = frame(&mut app, 0.0, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == Tokens::get(&ctx).row_selected => Some(r.rect),
+                _ => None,
+            })
+            .unwrap();
+        let icon = |k: f32| egui::pos2(row.right() - 14.0, row.center().y + 24.0 * k);
+        let events = |at: egui::Pos2, clicks: usize| {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            std::iter::once(egui::Event::PointerMoved(at)).chain((0..clicks).flat_map(|_| [button(true), button(false)])).collect::<Vec<_>>()
+        };
+        let opened = |app: &mut VectorcraftApp| app.ui.dialog.take().map(|d| (d.kind.clone(), d.f64("index", 9.0), d.f64("width", 0.0)));
+        // Artboard 2's icon: the first click makes it active, the second (a double-click) opens its
+        // options; no rename starts.
+        frame(&mut app, 1.0, events(icon(1.0), 1));
+        assert_eq!((app.view().unwrap().artboard, opened(&mut app)), (1, None));
+        frame(&mut app, 1.1, events(icon(1.0), 1));
+        assert_eq!(opened(&mut app), Some(("artboardOptions".to_string(), 1.0, 100.0)));
+        assert_eq!((app.session.tool_id(), pstate::<Option<usize>>(&ctx, "ab-edit")), (tool.as_str(), None));
+        // The active artboard's icon: one click opens its options.
+        frame(&mut app, 3.0, events(icon(1.0), 1));
+        assert_eq!(opened(&mut app), Some(("artboardOptions".to_string(), 1.0, 100.0)));
+        // With the Artboard tool, a double-click on Artboard 1's icon (both clicks in one frame)
+        // opens Artboard 1's options, and the tool moves to it.
+        app.select_tool("artboard");
+        frame(&mut app, 5.0, events(icon(0.0), 2));
+        assert_eq!(opened(&mut app), Some(("artboardOptions".to_string(), 0.0, 200.0)));
+        assert_eq!((app.session.tool_id(), app.session.tool_options()["active"].clone()), ("artboard", json!(0)));
+    }
+
+    /// The panel menu's Artboard Options… opens Artboard Options for the active artboard and leaves
+    /// the tool as it is.
+    #[test]
+    fn the_panel_menus_artboard_options_opens_the_active_artboards_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
+        select(&mut app, 1);
+        let tool = app.session.tool_id().to_string();
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let item = frame(&mut app, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == "Artboard Options…" => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+        let d = app.ui.dialog.take().unwrap();
+        assert_eq!((d.kind.as_str(), d.f64("index", 9.0), d.f64("x", 0.0)), ("artboardOptions", 1.0, 400.0));
+        assert_eq!(app.session.tool_id(), tool);
     }
 
     /// Choosing the Artboard tool starts it on the active artboard, the one the panel highlights:

@@ -1,5 +1,5 @@
-//! Artboard Options (double-click with the Artboard tool, or double-click the tool): the
-//! artboard's fields, sizes parsed with units.
+//! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
+//! panel's options icon or menu): the artboard's fields, sizes parsed with units.
 
 use serde_json::{Value, json};
 

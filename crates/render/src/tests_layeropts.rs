@@ -119,6 +119,35 @@ fn a_template_layer_stays_in_preview_in_outline_view() {
     assert_eq!(preview.pixel(25, 75), [255, 0, 0, 255]);
 }
 
+/// View › Hide Template (#2000) leaves template layers out of the screen view and nothing else:
+/// a guide path on another layer still draws, unlike in an export.
+#[test]
+fn hide_template_leaves_only_the_template_layers_out() {
+    let mut d = doc(|k| {
+        if let NodeKind::Layer { template, .. } = k {
+            *template = true;
+        }
+    });
+    let top = d.add_layer(Some("Guides"));
+    let mut g = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(70.0, 70.0, 90.0, 90.0)), Appearance::default());
+    if let NodeKind::Path { guide, .. } = &mut g.kind {
+        *guide = true;
+    }
+    d.insert(Some(top), 0, g).unwrap();
+    let render = |hide: bool| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), hide_templates: hide, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let guide_drawn = |r: &Rendered| (60..100).flat_map(|y| (60..100).map(move |x| (x, y))).any(|(x, y)| r.pixel(x, y) != [255, 255, 255, 255]);
+    let shown = render(false);
+    assert_ne!(shown.pixel(25, 25), [255, 255, 255, 255], "the template layer's square shows (dimmed)");
+    assert!(guide_drawn(&shown));
+    let hidden = render(true);
+    assert_eq!(hidden.pixel(25, 25), [255, 255, 255, 255], "Hide Template: the template layer is left out");
+    assert_eq!(hidden.pixel(65, 25), [255, 255, 255, 255], "its image too");
+    assert!(guide_drawn(&hidden), "the guide on the other layer still draws");
+}
+
 /// A guide path draws on screen only: exports leave it out, as they leave templates out (and as
 /// the SVG, PSD and PDF exports and printing already do).
 #[test]

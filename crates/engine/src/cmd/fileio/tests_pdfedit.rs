@@ -139,6 +139,27 @@ fn exports_write_ai_as_save_as_does() {
     assert!(b64(&r).starts_with(b"%PDF"));
 }
 
+/// A `.ai` with an artboard larger than 14,400 pt has its PDF page written with a `UserUnit`,
+/// and reopens at its size from its editing data and from its PDF part.
+#[test]
+fn an_ai_with_an_artboard_past_14400_pt_reopens_at_its_size() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20000, "height": 10000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 5000, "height": 3000})).unwrap();
+    let ai = b64(&s.execute("document.export", &json!({"format": "ai", "compress": false})).unwrap());
+    assert!(String::from_utf8_lossy(&ai).contains("/UserUnit 1.389"), "20,000 / 14,400 rounded up to the next thousandth");
+    let size = |s: &Session| {
+        let r = s.doc().unwrap().doc.artboards[0].rect;
+        (r.width().round(), r.height().round())
+    };
+    assert_eq!(open(&mut s, "big.ai", &ai)["restored"], true);
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+    // Picking its page opens the PDF part.
+    let r = s.execute("document.open", &json!({"name": "big.ai", "dataBase64": vectorcraft_format::base64_encode(&ai), "pages": "1"})).unwrap();
+    assert_eq!(r["restored"], false, "{r}");
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+}
+
 #[test]
 fn ait_templates_open_their_document_untitled() {
     let mut s = rich();
@@ -151,6 +172,33 @@ fn ait_templates_open_their_document_untitled() {
     assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
     assert_eq!(s.doc().unwrap().path, None);
     assert_eq!(comparable(&s.doc().unwrap().doc), before);
+}
+
+/// Save as Template writes a PDF-compatible `.ait` for a `.ait` path or `format: ait`, and New
+/// from Template opens it as an untitled copy of the document, layers and art included.
+#[test]
+fn save_as_template_writes_an_ait_that_new_from_template_opens_untitled() {
+    let mut s = rich();
+    s.execute("layer.new", &json!({"name": "Notes"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 20, "y": 120, "width": 40, "height": 30})).unwrap();
+    let before = comparable(&s.doc().unwrap().doc);
+    assert_eq!(before.layers.len(), 2);
+    let path = tmp("brochure template.ait");
+    let r = s.execute("file.saveAsTemplate", &json!({"path": path})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(bytes.starts_with(b"%PDF") && vectorcraft_pdf::editing(&bytes).is_some_and(|e| e.intact), "PDF-compatible, carrying the document");
+    assert_eq!((s.doc().unwrap().path.as_deref(), s.doc().unwrap().is_dirty()), (None, true), "the document is unchanged");
+    let r = s.execute("file.newFromTemplate", &json!({"path": path})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    assert_eq!(s.doc().unwrap().path, None);
+    assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    // Without a path: the bytes and a name for the Templates folder.
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "ait"})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    assert!(r["name"].as_str().is_some_and(|n| n.ends_with(" template.ait")), "{r}");
+    assert!(vectorcraft_pdf::editing(&b64(&r)).is_some_and(|e| e.intact));
 }
 
 #[test]

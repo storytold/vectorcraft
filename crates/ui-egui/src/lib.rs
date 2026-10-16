@@ -86,6 +86,8 @@ mod tests_font_menu;
 #[cfg(test)]
 mod tests_fonts;
 #[cfg(test)]
+mod tests_guide_escape;
+#[cfg(test)]
 mod tests_home;
 #[cfg(test)]
 mod tests_labels;
@@ -123,6 +125,8 @@ mod tests_recolor;
 mod tests_recovery;
 #[cfg(test)]
 mod tests_removeanchors;
+#[cfg(test)]
+mod tests_rotateview;
 #[cfg(test)]
 mod tests_ruler_origin;
 #[cfg(test)]
@@ -297,6 +301,8 @@ pub struct CanvasCache {
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
+    pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
 }
@@ -320,6 +326,8 @@ pub struct CacheKey {
     pub h: u32,
     pub outline: bool,
     pub trim: bool,
+    /// View › Hide Template: template layers left out ([`vectorcraft_render::RenderOptions::skip_templates`]).
+    pub templates: bool,
     pub ppp: f32,
     pub hidden: Vec<u64>,
     pub rot: f64,
@@ -405,6 +413,8 @@ pub struct VectorcraftApp {
     clipboard_out: Option<String>,
     clipboard_published: Option<String>,
     pub(crate) clipboard_in: Option<vectorcraft_engine::cmd::clipboard::Flavour>,
+    /// The Copy or Cut whose formats go to the system clipboard ([`Self::publish_clipboard`]).
+    clipboard_publishing: sysclip::Publishing,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
@@ -506,6 +516,7 @@ impl VectorcraftApp {
                 hidden_chars: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
+                content_bounds: None,
                 cursors: Default::default(),
             },
             perf: Perf::default(),
@@ -522,6 +533,7 @@ impl VectorcraftApp {
             clipboard_out: None,
             clipboard_published: None,
             clipboard_in: None,
+            clipboard_publishing: Default::default(),
             pending_url: None,
             control_rx: None,
             pending_screenshots: vec![],
@@ -633,13 +645,7 @@ impl VectorcraftApp {
 
     /// The zero point shown by rulers and position fields; command coordinates stay absolute.
     pub(crate) fn ruler_origin(&self) -> vectorcraft_geom::Point {
-        let origin = self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin);
-        // An untrusted file cannot make the ruler's tick loop or position fields overflow.
-        if origin.is_finite() && origin.x.abs() <= vectorcraft_engine::MAX_COORD && origin.y.abs() <= vectorcraft_engine::MAX_COORD {
-            origin
-        } else {
-            vectorcraft_geom::Point::ZERO
-        }
+        self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin_or_zero())
     }
     pub fn view_mut(&mut self) -> Option<&mut View> {
         self.sync_views();
@@ -655,9 +661,11 @@ impl VectorcraftApp {
             guides: self.ui.view.guides,
             snap_to_grid: self.ui.view.snap_to_grid,
             snap_to_pixel: self.ui.view.snap_to_pixel,
-            show_bbox: self.ui.view.bounding_box,
+            // View › Hide Edges: the canvas draws neither the bounding box (with the type widget)
+            // nor the Live Corners widgets, and the tools do not answer the pointer on them.
+            show_bbox: self.ui.view.bounding_box && self.ui.view.edges,
             snap_to_point: self.ui.view.snap_to_point,
-            corner_widgets: self.ui.view.corner_widgets,
+            corner_widgets: self.ui.view.corner_widgets && self.ui.view.edges,
             screen: self.screen_frame(),
         }
     }
@@ -707,6 +715,22 @@ impl VectorcraftApp {
             && let Some(p) = params.as_object_mut()
         {
             p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+        }
+        // Object › Artboards › Fit to Artwork Bounds resizes the selected artboards (the Artboard
+        // tool's, else the active one), which the app passes as its `indices`, and Fit to Selected
+        // Art resizes the active artboard, which the app passes as its `index`.
+        if vectorcraft_engine::FIT_ACTIVE_ARTBOARD.contains(&id)
+            && params.get("index").is_none()
+            && params.get("indices").is_none()
+            && self.view().is_some()
+            && let Some(n) = self.session.active().map(|d| d.doc.artboards.len())
+            && let Some(p) = params.as_object_mut()
+        {
+            if id == "artboard.fitToArt" {
+                p.insert("indices".into(), serde_json::json!(panels::artboards::picked(self, n)));
+            } else {
+                p.insert("index".into(), serde_json::json!(panels::artboards::selected(self, n)));
+            }
         }
         if id.starts_with("edit.paste") {
             if let Err(e) = self.adopt_system_clipboard() {
@@ -1079,6 +1103,22 @@ impl VectorcraftApp {
         self.canvas.selection_bounds = Some((key, b));
         b
     }
+
+    /// The art and the artboards together, the span of the canvas's scroll bars: measured once
+    /// per revision, as the canvas reads it every frame.
+    pub fn content_bounds(&mut self) -> Option<vectorcraft_geom::Rect> {
+        let st = self.session.active()?;
+        let key = (st.uid, st.revision);
+        if let Some((k, b)) = self.canvas.content_bounds
+            && k == key
+        {
+            return b;
+        }
+        let boards = st.doc.artboards.iter().map(|a| a.rect).reduce(|r, a| r.union(a));
+        let b = vectorcraft_geom::union_opt(st.doc.art_bounds(), boards);
+        self.canvas.content_bounds = Some((key, b));
+        b
+    }
 }
 
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
@@ -1143,6 +1183,7 @@ impl VectorcraftApp {
         }
         self.poll_font_check(ctx);
         picks::poll(self, ctx);
+        self.write_formats_before_text_input(ctx);
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
@@ -1401,6 +1442,7 @@ impl VectorcraftApp {
         self.ui_fonts.frame(&ctx);
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
+        self.drop_formats_after_egui_copy(&ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

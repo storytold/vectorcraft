@@ -137,7 +137,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate",
             ["Edit"],
             None,
-            "{dx?, dy?} duplicate the selection in place (offset optional)",
+            "{ids?: [id…] (selected first; default: the selection), dx?, dy?} duplicate the selection in place (offset optional)",
             has_selection,
             duplicate
         ),
@@ -324,9 +324,22 @@ pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
 }
 
+/// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): in
+/// an isolated compound path its paths are objects of their own, so the hole of a ring moves
+/// without the ring. Paint and the rest still go to the compound path, which holds the paint.
+pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), st.isolation))
+}
+
 /// The top-level objects among `ids` (in paint order): compound-path members stand for their
 /// compound, and ids whose ancestor is also listed, and layers, are dropped.
 pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
+    roots_within(doc, ids, None)
+}
+
+/// [`roots_of`], less the swap for the members of `isolation` when it is a compound path.
+fn roots_within(doc: &Document, ids: Vec<NodeId>, isolation: Option<NodeId>) -> Vec<NodeId> {
     // Every id's place in the tree, found in one walk (a lookup per id is a walk per id).
     let paths = doc.index_paths(ids.iter().copied());
     // A compound-path member acts as its compound (compounds are one object).
@@ -336,21 +349,35 @@ pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
             let path = paths.get(&id);
             let parent = path.and_then(|p| p.split_last()).map(|(_, up)| up).filter(|up| !up.is_empty());
             match parent.and_then(|up| doc.node_at(up).map(|n| (up, n))) {
-                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) => (n.id, Some(up.to_vec())),
+                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) && Some(n.id) != isolation => (n.id, Some(up.to_vec())),
                 _ => (id, path.cloned()),
             }
         })
         .collect();
     sel.dedup_by_key(|(id, _)| *id);
-    let listed: std::collections::HashSet<NodeId> = sel.iter().map(|(id, _)| *id).collect();
-    sel.iter()
-        .filter(|(_, path)| {
-            let anc = path.as_deref().and_then(|p| doc.ancestry_at(p)).unwrap_or_default();
-            !anc[..anc.len().saturating_sub(1)].iter().any(|a| listed.contains(a))
-        })
+    without_inner(doc, sel)
         .filter(|(_, path)| path.as_deref().and_then(|p| doc.node_at(p)).is_some_and(|n| !n.is_layer()))
-        .map(|(id, _)| *id)
+        .map(|(id, _)| id)
         .collect()
+}
+
+/// `ids` in the order given, less those whose ancestor is also listed: an object listed with a
+/// group that holds it is dropped, as [`roots_of`] drops it from a selection. Nothing else is
+/// dropped or replaced: unlike `roots_of`, it keeps layers, ids that aren't in the document and
+/// compound-path members.
+pub(crate) fn outermost(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
+    let paths = doc.index_paths(ids.iter().copied());
+    let placed = ids.into_iter().map(|id| (id, paths.get(&id).cloned())).collect();
+    without_inner(doc, placed).map(|(id, _)| id).collect()
+}
+
+/// The entries of `placed` (ids with their index paths) whose id has no ancestor among its ids.
+fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> impl Iterator<Item = (NodeId, Option<Vec<usize>>)> + '_ {
+    let listed: std::collections::HashSet<NodeId> = placed.iter().map(|(id, _)| *id).collect();
+    placed.into_iter().filter(move |(_, path)| {
+        let anc = path.as_deref().and_then(|p| doc.ancestry_at(p)).unwrap_or_default();
+        !anc[..anc.len().saturating_sub(1)].iter().any(|a| listed.contains(a))
+    })
 }
 
 fn copy(s: &mut Session, _: &Value) -> Result<Value> {

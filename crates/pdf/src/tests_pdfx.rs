@@ -57,7 +57,10 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
         for want in ["/OutputIntents[", "/S/GTS_PDFX", "/DestOutputProfile ", &format!("/OutputConditionIdentifier({profile})")] {
             assert!(t.contains(want), "{standard:?}: {want}");
         }
-        assert!(t.contains("/N 4/Length"), "{standard:?}: a CMYK profile");
+        // (PDF/X-3 and PDF/X-4 share the stream of the profile that tags the colours.)
+        let oi: u32 = t.split("/DestOutputProfile ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let (start, end) = crate::patch::Xref::read(&r.bytes).unwrap().dict(&r.bytes, oi).unwrap();
+        assert!(text(&r.bytes[start..end]).contains("/N 4"), "{standard:?}: a CMYK profile");
         // Every page is trimmed to its artboard; the file is untrapped, titled and dated.
         for want in ["/TrimBox[0 0 200 100]", "/Trapped/False", "/Title(Untitled)", "/CreationDate", "/ModDate"] {
             assert!(t.contains(want), "{standard:?}: {want}");

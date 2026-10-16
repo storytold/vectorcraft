@@ -405,6 +405,44 @@ fn add_text_justify_anchors_point_type_on_x() {
     assert!((r + rw - 300.0).abs() < 1.0, "{r} {rw}");
 }
 
+/// add_text forwards writing direction to both text-creation commands, keeping horizontal as the default.
+#[test]
+fn add_text_sets_writing_direction_for_every_kind() {
+    let tools = tool_definitions();
+    let definition = tools.iter().find(|t| t["name"] == "add_text").unwrap();
+    assert_eq!(definition["inputSchema"]["properties"]["vertical"]["type"], "boolean");
+    for mode in ["point", "area", "pathArea", "onPath"] {
+        for vertical in [None, Some(false), Some(true)] {
+            let mut s = server();
+            let mut args = json!({"text": "AB", "size": 24});
+            if mode == "point" || mode == "area" {
+                args["x"] = json!(100);
+                args["y"] = json!(100);
+                if mode == "area" {
+                    args["width"] = json!(180);
+                    args["height"] = json!(160);
+                }
+            } else {
+                let path = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 40, "y": 40, "width": 180, "height": 160}));
+                assert_eq!(path["isError"], false, "{path}");
+                args["path"] = serde_json::from_str::<Value>(&text_of(&path)).unwrap()["id"].clone();
+                args["mode"] = json!(if mode == "pathArea" { "area" } else { "onPath" });
+            }
+            if let Some(value) = vertical {
+                args["vertical"] = json!(value);
+            }
+            let made = call(&mut s, 2, "add_text", args);
+            assert_eq!(made["isError"], false, "{mode} {vertical:?}: {made}");
+            let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].clone();
+            let node = call(&mut s, 3, "run_command", json!({"command": "document.node", "params": {"id": id}}));
+            assert_eq!(node["isError"], false, "{node}");
+            let node: Value = serde_json::from_str(&text_of(&node)).unwrap();
+            assert_eq!(node["kind"]["type"], "text", "{node}");
+            assert_eq!(node["kind"]["vertical"].as_bool().unwrap_or(false), vertical.unwrap_or(false), "{mode}: {node}");
+        }
+    }
+}
+
 /// save_file says it saves in the document's own format or the one the path's extension picks.
 #[test]
 fn save_file_describes_the_formats_it_writes() {
@@ -970,6 +1008,28 @@ fn shift_marquee_gesture_toggles_the_selection() {
     }
 }
 
+/// `press_key {key: "e"}` while a Selection marquee is being dragged makes the marquee select only
+/// the objects entirely inside it. With nothing dragged, E still chooses its tool.
+#[test]
+fn e_during_a_marquee_gesture_selects_only_the_objects_inside() {
+    let mut s = server();
+    let square = |s: &mut Server, id: u64, x: u64| {
+        let r = call(s, id, "draw_shape", json!({"shape": "rectangle", "x": x, "y": 100, "width": 50, "height": 50}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, _b) = (square(&mut s, 1, 100), square(&mut s, 2, 200));
+    let begin = json!([{"kind": "down", "x": 80, "y": 80}, {"kind": "drag", "x": 220, "y": 170}]);
+    let r = call(&mut s, 3, "pointer_gesture", json!({"tool": "selection", "events": begin}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 4, "press_key", json!({"key": "e"}));
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
+    let end = json!([{"kind": "drag", "x": 230, "y": 170}, {"kind": "up", "x": 230, "y": 170}]);
+    let r = call(&mut s, 5, "pointer_gesture", json!({"tool": "selection", "events": end}));
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"], json!([a]), "{r}");
+    let r = call(&mut s, 6, "press_key", json!({"key": "e"}));
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool.select", "{r}");
+}
+
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies
 /// with it as `key` and `inspect_document` lists it, and a click on the key again lets it go.
 #[test]
@@ -1038,6 +1098,30 @@ fn type_preferences_apply_to_agents() {
     assert_eq!(style(&mut s, 6), (size + 4.0, tracking + 50.0));
 }
 
+/// Cmd+Alt+Shift+. and , reach agents: the placeholder text the Type tool selects steps by five
+/// times the Size/Leading increment (2 pt by default) and back.
+#[test]
+fn cmd_alt_shift_period_steps_the_font_size_by_five_for_agents() {
+    let mut s = server();
+    let events = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "up", "x": 100, "y": 100}]);
+    let r = call(&mut s, 1, "pointer_gesture", json!({"tool": "type", "events": events}));
+    assert_eq!(r["isError"], false, "{r}");
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"][0].as_u64().unwrap();
+    let r = call(&mut s, 2, "run_command", json!({"command": "text.setRangeStyle", "params": {"id": id, "size": 12}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let size = |s: &mut Server, n| {
+        let r = call(s, n, "run_command", json!({"command": "text.getRange", "params": {"id": id, "effective": true}}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["runs"][0]["style"]["size"].clone()
+    };
+    let r = call(&mut s, 3, "press_key", json!({"key": ".", "mods": {"cmd": true, "alt": true, "shift": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "type.size.increaseByFive", "{r}");
+    assert_eq!(size(&mut s, 4), json!(22.0));
+    let r = call(&mut s, 5, "press_key", json!({"key": ",", "mods": {"cmd": true, "alt": true, "shift": true}}));
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "type.size.decreaseByFive", "{r}");
+    assert_eq!(size(&mut s, 6), json!(12.0));
+}
+
 /// Cmd+Alt+Q reaches agents: the placeholder text the Type tool selects goes back to tracking 0
 /// and Auto kerning.
 #[test]
@@ -1056,6 +1140,26 @@ fn cmd_alt_q_resets_tracking_and_kerning_for_agents() {
     let runs = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["runs"].clone();
     assert_eq!(runs.as_array().unwrap().len(), 1, "{runs}");
     assert_eq!((&runs[0]["style"]["tracking"], &runs[0]["style"]["kerning"]), (&json!(0.0), &Value::Null), "{runs}");
+}
+
+/// Cmd+Shift+X reaches agents: the placeholder text the Type tool selects goes back to a
+/// horizontal scale of 100%.
+#[test]
+fn cmd_shift_x_resets_horizontal_scale_for_agents() {
+    let mut s = server();
+    let events = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "up", "x": 100, "y": 100}]);
+    let r = call(&mut s, 1, "pointer_gesture", json!({"tool": "type", "events": events}));
+    assert_eq!(r["isError"], false, "{r}");
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"][0].as_u64().unwrap();
+    let r = call(&mut s, 2, "run_command", json!({"command": "text.setRangeStyle", "params": {"id": id, "hScale": 150}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 3, "press_key", json!({"key": "X", "mods": {"cmd": true, "shift": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "type.resetHorizontalScale", "{r}");
+    let r = call(&mut s, 4, "run_command", json!({"command": "text.getRange", "params": {"id": id}}));
+    let runs = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["runs"].clone();
+    assert_eq!(runs.as_array().unwrap().len(), 1, "{runs}");
+    assert_eq!(runs[0]["style"]["h_scale"], json!(100.0), "{runs}");
 }
 
 /// The drawing tools snap to Smart Guides over MCP as with the mouse (#506): a Rectangle drawn

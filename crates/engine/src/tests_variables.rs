@@ -4,6 +4,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
 
+use super::tests_links::{BLUE, Folder, RED, bounds, image, place, png, write};
 use super::*;
 
 fn session() -> Session {
@@ -79,6 +80,38 @@ fn dataset_next_and_prev_wrap_around() {
     assert_eq!(plain(&s, t), "B");
     let v = s.execute("dataset.list", &json!({})).unwrap();
     assert_eq!(v["active"], "B");
+}
+
+#[test]
+fn applying_a_dataset_reports_the_area_type_it_overflows() {
+    let mut s = session();
+    let area = |s: &mut Session, y: u32, content: &str| {
+        let r = s.execute("text.create", &json!({"x": 10, "y": y, "text": content, "size": 12, "area": {"width": 120, "height": 40}})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let long = "word ".repeat(60);
+    let a = area(&mut s, 10, "x");
+    let p = text(&mut s, "x");
+    // Area type that already overflows, bound to no variable, isn't named.
+    area(&mut s, 200, &long);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0, p.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [a.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Short", "values": {"Name": "Ann", "Title": "Ann"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Long", "values": {"Name": long, "Title": long}})).unwrap();
+
+    // The area type is named once though two variables rewrote it; the point type is never named.
+    let v = s.execute("dataset.select", &json!({"name": "Long"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), &v["overflow"]), (Some(3), &json!([a.0])), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Short"})).unwrap();
+    assert!(v.get("overflow").is_none(), "{v}");
+    let v = s.execute("dataset.next", &json!({})).unwrap();
+    assert_eq!((&v["name"], &v["overflow"]), (&json!("Long"), &json!([a.0])), "{v}");
+    let v = s.execute("dataset.prev", &json!({})).unwrap();
+    assert!(v.get("overflow").is_none(), "{v}");
+    let v = s.execute("dataset.prev", &json!({})).unwrap();
+    assert_eq!((&v["name"], &v["overflow"]), (&json!("Long"), &json!([a.0])), "{v}");
 }
 
 #[test]
@@ -826,4 +859,178 @@ fn ids_and_names_from_an_agent_are_checked() {
     s.execute("variable.define", &json!({"name": "x".repeat(255), "kind": "text"})).unwrap();
     assert!(s.execute("variable.delete", &json!({"names": []})).is_err());
     assert!(s.execute("variable.delete", &json!({"names": [5]})).is_err());
+}
+
+/// Image variables swap the linked file and keep the object's bounds; capture records the path.
+#[test]
+fn image_datasets_swap_pixels_and_keep_bounds() {
+    let dir = Folder::new("vars-image");
+    let red_path = dir.file("red.png");
+    let blue_path = dir.file("blue.png");
+    write(&red_path, &png(40, 30, RED));
+    write(&blue_path, &png(80, 60, BLUE));
+
+    let mut s = session();
+    let id = place(&mut s, &red_path);
+    let before = bounds(&s, id);
+
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Photo", "ids": [id.0]})).unwrap();
+    // A text object can't take an image variable; a path must be a non-empty string.
+    let t = text(&mut s, "x");
+    assert!(s.execute("variable.bind", &json!({"variable": "Photo", "ids": [t.0]})).is_err());
+    assert!(s.execute("dataset.new", &json!({"name": "B", "values": {"Photo": ""}})).is_err());
+    assert!(s.execute("dataset.new", &json!({"name": "B", "values": {"Photo": true}})).is_err());
+
+    s.execute("dataset.new", &json!({"name": "Blue", "values": {"Photo": blue_path}})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Blue"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(0)));
+    assert_eq!(image(&s, id).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
+    assert_eq!(bounds(&s, id), before, "bounds stay when the file swaps");
+
+    // Capture records the path the art holds now; a missing file is skipped, not an abort.
+    s.execute("dataset.capture", &json!({"name": "Now"})).unwrap();
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let now = sets["datasets"].as_array().unwrap().iter().find(|d| d["name"] == "Now").unwrap();
+    assert_eq!(now["values"]["Photo"], json!({"image": blue_path}));
+
+    let gone = dir.file("gone.png");
+    s.execute("dataset.new", &json!({"name": "Missing", "values": {"Photo": gone}})).unwrap();
+    let skip = s.execute("dataset.select", &json!({"name": "Missing"})).unwrap();
+    assert_eq!((skip["applied"].as_u64(), skip["skipped"].as_u64()), (Some(0), Some(1)));
+    assert_eq!(image(&s, id).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
+
+    // Make Image Dynamic: one step from a selection to a bound image variable.
+    let id2 = place(&mut s, &red_path);
+    s.execute("select.set", &json!({"ids": [id2.0]})).unwrap();
+    let made = s.execute("variable.makeImageDynamic", &json!({})).unwrap();
+    assert_eq!(made["kind"], "image");
+    assert_eq!(made["ids"], json!([id2.0]));
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    assert!(s.execute("variable.makeImageDynamic", &json!({})).is_err(), "type is not an image");
+}
+
+/// A text value with commas, quotes and line breaks comes back from the exported CSV as it went out.
+#[test]
+fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    let value = "Line one, \"quoted\"\nLine two";
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": value}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let sets = &s.doc().unwrap().doc.variables.datasets;
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].values.get("Name"), Some(&vectorcraft_doc::DataValue::Text(value.into())));
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
+}
+
+/// A quoted text cell keeps its leading and trailing spaces, so a padded value comes back from
+/// the exported CSV as it went out; an unquoted cell, and spaces after a closing quote, are trimmed.
+#[test]
+fn datasets_csv_keeps_spaces_in_quoted_cells() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "  padded "}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "name,Name\nB,  typed  \nC,\" quoted \"  \n"})).unwrap();
+    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    assert_eq!(value("A"), text_value("  padded "));
+    assert_eq!(value("B"), text_value("typed"));
+    assert_eq!(value("C"), text_value(" quoted "));
+}
+
+/// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.
+#[test]
+fn datasets_csv_round_trips_and_rejects_bad_input() {
+    let dir = Folder::new("vars-csv");
+    let red_path = dir.file("red.png");
+    let blue_path = dir.file("blue.png");
+    write(&red_path, &png(8, 8, RED));
+    write(&blue_path, &png(8, 8, BLUE));
+
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let img = place(&mut s, &red_path);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Photo", "ids": [img.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Alice", "Show": true, "Photo": red_path}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob", "Show": false, "Photo": blue_path}})).unwrap();
+
+    let exported = s.execute("dataset.export", &json!({})).unwrap();
+    let csv = exported["csv"].as_str().unwrap().to_string();
+    assert!(csv.starts_with("name,Name,Show,Photo\n"), "{csv}");
+    assert!(csv.contains("Alice") && csv.contains("Bob") && csv.contains("false"), "{csv}");
+
+    // Clear rows, import again, apply B.
+    s.execute("dataset.delete", &json!({"names": ["A", "B"]})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), imp["updated"].as_u64()), (Some(2), Some(0)));
+    s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    assert_eq!(image(&s, img).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
+
+    // Re-import updates in place; unknown variable and bad visibility are errors.
+    let again = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!((again["imported"].as_u64(), again["updated"].as_u64()), (Some(0), Some(2)));
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Ghost\nX,y"})).is_err());
+    assert!(s.execute("dataset.import", &json!({"csv": "name,Show\nX,maybe"})).is_err());
+    assert!(s.execute("dataset.import", &json!({"csv": "Title,Name\nX,y"})).is_err(), "first column must be name");
+
+    let out = dir.file("sets.csv");
+    s.execute("dataset.export", &json!({"path": out})).unwrap();
+    let from_file = s.execute("dataset.import", &json!({"path": out})).unwrap();
+    assert_eq!(from_file["updated"].as_u64(), Some(2));
+
+    // One undo undoes the last import's replacements.
+    s.execute("edit.undo", &json!({})).unwrap();
+}
+
+#[test]
+fn graph_variable_applies_csv_and_captures() {
+    let mut s = session();
+    let id = s
+        .execute(
+            "graph.create",
+            &json!({
+                "type": "column",
+                "x": 10,
+                "y": 10,
+                "width": 120,
+                "height": 80,
+                "csv": ",Sales\nA,1\nB,2"
+            }),
+        )
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("variable.makeGraphDynamic", &json!({})).unwrap();
+    let name = s.execute("variable.list", &json!({})).unwrap()["variables"][0]["name"].as_str().unwrap().to_string();
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"][0]["kind"], "graph");
+    s.execute("dataset.new", &json!({"name": "Alt", "values": {name.clone(): ",Sales\nA,10\nB,20"}})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Alt"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(0)));
+    let csv = s.doc().unwrap().doc.variable_value(NodeId(id), vectorcraft_doc::VariableKind::Graph).unwrap();
+    match csv {
+        vectorcraft_doc::DataValue::Graph(c) => assert!(c.contains("10") && c.contains("20"), "{c}"),
+        other => panic!("expected graph csv, got {other:?}"),
+    }
+    // Binding a non-graph is refused.
+    let r = rect(&mut s);
+    assert!(s.execute("variable.bind", &json!({"variable": name, "ids": [r.0]})).is_err());
 }

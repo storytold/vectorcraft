@@ -91,3 +91,20 @@ fn a_chosen_artboard_s_svg_leaves_out_its_neighbours_art_in_a_shared_group() {
     assert_eq!(third_only.matches("<path").count() + third_only.matches("<rect").count(), 1, "{third_only}");
     assert!(third_only.contains(" C") || third_only.contains("<ellipse"), "{third_only}");
 }
+
+/// An object off a chosen artboard whose drop shadow reaches onto it is in that artboard's SVG.
+#[test]
+fn a_chosen_artboard_s_svg_keeps_an_object_whose_shadow_reaches_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let x0 = s.doc().unwrap().doc.artboards[0].rect.x0;
+    let id = s.execute("shape.rectangle", &json!({"x": x0 - 30.0, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let paths = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg", "artboard": 0})).unwrap();
+        let text = svg["text"].as_str().unwrap().to_string();
+        text.matches("<path").count() + text.matches("<rect").count()
+    };
+    assert_eq!(paths(&mut s), 0, "the plain rectangle is off the artboard");
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 20, "y": 0, "blur": 0}})).unwrap();
+    assert_eq!(paths(&mut s), 1, "its shadow reaches 10 pt onto the artboard");
+}

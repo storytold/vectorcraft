@@ -162,6 +162,51 @@ fn rescanning_finds_fonts_installed_since() {
     assert_ne!(db.generation(), generation);
 }
 
+/// A font removed since the last scan leaves the database at the next one even when type had
+/// loaded it: the family leaves the lists, its cached outlines are dropped, and its name resolves
+/// to the fallback font until the font is installed again. Fonts added as bytes stay.
+#[test]
+fn rescanning_drops_loaded_fonts_removed_since() {
+    let dir = font_dir("removed");
+    let (regular, bold) = (dir.join("Sysfont-Regular.ttf"), dir.join("Sub/Sysfont-Bold.TTF"));
+    let saved = std::fs::read(&regular).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.add_font(renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")), 1);
+    let (face, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((face.family.as_str(), m), (FAMILY, FontMatch::Exact));
+    assert_eq!(db.face(FAMILY, "Bold").unwrap().style, "Bold");
+    let glyph = face.glyph_for('A');
+    let outline = db.outline(&face, glyph);
+    assert!(!outline.elements().is_empty());
+
+    // One style removed: the family keeps the other.
+    std::fs::remove_file(&bold).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    assert_eq!(db.styles(FAMILY), ["Regular"]);
+    assert_eq!(db.face(FAMILY, "Bold").unwrap().style, "Regular", "the closest style left");
+
+    // The whole family removed.
+    let generation = db.generation();
+    std::fs::remove_file(&regular).unwrap();
+    assert_eq!(db.load_system_fonts(), 0);
+    assert!(!db.has_family(FAMILY) && !has(&db.families(), FAMILY) && !has(&db.menu_family_list(), FAMILY));
+    assert!(db.styles(FAMILY).is_empty() && db.find_family(FAMILY).is_none());
+    assert!(db.face_by_id(face.id()).is_none());
+    assert!(!Arc::ptr_eq(&db.outline(&face, glyph), &outline), "its cached outlines are dropped");
+    assert_ne!(db.generation(), generation, "lists built from the fonts are built again");
+    let (fallback, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((fallback.family.as_str(), m), (FALLBACK_FAMILY, FontMatch::Missing));
+    assert!(db.has_family("Other Sans 33"), "a font added as bytes has no file to remove");
+
+    // Installed again: it loads again.
+    std::fs::write(&regular, saved).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    let (again, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((again.family.as_str(), m), (FAMILY, FontMatch::Exact));
+    assert_ne!(again.id(), face.id());
+    assert_eq!(db.outline(&again, glyph).elements(), db.outline(&face, glyph).elements());
+}
+
 #[test]
 fn a_background_scan_serves_the_first_lookup() {
     let dir = font_dir("background");

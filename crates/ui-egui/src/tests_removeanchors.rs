@@ -150,7 +150,9 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert!(has(&texts, LABEL), "context menu: {texts:?}");
     let texts = click_canvas(&mut app, &ctx, at(&texts, LABEL), PointerButton::Primary);
     assert_eq!(anchor_count(&app, id), 3);
-    assert!(!has(&texts, LABEL), "the menu closes after the command");
+    assert!(!has(&texts, "Cut Path at Selected Anchor Points"), "the menu closes after the command");
+    // The next anchor along is selected (#2241), so the task bar offers the command again.
+    assert_eq!(texts.iter().filter(|(t, _)| t == LABEL).count(), 1, "task bar: {texts:?}");
 }
 
 #[test]
@@ -227,4 +229,75 @@ fn a_whole_path_converts_with_the_tools_that_edit_anchors() {
     click_button(&mut app, &ctx, "Convert:", 1);
     let sp = app.session.active().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
     assert!(sp.anchors.iter().all(|a| a.has_in() && a.has_out()), "every corner made smooth: {sp:?}");
+}
+
+/// Use the normal application frame: canvas pointer picking and the keyboard shortcut dispatcher.
+fn anchor_delete_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) {
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0));
+    let time = ctx.input(|i| i.time) + 0.1;
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+}
+
+#[test]
+fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
+    for key in [egui::Key::Delete, egui::Key::Backspace] {
+        let mut app = app();
+        let id = NodeId(
+            app.run(
+                "path.create",
+                json!({"anchors": [
+                    {"x": 50, "y": 100}, {"x": 100, "y": 80}, {"x": 150, "y": 100},
+                    {"x": 200, "y": 120}, {"x": 250, "y": 100}
+                ]}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        app.select_tool("directSelection");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        for _ in 0..3 {
+            anchor_delete_frame(&mut app, &ctx, vec![]);
+        }
+        let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(150.0, 100.0));
+        let click = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        anchor_delete_frame(&mut app, &ctx, vec![Event::PointerMoved(at), click(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![click(false)]);
+        assert_eq!(app.session.tool_id(), "directSelection");
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.selection.anchors[&id], [(0, 2)].into(), "the real canvas click selected the interior anchor");
+        assert!(st.selection.segments.is_empty());
+        let before = st.doc.clone();
+        let selection = st.selection.clone();
+        let undo = st.history.undo.len();
+        let press = |pressed| Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
+        let st = app.session.doc().unwrap();
+        let path = st.doc.node(id).unwrap().path_data().unwrap();
+        let points: Vec<Vec<_>> = path.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| a.p).collect()).collect();
+        assert_eq!(
+            points,
+            vec![vec![Point::new(50.0, 100.0), Point::new(100.0, 80.0)], vec![Point::new(200.0, 120.0), Point::new(250.0, 100.0)]],
+            "{key:?} must not join the gap"
+        );
+        assert!(path.subpaths.iter().all(|sp| !sp.closed));
+        assert_eq!(st.selection.objects, vec![id]);
+        assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
+        assert_eq!(st.history.undo.len(), undo + 1);
+        let after = st.doc.clone();
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert_eq!(app.session.doc().unwrap().selection, selection);
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, after);
+        anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
+        assert!(app.session.doc().unwrap().doc.node(id).is_none(), "the next {key:?} clears the whole remainder");
+    }
 }

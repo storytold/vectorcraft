@@ -1,8 +1,10 @@
 //! Artboard tool (Shift+O).
 //!
 //! Click an object to create an artboard fitted to its visible bounds; drag still moves the
-//! containing artboard or draws one on the pasteboard. Click an empty part of an artboard to
-//! make it active (dashed bounds, 8 handles and its name); Shift-click adds
+//! containing artboard or draws one on the pasteboard. The second click of a double-click on an
+//! object does not fit another artboard, and that double-click does not open Artboard Options.
+//! Double-click an empty part of an artboard to open Artboard Options. Click an empty
+//! part of an artboard to make it active (dashed bounds, 8 handles and its name); Shift-click adds
 //! artboards to the selection or takes them out (dashed bounds), and a drag or Delete then acts on
 //! all of them (#1139). Drag inside moves
 //! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
@@ -73,6 +75,9 @@ pub struct ArtboardTool {
     guides: Vec<Overlay>,
     /// Smart Guides for the corners of a new artboard.
     draw: DrawSnap,
+    /// The canvas sets this on the second click of a double-click, so that release does not fit
+    /// a second artboard before [`PointerKind::DoubleClick`] arrives.
+    suppress_fit: bool,
 }
 
 impl Default for ArtboardTool {
@@ -89,6 +94,7 @@ impl Default for ArtboardTool {
             copy_targets: None,
             guides: vec![],
             draw: DrawSnap::default(),
+            suppress_fit: false,
         }
     }
 }
@@ -195,11 +201,19 @@ impl ArtboardTool {
 /// An artboard's shortest side (as `artboard.setProps` keeps it).
 const MIN_SIDE: f64 = 1.0;
 
+fn rect_params(r: Rect) -> Value {
+    json!({ "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height() })
+}
+
 fn create_artboard(r: Rect) -> Vec<Action> {
-    vec![
-        Action::Exec("artboard.new".into(), json!({ "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height() })),
-        Action::Notify("created".into()),
-    ]
+    vec![Action::Exec("artboard.new".into(), rect_params(r)), Action::Notify("created".into())]
+}
+
+/// The visible bounds of the topmost object under `p`, when they are large enough to be an artboard.
+fn fittable_bounds(cx: &ToolContext, p: Point) -> Option<Rect> {
+    vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())
+        .and_then(|h| cx.doc.bounds_of(&[h.top_object(cx.isolation)], true))
+        .filter(|r| r.width() >= MIN_SIDE && r.height() >= MIN_SIDE && [r.x0, r.y0, r.x1, r.y1].iter().all(|n| n.is_finite()))
 }
 
 /// `r` grown about `anchor` until both sides are at least [`MIN_SIDE`], by one factor, so a
@@ -233,6 +247,10 @@ impl Tool for ArtboardTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         let m = ev.mods;
+        // Set by the canvas on the second click of a double-click, and only for the release that
+        // follows. Any other event drops it, so a later single click still fits.
+        let skip_fit = ev.kind == PointerKind::Up && self.suppress_fit;
+        self.suppress_fit = false;
         if ev.kind == PointerKind::Drag && self.click_art.is_some_and(|(start, _)| m != Mods::default() || p.distance(start) >= cx.tol(3.0)) {
             self.click_art = None;
         }
@@ -246,12 +264,9 @@ impl Tool for ArtboardTool {
                     return vec![];
                 }
                 if m == Mods::default() {
-                    self.click_art = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())
-                        .and_then(|h| cx.doc.bounds_of(&[h.top_object(cx.isolation)], true))
-                        // Match Fit to Selected Art, and do not stretch zero-sized art to the
-                        // artboard command's minimum side or pass non-finite bounds to it.
-                        .filter(|r| r.width() >= MIN_SIDE && r.height() >= MIN_SIDE && [r.x0, r.y0, r.x1, r.y1].iter().all(|n| n.is_finite()))
-                        .map(|r| (p, r));
+                    // Match Fit to Selected Art, and do not stretch zero-sized art to the
+                    // artboard command's minimum side or pass non-finite bounds to it.
+                    self.click_art = fittable_bounds(cx, p).map(|r| (p, r));
                 }
                 if let Some(i) = cx.doc.artboard_at(p)
                     && let Some(a) = cx.doc.artboards.get(i)
@@ -327,6 +342,7 @@ impl Tool for ArtboardTool {
                 let click_art = self.click_art;
                 self.end_drag();
                 if m == Mods::default()
+                    && !skip_fit
                     && let Some((start, r)) = click_art
                     && p.distance(start) < cx.tol(3.0)
                 {
@@ -357,6 +373,12 @@ impl Tool for ArtboardTool {
             }
             (PointerKind::DoubleClick, _) => {
                 self.end_drag();
+                // Fitting already happened on the first click. On an object this gesture does not
+                // open Artboard Options; a handle, a modifier, or empty artboard space still does.
+                let on_handle = self.active_rect(cx).and_then(|r| hit_handle(r, p, cx.tol(5.0))).is_some();
+                if m == Mods::default() && !on_handle && fittable_bounds(cx, p).is_some() {
+                    return vec![];
+                }
                 match cx.doc.artboards.get(self.active) {
                     Some(a) => {
                         let mut v = rect_json(self.active, a.rect);
@@ -485,6 +507,8 @@ impl Tool for ArtboardTool {
             }
             "moveArt" => self.move_art = value.as_bool().unwrap_or(true),
             "scaleArt" => self.scale_art = value.as_bool().unwrap_or(false),
+            // Not one of the saved options: the canvas sets it for the release of a double-click.
+            "suppressFitClick" => self.suppress_fit = value.as_bool().unwrap_or(false),
             _ => {}
         }
     }

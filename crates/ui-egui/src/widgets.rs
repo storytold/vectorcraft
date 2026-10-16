@@ -1,4 +1,4 @@
-//! Shared widgets in Illustrator's panel style. Colours come from theme tokens.
+//! Shared widgets. Colours come from theme tokens.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -25,9 +25,9 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(3), bg);
+    ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
     let pad = (size * 0.2).round();
-    icons::paint(ui, icon, rect.shrink(pad), if selected { t.text } else { t.icon });
+    icons::paint(ui, icon, rect.shrink(pad), if selected { t.text_strong } else { t.icon });
     if !tip.is_empty() { resp.on_hover_text(tl!(tip)) } else { resp }
 }
 
@@ -36,13 +36,8 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
+    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
     flat_fill(ui, rect, &resp);
-    ui.painter().rect_stroke(
-        rect,
-        CornerRadius::same(2),
-        Stroke::new(1.0, if resp.hovered() { t.text } else { t.button_border }),
-        StrokeKind::Inside,
-    );
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp
 }
@@ -61,11 +56,10 @@ pub fn split_button(ui: &mut Ui, text: &str, width: f32) -> (Response, Response)
     let arrow_rect = Rect::from_min_max(pos2(split, rect.top()), rect.max);
     let main = ui.interact(main_rect, ui.id().with((text, "split")), Sense::click());
     let arrow = ui.interact(arrow_rect, ui.id().with((text, "split-arrow")), Sense::click());
+    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
     flat_fill(ui, main_rect, &main);
     flat_fill(ui, arrow_rect, &arrow);
-    let border = if main.hovered() || arrow.hovered() { t.text } else { t.button_border };
-    ui.painter().rect_stroke(rect, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
-    ui.painter().vline(split, rect.y_range().shrink(4.0), Stroke::new(1.0, t.button_border));
+    ui.painter().vline(split, rect.y_range().shrink(5.0), Stroke::new(1.0, t.panel));
     ui.painter().with_clip_rect(main_rect).text(
         main_rect.center(),
         egui::Align2::CENTER_CENTER,
@@ -81,13 +75,13 @@ pub fn split_button(ui: &mut Ui, text: &str, width: f32) -> (Response, Response)
 fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
     let t = Tokens::get(ui.ctx());
     if resp.is_pointer_button_down_on() {
-        ui.painter().rect_filled(rect, CornerRadius::same(2), t.tool_active);
+        ui.painter().rect_filled(rect, CornerRadius::same(5), t.tool_active);
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(2), t.hover);
+        ui.painter().rect_filled(rect, CornerRadius::same(5), t.hover);
     }
 }
 
-/// Blue call-to-action pill (dialog OK/Create).
+/// The accent call-to-action button (dialog OK/Create).
 pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     primary_button_enabled(ui, text, true)
 }
@@ -104,24 +98,21 @@ pub fn primary_button_enabled(ui: &mut Ui, text: &str, enabled: bool) -> Respons
         (true, true) => t.accent,
         (true, false) => t.accent_strong,
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(14), bg);
+    ui.painter().rect_filled(rect, CornerRadius::same(6), bg);
     if !enabled {
-        ui.painter().rect_stroke(rect, CornerRadius::same(14), egui::Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, CornerRadius::same(6), egui::Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
     }
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, fg);
     resp
 }
 
-/// Outlined secondary pill (dialog Cancel).
+/// The quiet secondary button (dialog Cancel).
 pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), t.text);
     let w = galley.size().x + 32.0;
     let (rect, resp) = ui.allocate_exact_size(vec2(w.max(72.0), 28.0), Sense::click());
-    if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(14), t.hover);
-    }
-    ui.painter().rect_stroke(rect, CornerRadius::same(14), Stroke::new(1.5, t.text_dim), StrokeKind::Inside);
+    ui.painter().rect_filled(rect, CornerRadius::same(6), if resp.hovered() { t.hover } else { t.button });
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.text);
     resp
 }
@@ -130,7 +121,7 @@ pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
 pub fn section_header(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.add_space(2.0);
-    ui.label(egui::RichText::new(tl!(text)).size(13.0).color(t.text));
+    ui.label(egui::RichText::new(tl!(text)).size(12.5).color(t.text_strong));
     ui.add_space(2.0);
 }
 
@@ -326,6 +317,25 @@ pub(crate) fn enter_modifiers(ui: &Ui) -> Option<egui::Modifiers> {
     })
 }
 
+/// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter
+/// also commits it and ends its editing, as Enter does, and [`enter_modifiers`] reports Command.
+pub fn size_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
+    use egui::{Event, Key};
+    // The text box does not end its editing on an Enter with Ctrl/Cmd: a plain Enter goes in right
+    // after it, so the box first takes the text typed before it in this frame.
+    let field = ui.id().with(&id);
+    if ui.memory(|m| m.has_focus(field)) {
+        ui.input_mut(|i| {
+            let cmd_enter = |e: &Event| matches!(e, Event::Key { key: Key::Enter, pressed: true, modifiers, .. } if modifiers.command);
+            if let Some(at) = i.events.iter().position(cmd_enter) {
+                let enter = Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+                i.events.insert(at + 1, enter);
+            }
+        });
+    }
+    num_field(ui, id, value, unit, width)
+}
+
 /// Select all of `text` in text field `id`.
 fn select_all(ui: &Ui, id: egui::Id, text: &str) {
     let mut st = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
@@ -421,7 +431,7 @@ fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize
         .allocate_ui_with_layout(vec2(width, height), layout, |ui| {
             ui.set_min_size(vec2(width, height));
             let rect = ui.max_rect();
-            ui.painter().rect(rect, 2.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
+            ui.painter().rect(rect, 5.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
             let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
@@ -755,13 +765,19 @@ pub(crate) fn combo<R>(
             if searchable {
                 return searchable_combo(ui, ui.id().with(id), current, width - 4.0, list);
             }
-            egui::ComboBox::from_id_salt(ui.id().with(id))
+            let id = ui.id().with(id);
+            let button_id = ui.make_persistent_id(egui::IdSalt::new(id));
+            let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || egui::ComboBox::is_open(ui.ctx(), button_id);
+            let response = egui::ComboBox::from_id_salt(id)
                 .selected_text(egui::RichText::new(current).size(12.0))
                 .width(width - 4.0)
                 .height(ui.spacing().combo_height)
-                .show_ui(ui, list)
-                .inner
-                .flatten()
+                .show_ui(ui, list);
+            // The button or open list handles Enter before the modal can accept it.
+            if enter_for_combo {
+                ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            }
+            response.inner.flatten()
         })
         .inner
 }
@@ -864,6 +880,12 @@ pub fn menu_room(floor: f32, top: f32) -> f32 {
     (floor - top - BOTTOM_GAP).max(MIN_HEIGHT)
 }
 
+/// The scroll bar of a menu's list: slim, in a column of its own beside the items, so it never
+/// covers what sits at their right end (shortcuts, submenu arrows, a font's favourite star).
+pub fn list_scroll_style() -> egui::style::ScrollStyle {
+    egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
+}
+
 /// The body of a menu or popup list: as tall as its items up to the bottom bars of the window, and
 /// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
 /// small windows. Its scroll bar has a column of its own, so it never covers the shortcuts or the
@@ -872,7 +894,7 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     let floor = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("menu_floor"))).unwrap_or_else(|| ui.ctx().content_rect().bottom());
     let room = menu_room(floor, ui.next_widget_position().y);
     ui.scope(|ui| {
-        ui.spacing_mut().scroll = egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() };
+        ui.spacing_mut().scroll = list_scroll_style();
         // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
         // its items when they need less.
         egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
@@ -1484,9 +1506,11 @@ pub fn hex_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, hex: &
     let resp = egui::Frame::NONE
         .fill(t.input)
         .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-        .corner_radius(2)
+        .corner_radius(5)
         .inner_margin(egui::Margin::symmetric(6, 4))
         .show(ui, |ui| {
+            // As tall as the other fields (26 points with the margin), whatever the font's line height.
+            ui.set_height(18.0);
             ui.add(
                 egui::TextEdit::singleline(&mut buf)
                     .id(id)
@@ -1566,9 +1590,10 @@ pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool
 }
 
 /// [`menu_item`] for a name that is user or file data (a library, a recent URL), never translated.
+/// Like the menu bar's items, the row lights up under the pointer.
 pub fn menu_item_name(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool {
     let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
-    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame(false)).clicked()
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false)).clicked()
 }
 
 /// A number field that may be empty (Stroke dash/gap): `value` (points) shows in `unit` without

@@ -51,6 +51,24 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     app.run("command.batch", json!({"label": a.name, "commands": commands}))
 }
 
+/// The panel's (≡) menu.
+pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
+    let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
+    if widgets::menu_item(ui, tl!("Batch…"), has, false)
+        && let Some((s, a)) = selected
+        && let Err(e) = crate::dialogs::action_batch::open(app, s, a)
+    {
+        app.status(e);
+    }
+    if widgets::menu_item(ui, tl!("Play Current Selection"), has, false)
+        && let Some((s, a)) = selected
+        && let Err(e) = play(app, s, a)
+    {
+        app.status(e);
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a

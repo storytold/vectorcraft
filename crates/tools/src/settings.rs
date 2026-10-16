@@ -33,6 +33,7 @@ const ROWS: &[Row] = &[
     (&["pencil", "paintbrush"], None, &["fidelity", "fill", "keepSelected", "editWithin", "closeWithin"]),
     (&["smooth"], None, &["fidelity"]),
     (&["blobBrush", "eraser"], None, &["size"]),
+    (&["blobBrush"], None, &["keepSelected", "mergeOnlySelection"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),

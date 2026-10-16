@@ -12,8 +12,9 @@ const DISCORD: Color32 = Color32::from_rgb(0x58, 0x65, 0xF2);
 
 /// The Discord button's label, height and width.
 fn discord_layout(ui: &Ui, large: bool) -> (std::sync::Arc<egui::Galley>, f32, f32) {
-    let (h, font, label) = if large { (36.0, theme::semibold(14.0), tl!("Join our Discord")) } else { (24.0, theme::semibold(12.0), "Discord") };
-    let galley = ui.painter().layout_no_wrap(label.to_string(), font, Color32::WHITE);
+    let (h, font, label) =
+        if large { (36.0, theme::semibold(14.0), tl!("Join our Discord")) } else { (24.0, egui::FontId::proportional(12.0), "Discord") };
+    let galley = ui.painter().layout_no_wrap(label.to_string(), font, Color32::PLACEHOLDER);
     let w = galley.size().x + h * 0.55 + h * 0.9;
     (galley, h, w)
 }
@@ -23,16 +24,25 @@ pub fn discord_width(ui: &Ui, large: bool) -> f32 {
     discord_layout(ui, large).2
 }
 
-/// A Discord pill button: compact for the header, large for About / Home.
+/// The Discord button: compact and quiet for the app bar, large for About / Home.
 pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egui::Response {
     let (galley, h, w) = discord_layout(ui, large);
     let icon = h * 0.55;
     let (r, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
-    let fill = if resp.hovered() { DISCORD.gamma_multiply(0.85) } else { DISCORD };
-    ui.painter().rect_filled(r, CornerRadius::same((h / 2.0) as u8), fill);
+    let at = egui::pos2(0.0, r.center().y - galley.size().y / 2.0);
     let ir = egui::Rect::from_center_size(r.left_center() + vec2(h * 0.35 + icon / 2.0, 0.0), vec2(icon, icon));
-    icons::paint(ui, "message-circle", ir, Color32::WHITE);
-    ui.painter().galley(egui::pos2(ir.right() + h * 0.2, r.center().y - galley.size().y / 2.0), galley, Color32::WHITE);
+    if large {
+        let fill = if resp.hovered() { DISCORD.gamma_multiply(0.85) } else { DISCORD };
+        ui.painter().rect_filled(r, CornerRadius::same((h / 2.0) as u8), fill);
+        icons::paint(ui, "message-circle", ir, Color32::WHITE);
+        ui.painter().galley(egui::pos2(ir.right() + h * 0.2, at.y), galley, Color32::WHITE);
+    } else {
+        // In the app bar it stays quiet: a soft button with Discord's colour on its icon alone.
+        let t = Tokens::get(ui.ctx());
+        ui.painter().rect_filled(r, CornerRadius::same(6), if resp.hovered() { t.hover } else { t.button });
+        icons::paint(ui, "message-circle", ir, DISCORD);
+        ui.painter().galley(egui::pos2(ir.right() + h * 0.2, at.y), galley, if resp.hovered() { t.text_strong } else { t.text });
+    }
     let resp = resp.on_hover_text(tl!("Join the ArtCraft community on Discord (discord.gg/artcraft)"));
     if resp.clicked() {
         app.open_link("help.discord");

@@ -219,7 +219,8 @@ pub struct Interaction {
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
     pub perspective_again: Option<Value>,
-    /// A transform with `copy` keeps the copies it made of the snapshot here ([`PreviewCopies`]).
+    /// A transform or a perspective edit with `copy` keeps the copies it made of the snapshot here
+    /// ([`PreviewCopies`]).
     pub(crate) copies: Option<Arc<PreviewCopies>>,
 }
 
@@ -233,14 +234,15 @@ pub enum LastTransform {
     Each(Value),
 }
 
-/// This holds the copies that a transform with `copy` made of an interaction's snapshot
-/// ([`cmd::object::apply_transform`]). A later transform with `copy` of the same objects, while
-/// the document is still that snapshot, starts from `doc` and transforms only the copies.
+/// This holds the copies that a transform or a perspective edit with `copy` made of an
+/// interaction's snapshot ([`cmd::object::apply_transform`]; `persp_edit` and `plane_move` in
+/// `cmd::distortcmds`). A later transform or perspective edit with `copy` of the same objects,
+/// while the document is still that snapshot, starts from `doc` and transforms only the copies.
 #[derive(Debug)]
 pub(crate) struct PreviewCopies {
     /// The copies were made from this snapshot.
     pub(crate) from: Arc<Document>,
-    /// The transform copied these objects.
+    /// The transform or perspective edit copied these objects.
     pub(crate) roots: Vec<NodeId>,
     /// This is `from` with the copies added, untransformed.
     pub(crate) doc: Arc<Document>,
@@ -298,6 +300,9 @@ pub struct DocState {
     /// What Select → Reselect repeats: the last selection command, its params and the objects
     /// selected when it ran (a Same command's reference objects).
     pub last_selection_cmd: Option<(String, Value, Vec<NodeId>)>,
+    /// The saved selection last recalled (`select.recall`), which Select → Update Selection
+    /// changes. It is not saved with the file, and a recall is not an undo step.
+    pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
@@ -385,6 +390,57 @@ impl OpenRows {
     }
 }
 
+/// The saved selection last recalled, which Select → Update Selection changes. The Select commands
+/// give each saved selection an id for the session and keep the ids for every version of the
+/// document's saved selections they make or read, so the recalled one is found again after Edit
+/// Selection…, Undo and Redo. A version that nothing holds any more (neither the document nor its
+/// undo history) is dropped the next time a version is added.
+#[derive(Clone, Debug, Default)]
+pub struct RecalledSelection {
+    /// The recalled saved selection's id.
+    id: Option<u64>,
+    /// Each version of the saved selections (identified by its allocation), with the id of each saved
+    /// selection in it.
+    versions: Vec<(std::sync::Weak<Vec<vectorcraft_doc::SavedSelection>>, Vec<u64>)>,
+    /// The last id given.
+    last: u64,
+}
+
+impl RecalledSelection {
+    /// The ids of `list`'s saved selections; a version not met before gets new ones.
+    pub(crate) fn ids(&mut self, list: &vectorcraft_doc::Shared<Vec<vectorcraft_doc::SavedSelection>>) -> Vec<u64> {
+        let version = vectorcraft_doc::Shared::downgrade(list);
+        if let Some((_, ids)) = self.versions.iter().find(|(v, _)| v.ptr_eq(&version)) {
+            return ids.clone();
+        }
+        let ids: Vec<u64> = (0..list.len()).map(|_| self.new_id()).collect();
+        self.remember(list, ids.clone());
+        ids
+    }
+    /// An id no saved selection has had.
+    pub(crate) fn new_id(&mut self) -> u64 {
+        self.last += 1;
+        self.last
+    }
+    /// Keep `ids` as those of `list`'s saved selections, dropping versions nothing holds any more.
+    pub(crate) fn remember(&mut self, list: &vectorcraft_doc::Shared<Vec<vectorcraft_doc::SavedSelection>>, ids: Vec<u64>) {
+        let version = vectorcraft_doc::Shared::downgrade(list);
+        self.versions.retain(|(v, _)| v.strong_count() > 0 && !v.ptr_eq(&version));
+        self.versions.push((version, ids));
+    }
+    /// Recall the saved selection at `index` in `list`.
+    pub(crate) fn recall(&mut self, list: &vectorcraft_doc::Shared<Vec<vectorcraft_doc::SavedSelection>>, index: usize) {
+        self.id = self.ids(list).get(index).copied();
+    }
+    /// Where the recalled saved selection is in `list`, if `list` holds it.
+    pub fn index_in(&self, list: &vectorcraft_doc::Shared<Vec<vectorcraft_doc::SavedSelection>>) -> Option<usize> {
+        let id = self.id?;
+        let version = vectorcraft_doc::Shared::downgrade(list);
+        let (_, ids) = self.versions.iter().find(|(v, _)| v.ptr_eq(&version))?;
+        ids.iter().position(|&x| x == id).filter(|&i| i < list.len())
+    }
+}
+
 impl DocState {
     pub fn new(mut doc: Document, path: Option<String>) -> Self {
         let active_layer = doc.default_layer();
@@ -409,6 +465,7 @@ impl DocState {
             undo_group: None,
             last_transform: None,
             last_selection_cmd: None,
+            recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,
@@ -544,7 +601,7 @@ impl DocState {
 }
 
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
-pub const MAX_COORD: f64 = 4.0e6;
+pub use vectorcraft_doc::MAX_COORD;
 
 /// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
 /// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, Distribute
@@ -561,11 +618,17 @@ pub const ON_ACTIVE_ARTBOARD: [&str; 7] = [
     "select.allOnArtboard",
 ];
 
+/// The commands that resize the artboards the app passes (Object › Artboards): the app passes the
+/// selected artboards to Fit to Artwork Bounds as its `indices`, and the active artboard to Fit to
+/// Selected Art as its `index`. A `command.batch` given `artboard` passes it on, as `index`, to
+/// each of their steps that names none.
+pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitToSelection"];
+
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
-/// (dates from the clock: `cmd::clock_date`; the active artboard the app passes to the
-/// [`ON_ACTIVE_ARTBOARD`] commands and to a batch); an action leaves them out
-/// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 11] = [
+/// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
+/// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch); an action leaves
+/// them out ([`Session::journal_for_action`]).
+const REPLAY_ONLY: [(&str, &str); 14] = [
     ("file.new", "created"),
     ("document.save", "modified"),
     ("file.saveAs", "modified"),
@@ -575,6 +638,9 @@ const REPLAY_ONLY: [(&str, &str); 11] = [
     ("object.align", "artboard"),
     ("object.distribute", "artboard"),
     ("object.distributeSpacing", "artboard"),
+    ("artboard.fitToArt", "index"),
+    ("artboard.fitToArt", "indices"),
+    ("artboard.fitToSelection", "index"),
     ("select.allOnArtboard", "artboard"),
     ("command.batch", "artboard"),
 ];
@@ -735,6 +801,11 @@ pub struct Prefs {
     pub scratch_secondary: String,
     // User Interface
     pub ui_brightness: String,
+    /// User Interface › Accent Color: the colour of what is on, chosen or focused.
+    pub ui_accent: String,
+    /// User Interface › Color Scheme: "modern" (with the accent above) or "classic" (neutral
+    /// greys and a blue accent).
+    pub ui_color_scheme: String,
     pub canvas_color: String,
     pub auto_collapse_icon_panels: bool,
     /// User Interface › Show Tool Group Labels: the toolbar's group names (Select, Shapes, Draw…);
@@ -833,6 +904,10 @@ pub struct Prefs {
     /// not a Preferences dialog field: resetting the preferences keeps it; `pdf.preset.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pdf_presets: Vec<vectorcraft_pdf::PdfPreset>,
+    /// File → Export for Screens: the user's batch export presets (`document.exportPresets.*`;
+    /// the built-in ones aren't stored). A local library, not a Preferences dialog field.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub screen_export_presets: Vec<cmd::fileio::ScreenExportPreset>,
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
@@ -967,6 +1042,8 @@ impl Default for Prefs {
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
+            ui_accent: s("coral"),
+            ui_color_scheme: s("modern"),
             canvas_color: s("matchUi"),
             auto_collapse_icon_panels: false,
             tool_group_labels: false,
@@ -1016,6 +1093,7 @@ impl Default for Prefs {
             new_doc_presets: vec![],
             recent_new_docs: vec![],
             pdf_presets: vec![],
+            screen_export_presets: vec![],
             templates_folder: String::new(),
             append_converted: true,
             use_compression: false,
@@ -1376,7 +1454,15 @@ impl Session {
             self.note_depth = 1;
             self.batch_stash = None;
         }
-        let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
+        // A selection-only command given `ids` selects them first, in the same undo step (#2130).
+        let select_first = SELECTS_GIVEN_IDS.contains(&id).then(|| params.get("ids")).flatten();
+        let run = |s: &mut Session| {
+            if let Some(ids) = select_first {
+                s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
+            }
+            (spec.run)(s, params)
+        };
+        let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         let r = r?;
         if self.depth == 0 {
             self.inherit_new_art();
@@ -1877,6 +1963,8 @@ mod tests_gradient;
 #[cfg(test)]
 mod tests_gradpanel;
 #[cfg(test)]
+mod tests_gradspan;
+#[cfg(test)]
 mod tests_halftone;
 #[cfg(test)]
 mod tests_history_mem;
@@ -1884,6 +1972,8 @@ mod tests_history_mem;
 mod tests_ids_without_selection;
 #[cfg(test)]
 mod tests_inline;
+#[cfg(test)]
+mod tests_intertwine;
 #[cfg(test)]
 mod tests_journal;
 #[cfg(test)]
@@ -1930,6 +2020,8 @@ mod tests_newdoc;
 mod tests_objexpand;
 #[cfg(test)]
 mod tests_opacitymask;
+#[cfg(test)]
+mod tests_outlineobject;
 #[cfg(test)]
 mod tests_outlinestroke;
 #[cfg(test)]
@@ -2013,6 +2105,8 @@ mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]
+mod tests_select_ids_first;
+#[cfg(test)]
 mod tests_shaper;
 #[cfg(test)]
 mod tests_shortcutset;
@@ -2076,6 +2170,41 @@ mod tests_widthprofiles;
 mod tests_widthtool;
 #[cfg(test)]
 mod tests_xform;
+
+/// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
+/// its checks), then running as on the selection: the result and the selection afterwards are the
+/// menu command's (#2130).
+pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
+    "edit.duplicate",
+    "object.arrange.bringForward",
+    "object.arrange.bringToFront",
+    "object.arrange.sendBackward",
+    "object.arrange.sendToBack",
+    "object.arrange.sendToCurrentLayer",
+    "object.clippingMask.make",
+    "object.clippingMask.release",
+    "object.compoundPath.make",
+    "object.compoundPath.release",
+    "object.group",
+    "object.hide",
+    "object.lock",
+    "object.move",
+    "object.pathfinder.crop",
+    "object.pathfinder.divide",
+    "object.pathfinder.exclude",
+    "object.pathfinder.intersect",
+    "object.pathfinder.merge",
+    "object.pathfinder.minusBack",
+    "object.pathfinder.minusFront",
+    "object.pathfinder.outline",
+    "object.pathfinder.trim",
+    "object.pathfinder.unite",
+    "object.reflect",
+    "object.rotate",
+    "object.scale",
+    "object.shear",
+    "object.ungroup",
+];
 
 /// The non-empty `ids` given to a command whose params description names `ids` as a key (the
 /// key callers outside the app may pass it, [`cmd::params::takes_key`]).

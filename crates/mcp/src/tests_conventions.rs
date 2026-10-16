@@ -40,6 +40,35 @@ fn conventions_catalog_and_strict_keys() {
     assert_eq!(rpc(&mut s, "ping", json!({}))["result"], json!({}));
 }
 
+/// #2173: the command listings take `query` (as `filter`), a `menu` filter, and `brief`, which
+/// leaves out the long params text, so the catalogue fits a client's output limit.
+#[test]
+fn command_listings_take_query_menu_and_brief() {
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let ids = |v: &Value| v.as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    let by_filter = payload(&call(&mut s, "command_list", json!({"filter":"rectangle"})));
+    let by_query = payload(&call(&mut s, "command_list", json!({"query":"rectangle"})));
+    assert!(ids(&by_filter).contains(&"shape.rectangle".to_string()));
+    assert_eq!(by_filter, by_query);
+    // `menu` keeps the commands under that menu path.
+    let path_menu = payload(&call(&mut s, "command_list", json!({"menu":"object > path"})));
+    assert!(ids(&path_menu).contains(&"object.path.addAnchorPoints".to_string()), "{path_menu}");
+    for c in path_menu.as_array().unwrap() {
+        let menu: Vec<&str> = c["menu"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
+        assert_eq!(menu.get(..2), Some(&["Object", "Path"][..]), "{c}");
+    }
+    // `brief` drops the params text and nothing else.
+    let full = payload(&call(&mut s, "command_list", json!({})));
+    let brief = payload(&call(&mut s, "command_list", json!({"brief":true})));
+    assert_eq!(ids(&full), ids(&brief));
+    assert!(full.as_array().unwrap().iter().any(|c| c.get("params").is_some()));
+    assert!(brief.as_array().unwrap().iter().all(|c| c.get("params").is_none() && c.get("label").is_some()));
+    assert!(brief.to_string().len() * 2 < full.to_string().len(), "brief is much shorter");
+    // The other listing takes them too.
+    let r = payload(&call(&mut s, "list_commands", json!({"query":"rectangle","brief":true,"menu":""})));
+    assert_eq!(ids(&r["commands"]), ids(&by_filter));
+}
+
 #[test]
 fn conventions_commands_batch_and_bounded_preview() {
     let mut s = Server::new(Box::new(Headless::with_document()));

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\"} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -381,6 +381,7 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint) -> Result<Value> {
 /// remember the paint.
 fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
     if p.get("ids").is_none()
         && p.get("item").is_none()
@@ -415,6 +416,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
+    let paint = if span { placed_across(&s.doc()?.doc, &ids, paint, p, fill) } else { paint };
     // The gradient mesh point last clicked with the Mesh tool or Direct Selection: a solid fill
     // recolours just that point of its mesh.
     let mesh_point = if fill && matches!(paint, Paint::Solid { .. }) { focused_mesh_point(s) } else { None };
@@ -492,6 +494,52 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     }
     s.remember_paint(&paint);
     ok()
+}
+
+/// Does `p` ask for `span: "selection"` (#2127)? Only a linear or radial gradient the targets
+/// would each fit to their own bounds can span them: one with its own vector (`start`/`end`),
+/// a freeform one or a gradient swatch already has its placement.
+fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> {
+    match p.get("span") {
+        None | Some(Value::Null) => return Ok(false),
+        Some(Value::String(v)) if v == "object" => return Ok(false),
+        Some(Value::String(v)) if v == "selection" => {}
+        Some(v) => return Err(format!("span must be \"object\" or \"selection\", got {v}")),
+    }
+    let Paint::Gradient(g) = paint else { return Err("span: \"selection\" places a gradient: give `gradient`".into()) };
+    if p.get("swatch").is_some() {
+        return Err("span: \"selection\" places a `gradient`, not a swatch".into());
+    }
+    if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some() {
+        return Err("span: \"selection\" places a linear or radial gradient, not a freeform one".into());
+    }
+    if g.geom.is_some() {
+        return Err(
+            "span: \"selection\" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)".into()
+        );
+    }
+    Ok(true)
+}
+
+/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box its
+/// stroke paints), at the gradient's angle and aspect: every target gets the same vector in
+/// document coordinates, so the ramp runs on across them (#2127).
+fn placed_across(d: &Document, ids: &[NodeId], paint: Paint, p: &Value, fill: bool) -> Paint {
+    let union = ids
+        .iter()
+        .filter_map(|id| d.node(*id))
+        .filter_map(|n| item_paint_bounds(n, None, fill).or_else(|| n.geometric_bounds()))
+        .filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
+        .reduce(|a, b| a.union(b));
+    let (Some(union), Paint::Gradient(g)) = (union, &paint) else { return paint };
+    // An `aspect` places a radial gradient on the box already; otherwise fit it there.
+    match place_paint(&paint, p, Some(union)) {
+        Paint::Gradient(placed) if placed.geom.is_some() => Paint::Gradient(placed),
+        _ => {
+            let geom = vectorcraft_color::GradientGeom::fit(g.gradient.kind, union, g.angle);
+            Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() }))
+        }
+    }
 }
 
 /// The mesh point the active tool has focused (its `meshPoint` option: the Mesh tool's or Direct

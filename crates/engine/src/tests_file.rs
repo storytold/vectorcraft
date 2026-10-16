@@ -260,6 +260,39 @@ fn export_selection_keeps_a_groups_shadow_in_the_crop() {
     assert!(img.get_pixel((155.0 - b[0]) as u32, img.height() / 2)[3] > 0, "the shadow is in the image");
 }
 
+/// Export with Use Artboards off and Fit to Artwork Bounds take in the drop shadow of a group and
+/// of type.
+#[test]
+fn the_arts_bounds_take_in_the_shadow_of_a_group_and_of_type() {
+    for kind in ["group", "type"] {
+        let mut s = session();
+        let id = if kind == "group" {
+            s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+            s.execute("shape.rectangle", &json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap();
+            s.execute("select.all", &json!({})).unwrap();
+            s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap()
+        } else {
+            s.execute("text.create", &json!({"x": 100, "y": 120, "text": "Hill"})).unwrap()["id"].as_u64().unwrap()
+        };
+        let plain = s.doc().unwrap().doc.node(NodeId(id)).unwrap().visual_bounds().unwrap();
+        s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 8, "y": 0, "blur": 0}})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let png = |v: &serde_json::Value| {
+            image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8()
+        };
+        let art = s.execute("document.export", &json!({"format": "png", "useArtboards": false, "background": "transparent"})).unwrap();
+        let sel = s.execute("document.exportSelection", &json!({"format": "png", "background": "transparent"})).unwrap();
+        let x0 = sel["bounds"][0].as_f64().unwrap();
+        let img = png(&art);
+        assert!(png(&sel) == img, "{kind}: the same image as Export Selection's");
+        let past = (plain.x1 + 1.0 - x0).ceil() as u32;
+        assert!(img.enumerate_pixels().any(|(x, _, p)| x >= past && p[3] > 0), "{kind}: the shadow is in the image, right of the object");
+        s.execute("artboard.fitToArt", &json!({})).unwrap();
+        let board = s.doc().unwrap().doc.artboards[0].rect;
+        assert!(board.x0 <= plain.x0 && board.x1 >= plain.x1 + 8.0, "{kind}: the artboard holds the shadow 8 pt right of {plain:?}: {board:?}");
+    }
+}
+
 /// The crop of a brushed path is its visual bounds, with no room added for brush art.
 #[test]
 fn export_selection_crops_a_brushed_path_to_its_visual_bounds() {

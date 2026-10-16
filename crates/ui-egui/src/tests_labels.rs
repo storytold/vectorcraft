@@ -1,7 +1,7 @@
 //! Neutral wording in menus and panels: what users read names VectorCraft's own features.
 
 use egui::epaint::Shape;
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
@@ -48,6 +48,24 @@ fn effect_menu_has_a_vector_effects_section() {
     let tree = menus::menu_tree();
     let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
     assert!(effect.iter().any(|i| matches!(i, Item::Header("Vector Effects"))));
+}
+
+/// Effect › Path: Offset Path… opens its dialog; Outline Object and Outline Stroke (no options)
+/// apply.
+#[test]
+fn effect_menu_lists_outline_object_between_offset_path_and_outline_stroke() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let items: Vec<(&str, Option<&str>, &Value)> =
+        entries.iter().filter(|e| e.path == ["Effect", "Path"]).map(|e| (e.label.as_str(), e.command.as_deref(), &e.params)).collect();
+    assert_eq!(
+        items,
+        [
+            ("Offset Path…", Some("effect.dialog"), &json!({"effect": "path.offsetPath"})),
+            ("Outline Object", Some("effect.apply"), &json!({"effect": "path.outlineObject"})),
+            ("Outline Stroke", Some("effect.apply"), &json!({"effect": "path.outlineStroke"})),
+        ]
+    );
 }
 
 #[test]
@@ -138,6 +156,54 @@ fn effect_menu_lists_the_texture_filters_between_sharpen_and_video() {
         entries.iter().filter_map(|e| e.path.get(1).filter(|_| e.path.len() == 2 && e.path[0] == "Effect")).map(String::as_str).collect();
     let at = |name: &str| raster.iter().position(|s| *s == name).unwrap();
     assert!(at("Sharpen") < at("Texture") && at("Texture") < at("Video"));
+}
+
+/// Effect › Sketch, between Sharpen and the raster Stylize: Halftone Pattern opens its dialog.
+#[test]
+fn effect_menu_lists_the_sketch_filters_between_sharpen_and_stylize() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let sketch: Vec<_> = entries.iter().filter(|e| e.path == ["Effect", "Sketch"]).collect();
+    let labels: Vec<&str> = sketch.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Halftone Pattern…"]);
+    assert_eq!(sketch[0].command.as_deref(), Some("effect.dialog"));
+    assert_eq!(sketch[0].params, json!({"effect": "sketch.halftonePattern"}));
+    let at = |label: &str| entries.iter().position(|e| e.path[0] == "Effect" && e.label == label).unwrap();
+    assert!(at("Unsharp Mask…") < at("Halftone Pattern…") && at("Halftone Pattern…") < at("Glowing Edges…"));
+}
+
+/// Effect › Stylize under Raster Effects, between Sharpen and Texture: Glowing Edges opens its
+/// dialog.
+#[test]
+fn effect_menu_lists_glowing_edges_in_the_raster_stylize_between_sharpen_and_texture() {
+    let app = app();
+    let entries = menus::menu_entries(&app);
+    let at = |label: &str| entries.iter().position(|e| e.path[0] == "Effect" && e.label == label).unwrap();
+    let glowing = &entries[at("Glowing Edges…")];
+    assert_eq!(glowing.path, ["Effect", "Stylize"]);
+    assert_eq!(glowing.command.as_deref(), Some("effect.dialog"));
+    assert_eq!(glowing.params, json!({"effect": "stylize.glowingEdges"}));
+    assert!(at("Unsharp Mask…") < at("Glowing Edges…") && at("Glowing Edges…") < at("Craquelure…"));
+}
+
+/// The vector effects' Stylize keeps its six effects and leaves Glowing Edges out.
+#[test]
+fn effect_menu_keeps_glowing_edges_out_of_the_vector_stylize() {
+    let tree = menus::menu_tree();
+    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
+    let raster = effect.iter().position(|i| matches!(i, Item::Header("Raster Effects"))).expect("Raster Effects");
+    let stylize: Vec<(usize, Vec<&str>)> = effect
+        .iter()
+        .enumerate()
+        .filter_map(|(i, it)| match it {
+            Item::Sub("Stylize", items) => Some((i, items.iter().filter_map(|c| if let Item::Cmd(l, ..) = c { Some(*l) } else { None }).collect())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(stylize.len(), 2);
+    assert!(stylize[0].0 < raster && raster < stylize[1].0);
+    assert_eq!(stylize[0].1, ["Round Corners…", "Scribble…", "Drop Shadow…", "Inner Glow…", "Outer Glow…", "Feather…"]);
+    assert_eq!(stylize[1].1, ["Glowing Edges…"]);
 }
 
 #[test]

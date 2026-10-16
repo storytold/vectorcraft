@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (G2: Effect › Sketch › Halftone Pattern; Photoshop filters 30/57, 27 remaining (22–38 h); Round Corners also rounds corners where a curve meets a line or another curve, with Live Corners' cut; straight corners unchanged; score unchanged; Revolve: automatic smooth shading and default-on Cap with continuous rims; wide shadows and glows at high zoom, #1706; stacked Transform effects, #1705; 3D on nonzero compound paths, #1724; pattern tiles redraw, #1723; scores unchanged; Roughen's Smooth turn-backs, #1643; Scribble per region, #1648; score unchanged; Warp Arc bends in the object's proportions, #1578; Zig Zag ridges evenly spaced, #1558; effect parameters checked, #1592; score unchanged; raster effects after a pattern, radial or freeform gradient fill export at their place and size, #1536; score unchanged; 3D and Materials on outlined type and other shapes of many small curves, #1481; Twist 0° to 360°, #1524; twisted walls keep their faces, #1525; score unchanged; 3D and Materials: Inflate takes Twist, Taper and Cap; score unchanged; 3D and Materials: Perspective as the documented 0°–160° angle; 3D and Materials: the documented light settings) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -11,8 +11,8 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
-| Illustrator effects (vector and stylize) | 50 | 44 | 88% | 6–10 |
-| Photoshop effects (raster, Effect Gallery) | 57 | 29 | 51% | 23–39 |
+| Illustrator effects (vector and stylize) | 50 | 45 | 90% | 6–10 |
+| Photoshop effects (raster, Effect Gallery) | 57 | 30 | 53% | 22–38 |
 | 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
@@ -22,11 +22,11 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 |---|---|---:|---|
 | Convert to Shape | Rectangle, Rounded Rectangle, Ellipse | 3/3 | — |
 | Crop Marks | Crop Marks | 1/1 | — |
-| Distort & Transform | Free Distort, Pucker & Bloat, Roughen, Transform, Tweak, Twist, Zig Zag | 7/7 | Transform's Transform Objects/Patterns and Scale Strokes & Effects options, invisible Reflect checkboxes (#885); Zig Zag's ridges are evenly spaced along each segment (#1558); Roughen with Smooth keeps turn-backs smooth instead of cusps that draw as spikes (#1646) |
-| Path | Offset Path, Outline Object, Outline Stroke | 2/3 | Outline Object |
+| Distort & Transform | Free Distort, Pucker & Bloat, Roughen, Transform, Tweak, Twist, Zig Zag | 7/7 | Free Distort's dialog has a handle on each corner of the object's bounds, moved by dragging or with the arrow keys; Transform's Transform Objects/Patterns and Scale Strokes & Effects options, invisible Reflect checkboxes (#885); Zig Zag's ridges are evenly spaced along each segment (#1558); Roughen with Smooth keeps turn-backs smooth instead of cusps that draw as spikes (#1646) |
+| Path | Offset Path, Outline Object, Outline Stroke | 3/3 | With Use Preview Bounds on, Align, Distribute and the Transform panel still measure type that carries Outline Object by its layout box (preview bounds leave out effects) |
 | Pathfinder | Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline, Hard Mix, Soft Mix, Trap | 10/13 | Hard Mix, Soft Mix, Trap |
 | Rasterize | Rasterize… (as a live effect) | 0/1 | the live effect (Object › Rasterize exists) |
-| Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble draws one zig-zag per region, with no lines across holes and notches (#1651) |
+| Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |
 | SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; Arc is a circular arc in the object's own proportions (#1578) |
 
@@ -39,12 +39,12 @@ its resolution, PDF export warns once per object with the requested and the lowe
 | Submenu | Items | Ours | Missing |
 |---|---|---:|---|
 | Artistic | Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor | 1/15 (approximate Film Grain) | Colored Pencil, Cutout, Dry Brush, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting, Watercolor |
-| Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | Smart Blur's Edge Only and Overlay Edge modes |
+| Blur | Gaussian Blur, Radial Blur, Smart Blur | 3/3 | — |
 | Brush Strokes | Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes, Sumi-e | 8/8 | — |
-| Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | Glass's Load Texture |
+| Distort | Diffuse Glow, Glass, Ocean Ripple | 3/3 | — |
 | Pixelate | Color Halftone, Crystallize, Mezzotint, Pointillize | 4/4 | — |
 | Sharpen | Unsharp Mask | 1/1 | — |
-| Sketch | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper | 0/14 | all |
+| Sketch | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper | 1/14 | Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges, Water Paper |
 | Stylize | Glowing Edges | 1/1 | — |
 | Texture | Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass, Texturizer | 6/6 | Texturizer's Load Texture |
 | Video | De-Interlace, NTSC Colors | 2/2 | — |
@@ -52,7 +52,7 @@ its resolution, PDF export warns once per object with the requested and the lowe
 
 The pixel-filter pipeline (`vectorcraft_effects::pixel`) is in place: each new filter is one function, a
 catalogue row, a menu entry and translations. Measured throughput: 0.7–1.2 agent hours per filter
-(see [calibration](target-app-parity.md#calibration)), so the 28 missing filters are ~19–34 h and the Effect
+(see [calibration](target-app-parity.md#calibration)), so the 27 missing filters are ~18–33 h and the Effect
 Gallery dialog another 4–6 h. These parallelize well across agents.
 
 Film Grain (`artistic.filmGrain`, Effect › Artistic) adds stable monochrome noise to shadows and
@@ -99,6 +99,8 @@ angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | G2: Effect › Sketch › Halftone Pattern (Size, Contrast, Pattern Type Circle, Dot or Line; black ink on white paper, Size in points at any Document Raster Effects resolution); measured Photoshop filters 30/57, 27 remaining (22–38 h). |
+| 2026-10-15 | minor | Round Corners rounds corners whose anchor carries a handle (where a curve meets a line, or two curves meet) with the round cut Live Corners uses (#1144), reaching `radius` along each side; before, they were left sharp. Corners between handle-less anchors are rounded as before; score unchanged (estimated) |
 | 2026-10-14 | minor | Revolve: automatic smooth vector shading, default-on Cap with continuous curved rims, and bounded seam joins; angular cut sides remain open. Scores and hour estimates unchanged at this rounding |
 | 2026-10-14 | minor | Wide drop shadows and glows at high zoom render within the raster budget (#1706); stacked Transform effects are bounded (#1705); 3D effects keep the area a nonzero compound path fills (#1724); pattern tiles redraw when a symbol, pattern or image their art shows changes (#1723) (all #1864). Scores unchanged (estimated) |
 | 2026-10-14 | minor | Roughen with Smooth keeps turn-backs smooth instead of making cusps that draw as spikes (#1646, #1643); Scribble draws one zig-zag per region, with no lines across holes and notches; convex shapes are unchanged (#1651, #1648); scores unchanged (estimated) |

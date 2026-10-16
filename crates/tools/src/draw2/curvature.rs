@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
-use super::{FEEDBACK, anchor_in, catmull_rom, editable_paths, remove_anchor, segment_in};
+use super::{FEEDBACK, anchor_in, curvature_spline, editable_paths, end_handle, remove_anchor, segment_in, smooth_handles};
 use crate::guides::{DrawSnap, Leave, Targets};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -92,8 +92,8 @@ pub enum EndCurve {
     /// curve where it has none, and with both it is smooth.
     #[default]
     Keep,
-    /// Smooth through its neighbours, as [`catmull_rom`] curves a point (a point the Curvature tool
-    /// placed: its segment re-curves).
+    /// Smooth through its neighbours, as [`curvature_spline`] curves a point (a point the Curvature
+    /// tool placed: its segment re-curves).
     Smooth,
     /// A corner, without handles.
     Corner,
@@ -127,14 +127,21 @@ fn neighbours(sp: &SubPath, i: usize) -> [Option<usize>; 2] {
 }
 
 /// Move anchor `i` of `sp` to `q` as the Curvature tool drags a point: only the two segments at it
-/// change. A smooth anchor turns along the line through its neighbours; the neighbours' handles on
-/// those segments, and a corner's own handles, keep their directions, their lengths scaling with
-/// their segment's chord, so the segments beyond don't move and a corner without handles keeps
-/// none. False when there is no anchor `i`.
+/// change. A smooth anchor takes the Curvature tool's own handles ([`smooth_handles`]: along the
+/// circle through it and its neighbours; at an end of an open path the one [`end_handle`] into the
+/// curve). The neighbours' handles on those segments, and a corner's own
+/// handles, keep their directions, their lengths scaling with their segment's chord, so the
+/// segments beyond don't move and a corner without handles keeps none.
+///
+/// The neighbours' tangents are not re-curved: a selected path may come from the Pen or any other
+/// tool, and turning its smooth points would reshape what the user drew. The path the tool is
+/// drawing ([`Grab::Drawn`]) is rebuilt by [`curvature_spline`] from its points, so there the
+/// neighbours do turn with the dragged point. False when there is no anchor `i`.
 pub fn curvature_move(sp: &mut SubPath, i: usize, q: Point) -> bool {
     let Some(&a) = sp.anchors.get(i) else { return false };
     let mut own = [a.h_in - a.p, a.h_out - a.p];
-    let mut ends = [None; 2];
+    // Each neighbour, its handle on the segment to `a` scaled.
+    let mut ends: [Option<Anchor>; 2] = [None; 2];
     for (side, j) in neighbours(sp, i).into_iter().enumerate() {
         let Some(b) = j.and_then(|j| sp.anchors.get_mut(j)) else { continue };
         let old = a.p.distance(b.p);
@@ -142,17 +149,21 @@ pub fn curvature_move(sp: &mut SubPath, i: usize, q: Point) -> bool {
         let h = if side == 0 { &mut b.h_out } else { &mut b.h_in };
         *h = b.p + (*h - b.p) * s;
         own[side] *= s;
-        ends[side] = Some(b.p);
+        ends[side] = Some(*b);
     }
     let mut m = Anchor { p: q, h_in: q + own[0], h_out: q + own[1], kind: a.kind };
-    if let (AnchorKind::Smooth, [Some(prev), Some(next)]) = (a.kind, ends) {
-        let d = next - prev;
-        let l = d.hypot();
-        if l > 1e-9 {
-            // A handle it lacks comes out a third of the way to that side's neighbour.
-            let len = |h: Vec2, to: Point| if h.hypot() > 1e-9 { h.hypot() } else { q.distance(to) / 3.0 };
-            m.h_in = q - d * (len(own[0], prev) / l);
-            m.h_out = q + d * (len(own[1], next) / l);
+    if a.kind == AnchorKind::Smooth {
+        match ends {
+            [Some(prev), Some(next)] => {
+                if let Some((h_in, h_out)) = smooth_handles(prev.p, q, next.p) {
+                    (m.h_in, m.h_out) = (h_in, h_out);
+                }
+            }
+            // An end of an open path has one segment: its handle only, and a corner like the
+            // ends `curvature_spline` makes.
+            [None, Some(next)] => m = Anchor { h_out: end_handle(q, &next, true).unwrap_or(q), h_in: q, kind: AnchorKind::Corner, ..m },
+            [Some(prev), None] => m = Anchor { h_in: end_handle(q, &prev, false).unwrap_or(q), h_out: q, kind: AnchorKind::Corner, ..m },
+            [None, None] => {}
         }
     }
     if let Some(x) = sp.anchors.get_mut(i) {
@@ -161,9 +172,10 @@ pub fn curvature_move(sp: &mut SubPath, i: usize, q: Point) -> bool {
     true
 }
 
-/// Add a smooth anchor at `t` on segment `seg` of `sp` without changing its shape (on a straight
-/// segment its handles lie along it, so a drag curves it): the new anchor's index. None when there
-/// is no such segment.
+/// Add a smooth anchor at `t` on segment `seg` of `sp` without changing its shape: the new anchor's
+/// index. On a straight segment its handles lie along it, each a third of its own part of the
+/// segment ([`curvature_smooth`]: a line is a circle's limit), so a drag bends the line evenly; a drag then moves it as a
+/// smooth point ([`curvature_move`]). None when there is no such segment.
 pub fn curvature_insert(sp: &mut SubPath, seg: usize, t: f64) -> Option<usize> {
     if seg >= sp.segment_count() {
         return None;
@@ -171,19 +183,49 @@ pub fn curvature_insert(sp: &mut SubPath, seg: usize, t: f64) -> Option<usize> {
     let line = sp.segment_is_line(seg);
     let i = sp.insert_anchor(seg, if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.5 });
     if line {
-        sp.smooth_anchor(i);
+        curvature_smooth(sp, i);
     }
     Some(i)
 }
 
-/// Go on from an end of the open subpath `sp` (its start with `start`) to a new end at `p`, which
-/// has no handles; the old end bends into the new segment as `how` says.
-pub fn curvature_extend(sp: &mut SubPath, start: bool, p: Point, how: EndCurve) {
+/// Make anchor `i` of `sp` smooth as the Curvature tool curves a point: [`smooth_handles`] from its
+/// neighbours, or at an end of an open path the one [`end_handle`] into the curve (no outer handle;
+/// it stays a corner, as the ends [`curvature_spline`] makes). False, and `sp` unchanged, when
+/// there is no anchor `i` or no direction: the neighbours coincide with it or fold back on it, or
+/// an end's neighbour has no handle to take a tangent from.
+pub fn curvature_smooth(sp: &mut SubPath, i: usize) -> bool {
+    let at = |j: Option<usize>| j.and_then(|j| sp.anchors.get(j)).copied();
+    let [prev, next] = neighbours(sp, i).map(at);
+    let Some(a) = sp.anchors.get(i).copied() else { return false };
+    let m = match (prev, next) {
+        (Some(b), Some(c)) => smooth_handles(b.p, a.p, c.p).map(|(h_in, h_out)| Anchor { p: a.p, h_in, h_out, kind: AnchorKind::Smooth }),
+        (None, Some(c)) => end_handle(a.p, &c, true).map(|h_out| Anchor { h_in: a.p, h_out, ..Anchor::corner(a.p) }),
+        (Some(b), None) => end_handle(a.p, &b, false).map(|h_in| Anchor { h_in, h_out: a.p, ..Anchor::corner(a.p) }),
+        (None, None) => None,
+    };
+    match (m, sp.anchors.get_mut(i)) {
+        (Some(m), Some(x)) => {
+            *x = m;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Go on from an end of the open subpath `sp` (its start with `start`) to a new end at `p`; the old
+/// end bends into the new segment as `how` says. The new end has no handle on the outer side and,
+/// unless it is a `corner` (Alt-clicked), the one [`end_handle`] into the curve, so its segment
+/// curves as the last one of a path drawn from scratch does.
+pub fn curvature_extend(sp: &mut SubPath, start: bool, p: Point, how: EndCurve, corner: bool) {
     if start {
         sp.reverse();
     }
     bend_last(sp, p, how);
-    sp.anchors.push(Anchor::corner(p));
+    let mut end = Anchor::corner(p);
+    if let (false, Some(old)) = (corner, sp.anchors.last()) {
+        end.h_in = end_handle(p, old, false).unwrap_or(p);
+    }
+    sp.anchors.push(end);
     if start {
         sp.reverse();
     }
@@ -213,14 +255,12 @@ fn bend_last(sp: &mut SubPath, to: Point, how: EndCurve) {
     let Some(e) = sp.anchors.last_mut() else { return };
     match how {
         EndCurve::Corner => e.retract(),
-        EndCurve::Smooth => {
-            let t = prev.map_or(Vec2::ZERO, |b| (to - b.p) / 6.0);
-            if t.hypot() > 1e-9 {
-                *e = Anchor { p: e.p, h_in: e.p - t, h_out: e.p + t, kind: AnchorKind::Smooth };
-            } else {
-                e.retract();
-            }
-        }
+        EndCurve::Smooth => match prev.and_then(|b| smooth_handles(b.p, e.p, to)) {
+            Some((h_in, h_out)) => *e = Anchor { p: e.p, h_in, h_out, kind: AnchorKind::Smooth },
+            // Nothing before it, or no direction: the new point has no handle yet for an end
+            // handle to aim at, so the segment stays straight (two points are a line).
+            None => e.retract(),
+        },
         EndCurve::Keep => {
             // The way the curve comes in: from its handle, or else the segment's tangent there.
             let back = if e.has_in() { Some(e.h_in) } else { prev.map(|b| if b.h_out.distance(e.p) > 1e-9 { b.h_out } else { b.p }) };
@@ -273,10 +313,15 @@ fn select_point((id, si, ai): (NodeId, usize, usize)) -> Action {
     Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))
 }
 
-/// Toggle anchor `(id, si, ai)` of a selected path between smooth and corner.
+/// Toggle anchor `(id, si, ai)` of a selected path between smooth and corner. An end of an open
+/// path counts as smooth while it has a handle into its segment (the ends the tool curves are
+/// corners with one handle).
 fn toggle(cx: &ToolContext, (id, si, ai): (NodeId, usize, usize)) -> Option<Action> {
-    let a = subpath(cx, id, si)?.anchors.get(ai)?;
-    let to = if a.kind == AnchorKind::Smooth { "corner" } else { "smooth" };
+    let sp = subpath(cx, id, si)?;
+    let a = sp.anchors.get(ai)?;
+    let open_end = !sp.closed && (ai == 0 || ai + 1 == sp.anchors.len());
+    let smooth = if open_end { a.has_in() || a.has_out() } else { a.kind == AnchorKind::Smooth };
+    let to = if smooth { "corner" } else { "smooth" };
     Some(Action::Exec("path.convertAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai, "to": to})))
 }
 
@@ -378,7 +423,7 @@ impl CurvatureTool {
             let q = self.snap.press(cx, p, &[e.id], Some(&Leave::segment(cx, e.p, false)));
             let how = self.how(&e);
             self.placed = Some(Placed { id: e.id, si: e.si, start: e.start, anchors: e.anchors + 1, corner: ev.mods.alt });
-            let v = json!({"id": e.id.0, "subpath": e.si, "op": "extend", "end": e.name(), "x": q.x, "y": q.y, "from": how.name()});
+            let v = json!({"id": e.id.0, "subpath": e.si, "op": "extend", "end": e.name(), "x": q.x, "y": q.y, "from": how.name(), "corner": ev.mods.alt});
             return Some(vec![Action::Exec(EDIT.into(), v)]);
         }
         let (id, si, seg, t) = segment_in(cx, editable_paths(cx), p, tol)?;
@@ -550,7 +595,7 @@ impl Tool for CurvatureTool {
                     sp.anchors.iter().skip(n.saturating_sub(2)).copied().collect()
                 };
                 let mut tail = SubPath::new(near, false);
-                curvature_extend(&mut tail, false, h, self.how(&e));
+                curvature_extend(&mut tail, false, h, self.how(&e), false);
                 tail.to_bezpath_into(&mut bp);
                 o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
             }
@@ -562,7 +607,7 @@ impl Tool for CurvatureTool {
         {
             let mut pts = self.pts.clone();
             pts.push((h, false));
-            catmull_rom(&pts, false).to_bezpath_into(&mut bp);
+            curvature_spline(&pts, false).to_bezpath_into(&mut bp);
             o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
         }
         for (i, (p, _)) in self.pts.iter().enumerate() {
@@ -689,11 +734,17 @@ mod tests {
         assert!(collinear(sp.anchors[1].h_out - sp.anchors[1].p, before.anchors[1].h_out - before.anchors[1].p));
         assert!(collinear(sp.anchors[3].h_in - sp.anchors[3].p, before.anchors[3].h_in - before.anchors[3].p));
         assert_eq!((sp.anchors[1].h_in, sp.anchors[3].h_out), (before.anchors[1].h_in, before.anchors[3].h_out));
-        // The moved smooth point turns along the line through its neighbours.
+        // The moved smooth point takes the Curvature tool's handles, along the circle through it
+        // and its neighbours, whatever the spacing: between a third and two thirds of its chord.
         let a = sp.anchors[2];
+        let (prev, next) = (sp.anchors[1].p, sp.anchors[3].p);
         assert_eq!(a.kind, AnchorKind::Smooth);
-        assert!(collinear(a.h_out - a.p, sp.anchors[3].p - sp.anchors[1].p) && collinear(a.h_in - a.p, a.h_out - a.p));
-        assert!((a.h_out - a.p).dot(sp.anchors[3].p - sp.anchors[1].p) > 0.0);
+        assert_eq!(Some((a.h_in, a.h_out)), smooth_handles(prev, a.p, next));
+        assert!(collinear(a.h_in - a.p, a.h_out - a.p) && (a.h_in - a.p).dot(a.h_out - a.p) < 0.0);
+        for (h, to) in [(a.h_in, prev), (a.h_out, next)] {
+            let r = a.p.distance(h) / a.p.distance(to);
+            assert!((1.0 / 3.0 - 1e-9..=2.0 / 3.0 + 1e-9).contains(&r), "{r}");
+        }
         // A cusp keeps its handle directions; a moved end changes its one segment only.
         assert_eq!(sp.anchors[3].kind, AnchorKind::Corner);
         assert!(curvature_move(&mut sp, 3, pt(360.0, 170.0)));
@@ -702,6 +753,21 @@ mod tests {
         assert!(curvature_move(&mut end, 4, pt(470.0, 20.0)));
         assert_eq!(end.segment(2), before.segment(2));
         assert!(!curvature_move(&mut end, 5, pt(0.0, 0.0)));
+    }
+
+    /// A smooth end of an open path has one segment: its one handle into the curve, mirroring the
+    /// neighbour's tangent in their chord, and nothing on the outer side.
+    #[test]
+    fn moving_a_smooth_end_gives_it_the_end_handle() {
+        let mut sp = curvature_spline(&[(pt(0.0, 0.0), false), (pt(100.0, 60.0), false), (pt(200.0, 0.0), false), (pt(300.0, 50.0), false)], false);
+        sp.anchors[0].kind = AnchorKind::Smooth;
+        let before = sp.clone();
+        assert!(curvature_move(&mut sp, 0, pt(-20.0, 30.0)));
+        let (e, b) = (sp.anchors[0], sp.anchors[1]);
+        assert!(!e.has_in() && e.has_out());
+        assert_eq!(Some(e.h_out), end_handle(e.p, &b, true));
+        assert_eq!(sp.segment(2), before.segment(2));
+        assert_eq!(sp.anchors[2], before.anchors[2]);
     }
 
     #[test]
@@ -717,7 +783,7 @@ mod tests {
     fn going_on_from_an_end_keeps_the_old_segments() {
         let before = wave();
         let mut sp = before.clone();
-        curvature_extend(&mut sp, false, pt(550.0, 120.0), EndCurve::Keep);
+        curvature_extend(&mut sp, false, pt(550.0, 120.0), EndCurve::Keep, false);
         assert_eq!(sp.anchors.len(), 6);
         assert!((0..4).all(|i| sp.segment(i) == before.segment(i)));
         // The old end turns smooth, going on along its incoming handle, a third of the chord out.
@@ -725,19 +791,22 @@ mod tests {
         assert_eq!(e.kind, AnchorKind::Smooth);
         assert!(collinear(e.h_out - e.p, e.p - e.h_in) && (e.h_out - e.p).dot(e.p - e.h_in) > 0.0);
         assert!((e.h_out.distance(e.p) - e.p.distance(pt(550.0, 120.0)) / 3.0).abs() < 1e-9);
-        assert_eq!(sp.anchors[5], Anchor::corner(pt(550.0, 120.0)));
+        // The new end has no outer handle and one into the curve, mirroring the old end's tangent.
+        let n = sp.anchors[5];
+        assert_eq!((n.p, n.has_out(), n.kind), (pt(550.0, 120.0), false, AnchorKind::Corner));
+        assert_eq!(Some(n.h_in), end_handle(n.p, &e, false));
         // The point placed then curves through its neighbours as a drawn path's points do.
-        curvature_extend(&mut sp, false, pt(650.0, 60.0), EndCurve::Smooth);
-        let drawn = catmull_rom(&[(pt(450.0, 60.0), false), (pt(550.0, 120.0), false), (pt(650.0, 60.0), false)], false);
+        curvature_extend(&mut sp, false, pt(650.0, 60.0), EndCurve::Smooth, false);
+        let drawn = curvature_spline(&[(pt(450.0, 60.0), false), (pt(550.0, 120.0), false), (pt(650.0, 60.0), false)], false);
         assert_eq!((sp.anchors[5].h_in, sp.anchors[5].h_out), (drawn.anchors[1].h_in, drawn.anchors[1].h_out));
         assert!((0..4).all(|i| sp.segment(i) == before.segment(i)));
         // A corner stays one.
-        curvature_extend(&mut sp, false, pt(700.0, 100.0), EndCurve::Corner);
+        curvature_extend(&mut sp, false, pt(700.0, 100.0), EndCurve::Corner, false);
         assert!(!sp.anchors[6].has_in() && !sp.anchors[6].has_out());
         // From the start: the old segments come one later, and the new end is the first anchor.
         let mut sp = before.clone();
-        curvature_extend(&mut sp, true, pt(-100.0, 50.0), EndCurve::Keep);
-        assert_eq!(sp.anchors[0], Anchor::corner(pt(-100.0, 50.0)));
+        curvature_extend(&mut sp, true, pt(-100.0, 50.0), EndCurve::Keep, false);
+        assert!(sp.anchors[0].p == pt(-100.0, 50.0) && !sp.anchors[0].has_in() && sp.anchors[0].has_out());
         assert!((0..4).all(|i| sp.segment(i + 1) == before.segment(i)));
         // A corner end without handles goes on along its segment's tangent.
         let old = sp.anchors[1];
@@ -774,6 +843,56 @@ mod tests {
         assert!(sp.anchors[i].has_in() && sp.anchors[i].has_out());
         assert!(lies_on(&sp, &rect) && lies_on(&rect, &sp));
         assert_eq!(curvature_insert(&mut sp, 99, 0.5), None);
+    }
+
+    /// On a straight side the inserted point's handles lie along it, each a third of its own part
+    /// of the side; a drag then moves it as a smooth Curvature point.
+    #[test]
+    fn a_point_inserted_on_a_line_takes_the_chord_rule_and_drags_smooth() {
+        let (d, id) = doc_with_rect();
+        let rect = d.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+        let mut sp = rect.clone();
+        let i = curvature_insert(&mut sp, 0, 0.25).unwrap();
+        let (a, prev, next) = (sp.anchors[i], sp.anchors[i - 1].p, sp.anchors[i + 1].p);
+        assert!((a.p.distance(a.h_in) - a.p.distance(prev) / 3.0).abs() < 1e-9);
+        assert!((a.p.distance(a.h_out) - a.p.distance(next) / 3.0).abs() < 1e-9);
+        assert!(collinear(a.h_out - a.p, next - prev) && (a.h_out - a.p).dot(next - prev) > 0.0);
+        assert!(sp.segment_is_line(0) || lies_on(&sp, &rect));
+        // A drag bends it as a smooth point; the sides beyond stay straight.
+        let q = pt(a.p.x, a.p.y - 40.0);
+        assert!(curvature_move(&mut sp, i, q));
+        let m = sp.anchors[i];
+        assert_eq!(Some((m.h_in, m.h_out)), smooth_handles(prev, q, next));
+        assert!((2..sp.segment_count()).all(|s| sp.segment_is_line(s)));
+    }
+
+    #[test]
+    fn curvature_smooth_uses_the_tool_rule() {
+        let mut sp = curvature_spline(&[(pt(0.0, 0.0), true), (pt(100.0, 60.0), true), (pt(200.0, 0.0), false), (pt(300.0, 50.0), false)], false);
+        // A corner in the middle takes the bisector handles.
+        assert!(curvature_smooth(&mut sp, 1));
+        let a = sp.anchors[1];
+        assert_eq!((a.kind, Some((a.h_in, a.h_out))), (AnchorKind::Smooth, smooth_handles(pt(0.0, 0.0), a.p, pt(200.0, 0.0))));
+        // An end curves into its segment, mirroring its neighbour's tangent.
+        assert!(curvature_smooth(&mut sp, 0));
+        let e = sp.anchors[0];
+        assert!(!e.has_in() && Some(e.h_out) == end_handle(e.p, &sp.anchors[1], true));
+        // No direction: a fold, or an end whose neighbour has no handle there, stays as it is.
+        let mut fold = SubPath::new(vec![Anchor::corner(pt(0.0, 0.0)), Anchor::corner(pt(100.0, 0.0)), Anchor::corner(pt(0.0, 0.0))], false);
+        let before = fold.clone();
+        assert!(!curvature_smooth(&mut fold, 1) && !curvature_smooth(&mut fold, 0) && !curvature_smooth(&mut fold, 9));
+        assert_eq!(fold, before);
+    }
+
+    /// A curved end counts as smooth for the toggle: Alt-click turns it into a corner.
+    #[test]
+    fn alt_click_on_a_curved_end_makes_it_a_corner() {
+        let sp = curvature_spline(&[(pt(100.0, 300.0), false), (pt(200.0, 200.0), false), (pt(300.0, 300.0), false)], false);
+        let (d, id) = doc_with(sp);
+        let (s, p) = (selected(id, None), paint());
+        let cx = quiet(&d, &s, &p);
+        let a = press(&mut CurvatureTool::default(), &cx, 100.0, 300.0, true);
+        assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "path.convertAnchor" && v["anchor"] == 0 && v["to"] == "corner")), "{a:?}");
     }
 
     /// A document with one path, `sp`.
@@ -835,6 +954,19 @@ mod tests {
         assert_eq!(press(&mut t, &cx, 100.0, 0.0, false).len(), 1);
     }
 
+    /// #2120: the dragged end of a slanted straight path keeps to its extension (Smart Guides).
+    #[test]
+    fn a_dragged_end_of_a_straight_path_keeps_to_its_extension() {
+        let (d, id) = doc_with(SubPath::polyline(&[pt(300.0, 400.0), pt(380.0, 340.0)], false));
+        let (s, p) = (selected(id, None), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = CurvatureTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 380.0, 340.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 421.5, 312.0));
+        let moved = a.get(1).and_then(edit_op).map(|(op, v)| (op, v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap()));
+        assert!(matches!(moved, Some(("move", x, y)) if (x - 420.0).abs() < 1e-9 && (y - 310.0).abs() < 1e-9), "{a:?}");
+    }
+
     #[test]
     fn alt_click_or_double_click_toggles_and_delete_removes() {
         let (d, id) = doc_with(wave());
@@ -886,7 +1018,7 @@ mod tests {
         let a = press(&mut t, &quiet(&d, &s, &p), 550.0, 120.0, false);
         assert!(matches!(edit_op(&a[0]), Some(("extend", v)) if v["end"] == "end" && v["from"] == "keep" && v["x"] == 550.0), "{a:?}");
         // As the engine does it: the new end is current, and the next click curves through it.
-        curvature_extend(&mut sp, false, pt(550.0, 120.0), EndCurve::Keep);
+        curvature_extend(&mut sp, false, pt(550.0, 120.0), EndCurve::Keep, false);
         let (d, id) = doc_with(sp.clone());
         let s = selected(id, Some(5));
         let cx = quiet(&d, &s, &p);
@@ -894,7 +1026,7 @@ mod tests {
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { .. })), "the rubber band shows");
         let a = press(&mut t, &cx, 650.0, 60.0, true);
         assert!(matches!(edit_op(&a[0]), Some(("extend", v)) if v["from"] == "smooth"), "{a:?}");
-        curvature_extend(&mut sp, false, pt(650.0, 60.0), EndCurve::Smooth);
+        curvature_extend(&mut sp, false, pt(650.0, 60.0), EndCurve::Smooth, false);
         let (d, id) = doc_with(sp.clone());
         let s = selected(id, Some(6));
         let cx = quiet(&d, &s, &p);

@@ -2,9 +2,10 @@
 //!
 //! Add: click a segment to insert an anchor without changing the shape (Alt = delete).
 //! Delete: click an anchor to remove it, re-fitting the neighbouring curve (Alt = add).
-//! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; drag a
-//! handle → move it independently (Shift: at 45° steps round its anchor); drag a segment → reshape
-//! the curve, a selected blend's spine's too, straight or curved (#1111).
+//! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; click a
+//! handle end → retract that handle only (#2267); drag a handle → move it independently (Shift: at
+//! 45° steps round its anchor); drag a segment → reshape the curve, a selected blend's spine's too,
+//! straight or curved (#1111).
 //! Scissors: click a path to split it there.
 
 use serde_json::json;
@@ -31,6 +32,7 @@ enum State {
         si: usize,
         ai: usize,
         out: bool,
+        start: Point,
         began: bool,
     },
     /// Bending a segment: a path's, or (`spine`) a selected blend's spine's.
@@ -110,7 +112,7 @@ impl Tool for AnchorTool {
             }
             ("anchorPoint", PointerKind::Down) => {
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
-                    self.state = State::Handle { id, si, ai, out, began: false };
+                    self.state = State::Handle { id, si, ai, out, start: p, began: false };
                     self.snap = HandleSnap::default();
                 } else if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
                     self.state = State::Convert { id, si, ai, start: p, began: false };
@@ -125,8 +127,9 @@ impl Tool for AnchorTool {
                 let mut out = vec![];
                 let (began, far) = match self.state {
                     State::Idle => return out,
-                    State::Convert { began, start, .. } | State::Reshape { began, start, .. } => (began, p.distance(start) >= cx.tol(2.0)),
-                    State::Handle { began, .. } => (began, true),
+                    State::Convert { began, start, .. } | State::Handle { began, start, .. } | State::Reshape { began, start, .. } => {
+                        (began, p.distance(start) >= cx.tol(2.0))
+                    }
                 };
                 if !began {
                     if !far {
@@ -182,6 +185,15 @@ impl Tool for AnchorTool {
                         } else {
                             vec![]
                         }
+                    }
+                    State::Handle { id, si, ai, out, began: false, .. } => {
+                        let Some(a) = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) else {
+                            return vec![];
+                        };
+                        vec![Action::Exec(
+                            "path.setHandle".into(),
+                            json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": a.p.x, "y": a.p.y, "independent": true}),
+                        )]
                     }
                     _ => vec![],
                 }
@@ -304,5 +316,40 @@ mod tests {
         assert_eq!(dragged(press(&cx(&d, &s, &p), 240.0, 301.0)), "path.setHandle");
         let single = ToolContext { handles_multiple: false, ..cx(&d, &s, &p) };
         assert_eq!(dragged(press(&single, 240.0, 301.0)), "path.reshapeSegment");
+    }
+
+    /// #2267: clicking a handle end retracts that handle only; the anchor becomes a corner and
+    /// keeps the other handle, as Illustrator's Anchor Point tool does.
+    #[test]
+    fn anchor_point_click_on_a_handle_retracts_only_that_handle() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+        sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+        let path = vectorcraft_geom::PathData::single(sp);
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let retract = |which: &str| {
+            vec![Action::Exec(
+                "path.setHandle".into(),
+                json!({"id": id.0, "subpath": 0, "anchor": 1, "which": which, "x": 200.0, "y": 300.0, "independent": true}),
+            )]
+        };
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 240.0, 320.0)), retract("out"));
+        // A hand that shakes by a pixel still clicks; the incoming handle sits opposite, at (160, 280).
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 280.0));
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.5, 280.5)).is_empty());
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.5, 280.5)), retract("in"));
+        // The command leaves the other handle where it was.
+        let mut a = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+        a.set_handle(true, a.p, true);
+        assert!(!a.has_out());
+        assert_eq!(a.h_in, Point::new(160.0, 280.0));
     }
 }

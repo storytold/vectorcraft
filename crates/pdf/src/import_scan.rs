@@ -1,7 +1,8 @@
 //! What the interpreter doesn't tell the import, read from the file itself: the optional content
 //! groups (layers) with their states and nesting, which group each marked-content sequence belongs
 //! to, the isolate and knockout flags of transparency groups, the overprint parameters each path
-//! and each stretch of text is painted with, and the names of the fonts.
+//! and each stretch of text is painted with, the Separation and DeviceN inks they are painted in
+//! (by their colorant names, which the interpreter drops), and the names of the fonts.
 //!
 //! hayro-interpret reports a marked-content sequence by its tag alone and a transparency group
 //! without its flags, and skips the content of groups that are off. So each page's content is
@@ -23,6 +24,7 @@ use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, 
 use craft_pdf::syntax::page::{Page, Resources};
 
 use crate::PdfError;
+use crate::import_color::ink_names;
 
 /// The interpreter's limit on nested form XObjects.
 const MAX_DEPTH: u32 = 50;
@@ -39,6 +41,10 @@ const MAX_GROUPS: usize = 10_000;
 /// Match the interpreter's ordinary content window and maximum incomplete instruction.
 const CONTENT_WINDOW: usize = 64 << 10;
 const MAX_WINDOW: usize = 256 << 20;
+/// The most Separation and DeviceN inks noted per page.
+const MAX_INKS: usize = 4096;
+/// The most changes of ink noted per page in the paths, and in the text (24 bytes each).
+const MAX_INK_CHANGES: usize = 2_000_000;
 /// The deepest layers nest in the configuration's `/Order`.
 pub(crate) const MAX_NESTING: usize = 32;
 
@@ -234,11 +240,115 @@ pub(crate) struct Scan {
     /// How the text shown before each of [`Self::paints`] (since the one before it) overprints,
     /// and last the text after them all: one more entry than `paints`.
     pub texts: Vec<TextOverprint>,
-    /// Something on the page overprints (when nothing does, `paints` and `texts` aren't used).
+    /// Something on the page overprints (when nothing does, the overprint flags in `paints` and
+    /// `texts` aren't read).
     pub overprints: bool,
     /// Something overprints with overprint mode 0, where a `DeviceCMYK` colour's zero components
     /// knock out; the document's overprint is the nonzero one (mode 1).
     pub zero_mode: bool,
+    /// The colorant names of the Separation and DeviceN spaces the page sets (`cs`, `CS`), and of
+    /// those of the shading patterns it sets (`scn`, `SCN`) and of the shadings it draws (`sh`),
+    /// each once (none when the page uses more than [`MAX_INKS`] inks or changes ink more than
+    /// [`MAX_INK_CHANGES`] times).
+    pub inks: Vec<Vec<String>>,
+    /// The inks each of [`Self::paints`] is painted in.
+    paint_inks: Changes<Inks>,
+    /// The inks of the text before each of [`Self::paints`], counted as [`Self::texts`] is: of its
+    /// fills and of its strokes (indices into [`Self::inks`]), where all of its text shown in an
+    /// ink is shown in the same one.
+    text_inks: Changes<[Option<u32>; 2]>,
+}
+
+impl Scan {
+    /// The colorant names of the ink the walk found `at` painted in: a path's, or the fills' (the
+    /// `stroke`s') of the text before a path. `pattern`: the interpreter paints with a pattern,
+    /// whose shading's ink it is (text painted with one isn't followed); else the color space's.
+    pub fn ink(&self, at: Walked, stroke: bool, pattern: bool) -> Option<&[String]> {
+        let i = match at {
+            Walked::Path(k) => {
+                let inks = self.paint_inks.at(k);
+                if pattern { inks.pattern } else { inks.space }
+            }
+            Walked::Text(_) if pattern => None,
+            Walked::Text(k) => self.text_inks.at(k)[usize::from(stroke)],
+        }?;
+        self.inks.get(usize::try_from(i).ok()?).map(Vec::as_slice)
+    }
+}
+
+/// The inks a fill or a stroke paints in (indices into [`Scan::inks`]): that of the color space
+/// set last (`cs`, `CS`), and that of the shading of the pattern named last (`scn`, `SCN`). The
+/// interpreter's paint, a color or a pattern, says which of the two it is.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Inks {
+    space: Option<u32>,
+    pattern: Option<u32>,
+}
+
+/// What the interpreter draws, counted as the walk counts it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Walked {
+    /// The `k`-th path ([`Scan::paints`]).
+    Path(usize),
+    /// The text shown before the `k`-th path ([`Scan::texts`]).
+    Text(usize),
+}
+
+/// A value for each index from 0, kept as the indices where it changes (the default before the
+/// first).
+#[derive(Default)]
+struct Changes<T>(Vec<(usize, T)>);
+
+impl<T: Copy + Default + PartialEq> Changes<T> {
+    /// The value is `v` from index `at` on (`at` past the indices set before). `false`: the value
+    /// changes there and [`MAX_INK_CHANGES`] changes are kept already, so this one isn't kept.
+    fn set(&mut self, at: usize, v: T) -> bool {
+        if self.0.last().map_or(T::default(), |(_, last)| *last) == v {
+            return true;
+        }
+        if self.0.len() >= MAX_INK_CHANGES {
+            return false;
+        }
+        self.0.push((at, v));
+        true
+    }
+
+    /// The value at index `k`.
+    fn at(&self, k: usize) -> T {
+        let n = self.0.partition_point(|(at, _)| *at <= k);
+        n.checked_sub(1).and_then(|i| self.0.get(i)).map_or(T::default(), |(_, v)| *v)
+    }
+}
+
+/// The ink of the text shown between two painted paths: of its fills, or of its strokes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum RunInk {
+    /// No text is shown in an ink.
+    #[default]
+    None,
+    /// All of the text shown in an ink is shown in this one.
+    One(u32),
+    /// Text is shown in several inks, which can't be told apart by glyph.
+    Several,
+}
+
+impl RunInk {
+    /// With more text shown in `ink` (`None`: in no ink).
+    fn and(self, ink: Option<u32>) -> Self {
+        match (self, ink) {
+            (_, None) => self,
+            (Self::None, Some(i)) => Self::One(i),
+            (Self::One(j), Some(i)) if i == j => self,
+            _ => Self::Several,
+        }
+    }
+
+    fn ink(self) -> Option<u32> {
+        match self {
+            Self::One(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 /// How the text shown between two painted paths overprints.
@@ -253,14 +363,16 @@ pub(crate) enum TextOverprint {
     Mixed,
 }
 
-/// The overprint parameters of the graphics state (ISO 32000-1 §8.6.7; `OP`, `op` and `OPM` in
-/// Table 58).
+/// What the walk follows of the graphics state: the overprint parameters (ISO 32000-1 §8.6.7;
+/// `OP`, `op` and `OPM` in Table 58) and the inks fills and strokes paint in.
 #[derive(Clone, Copy, Default)]
-struct Overprint {
+struct State {
     stroke: bool,
     fill: bool,
     /// Overprint mode 1 (nonzero overprint).
     nonzero: bool,
+    /// The inks of fills and of strokes.
+    inks: [Inks; 2],
 }
 
 /// A marked-content tag as [`Scan::tags`] keeps it: its FNV-1a hash (the tags are only compared,
@@ -331,11 +443,17 @@ struct Walker<'w, 'p> {
     out: Scan,
     /// A form XObject hidden by its own optional content was met.
     hidden_form: bool,
-    /// The saved graphics states' overprint parameters, the current one last, pushed and popped
-    /// as the interpreter does its states.
-    states: Vec<Overprint>,
+    /// The saved graphics states' overprint parameters and inks, the current one last, pushed and
+    /// popped as the interpreter does its states.
+    states: Vec<State>,
     /// The text shown since the last painted path.
     text: TextOverprint,
+    /// The inks of the text shown since the last painted path: of its fills, of its strokes.
+    text_inks: [RunInk; 2],
+    /// The index in [`Scan::inks`] of each list of colorant names.
+    ink_index: HashMap<Vec<String>, u32>,
+    /// More inks or changes of ink than are kept: the page's inks are left out.
+    inks_cut: bool,
 }
 
 impl Walker<'_, '_> {
@@ -372,7 +490,7 @@ impl Walker<'_, '_> {
         self.begin(on);
     }
 
-    fn state(&self) -> Overprint {
+    fn state(&self) -> State {
         self.states.last().copied().unwrap_or_default()
     }
 
@@ -400,8 +518,11 @@ impl Walker<'_, '_> {
         let s = self.state();
         let on = if stroke { s.stroke } else { s.fill };
         self.overprinting(on);
+        let k = self.out.paints.len();
         self.out.paints.push(on);
         self.out.texts.push(std::mem::take(&mut self.text));
+        self.inks_cut |= !self.out.paint_inks.set(k, s.inks[usize::from(stroke)]);
+        self.inks_cut |= !self.out.text_inks.set(k, std::mem::take(&mut self.text_inks).map(RunInk::ink));
     }
 
     /// The interpreter shows text.
@@ -413,6 +534,64 @@ impl Walker<'_, '_> {
         self.overprinting(s.fill || s.stroke);
         let now = TextOverprint::All { fill: s.fill, stroke: s.stroke };
         self.text = if self.text == TextOverprint::None || self.text == now { now } else { TextOverprint::Mixed };
+        // Text painted with a pattern isn't followed, so only the color spaces' inks count.
+        for (run, inks) in self.text_inks.iter_mut().zip(s.inks) {
+            *run = run.and(inks.space);
+        }
+    }
+
+    /// The color space of fills (or of `stroke`s) is in ink `ink` from now on.
+    fn set_space(&mut self, stroke: bool, ink: Option<u32>) {
+        if let Some(s) = self.states.last_mut() {
+            s.inks[usize::from(stroke)].space = ink;
+        }
+    }
+
+    /// The pattern of fills (or of `stroke`s) is in ink `ink` from now on.
+    fn set_pattern(&mut self, stroke: bool, ink: Option<u32>) {
+        if let Some(s) = self.states.last_mut() {
+            s.inks[usize::from(stroke)].pattern = ink;
+        }
+    }
+
+    /// The ink of color space `name` (`cs`, `CS`): a Separation or DeviceN space of the resources.
+    /// The names the interpreter reads as device and pattern spaces come first, as it reads them.
+    fn space_ink(&mut self, name: &Name<'_>, res: &Resources<'_>) -> Option<u32> {
+        if matches!(name.as_ref(), b"DeviceRGB" | b"RGB" | b"DeviceGray" | b"G" | b"DeviceCMYK" | b"CMYK" | b"CalCMYK" | b"Pattern") {
+            return None;
+        }
+        self.ink_of(&res.get_color_space(name)?)
+    }
+
+    /// The ink pattern `name` paints in (`scn`, `SCN`): a shading pattern's (a dictionary, where a
+    /// tiling pattern is a stream) is its shading's.
+    fn pattern_ink(&mut self, name: &Name<'_>, res: &Resources<'_>) -> Option<u32> {
+        let Object::Dict(p) = res.get_pattern(name)? else { return None };
+        self.shading_ink(&p.get::<Object<'_>>(b"Shading")?)
+    }
+
+    /// The ink of a shading (a dictionary or a stream): its color space's.
+    fn shading_ink(&mut self, shading: &Object<'_>) -> Option<u32> {
+        let (d, _) = dict_or_stream(shading)?;
+        self.ink_of(&d.get::<Object<'_>>(b"ColorSpace")?)
+    }
+
+    /// The index in [`Scan::inks`] of color space `o` when it is a Separation or DeviceN array, its
+    /// colorant names noted when new.
+    fn ink_of(&mut self, o: &Object<'_>) -> Option<u32> {
+        let Object::Array(a) = o else { return None };
+        let (_, names) = ink_names(&mut a.flex_iter())?;
+        if let Some(i) = self.ink_index.get(&names) {
+            return Some(*i);
+        }
+        if self.out.inks.len() >= MAX_INKS {
+            self.inks_cut = true;
+            return None;
+        }
+        let i = u32::try_from(self.out.inks.len()).ok()?;
+        self.ink_index.insert(names.clone(), i);
+        self.out.inks.push(names);
+        Some(i)
     }
 
     fn note_fonts(&mut self, res: &Resources<'_>) {
@@ -545,9 +724,45 @@ impl Walker<'_, '_> {
                     self.painted(false);
                     self.painted(true);
                 }
-                // Drawn when the interpreter can read the shading: the page's count tells.
-                TypedInstruction::Shading(s) if res.get_shading(s.0).is_some() => {
-                    self.painted(false);
+                // Drawn when the interpreter can read the shading (the page's count tells), as a
+                // fill in a state of its own, in the shading's ink.
+                TypedInstruction::Shading(s) => {
+                    if let Some(sh) = res.get_shading(s.0) {
+                        let ink = self.shading_ink(&sh);
+                        self.save();
+                        self.set_pattern(false, ink);
+                        self.painted(false);
+                        self.restore();
+                    }
+                }
+                TypedInstruction::ColorSpaceNonStroke(cs) => {
+                    let ink = self.space_ink(cs.0, res);
+                    self.set_space(false, ink);
+                }
+                TypedInstruction::ColorSpaceStroke(cs) => {
+                    let ink = self.space_ink(cs.0, res);
+                    self.set_space(true, ink);
+                }
+                // A pattern by name; without one, `scn` sets a color in the space set before.
+                TypedInstruction::NonStrokeColorNamed(c) => {
+                    if let Some(name) = c.1 {
+                        let ink = self.pattern_ink(name, res);
+                        self.set_pattern(false, ink);
+                    }
+                }
+                TypedInstruction::StrokeColorNamed(c) => {
+                    if let Some(name) = c.1 {
+                        let ink = self.pattern_ink(name, res);
+                        self.set_pattern(true, ink);
+                    }
+                }
+                TypedInstruction::NonStrokeColorDeviceGray(_)
+                | TypedInstruction::NonStrokeColorDeviceRgb(_)
+                | TypedInstruction::NonStrokeColorCmyk(_) => {
+                    self.set_space(false, None);
+                }
+                TypedInstruction::StrokeColorDeviceGray(_) | TypedInstruction::StrokeColorDeviceRgb(_) | TypedInstruction::StrokeColorCmyk(_) => {
+                    self.set_space(true, None);
                 }
                 TypedInstruction::ShowText(_)
                 | TypedInstruction::ShowTexts(_)
@@ -647,10 +862,17 @@ fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &
         max_form_bytes,
         out: Scan::default(),
         hidden_form: false,
-        states: vec![Overprint::default()],
+        states: vec![State::default()],
         text: TextOverprint::None,
+        text_inks: [RunInk::None; 2],
+        ink_index: HashMap::new(),
+        inks_cut: false,
     };
     w.page(page);
+    w.inks_cut |= !w.out.text_inks.set(w.out.paints.len(), w.text_inks.map(RunInk::ink));
+    if w.inks_cut {
+        w.out.inks.clear();
+    }
     w.out.texts.push(w.text);
     w
 }
