@@ -4883,3 +4883,22 @@ theme	Appearance	Apparence
 @msg	Unknown unit	Unité inconnue
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Ferme les extrémités circulaires des profils ouverts. Les rotations partielles conservent leurs faces de coupe ouvertes.
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Parcourir un dossier cloud
+	Cloud Status	État du cloud
+	Connect Cloud Storage	Connecter le stockage cloud
+	List Cloud Shares	Lister les partages cloud
+	Open a Cloud Drawing	Ouvrir un dessin cloud
+	Open from the Cloud…	Ouvrir depuis le cloud…
+	Reload from the Cloud	Recharger depuis le cloud
+	Save to the Cloud	Enregistrer dans le cloud
+	Save to the Cloud…	Enregistrer dans le cloud…
+	A folder on this computer	Un dossier sur cet ordinateur
+	Cloud	Cloud
+	This computer	Cet ordinateur
+	Where	Emplacement
+	Your cloud account	Votre compte cloud
+@msg	VectorCraft cannot open {_1}	VectorCraft ne peut pas ouvrir {_1}
+@msg	no drawing open	aucun dessin ouvert
+@msg	no such file in the cloud listing	aucun fichier de ce nom dans la liste cloud

@@ -4851,3 +4851,22 @@ imageTrace	Outline	Körvonal
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
 	Distance	Távolság
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Felhőmappa tallózása
+	Cloud Status	Felhőállapot
+	Connect Cloud Storage	Felhőtárhely csatlakoztatása
+	List Cloud Shares	Felhőmegosztások listázása
+	Open a Cloud Drawing	Felhőbeli rajz megnyitása
+	Open from the Cloud…	Megnyitás a felhőből…
+	Reload from the Cloud	Újratöltés a felhőből
+	Save to the Cloud	Mentés a felhőbe
+	Save to the Cloud…	Mentés a felhőbe…
+	A folder on this computer	Mappa ezen a számítógépen
+	Cloud	Felhő
+	This computer	Ez a számítógép
+	Where	Hova
+	Your cloud account	A felhőfiókja
+@msg	VectorCraft cannot open {_1}	A VectorCraft nem tudja megnyitni: {_1}
+@msg	no drawing open	nincs megnyitott rajz
+@msg	no such file in the cloud listing	nincs ilyen fájl a felhőlistában

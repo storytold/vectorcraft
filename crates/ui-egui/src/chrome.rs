@@ -92,16 +92,23 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // floor could exceed available_for_ws and push the widget into the menus region at
             // narrow widths (e.g. ~472 px with cloud controls present).
             let available_for_ws = (room - 8.0 - gap - if search { icon } else { 0.0 }).max(0.0);
-            let ws_w = ws_w.min(available_for_ws).max(available_for_ws.min(64.0));
-            let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
+            // Never force a floor that exceeds the room left after menus / cloud controls.
+            // Below ~32 pt the switcher is unreadable; Window → Workspace still reaches it.
+            let ws_w = ws_w.min(available_for_ws);
+            let show_ws = ws_w >= 32.0;
+            let discord = search
+                && show_ws
+                && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
-            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
-            ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
-            ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
-            icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
-            let wresp = wresp.on_hover_text(tl!("Switch workspace"));
-            egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
-            ui.add_space(8.0);
+            if show_ws {
+                let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
+                ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
+                ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
+                icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
+                let wresp = wresp.on_hover_text(tl!("Switch workspace"));
+                egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
+                ui.add_space(8.0);
+            }
             // Search → command palette (its shortcut opens it too).
             if search {
                 let tip = match menus::shortcut_of("help.commandPalette") {
@@ -1438,9 +1445,13 @@ mod visual_regressions {
             let ws_widgets: Vec<egui::Rect> =
                 widgets.iter().copied().filter(|r| (r.height() - WIDGET_H).abs() < 0.5 && r.right() > width * 0.4).collect();
             // Menu-bar buttons are the tallest interactive elements in the left portion
-            // of the bar (interact_size.y = 24 pt in our theme).
-            let menu_buttons: Vec<egui::Rect> =
-                widgets.iter().copied().filter(|r| r.height() > 20.0 && r.height() < 30.0 && r.left() < width * 0.6).collect();
+            // of the bar (interact_size.y = 24 pt in our theme). Exclude the MenuBar's own
+            // stretch rect (full leftover width) by capping button width to a title label.
+            let menu_buttons: Vec<egui::Rect> = widgets
+                .iter()
+                .copied()
+                .filter(|r| r.height() > 20.0 && r.height() < 30.0 && r.width() < 120.0 && r.left() < width * 0.6)
+                .collect();
             let Some(rightmost_menu) = menu_buttons.iter().max_by(|a, b| a.right().total_cmp(&b.right())) else {
                 continue; // menus absent at this scale/size – skip
             };

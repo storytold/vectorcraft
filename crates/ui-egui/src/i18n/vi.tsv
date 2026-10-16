@@ -4438,3 +4438,22 @@ theme	Appearance	Giao diện
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
 	Distance	Khoảng cách
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Duyệt thư mục đám mây
+	Cloud Status	Trạng thái đám mây
+	Connect Cloud Storage	Kết nối lưu trữ đám mây
+	List Cloud Shares	Liệt kê chia sẻ đám mây
+	Open a Cloud Drawing	Mở bản vẽ trên đám mây
+	Open from the Cloud…	Mở từ đám mây…
+	Reload from the Cloud	Tải lại từ đám mây
+	Save to the Cloud	Lưu lên đám mây
+	Save to the Cloud…	Lưu lên đám mây…
+	A folder on this computer	Thư mục trên máy tính này
+	Cloud	Đám mây
+	This computer	Máy tính này
+	Where	Nơi lưu
+	Your cloud account	Tài khoản đám mây của bạn
+@msg	VectorCraft cannot open {_1}	VectorCraft không mở được {_1}
+@msg	no drawing open	không có bản vẽ nào đang mở
+@msg	no such file in the cloud listing	không có tệp đó trong danh sách đám mây

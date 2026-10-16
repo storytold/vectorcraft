@@ -4726,3 +4726,22 @@ mark-style	Japanese	Japońskie
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Zamknij okrągłe końce otwartych profili. Przy częściowym obrocie boki przekroju pozostają otwarte.
 	Distance	Odległość
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Przeglądaj folder w chmurze
+	Cloud Status	Stan chmury
+	Connect Cloud Storage	Połącz magazyn w chmurze
+	List Cloud Shares	Lista udostępnień w chmurze
+	Open a Cloud Drawing	Otwórz rysunek z chmury
+	Open from the Cloud…	Otwórz z chmury…
+	Reload from the Cloud	Wczytaj ponownie z chmury
+	Save to the Cloud	Zapisz w chmurze
+	Save to the Cloud…	Zapisz w chmurze…
+	A folder on this computer	Folder na tym komputerze
+	Cloud	Chmura
+	This computer	Ten komputer
+	Where	Gdzie
+	Your cloud account	Twoje konto w chmurze
+@msg	VectorCraft cannot open {_1}	VectorCraft nie może otworzyć {_1}
+@msg	no drawing open	brak otwartego rysunku
+@msg	no such file in the cloud listing	brak takiego pliku na liście w chmurze

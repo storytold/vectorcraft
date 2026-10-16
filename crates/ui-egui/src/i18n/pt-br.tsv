@@ -3790,3 +3790,22 @@ axis	Both	Ambos
 	Update Dimensions	Atualizar Cotas
 # Revolve cap description
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Fecha as extremidades circulares dos perfis abertos. Giros parciais mantêm as faces de corte abertas.
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Procurar uma pasta na nuvem
+	Cloud Status	Status da nuvem
+	Connect Cloud Storage	Conectar armazenamento na nuvem
+	List Cloud Shares	Listar compartilhamentos na nuvem
+	Open a Cloud Drawing	Abrir um desenho na nuvem
+	Open from the Cloud…	Abrir da nuvem…
+	Reload from the Cloud	Recarregar da nuvem
+	Save to the Cloud	Salvar na nuvem
+	Save to the Cloud…	Salvar na nuvem…
+	A folder on this computer	Uma pasta neste computador
+	Cloud	Nuvem
+	This computer	Este computador
+	Where	Onde
+	Your cloud account	Sua conta na nuvem
+@msg	VectorCraft cannot open {_1}	O VectorCraft não pode abrir {_1}
+@msg	no drawing open	nenhum desenho aberto
+@msg	no such file in the cloud listing	não há esse arquivo na lista da nuvem

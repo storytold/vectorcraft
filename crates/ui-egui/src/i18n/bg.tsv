@@ -4869,3 +4869,22 @@ theme	Appearance	Външен вид
 
 # Type › Reset Tracking and Kerning
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Преглед на облачна папка
+	Cloud Status	Състояние на облака
+	Connect Cloud Storage	Свързване на облачно хранилище
+	List Cloud Shares	Списък с облачни споделяния
+	Open a Cloud Drawing	Отваряне на облачна рисунка
+	Open from the Cloud…	Отваряне от облака…
+	Reload from the Cloud	Презареждане от облака
+	Save to the Cloud	Запазване в облака
+	Save to the Cloud…	Запазване в облака…
+	A folder on this computer	Папка на този компютър
+	Cloud	Облак
+	This computer	Този компютър
+	Where	Къде
+	Your cloud account	Вашият облачен акаунт
+@msg	VectorCraft cannot open {_1}	VectorCraft не може да отвори {_1}
+@msg	no drawing open	няма отворена рисунка
+@msg	no such file in the cloud listing	няма такъв файл в облачния списък
