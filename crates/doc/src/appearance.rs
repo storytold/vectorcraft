@@ -1061,7 +1061,7 @@ impl Appearance {
         for g in self.gradients_mut() {
             let freeform = g.freeform.take();
             if let Some(geom) = g.geom {
-                let c = if g.gradient.kind == vectorcraft_color::GradientKind::Radial { geom.start } else { geom.start.midpoint(geom.end) };
+                let c = if g.gradient.kind.is_centred() { geom.start } else { geom.start.midpoint(geom.end) };
                 g.transform(near(c));
             }
             g.freeform = freeform.map(|mut f| {

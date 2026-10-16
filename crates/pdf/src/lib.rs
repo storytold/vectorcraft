@@ -246,6 +246,8 @@ mod tests_cmykimages;
 #[cfg(test)]
 mod tests_compression;
 #[cfg(test)]
+mod tests_conic;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_editing;

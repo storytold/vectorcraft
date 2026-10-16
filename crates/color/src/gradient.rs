@@ -463,6 +463,39 @@ impl GradientGeom {
             self.set_focal(Some(m * q));
         }
     }
+    /// A conic gradient drawn as `n` solid wedges around the centre, for formats without conic
+    /// gradients: each wedge's outline (the centre, then its arc, reaching past every corner of
+    /// `b`) and the turn its colour is sampled at (its middle). With `overlap` (opaque stops),
+    /// each wedge runs on to the seam and the next is drawn over it, so every point is covered
+    /// by the wedges before it and no hairline of what lies below shows between them; the seam
+    /// stays sharp.
+    pub fn conic_wedges(&self, b: Rect, n: usize, overlap: bool) -> Vec<(Vec<Point>, f64)> {
+        let n = n.clamp(1, 4096);
+        let frame = self.unit_frame().unwrap_or_else(|| Affine::translate(self.start.to_vec2()));
+        let to_unit = frame.inverse();
+        // The unit-frame radius past every corner, with a margin for the arcs' chords.
+        let corners = [b.origin(), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+        let reach = corners.iter().map(|&c| (to_unit * c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+        let reach = if reach.is_finite() { reach * 1.01 } else { 1.0 };
+        // Arc points at most 1/32 turn apart; their chords stay outside `reach` at this radius.
+        const ARC: f64 = 1.0 / 32.0;
+        let r = reach / (std::f64::consts::PI * ARC).cos();
+        let at = |turn: f64| {
+            let a = turn * std::f64::consts::TAU;
+            frame * Point::new(r * a.cos(), r * a.sin())
+        };
+        (0..n)
+            .map(|k| {
+                let from = k as f64 / n as f64;
+                let to = if overlap { 1.0 } else { (k + 1) as f64 / n as f64 };
+                let steps = ((to - from) / ARC).ceil().max(1.0) as usize;
+                let mut pts = Vec::with_capacity(steps + 2);
+                pts.push(self.start);
+                pts.extend((0..=steps).map(|i| at(from + (to - from) * i as f64 / steps as f64)));
+                (pts, (k as f64 + 0.5) / n as f64)
+            })
+            .collect()
+    }
     pub fn angle_deg(&self) -> f64 {
         let v = self.end - self.start;
         (-v.y).atan2(v.x).to_degrees()
@@ -907,5 +940,40 @@ mod tests {
         let fit = GradientGeom::fit(GradientKind::Conic, Rect::new(0.0, 0.0, 200.0, 100.0), 90.0);
         assert_eq!(fit.start, Point::new(100.0, 50.0));
         assert!(fit.end.distance(Point::new(100.0, -50.0)) < 1e-9);
+    }
+
+    #[test]
+    fn conic_wedges_cover_the_box_and_meet_the_seam() {
+        let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+        let g = GradientGeom { start: Point::new(60.0, 40.0), end: Point::new(90.0, 40.0), aspect: 0.5, focal: None };
+        let wedges = g.conic_wedges(b, 36, false);
+        assert_eq!(wedges.len(), 36);
+        // Every point of the box (off the edges) is inside the wedge whose turn range holds it.
+        let inside = |poly: &[Point], p: Point| {
+            let mut w = 0i32;
+            for (i, &a) in poly.iter().enumerate() {
+                let c = poly[(i + 1) % poly.len()];
+                let cross = (c - a).cross(p - a);
+                if a.y <= p.y && c.y > p.y && cross > 0.0 {
+                    w += 1;
+                } else if a.y > p.y && c.y <= p.y && cross < 0.0 {
+                    w -= 1;
+                }
+            }
+            w != 0
+        };
+        for (x, y) in [(1.0, 1.0), (199.0, 99.0), (150.0, 30.0), (10.0, 90.0), (61.0, 39.0)] {
+            let p = Point::new(x, y);
+            let t = g.param_at(GradientKind::Conic, p);
+            let k = (t * 36.0).floor() as usize;
+            assert!(inside(&wedges[k].0, p), "({x}, {y}) t {t} not in wedge {k}");
+            assert!((wedges[k].1 - (k as f64 + 0.5) / 36.0).abs() < 1e-12);
+        }
+        // Overlapping wedges run on to the seam, each from its own start.
+        let over = g.conic_wedges(b, 36, true);
+        let frame = g.unit_frame().unwrap();
+        let at = |turn: f64| frame * Point::new(0.5 * (turn * std::f64::consts::TAU).cos(), 0.5 * (turn * std::f64::consts::TAU).sin());
+        assert!(inside(&over[0].0, at(0.5)) && inside(&over[0].0, at(35.9 / 36.0)));
+        assert!(inside(&over[20].0, at(35.9 / 36.0)) && !inside(&over[20].0, at(19.9 / 36.0)) && !inside(&over[20].0, at(0.1 / 36.0)));
     }
 }

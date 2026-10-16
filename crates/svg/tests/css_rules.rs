@@ -206,6 +206,15 @@ fn gradients_give_css_gradients() {
     let id = add(&mut d, n);
     let bg = one(&d, id, &CssOptions::default()).props.into_iter().find(|(k, _)| *k == "background-image").unwrap().1;
     assert!(bg.starts_with("radial-gradient(circle ") && bg.contains(" at 50px 50px, #ffffff 0%, #000000 100%)"), "{bg}");
+    // Conic: CSS turns from straight up, so a sweep starting to the right starts at 90deg.
+    let conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
+    let mut n = rect(&mut d, (0.0, 0.0, 100.0, 60.0), 0.0);
+    n.appearance = Appearance::basic(Paint::Gradient(Box::new(conic)), Paint::None, 0.0).into();
+    let id = add(&mut d, n);
+    assert_eq!(
+        prop(&one(&d, id, &CssOptions::default()), "background-image"),
+        Some("conic-gradient(from 90deg at 50px 30px, #ffffff 0%, #000000 100%)")
+    );
 }
 
 #[test]

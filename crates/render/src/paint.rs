@@ -1,7 +1,7 @@
 //! Paint conversion (solid, gradients, patterns) and image decoding.
 
 use vectorcraft_color::{GradientKind, Paint};
-use vectorcraft_geom::{Rect, Vec2};
+use vectorcraft_geom::{Affine, Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
 
@@ -35,6 +35,14 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
                         None => peniko::Gradient::new_radial(geom.start, r),
                     };
                     g.with_stops(stops.as_slice())
+                }
+                GradientKind::Conic => {
+                    // One turn around the origin, carried onto the extent ellipse (its frame turns
+                    // the sweep to start along the vector, and a mirrored frame reverses it). A
+                    // vector without length sweeps from the right around its start.
+                    let frame = geom.unit_frame().unwrap_or_else(|| Affine::translate(geom.start.to_vec2()));
+                    ctx.set_paint_transform(frame);
+                    peniko::Gradient::new_sweep((0.0, 0.0), 0.0, std::f32::consts::TAU).with_stops(stops.as_slice())
                 }
                 _ => {
                     ctx.reset_paint_transform();

@@ -483,7 +483,7 @@ impl Rules<'_> {
         }
     }
 
-    /// A linear or radial gradient over `b` at `opacity`, with the stops SVG export writes
+    /// A linear, radial or conic gradient over `b` at `opacity`, with the stops SVG export writes
     /// (midpoints as stops of their own). `None` for freeform gradients.
     fn gradient(&mut self, g: &GradientPaint, b: Rect, opacity: f32) -> Option<String> {
         let geom = g.resolve(b);
@@ -520,6 +520,16 @@ impl Rules<'_> {
                 };
                 let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
                 Some(format!("radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
+            }
+            GradientKind::Conic => {
+                // CSS turns clockwise from straight up; the vector's direction is where it starts.
+                let v = geom.end - geom.start;
+                let from = if v.hypot() > 1e-9 { v.x.atan2(-v.y).to_degrees().rem_euclid(360.0) } else { 90.0 };
+                if (geom.aspect - 1.0).abs() > 1e-9 {
+                    self.warn("conic gradients are written round (an elliptical or mirrored sweep is left out)");
+                }
+                let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
+                Some(format!("conic-gradient(from {}deg {at}, {})", fmt_num(from, 2), stops(&|t| t as f64)))
             }
             GradientKind::Freeform => None,
         }
