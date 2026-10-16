@@ -384,7 +384,7 @@ pub(crate) fn shape_range(
             } else if let Some((_, f)) = cache.iter().find(|(k, _)| *k == c) {
                 f.clone()
             } else {
-                let f = db.fallback_for(c, primary.id()).unwrap_or_else(|| primary.clone());
+                let f = db.fallback_for_style(c, primary.id(), primary.weight, primary.italic).unwrap_or_else(|| primary.clone());
                 cache.push((c, f.clone()));
                 f
             };

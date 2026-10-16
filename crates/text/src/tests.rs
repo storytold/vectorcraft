@@ -405,6 +405,40 @@ fn fallback_font_per_character() {
     assert_eq!(l.glyphs[2].font_id, primary.id());
 }
 
+/// Characters drawn from a fallback face keep the weight and slant asked for (#2491): bold text
+/// takes a bold face of the fallback family when it has one.
+#[test]
+fn fallback_glyphs_keep_the_weight_of_the_text() {
+    let primary = db().face("Source Sans 3", "Bold").unwrap();
+    let regular = db().face("Source Sans 3", "Regular").unwrap();
+    let c = ['\u{2500}', '\u{2192}', '\u{25B6}', '\u{2588}', '\u{21E5}', '\u{2318}']
+        .into_iter()
+        .find(|&c| {
+            !primary.covers(c)
+                && db()
+                    .fallback_for(c, regular.id())
+                    .is_some_and(|f| db().fallback_for_style(c, regular.id(), 700.0, false).is_some_and(|b| b.weight > f.weight))
+        })
+        .expect("some symbol covered by a family of the bundled fonts with more than one weight");
+    let mut st = style(12.0);
+    st.font_style = "Bold".into();
+    let l = layout(db(), &point(&format!("a{c}b"), st));
+    assert_eq!(l.glyphs[0].font_id, primary.id());
+    let drawn = db().face_by_id(l.glyphs[1].font_id).unwrap();
+    assert!(drawn.weight >= 600.0, "{} {} for a bold run", drawn.family, drawn.style);
+}
+
+/// A missing family's Bold Italic is drawn bold when the fallback family has Bold and Italic but no
+/// Bold Italic, not as plain Italic (#2491).
+#[test]
+fn bold_italic_of_a_missing_family_keeps_the_bold() {
+    let face = db().face("No Such Family", "Bold Italic").unwrap();
+    assert_eq!(face.family, FALLBACK_FAMILY);
+    assert!(face.weight >= 600.0, "{} {}", face.family, face.style);
+    let italic = db().face("No Such Family", "Italic").unwrap();
+    assert!(italic.italic && italic.weight < 600.0);
+}
+
 /// A space the primary font doesn't map goes to the fallback face like any other character
 /// (#1844): an ideographic space in a face without U+3000 keeps its em, so an indent made with it
 /// isn't lost. A tab, which the layout handles itself, stays with the primary face. Needs a bundled
