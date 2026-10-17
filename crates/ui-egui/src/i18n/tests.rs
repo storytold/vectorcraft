@@ -1506,7 +1506,10 @@ fn messages_translate_by_template_and_their_parts() {
 
 /// Each language that translates status and error messages ([`COMPLETE_MESSAGES`]) has an `@msg`
 /// row for every message in the sources that reach the status bar, so a new one can't ship
-/// untranslated by accident (`VECTORCRAFT_I18N_DUMP_MESSAGES=<file>` lists them).
+/// untranslated by accident (`VECTORCRAFT_I18N_DUMP_MESSAGES=<file>` lists them). A message listed
+/// in `untranslated_messages.txt` passes whether or not it has rows
+/// (`VECTORCRAFT_I18N_DUMP_UNTRANSLATED=<file>` writes that file's header and the messages in the
+/// sources that lack a row).
 #[test]
 fn complete_languages_translate_every_message() {
     let messages = message_literals();
@@ -1514,17 +1517,86 @@ fn complete_languages_translate_every_message() {
     if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP_MESSAGES") {
         std::fs::write(path, messages.iter().map(|m| format!("{m}\n")).collect::<String>()).expect("write dump");
     }
+    let listed: std::collections::HashSet<&str> = UNTRANSLATED_MESSAGES.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+    let mut untranslated = std::collections::BTreeSet::new();
+    let mut unlisted = vec![];
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
         let (entries, _) = parse_entries(lang.0.source);
         let rows: std::collections::HashSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
-        let missing: Vec<_> = messages.iter().filter(|m| !rows.contains(m.as_str())).collect();
+        let missing: Vec<&str> = messages.iter().map(String::as_str).filter(|m| !rows.contains(m)).collect();
+        untranslated.extend(missing.iter().copied());
+        unlisted.push((code, missing.into_iter().filter(|m| !listed.contains(m)).collect::<Vec<_>>()));
+    }
+    if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP_UNTRANSLATED") {
+        let header = UNTRANSLATED_MESSAGES.lines().take_while(|l| l.starts_with('#'));
+        std::fs::write(path, header.chain(untranslated).map(|l| format!("{l}\n")).collect::<String>()).expect("write dump");
+    }
+    for (code, missing) in unlisted {
         assert!(missing.is_empty(), "{code}: {} untranslated messages: {missing:#?}", missing.len());
     }
 }
 
-/// The parameter errors of Align, Distribute Spacing, Reflect and Shear, whose text the scan above
-/// doesn't read, are translated whole in each language of [`COMPLETE_MESSAGES`].
+/// The messages [`complete_languages_translate_every_message`] lets through without rows (see the
+/// file's header).
+const UNTRANSLATED_MESSAGES: &str = include_str!("untranslated_messages.txt");
+
+/// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
+/// an error enum's variant: a literal or a `format!` string, on the call's line or wrapped over
+/// several lines, in the same template form as the catalogs' rows. It does not read a call whose
+/// name ends in a helper's name (`is_bad(`), a method call (`.err(`), `std::io::Error::new` or one
+/// of [`NAME_VARIANTS`]; without the helpers, it reads only the two variants in this source.
+#[test]
+fn message_scan_reads_error_helpers_and_variants() {
+    let code = r#"
+fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
+    let w = p.get(key).and_then(Value::as_f64).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
+    if w < 0.0 {
+        return Err(bad(cmd, "the width can't be negative"));
+    }
+    let e = bad(
+        "object.example",
+        format!(
+            "`{}` must be between {lo:.1} and {hi}, not {w}",
+            key
+        ),
+    );
+    let _ = bad(&format!("{cmd}, {key}"), "a comma in the first argument");
+    let _ = is_bad(cmd, "not an error helper");
+    let _ = r.err("not an error helper either");
+    let _ = err(format!("can't open `{name}`: damaged"));
+    let _ = PsError::Limit(format!("the {what} is nested too deep"));
+    let _ = Error::Manifest("the manifest has no name".into());
+    let _ = std::io::Error::new(kind, "not an error variant");
+    let _ = PsError::Ps("not an error message", op);
+    let _ = EngineError::UnknownCommand("not.an.error.message".into());
+    Err(error("Select only dimensions"))
+}
+"#;
+    let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
+    let found = source_messages(code, &engine);
+    for want in [
+        "`{key}` must be a number",
+        "the width can't be negative",
+        "`{_1}` must be between {lo} and {hi}, not {w}",
+        "a comma in the first argument",
+        "can't open `{name}`: damaged",
+        "the {what} is nested too deep",
+        "the manifest has no name",
+        "Select only dimensions",
+    ] {
+        assert!(found.iter().any(|m| m == want), "{want} not in {found:#?}");
+    }
+    assert!(!found.iter().any(|m| m.contains("not an error") || m.contains("not.an.error")), "{found:#?}");
+    let elsewhere = source_messages(code, &[]);
+    assert!(elsewhere.len() == 2 && elsewhere.iter().all(|m| m.contains("nested") || m.contains("manifest")), "{elsewhere:#?}");
+    // A message read this way matches its row: `{key}` keeps its name.
+    let cs = Lang::from_code("cs").expect("registered");
+    assert_eq!(message(cs, "`width` must be a number"), "`width` musí být číslo");
+}
+
+/// The parameter errors of Align, Distribute Spacing, Reflect and Shear are translated whole in each
+/// language of [`COMPLETE_MESSAGES`].
 #[test]
 fn align_reflect_and_shear_param_errors_are_translated() {
     use serde_json::json;
@@ -1556,8 +1628,7 @@ fn align_reflect_and_shear_param_errors_are_translated() {
 
 /// The parameter errors of the blend spine commands (Move Spine Point, Reshape Spine Segment, Add
 /// Spine Point and Delete Spine Point, which Direct Selection, the Pen and the Anchor Point tool
-/// send), whose text the scan above doesn't read, are translated whole in each language of
-/// [`COMPLETE_MESSAGES`] and in Bulgarian.
+/// send) are translated whole in each language of [`COMPLETE_MESSAGES`] and in Bulgarian.
 #[test]
 fn blend_spine_param_errors_are_translated() {
     use serde_json::json;
@@ -1636,8 +1707,8 @@ fn unknown_parameter_errors_are_translated() {
     }
 }
 
-/// The error for an effect `color` the effect can't draw, whose text the scan above doesn't read,
-/// is translated whole in each language of [`COMPLETE_MESSAGES`] and in Bulgarian.
+/// The error for an effect `color` the effect can't draw is translated whole in each language of
+/// [`COMPLETE_MESSAGES`] and in Bulgarian.
 #[test]
 fn effect_color_param_error_is_translated() {
     use serde_json::json;
@@ -1667,9 +1738,8 @@ fn unread_layers_notes_are_translated() {
     }
 }
 
-/// The parameter error of `select.key` for an id that isn't a selected top-level object, whose
-/// text [`message_literals`] doesn't read, is translated whole in each language of
-/// [`COMPLETE_MESSAGES`].
+/// The parameter error of `select.key` for an id that isn't a selected top-level object is
+/// translated whole in each language of [`COMPLETE_MESSAGES`].
 #[test]
 fn select_key_param_error_is_translated() {
     use serde_json::json;
@@ -1697,6 +1767,17 @@ const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "
 /// Where a message literal starts: a status, an error value, a `thiserror` message.
 const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Other(", "Err(", "ok_or(", "ok_or_else(|| ", "#[error("];
 
+/// Helpers that make an error from a message, by crate, with the number of arguments before the
+/// message: the engine's `bad(cmd, msg)` (`EngineError::BadParams`), `err(msg)` (`cmd/fileio`)
+/// and `error(msg)` (`cmd/dimension.rs`), and the PDF writer's `bad(why)` (`forms.rs`) and
+/// `failed(why)` (`encrypt.rs`, `linearize.rs`).
+const ERROR_HELPERS: &[(&str, &str, usize)] =
+    &[("engine", "bad(", 1), ("engine", "err(", 0), ("engine", "error(", 0), ("pdf", "bad(", 0), ("pdf", "failed(", 0)];
+
+/// Error variants whose first argument is a name, not a message: a command id
+/// (`EngineError::UnknownCommand`) and a PostScript error name (`PsError::Ps`).
+const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
+
 /// Messages that are signals, not text for people.
 const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
 
@@ -1718,22 +1799,76 @@ pub fn message_literals() -> std::collections::BTreeSet<String> {
                 // Control replies are English protocol data, never status-bar messages
                 // (see i18n's module contract). Engine messages are scanned in their own crates.
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
-                let code = without_test_module(&text);
-                for marker in MESSAGE_MARKERS {
-                    for (at, _) in code.match_indices(marker) {
-                        let rest = code[at + marker.len()..].trim_start();
-                        let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
-                        let Some(lit) = rest.strip_prefix('"').and_then(string_literal) else { continue };
-                        let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
-                        if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
-                            out.insert(as_template(&lit));
-                        }
-                    }
-                }
+                let helpers: Vec<_> =
+                    ERROR_HELPERS.iter().filter(|(c, _, _)| path.starts_with(crates.join(c))).map(|&(_, call, before)| (call, before)).collect();
+                out.extend(source_messages(without_test_module(&text), &helpers));
             }
         }
     }
     out
+}
+
+/// The message literals in `code`, as catalog templates (see [`message_literals`]): the literal
+/// after each of [`MESSAGE_MARKERS`], the first argument of an error enum's variant
+/// (`PsError::Limit(…)`, `Error::Manifest(…)`; not [`NAME_VARIANTS`]),
+/// and the message argument of each call in `helpers` (a call and the number of arguments before
+/// its message), a literal or a `format!` string.
+fn source_messages(code: &str, helpers: &[(&str, usize)]) -> Vec<String> {
+    let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
+    let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
+        let rest = &code[at + m.len()..];
+        let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
+        let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
+        if named { args.strip_prefix('(') } else { None }
+    });
+    let in_helpers = helpers.iter().flat_map(|&(call, before)| {
+        code.match_indices(call)
+            .filter(|&(at, _)| !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter_map(move |(at, _)| skip_args(&code[at + call.len()..], before))
+    });
+    let mut out = vec![];
+    for rest in after_markers.chain(in_variants).chain(in_helpers) {
+        let rest = rest.trim_start();
+        let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
+        let Some(lit) = rest.strip_prefix('"').and_then(string_literal) else { continue };
+        let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
+        if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
+            out.push(as_template(&lit));
+        }
+    }
+    out
+}
+
+/// The arguments of a call whose opening parenthesis was just read, past the first `n` of them;
+/// `None` when `n` is 1 or more and the call has `n` arguments or fewer.
+fn skip_args(args: &str, n: usize) -> Option<&str> {
+    if n == 0 {
+        return Some(args);
+    }
+    let (mut left, mut depth, mut chars) = (n, 0usize, args.char_indices());
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.checked_sub(1)?,
+            '"' => loop {
+                match chars.next()?.1 {
+                    '\\' => {
+                        chars.next()?;
+                    }
+                    '"' => break,
+                    _ => {}
+                }
+            },
+            ',' if depth == 0 => {
+                left -= 1;
+                if left == 0 {
+                    return Some(&args[at + 1..]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Source up to its inline test module (`#[cfg(test)] mod tests {`); declarations of test files

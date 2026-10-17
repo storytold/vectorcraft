@@ -12,7 +12,8 @@ The reference is the French catalog, which the tests hold complete: 3,416 interf
 strings (menus, command labels, `tl!` literals: panels, dialogs, tooltips, Preferences) plus 604 `@msg` status and
 error messages, 4,020 in all. A language's % is its rows over 4,020 (capped at 100% per part). The
 `complete_menus` flag and `COMPLETE_MESSAGES` list make `i18n::tests` fail if a complete language misses a
-string, so "full" here is enforced by tests. No language has help content: there is no translated (or English)
+string, so "full" here is enforced by tests. The messages listed in `crates/ui-egui/src/i18n/untranslated_messages.txt`
+are not translated yet, and the tests let them through. No language has help content: there is no translated (or English)
 in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents

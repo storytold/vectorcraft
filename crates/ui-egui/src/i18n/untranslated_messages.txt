@@ -1,0 +1,1201 @@
+# Status and error messages that at least one language in `COMPLETE_MESSAGES` (tests.rs) has no
+# `@msg` row for yet, one per line as the message scan writes it (`{}` as `{_1}`), sorted. The list
+# also holds the messages that open pull requests add without those rows, so those pull requests
+# don't fail when they merge. `complete_languages_translate_every_message` lets these through; every
+# other message needs a row in each complete catalog. A pull request that adds a message's rows
+# removes its line here. The test ignores a line whose message no source contains.
+# `VECTORCRAFT_I18N_DUMP_UNTRANSLATED=<file>` writes this header and the messages in the sources
+# that lack a row.
+A profile supports one Revolve effect. Edit the existing effect's options instead.
+CSS options: {e}
+CSV has a header but no data rows
+CSV is empty
+CSV is larger than {MAX_CSV_BYTES} bytes
+CSV is not UTF-8
+CSV would be larger than {MAX_CSV_BYTES} bytes
+Choose original artwork, not a dimension's generated paths
+Create needs fills, strokes or both
+DXF options: {e}
+DXF scale must be a positive number up to {_1}, not {scale}
+DXF {field} `{s}`: {allowed}
+Dimension is locked or hidden
+Dimension mode does not match its source
+Draw Inside needs exactly one selected path, compound path or text
+EPS flattener: {e}
+EPS options: {e}
+EPS {field} `{s}`: {allowed}
+Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft
+HTML Text applies to object slices of type only
+Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)
+Invalid dimension mode
+Invalid dimension offset
+Invalid point
+JSON recovery transport exceeds 8 MiB; use the binary adapter
+PDF content is incomplete or exceeds the reader's limits; no document was imported
+PDF flattener: {e}
+PDF options: {e}
+SVG is not UTF-8, UTF-16 or ISO 8859-1
+Save writes one artboard: name one, or export several with document.export
+Select a dimension first
+Select at most 1000 segments at a time
+Select dimensions to update
+Select dimensions to update (at most 1000)
+Select one or more paths first
+Select only dimension groups
+Select only dimensions
+Shaper needs 1–64 source paths
+Switch x/y is for scatter graphs
+Text options: {e}
+`anchors` must be an array of [subpath, anchor] pairs
+`asset` is the asset id (see assets.list)
+`at` must be a byte offset
+`background` must be "", "matte" or #rrggbb
+`background` must be a colour
+`burasagari` must be "none", "standard" or "forced"
+`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"
+`color` needs a `rule` to make the theme from
+`colors` is empty
+`columnType` is vertical, uniform, repeating or sliding
+`commands` must not be empty
+`corners` must list anchor indices (0, 1, 2…), not {v}
+`dataBase64` is larger than the module limit
+`dataBase64` is not valid base64
+`depth` and `childLimit` slice the summary: pass `summary: true`
+`design` is a design name, or null for plain columns
+`design` is a design name, or null for the default marker
+`destinationFolder` is required when destination is `folder`
+`destination` must be `none`, `saveAndClose` or `folder`
+`digits` must be "default", "arabic", "hindi" or "farsi"
+`dimImages` is a percentage or false
+`direction` must be "auto", "leftToRight" or "rightToLeft"
+`each` is the value one design stands for, more than 0
+`ecc` must be "L", "M", "Q" or "H"
+`event` must be one of {_1}
+`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found
+`folder` must be an absolute folder path
+`fractions` is chop or scale
+`from` and `to` must differ
+`hAlign` must be default, left, center or right
+`id` must be a node id
+`id` must be an object id, not {v}
+`ids` takes at most {MAX_INSPECT_IDS} ids
+`imageMap` must be none, rectangle or polygon
+`index` must be a point index
+`index` must be a whole number or null
+`indices` must be a non-empty array of item indices
+`items` is a list of {kind, item}
+`items` must be an array of {id, anchors}
+`items` must be an array of {{id, corners?}}, not {v}
+`kind` is one of {_1}
+`kind` must be "round", "invertedRound" or "chamfer", not {v}
+`kind` must be `text`, `visibility`, `image` or `graph`
+`kind` must be a string
+`kind` must be image, noImage or htmlText
+`kinsoku` must be "none", "hard" or "soft"
+`label` must be a non-empty name of at most 200 characters
+`leadingModel` must be "romanBaseline" or "emBoxTop"
+`line` must be true or false
+`mode` must be "add", "subtract", "intersect" or "exclude"
+`mojikumi` must be "none" or "lineEndHalf"
+`name` is empty
+`name` must be 1-64 printable characters
+`names` must be a list of names
+`newName` is empty
+`new` is a design name, or true
+`params` must be an object
+`path` must be a folder
+`path` must be a path object
+`points` must be an array of point indices
+`quietZone` must be a whole number of modules from 0 to 100
+`reversed` must be true or false
+`rule` must be nonZero or evenOdd
+`scale` must be a number in (0, 100]
+`script` must be a string
+`seriesIndexes` is a non-empty list of series indexes
+`seriesIndexes` needs a `type` or a `valueAxis`
+`shift` must be a number of points
+`showCenter` must be true or false
+`size` must be a positive number
+`source` and `target` are the same object
+`source` must be `folder` or `datasets`
+`spacing` must be a number
+`starts` must be an array of anchor indices (or nulls)
+`stop` must be a stop index
+`strokeMode` applies to strokes (stroke: true)
+`style` must be roman or japanese
+`symbol` must be a symbol name
+`target` must be "object" or "contents", not {v}
+`text` is required
+`tint` applies to global and spot colours
+`tint` goes with a global or spot `swatch`
+`tint` must be a number (%)
+`tint` needs a global or spot colour
+`to` is the design's new name
+`to` takes a single `index`
+`useLab` must be true or false
+`vAlign` must be default, top, middle, baseline or bottom
+`values` must be an object
+`version`, `description` or `author` is too long
+`{_1}` can't be edited or removed
+`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}
+`{_1}` is built in and always listed
+`{_1}` is not a font file the last text.findFontFiles search found
+`{_1}` would be overwritten by the package: choose a different folder or name
+`{file}` has no art to place
+`{file}` is over {_1} MB
+`{file}` isn't a VectorCraft document
+`{f}` belongs to a VectorCraft that is running
+`{f}` is the copy of a document open now
+`{id}` is no writable format (see document.formats)
+`{id}` isn't a loaded library
+`{key}` has no colours
+`{key}` is a design name
+`{key}` is a design name or a list of them
+`{key}` is longer than {MAX_NAME} characters
+`{key}` is out of range
+`{key}` must be a non-negative integer
+`{key}` must be a number, not {v}
+`{key}` must be a profile name or null
+`{key}` must be an appearance item index (paint order) or null
+`{key}` must be an array of asset ids (see assets.list)
+`{k}.family` is required
+`{k}` is a number 0..1
+`{k}` is true or false
+`{k}` isn't an export setting: {_1}
+`{k}` must be a byte offset
+`{k}` must be a number
+`{k}` must be a number of points
+`{k}` must be a percentage 0..100
+`{k}` must be a string
+`{k}` must be a whole number
+`{k}` must be one of {_1}
+`{k}` must be {what}
+`{k}` must be {what}, not {v}
+`{l}` isn't a global or spot colour
+`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText
+`{name}` can't be deleted
+`{name}` can't be duplicated
+`{name}` can't be edited
+`{name}` can't be renamed
+`{name}` can't name a folder
+`{name}` has no art to place
+`{name}` has no text to place
+`{name}` is a built-in preset and can't change: save it under another name
+`{name}` is a built-in preset and is read-only: save it under another name
+`{name}` is a built-in preset and stays
+`{name}` is a built-in preset: save under another name
+`{name}` is a built-in profile and stays
+`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)
+`{name}` is a working space: choose another with edit.colorSettings first
+`{name}` is built in and stays
+`{name}` takes a paint of its own kind (colour, gradient or pattern)
+`{n}` can't be deleted
+`{n}` can't be merged
+`{n}` can't be moved
+`{n}` isn't a solid colour
+`{n}`: colour groups hold solid colours only
+`{to}` is empty or already used
+`{what}` is longer than {MAX_TEXT} bytes
+`{what}` must be text
+a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard
+a brush named `{nn}` exists
+a container of the listed objects is gone
+a content stream can't be read
+a content stream isn't a stream
+a design holds at most {_1} objects
+a design needs a name
+a dictionary grew too large
+a document keeps at most {MAX_VIEWS} views
+a document keeps at most {_1} graph designs
+a document keeps at most {_1} saved selections
+a document links at most {MAX_SVG_SCRIPTS} JavaScript files
+a graph has at most {_1} series, so it transposes with at most that many categories
+a layer can't be merged into its own sublayer
+a layer's form box isn't an array
+a layer's form can't be read
+a layer's form has no box
+a layer's form has no dictionary
+a name names one asset: give multiple: false, or one object
+a page can't be read
+a page object is used by something else
+a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})
+a pattern named `{n}` exists
+a plug-in with id {_1} is already installed
+a preset named `{n}` exists
+a profile is already called {n}
+a right-to-left character moves only up and down (dy)
+a row can't go into itself
+a series goes on the left or the right value axis
+a start must be an anchor index ≥ 0 or null
+a style named `{name}` already exists
+a swatch needs a colour, gradient or pattern
+a symbol named `{n}` already exists
+a theme has 1 to {THEME_SIZE} colours
+a theme is already called {name} (replace: "{name}" overwrites it)
+a view named `{name}` exists
+a view named `{new}` exists
+a {_1} series can't go in a {_2} graph
+aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)
+already editing an opacity mask
+already editing another object's opacity mask
+already in pattern editing mode
+an artboard is listed twice
+an empty artboard has no width or height to scale to
+an image of {_1} MB, at most {_2} MB
+an image of {width} × {height} pixels is too large to draw
+an index must be a whole number
+an object is missing
+an object's header is missing
+an overprinting form can't be read
+anchor `smooth` must be true or false
+anchor `{key}` must be [x, y]
+anchor `{key}` must be a number
+angles must be a list as long as pins (degrees or null)
+appearance must be flat|center|edge
+apply is "fill" or "stroke", not `{other}`
+area must be a closed polygon of 3 to 100000 [x, y] points
+area type needs a path that encloses an area
+arrowAlign must be extend|tip, got {o}
+arrowScale must be [start, end]
+art, guides, slices or the rulers' zero point lie beyond the standard canvas (±4,000,000 pt): move them nearer the origin first
+artboard is a 0-based index
+artboard must be a 0-based index
+artboard {i} doesn't print
+artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}
+artboardLayout.columns must be 1 or more
+artboardLayout.layout must be gridByRow, gridByColumn, row or column
+artboardLayout.rightToLeft must be true or false
+artboardLayout.spacing must be -{MAX_SPACING}–{MAX_SPACING} pt
+artboardLayout.spacing must be 0–{MAX_SPACING} pt
+artboards must be a non-empty list
+artboards must be a number
+asset `{_1}` has no art to export
+at most {MAX_KEYWORDS} keywords
+at most {MAX_MATCHES} matches are kept
+at most {MAX_QUEUE} files
+at must be [x, y]
+at/rect lie outside the canvas
+attribute must be size|leading|tracking|kerning|baselineShift
+attrs must be an object
+axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`
+backgroundContents must be transparent or white
+bad AES key
+bad `runs`: {e}
+bad arrowScale
+bad base64
+bad color {c}
+bad colour
+bad colour in `colors`
+bad colour {v}
+bad colour {v} in groupColors
+bad cross-reference entry
+bad cross-reference table
+bad current colour {v}
+bad dataBase64
+bad edit
+bad fill colour
+bad fill {v}
+bad fit: {e}
+bad new colour {v}
+bad object
+bad object number
+bad offset
+bad path data: {e}
+bad reference
+bad trailer size
+bad {k} colour
+batches cannot nest
+bind something to a variable first
+bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}
+brush must be a name or null
+by must be a number
+bytes must be an array of integers
+bytes must be integers from 0 to 255
+can't add page thumbnails: {why}
+can't edit the written PDF: {why}
+can't encode the input
+can't encrypt the PDF: {why}
+can't linearise the PDF: {why}
+can't open `{_1}`: {_2}
+can't open `{_1}`: {e}
+can't open `{name}`: not a format VectorCraft reads (see document.formats)
+can't place `{name}`: not a format VectorCraft reads (see document.formats)
+can't read back the written PDF: {e}
+can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp
+can't write PDF layers or overprint: {why}
+can't write the pages' user units: {why}
+cannot distort a zero-size or non-finite bounding box
+cannot move an object into itself
+canvas must be standard or infinite, not {c}
+canvas must be standard or infinite, not {v}
+case must be upper|lower|title|sentence
+category `{c}`: one of {_1}
+center must be [x, y]
+choose appearance and/or size
+clip must be true or false
+clippingMask must be true or false
+close current work before restoring
+closed must be a boolean
+color.profile: no RGB or CMYK profile is called “{profile}”
+colorMode must be rgb or cmyk, not `{m}`
+colorModel must be {own} (the document's mode), grayscale or bitmap
+colour groups can't go into colour groups
+colour, mode and spot apply to solid-colour swatches only
+command must be a shape.* command
+commands[{i}]: missing `command`
+commands[{i}]: unknown command `{id}`
+composer must be "singleLine" or "everyLine"
+copy needs path: the file to copy into the document's folder
+copy takes images only: relink placed documents where their files are
+copying a file isn't available on the web
+copyrightStatus must be unknown, copyrighted or publicDomain
+copyrightUrl must be a URL (no spaces, at most 2048 characters)
+corners must be 4 [x, y] points (TL, TR, BR, BL)
+counterPer `{c}`: item or file
+crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"
+crop rectangle doesn't overlap the image
+cross-reference and object streams aren't supported
+damaged compressed data: {e}
+dash lengths must be numbers, got {v}
+dash must be a list of lengths or null, got {v}
+data key `{k}`: letters, digits, -, _ and . (not name or vc-…)
+data must be an object of key: value, not {v}
+data takes at most {MAX_DATA} keys at once
+dataset `{name}` already exists
+dataset `{to}` already exists
+date `{d}`: YYYY-MM-DD
+decoded data is too large
+define a variable first
+detect must be true or false
+direct-select anchor points of a path
+distance must be > 0
+dx and dy give the arrow's direction
+dx and dy must be numbers
+dxf fitTo must be [width, height], positive
+dxf must be an object of DXF import options
+dxf scale must be a positive number up to {_1}, not {s}
+dxf unit `{u}`: a unit such as mm, cm, in or pt
+dxf: {e}
+each format is an object {format, scale?, suffix?}
+each item needs an id
+each match needs `kind`
+each match needs a `name`
+each of `fonts` is {family, style?}; 1 to 1000 of them
+each of `items` is {kind, item}
+each of `items` is {{id, corners?}} with an object id, not {it}
+each row needs `from`
+each stop needs a position
+each subpath needs an anchors array
+editingData must be true or false
+editingData must be true, false or "always"
+edits overlap
+empty first subpath
+empty header in column {_1}
+empty second subpath
+empty subpath
+encoding `{_1}`: utf8 or utf16
+ends must be two of "first" and "last"
+expected {"objects"}
+export `{name}`: {e}
+exportText must be editable or appearance
+exportType must be movieClip or graphic, not `{s}`
+extend needs id
+features must be a list of tags
+fidelity must be 0..100
+files must be {name, dataBase64}
+finish editing the pattern first
+fit must be none|autoHeight|shrinkText, got {id}
+flattener: {e}
+flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)
+flipProfile must be along|across, got {o}
+folders `{f}`: none, rows, format, item or itemFormat
+folders deeper than {MAX_BATCH_DEPTH} levels
+font family `{family}` is not available
+font family `{tf}` is not available
+format `{f}`: pdf or postscript
+format `{f}`: text or json
+format is `{_1}`
+formats must be an array of rows, not {v}
+frequency must be between 1 and 300 lines per inch
+from and to must be finite
+from must be [x0, y0, x1, y1]
+give `char` or `text`
+give `colors`, or `color` and `rule`
+give `event`, such as onclick
+give `file`, the JavaScript file's path or URL
+give `fill` and/or `stroke`
+give `fonts`, or open a document
+give `id` (no text is being edited)
+give `matches`: [{kind, name, target}]
+give `name` (or edit a pattern)
+give `name` or `names`
+give `path` (a .wasm file) or `dataBase64` (the module)
+give `path`, `data` or `dataBase64`
+give `path`, `data`, `dataBase64` or `csv`
+give `script`, the JavaScript the event runs ("" removes the event)
+give a mode or r/g/b, c/m/y/k, gray or tint adjustments
+give a name, or select a stroke with a saved profile
+give a pattern image id from links.patternImages
+give a pattern name or select an object painted with a pattern
+give at least one of `name`, `kind`, `text`
+give at least one of clip, invert, disabled, linked
+give color, none, swatch or gradient
+give dataBase64
+give either at (a click) or area (a path drawn around the overlaps)
+give formats or a preset, not both
+give newName or delete
+give offset or by
+give one of assets, layers, selection or fullDocument
+give origin: [x, y], or reset: true
+give overprintFill, overprintStroke, showCenter, imageMap, url or note
+give path (a file) or folder
+give path, or name and dataBase64
+give paths or files
+give rows, rowHeight, columns or columnWidth
+give svg, or dataBase64 of an SVG or SVGZ file
+give text
+give the asset a name
+give the preset a `name`
+give the preset a name
+give the preset a name (1–64 characters)
+give the settings to change, e.g. {"formats"}]}
+give two or more style `names`
+give two or more swatches
+give {key, value} or {values}
+global must be true or false
+gradient must be "objects" or "mesh"
+grays must be "profile" or "black", not `{g}`
+gridColors must be a preset name or two colours
+gridSize must be small, medium or large
+handle must be 0..3
+hiddenObjects {v}: "layer" (the default), "omit" or "visible"
+highlight a layer to merge into
+highlight two or more rows in one layer or group
+highlight two or more rows to merge
+id must be a dimension id
+image has no bounds
+image {_1} is linked already
+imageMap `{m}`: none, client or server
+index out of range
+instances must be 1..1000
+instruction budget
+invalid `color`
+invalid anchor index {v}: expected a non-negative integer
+invalid anchor reference {v}: expected [subpath, anchor]
+invalid angle
+invalid brush: {e}
+invalid color
+invalid colour {c}
+invalid delta
+invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -
+invalid object id {value}: expected a non-negative integer
+invalid parameter name {k}
+invalid point
+invalid size
+invalid t
+invalid tolerance
+join two different paths
+joining different subpaths requires two open endpoints
+joining must leave at least two anchors
+justify must be auto|left|center|right|justifyAll
+kbps must be a positive number, not {kbps}
+kerning must be a number or "auto"
+keywords must be a list of words or a comma-separated string
+keywords must be at most {MAX_KEYWORD} characters, without control characters
+kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)
+kind must be corner or smooth
+kind must be graphic, fillColor, strokeColor, charStyle or paraStyle
+knockout must be "on", "off", "neutral" or a bool, not {v}
+layer `{name}` has no art to export
+layer must name a layer or sublayer
+layers can't be intertwined: select the objects in them
+layers go only at the top level or in layers, objects in layers and groups
+layers must be true or false
+layout must be gridByRow, gridByColumn, row or column
+leading must be a number or "auto"
+left/right must be non-negative widths
+length must be greater than zero
+level `{t}`: 2 or 3
+line {line}: `name` is longer than {MAX_NAME} characters
+line {line}: dataset `{name}` appears twice
+line {line}: more than {MAX_CSV_COLS} columns
+line {line}: unclosed quote
+line {line}: value for `{var}` must match its variable kind
+lineEndings `{other}`: lf or crlf
+loading profiles from disk isn't available in the browser
+manifest is not UTF-8
+manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)
+manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})
+manifest: {e}
+margin: a {m} pt margin leaves no imageable area on the paper
+matrix must be finite and invertible, depth finite
+matte: {e}
+member is for order front or back
+memory budget (the selection is too large to hand over)
+missing `at` [x, y]
+missing `attrs`
+missing `color` or `opacity`
+missing `colors`
+missing `commands`
+missing `effect` id
+missing `family`
+missing `find`
+missing `group`
+missing `id`
+missing `id`: give one, or select one type object
+missing `index` (a point index, or null to clear)
+missing `index` (a stop index, or null to clear)
+missing `index` (an item index or null)
+missing `item`
+missing `library`
+missing `library` (see graphicStyle.libraries)
+missing `library` (see swatch.library.list)
+missing `map` (rows [{from, to}] or {current})
+missing `matrix` [a,b,c,d,e,f]
+missing `mode`
+missing `path`
+missing `path` (a path object id)
+missing `rule`
+missing `source` id
+missing `start` (the byte offset of a character)
+missing `target` id
+missing `text`
+missing `to`
+missing `to` (an index)
+missing `type`
+missing `value`
+missing `{key}`
+missing `{k}`
+missing anchor
+missing anchors
+missing anchors [[subpath, anchor]…]
+missing array `{key}`
+missing artboard_index
+missing case
+missing color
+missing color (null clears it)
+missing commands
+missing destination folder
+missing first subpath
+missing from
+missing group
+missing id
+missing id or ids
+missing ids
+missing indexes
+missing integer `{key}`
+missing matrix [a,b,c,d,e,f]
+missing name
+missing op
+missing or invalid `color`
+missing or unknown `tool`
+missing page
+missing point
+missing point [x,y]
+missing point `{key}` ([x, y])
+missing points
+missing points [[x,y]…]
+missing segment
+missing stops
+missing subpaths
+missing target
+missing to
+missing x, y
+mode is set, add or toggle, not `{other}`
+mode must be "cmyk" or "rgb"
+mode must be area|onPath, got {o}
+mode must be independent, aligned or mirrored
+module is {_1} bytes (limit {_2})
+more than 10000 linked files: package dependencies in smaller parts
+more than 256 commands
+more than {MAX_BATCH_FILES} data sets
+more than {MAX_BATCH_FILES} files
+more than {MAX_CSV_ROWS} data rows
+more than {MAX_IMPORT} presets
+moved must be [[x,y]…]
+need `anchor` or `segment` + `t`
+need at least one anchor
+need at least one point
+need at least two points
+needs points
+nineSlice must be true or false
+nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1
+no PDF preset named `{n}`
+no active data set
+no appearance item {index}
+no artboard {_1}
+no artboard {artboard} (0-based; the document has {_1})
+no asset {id}
+no asset {id} (see assets.list)
+no assets to export
+no assets yet: collect art for export first (assets.add)
+no brush named `{n}`
+no character at byte {start}
+no colour
+no colour group `{group}`
+no colour group `{name}`
+no data sets
+no dataset named `{from}`
+no dataset named `{name}`
+no datasets
+no design named `{name}`
+no design named `{n}`
+no design named `{old}`
+no encoder for {_1} yet
+no export preset `{name}` (see document.exportPresets.list)
+no folder: pass `path` or set Preferences › Performance & Storage › Additional Plug-ins Folder
+no fonts to look for: they are all available
+no formats to export
+no graphic style `{n}` in `{_1}`
+no graphic style library `{key}` (see graphicStyle.libraries)
+no guide selected
+no guide selected (or give an index)
+no guide {i}
+no item at index {_1}
+no item at index {from}
+no layer
+no layer {id} (see layer.list)
+no layers to export
+no library `{key}`
+no library `{key}` under Other Libraries (see graphicStyle.libraries, category "loaded")
+no library `{key}` under Other Libraries (see swatch.library.list, category "loaded")
+no metafile format
+no object {_1}
+no objects
+no parent layer
+no pattern image with that id
+no perspective grid preset named `{b}` (see perspective.presets.list)
+no perspective grid preset named `{n}`
+no point selected (give `index`)
+no preset called `{from}` (see file.newPresets)
+no preset called `{name}` (see file.newPresets)
+no preset named `{n}`
+no print preset named `{b}` (see print.presets.list)
+no print preset named `{name}` (presets: {_1})
+no print preset named `{n}`
+no profile named `{name}`
+no readable files in the folder
+no recovery copy `{f}` (see file.recovery.list)
+no rows
+no saved PDF preset named `{name}`
+no saved export preset `{name}`
+no saved preset called `{name}`
+no saved preset named `{name}`
+no saved presets to export (name [Default] in `names` to export it)
+no saved presets to export (name built-in ones in `names`)
+no saved print preset named `{name}`
+no saved profile called {name}
+no saved selection `{name}`
+no saved theme called {name} (see colorTheme.list)
+no series {i}
+no slice {n} in the image (see slice.list)
+no source art
+no stop {i} (the gradient has {n})
+no style `{name}`
+no such assets (see assets.list)
+no such frame anchor, or the frame would reach past the canvas
+no such object id {value}
+no such objects
+no such rows
+no swatch `{keep}`
+no swatch `{n}`
+no swatch `{n}` (swatches and colour groups move separately)
+no swatch library `{key}` (see swatch.library.list)
+no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)
+no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)
+no swatch or colour group `{n}`
+no swatch or colour group `{n}` in `{_1}`
+no symbol named `{name}`
+no text objects selected
+no user library folder here (save with a path, or without one to get the data)
+no variable named `{from}`
+no variable named `{name}`
+no variable named `{var}`
+no variable named `{v}`
+no view named `{name}`
+node {_1} already has the text variable `{_2}`
+node {_1} is not a graph
+node {_1} is not an image
+node {_1} is not type
+not JSON: {e}
+not a PDF presets file (format `{_1}`)
+not a PDF presets file: {e}
+not a WebAssembly binary (missing \0asm header)
+not a closed path
+not a flattener presets file (format `{_1}`)
+not a flattener presets file: {e}
+not a gradient mesh or mesh envelope
+not a layer or group
+not a library file: {e}
+not a mesh envelope point
+not a perspective grid presets file (format `{_1}`)
+not a perspective grid presets file: {e}
+not a print presets file (format `{_1}`)
+not a print presets file: {e}
+not a valid SVGZ file: {e}
+not an RTF file: it doesn't start with not an RTF file: it doesn't start with {\rtf
+not an image VectorCraft reads (see document.formats)
+not area type (text in a frame) outside perspective
+not editing an opacity mask
+nothing prints
+nothing to bind
+nothing to change
+nothing to change: give dx, dy, hScale, vScale or rotation
+nothing to crop
+nothing to export: the document has no visible art
+nothing to mark
+nothing to print: every artboard picked is blank
+nothing to print: the document has no art that prints
+object is not a path
+object {_1} has lost its file's contents: relink it
+object {_1} has no size
+object {_1} is not a placed document
+object {_1} is not an Intertwine group
+object {_1} is not an image
+object {_1} is not an image or a linked file
+object {_1} is not an image or a placed document
+object {_1} is not in this Intertwine group
+object {id} has anchors 0–{_1} for `corners`, not {past}
+objects must be none, move or copy
+objects were left out
+offset out of range
+only groups, layers and type have a Contents (Characters) row
+only groups, layers, type and images have a Contents (Characters) row
+only interior mesh lines can be deleted
+only solid colours can be added (not gradients or patterns)
+only solid-colour swatches can be spot colours
+only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first
+only this Affinity file's embedded preview could be read; use File › Open to see it with its warning
+open a document to look for its linked files
+options must be an object (see file.formatOptions)
+order must be leftToRight or rightToLeft
+orientation must be portrait or landscape, not `{o}`
+outlineText {v}: true or false
+output intent profile: {e}
+output size ({what} is {len} bytes, limit {max})
+output.destination: no RGB or CMYK profile is called “{name}”
+output.destination: {_1} files are CMYK, and “{name}” is an RGB profile
+output.destination: {e}
+output.inks: no ink is set to print
+output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile
+output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)
+output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile
+output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent
+overlap: {o} pt is half a tile or more
+overlapping Shaper paths must be in the same layer or group
+overlapping edits
+page must be a whole number from 1
+page thumbnail: {e}
+page {page} of the PDF has no objects
+page {page}: `{file}` has {n} artboard(s)
+page {page}: `{name}` has {n} page(s)
+pages must be a range such as "2-3" or a page number, not {v}
+pages: {e}
+parallel line styles apply to shape strokes, not character strokes
+parameter `{k}`: bad range
+parameter `{k}`: choices must be 1-64 non-empty, printable strings
+parameter `{k}`: default is not one of the options
+params must be an object
+pass newName, registration and/or exportType
+pass newName, registration, exportType and/or nineSlice
+passwords can have up to {MAX_PASSWORD} bytes
+path has no open end
+paths must be strings
+pattern image pixels are missing
+pattern placement traversal limit exceeded
+pdfCompatible: false needs every artboard to keep the editable artwork
+pickColorFrom is "artwork" or "swatches", not {v}
+pins and moved must be non-empty lists of the same length
+pins must be [[x,y]…]
+pins must be finite
+place is above, below or inside, not `{other}`
+plane must be left|right|ground
+plane must be left|right|ground|none
+plug-in parameters must be a JSON object
+point is outside the mesh
+points must be [t, left, right] with non-negative widths
+points must be a non-empty [[x,y,pressure?]…] list
+points must be a non-empty list of finite [x,y]
+points must be an array or null
+points must be finite
+points must be finite [x,y] pairs
+points must contain 1–4096 coordinates
+position must be normal, superscript or subscript
+position must be topLeft, topRight, bottomLeft or bottomRight
+positions must be between 0 and 100000 pt
+ppi must be a positive number, not {ppi}
+ppi must be between 1 and 2400
+preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill
+preserveShape must be clippingMask|transparency
+preset `{id}`: mobile or density
+preset is required
+preset must be double|triple|road|none
+preset must be the name of a print preset
+previewMode must be default, pixel or overprint
+print settings: {e}
+procedures nest too deeply
+procedures nested too deeply
+quotes must be {double?, single?}
+quotes.{k} must be an opening and a closing quote, e.g. "“”"
+rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)
+rating must be a whole number from 0 to {MAX_RATING}
+rect and {k} contradict each other: give the area or the artboards
+rect applies to raster formats, not {_1}
+rect is [x, y, width, height] in points
+rect must be [x, y, width, height]
+rect must be [x, y, width, height] with a positive width and height
+rect needs finite numbers and a positive width and height
+registration must be 0..8
+release a layer or a group
+replace keeps the replaced object's place and transform: drop template, at and rect
+replace: select the one object to replace
+replacement must be a PNG
+resolution must be a number or screen|medium|high
+resolution must be between 1 and 2400 ppi
+rotation must be a number of degrees
+rotation must be finite
+rows and cols must be 1..50
+rows and columns must be 1..500
+save the document first: Package collects a saved document
+save the document first: copy puts the file in its folder
+scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)
+scale must be a number above 0, at most 64
+scale must be non-zero
+scope must be selection or all (got {other})
+scribble is too long
+segment does not exist
+select a Shaper group
+select a graph
+select a group or layer with visible, unlocked members
+select a layer
+select a path or compound path
+select a text object
+select an image (or an Image Trace group)
+select an image, or pass id
+select an object (or pass `id`)
+select an object with a freeform gradient
+select an object with an opacity mask
+select area type
+select area type (text in a frame)
+select area type and closed paths (at least one area type object)
+select artwork to add its colours
+select artwork to make a group of its colours
+select artwork to recolour, or give a colour `group`
+select objects or give ids
+select one Intertwine group
+select one image or pass id
+select paths
+select paths or compound paths
+select rows or objects to collect
+select something to export
+select something to export (or turn off selectedOnly)
+select text to redefine the style from
+select the art and, on top of it, the mask object
+select the art for the design
+select the art for the pattern tile
+select the art to add first
+select the art to collect (or give its ids)
+select the content and a path on top
+select the images to relink, or pass ids
+select the images, or pass ids
+select the linked images or placed documents, or pass ids
+select the object to copy from
+select the objects (or give their ids)
+select the objects to bind
+select two or more objects to intertwine
+select two or more slices to combine
+select type on a path
+selected anchor no longer exists
+selected object is not a path
+selection `{m}`: one or each
+selection has no length to scale
+settings is an object of document.exportForScreens params
+settings must be an object
+show `{show}`: all, missing, modified or embedded
+show must be true or false
+size must be "small", "medium", "large" or a number of points over 0 up to {_1}
+size must be positive
+smallCaps must be true or false
+smooth must be true or false
+sort `{x}`: name, kind or status
+source paths are too large for Shaper
+spot, mode and group apply to solid colours only
+steps must be 1..1000
+steps must be 1..{MAX_STEPS}
+stop editing the opacity mask first
+strokeMode must be within|along|across, got {m}
+strokeOptions must be an object of stroke.set options
+strokeWidth must be a positive number of pixels
+subLines contains an invalid lane
+subLines is missing
+subLines must be a list or null
+subLines must contain at most {MAX_SUB_LINES} valid lanes
+swatchConflict must be "merge" or "add", not {v}
+text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+text transform is collapsed or unrepresentable
+text.replaceSpaces must be a whole number from 2 to 100
+text.{key} `{v}`: use "{_1}" or "{_2}"
+textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it
+textureImage: {e}
+that makes more than {MAX_PIECES} slices
+that object is not in the overlap
+the Affinity document has no page with a size
+the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)
+the RTF file is too large to place as type (at most {_1} MB)
+the SVG has no drawable objects
+the SVGZ file unpacks to more than {_1} MB
+the active paint is not a gradient
+the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size
+the character's size can't be measured
+the compound path has no path to put type on
+the container of the listed objects is gone
+the copy `{user_id}` can't be read as a library
+the copy would leave the canvas
+the data isn't an EMF or WMF picture
+the data isn't an EPS or PostScript picture
+the design is too big to draw at every data point of this graph
+the design is too big to draw in every column of this graph
+the dictionary stack overflowed
+the editing data's hash has no place
+the envelope's content has no bounds
+the envelope's mesh is malformed
+the file is larger than {_1} MB
+the file is too large
+the file was updated or encrypted already
+the first character of a line has no character before it to kern: it moves only up and down (dy)
+the graphic can't be read: {e}
+the graphic is empty
+the graphic's data is damaged
+the graphic's document has no artboard
+the image has no embedded pixels
+the image is empty
+the image is fully transparent
+the image is not on an artboard; pass rect
+the image's pixels are missing
+the image's pixels aren't in the document
+the image's pixels can't be read
+the image's pixels can't be read: {e}
+the job would print more than {MAX_PAGES} pages
+the joined anchor has no distinct neighbors to define a smooth direction
+the layout moved
+the library has a group `{name}` already
+the library has no group `{name}`
+the library has no item `{item}`
+the library holds {MAX_GROUPS} groups already
+the library holds {MAX_ITEMS} items of this kind already
+the module imports `{_1}.{_2}`, but plug-ins get no host imports (no WASI, files or network)
+the module must export its linear memory as `memory`
+the name is empty
+the object has no fill, stroke or effect
+the object has no graphic style (pass `name`)
+the object is hidden or locked
+the object is outside the isolated group
+the objects don't match the plan
+the objects to change are no longer in the document
+the open and permissions passwords must differ
+the operand stack overflowed
+the page has no area
+the paint behind the proxy is not a gradient
+the parent must be a layer or sublayer
+the path is empty
+the picture has no objects
+the program runs too long
+the program uses too much memory
+the rectangle must have a width and a height
+the rectangle needs a size and must lie on the canvas
+the runtime panicked
+the selected art has no width
+the selection draws nothing
+the selection has no area
+the selection has no art to export
+the selection has no bounds
+the selection has no graphic style
+the slice would leave the canvas
+the text file is too large to place as type (at most {_1} MB)
+the text is empty
+the text is over {_1} MB
+the top object must be a path
+the trailer has no size
+the type object is flattened to nothing
+the written PDF has no catalog
+the written PDF has no cross-reference table
+the written PDF's metadata can't be edited
+there is already a design named `{name}`
+there is already a design named `{to}`
+there is no library: create one first
+these paths are too degenerate for Shaper
+thumbnail: no page {n} (the PDF has {_1})
+tileRange of {what}: {e}
+time budget
+title can't be empty
+to must be fill or stroke
+to must be smooth or corner
+too large for a zip archive: package to a folder
+too many Shaper edits
+too many dots for this size: lower the frequency
+too many overlapping paths for Shaper
+too many saved clips
+too many saved graphics states
+transparentImages {v}: "flatten" (the default) or "omit"
+two saved selections would be named `{_1}`
+type dimension cannot be represented with this text transform
+type dimension must be finite
+type objects can't be isolated
+unexpected host trap
+unexpected resources
+unknown CMYK profile `{name}`
+unknown File Info field `{k}`
+unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs; prefix - to turn off)
+unknown PDF preset `{name}` (presets: {_1})
+unknown Warp style
+unknown align `{other}`
+unknown alignToPath `{a}`
+unknown arrowhead {v}
+unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)
+unknown attribute `{k}`
+unknown axis `{other}` (vertical|horizontal|free)
+unknown blend mode `{b}`
+unknown blend mode {b}
+unknown brush type `{o}`
+unknown category `{c}`
+unknown category `{c}` ({_1})
+unknown character `{c}`
+unknown effect `{e}`
+unknown end {e}
+unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)
+unknown format `{f}` (vcswatches, gpl, ase or css)
+unknown from {f}
+unknown graph type `{t}`
+unknown grid colours `{name}` (one of {_1})
+unknown gridType `{t}`
+unknown highlight `{v}`
+unknown intent `{i}`
+unknown knockout state {k}
+unknown language `{l}` (one of {_1})
+unknown method `{m}` ({_1})
+unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)
+unknown mode `{other}` (mono|cmyk)
+unknown mode `{other}` (rgb|cmyk|gray|global)
+unknown mode `{other}` (set, add, subtract)
+unknown mode `{o}`
+unknown mode {m}
+unknown mode {other}
+unknown model `{other}`
+unknown model `{other}` (keep, new or document)
+unknown op {o}
+unknown order `{o}`: toggle, front or back
+unknown overprints `{v}` (preserve, simulate or discard)
+unknown pieLegend `{v}` (none, standard or wedges)
+unknown piePosition `{v}` (even, ratio or stacked)
+unknown pieSort `{v}` (none, all or first)
+unknown plate `{n}`
+unknown preference `{k}`
+unknown preset `{name}` (see imageTrace.presets)
+unknown profile {id} (see stroke.widthProfile.list)
+unknown proof target `{t}`
+unknown quotes key `{k}` (double, single)
+unknown resolution `{v}`
+unknown rule `{rule}` ({_1})
+unknown rule `{r}` (see color.harmony)
+unknown setting `{k}`
+unknown shape `{v}` (circle|ellipse|square|diamond|line)
+unknown spacing `{o}` (smooth|steps|distance)
+unknown tileType `{t}` ({_1})
+unknown units
+unknown units `{u}`
+unknown value axis `{v}` (left, right or both)
+unknown variation `{v}` (tintsShades|warmCool|vividMuted)
+unknown warp style `{s}`
+unknown {key} `{v}` (none, short or full)
+unknown {key} profile `{n}`
+unknown {k} key `{key}` (size, position)
+unreadable object
+unsupported stored image format
+use .{ext} to export the stored samples without conversion
+use paths or compound paths
+useArtboards must be true or false, not {v}
+value for `{var}` is longer than {MAX_GRAPH_CSV} bytes
+value for `{var}` must be true or false
+value for `{var}` must match its variable kind
+variable `{name}` is already defined
+variable `{to}` already exists
+vc_abi_version returned {v}; this host implements version {ABI_VERSION}
+vc_alloc returned 0 (out of memory)
+vc_alloc returned a block outside memory
+vc_run returned error code {packed}
+view is required
+view must be one of {_1}
+warpStyle can only edit an applied Warp effect
+width factors must be finite
+width must be positive
+width out of range
+width/height must be > 0
+width/height must be positive and within the canvas
+x and y must be finite numbers
+x and y must be given together
+zoom must be positive
+{DEFAULT_PRESET} is protected and stays
+{DEFAULT_PRESET} is protected: save the settings under another name
+{_1} MB of document, at most {_2} MB
+{_1} MB of images, at most {_2} MB
+{_1} can't be read, or changed since it was read: relink or update it first
+{_1} can't go into {into}
+{_1} files can't be opened yet
+{_1} files can't be password-protected: remove the passwords or choose no standard
+{_1} files can't be {_2}
+{_1} files can't carry editing data: turn off preserveEditing
+{_1} files can't have PDF layers: turn off createLayers
+{_1} files need a creation date, and this platform has no clock to give one
+{_1} is not a file
+{_1} is {_2} bytes (limit {_3})
+{_1} isn't a path
+{_1} objects (limit {MAX_OBJECTS})
+{_1} options: {e}
+{_1} paints nothing to rasterize
+{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)
+{_1} with linked images or an image map writes several files: use document.export
+{_1} writes one file per artboard here: use document.export, or name one artboard
+{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale
+{at}: {msg}
+{doc} has no folder
+{file} isn't linked
+{folder}: {e}
+{g} is not a Live Paint group
+{id} is not a slice
+{key} must be 0–{MAX_ADD_AROUND} pt
+{key} must be Unix seconds (an integer) or null
+{key} must be [x,y]
+{key} must be a positive number, not {v}
+{key} must be an array of non-negative integer object ids
+{key} must be one of {_1}
+{key} must be {_1}, got {s}
+{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)
+{kind} images can't be opened (see document.formats)
+{k} `{v}` is not one of the choices
+{k} has control characters{_1}
+{k} is too long (at most {MAX_TEXT} characters)
+{k} must be > 0
+{k} must be a number (pt) or a length such as "210 mm"
+{k} must be a number from {min} to {max}
+{k} must be a number or "auto"
+{k} must be a string
+{k} must be text
+{k} must be true or false
+{k} must be {{size?, position?}}
+{k}: can't read `{s}` as a length
+{name} `{s}`: {ids}
+{name} is built in and can't be deleted
+{name} must be {lo}–{hi}{unit} (got {v})
+{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing
+{name}: {e}
+{native}; its embedded preview can't be read either ({e})
+{std} files are CMYK, and the file would have colours in {_1}
+{std} files embed their fonts, and the file would have one that isn't
+{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway
+{ty} brushes need selected art (or params.{k})
+{v} is not an asset id
+{what} can't be intertwined
+{what} doesn't fit the paper with its bleed and marks
+{what} points outside memory
+{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up
+{what} would print on more than {MAX_TILES} tiles: scale it down

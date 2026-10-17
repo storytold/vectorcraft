@@ -235,9 +235,14 @@ other `sv-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
   placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Greek, Spanish, French, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Swedish, Ukrainian, Vietnamese and Finnish cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
-  `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs a row in each of those catalogs (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
-  complete_languages_translate_every_message` lists them all). Other languages show messages in English
-  until they add `@msg` rows.
+  `COMPLETE_MESSAGES`), except the messages listed in `crates/ui-egui/src/i18n/untranslated_messages.txt`.
+  A new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs a row in each of those catalogs, and so
+  does a new message given to an error enum's variant (`PsError::Limit(…)`), to the engine's `bad(cmd, …)`, `err(…)` or
+  `error(…)`, or to the PDF writer's `bad(…)` or `failed(…)` (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  complete_languages_translate_every_message` lists them all). The list also holds the messages that open pull
+  requests add without those rows. A change that adds the rows for a listed message removes its line from the list
+  (`VECTORCRAFT_I18N_DUMP_UNTRANSLATED=<file>` writes the messages in the sources that lack a row). Other languages
+  show messages in English until they add `@msg` rows.
 - Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab
   title's colour mode, command ids and parameter names inside messages. Not done yet: locale-aware number
   and date formats, right-to-left layout. Chinese and Japanese UI text
