@@ -292,9 +292,9 @@ pub struct CanvasCache {
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     pub last_ms: f64,
-    /// The frame shown drew raster effects from rasters made before their objects moved
-    /// ([`vectorcraft_render::FrameStats::moved`]): the next frame outside an interaction runs
-    /// them again, on the worker when there is one.
+    /// The frame shown drew raster effects from rasters made before their objects moved, or at a
+    /// drag's lower resolution ([`vectorcraft_render::FrameStats::moved`]): the next frame outside
+    /// an interaction runs them again, on the worker when there is one.
     pub moved: bool,
     pub worker: Option<render_worker::Worker>,
     pub worker_started: bool,
@@ -327,6 +327,8 @@ pub struct CacheKey {
     pub revision: u64,
     /// An interaction is in progress ([`vectorcraft_render::RenderOptions::interacting`]).
     pub interacting: bool,
+    /// A tool's drag on the canvas is in progress ([`vectorcraft_render::RenderOptions::dragging`]).
+    pub dragging: bool,
     pub zoom: f64,
     pub cx: f64,
     pub cy: f64,

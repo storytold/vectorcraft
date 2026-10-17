@@ -315,6 +315,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         isolated: st.isolation.map(|id| id.0),
         // Appearance of Black › On Screen: Display All Blacks as Rich Black.
         rich_black: app.session.prefs.black_on_screen == "rich",
+        // A tool's drag on the canvas, during an interaction (not a dialog's preview).
+        dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
     };
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
@@ -376,6 +378,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // During a drag or a dialog's preview, objects that only moved draw their raster
             // effects from the cached rasters of an earlier frame (#1257).
             interacting: key.interacting,
+            // During a tool's drag, raster effects without a cached raster to draw render at a
+            // lower resolution (#2558); the frame after the drag renders them as a still frame does.
+            dragging: key.dragging,
             rich_black: key.rich_black,
             ..opts
         };
@@ -4381,6 +4386,64 @@ mod tests {
         app.canvas.renderer = vectorcraft_render::Renderer::new();
         app.canvas.key = None;
         assert!(upload(&mut app) == Some(after), "the frame after the drag is what a fresh renderer draws");
+    }
+
+    /// A tool's drag on the canvas renders with `dragging` (#2558). At 3200% a rectangle with
+    /// Texturizer covers more than the raster budget, so no raster is kept for it, and each frame
+    /// of a Selection tool drag draws its filtered content at the drag's lower resolution. The
+    /// frame after the drag draws what a fresh renderer draws. A dialog's preview, an interaction
+    /// without a drag, renders without `dragging` and draws the same.
+    #[test]
+    fn a_drag_on_the_canvas_draws_raster_effects_at_a_lower_resolution() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 80, "width": 200, "height": 150})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"effect": "texture.texturizer", "ids": [id]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        // One headless frame on a 1920 × 1200 window (a view larger than the drag's budget) with
+        // `events` → the art's raster it uploaded, None when it was not re-rendered.
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| -> Option<Vec<Color32>> {
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1920.0, 1200.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            let art = app.canvas.texture.as_ref().map(|t| t.id());
+            let px = out.textures_delta.set.iter().find(|e| Some(*e.0) == art).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                img.pixels.clone()
+            });
+            out.textures_delta.clear();
+            px
+        };
+        run(&mut app, vec![]);
+        if let Some(vm) = app.view_mut() {
+            (vm.zoom, vm.center) = (32.0, Point::new(200.0, 155.0));
+        }
+        let still = run(&mut app, vec![]).expect("the zoomed view renders");
+        assert_eq!(app.canvas.renderer.stats.previewed, 0, "a still frame");
+        let at = app.canvas_rect.unwrap().center();
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(at, true)]);
+        for step in [1.0, 2.0] {
+            let drawn = run(&mut app, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]).expect("each frame of the drag renders");
+            assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && k.dragging), "step {step}");
+            assert_eq!(app.canvas.renderer.stats.previewed, 1, "the filtered content, step {step}");
+            assert!(app.canvas.moved);
+            assert!(drawn != still, "the rectangle moved, step {step}");
+        }
+        let after = run(&mut app, vec![button(at + vec2(26.0, 14.0), false)]).expect("the frame after the drag renders");
+        assert!(app.canvas.key.as_ref().is_some_and(|k| !k.interacting && !k.dragging));
+        assert_eq!(app.canvas.renderer.stats.previewed, 0, "the frame after the drag");
+        assert!(!app.canvas.moved);
+        app.canvas.renderer = vectorcraft_render::Renderer::new();
+        app.canvas.key = None;
+        assert!(run(&mut app, vec![]) == Some(after.clone()), "the frame after the drag is what a fresh renderer draws");
+        // A dialog's preview: an interaction, and no drag.
+        app.session.begin_interaction("Texturizer").unwrap();
+        assert!(run(&mut app, vec![]) == Some(after), "a dialog's preview draws the effect at full resolution");
+        assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && !k.dragging));
+        assert_eq!(app.canvas.renderer.stats.previewed, 0);
     }
 
     /// The frame after an interaction renders without `interacting` also when the interaction

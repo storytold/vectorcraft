@@ -173,6 +173,12 @@ pub struct RenderOptions {
     /// running the effects again (see `fx`). Off, no raster made that way, or made over one, is
     /// drawn: the effects run again.
     pub interacting: bool,
+    /// Screen views during a tool's drag on the canvas: the renderer draws filtered content within
+    /// `fx::DRAG_PIXEL_BUDGET` pixels, at a lower resolution where it would need more, unless it
+    /// can draw the content from a raster kept from an earlier frame. With [`Renderer::threads`]
+    /// above 0 it does the same for drop shadows, outer glows and inner glows. No raster made that
+    /// way is kept (see `fx`). Off, they render as in a still frame.
+    pub dragging: bool,
     /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
     /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
     pub rich_black: bool,
@@ -254,6 +260,7 @@ impl Default for RenderOptions {
             supersample: false,
             image_mips: false,
             interacting: false,
+            dragging: false,
             rich_black: false,
         }
     }
@@ -545,8 +552,12 @@ pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
     /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
-    /// their object moved, or made over such rasters ([`RenderOptions::interacting`]).
+    /// their object moved, or made over such rasters ([`RenderOptions::interacting`]), and those it
+    /// drew at a drag's lower resolution ([`Self::previewed`]).
     pub moved: usize,
+    /// The filtered contents, shadows and glows the frame drew at a drag's lower resolution
+    /// ([`RenderOptions::dragging`]). [`Self::moved`] counts them too.
+    pub previewed: usize,
     /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
     /// transparency; 0 for other frames.
     pub ink_threads: usize,

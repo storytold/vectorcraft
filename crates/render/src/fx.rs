@@ -28,6 +28,11 @@
 //! cached shadows, glows and filtered content at its new place instead of running the effects
 //! again ([`Renderer::move_shadow`], [`Renderer::move_pixel_content`]).
 //!
+//! While [`crate::RenderOptions::dragging`] is set, the renderer draws filtered content that runs
+//! its effects within [`DRAG_PIXEL_BUDGET`] pixels, at a lower resolution where it would need more,
+//! and keeps no raster made that way. On the multithreaded pipeline it does the same for shadows
+//! and glows. The frame after the drag renders them as a still frame does.
+//!
 //! A cached raster is made again when something its content reads from outside the object
 //! changes ([`Inputs`]): the pattern definitions, symbols, images and brushes it uses, the
 //! document's raster resolution, color mode and substitution highlights, the knockout its object
@@ -641,6 +646,19 @@ fn linear_key(view: Affine) -> [u64; 4] {
     [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()]
 }
 
+/// Most pixels a raster of [`Renderer::pixel_content`] or [`Renderer::with_filters`] holds while
+/// [`crate::RenderOptions::dragging`] (a 1000 × 1000 raster's), when the frame does not draw a raster
+/// kept from an earlier frame instead (#2558).
+const DRAG_PIXEL_BUDGET: f64 = 1.0e6;
+
+/// The scale (raster pixels a device pixel) for content of `rw` × `rh` device pixels that would
+/// render at scale `k`, when a drag lowers it to stay within [`DRAG_PIXEL_BUDGET`]; `None` when it
+/// does not (`dragging` off, or content within the budget at `k`).
+fn drag_scale(dragging: bool, (rw, rh): (f64, f64), k: f64) -> Option<f64> {
+    let d = (DRAG_PIXEL_BUDGET / (rw * rh)).sqrt();
+    (dragging && d < k).then_some(d)
+}
+
 /// The raster a shadow or glow blurred by `blur` device pixels is filtered in, for content
 /// reaching `reach` (device pixels) in a view of `screen` pixels: (left, top, width, height,
 /// scale). It covers what of the reach can show in the view, the blur's spread around it
@@ -648,6 +666,11 @@ fn linear_key(view: Affine) -> [u64; 4] {
 /// [`PIXEL_BUDGET`]. At a high zoom the spread of a wide blur is tens of thousands of pixels a
 /// side, whatever the size of the view (#1706). `None`: nothing to draw.
 fn filter_region(reach: Rect, screen: (u16, u16), blur: f64) -> Option<(f64, f64, u16, u16, f64)> {
+    filter_region_within(reach, screen, blur, PIXEL_BUDGET)
+}
+
+/// The region [`filter_region`] returns, within `budget` pixels instead of [`PIXEL_BUDGET`].
+fn filter_region_within(reach: Rect, screen: (u16, u16), blur: f64, budget: f64) -> Option<(f64, f64, u16, u16, f64)> {
     // 3σ of the Gaussian (σ = blur / 2) in pixels, plus a pixel of antialiasing.
     let spread = blur.max(0.0) * 1.5 + 2.0;
     let screen = Rect::new(0.0, 0.0, f64::from(screen.0), f64::from(screen.1)).inflate(spread, spread);
@@ -659,7 +682,7 @@ fn filter_region(reach: Rect, screen: (u16, u16), blur: f64) -> Option<(f64, f64
         return None;
     }
     let side = f64::from(u16::MAX);
-    let k = (PIXEL_BUDGET / (rw * rh)).sqrt().min(side / rw).min(side / rh).min(1.0);
+    let k = (budget / (rw * rh)).sqrt().min(side / rw).min(side / rh).min(1.0);
     let (w, h) = ((rw * k).floor().clamp(1.0, side), (rh * k).floor().clamp(1.0, side));
     Some((x0, y0, w as u16, h as u16, k))
 }
@@ -977,6 +1000,8 @@ impl Renderer {
     /// (pans only move it), and while interacting after the object only moved
     /// ([`Self::move_shadow`]). Returns false when the effect isn't a shadow/glow or the raster
     /// would be too large (caller falls back).
+    /// While dragging on a multithreaded context, a raster that has to be made again counts as too
+    /// large when it would hold more than [`DRAG_PIXEL_BUDGET`] pixels.
     #[allow(clippy::too_many_arguments)]
     fn draw_shadow_cached(
         &mut self,
@@ -1020,6 +1045,11 @@ impl Renderer {
                 let (x0, y0) = (r.x0.floor(), r.y0.floor());
                 let (w, h) = (r.x1.ceil() - x0, r.y1.ceil() - y0);
                 if !(1.0..=8192.0).contains(&w) || !(1.0..=8192.0).contains(&h) || w * h > 4.0e6 {
+                    return false;
+                }
+                // During a drag, a larger shadow on a multithreaded context is filtered within the
+                // drag's budget (`with_filters`), and no raster is kept.
+                if f.opts.dragging && f.mt && w * h > DRAG_PIXEL_BUDGET {
                     return false;
                 }
                 let (w, h) = (w as u16, h as u16);
@@ -1544,6 +1574,8 @@ impl Renderer {
     /// resolution. A whole raster at full resolution is cached while the object, the
     /// zoom and what the content reads ([`Inputs`]) stay the same (panning only moves it), and
     /// while interacting after the content only moved ([`Self::move_pixel_content`]).
+    /// While dragging, content without such a raster to draw renders within [`DRAG_PIXEL_BUDGET`]
+    /// pixels and is not cached.
     fn pixel_content(
         &mut self,
         ctx: &mut RenderContext,
@@ -1628,6 +1660,16 @@ impl Renderer {
             draw_scaled(ctx, image, at, k);
             return;
         }
+        // During a drag, content without a raster to draw renders within the drag's budget and keeps
+        // no raster (#2558).
+        let (k, w, h, key) = match drag_scale(f.opts.dragging, (rw, rh), k) {
+            Some(d) => {
+                self.stats.moved += 1;
+                self.stats.previewed += 1;
+                (d, (rw * d).ceil().clamp(1.0, side), (rh * d).ceil().clamp(1.0, side), None)
+            }
+            None => (k, w, h, key),
+        };
         let (wu, hu) = (w as u16, h as u16);
         let view = Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view;
         let to_doc = view.inverse();
@@ -1966,6 +2008,7 @@ impl Renderer {
     /// applies `composite` (blend mode, opacity) on its filter layer. On a multithreaded context
     /// the layer is drawn into an offscreen single-threaded context covering `reach` (document
     /// space) plus the blur's spread, then composited back with `composite`.
+    /// While dragging, that context holds at most [`DRAG_PIXEL_BUDGET`] pixels.
     fn with_filters(
         &mut self,
         ctx: &mut RenderContext,
@@ -1979,6 +2022,16 @@ impl Renderer {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
         let Some((x0, y0, w, h, k)) = filter_region(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px) else { return };
+        // During a drag, the region holds at most `DRAG_PIXEL_BUDGET` pixels (#2558).
+        let drag = || filter_region_within(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px, DRAG_PIXEL_BUDGET);
+        let (x0, y0, w, h, k) = match f.opts.dragging.then(drag).flatten().filter(|r| r.4 < k) {
+            Some(r) => {
+                self.stats.moved += 1;
+                self.stats.previewed += 1;
+                r
+            }
+            None => (x0, y0, w, h, k),
+        };
         let mut off = f.offscreen_context(w, h);
         let shifted = Frame { mt: false, view: Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view, px: f.px / k, ..*f };
         self.inside_layer(|r| draw(r, &mut off, &shifted, None));
@@ -2100,7 +2153,7 @@ mod tests {
     use vectorcraft_doc::{Appearance, Document, Effect, Node};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
-    use super::{Drawn, PIXEL_BUDGET, filter_region};
+    use super::{DRAG_PIXEL_BUDGET, Drawn, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within};
     use crate::tests_fontchange::fonts_steady;
     use crate::{RenderOptions, Rendered, Renderer};
 
@@ -2121,6 +2174,28 @@ mod tests {
         assert_eq!(filter_region(Rect::new(10.0, 20.0, 110.0, 70.0), (1600, 1000), 4.0), Some((2.0, 12.0, 116, 66, 1.0)));
         assert_eq!(filter_region(Rect::new(5000.0, 0.0, 5100.0, 100.0), (1600, 1000), 4.0), None, "off the view");
         assert_eq!(filter_region(Rect::new(0.0, 0.0, 100.0, 100.0), (1600, 1000), f64::NAN).map(|r| r.4), Some(1.0));
+    }
+
+    /// #2558: while dragging, content and a shadow's region over the drag's budget at their scale
+    /// render at a lower scale, within the budget; otherwise their scale stays as it is.
+    #[test]
+    fn a_drag_lowers_the_scale_of_rasters_over_its_budget() {
+        let d = drag_scale(true, (2560.0, 1440.0), 1.0).unwrap();
+        assert!(d < 1.0 && (2560.0 * d) * (1440.0 * d) <= DRAG_PIXEL_BUDGET * (1.0 + 1e-9), "{d}");
+        assert_eq!(drag_scale(false, (2560.0, 1440.0), 1.0), None, "not dragging");
+        assert_eq!(drag_scale(true, (1000.0, 800.0), 1.0), None, "within the budget");
+        // At a scale already lowered to 0.5, 1280 × 720 raster pixels: within the budget.
+        assert_eq!(drag_scale(true, (2560.0, 1440.0), 0.5), None);
+        // A 2000 × 1500 pixel square blurred by 20 pixels in a 1600 × 1000 view.
+        let reach = Rect::new(-200.0, -200.0, 1800.0, 1300.0);
+        let (x0, y0, w, h, k) = filter_region_within(reach, (1600, 1000), 20.0, DRAG_PIXEL_BUDGET).unwrap();
+        assert!(f64::from(w) * f64::from(h) <= DRAG_PIXEL_BUDGET && k < 1.0, "{w} × {h} at {k}");
+        // It covers the same pixels as the full-size region, at that scale.
+        let full = filter_region(reach, (1600, 1000), 20.0).unwrap();
+        assert_eq!((x0, y0, full.4), (full.0, full.1, 1.0));
+        assert!((f64::from(w) / k - f64::from(full.2)).abs() <= 1.0 / k && (f64::from(h) / k - f64::from(full.3)).abs() <= 1.0 / k);
+        let small = Rect::new(10.0, 20.0, 110.0, 70.0);
+        assert_eq!(filter_region_within(small, (1600, 1000), 4.0, DRAG_PIXEL_BUDGET), filter_region(small, (1600, 1000), 4.0));
     }
 
     fn doc_with(r: Rect, fill: Color, effects: Vec<(&str, serde_json::Value)>) -> Document {
@@ -2566,6 +2641,56 @@ mod tests {
         assert!(after != last, "6.3 is not on a whole pixel");
     }
 
+    /// While dragging (#2558), filtered content and a drop shadow that the frame does not draw from a
+    /// raster of an earlier frame render within the drag's budget and keep no raster. At 6400% a
+    /// rectangle with Drop Shadow and Texturizer covers more than the raster budget, so no raster is
+    /// kept for either, and a 1600 × 1000 view near its corner needs more than the drag's budget. The
+    /// frame after the drag, of the same document, is what a fresh renderer draws, as is a frame
+    /// rendered while interacting without a drag (a dialog's preview).
+    #[test]
+    fn a_drag_renders_raster_effects_within_the_drag_budget() {
+        let effects = vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 7, "opacity": 80})), ("texture.texturizer", json!({}))];
+        let base = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::rgb(0.9, 0.4, 0.1), effects);
+        let id = base.layers[0].children().unwrap()[0].id;
+        let mut d = base.clone();
+        d.node_mut(id).unwrap().transform(Affine::translate((0.3, 0.2)), false);
+        // The view is centered 10 pt inside the rectangle's right and bottom edges, and shows the
+        // shadow beyond the right edge.
+        let view = Affine::translate((800.0, 500.0)) * Affine::scale(64.0) * Affine::translate((-70.0, -66.0));
+        let still = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let live = RenderOptions { interacting: true, ..still.clone() };
+        let drag = RenderOptions { dragging: true, ..live.clone() };
+        let fresh = Renderer::new().render(&d, 1600, 1000, view, &still).pixels;
+        let mut r = Renderer::new();
+        let _ = r.render(&base, 1600, 1000, view, &still);
+        assert_eq!(r.stats.previewed, 0);
+        let dragged = r.render(&d, 1600, 1000, view, &drag).pixels;
+        assert_eq!(r.stats.previewed, 2, "the shadow and the filtered content");
+        assert_eq!(r.stats.moved, 2, "counted as moved: the frame after the drag renders them again");
+        assert!(r.pixel_fx.is_empty() && r.shadows.is_empty(), "no raster kept");
+        assert!(dragged != fresh, "at the drag's lower resolution");
+        let after = r.render(&d, 1600, 1000, view, &still).pixels;
+        assert_eq!((r.stats.previewed, r.stats.moved), (0, 0));
+        assert!(after == fresh, "the frame after the drag");
+        assert!(r.render(&d, 1600, 1000, view, &live).pixels == fresh, "interacting without a drag");
+        assert_eq!(r.stats.previewed, 0);
+        // A drop shadow of about 2 million pixels at 4000%, within the shadow cache's limit: scaled
+        // by a drag, it can't take its raster along, and renders within the drag's budget.
+        let shadowed = doc_with(Rect::new(20.0, 20.0, 50.0, 46.0), Color::rgb(0.9, 0.4, 0.1), vec![("stylize.dropShadow", json!({"blur": 2}))]);
+        let mut scaled = shadowed.clone();
+        let id = scaled.layers[0].children().unwrap()[0].id;
+        scaled.node_mut(id).unwrap().transform(Affine::scale_about(1.05, vectorcraft_geom::Point::new(35.0, 33.0)), false);
+        let view = Affine::translate((800.0, 500.0)) * Affine::scale(40.0) * Affine::translate((-35.0, -33.0));
+        let mut r = Renderer::new();
+        let _ = r.render(&shadowed, 1600, 1000, view, &still);
+        let kept = r.shadows.len();
+        assert_eq!((kept, r.stats.previewed), (1, 0), "a still frame keeps the shadow's raster");
+        let _ = r.render(&scaled, 1600, 1000, view, &drag);
+        assert_eq!((r.shadows.len(), r.stats.previewed), (kept, 1), "the scaled shadow");
+        let after = r.render(&scaled, 1600, 1000, view, &still).pixels;
+        assert!(after == Renderer::new().render(&scaled, 1600, 1000, view, &still).pixels, "the frame after the drag");
+    }
+
     /// While interacting, a group holding a symbol instance whose art lies outside the 20 × 20
     /// square around the origin draws its drop shadow from the raster of an earlier frame. The
     /// shadow is made from the instance's art, which the renderer measures the group's content by.
@@ -2782,6 +2907,67 @@ mod tests {
                 "{effect}: moved CMYK rounded rectangle at 190.07%, DPI 1.5, 1800x1500: median {:.2} ms; samples {ms:?}; the frame after the drag {after:.2} ms, that frame again {again:.2} ms",
                 (ms[3] + ms[4]) * 0.5
             );
+        }
+    }
+
+    /// Reproduce #2558's drag of a textured or blurred rectangle when zoomed in, in a 2560 × 1440
+    /// view centered on the rectangle: the first frame renders as before a drag, and the next eight
+    /// render as a drag's frames, once with `interacting` alone and once with `dragging` as well (as
+    /// the canvas renders them). Then the eighth position renders as the canvas renders the frame
+    /// after the drag. The hashes of that frame and of a fresh renderer's frame compare builds.
+    /// Run with `cargo test -p vectorcraft-render zoomed_drag_perf -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+    fn zoomed_drag_perf() {
+        let sets: [(&str, Vec<(&str, serde_json::Value)>); 3] = [
+            ("Texturizer", vec![("texture.texturizer", json!({}))]),
+            ("Gaussian Blur 8 pt", vec![("blur.gaussian", json!({"radius": 8}))]),
+            ("Drop Shadow and Craquelure", vec![("stylize.dropShadow", json!({"blur": 7})), ("texture.craquelure", json!({}))]),
+        ];
+        let hash = |px: &[u8]| {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::hash::DefaultHasher::new();
+            px.hash(&mut h);
+            h.finish()
+        };
+        for (name, effects) in sets {
+            for zoom in [1.0, 4.0, 16.0, 64.0] {
+                let base = doc_with(Rect::new(100.0, 100.0, 300.0, 250.0), Color::rgb(0.9, 0.4, 0.1), effects.clone());
+                let id = base.layers[0].children().unwrap()[0].id;
+                let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+                let view = Affine::translate((1280.0, 720.0)) * Affine::scale(zoom) * Affine::translate((-200.0, -175.0));
+                for dragging in [false, true] {
+                    let live = RenderOptions { interacting: true, dragging, ..opts.clone() };
+                    let mut r = Renderer::new();
+                    r.threads = crate::default_threads();
+                    let (mut ms, mut doc) = (vec![], base.clone());
+                    for frame in 0..9 {
+                        doc = base.clone();
+                        let by = (f64::from(frame) * 0.75 / zoom, f64::from(frame) * 0.5 / zoom);
+                        doc.node_mut(id).unwrap().transform(Affine::translate(by), false);
+                        let start = std::time::Instant::now();
+                        std::hint::black_box(r.render(&doc, 2560, 1440, view, if frame > 0 { &live } else { &opts }));
+                        if frame > 0 {
+                            ms.push(start.elapsed().as_secs_f64() * 1000.0);
+                        }
+                    }
+                    let previewed = r.stats.previewed;
+                    let start = std::time::Instant::now();
+                    let still = r.render(&doc, 2560, 1440, view, &opts);
+                    let after = start.elapsed().as_secs_f64() * 1000.0;
+                    let fresh = Renderer::new().render(&doc, 2560, 1440, view, &opts);
+                    ms.sort_by(f64::total_cmp);
+                    println!(
+                        "{name} at {:.0}%, dragging {dragging}: drag frames median {:.1} ms (min {:.1}, max {:.1}), {previewed} previewed; the frame after the drag {after:.1} ms; hashes {:016x} {:016x}",
+                        zoom * 100.0,
+                        (ms[3] + ms[4]) * 0.5,
+                        ms[0],
+                        ms[7],
+                        hash(&still.pixels),
+                        hash(&fresh.pixels)
+                    );
+                }
+            }
         }
     }
 
