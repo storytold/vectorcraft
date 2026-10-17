@@ -374,7 +374,7 @@ struct Importer {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    data: HashMap<String, Vec<(String, String)>>,
+    data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     events: HashMap<String, Vec<(String, String)>>,
     /// Ids of the `<g>` elements marked as layers ([`marked_layer`]).
@@ -492,7 +492,7 @@ struct Found {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    data: HashMap<String, Vec<(String, String)>>,
+    data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     events: HashMap<String, Vec<(String, String)>>,
     /// The JavaScript files `<script>` elements link to ([`linked_scripts`]).
@@ -597,7 +597,7 @@ fn prepass<'s>(svg: &'s str, xml: &roxmltree::Document, opts: &ImportOptions) ->
     if !css_transform
         && !not
         && !events
-        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode", "script"]
+        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
             .any(|t| svg.contains(t))
     {
@@ -610,11 +610,12 @@ fn prepass<'s>(svg: &'s str, xml: &roxmltree::Document, opts: &ImportOptions) ->
             found.links.insert(edits.id(svg, a), url.to_string());
         }
     }
-    if svg.contains("data-") {
+    if svg.contains("data-") || svg.contains("class") {
         for e in elements().filter(|e| OBJECT_ELEMENTS.contains(&e.tag_name().name())) {
             let data = user_data(e);
-            if !data.is_empty() {
-                found.data.insert(edits.id(svg, e), data);
+            let classes = user_classes(e);
+            if !data.is_empty() || !classes.is_empty() {
+                found.data.insert(edits.id(svg, e), (data, classes));
             }
         }
     }
@@ -706,6 +707,25 @@ fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits
 fn tag_name_end(svg: &str, n: XNode) -> usize {
     let start = n.range().start;
     svg.get(start + 1..).and_then(|s| s.find(|c: char| c.is_whitespace() || c == '/' || c == '>')).map_or(start + 2, |i| start + 1 + i)
+}
+
+/// What import keeps of an element's own attributes: its `data-*` attributes and CSS classes.
+type Extras = (Vec<(String, String)>, Vec<String>);
+
+/// The most CSS classes kept per element (the file is untrusted).
+const MAX_CLASSES: usize = 64;
+
+/// The CSS classes of element `e`, in order and without repeats. Classes our own export
+/// generated (`cls-1`, with or without a prefix) aren't kept: export makes them again.
+fn user_classes(e: XNode) -> Vec<String> {
+    let generated = |c: &str| c.rsplit_once("cls-").is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    let mut out: Vec<String> = Vec::new();
+    for c in e.attribute("class").into_iter().flat_map(str::split_whitespace) {
+        if out.len() < MAX_CLASSES && !generated(c) && !out.iter().any(|k| k == c) {
+            out.push(c.to_string());
+        }
+    }
+    out
 }
 
 /// The elements that become objects, whose `data-*` attributes are kept.
@@ -913,11 +933,15 @@ impl Importer {
         Some(out)
     }
 
-    /// Give `n` the `data-*` attributes of element `id`, unless it has data already (what an
+    /// Give `n` the `data-*` attributes and classes of element `id`, unless it has data already (what an
     /// inner element made of it keeps).
     fn keep_data(&self, id: &str, n: &mut Node) {
-        if let Some(data) = self.data.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty())) {
+        let Some((data, classes)) = self.data.get(id) else { return };
+        if n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty()) {
             n.edit_attrs(|a| a.data = data.clone());
+        }
+        if n.extras().attrs.as_ref().is_none_or(|a| a.classes.is_empty()) {
+            n.edit_attrs(|a| a.classes = classes.clone());
         }
     }
 
