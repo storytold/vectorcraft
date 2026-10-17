@@ -141,12 +141,15 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   so they are the fallback for Japanese after the requested font; installed system fonts come after.
   Noto Sans Thai (when the checkout has it) is the fallback for Thai where no Thai font is
   installed, and the web build fetches it before the app starts (`crates/text/web-fonts.txt`).
+  Noto Sans Georgian (when the checkout has it) is the same for Georgian.
   All other supplied faces follow those existing document fallbacks in manifest order, so they
   can also be selected by family name. This does not change which faces the web build embeds
   or fetches, and no craft-fonts faces are registered when the optional input is absent.
-- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
-  the UI fonts and before the installed fonts `ui_fonts.rs` discovers for other scripts.
-- Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
+- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first, then
+  Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
+  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup
+  and reaches the UI through `ui_fonts.rs`.
+- Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
 
@@ -204,7 +207,7 @@ locale such as `ru-RU`, `ru-BY` or `ru-KZ` resolves to it), Ukrainian (`uk`, com
 `uk_UA.UTF-8` and every other `uk-*` locale resolve to it; integer plurals use one/few/many), Hungarian (`hu`, complete;
 `hu-HU` and every other `hu-*` locale resolve to it; a count takes the singular, so plurals have one form), Polish (`pl`, complete; `pl-PL` and every other `pl-*`
 locale resolve to it; plurals use one/few/many, with 21, 31 … taking many), Swedish (`sv`, complete; `sv-SE`, `sv-FI` and every
-other `sv-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian Portuguese
+other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE.UTF-8` resolve to it; one count-neutral plural form), Czech (`cs`, every menu label) and Brazilian Portuguese
 (`pt-br`, complete; `pt-BR`, `pt_BR.UTF-8` and other tags that resolve to `pt-br` through `candidates`). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
@@ -232,7 +235,7 @@ other `sv-*` locale resolve to it), Czech (`cs`, every menu label) and Brazilian
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Spanish, French, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Vietnamese and Finnish cover every
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Vietnamese and Finnish cover every
   message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
   `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs a row in each of those catalogs (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
   complete_languages_translate_every_message` lists them all). Other languages show messages in English

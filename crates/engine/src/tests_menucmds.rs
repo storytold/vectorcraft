@@ -1467,6 +1467,23 @@ fn change_case_variants() {
     assert!(s.execute("type.changeCase", &json!({"case": "weird"})).is_err());
 }
 
+/// Georgian has no word capitals: title and sentence case leave Mkhedruli lower case (and bring
+/// Mtavruli back to it) instead of capitalizing it; upper case still gives Mtavruli.
+#[test]
+fn change_case_leaves_georgian_uncapitalized() {
+    let mut s = session();
+    let t = text(&mut s, "ფენის სახელი. ახალი Layer");
+    sel(&mut s, &[t]);
+    s.execute("type.changeCase", &json!({"case": "title"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი Layer");
+    s.execute("type.changeCase", &json!({"case": "sentence"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი layer");
+    s.execute("type.changeCase", &json!({"case": "upper"})).unwrap();
+    assert_eq!(plain(&s, t), "ᲤᲔᲜᲘᲡ ᲡᲐᲮᲔᲚᲘ. ᲐᲮᲐᲚᲘ LAYER");
+    s.execute("type.changeCase", &json!({"case": "title"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი Layer");
+}
+
 /// Change Case is one undo step, and Change Case to the case the text has already records no undo
 /// step: the step to redo stays and the document stays unmodified. It still replies with the
 /// objects.
