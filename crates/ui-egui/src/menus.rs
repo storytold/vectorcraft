@@ -1906,9 +1906,11 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     match id {
         "edit.undo" | "edit.redo" => {
             let last = app.session.active().and_then(|d| if id == "edit.undo" { d.history.undo.last() } else { d.history.redo.last() });
+            // The step's name as the History panel lists it.
+            let name = |label: &str| crate::panels::history::step_name(lang, label).unwrap_or_else(|| label.to_string());
             match last {
-                Some(h) if id == "edit.undo" => fmt(tl!("Undo {name}"), &[("name", tl!(&h.label))]),
-                Some(h) => fmt(tl!("Redo {name}"), &[("name", tl!(&h.label))]),
+                Some(h) if id == "edit.undo" => fmt(tl!("Undo {name}"), &[("name", &name(&h.label))]),
+                Some(h) => fmt(tl!("Redo {name}"), &[("name", &name(&h.label))]),
                 None => tl!(if id == "edit.undo" { "Undo" } else { "Redo" }).to_string(),
             }
         }
@@ -4172,6 +4174,31 @@ mod tests {
             app.run(id, json!({})).unwrap();
             assert_eq!(dynamic_label(&app, id, ""), off);
         }
+    }
+
+    /// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it
+    /// (`panels::history::step_name`), including a step named after an effect whose catalog holds
+    /// only the effect's menu row with an ellipsis, as Japanese does for Feather.
+    #[test]
+    fn undo_and_redo_name_the_step_as_the_history_panel_does() {
+        let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
+        crate::i18n::set_current(ja);
+        let mut app = app_with_a_rectangle();
+        app.run("effect.apply", json!({"effect": "stylize.feather"})).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|h| h.label.as_str()), Some("Feather"));
+        let shown = |app: &VectorcraftApp, id: &'static str| {
+            let item = c(if id == "edit.undo" { "Undo" } else { "Redo" }, id);
+            match entry(app, &item) {
+                Some(Entry::Item(row)) => row.label.to_string(),
+                _ => panic!("{id} is not a menu item"),
+            }
+        };
+        assert_eq!(shown(&app, "edit.undo"), "ぼかしを取り消す");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shown(&app, "edit.redo"), "ぼかしをやり直す");
+        assert_eq!(shown(&app, "edit.undo"), "長方形を取り消す", "a step with a plain row");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(shown(&app, "edit.redo"), "Redo Feather");
     }
 
     /// Type › Optical Margin Alignment runs `type.opticalMarginAlignment`, needs a selection, and
