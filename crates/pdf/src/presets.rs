@@ -61,7 +61,11 @@ pub fn builtin_presets() -> Vec<PdfPreset> {
             "Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.",
             PdfSettings { preserve_editing: true, ..Default::default() },
         ),
-        preset("High Quality Print", "For desktop printers and proofs: images stay at print resolution.", print(ImageCodec::Auto, false)),
+        preset(
+            "High Quality Print",
+            "For desktop printers and proofs: images stay at print resolution, with the document's bleed.",
+            print(ImageCodec::Auto, true),
+        ),
         preset(
             "Press Quality",
             "For commercial printing: high-resolution images compressed losslessly, the document's bleed.",
