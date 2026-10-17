@@ -541,6 +541,23 @@ fn delete_duplicate_and_replace_symbols() {
     assert!(s.execute("symbol.delete", &json!({"name": "Small"})).is_err());
 }
 
+/// New Symbol and Duplicate Symbol trim the name they are given, as Symbol Options trims
+/// `newName`; the trimmed name is the one compared with the symbols there are.
+#[test]
+fn new_and_duplicate_symbols_trim_their_names_as_a_rename_does() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    assert_eq!(s.execute("symbol.new", &json!({"name": "  Box \t"})).unwrap()["name"], "Box");
+    rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    assert_eq!(s.execute("symbol.new", &json!({"name": " Box"})).unwrap()["name"], "Box 2");
+    rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    assert_eq!(s.execute("symbol.new", &json!({"name": "   "})).unwrap()["name"], "New Symbol");
+    assert_eq!(s.execute("symbol.duplicate", &json!({"name": "Box", "newName": " Logo\t"})).unwrap()["name"], "Logo");
+    assert_eq!(s.execute("symbol.duplicate", &json!({"name": "Box", "newName": " "})).unwrap()["name"], "Box copy");
+    let names: Vec<String> = s.doc().unwrap().doc.symbols.iter().map(|x| x.name.clone()).collect();
+    assert_eq!(names, ["Box", "Box 2", "New Symbol", "Logo", "Box copy"]);
+}
+
 #[test]
 fn symbol_export_type_defaults_to_movie_clip_and_round_trips() {
     let mut s = session();

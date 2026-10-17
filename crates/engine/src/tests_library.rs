@@ -131,6 +131,25 @@ fn text_styles_come_from_the_selected_type_and_apply_in_one_step() {
     assert_eq!(r["style"], format!("{name} 2"));
 }
 
+/// A text style that a library file names with spaces around it comes into the document with the
+/// name trimmed, as New Character Style and New Paragraph Style trim a name, and applies.
+#[test]
+fn a_library_style_named_with_spaces_comes_in_trimmed() {
+    let mut s = session();
+    let style = |attrs: Value| json!([{"name": " Body ", "attrs": attrs}]);
+    let data = json!({"name": "Spaced", "charStyles": style(json!({"size": 31.0})), "paraStyles": style(json!({}))});
+    let lib = run(&mut s, "library.import", json!({"data": data.to_string()}))["id"].as_str().unwrap().to_string();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    for kind in ["charStyle", "paraStyle"] {
+        assert_eq!(run(&mut s, "library.use", json!({"library": lib, "kind": kind, "item": " Body "}))["style"], "Body", "{kind}");
+    }
+    let d = &s.doc().unwrap().doc;
+    assert_eq!((d.char_styles[0].name.as_str(), d.para_styles[0].name.as_str()), ("Body", "Body"));
+    let vectorcraft_doc::NodeKind::Text(text) = &d.node(NodeId(t.as_u64().unwrap())).unwrap().kind else { panic!("not text") };
+    assert_eq!((text.runs[0].style.size, text.runs[0].style.style_name.as_deref()), (31.0, Some("Body")));
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn libraries_are_kept_in_files_across_sessions() {

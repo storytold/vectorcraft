@@ -884,7 +884,7 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Kind::CharStyle | Kind::ParaStyle => {
             let para = kind == Kind::ParaStyle;
-            let name = data.get("name").and_then(Value::as_str).unwrap_or("Style").to_string();
+            let name = data.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Style").to_string();
             let attrs = data.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
             let doc = &s.doc()?.doc;
             // The document's style of that name when it is the same; else a new one.

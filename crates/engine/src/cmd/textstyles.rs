@@ -58,7 +58,7 @@ macro_rules! style_cmds {
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name?, attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
+                "{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -431,10 +431,13 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };
     let name = match str_param(p, "name") {
-        Some(n) => n.to_string(),
+        Some(n) => n.trim().to_string(),
         None => (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string()),
     };
-    if name.trim().is_empty() || kind.attrs(d, &name).is_some() {
+    if name.is_empty() {
+        return Err(bad(&c, format!("`{name}` is empty or already used")));
+    }
+    if kind.attrs(d, &name).is_some() {
         return Err(bad(&c, format!("a style named `{name}` already exists")));
     }
     let n2 = name.clone();
@@ -551,10 +554,12 @@ fn duplicate(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "duplicate")?.to_string();
     let d = &s.doc()?.doc;
     let attrs = kind.attrs(d, &name).ok_or_else(|| bad(&kind.cmd("duplicate"), format!("no style `{name}`")))?;
+    // `new` trims the name, so the copy is named from the trimmed one.
+    let stem = name.trim();
     let copy = (1..)
-        .map(|i| if i == 1 { format!("{name} copy") } else { format!("{name} copy {i}") })
+        .map(|i| if i == 1 { format!("{stem} copy") } else { format!("{stem} copy {i}") })
         .find(|n| kind.attrs(d, n).is_none())
-        .unwrap_or_else(|| format!("{name} copy"));
+        .unwrap_or_else(|| format!("{stem} copy"));
     new(s, &json!({ "name": copy, "attrs": attrs }), kind)
 }
 
@@ -685,6 +690,29 @@ mod tests {
         s.execute("charStyle.apply", &json!({"name": "Pink"})).unwrap();
         let fill = serde_json::to_value(&runs(&s, id)[0].style.fill).unwrap();
         assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Pink").unwrap().attrs["fill"], fill);
+    }
+
+    /// New Character Style and New Paragraph Style trim the name they are given, as a rename
+    /// trims `to`; the trimmed name is the one compared with the styles there are.
+    #[test]
+    fn new_styles_trim_their_names_as_a_rename_does() {
+        let (mut s, _) = session_with_text("Body text");
+        for p in ["charStyle", "paraStyle"] {
+            assert_eq!(s.execute(&format!("{p}.new"), &json!({"name": "  Body \t"})).unwrap()["name"], "Body", "{p}");
+            let list = s.execute(&format!("{p}.list"), &json!({})).unwrap();
+            let names: Vec<&str> = list["styles"].as_array().unwrap().iter().filter_map(|x| x["name"].as_str()).collect();
+            assert_eq!(names[1..], ["Body"], "{p}");
+            let e = s.execute(&format!("{p}.new"), &json!({"name": " Body"})).unwrap_err().to_string();
+            assert!(e.contains("a style named `Body` already exists"), "{p}: {e}");
+            let e = s.execute(&format!("{p}.new"), &json!({"name": " \t "})).unwrap_err().to_string();
+            assert!(e.contains("`` is empty or already used"), "{p}: {e}");
+            assert_eq!(s.execute(&format!("{p}.duplicate"), &json!({"name": "Body"})).unwrap()["name"], "Body copy", "{p}");
+        }
+        // A style whose name has spaces around it, as a saved file can hold, is copied under the
+        // trimmed name, numbered past the copies there are.
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.push(TextStyleDef { name: " Old ".into(), attrs: Map::new() });
+        s.execute("charStyle.new", &json!({"name": "Old copy"})).unwrap();
+        assert_eq!(s.execute("charStyle.duplicate", &json!({"name": " Old "})).unwrap()["name"], "Old copy 2");
     }
 
     /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no

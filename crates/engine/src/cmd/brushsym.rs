@@ -669,7 +669,7 @@ fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = roots(s, p)?;
     let art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
     let (art, size, c) = normalize(art)?;
-    let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").filter(|n| !n.trim().is_empty()).unwrap_or("New Symbol"));
+    let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("New Symbol"));
     let reg = registration_param(p, C)?.unwrap_or(SymbolRegistration::CENTER);
     let export = export_type_param(p, C)?.unwrap_or_default();
     let nine = nine_slice_param(p, C, None)?.flatten();
@@ -918,7 +918,8 @@ fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let name = name_param(p, C)?.to_string();
     let d = &s.doc()?.doc;
     let sym = d.symbols.iter().find(|x| x.name == name).cloned().ok_or_else(|| bad(C, format!("no symbol named `{name}`")))?;
-    let new = d.unique_symbol_name(str_param(p, "newName").unwrap_or(&format!("{name} copy")));
+    let given = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty());
+    let new = d.unique_symbol_name(&given.map_or_else(|| format!("{} copy", name.trim()), str::to_string));
     let size = natural_size(d, &name);
     let reg = d.symbol_registration(&name);
     let export = d.symbol_export_type(&name);

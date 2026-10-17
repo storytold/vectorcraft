@@ -1120,7 +1120,8 @@ already walks Image Trace. Short agent entry points:
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size; rows
   of `symbol.list` carry `nineSlice`: the guides or `null`),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`, `symbol.edit`, `symbol.duplicate`,
-  `symbol.selectInstances {name}`.
+  `symbol.selectInstances {name}`. `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
+  name they are given, as `symbol.options` trims `newName`; a blank one gives "New Symbol" or "<name> copy".
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?}`, `brush.delete {name} | {names}`,
   `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`.
@@ -1444,8 +1445,9 @@ first selected object's solid colour, else the default one, or `color`), `charSt
 text's attributes). An item the library already has is reported as `existing`. `library.use {library?, kind, item,
 center?, to?}` uses one: a graphic is placed centred on `center` (pasted with its resources; a swatch name the document
 gives another colour merges into the document's), a colour paints the selection's fill or stroke, and a style is added
-to the document (numbered when its name is taken by other attributes) and applied to the selected text, each as one
-undo step. `library.removeItem {library?, kind, item}` removes one.
+to the document under its name without the white space around it (numbered when that name is taken by other
+attributes) and applied to the selected text, each as one undo step. `library.removeItem {library?, kind, item}` removes
+one.
 
 Items can be put in user-named groups, which the panel shows as collapsible sections after the ungrouped items (its
 search field filters every item by name; `library.get` lists them all to filter). `library.createGroup {library?,
