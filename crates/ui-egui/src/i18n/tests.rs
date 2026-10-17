@@ -38,6 +38,9 @@ fn tags_map_to_languages() {
     for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8", "SV-se"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("sv"), "{tag}");
     }
+    for tag in ["tr", "tr-TR", "tr_TR.UTF-8", "tr-CY", "TR-tr"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("tr"), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -807,7 +810,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
+const KEEPS_MENU_NAMES: [&str; 17] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -1689,7 +1692,8 @@ fn select_key_param_error_is_translated() {
 }
 
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "fi"];
+const COMPLETE_MESSAGES: &[&str] =
+    &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "fi", "tr"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
@@ -1936,4 +1940,36 @@ fn japanese_names_the_default_swatches() {
     assert!(missing.is_empty(), "{missing:?}");
     assert_eq!(ja.contextual("swatch", "White"), Some("ホワイト"));
     assert_eq!(ja.contextual("swatch", "My Red"), None);
+}
+
+fn turkish() -> Lang {
+    Lang::from_code("tr").expect("tr registered")
+}
+
+/// Turkish uses standard graphic design terminology (çalışma yüzeyi, kontur, dolgu…), resolves
+/// every `tr-*` locale, counts with singular forms and translates nested messages.
+#[test]
+fn turkish_reads_as_turkish() {
+    for tag in ["tr", "tr-TR", "tr_TR.UTF-8", "tr-CY", "TR-tr"] {
+        assert_eq!(lang_from_tag(tag), Some(turkish()), "{tag}");
+    }
+    for (en, want) in [
+        ("File", "Dosya"),
+        ("Artboard Tool", "Çalışma Yüzeyi Aracı"),
+        ("Swatches", "Renk Örnekleri"),
+        ("Pathfinder", "Yol Bulucu"),
+        ("Stroke", "Kontur"),
+        ("Fill", "Dolgu"),
+        ("Workspace", "Çalışma Alanı"),
+    ] {
+        assert_eq!(tr(turkish(), en), want);
+    }
+    for n in [1, 2, 5, 21, 22] {
+        assert_eq!(trn(turkish(), n, "{n} Layer", "{n} Layers"), format!("{n} Katman"));
+    }
+    assert_eq!(tr_ctx(turkish(), "axis", "Both"), "Her İkisi");
+    assert_eq!(tr_id(turkish(), "pathfinder.add", "Add"), "Birleştir");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    let shown = message(turkish(), nested);
+    assert!(!shown.contains("nothing selected"), "{shown}");
 }

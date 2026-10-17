@@ -88,7 +88,7 @@ fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     let mut close = false;
     widgets::label_row(ui, "", LABEL, |ui| {
         // Applies the settings, then edits the artboards with the Artboard tool.
-        if widgets::flat_button(ui, tl!("Edit Artboards"), 120.0).clicked() && confirm(app, d).is_ok() {
+        if widgets::flat_button_fit(ui, tl!("Edit Artboards"), 120.0).clicked() && confirm(app, d).is_ok() {
             app.select_tool("artboard");
             // The shared frame restores its working copy after drawing the body. Tell it to
             // close too, otherwise it reopens the dialog that confirm just closed.
