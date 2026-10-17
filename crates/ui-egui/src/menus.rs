@@ -3063,6 +3063,9 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if any(|k| matches!(k, NodeKind::Compound { .. })) {
             v.push(c("Release Compound Path", "object.compoundPath.release"));
         }
+        // As in the Object menu: Expand Appearance only shows when an object's appearance isn't
+        // basic (`prune` drops it otherwise).
+        v.extend([c("Expand…", "ui.expandDialog"), c("Expand Appearance", "effect.expandAppearance")]);
         v.extend([
             c("Make Guides", "view.guides.make"),
             Sep,

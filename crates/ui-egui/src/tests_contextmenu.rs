@@ -209,6 +209,24 @@ fn the_menu_follows_the_selection() {
     assert!(items.windows(2).all(|w| !matches!(w, [Item::Sep, Item::Sep])));
 }
 
+/// Expand… and Expand Appearance are offered on the selection as in the Object menu (#2462):
+/// Expand Appearance only when the appearance isn't basic.
+#[test]
+fn the_menu_offers_expand_and_expand_appearance() {
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    let l = labels(&menus::context_items(&app));
+    assert!(l.contains(&"Expand…"), "{l:?}");
+    assert!(!l.contains(&"Expand Appearance"), "a basic appearance has nothing to expand: {l:?}");
+    app.run("effect.apply", json!({"effect": "stylize.dropShadow", "ids": [id.0], "item": null})).unwrap();
+    let entries = menus::context_entries(&app);
+    for cmd in ["ui.expandDialog", "effect.expandAppearance"] {
+        assert!(entries.iter().any(|e| e.command.as_deref() == Some(cmd) && e.enabled && e.path.is_empty()), "{cmd}");
+    }
+    menus::invoke(&mut app, "effect.expandAppearance", json!({}));
+    assert!(matches!(app.session.active().unwrap().doc.node(id).unwrap().kind, NodeKind::Group { .. }));
+}
+
 /// Every label the context menu can show is a menu string, so complete catalogs must translate it.
 #[test]
 fn every_context_label_is_a_menu_string() {
