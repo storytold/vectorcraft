@@ -211,6 +211,12 @@ enum BoxHit {
     Rotate,
 }
 
+/// The bounding box answers the pointer while it is shown. Ctrl hides it, so a corner anchor can
+/// be grabbed to move the object instead of hitting the scale handle.
+fn box_shown(cx: &ToolContext, m: Mods) -> bool {
+    cx.show_bbox && !m.ctrl
+}
+
 /// The bounding-box handle or rotate zone under `p`.
 fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
     let (tol, lp) = (cx.tol(5.0), b.to_local(p));
@@ -360,7 +366,7 @@ impl Tool for SelectionTool {
                     self.state = State::Idle;
                     return vec![];
                 }
-                if cx.show_bbox
+                if box_shown(cx, m)
                     && let Some(bx) = selection_box(cx)
                 {
                     match box_hit(cx, &bx, p) {
@@ -387,8 +393,13 @@ impl Tool for SelectionTool {
                     return out;
                 }
                 // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
+                // A corner that the hidden box's handle covered is a move of this object, not
+                // Select Behind: on Linux the Ctrl key sets both modifiers.
+                let through_handle =
+                    m.ctrl && cx.show_bbox && selection_box(cx).is_some_and(|bx| matches!(box_hit(cx, &bx, p), Some(BoxHit::Handle(_))));
                 if m.cmd
                     && cx.select_behind
+                    && !through_handle
                     && let Some(behind) = object_behind(cx, p)
                 {
                     self.state = State::Moving { start: p, began: false, deselect: None, key: None };
@@ -586,7 +597,7 @@ impl Tool for SelectionTool {
         if typewidget::over_widget(cx, p) {
             return Cursor::TypeWidget;
         }
-        if cx.show_bbox
+        if box_shown(cx, m)
             && let Some(bx) = selection_box(cx)
         {
             match box_hit(cx, &bx, p) {
@@ -1287,6 +1298,37 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
         assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+    }
+
+    /// Ctrl hides the bounding box: the corner moves the selected object instead of scaling it,
+    /// even where Select Behind would otherwise take the object underneath.
+    #[test]
+    fn ctrl_on_a_corner_moves_instead_of_scaling() {
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let under = d.alloc_id();
+        d.insert(
+            Some(l),
+            0,
+            vectorcraft_doc::Node::path(
+                under,
+                vectorcraft_geom::shapes::rectangle(Rect::new(150.0, 150.0, 280.0, 280.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            ),
+        )
+        .unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        let ctrl = Mods { ctrl: true, cmd: true, ..Mods::default() };
+        let at = |kind| ev(kind, 200.0, 200.0).with_mods(ctrl);
+        // Snap to Point marks the anchor a press will grab. The scale cursor is what Ctrl removes.
+        assert_eq!(t.cursor(&cx, Point::new(200.0, 200.0), ctrl), Cursor::ArrowHollow);
+        assert!(t.pointer(&cx, &at(PointerKind::Down)).is_empty(), "the object stays selected");
+        let drag = t.pointer(&cx, &ev(PointerKind::Drag, 220.0, 220.0).with_mods(ctrl));
+        assert!(matches!(drag.first(), Some(Action::Begin(label)) if label == "Move"), "{drag:?}");
     }
 
     #[test]

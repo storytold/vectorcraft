@@ -2157,9 +2157,12 @@ fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
     // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
+    // Ctrl hides it too, while it is enabled, so a corner anchor can be grabbed to move.
+    let held = p.ctx().input(|i| i.modifiers);
     let show_box = app.session.tool_id() == "selection"
         && !app.session.tool_transforming()
         && app.ui.view.bounding_box
+        && !held.ctrl
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
     let st = app.session.active();
@@ -4282,6 +4285,23 @@ mod tests {
         app.session.execute("prefs.set", &json!({"key": "anchorSize", "value": 7})).unwrap();
         let big = sizes(&mut app);
         assert!(big.contains(&8.0) && big.contains(&10.0) && !big.contains(&4.0), "4 points bigger at 7: {big:?}");
+    }
+
+    /// Ctrl hides the Selection tool's bounding box while View → Show Bounding Box is on.
+    #[test]
+    fn ctrl_hides_the_bounding_box_handles() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let handle_squares = |app: &mut VectorcraftApp, mods| {
+            frame(app, &ctx, vec![egui::Event::ModifiersChanged(mods)]);
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Rect(r) if (r.rect.width() - 6.0).abs() < 0.1)).count()
+        };
+        assert!(handle_squares(&mut app, egui::Modifiers::NONE) >= 8, "the bounding box's handles");
+        assert_eq!(handle_squares(&mut app, egui::Modifiers::CTRL), 0, "Ctrl hides them");
+        assert!(handle_squares(&mut app, egui::Modifiers::NONE) >= 8, "letting go brings them back");
     }
 
     /// #1236: Curvature edits points, so existing paths show one circular marker per point and
