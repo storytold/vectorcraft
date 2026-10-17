@@ -2134,6 +2134,49 @@ fn artistic_params_take_defaults_and_stay_in_range() {
 }
 
 #[test]
+fn artistic_filters_leave_invalid_coordinate_spaces_alone() {
+    let (w, h) = (16, 12);
+    let src = ramp(w, h);
+    let run = |f: &PixelFx, s: &PixelSpace| {
+        let mut out = src.clone();
+        f.apply(&mut out, w, h, s);
+        out
+    };
+    let colour = [0.3, 0.65, 1.0];
+    let filters = [
+        PixelFx::Cutout { levels: 4.0, simplicity: 4.0, fidelity: 2.0 },
+        PixelFx::NeonGlow { size: 5.0, brightness: 15.0, colour },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: 1.0, posterization: 2.0 },
+    ];
+    for f in &filters {
+        assert_ne!(run(f, &space(w, h)), src, "{f:?} changes the art in a valid space");
+    }
+    let mut changed = Vec::new();
+    for f in &filters {
+        for px in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            if run(f, &PixelSpace { px, ..space(w, h) }) != src {
+                changed.push(format!("{f:?} at px {px}"));
+            }
+        }
+    }
+    for f in [
+        PixelFx::Cutout { levels: f64::NAN, simplicity: 4.0, fidelity: 2.0 },
+        PixelFx::Cutout { levels: 4.0, simplicity: f64::INFINITY, fidelity: 2.0 },
+        PixelFx::Cutout { levels: 4.0, simplicity: 4.0, fidelity: f64::NEG_INFINITY },
+        PixelFx::NeonGlow { size: f64::NAN, brightness: 15.0, colour },
+        PixelFx::NeonGlow { size: 5.0, brightness: f64::INFINITY, colour },
+        PixelFx::PosterEdges { thickness: f64::NAN, intensity: 1.0, posterization: 2.0 },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: f64::INFINITY, posterization: 2.0 },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: 1.0, posterization: f64::NEG_INFINITY },
+    ] {
+        if run(&f, &space(w, h)) != src {
+            changed.push(format!("{f:?}"));
+        }
+    }
+    assert!(changed.is_empty(), "directly constructed non-finite parameters and invalid spaces are harmless: {changed:?}");
+}
+
+#[test]
 fn cutout_paints_a_few_flat_colours_and_keeps_coverage() {
     let (w, h) = (64, 24);
     let src = ramp(w, h);

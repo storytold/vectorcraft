@@ -835,6 +835,50 @@ fn drop_shadow_darkness_replaces_its_color_when_chosen() {
 }
 
 #[test]
+fn rasterize_compose_leaves_the_raster_alone_when_the_sizes_do_not_fit() {
+    let r = match raster_effects(&[fx(RASTERIZE, json!({}))]).as_slice() {
+        [RasterFx::Rasterize(r)] => *r,
+        other => panic!("{other:?}"),
+    };
+    let space = PixelSpace {
+        to_doc: Affine::IDENTITY,
+        px: 1.0,
+        center: Point::new(1.0, 1.0),
+        channels: pixel::Channels::Rgb,
+        line: 1.0,
+        extent: std::f64::consts::SQRT_2,
+    };
+    let compose = |len: usize, w: usize, h: usize, image: &[u8], cols: usize, rows: usize, rect: Rect| {
+        let mut data = vec![7; len];
+        r.compose(&mut data, w, h, &space, image, cols, rows, rect);
+        data
+    };
+    // A 2 × 2 red image over a 2 × 2 raster of one-point pixels: each pixel takes the image's color.
+    let red = [255, 0, 0, 255].repeat(4);
+    let mut long = red.clone();
+    long.extend([255, 0]);
+    let (img, long, area) = (red.as_slice(), long.as_slice(), Rect::new(0.0, 0.0, 2.0, 2.0));
+    assert_eq!(compose(16, 2, 2, img, 2, 2, area), red);
+    let cases = [
+        ("w × h is not the raster's pixel count", 16, 1, 2, img, 2, 2, area),
+        ("the raster's length is not a multiple of 4", 18, 2, 2, img, 2, 2, area),
+        ("cols × rows is not the image's pixel count", 16, 2, 2, img, 1, 2, area),
+        ("the image's length is not a multiple of 4", 16, 2, 2, long, 2, 2, area),
+        ("the image has no width", 16, 2, 2, img, 2, 2, Rect::new(0.0, 0.0, 0.0, 2.0)),
+        ("the image has no height", 16, 2, 2, img, 2, 2, Rect::new(0.0, 0.0, 2.0, 0.0)),
+        ("the image has a negative width", 16, 2, 2, img, 2, 2, Rect::new(2.0, 0.0, 0.0, 2.0)),
+        ("the image has a NaN width", 16, 2, 2, img, 2, 2, Rect::new(0.0, 0.0, f64::NAN, 2.0)),
+        ("the image has a NaN height", 16, 2, 2, img, 2, 2, Rect::new(0.0, 0.0, 2.0, f64::NAN)),
+    ];
+    let failures: Vec<_> = cases
+        .iter()
+        .filter(|&&(_, len, w, h, image, cols, rows, rect)| compose(len, w, h, image, cols, rows, rect) != vec![7; len])
+        .map(|c| c.0)
+        .collect();
+    assert!(failures.is_empty(), "{failures:?}");
+}
+
+#[test]
 fn blend_mode_names() {
     use vectorcraft_doc::color::BlendMode;
     assert_eq!(raster::blend_mode("Color-Burn"), BlendMode::ColorBurn);

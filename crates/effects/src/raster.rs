@@ -197,7 +197,7 @@ impl Rasterize {
         let (px, rest) = data.as_chunks_mut::<4>();
         let (src, src_rest) = image.as_chunks::<4>();
         let fits = |n: usize, w: usize, h: usize, rest: usize| w > 0 && h > 0 && rest == 0 && w.checked_mul(h) == Some(n);
-        if !fits(px.len(), w, h, rest.len()) || !fits(src.len(), cols, rows, src_rest.len()) || !(rect.width() > 0.0 && rect.height() > 0.0) {
+        if !(fits(px.len(), w, h, rest.len()) && fits(src.len(), cols, rows, src_rest.len()) && rect.width() > 0.0 && rect.height() > 0.0) {
             return;
         }
         let (sx, sy) = (cols as f64 / rect.width(), rows as f64 / rect.height());

@@ -165,7 +165,7 @@ fn planes(px: &[[u8; 4]]) -> ([Vec<f32>; 3], Vec<f32>) {
 /// colours keep their hue. Slivers (the blends along softened edges) take the nearest large
 /// piece's colour, so the pieces meet with crisp edges. Coverage is kept.
 pub(super) fn cutout(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, levels: f64, simplicity: f64, fidelity: f64) {
-    if ![levels, simplicity, fidelity].iter().all(|v| v.is_finite()) || !(space.px.is_finite() && space.px > 0.0) {
+    if !([levels, simplicity, fidelity].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
         return;
     }
     let levels = levels.round().clamp(2.0, 8.0) as usize;
@@ -212,7 +212,7 @@ pub(super) fn cutout(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace,
 /// channel, with black lines drawn on the edges of any of its colour channels and of its outline. `thickness` (0..10) widens the lines and
 /// `intensity` (0..10) darkens them and lets fainter edges take a line. Coverage is kept.
 pub(super) fn poster_edges(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, thickness: f64, intensity: f64, posterization: f64) {
-    if ![thickness, intensity, posterization].iter().all(|v| v.is_finite()) || !(space.px.is_finite() && space.px > 0.0) {
+    if !([thickness, intensity, posterization].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
         return;
     }
     let steps = (posterization.round().clamp(0.0, 6.0) + 1.0) as f32;
@@ -248,7 +248,7 @@ pub(super) fn glow_spread(size: f64) -> f64 {
 /// above 0) or from its dark areas (below 0), spread as far as |`size`| (0..24) says and as
 /// strong as `brightness` (0..50). Coverage is kept.
 pub(super) fn neon_glow(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, size: f64, brightness: f64, colour: [f32; 3]) {
-    if ![size, brightness].iter().all(|v| v.is_finite()) || !(space.px.is_finite() && space.px > 0.0) {
+    if !([size, brightness].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
         return;
     }
     let strength = (brightness / 50.0).clamp(0.0, 1.0) as f32;
