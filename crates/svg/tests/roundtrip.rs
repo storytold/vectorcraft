@@ -69,7 +69,7 @@ fn curves_roundtrip() {
     let n = Node::path(id, shapes::ellipse(Rect::new(20.0, 30.0, 120.0, 90.0)), Appearance::default_art());
     let d = doc_with(vec![n]);
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains(" C"), "{s}");
+    assert!(s.contains("<ellipse "), "{s}");
     let r = roundtrip(&d);
     let a = art(&r);
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 120.0, 90.0), 0.01));
@@ -326,7 +326,7 @@ fn hidden_and_guides_omitted() {
     a.visible = false;
     let b = rect_node(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Appearance::default_art());
     let s = export(&doc_with(vec![a, b]), &ExportOptions::default());
-    assert_eq!(s.matches("<path").count(), 1);
+    assert_eq!(s.matches("<rect").count(), 1);
     let r = import(&s).unwrap();
     assert_eq!(art(&r).len(), 1);
 }
@@ -513,9 +513,9 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(!s.contains("<?xml"));
     assert!(!s.contains(" width=\"200\""));
     assert!(s.contains("viewBox=\"0 0 200 100\""), "{s}");
-    assert!(s.contains("M10.12 20"), "{s}");
+    assert!(s.contains("x=\"10.12\"") && s.contains("y=\"20\""), "{s}");
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("M10.123 20"), "{s}");
+    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("x=\"10.123\"") && s.contains("y=\"20\""), "{s}");
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
@@ -572,6 +572,11 @@ fn import_basic_shapes() {
     assert_eq!(a[3].appearance.fill_paint().color().unwrap().to_hex(), "#008000");
     assert!(!a[4].path_data().unwrap().is_closed());
     assert_eq!(a[5].path_data().unwrap().anchor_count(), 2);
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("<rect "), "{s}");
+    assert!(s.contains("<circle "), "{s}");
+    assert!(s.contains("<ellipse "), "{s}");
+    assert!(s.contains("<path "), "a polygon stays a path: {s}");
 }
 
 #[test]
