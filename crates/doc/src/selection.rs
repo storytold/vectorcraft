@@ -181,10 +181,10 @@ impl Selection {
         self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
     }
     /// Deselect the objects that are hidden or locked, themselves or through a group or layer
-    /// around them (and so the key object when it is one): hidden or locked art can't stay
-    /// selected.
+    /// around them, or that are on a template layer ([`Document::is_selectable`]), and so the key
+    /// object when it is one: such art can't stay selected.
     pub fn deselect_uneditable(&mut self, doc: &Document) {
-        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable(*o)).collect();
+        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_selectable(*o)).collect();
         if uneditable.is_empty() {
             return;
         }

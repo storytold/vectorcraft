@@ -213,6 +213,36 @@ fn the_selection_column_selects_a_rows_art_and_shift_adds_or_removes_it() {
     assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c, a, g]);
 }
 
+/// The selection column selects nothing on a template layer or sublayer that is unlocked, and the
+/// target circle is refused there, as for a locked row.
+#[test]
+fn the_selection_column_and_the_target_circle_leave_template_art_out() {
+    let mut s = session();
+    let (layer, sub, a, g, _, c) = tree(&mut s);
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "template": true, "locked": false}));
+    let sel = |s: &Session| s.doc().unwrap().selection.objects.clone();
+    for id in [sub, a, g] {
+        run(&mut s, "select.set", json!({"ids": [c.0]}));
+        run(&mut s, "layer.selectAll", json!({"id": id.0, "add": true}));
+        assert_eq!(sel(&s), vec![c], "the selection column adds nothing of {id:?}");
+        let e = s.execute("layer.target", &json!({"id": id.0})).unwrap_err();
+        assert!(e.to_string().contains("template layers and their objects can't be selected"), "{id:?}: {e}");
+        assert_eq!(sel(&s), vec![c], "a refused target leaves the selection as it is ({id:?})");
+    }
+    // The layer around the template sublayer: its own art only.
+    assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c]);
+    run(&mut s, "layer.selectAll", json!({"id": layer.0}));
+    assert_eq!(sel(&s), vec![c]);
+    // A template layer at the top level.
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "template": false}));
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "template": true, "locked": false}));
+    for id in [layer, sub, c] {
+        run(&mut s, "layer.selectAll", json!({"id": id.0}));
+        assert!(sel(&s).is_empty(), "{id:?}");
+        assert!(s.execute("layer.target", &json!({"id": id.0})).is_err(), "{id:?}");
+    }
+}
+
 fn ids_sel(v: &Value) -> Vec<NodeId> {
     v["selected"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
 }
@@ -491,6 +521,30 @@ fn node_move_into_a_hidden_or_locked_layer_deselects_the_object() {
         let sel = s.doc().unwrap().selection.clone();
         assert_eq!((sel.objects, sel.key), (vec![a, b], Some(b)), "{prop}: undo selects b again as the key object");
     }
+}
+
+/// Making a layer or sublayer a template deselects the selected objects on it, the key object
+/// included, also when Layer Options leaves it unlocked; undo selects them again. Objects that
+/// `node.move` or `layer.move` puts on an unlocked template layer are deselected too.
+#[test]
+fn a_template_layer_deselects_its_art_locked_or_not() {
+    let mut s = session();
+    let (_, sub, a, g, _, c) = tree(&mut s);
+    run(&mut s, "select.set", json!({"ids": [a.0, g.0, c.0]}));
+    run(&mut s, "select.key", json!({"id": a.0}));
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "template": true, "locked": false}));
+    assert!(node(&s, sub).is_template() && !node(&s, sub).locked);
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![c], None), "a, the key object, and g are on the template sublayer");
+    run(&mut s, "edit.undo", json!({}));
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!((sel.objects, sel.key), (vec![a, g, c], Some(a)), "undo selects them again");
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    run(&mut s, "layer.setProps", json!({"id": other.0, "template": true, "locked": false}));
+    run(&mut s, "node.move", json!({"id": c.0, "parent": other.0, "index": 0}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, g], "node.move put c on the template layer");
+    run(&mut s, "layer.move", json!({"ids": [g.0], "target": other.0}));
+    assert_eq!((parent(&s, g), s.doc().unwrap().selection.objects.clone()), (Some(other), vec![a]), "layer.move put g there");
 }
 
 #[test]

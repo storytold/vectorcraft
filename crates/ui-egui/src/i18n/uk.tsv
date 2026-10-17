@@ -4048,6 +4048,7 @@ axis	Both	Обидві
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	template layers and their objects can't be selected	шари шаблону та їхні об’єкти не можна виділити
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	нема чого експортувати: у документі немає видимого малюнка (або увімкніть «Використовувати монтажні області»)

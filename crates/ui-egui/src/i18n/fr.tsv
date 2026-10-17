@@ -4022,6 +4022,7 @@ axis	Both	Les deux
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	nothing encoded	rien n’a été encodé
 @msg	nothing selected	aucune sélection
+@msg	template layers and their objects can't be selected	les calques modèles et leurs objets ne peuvent pas être sélectionnés
 @msg	nothing to align	rien à aligner
 @msg	nothing to distort	rien à déformer
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	rien à exporter : le document n’a aucune illustration visible (ou activez Utiliser les plans de travail)

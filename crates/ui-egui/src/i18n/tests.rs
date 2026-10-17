@@ -1650,6 +1650,22 @@ fn effect_color_param_error_is_translated() {
     }
 }
 
+/// The parameter error of `layer.target` for a template layer, whose text [`message_literals`]
+/// doesn't read, is translated whole in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn layer_target_template_param_error_is_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let layer = s.execute("layer.new", &json!({"template": true, "locked": false})).unwrap()["id"].clone();
+    let e = s.execute("layer.target", &json!({"id": layer})).unwrap_err();
+    let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{e}") };
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+        assert!(!shown.contains(msg.as_str()), "{code}: {shown}");
+    }
+}
+
 /// The notes of an EPS or `.ai` whose layers weren't read, which the importer pushes as warnings
 /// (the scan above doesn't read them), are translated whole, reason included, as the status bar
 /// shows them after opening (#2035).

@@ -1037,6 +1037,10 @@ and `dataset.prev` also deselect every selected object that is hidden or locked 
 moved into a hidden or locked layer or group, or objects that a data set hides. The key object is cleared when it
 is one of them, and `edit.undo` selects them again with the key object.
 
+In the cases the two paragraphs above describe, the commands they name, and `layer.setProps`, also deselect the
+selected objects on a template layer or sublayer, also when it is unlocked: for example the objects on a layer that
+`layer.setProps {template: true, locked: false}` makes a template, or objects moved onto an unlocked template layer.
+
 These Select menu commands select only the objects that `select.all` selects and the objects inside them: every
 `select.same.*` and `select.object.*` command except `select.object.slices`, `select.nextAbove`, `select.nextBelow`
 and `select.recall`. They leave out hidden and locked objects with the objects inside them, the objects on hidden,
@@ -1046,6 +1050,9 @@ everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` 
 `select.nextAbove` and `select.nextBelow` select the nearest such object above or below the first selected object
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
+`select.magicWand`, the Lasso, Direct Selection (a press on an anchor or on a blend's spine point, and its marquee) and
+`shaper.select` pass over the objects on template layers and sublayers, also unlocked ones, as they pass over locked
+objects.
 
 ## Saved selections
 
@@ -1565,7 +1572,8 @@ and `layerRows`, the rows highlighted in the panel.
   set|add|toggle}` is Shift-click (a range) and Ctrl/Cmd-click (toggle). Selecting art makes its layer current.
   Without `ids`, the panel commands below act on the highlighted rows, else on the current layer.
 - **Selection column**: `layer.selectAll {id, add?}` selects a row's visible, unlocked art (a layer's sublayers'
-  too); `add` (Shift) adds it, or removes it when it's all selected.
+  too, except template sublayers); `add` (Shift) adds it, or removes it when it's all selected. A template layer, and a
+  row on one, selects nothing, also when the template layer is unlocked.
 - **Eye and lock**: `layer.setProps {ids?, visible?, locked?, name?}` for any rows, plus Layer Options for layers:
   `template` (also locks the layer and dims its images to 50% unless given), `printable`, `preview` (off: the layer
   draws and is clicked in outline, Ctrl/Cmd-click its eye), `dimImages` (0–100, or false) and `color` (an index 0–26,
@@ -1615,10 +1623,12 @@ and `layerRows`, the rows highlighted in the panel.
 
 ## Targeting layers and moving appearances
 
-`layer.target {id}` is the Layers panel's target circle: a layer gets its visible, unlocked art (its sublayers' too) selected and is itself
-the target, so `appearance.*`, `effect.*`, `transparency.*` and the opacity-mask commands without `ids` act on the
+`layer.target {id}` is the Layers panel's target circle: a layer gets its visible, unlocked art (its sublayers' too,
+except template sublayers) selected and is itself the target, so `appearance.*`, `effect.*`, `transparency.*` and the opacity-mask commands without `ids` act on the
 layer (its opacity, its own fills and effects, an opacity mask on the whole layer); a group or object is simply
-selected. `document.inspect` reports it as `target`, and any other selection change ends it.
+selected. A hidden or locked row is refused, and so are a template layer and a row on one, locked or not; an unlocked
+one is refused with "template layers and their objects can't be selected". `document.inspect` reports it as
+`target`, and any other selection change ends it.
 `appearance.transfer {source, target, copy?}` is dragging a target circle onto another: the target gets the source's
 fills, strokes, effects and transparency, and the source is cleared unless `copy` (Alt-drag). Dropping a circle on the
 panel's trash is `appearance.clear {ids: [id]}`. Masked objects' names have a dashed underline; while an opacity mask

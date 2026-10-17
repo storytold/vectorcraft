@@ -4025,6 +4025,7 @@ axis	Both	Ambos
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
 @msg	nothing encoded	no se codificó nada
 @msg	nothing selected	no hay nada seleccionado
+@msg	template layers and their objects can't be selected	las capas de plantilla y sus objetos no se pueden seleccionar
 @msg	nothing to align	no hay nada que alinear
 @msg	nothing to distort	no hay nada que distorsionar
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	no hay nada que exportar: el documento no tiene ilustración visible (o activa Usar mesas de trabajo)

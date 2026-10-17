@@ -4320,6 +4320,7 @@ theme	Appearance	Giao diện
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
 @msg	nothing encoded	không có gì được mã hóa
 @msg	nothing selected	chưa chọn gì
+@msg	template layers and their objects can't be selected	không thể chọn lớp mẫu và các đối tượng trên đó
 @msg	nothing to align	không có gì để căn chỉnh
 @msg	nothing to distort	không có gì để làm méo
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	không có gì để xuất: tài liệu không có tác phẩm hiển thị (hoặc bật Dùng bảng vẽ)

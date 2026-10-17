@@ -3963,6 +3963,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	nothing encoded	nichts kodiert
 @msg	nothing selected	nichts ausgewählt
+@msg	template layers and their objects can't be selected	Vorlagenebenen und ihre Objekte können nicht ausgewählt werden
 @msg	nothing to align	nichts auszurichten
 @msg	nothing to distort	nichts zu verzerren
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nichts zu exportieren: Das Dokument enthält keine sichtbare Grafik (oder aktivieren Sie „Zeichenflächen verwenden“)

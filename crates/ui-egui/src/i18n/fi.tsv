@@ -4247,6 +4247,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	nothing encoded	mitään ei koodattu
 @msg	nothing selected	mitään ei ole valittu
+@msg	template layers and their objects can't be selected	mallitasoja ja niiden objekteja ei voi valita
 @msg	nothing to align	ei tasattavaa
 @msg	nothing to distort	ei vääristettävää
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	ei vietävää: asiakirjassa ei ole näkyvää kuvitusta (tai ota Käytä piirtoalustoja käyttöön)

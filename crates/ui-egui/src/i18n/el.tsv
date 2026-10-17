@@ -4002,6 +4002,7 @@ theme	Appearance	Εμφάνιση
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	template layers and their objects can't be selected	τα επίπεδα προτύπου και τα αντικείμενά τους δεν μπορούν να επιλεγούν
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	δεν υπάρχει τίποτα για εξαγωγή: το έγγραφο δεν έχει ορατό σχέδιο (ή ενεργοποιήστε Χρήση πινάκων σχεδίασης)

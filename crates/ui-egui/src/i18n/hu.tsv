@@ -4671,6 +4671,7 @@ imageTrace	Outline	Körvonal
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	nothing encoded	nincs kódolt adat
 @msg	nothing selected	nincs kijelölés
+@msg	template layers and their objects can't be selected	a sablonrétegek és objektumaik nem jelölhetők ki
 @msg	nothing to align	nincs mit igazítani
 @msg	nothing to distort	nincs mit torzítani
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nincs mit exportálni: a dokumentumban nincs látható grafika (vagy kapcsold be a Rajztáblák használata beállítást)

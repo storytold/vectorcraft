@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Magic Wand",
             [],
             None,
-            "{id, mode?: set|add|subtract} select objects similar to `id` by the Magic Wand settings → {count}",
+            "{id, mode?: set|add|subtract} select objects similar to `id` by the Magic Wand settings, among the visible, unlocked objects that are not on a template layer → {count}",
             has_doc,
             magic_wand
         ),
@@ -127,7 +127,8 @@ impl WandSettings {
     }
 }
 
-/// Paintable leaves (paths, compounds, text, images) that are visible and editable.
+/// Paintable leaves (paths, compounds, text, images) that are visible and selectable
+/// ([`Document::is_selectable`]).
 fn paintable(doc: &Document) -> Vec<NodeId> {
     let mut out = vec![];
     let mut compounds: Vec<NodeId> = vec![];
@@ -141,7 +142,7 @@ fn paintable(doc: &Document) -> Vec<NodeId> {
     });
     out.retain(|id| {
         !doc.parent_of(*id).is_some_and(|p| compounds.contains(&p))
-            && doc.is_editable(*id)
+            && doc.is_selectable(*id)
             && doc.is_visible(*id)
             && doc.node(*id).is_some_and(|n| n.visible)
     });
@@ -205,6 +206,21 @@ mod tests {
         s.select_tool("pen", Default::default()).unwrap();
         assert_eq!(s.execute("magicWand.options", &json!({})).unwrap()["strokeWeight"], true);
         assert_eq!(s.execute("magicWand.set", &json!({"reset": true})).unwrap(), json!(WandSettings::default()));
+    }
+
+    /// Objects on a template layer are left out, also when it is unlocked, as locked ones are.
+    #[test]
+    fn template_layers_are_left_out() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+        let a = rect(&mut s, 0.0, "#ffffff", 1.0);
+        let layer = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+        let b = rect(&mut s, 20.0, "#ffffff", 1.0);
+        s.execute("select.magicWand", &json!({"id": a})).unwrap();
+        assert_eq!(selected(&s), [a, b]);
+        s.execute("layer.setProps", &json!({"id": layer, "template": true, "locked": false})).unwrap();
+        s.execute("select.magicWand", &json!({"id": a})).unwrap();
+        assert_eq!(selected(&s), [a]);
     }
 
     #[test]

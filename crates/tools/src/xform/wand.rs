@@ -114,7 +114,7 @@ impl Tool for LassoTool {
                         }
                     }
                 });
-                hits.retain(|(id, _)| cx.doc.is_editable(*id) && cx.doc.is_visible(*id));
+                hits.retain(|(id, _)| cx.doc.is_selectable(*id) && cx.doc.is_visible(*id));
                 let items: Vec<Value> = hits.iter().map(|(id, v)| json!({ "id": id.0, "anchors": anchors_json(v) })).collect();
                 let mode = if sub {
                     "subtract"
@@ -190,5 +190,28 @@ mod tests {
         assert_eq!(v["items"][0]["anchors"].as_array().unwrap().len(), 1);
         assert_eq!(v["mode"], "set");
         assert!(point_in_polygon(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], Point::new(2.0, 2.0)));
+    }
+
+    /// The Lasso passes over the paths of a template layer, also when it is unlocked, as it passes
+    /// over a locked layer's.
+    #[test]
+    fn lasso_passes_over_template_layers() {
+        let lasso = |d: &vectorcraft_doc::Document| {
+            let (s, p) = (Selection::default(), paint());
+            let cx = cx(d, &s, &p);
+            let mut t = LassoTool::default();
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 80.0, 80.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 80.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 140.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 80.0, 140.0))
+        };
+        let (mut locked, _) = doc_with_rect();
+        let (mut template, _) = doc_with_rect();
+        let l = locked.layers[0].id;
+        locked.node_mut(l).unwrap().locked = true;
+        let Some(NodeKind::Layer { template: on, .. }) = template.node_mut(l).map(|n| &mut n.kind) else { panic!("a layer") };
+        *on = true;
+        assert_ne!(lasso(&doc_with_rect().0), lasso(&locked));
+        assert_eq!(lasso(&template), lasso(&locked));
     }
 }

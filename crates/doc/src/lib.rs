@@ -1330,6 +1330,11 @@ impl Document {
     pub fn is_editable(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible && !n.locked)))
     }
+    /// Can the node be selected: is it editable ([`Document::is_editable`]) and neither a template
+    /// layer nor inside one, locked or not?
+    pub fn is_selectable(&self, id: NodeId) -> bool {
+        self.is_editable(id) && self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.is_template())))
+    }
     pub fn is_visible(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible)))
     }

@@ -4374,6 +4374,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした: {e}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
 @msg	nothing selected	何も選択されていません
+@msg	template layers and their objects can't be selected	テンプレートレイヤーとそのオブジェクトは選択できません
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
 @msg	unknown tool `{tool}`	`{tool}` は不明なツールです
 @msg	{tool} isn't in a toolbar group of several tools	{tool} は複数のツールからなるツールグループに含まれていません

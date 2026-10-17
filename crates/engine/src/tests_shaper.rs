@@ -311,6 +311,23 @@ fn shaper_construction_taps_stay_in_the_isolated_group() {
     assert_eq!(s.doc().unwrap().isolation, Some(sources));
 }
 
+/// A Shaper tap passes over a Shaper Group on a template layer, also when it is unlocked, as it
+/// passes over one on a locked layer.
+#[test]
+fn shaper_taps_pass_over_a_template_layer() {
+    let mut s = session();
+    rectangle(&mut s, 0.0, "#ff0000");
+    rectangle(&mut s, 50.0, "#0000ff");
+    scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"id": layer.0, "template": true, "locked": false})).unwrap();
+    for source in [false, true] {
+        assert_eq!(s.execute("shaper.select", &json!({"point": [75, 50], "source": source})).unwrap()["id"], json!(null), "source: {source}");
+        assert!(s.doc().unwrap().selection.objects.is_empty() && s.doc().unwrap().isolation.is_none(), "source: {source}");
+    }
+}
+
 #[test]
 fn shaper_lines_keep_free_angles_with_or_without_shift() {
     for shift in [false, true] {

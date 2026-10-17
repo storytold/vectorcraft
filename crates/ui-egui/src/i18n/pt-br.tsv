@@ -3607,6 +3607,7 @@ axis	Both	Ambos
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	nothing encoded	nada codificado
 @msg	nothing selected	nada selecionado
+@msg	template layers and their objects can't be selected	camadas de modelo e seus objetos não podem ser selecionados
 @msg	nothing to align	nada para alinhar
 @msg	nothing to distort	nada para distorcer
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nada para exportar: o documento não tem arte visível (ou ative Usar pranchetas)

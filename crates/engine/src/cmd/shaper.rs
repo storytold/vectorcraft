@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Shaper Face",
             [],
             None,
-            "{point: [x,y], source?: bool} click selects a group, then a face; source enters construction isolation and selects an original; while a group's originals are isolated, it selects one of that group's originals → {id}",
+            "{point: [x,y], source?: bool} click selects a group (not one that is hidden or locked or on a template layer), then a face; source enters construction isolation and selects an original; while a group's originals are isolated, it selects one of that group's originals → {id}",
             has_doc,
             select
         ),
@@ -687,14 +687,14 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "regions": touched.len(), "strokes": strokes}))
 }
 
-/// The topmost editable Shaper Group at `point`, measured by its source shapes in `construction`.
-/// When `within` is given, only that group is considered.
+/// The topmost selectable Shaper Group at `point` ([`Document::is_selectable`]), measured by its
+/// source shapes in `construction`. When `within` is given, only that group is considered.
 fn group_at(d: &Document, point: Point, construction: bool, within: Option<NodeId>) -> Option<NodeId> {
     let mut groups = vec![];
     d.walk(|n| {
         if n.extras().shaper.is_some()
             && within.is_none_or(|g| g == n.id)
-            && d.is_editable(n.id)
+            && d.is_selectable(n.id)
             && (if construction { source_group(n).and_then(Node::geometric_bounds) } else { n.geometric_bounds() })
                 .is_some_and(|b| b.inflate(6.0, 6.0).contains(point))
         {

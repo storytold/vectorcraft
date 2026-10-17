@@ -4148,6 +4148,7 @@ imageTrace	Outline	Kontur
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	nothing encoded	nic nie zakodowano
 @msg	nothing selected	nic nie zaznaczono
+@msg	template layers and their objects can't be selected	warstw szablonu i ich obiektów nie można zaznaczyć
 @msg	nothing to align	nie ma czego wyrównać
 @msg	nothing to distort	nie ma czego zniekształcić
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nie ma czego eksportować: dokument nie ma widocznej kompozycji (lub włącz Użyj obszarów kompozycji)

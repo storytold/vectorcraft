@@ -4060,6 +4060,7 @@ axis	Both	Оба
 @msg	not in pattern editing mode	не в режиме редактирования узора
 @msg	nothing encoded	ничего не закодировано
 @msg	nothing selected	ничего не выделено
+@msg	template layers and their objects can't be selected	слои шаблона и их объекты нельзя выделить
 @msg	nothing to align	нечего выравнивать
 @msg	nothing to distort	нечего искажать
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	нечего экспортировать: в документе нет видимого рисунка (или включите «Использовать монтажные области»)

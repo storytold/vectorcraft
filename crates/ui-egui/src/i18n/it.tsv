@@ -4064,6 +4064,7 @@ axis	Both	Entrambi
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	nothing encoded	nessun dato codificato
 @msg	nothing selected	nessuna selezione
+@msg	template layers and their objects can't be selected	i livelli modello e i loro oggetti non possono essere selezionati
 @msg	nothing to align	niente da allineare
 @msg	nothing to distort	niente da distorcere
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	niente da esportare: il documento non ha grafica visibile (oppure attiva Usa tavole da disegno)

@@ -3950,6 +3950,7 @@ axis	Both	Båda
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	nothing encoded	inget kodat
 @msg	nothing selected	inget markerat
+@msg	template layers and their objects can't be selected	malllager och deras objekt kan inte markeras
 @msg	nothing to align	inget att justera
 @msg	nothing to distort	inget att förvränga
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	inget att exportera: dokumentet har ingen synlig grafik (eller aktivera Använd ritytor)
