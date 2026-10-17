@@ -10,7 +10,20 @@ use vectorcraft_doc::{
 };
 use vectorcraft_doc::{CharStyle, ImageBlob, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
+
+/// The circle-approximation handle ratio that `vectorcraft_geom::shapes::ellipse` uses. We use
+/// the same constant when detecting whether a path is an exact ellipse post-transform.
+const ELLIPSE_KAPPA: f64 = 0.552_284_749_830_793_6;
+
+/// A geometric primitive we can emit directly (`<rect>`, `<circle>`, `<ellipse>`) instead of
+/// `<path>`. Coords are in document space (post-xf). (#1292)
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Prim {
+    Rect { x: f64, y: f64, w: f64, h: f64 },
+    Circle { cx: f64, cy: f64, r: f64 },
+    Ellipse { cx: f64, cy: f64, rx: f64, ry: f64 },
+}
 
 use vectorcraft_text::{FontDb, FontFace};
 
@@ -765,6 +778,117 @@ impl Writer<'_> {
         s
     }
 
+/// Tolerance for detecting shape primitives: usvg constructs paths through several Affines and
+/// b-spline fits, so the KAPPA-scaled handles can drift by a few ULPs. 1e-4 is well below the
+/// visual threshold for primitive-anchor placement.
+const PRIM_TOL: f64 = 1e-4;
+
+fn close_enough(a: Point, b: Point, tol: f64) -> bool {
+(a.x - b.x).abs() <= tol && (a.y - b.y).abs() <= tol
+}
+
+/// Detect if `path` is an exact circle, ellipse, or axis-aligned rectangle, after applying
+/// `xf`. Returns `None` if it is any other shape (a generic path, a rect-with-rounded-corners,
+/// a rotated rect, etc.). (#1292)
+fn detect_primitive(path: &PathData, xf: Affine) -> Option<Prim> {
+    if path.subpaths.len() != 1 {
+        return None;
+    }
+    let sp = &path.subpaths[0];
+    if !sp.closed || sp.anchors.len() != 4 {
+        return None;
+    }
+    // Apply xf to every anchor position and handle. For non-rotational xf (off-diagonal
+    // coefficients are zero) the post-xf shape is still a rect or ellipse; otherwise we fall
+    // back to a path.
+    let [a, b, c, d, e, f] = xf.as_coeffs();
+    if b != 0.0 || c != 0.0 {
+        return None;
+    }
+    if a.abs() < 1e-12 || d.abs() < 1e-12 {
+        return None;
+    }
+    let tx = |p: Point| Point::new(a * p.x + e, d * p.y + f);
+
+    // Post-xf bounds, from the transformed anchor positions.
+    let mut bounds = Rect::new(f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+    let pts: Vec<Point> = sp.anchors.iter().map(|an| tx(an.p)).collect();
+    for p in &pts {
+        bounds.x0 = bounds.x0.min(p.x);
+        bounds.y0 = bounds.y0.min(p.y);
+        bounds.x1 = bounds.x1.max(p.x);
+        bounds.y1 = bounds.y1.max(p.y);
+    }
+
+    // All anchors must be corners (handles equal position) for a rect.
+    let all_lines = sp.anchors.iter().all(|an| an.h_in == an.p && an.h_out == an.p);
+    if all_lines {
+        let mut at_corners = 0;
+        for p in &pts {
+            let on_x = p.x == bounds.x0 || p.x == bounds.x1;
+            let on_y = p.y == bounds.y0 || p.y == bounds.y1;
+            if on_x && on_y {
+                at_corners += 1;
+            }
+        }
+        if at_corners != 4 {
+            return None;
+        }
+        return Some(Prim::Rect {
+            x: bounds.x0,
+            y: bounds.y0,
+            w: bounds.width(),
+            h: bounds.height(),
+        });
+    }
+
+    // Otherwise 4 cubics: an ellipse. Bounds give center + radii.
+    let (rx, ry) = (bounds.width() / 2.0, bounds.height() / 2.0);
+    if rx <= 0.0 || ry <= 0.0 {
+        return None;
+    }
+    let c = bounds.center();
+    let kx = ELLIPSE_KAPPA * rx;
+    let ky = ELLIPSE_KAPPA * ry;
+    // Anchors at left/top/right/bottom in this order. Tries all 4 cyclic rotations below.
+    // Each tuple is (anchor_position, h_in_position, h_out_offset). The vector sign matches
+    // `vectorcraft_geom::shapes::ellipse`: h_in = p + hin, h_out = p - hin, so h_out_offset
+    // is the negation of `hin`.
+    let expected: [(Point, Point, Vec2); 4] = [
+        // left, hin=(0, +ky)
+        (Point::new(c.x - rx, c.y), Point::new(c.x - rx, c.y + ky), Vec2::new(0.0, -ky)),
+        // top, hin=(-kx, 0)
+        (Point::new(c.x, c.y - ry), Point::new(c.x - kx, c.y - ry), Vec2::new(kx, 0.0)),
+        // right, hin=(0, -ky)
+        (Point::new(c.x + rx, c.y), Point::new(c.x + rx, c.y - ky), Vec2::new(0.0, ky)),
+        // bottom, hin=(+kx, 0)
+        (Point::new(c.x, c.y + ry), Point::new(c.x + kx, c.y + ry), Vec2::new(-kx, 0.0)),
+    ];
+    for rot in 0..4 {
+        let mut ok = true;
+        for (i, an) in sp.anchors.iter().enumerate() {
+            let (ep, ei, eo) = expected[(i + rot) % 4];
+            let hi_expected = ei;
+            let ho_expected = ep + eo;
+            if !Self::close_enough(tx(an.p), ep, Self::PRIM_TOL)
+                || !Self::close_enough(tx(an.h_in), hi_expected, Self::PRIM_TOL)
+                || !Self::close_enough(tx(an.h_out), ho_expected, Self::PRIM_TOL)
+            {
+                ok = false;
+                break;
+            }
+        }
+        if ok {
+            return Some(if (rx - ry).abs() < 1e-9 {
+                Prim::Circle { cx: c.x, cy: c.y, r: rx }
+            } else {
+                Prim::Ellipse { cx: c.x, cy: c.y, rx, ry }
+            });
+        }
+    }
+    None
+    }
+
     /// A fill or stroke value. Gradients resolve unset geometry against `bounds` (the space
     /// [`Self::xf`] maps into user space, as the renderer does).
     fn paint(&mut self, p: &Paint, bounds: Option<Rect>) -> String {
@@ -1026,6 +1150,29 @@ impl Writer<'_> {
             }
             p.extend(css::transparency(n));
             let a = self.attrs(&p);
+            // A single geometric primitive (rect, circle, ellipse) round-trips as the matching
+            // SVG tag instead of a path. (#1292)
+            if paths.len() == 1
+                && let Some(prim) = Self::detect_primitive(paths[0], self.xf)
+            {
+                let d = self.opts.decimals;
+                let body = match prim {
+                    Prim::Rect { x, y, w, h } => format!(
+                        "<rect{id} x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"{a}/>",
+                        fmt_num(x, d), fmt_num(y, d), fmt_num(w, d), fmt_num(h, d)
+                    ),
+                    Prim::Circle { cx, cy, r } => format!(
+                        "<circle{id} cx=\"{}\" cy=\"{}\" r=\"{}\"{a}/>",
+                        fmt_num(cx, d), fmt_num(cy, d), fmt_num(r, d)
+                    ),
+                    Prim::Ellipse { cx, cy, rx, ry } => format!(
+                        "<ellipse{id} cx=\"{}\" cy=\"{}\" rx=\"{}\" ry=\"{}\"{a}/>",
+                        fmt_num(cx, d), fmt_num(cy, d), fmt_num(rx, d), fmt_num(ry, d)
+                    ),
+                };
+                self.line(&body);
+                return;
+            }
             self.line(&format!("<path{id} d=\"{d}\"{a}/>"));
             return;
         }

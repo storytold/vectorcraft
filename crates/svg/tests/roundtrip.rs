@@ -69,7 +69,9 @@ fn curves_roundtrip() {
     let n = Node::path(id, shapes::ellipse(Rect::new(20.0, 30.0, 120.0, 90.0)), Appearance::default_art());
     let d = doc_with(vec![n]);
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains(" C"), "{s}");
+    // After #1292 an exact ellipse is emitted as `<ellipse>` rather than `<path d="…C…"/>`. The
+    // round-trip still preserves the geometry.
+    assert!(s.contains("<ellipse"), "{s}");
     let r = roundtrip(&d);
     let a = art(&r);
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 120.0, 90.0), 0.01));
@@ -326,7 +328,8 @@ fn hidden_and_guides_omitted() {
     a.visible = false;
     let b = rect_node(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Appearance::default_art());
     let s = export(&doc_with(vec![a, b]), &ExportOptions::default());
-    assert_eq!(s.matches("<path").count(), 1);
+    // The visible rect is emitted as a primitive (`<rect>` after #1292), the hidden one is omitted.
+    assert_eq!(s.matches("<rect").count() + s.matches("<path").count(), 1);
     let r = import(&s).unwrap();
     assert_eq!(art(&r).len(), 1);
 }
@@ -513,9 +516,10 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(!s.contains("<?xml"));
     assert!(!s.contains(" width=\"200\""));
     assert!(s.contains("viewBox=\"0 0 200 100\""), "{s}");
-    assert!(s.contains("M10.12 20"), "{s}");
+    // The rectangle is emitted as a `<rect>` primitive (after #1292), not as a `<path>` d-string.
+    assert!(s.contains("x=\"10.12\"") && s.contains("y=\"20\""), "{s}");
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("M10.123 20"), "{s}");
+    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("x=\"10.123\"") && s.contains("y=\"20\""), "{s}");
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
@@ -572,6 +576,31 @@ fn import_basic_shapes() {
     assert_eq!(a[3].appearance.fill_paint().color().unwrap().to_hex(), "#008000");
     assert!(!a[4].path_data().unwrap().is_closed());
     assert_eq!(a[5].path_data().unwrap().anchor_count(), 2);
+}
+
+/// Hand-written `<rect>`, `<circle>`, `<ellipse>` round-trip back as those primitives instead of
+/// `<path d="…"/>` so downstream scripts that key off the tag still find them. (#1292)
+#[test]
+fn shape_primitives_round_trip() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+        <rect id="box" x="10" y="10" width="50" height="30" fill="#ff0000"/>
+        <circle id="c" cx="100" cy="50" r="20" fill="#0000ff"/>
+        <ellipse id="e" cx="160" cy="50" rx="30" ry="10" fill="#00ff00"/>
+        </svg>"##;
+    let s = export(&import_art(svg), &ExportOptions::default());
+    assert!(s.contains("<rect "), "rect exported as path:\n{s}");
+    assert!(s.contains("id=\"box\""), "rect id dropped:\n{s}");
+    assert!(s.contains("<circle "), "circle exported as path:\n{s}");
+    assert!(s.contains("id=\"c\""), "circle id dropped:\n{s}");
+    assert!(s.contains("<ellipse "), "ellipse exported as path:\n{s}");
+    assert!(s.contains("id=\"e\""), "ellipse id dropped:\n{s}");
+    // Confirm the geometry survives by round-tripping again.
+    let r = import_art(&s);
+    let art = art(&r);
+    assert_eq!(art.len(), 3);
+    assert!(close_rect(art[0].geometric_bounds().unwrap(), Rect::new(10.0, 10.0, 60.0, 40.0), 0.01));
+    assert!(close_rect(art[1].geometric_bounds().unwrap(), Rect::new(80.0, 30.0, 120.0, 70.0), 0.01));
+    assert!(close_rect(art[2].geometric_bounds().unwrap(), Rect::new(130.0, 40.0, 190.0, 60.0), 0.01));
 }
 
 #[test]
