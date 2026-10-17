@@ -1,12 +1,13 @@
 //! Where each printed page's art goes: the artboards (or all the art) that print, the paper's
-//! orientation, the scale, the placement on the imageable area or the tiles, and the turns and
-//! mirroring of the page (flipped orientation, emulsion down, transverse).
+//! orientation, the scale, the placement on the imageable area (of one copy, or of a grid of
+//! copies per sheet) or the tiles, and the turns and mirroring of the page (flipped orientation,
+//! emulsion down, transverse).
 //!
 //! The art is placed in a drawing space: the paper (y down from its top-left corner), or, when
 //! tiling, the whole printed area (the artboard grown by its bleed and marks) from its top-left
 //! corner, of which each page shows one tile.
 
-use kurbo::{Affine, Rect};
+use kurbo::{Affine, Rect, Vec2};
 use serde::Serialize;
 use vectorcraft_doc::marks::outset;
 use vectorcraft_doc::range::parse_range;
@@ -17,6 +18,9 @@ use crate::PdfError;
 
 /// Most tiles of one artboard.
 pub const MAX_TILES: usize = 1000;
+
+/// Most copies of one artboard on a sheet ([`PrintSettings::copies_per_sheet`]).
+pub const MAX_COPIES_PER_SHEET: usize = 1000;
 
 /// One page of the job, before copies and inks.
 #[derive(Clone, Debug)]
@@ -43,9 +47,12 @@ pub(crate) struct Layout {
     /// the marks go.
     pub trim: Rect,
     pub bleed: [f64; 4],
-    /// The TrimBox and BleedBox in page space.
+    /// The TrimBox and BleedBox in page space (around every copy with copies per sheet).
     pub page_trim: Rect,
     pub page_bleed: Rect,
+    /// With copies per sheet, where each copy goes: its move in drawing space from where
+    /// [`Self::place`] puts the art, across then down (the first is zero). Empty: one copy.
+    pub copies: Vec<Vec2>,
 }
 
 /// The tiles of one artboard (`print.preview`).
@@ -148,6 +155,13 @@ fn span(start: Option<f64>, extent: f64, tile: f64, step: f64, overlap: f64) -> 
     }
 }
 
+/// How many printed areas `extent` long fit in `room`, `gutter` apart (whole copies only).
+fn fitting(room: f64, extent: f64, gutter: f64) -> f64 {
+    // Copies that fill the room exactly fit.
+    const EPS: f64 = 1e-6;
+    ((room + gutter) / (extent + gutter) + EPS).floor().max(0.0)
+}
+
 /// The page turns of a `w` × `h` paper (flipped, emulsion down, transverse) as one transform from
 /// the paper onto the page, and the page's size.
 fn turns(set: &PrintSettings, (w, h): (f64, f64), flipped: bool) -> (Affine, (f64, f64)) {
@@ -230,7 +244,7 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let t = view.transform_rect_bbox(trim).intersect(b);
             if t.area() > 0.0 { (t, b) } else { (page, page) }
         };
-        let base = |view, window, place, area, trim, (page_trim, page_bleed), tile| Layout {
+        let base = |view, window, place, area, trim, (page_trim, page_bleed), tile, copies| Layout {
             artboard,
             tile,
             size: page_size,
@@ -244,24 +258,48 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             bleed: bleed_s,
             page_trim,
             page_bleed,
+            copies,
         };
         if !set.scaling.tiles() {
-            // The printed area's top-left corner: where the tile origin puts it, else the placement.
+            // With copies per sheet, the grid holds as many printed areas as fit the imageable
+            // area, `gutter` apart, and is placed as one; when not even one fits, the artboard
+            // prints alone.
+            let gutter = set.gutter;
+            let fit = set.copies_per_sheet.then(|| (fitting(imageable.width(), extent.0, gutter), fitting(imageable.height(), extent.1, gutter)));
+            let grid = match fit {
+                Some((cols, rows)) if cols < 1.0 || rows < 1.0 => {
+                    warnings.push(format!("{what} with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"));
+                    None
+                }
+                Some((cols, rows)) if cols * rows > MAX_COPIES_PER_SHEET as f64 => {
+                    return Err(PdfError::BadSetting(format!("{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up")));
+                }
+                fit => fit.map(|(cols, rows)| (cols as usize, rows as usize)),
+            };
+            let step = (extent.0 + gutter, extent.1 + gutter);
+            let all = grid.map_or(extent, |(cols, rows)| (cols as f64 * step.0 - gutter, rows as f64 * step.1 - gutter));
+            // The printed area's (or the grid's) top-left corner: where the tile origin puts it,
+            // else the placement.
             let (x, y) = match origin {
                 Some((ox, oy)) => (imageable.x0 - ox * scale.0 - most[2], imageable.y0 - oy * scale.1 - most[0]),
                 None => {
                     let (fx, fy) = set.placement.origin.factors();
                     (
-                        imageable.x0 + (imageable.width() - extent.0) * fx + set.placement.x,
-                        imageable.y0 + (imageable.height() - extent.1) * fy + set.placement.y,
+                        imageable.x0 + (imageable.width() - all.0) * fx + set.placement.x,
+                        imageable.y0 + (imageable.height() - all.1) * fy + set.placement.y,
                     )
                 }
             };
             let trim = Rect::new(x + most[2], y + most[0], x + most[2] + size.0, y + most[0] + size.1);
-            if !imageable.inflate(0.01, 0.01).contains_rect(Rect::new(x, y, x + extent.0, y + extent.1)) {
+            if !imageable.inflate(0.01, 0.01).contains_rect(Rect::new(x, y, x + all.0, y + all.1)) {
                 warnings.push(format!("{what} with its bleed and marks is larger than the imageable area: part of it doesn't print"));
             }
-            pages.push(base(turn, None, place_at(trim), bleed_box, trim, boxes(turn, trim), None));
+            let copies: Vec<Vec2> = grid.map_or_else(Vec::new, |(cols, rows)| {
+                (0..rows).flat_map(|j| (0..cols).map(move |i| Vec2::new(i as f64 * step.0, j as f64 * step.1))).collect()
+            });
+            let page_boxes =
+                copies.iter().map(|m| boxes(turn, trim + *m)).reduce(|a, b| (a.0.union(b.0), a.1.union(b.1))).unwrap_or_else(|| boxes(turn, trim));
+            pages.push(base(turn, None, place_at(trim), bleed_box, trim, page_boxes, None, copies));
             continue;
         }
         // Tiles across then down over the printed area, overlapping by `overlap`.
@@ -301,7 +339,7 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let w = window(t);
             let view = turn * Affine::translate((at.0 - w.x0, at.1 - w.y0));
             let area = from_doc.transform_rect_bbox(w).intersect(bleed_box);
-            pages.push(base(view, Some(w), place, area, trim, boxes(view, trim), Some((t, count))));
+            pages.push(base(view, Some(w), place, area, trim, boxes(view, trim), Some((t, count)), vec![]));
         }
         let tiles = (0..count).map(|t| from_doc.transform_rect_bbox(window(t))).map(|b| [b.x0, b.y0, b.x1, b.y1]).collect();
         grids.push(TileGrid { artboard, columns: cols, rows, printed: pick.iter().map(|t| t + 1).collect(), tiles });

@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use kurbo::Shape;
+use kurbo::{Shape, Vec2};
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_geom::{Affine, Rect};
 
@@ -24,6 +24,9 @@ pub struct PrintPage<'a> {
     pub window: Option<Rect>,
     /// Document space → drawing space.
     pub place: Affine,
+    /// Copies on the sheet: each one's move in drawing space from where [`Self::place`] puts the
+    /// art. The art and the marks are drawn once per copy. Empty: one copy, not moved.
+    pub copies: &'a [Vec2],
     /// The art drawn, in document space: what lies outside it is left out.
     pub area: Rect,
     /// Printer's marks, in drawing space.
@@ -59,7 +62,10 @@ fn sheet(p: &PrintPage, job: &PrintJob) -> Result<(String, Vec<Page>), String> {
     if !(w.is_finite() && h.is_finite() && w >= 1.0 && h >= 1.0 && [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite())) {
         return Err(format!("page size {w} × {h}"));
     }
-    if !finite(p.view) || !finite(p.place) {
+    // `moves` holds each copy's move in drawing space; without copies, it holds one zero move.
+    let moves = if p.copies.is_empty() { &[Vec2::ZERO][..] } else { p.copies };
+    let place_at = |m: Vec2| if m == Vec2::ZERO { p.place } else { Affine::translate(m) * p.place };
+    if !finite(p.view) || !moves.iter().all(|m| finite(place_at(*m))) {
         return Err("a page's placement is not finite".into());
     }
     let opts = |region: Rect| EpsOptions { level: job.level, region, ..EpsOptions::default() };
@@ -69,6 +75,9 @@ fn sheet(p: &PrintPage, job: &PrintJob) -> Result<(String, Vec<Page>), String> {
     let paper = Rect::new(0.0, 0.0, w, h);
     let shown = if p.view.determinant().abs() > 1e-12 { p.view.inverse().transform_rect_bbox(paper) } else { paper };
     let shown = p.window.map_or(shown, |t| t.intersect(shown));
+    // The marks body is drawn for every copy, so it is generated for the union of the regions
+    // the copies show.
+    let shown = moves.iter().map(|m| shown - *m).reduce(|a, b| a.union(b)).unwrap_or(shown);
     let marks_opts = opts(shown);
     let marks = p.marks.map(|m| Scene::new(p.doc, &marks_opts).run_node(m));
     let mut s = String::with_capacity(art.body.len() + art.setup.len() + 1024);
@@ -98,19 +107,33 @@ fn sheet(p: &PrintPage, job: &PrintJob) -> Result<(String, Vec<Page>), String> {
         ps::push_path(&mut s, &t.to_path(0.1));
         s.push_str("W\n");
     }
-    s.push_str("q\n");
-    let _ = writeln!(s, "{} cm", ps::matrix(p.place));
-    ps::push_path(&mut s, &r.to_path(0.1));
-    s.push_str("W\n");
-    s.push_str(&art.setup);
-    s.push_str(&art.body);
-    s.push_str("Q\n");
+    for (i, m) in moves.iter().enumerate() {
+        s.push_str("q\n");
+        let _ = writeln!(s, "{} cm", ps::matrix(place_at(*m)));
+        ps::push_path(&mut s, &r.to_path(0.1));
+        s.push_str("W\n");
+        // The setup defines the spot color spaces once; each copy draws the same body.
+        if i == 0 {
+            s.push_str(&art.setup);
+        }
+        s.push_str(&art.body);
+        s.push_str("Q\n");
+    }
     let mut found = vec![art];
-    if let Some(m) = marks {
+    if let Some(marks) = marks {
         // The marks' spot colour spaces are defined after the art is drawn: names may be reused.
-        s.push_str(&m.setup);
-        s.push_str(&m.body);
-        found.push(m);
+        s.push_str(&marks.setup);
+        for m in moves {
+            let moved = *m != Vec2::ZERO;
+            if moved {
+                let _ = writeln!(s, "q\n{} cm", ps::matrix(Affine::translate(*m)));
+            }
+            s.push_str(&marks.body);
+            if moved {
+                s.push_str("Q\n");
+            }
+        }
+        found.push(marks);
     }
     s.push_str("Q\nend\nshowpage\n%%PageTrailer\n");
     Ok((s, found))
