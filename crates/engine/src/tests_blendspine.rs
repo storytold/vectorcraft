@@ -74,24 +74,22 @@ fn spine_anchor_conversion_preserves_keys_and_undo() {
     let (a, b, g) = blend(&mut s);
     s.execute("object.blend.spine.addAnchor", &json!({"id": g.0, "x": 55, "y": 5})).unwrap();
     let keys_before = spec(&s, g).key_anchors;
-    s.execute(
-        "object.blend.spine.convertAnchor",
-        &json!({"id": g.0, "anchor": 1, "to": "smooth", "x": 55, "y": 35}),
-    )
-    .unwrap();
+    let point_before = spec(&s, g).spine.unwrap().subpaths[0].anchors[1].p;
+    assert!(point_before.distance(Point::new(55.0, 5.0)) < 1e-9);
+    s.execute("object.blend.spine.convertAnchor", &json!({"id": g.0, "anchor": 1, "to": "smooth", "x": 55, "y": 35})).unwrap();
     let sp = spec(&s, g);
     assert_eq!(sp.key_anchors, keys_before);
     let middle = sp.spine.as_ref().unwrap().subpaths[0].anchors[1];
     assert_eq!(middle.kind, vectorcraft_geom::AnchorKind::Smooth);
-    assert_eq!(middle.p, Point::new(55.0, 5.0));
-    assert_eq!(middle.h_in, Point::new(55.0, -25.0));
+    assert_eq!(middle.p, point_before);
+    assert_eq!(middle.h_in, point_before - (Point::new(55.0, 35.0) - point_before));
     assert_eq!(middle.h_out, Point::new(55.0, 35.0));
     assert_eq!(center(&node(&s, a)), Point::new(5.0, 5.0));
     assert_eq!(center(&node(&s, b)), Point::new(105.0, 5.0));
 
     s.execute("edit.undo", &json!({})).unwrap();
     let before = spec(&s, g);
-    assert_eq!(before.spine.unwrap().subpaths[0].anchors[1].h_out, Point::new(55.0, 5.0));
+    assert_eq!(before.spine.unwrap().subpaths[0].anchors[1].h_out, point_before);
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle);
 

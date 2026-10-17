@@ -11,7 +11,6 @@
 
 use serde_json::json;
 use vectorcraft_doc::NodeId;
-use vectorcraft_geom::Anchor;
 use vectorcraft_geom::Point;
 
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
@@ -84,42 +83,71 @@ impl AnchorTool {
         Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default() }
     }
 
-    /// Only selected, editable blends are eligible; their visible spines are
-    /// computed in document coordinates, as for Direct Selection.
-    fn spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, Anchor)> {
-        let mut best: Option<((NodeId, usize, Anchor), f64)> = None;
-        for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
-            for (_, ai, a) in path.anchors().filter(|(si, _, _)| *si == 0) {
-                let d = a.p.distance(p);
-                if d <= tol && best.is_none_or(|b| d < b.1) {
-                    best = Some(((id, ai, *a), d));
+    /// Nearest point of this eligible spine, in document coordinates.
+    fn spine_point(path: &vectorcraft_geom::PathData, p: Point, tol: f64) -> Option<usize> {
+        path.anchors()
+            .filter(|(si, _, a)| *si == 0 && a.p.distance(p) <= tol)
+            .min_by(|a, b| a.2.p.distance(p).total_cmp(&b.2.p.distance(p)))
+            .map(|(_, ai, _)| ai)
+    }
+
+    /// Nearest shown handle, only when closer than its own anchor (short handles).
+    fn spine_handle(cx: &ToolContext, path: &vectorcraft_geom::PathData, p: Point, tol: f64) -> Option<(usize, bool)> {
+        let anchors: Vec<_> = path.anchors().filter(|(si, _, _)| *si == 0).collect();
+        if !cx.handles_multiple && anchors.len() > 1 {
+            return None;
+        }
+        let mut best: Option<((usize, bool), f64)> = None;
+        for (_, ai, a) in anchors {
+            for (out, has, h) in [(true, a.has_out(), a.h_out), (false, a.has_in(), a.h_in)] {
+                let d = h.distance(p);
+                if has && d <= tol && d < a.p.distance(p) && best.is_none_or(|b| d < b.1) {
+                    best = Some(((ai, out), d));
                 }
             }
         }
         best.map(|b| b.0)
     }
 
-    /// The end of a shown spine handle nearest to p within tol, and nearer to it than
-    /// the handle's anchor (a short handle leaves its anchor to be picked).
-    fn spine_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, bool)> {
-        let mut best: Option<((NodeId, usize, bool), f64)> = None;
+    /// Preserve Path hit semantics; compare Path and Blend owners by selection and stacking.
+    /// Hover and pointer-down share the same decision.
+    fn press_target(cx: &ToolContext, p: Point) -> State {
+        let (point, tol) = (cx.point_tol(), cx.pick_tol());
+        let mut target = if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
+            State::Handle { id, si, ai, out, start: p, began: false }
+        } else if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
+            State::Convert { id, si, ai, start: p, began: false }
+        } else if let Some((id, si, seg, t)) = hit_segment(cx, p, tol) {
+            State::Reshape { id, si, seg, t, start: p, began: false, spine: false }
+        } else {
+            State::Idle
+        };
+        let rank = |state| match state {
+            State::Idle => None,
+            State::Convert { id, .. }
+            | State::Handle { id, .. }
+            | State::SpineConvert { id, .. }
+            | State::SpineHandle { id, .. }
+            | State::Reshape { id, .. } => Some((cx.selection.contains(id), cx.doc.index_path(id))),
+        };
         for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
-            // With Show handles when multiple anchors are selected off, more than one spine
-            // anchor hides every handle, as for ordinary paths.
-            let anchors: Vec<_> = path.anchors().filter(|(si, _, _)| *si == 0).collect();
-            if !cx.handles_multiple && anchors.len() > 1 {
-                continue;
-            }
-            for (_, ai, a) in anchors {
-                for (out, has, h) in [(true, a.has_out(), a.h_out), (false, a.has_in(), a.h_in)] {
-                    let d = h.distance(p);
-                    if has && d <= tol && d < a.p.distance(p) && best.is_none_or(|b| d < b.1) {
-                        best = Some(((id, ai, out), d));
-                    }
+            let candidate = if let Some((ai, out)) = Self::spine_handle(cx, &path, p, point) {
+                State::SpineHandle { id, ai, out, start: p, began: false }
+            } else if let Some(ai) = Self::spine_point(&path, p, point) {
+                State::SpineConvert { id, ai, start: p, began: false }
+            } else if let Some((_, seg, t, _, dist)) = path.nearest(p) {
+                if dist > tol {
+                    continue;
                 }
+                State::Reshape { id, si: 0, seg, t, start: p, began: false, spine: true }
+            } else {
+                continue;
+            };
+            if rank(candidate) > rank(target) {
+                target = candidate;
             }
         }
-        best.map(|b| b.0)
+        target
     }
 
     /// Unlike Direct Selection, Anchor Point has no remembered focus after a
@@ -187,19 +215,9 @@ impl Tool for AnchorTool {
                 }
             }
             ("anchorPoint", PointerKind::Down) => {
-                if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
-                    self.state = State::Handle { id, si, ai, out, start: p, began: false };
+                self.state = Self::press_target(cx, p);
+                if matches!(self.state, State::Handle { .. }) {
                     self.snap = HandleSnap::default();
-                } else if let Some((id, ai, out)) = Self::spine_handle(cx, p, point) {
-                    self.state = State::SpineHandle { id, ai, out, start: p, began: false };
-                } else if let Some((id, ai, _)) = Self::spine_point(cx, p, point) {
-                    self.state = State::SpineConvert { id, ai, start: p, began: false };
-                } else if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
-                    self.state = State::Convert { id, si, ai, start: p, began: false };
-                } else if let Some((id, si, seg, t)) = hit_segment(cx, p, tol) {
-                    self.state = State::Reshape { id, si, seg, t, start: p, began: false, spine: false };
-                } else if let Some((id, seg, t, _)) = crate::direct::hit_spine_segment(cx, p, tol) {
-                    self.state = State::Reshape { id, si: 0, seg, t, start: p, began: false, spine: true };
                 }
                 vec![]
             }
@@ -211,20 +229,22 @@ impl Tool for AnchorTool {
                     | State::Handle { began, start, .. }
                     | State::SpineConvert { began, start, .. }
                     | State::SpineHandle { began, start, .. }
-                    | State::Reshape { began, start, .. } => {
-                        (began, p.distance(start) >= cx.tol(2.0))
-                    }
+                    | State::Reshape { began, start, .. } => (began, p.distance(start) >= cx.tol(2.0)),
                 };
                 if !began {
                     if !far {
                         return out;
                     }
-                    out.push(Action::Begin(if matches!(self.state, State::Convert { .. } | State::SpineConvert { .. }) { "Convert Anchor Point" } else { "Reshape" }.into()));
+                    out.push(Action::Begin(
+                        if matches!(self.state, State::Convert { .. } | State::SpineConvert { .. }) { "Convert Anchor Point" } else { "Reshape" }
+                            .into(),
+                    ));
                     if let State::Convert { began, .. }
                     | State::Handle { began, .. }
                     | State::SpineConvert { began, .. }
                     | State::SpineHandle { began, .. }
-                    | State::Reshape { began, .. } = &mut self.state {
+                    | State::Reshape { began, .. } = &mut self.state
+                    {
                         *began = true;
                     }
                 }
@@ -387,13 +407,7 @@ impl Tool for AnchorTool {
 /// segment (a path's or a selected blend's spine's), else its caret. Handles and anchors win
 /// over the segments through them, as the press has it.
 pub(crate) fn press_cursor(cx: &ToolContext, p: Point) -> Cursor {
-    let (point, tol) = (cx.point_tol(), cx.pick_tol());
-    let segment = hit_handle(cx, p, point).is_none()
-        && hit_anchor(cx, p, point).is_none()
-        && AnchorTool::spine_handle(cx, p, point).is_none()
-        && AnchorTool::spine_point(cx, p, point).is_none()
-        && (hit_segment(cx, p, tol).is_some() || crate::direct::hit_spine_segment(cx, p, tol).is_some());
-    if segment { Cursor::ReshapeSegment } else { Cursor::AnchorPoint }
+    if matches!(AnchorTool::press_target(cx, p), State::Reshape { .. }) { Cursor::ReshapeSegment } else { Cursor::AnchorPoint }
 }
 
 #[cfg(test)]
@@ -401,6 +415,7 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+    use vectorcraft_geom::{Anchor, ParamCurve};
 
     /// The Anchor Point tool has its own caret cursor, not the Pen's start-a-path one, and over a
     /// segment the Reshape Segment cursor, kept while the segment is dragged.
@@ -431,10 +446,7 @@ mod tests {
             let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
             std::sync::Arc::new(vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
         };
-        let mut path = vectorcraft_geom::SubPath::polyline(
-            &[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)],
-            false,
-        );
+        let mut path = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
         if smooth {
             path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(190.0, 330.0));
         }
@@ -449,6 +461,64 @@ mod tests {
         let mut selected = Selection::default();
         selected.set([id]);
         (d, id, selected)
+    }
+
+    /// Owner priority applies to anchors, visible handles and segments alike, regardless
+    /// of selection insertion order; cursor and emitted command must agree.
+    #[test]
+    fn overlapping_path_and_blend_follow_selection_then_stacking() {
+        use vectorcraft_doc::{Appearance, Node};
+        use vectorcraft_geom::{PathData, SubPath};
+        for path_on_top in [false, true] {
+            for path_selected in [false, true] {
+                for blend_first in [false, true] {
+                    let (d, blend, sel) = blend_spine_doc(true);
+                    let paint = paint();
+                    let spine = crate::direct::spines(&cx(&d, &sel, &paint)).pop().unwrap().1;
+                    let curve = spine.subpaths[0].segment(1).eval(0.5);
+                    // Point, handle and segment overlaps, including different cursor kinds.
+                    for (at, path_is_segment) in [
+                        (Point::new(160.0, 310.0), false),
+                        (Point::new(190.0, 330.0), false),
+                        (Point::new(160.0, 310.0), true),
+                        (Point::new(190.0, 330.0), true),
+                        (curve, false),
+                        (curve, true),
+                    ] {
+                        let (mut d, mut sel) = (d.clone(), sel.clone());
+                        let path = d.alloc_id();
+                        let points = if path_is_segment {
+                            vec![at - vectorcraft_geom::Vec2::new(0.0, 30.0), at + vectorcraft_geom::Vec2::new(0.0, 30.0)]
+                        } else {
+                            vec![at, at + vectorcraft_geom::Vec2::new(0.0, 60.0)]
+                        };
+                        let node = Node::path(path, PathData::single(SubPath::polyline(&points, false)), Appearance::default_art());
+                        d.insert(Some(d.layers[0].id), if path_on_top { 2 } else { 1 }, node).unwrap();
+                        if path_selected {
+                            sel.set(if blend_first { vec![blend, path] } else { vec![path, blend] });
+                        }
+                        let c = cx(&d, &sel, &paint);
+                        let path_wins = path_selected && path_on_top;
+                        let expected_id = if path_wins { path } else { blend };
+                        let spine = crate::direct::spines(&c).into_iter().find(|(id, _)| *id == blend).unwrap().1;
+                        let spine_segment = AnchorTool::spine_point(&spine, at, c.point_tol()).is_none()
+                            && AnchorTool::spine_handle(&c, &spine, at, c.point_tol()).is_none();
+                        let reshape = if path_wins { path_is_segment } else { spine_segment };
+                        let mut tool = AnchorTool::new("anchorPoint");
+                        assert_eq!(tool.cursor(&c, at, Mods::default()), if reshape { Cursor::ReshapeSegment } else { Cursor::AnchorPoint });
+                        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+                        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x + 10.0, at.y + 20.0));
+                        let Some(Action::Preview(cmd, args)) = actions.get(1) else { panic!("missing preview: {actions:?}") };
+                        assert_eq!(
+                            args["id"], expected_id.0,
+                            "top={path_on_top}, selected={path_selected}, blend_first={blend_first}, at={at:?}, segment={path_is_segment}: {cmd}"
+                        );
+                        assert_eq!(cmd.starts_with("path."), path_wins);
+                        assert_eq!(cmd.ends_with("reshapeSegment"), reshape);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -545,17 +615,20 @@ mod tests {
         let single = ToolContext { handles_multiple: false, ..cx(&d, &sel, &p) };
         let tool = AnchorTool::new("anchorPoint");
         assert!(tool.overlays(&single).iter().all(|o| !matches!(o, Overlay::Handle { .. })));
-        // A press on the hidden handle endpoint converts the anchor, it does not drag a handle.
+        // The hidden handle endpoint is neither an editable handle nor on the curve.
         let mut tool = AnchorTool::new("anchorPoint");
         tool.pointer(&single, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
+        assert!(matches!(tool.state, State::Idle));
         assert!(tool.pointer(&single, &PointerEvent::new(PointerKind::Up, 190.0, 330.0)).is_empty());
         // A drag on the curve away from anchors and handles reshapes the spine segment.
-        // The smooth middle anchor (160, 310) has out handle (190, 330); the second
-        // segment runs (160, 310) -> (210, 310) bending toward (130, 290). Its
-        // midpoint is near (183, 316), clear of every anchor and handle endpoint.
+        let (_, spine) = crate::direct::spines(&single).pop().unwrap();
+        let at = spine.subpaths[0].segment(1).eval(0.5);
+        assert!(AnchorTool::spine_handle(&single, &spine, at, single.point_tol()).is_none());
+        assert!(AnchorTool::spine_point(&spine, at, single.point_tol()).is_none());
         let mut tool = AnchorTool::new("anchorPoint");
-        tool.pointer(&single, &PointerEvent::new(PointerKind::Down, 183.0, 316.0));
-        let actions = tool.pointer(&single, &PointerEvent::new(PointerKind::Drag, 183.0, 336.0));
+        assert_eq!(tool.cursor(&single, at, Mods::default()), Cursor::ReshapeSegment);
+        tool.pointer(&single, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        let actions = tool.pointer(&single, &PointerEvent::new(PointerKind::Drag, at.x, at.y + 20.0));
         assert!(matches!(actions.get(1), Some(Action::Preview(cmd, _)) if cmd == "object.blend.spine.reshapeSegment"));
     }
 
@@ -570,7 +643,8 @@ mod tests {
         let none = Mods::default();
         assert_eq!(tool.cursor(&c, Point::new(160.0, 310.0), none), Cursor::AnchorPoint);
         assert_eq!(tool.cursor(&c, Point::new(190.0, 330.0), none), Cursor::AnchorPoint);
-        assert_eq!(tool.cursor(&c, Point::new(183.0, 316.0), none), Cursor::ReshapeSegment);
+        let spine = crate::direct::spines(&c).pop().unwrap().1;
+        assert_eq!(tool.cursor(&c, spine.subpaths[0].segment(1).eval(0.5), none), Cursor::ReshapeSegment);
     }
 
     /// P1-2: Shift-dragging a blend spine handle constrains it to 45-degree steps round
