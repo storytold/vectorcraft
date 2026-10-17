@@ -381,6 +381,80 @@ mod tests {
         assert_eq!(t.cursor(&cx, Point::new(150.0, 140.0), none), Cursor::ReshapeSegment);
     }
 
+    /// Selected three-anchor blend spine; the end anchors stay pinned to the
+    /// centres of the two key objects.
+    fn blend_spine_doc(smooth: bool) -> (vectorcraft_doc::Document, NodeId, Selection) {
+        let (mut d, _) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let (id, first, last) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let key = |id, x| {
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
+            std::sync::Arc::new(vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+        };
+        let mut path = vectorcraft_geom::SubPath::polyline(
+            &[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)],
+            false,
+        );
+        if smooth {
+            path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(190.0, 330.0));
+        }
+        let mut spec = vectorcraft_doc::live::BlendSpec::default();
+        spec.spine = Some(vectorcraft_geom::PathData::single(path));
+        spec.key_anchors = vec![0, 2];
+        let blend = vectorcraft_doc::Node::new(
+            id,
+            vectorcraft_doc::NodeKind::Blend { children: vec![key(first, 100.0), key(last, 200.0)], spec: Box::new(spec) },
+        );
+        d.insert(Some(layer), 1, blend).unwrap();
+        let mut selected = Selection::default();
+        selected.set([id]);
+        (d, id, selected)
+    }
+
+    #[test]
+    fn anchor_point_converts_a_blend_spine_point_before_reshaping_its_segment() {
+        let (d, id, sel) = blend_spine_doc(false);
+        let p = paint();
+        let c = cx(&d, &sel, &p);
+        let mut tool = AnchorTool::new("anchorPoint");
+        assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0)).is_empty());
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 340.0));
+        assert_eq!(actions.first(), Some(&Action::Begin("Convert Anchor Point".into())));
+        assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
+            if cmd == "object.blend.spine.convertAnchor"
+            && args["id"] == id.0 && args["anchor"] == 1
+            && args["to"] == "smooth" && args["y"] == 340.0));
+        assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 340.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn anchor_point_keeps_blend_spine_handles_visible_and_editable_after_switch() {
+        let (d, id, sel) = blend_spine_doc(true);
+        let p = paint();
+        let c = cx(&d, &sel, &p);
+        // A new tool instance models switching from Direct Selection.
+        let mut tool = AnchorTool::new("anchorPoint");
+        let overlays = tool.overlays(&c);
+        assert!(overlays.iter().any(|o| matches!(o, Overlay::Handle { p, .. } if *p == Point::new(190.0, 330.0))));
+        assert!(overlays.iter().any(|o| matches!(o, Overlay::Handle { p, .. } if *p == Point::new(130.0, 290.0))));
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 190.0, 350.0));
+        assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
+            if cmd == "object.blend.spine.moveAnchor"
+            && args["id"] == id.0 && args["anchor"] == 1 && args["handle"] == "out"
+            && args["independent"] == true));
+        assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 190.0, 350.0)), vec![Action::Commit]);
+
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+        assert_eq!(
+            tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 310.0)),
+            vec![Action::Exec(
+                "object.blend.spine.convertAnchor".into(),
+                json!({"id": id.0, "anchor": 1, "to": "corner"}),
+            )],
+        );
+    }
+
     #[test]
     fn add_and_delete_anchor_clicks() {
         let (d, id) = doc_with_rect();
