@@ -1708,6 +1708,27 @@ fn direct_selection_snaps_anchors_to_the_grid() {
     assert_eq!(p.subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(201.0, 101.0));
 }
 
+/// #2054: with Snap to Grid on, a bounding-box handle dragged with the Selection tool or the Free
+/// Transform tool lands the corner it moves on the grid, even with Snap to Pixel left on too; the
+/// opposite corner stays put.
+#[test]
+fn bounding_box_handles_snap_to_the_grid() {
+    for tool in ["selection", "freeTransform"] {
+        let mut s = session();
+        let a = rect(&mut s, 101.0, 101.0, 100.0, 100.0);
+        let step = s.doc().unwrap().doc.grid.spacing / f64::from(s.doc().unwrap().doc.grid.subdivisions.max(1));
+        let on_grid = |v: f64| (v / step - (v / step).round()).abs() < 1e-9;
+        let v = ViewInfo { snap_to_grid: true, snap_to_pixel: true, ..ViewInfo::default() };
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 201.0, 201.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 230.0, 214.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 230.0, 214.0), v).unwrap();
+        let b = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
+        assert!(on_grid(b.x1) && on_grid(b.y1), "{tool}: {b:?}, grid step {step}");
+        assert!((b.x0 - 101.0).abs() < 1e-9 && (b.y0 - 101.0).abs() < 1e-9, "{tool}: {b:?}");
+    }
+}
+
 /// Follow-up to #1254: toggling or adding anchors of a path selected as a whole starts from all
 /// its anchors, so toggling one deselects it alone and adding one keeps them all.
 #[test]

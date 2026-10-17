@@ -424,6 +424,22 @@ impl Targets {
         (cx.snap_to_point && !cx.smart_guides).then(|| Self::collect(cx.doc, exclude, None).for_snap_to_point(cx))
     }
 
+    /// The gridlines (one every `step` from the page's origin, as
+    /// [`vectorcraft_geom::snap::snap_to_grid`] places them) at and either side of the nearest one
+    /// to each of `points`, as lines to line up with.
+    fn grid_lines(points: impl IntoIterator<Item = Point>, step: f64) -> Self {
+        let mut t = Targets::default();
+        let line = |v: f64, k: i32| vectorcraft_geom::snap::snap_to_grid(v, step, 0.0) + f64::from(k) * step;
+        for p in points {
+            for k in -1..=1 {
+                let (x, y) = (line(p.x, k), line(p.y, k));
+                t.xs.push((x, Point::new(x, p.y), Kind::Guide));
+                t.ys.push((y, Point::new(p.x, y), Kind::Guide));
+            }
+        }
+        t.index()
+    }
+
     /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
     /// reach into `near`.
     fn points_near(doc: &Document, roots: &[NodeId], near: Rect) -> Self {
@@ -799,8 +815,8 @@ impl Targets {
     /// dragging `handle` of the box `bx` (about the centre when `from_center`), in the box's own
     /// frame, and so is the result. The handle lands on an anchor or centre within `tol` on the page
     /// (labelled as [`Self::snap_point`] does), else the corners and the side it moves line up with
-    /// the nearest target ("align"), whatever the box's angle. A handle with one way to go (a side,
-    /// or a proportional corner) slides along it until one of them is on a target.
+    /// the nearest target or ruler guide ("align"), whatever the box's angle. A handle with one way
+    /// to go (a side, or a proportional corner) slides along it until one of them is on a target.
     pub fn snap_scale(&self, bx: &OrientedBox, handle: Handle, a: Affine, proportional: bool, from_center: bool, tol: f64) -> (Affine, Vec<Overlay>) {
         type Hit = Option<(f64, Point)>;
         // Where a snap lands: in line with a target's x and/or y, or on an anchor or centre.
@@ -811,10 +827,16 @@ impl Targets {
         let (to_doc, to_local) = (bx.to_doc(), bx.to_doc().inverse());
         // A scale that collapses or flips the box is no snap.
         let valid = |n: f64, s: f64| n.is_finite() && n * s > 0.0;
-        let nearest = |v: f64, ts: &[(f64, Point, Kind)]| -> Hit {
+        // The target line along the x axis (`x`: a vertical line) or the y axis nearest `p`, the
+        // ruler guides running past it included.
+        let nearest = |p: Point, x: bool| -> Hit {
+            let (v, ts) = if x { (p.x, &self.xs) } else { (p.y, &self.ys) };
+            let rulers = self.rulers.iter().filter(|r| r.vertical == x).filter_map(|r| r.line_at(p, tol));
             lines_near(ts, v, tol)
                 .iter()
-                .map(|(t, from, _)| (*t, *from))
+                .copied()
+                .chain(rulers)
+                .map(|(t, from, _)| (t, from))
                 .filter(|(t, _)| (t - v).abs() <= tol)
                 .min_by(|p, q| (p.0 - v).abs().total_cmp(&(q.0 - v).abs()))
         };
@@ -824,7 +846,7 @@ impl Targets {
             // The corner goes anywhere: onto an anchor or centre, else it takes the target's x, its
             // y, or both.
             let p = to_doc * (a * handle.pos(r));
-            let (hx, hy) = (nearest(p.x, &self.xs), nearest(p.y, &self.ys));
+            let (hx, hy) = (nearest(p, true), nearest(p, false));
             let on = self.nearest_point(p, tol).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
             for (tx, ty, at) in on.into_iter().chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
                 if tx.is_none() && ty.is_none() {
@@ -878,11 +900,11 @@ impl Targets {
                 {
                     consider((q - base).dot(dir) / l2, false, (None, None, Some((q, k))));
                 }
-                for (is_x, at, b, d, ts) in [(true, p.x, base.x, dir.x, &self.xs), (false, p.y, base.y, dir.y, &self.ys)] {
+                for (is_x, b, d) in [(true, base.x, dir.x), (false, base.y, dir.y)] {
                     if d.abs() <= 1e-9 {
                         continue;
                     }
-                    let Some(hit) = nearest(at, ts) else { continue };
+                    let Some(hit) = nearest(p, is_x) else { continue };
                     consider((hit.0 - b) / d, true, if is_x { (Some(hit), None, None) } else { (None, Some(hit), None) });
                 }
             }
@@ -978,6 +1000,38 @@ impl PointSnap {
         match &self.targets {
             Some((t, tol)) => t.snap_from(p, from, cx.tol(*tol)),
             None => (keep(p), vec![]),
+        }
+    }
+
+    /// Snap a bounding-box resize ([`Targets::snap_scale`]) as [`Self::snap`] snaps a point. With
+    /// Snap to Pixel on, the corner or side the handle moves lines up with whole pixels, and with
+    /// Snap to Grid on it lines up with the nearest gridline, however far that is; neither shows
+    /// guides. Otherwise the handle snaps to the targets [`Self::new`] gathered.
+    pub fn snap_scale(
+        &self,
+        cx: &ToolContext,
+        bx: &OrientedBox,
+        handle: Handle,
+        a: Affine,
+        proportional: bool,
+        from_center: bool,
+    ) -> (Affine, Vec<Overlay>) {
+        let step = if cx.snap_to_pixel {
+            Some(1.0)
+        } else if cx.snap_to_grid {
+            Some(cx.grid_step()).filter(|s| s.is_finite() && *s > 0.0)
+        } else {
+            None
+        };
+        if let Some(step) = step {
+            let moved = Handle::ALL.map(|h| bx.to_doc() * (a * h.pos(bx.rect)));
+            // Every point the handle moves is within half a step of a gridline, so a tolerance of
+            // one step always finds one.
+            return (Targets::grid_lines(moved, step).snap_scale(bx, handle, a, proportional, from_center, step).0, vec![]);
+        }
+        match &self.targets {
+            Some((t, tol)) => t.snap_scale(bx, handle, a, proportional, from_center, cx.tol(*tol)),
+            None => (a, vec![]),
         }
     }
 }
