@@ -166,6 +166,24 @@ pub fn specs() -> Vec<CommandSpec> {
             artboard_fit_sel
         ),
         cmd!(
+            "artboard.lock",
+            "Lock Artboards",
+            ["Window", "Artboards"],
+            None,
+            "{index?: n | indices?: [n…], mode?: \"selected\" (default; the artboards named) | \"exceptSelected\" (every other artboard) | \"all\", locked?: bool (default true; false unlocks)} a locked artboard can't be moved, resized or deleted (not by the Artboard tool, the panels or artboard.move / setProps size and position / delete / cut / fitTo* / rearrange); its name, colour and options can still change and its art is unaffected. One undo step; nothing to change is a no-op → {changed: artboards}",
+            has_doc,
+            artboard_lock
+        ),
+        cmd!(
+            "artboard.setColor",
+            "Artboard Color",
+            ["Window", "Artboards"],
+            None,
+            "{index | indices: [n…], color: a colour (hex, RGB array, {c,m,y,k}…) | null (none: the paper shows)} the artboard colour: filled behind the artboard on the canvas; exports leave it out unless they pass `artboardFill: true` (raster, SVG, PDF… draw it behind the art). One undo step",
+            has_doc,
+            artboard_set_color
+        ),
+        cmd!(
             "layer.clippingMask.toggle",
             "Make/Release Clipping Mask",
             ["Window", "Layers"],
@@ -811,14 +829,72 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = s.edit("New Artboard", |d, _| {
         let id = d.next_artboard_id();
         let name = str_param(p, "name").map(str::to_string).unwrap_or_else(|| format!("Artboard {}", d.artboards.len() + 1));
-        d.artboards.push(Artboard { id, name, rect: r, show_center_mark: false, show_cross_hairs: false });
+        d.artboards.push(Artboard::new(id, name, r));
         Ok(d.artboards.len() - 1)
     })?;
     Ok(json!({ "index": idx }))
 }
 
+/// Fails when any of artboards `indices` is locked: a locked artboard can't be moved, resized or
+/// deleted.
+pub(crate) fn ensure_unlocked(d: &Document, indices: &[usize]) -> Result<()> {
+    match indices.iter().find(|i| d.artboards.get(**i).is_some_and(|a| a.locked)) {
+        Some(i) => Err(EngineError::Other(format!("artboard {} is locked", i + 1))),
+        None => Ok(()),
+    }
+}
+
+fn artboard_lock(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.lock";
+    let d = &s.doc()?.doc;
+    let locked = bool_or(p, "locked", true);
+    let named = |p: &Value| super::panelcmds::artboard_indices(d, p, C);
+    let targets: Vec<usize> = match str_param(p, "mode").unwrap_or("selected") {
+        "selected" => named(p)?,
+        "exceptSelected" => {
+            let keep = named(p)?;
+            (0..d.artboards.len()).filter(|i| !keep.contains(i)).collect()
+        }
+        "all" => (0..d.artboards.len()).collect(),
+        other => return Err(bad(C, format!("unknown mode {other}"))),
+    };
+    let changed: Vec<usize> = targets.into_iter().filter(|i| d.artboards.get(*i).is_some_and(|a| a.locked != locked)).collect();
+    if changed.is_empty() {
+        return Ok(json!({ "changed": 0 }));
+    }
+    s.edit(if locked { "Lock Artboards" } else { "Unlock Artboards" }, |d, _| {
+        for i in &changed {
+            if let Some(a) = d.artboards.get_mut(*i) {
+                a.locked = locked;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "changed": changed.len() }))
+}
+
+fn artboard_set_color(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.setColor";
+    let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, C)?;
+    let color = match p.get("color") {
+        None => return Err(bad(C, "missing color (null clears it)")),
+        Some(Value::Null) => None,
+        Some(v) => Some(color_value(v).ok_or_else(|| bad(C, format!("bad color {v}")))?),
+    };
+    s.edit("Artboard Color", |d, _| {
+        for i in &indices {
+            if let Some(a) = d.artboards.get_mut(*i) {
+                a.color = color;
+            }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
 fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.delete")?;
+    ensure_unlocked(&s.doc()?.doc, &indices)?;
     s.edit("Delete Artboard", |d, sel| {
         if indices.len() >= d.artboards.len() {
             return Err(EngineError::Other("a document needs at least one artboard".into()));
@@ -837,6 +913,9 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     let i = super::panelcmds::artboard_index(&s.doc()?.doc, p, "artboard.setProps")?;
     let was = s.doc()?.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
     let now = rect_from(p, was);
+    if now != was {
+        ensure_unlocked(&s.doc()?.doc, &[i])?;
+    }
     let resized = (now.width() - was.width()).abs() > 1e-6 || (now.height() - was.height()).abs() > 1e-6;
     // Scale Artwork with Artboard: resized, it takes the art fully inside it (as Move Artwork with
     // Artboard gathers it) and its guides from the old rectangle onto the new one.
@@ -906,6 +985,7 @@ fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let indices =
         if p.get("index").is_none() && p.get("indices").is_none() { vec![0] } else { super::panelcmds::artboard_indices(d, p, "artboard.fitToArt")? };
+    ensure_unlocked(d, &indices)?;
     let mut fits = vec![];
     for i in indices {
         let was = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;

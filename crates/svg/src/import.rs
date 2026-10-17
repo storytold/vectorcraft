@@ -334,6 +334,8 @@ fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<Vec<vectorc
             rect: r,
             show_center_mark: false,
             show_cross_hairs: false,
+            locked: false,
+            color: None,
         })
         .collect();
     (!pages.is_empty()).then_some(pages)

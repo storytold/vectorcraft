@@ -261,9 +261,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
             painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
             painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
-            match &grid {
-                Some((tex, cell)) => checker(&painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
-                None => {
+            // An artboard colour (Artboards panel) replaces the paper and the grid behind its art.
+            match (&grid, ab.color) {
+                (_, Some(c)) => {
+                    painter.add(Shape::convex_polygon(q, crate::panels::c32(&c), Stroke::NONE));
+                }
+                (Some((tex, cell)), None) => checker(&painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
+                (None, None) => {
                     painter.add(Shape::convex_polygon(q, paper, Stroke::NONE));
                 }
             }
@@ -450,6 +454,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // bounding box's (#1095).
             let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
             artboard_label(&painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
+        }
+        // A locked artboard shows a lock above its top-right corner (when it is wide enough to
+        // leave room for the name).
+        if ab.locked && (ab.rect.width() * xf.zoom) as f32 >= 2.0 * MIN_LABELLED_ARTBOARD {
+            let at = xf.to_screen(Point::new(ab.rect.x1, ab.rect.y0)) + vec2(-9.0, -11.0);
+            crate::icons::paint(ui, "lock", egui::Rect::from_center_size(at, vec2(12.0, 12.0)), t.text_dim);
         }
     }
     if app.ui.view.guides {
@@ -1875,14 +1885,26 @@ fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
         && let Some(p) = resp.interact_pointer_pos()
     {
         let p = xf.to_doc(p);
-        let locked = hit_with(app, p, xf.zoom, |doc, p, opt| Some(vectorcraft_doc::hit::locked_objects_at(doc, p, opt)));
-        app.ui.context_locked = app.session.active().map(|st| st.uid).zip(locked);
-        if let Some(st) = app.session.active()
-            && let Some(top) = hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
-            && !st.selection.contains(top)
-        {
-            // A locked or hidden object can't be selected; the menu is then for the selection as is.
-            let _ = app.run("select.set", json!({ "ids": [top.0] }));
+        // The Artboard tool's menu acts on artboards: the one under the pointer joins the
+        // selection unless it is in it, and no object is selected.
+        if app.session.tool_id() == "artboard" {
+            let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+            if let Some(i) = app.session.active().and_then(|st| st.doc.artboard_at(p))
+                && !crate::panels::artboards::picked(app, n).contains(&i)
+            {
+                crate::panels::artboards::select(app, i);
+            }
+            app.ui.context_locked = None;
+        } else {
+            let locked = hit_with(app, p, xf.zoom, |doc, p, opt| Some(vectorcraft_doc::hit::locked_objects_at(doc, p, opt)));
+            app.ui.context_locked = app.session.active().map(|st| st.uid).zip(locked);
+            if let Some(st) = app.session.active()
+                && let Some(top) = hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
+                && !st.selection.contains(top)
+            {
+                // A locked or hidden object can't be selected; the menu is then for the selection as is.
+                let _ = app.run("select.set", json!({ "ids": [top.0] }));
+            }
         }
     }
     let mut clicked = None;

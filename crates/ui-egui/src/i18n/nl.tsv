@@ -5154,3 +5154,15 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
+	Lock Artboards	Tekengebieden vergrendelen
+	Unlock Artboards	Tekengebieden ontgrendelen
+	Artboard Color	Kleur van tekengebied
+	Lock Selected	Selectie vergrendelen
+	Lock All Except Selected	Alles behalve selectie vergrendelen
+	Lock All	Alles vergrendelen
+	Unlock Selected	Selectie ontgrendelen
+	Lock Artboard	Tekengebied vergrendelen
+	Unlock Artboard	Tekengebied ontgrendelen
+	Clear Artboard Color	Kleur van tekengebied wissen
+@msg	artboard {_1} is locked	tekengebied {_1} is vergrendeld
+	Include Artboard Fill	Kleur van tekengebied opnemen

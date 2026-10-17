@@ -5130,3 +5130,15 @@ theme	Appearance	Външен вид
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
+	Lock Artboards	Заключване на работни области
+	Unlock Artboards	Отключване на работни области
+	Artboard Color	Цвят на работна област
+	Lock Selected	Заключване на избраните
+	Lock All Except Selected	Заключване на всички без избраните
+	Lock All	Заключване на всички
+	Unlock Selected	Отключване на избраните
+	Lock Artboard	Заключване на работна област
+	Unlock Artboard	Отключване на работна област
+	Clear Artboard Color	Изчистване на цвета на работна област
+@msg	artboard {_1} is locked	работна област {_1} е заключена
+	Include Artboard Fill	Включване на цвета на работната област

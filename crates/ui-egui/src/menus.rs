@@ -3002,6 +3002,28 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
+    // Managing artboards from the canvas: with the Artboard tool, the menu locks and unlocks them.
+    if app.session.tool_id() == "artboard" {
+        let sel = crate::panels::artboards::picked(app, st.doc.artboards.len());
+        v.extend([
+            sub(
+                "Lock Artboards",
+                vec![
+                    cp("Lock Selected", "artboard.lock", json!({ "indices": sel })),
+                    cp("Lock All Except Selected", "artboard.lock", json!({ "indices": sel, "mode": "exceptSelected" })),
+                    cp("Lock All", "artboard.lock", json!({ "mode": "all" })),
+                ],
+            ),
+            sub(
+                "Unlock Artboards",
+                vec![
+                    cp("Unlock Selected", "artboard.lock", json!({ "indices": sel, "locked": false })),
+                    cp("Unlock All", "artboard.lock", json!({ "mode": "all", "locked": false })),
+                ],
+            ),
+            Sep,
+        ]);
+    }
     // The locked objects under the pointer at the right-click, each unlocked as the Layers panel's
     // lock column does. `unlock_item_label` shows each object's name.
     let unlock: Vec<Item> = app
@@ -3869,6 +3891,12 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
 pub const CONTEXT_LABELS: &[&str] = &[
     "Isolate Selected Group",
     "Exit Isolation Mode",
+    "Lock Artboards",
+    "Lock Selected",
+    "Lock All Except Selected",
+    "Lock All",
+    "Unlock Artboards",
+    "Unlock Selected",
     "Unlock",
     "Make Clipping Mask",
     "Release Clipping Mask",

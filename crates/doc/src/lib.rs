@@ -416,6 +416,20 @@ pub struct Artboard {
     pub show_center_mark: bool,
     #[serde(default)]
     pub show_cross_hairs: bool,
+    /// Locked: the artboard can't be moved, resized or deleted (its art is unaffected).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Artboard colour: shown behind the artboard on the canvas; exported only when an export
+    /// asks for it (`artboardFill`). `None`: the paper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<vectorcraft_color::Color>,
+}
+
+impl Artboard {
+    /// An unlocked artboard without a colour or marks.
+    pub fn new(id: u32, name: impl Into<String>, rect: Rect) -> Self {
+        Self { id, name: name.into(), rect, show_center_mark: false, show_cross_hairs: false, locked: false, color: None }
+    }
 }
 
 /// Opacity-mask editing mode: `object`'s mask art lives on the temporary `layer` while editing.
@@ -846,13 +860,7 @@ impl Document {
             rulers: RulerMode::Artboard,
             artboard_ruler_origins: BTreeMap::new(),
             color_mode: mode,
-            artboards: vec![Artboard {
-                id: 1,
-                name: "Artboard 1".into(),
-                rect: Rect::new(0.0, 0.0, width, height),
-                show_center_mark: false,
-                show_cross_hairs: false,
-            }],
+            artboards: vec![Artboard::new(1, "Artboard 1", Rect::new(0.0, 0.0, width, height))],
             layers: vec![],
             swatches: swatches.into(),
             swatch_groups: swatch_groups.into(),
@@ -1294,6 +1302,31 @@ impl Document {
     /// Default target layer: the topmost visible, unlocked layer.
     pub fn default_layer(&self) -> Option<NodeId> {
         self.layers.iter().rev().find(|l| l.visible && !l.locked).or(self.layers.last()).map(|l| l.id)
+    }
+
+    /// A copy of the document with every coloured artboard filled behind the art, on a layer of its
+    /// own at the bottom: how exports draw the artboard colour when they are asked to. `None` when
+    /// no artboard has a colour.
+    pub fn with_artboard_fill(&self) -> Option<Document> {
+        if self.artboards.iter().all(|a| a.color.is_none()) {
+            return None;
+        }
+        let mut d = self.clone();
+        let rects: Vec<Arc<Node>> = self
+            .artboards
+            .iter()
+            .filter_map(|a| {
+                let ap = Appearance::basic(vectorcraft_color::Paint::solid(a.color?), vectorcraft_color::Paint::None, 0.0);
+                Some(Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(a.rect), ap)))
+            })
+            .collect();
+        let id = d.alloc_id();
+        let mut layer = Node::layer(id, "Artboard Fill", LayerColor::Preset(0));
+        if let Some(ch) = layer.children_mut() {
+            *ch = rects;
+        }
+        d.layers.insert(0, Arc::new(layer));
+        Some(d)
     }
 
     /// Add a new top-level layer above all others.
