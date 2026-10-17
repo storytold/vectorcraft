@@ -1,10 +1,11 @@
 //! The gradient stop popover: double-clicking a stop on the Gradient tool's annotator (or the
 //! Gradient panel's slider) edits it next to its chip — its colour (the Color panel's controls,
 //! or a document swatch, which stays linked when it is a global or spot colour), opacity and
-//! location. It edits the selected stop (`gradient.selectStop`) through `paint.editGradient`, and
-//! closes on Escape or a click elsewhere. On a freeform gradient it edits the selected point
-//! (`paint.freeform.selectPoint`) instead: its colour, opacity and spread, through
-//! `paint.freeform.setPoint`.
+//! location. It edits the selected stop (`gradient.selectStop`) through `paint.editGradient`, moves
+//! by dragging its background (it stays where it was dragged to while it is open; the next opening
+//! starts beside the art again), and closes on Escape or a click elsewhere. On a freeform gradient
+//! it edits the selected point (`paint.freeform.selectPoint`) instead: its colour, opacity and
+//! spread, through `paint.freeform.setPoint`.
 //!
 //! Fields: `index`, `x`, `y` (the chip, document coordinates) or `screen` ([x, y], screen points,
 //! from the panel), and `tab` (`color` or `swatches`).
@@ -31,6 +32,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
 
 /// The field holding the frame the popover was first drawn in.
 const OPENED: &str = "__opened";
+
+/// The field holding where the popover was dragged to ([x, y], its top left in screen points).
+const MOVED: &str = "__moved";
 
 /// What the popover edits: the selected stop of the gradient behind the active proxy (with all
 /// its stops), or the selected point of a freeform gradient.
@@ -92,7 +96,8 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let chip = Point::new(d.f64("x", 0.0), d.f64("y", 0.0));
     let area = egui::Id::new("gradient-stop-popover");
     let size = ctx.memory(|m| m.area_rect(area)).map_or(POPOVER_SIZE, |r| r.size());
-    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.view().copied()) {
+    let moved = d.fields.get(MOVED).and_then(Value::as_array).and_then(|a| Some(egui::pos2(a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32)));
+    let pos = moved.or(screen).unwrap_or_else(|| match app.canvas_rect.zip(app.view().copied()) {
         Some((canvas, v)) => {
             let xf = Xf::new(canvas, &v);
             let at = xf.to_screen(chip);
@@ -104,7 +109,8 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut tab = None;
     let resp = egui::Area::new(area)
         .order(egui::Order::Foreground)
-        .fixed_pos(pos)
+        .current_pos(pos)
+        .movable(true)
         .constrain(true)
         .show(ctx, |ui| {
             egui::Frame::popup(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -141,6 +147,12 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         })
         .response;
+    if resp.dragged() {
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if resp.hovered() && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default {
+        // Over its background, not one of its controls.
+        ctx.set_cursor_icon(egui::CursorIcon::Grab);
+    }
     // The frame it opened in (its first drawn).
     let frame = ctx.cumulative_frame_nr();
     let opened = d.fields.get(OPENED).and_then(Value::as_u64).unwrap_or(frame);
@@ -149,6 +161,10 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             d.fields.insert("tab".into(), json!(tab));
         }
         d.fields.insert(OPENED.into(), json!(opened));
+        // Dragged: it stays there (kept on screen) until it closes.
+        if resp.dragged() {
+            d.fields.insert(MOVED.into(), json!([resp.rect.min.x, resp.rect.min.y]));
+        }
     }
     // The click that opened the popover (the Gradient panel's colour chip) or the double-click
     // (a stop's chip) lands outside it: only a later click elsewhere closes it (#577).
@@ -403,6 +419,41 @@ mod tests {
         let away = egui::pos2(5.0, 600.0);
         frame(&mut app, vec![egui::Event::PointerMoved(away), click(away, true), click(away, false)]);
         assert!(app.ui.dialog.is_none(), "a later click elsewhere closes it");
+    }
+
+    /// #862: dragging its background moves it; it stays there while open, and the next opening
+    /// starts where it first opens again.
+    #[test]
+    fn dragging_its_background_moves_it_until_it_closes() {
+        let mut app = app();
+        let popover = |app: &mut VectorcraftApp| {
+            frame(app, vec![]);
+            CTX.with(|c| c.memory(|m| m.area_rect(egui::Id::new("gradient-stop-popover")))).expect("the popover drew")
+        };
+        let open = |app: &mut VectorcraftApp| app.ui.dialog = Some(Dialog::new("gradientStop", json!({"index": 1, "x": 150, "y": 160})));
+        open(&mut app);
+        frame(&mut app, vec![]);
+        let start = popover(&mut app);
+        // Press on its frame's margin (its background), drag, release.
+        let from = start.min + vec2(4.0, 4.0);
+        let by = vec2(-80.0, -60.0);
+        frame(&mut app, vec![egui::Event::PointerMoved(from), click(from, true)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(from + by * 0.5)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(from + by)]);
+        frame(&mut app, vec![click(from + by, false)]);
+        assert!(app.ui.dialog.is_some(), "a drag is not a click elsewhere");
+        let moved = popover(&mut app);
+        assert_eq!(moved.min, start.min + by);
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        assert_eq!(popover(&mut app).min, moved.min, "it stays where it was dragged to");
+        // Closed and opened again: back where it first opened.
+        frame(&mut app, vec![key(egui::Key::Escape)]);
+        assert!(app.ui.dialog.is_none());
+        open(&mut app);
+        frame(&mut app, vec![]);
+        assert_eq!(popover(&mut app).min, start.min);
     }
 
     #[test]
