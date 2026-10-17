@@ -434,12 +434,65 @@ fn structured_junk() {
         ("symbol.options", json!({"name": "Dot", "nineSlice": true, "nineSliceGuides": [1e308, -1e308, 0, 0]})),
         ("symbol.options", json!({"nineSlice": 7, "nineSliceGuides": []})),
         ("symbol.options", json!({"nineSlice": false, "nineSliceGuides": null})),
+        // Shape Builder Gap Detection: the `gap` param and the tool options.
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": 1e308})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80], [120, 90]], "gap": -1e308})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": f64::MAX})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": "NaN"})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": "1e999"})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": null})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": [1, 2]})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": {"a": 1}, "erase": true})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": 1e-300, "erase": true, "tolerance": 1e308})),
+        ("shapeBuilder.regions", json!({"gap": 1e308})),
+        ("shapeBuilder.regions", json!({"ids": [0, 1, 2, 3], "gap": -1})),
+        ("shapeBuilder.regions", json!({"ids": [2, 3], "gap": "x"})),
+        ("shapeBuilder.regions", json!({"gap": true})),
+        ("shapeBuilder.regions", json!({"gap": 12, "ids": [u64::MAX]})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {
         for (id, p) in &cases {
             if let Some(f) = probe(fx, id, p) {
                 failures.push(f);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// Shape Builder Tool Options (Gap Detection) with junk values: never a panic, and the tool still
+/// answers with options and works on a drag afterwards.
+#[test]
+fn shape_builder_options_junk() {
+    let cases = [
+        json!({"values": {"gapDetection": true, "gapLength": 1e308}}),
+        json!({"values": {"gapDetection": "yes", "gapLength": -1e308}}),
+        json!({"values": {"gapDetection": null, "gapLength": "NaN"}}),
+        json!({"values": {"gapDetection": [true], "gapLength": [1, 2]}}),
+        json!({"values": {"gapDetection": true, "gapLength": "1e999"}}),
+        json!({"values": {"gapLength": {"a": 1}, "bogus": 1}}),
+        json!({"key": "gapLength", "value": f64::MAX}),
+        json!({"key": "gapLength", "value": f64::MIN_POSITIVE}),
+        json!({"key": "gapDetection"}),
+        json!({"key": "gapDetection", "value": 1}),
+        json!({"values": [1, 2]}),
+        json!({"values": "x"}),
+    ];
+    let mut failures = vec![];
+    for fx in Fixture::ALL {
+        for p in &cases {
+            let mut s = fx.session();
+            let r = catch_quiet(|| {
+                let _ = s.select_tool("shapeBuilder", Default::default());
+                let _ = s.set_tool_option_cmd(p);
+                let _ = s.set_tool_option_cmd(&json!({"values": {"gapDetection": true}}));
+                no_panic(s.execute("shapeBuilder.regions", &json!({})))
+            });
+            if let Err(msg) = r {
+                failures.push(format!("PANIC {p} [{fx:?}]: {msg}"));
+            } else if let Err(e) = check_session(&s) {
+                failures.push(format!("{p} [{fx:?}]: {e}"));
             }
         }
     }

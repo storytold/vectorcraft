@@ -25,6 +25,8 @@ const ROWS: &[Row] = &[
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
     (SYMBOLISM, Some("symbolism"), &["diameter", "intensity", "density"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
+    // Shape Builder Tool Options: Gap Detection.
+    (&["shapeBuilder"], None, &["gapDetection", "gapLength"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),

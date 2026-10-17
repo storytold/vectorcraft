@@ -227,12 +227,15 @@ fn piece_near(pieces: &[(po::Shape, Rect)], p: Point, tol: f64) -> Option<(f64, 
 impl BuilderMap {
     /// The map of `roots` (sorted back → front), with the leaves the inputs came from; the outline
     /// edges only `with_edges` (they cost a planar map of their own when no open path is in).
-    pub fn new<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool) -> (Self, Vec<&'a Node>) {
+    ///
+    /// With `gap` above 0 (Gap Detection's Gap Length, in points) open paths whose ends come within
+    /// it of another path bound regions as if they met.
+    pub fn new<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool, gap: f64) -> (Self, Vec<&'a Node>) {
         let (shapes, leaves) = shape_builder_shapes(doc, roots);
         if shapes.is_empty() {
             return (Self::default(), leaves);
         }
-        let arr = po::shape_builder(&shapes, with_edges);
+        let arr = po::shape_builder_with_gap(&shapes, with_edges, gap);
         let bounded = |pieces: Vec<po::Shape>| {
             pieces
                 .into_iter()
@@ -416,6 +419,8 @@ struct RegionCache {
     live: bool,
     /// The map has the Shape Builder's outline edges.
     edges: bool,
+    /// Gap Detection's Gap Length the map is made with (0: off).
+    gap: f64,
 }
 
 impl RegionCache {
@@ -432,7 +437,7 @@ impl RegionCache {
                 let regions = if shapes.is_empty() { vec![] } else { faces_of(po::live_paint(&shapes).0) };
                 BuilderMap { regions, ..Default::default() }
             } else {
-                BuilderMap::new(cx.doc, &roots, edges).0
+                BuilderMap::new(cx.doc, &roots, edges, self.gap).0
             };
             self.key = Some(key);
             self.edges = edges;
@@ -450,7 +455,9 @@ impl RegionCache {
 /// mode while it is held: the pointer shows a minus, what a click or drag would delete highlights in
 /// red, and the gesture deletes the regions it touches, the pieces of open paths and the edges
 /// (outline pieces between the points where paths meet) it passes over.
-#[derive(Default)]
+///
+/// Its options (Shape Builder Tool Options): Gap Detection, which treats open paths whose ends are
+/// within the Gap Length of another path as closed for the regions they bound.
 pub struct ShapeBuilderTool {
     cache: RegionCache,
     hover: Option<Hit>,
@@ -459,12 +466,39 @@ pub struct ShapeBuilderTool {
     dragging: bool,
     /// Erase mode: Alt held while hovering, or when the drag started.
     alt: bool,
+    /// Gap Detection on.
+    gap_detection: bool,
+    /// Gap Length (points).
+    gap_length: f64,
+}
+
+/// The Gap Length of the Small, Medium and Large choices (points).
+pub const GAP_LENGTHS: [f64; 3] = [3.0, 6.0, 12.0];
+
+impl Default for ShapeBuilderTool {
+    fn default() -> Self {
+        Self {
+            cache: RegionCache::default(),
+            hover: None,
+            points: Vec::new(),
+            touched: Touched::default(),
+            dragging: false,
+            alt: false,
+            gap_detection: false,
+            gap_length: GAP_LENGTHS[0],
+        }
+    }
 }
 
 /// How close (screen px) the pointer must come to a line piece or an edge to delete it.
 const LINE_TOL_PX: f64 = 4.0;
 
 impl ShapeBuilderTool {
+    /// The gap the tool bridges: the Gap Length with Gap Detection on, else 0.
+    fn gap(&self) -> f64 {
+        if self.gap_detection { self.gap_length } else { 0.0 }
+    }
+
     fn line_tol(cx: &ToolContext, alt: bool) -> Option<f64> {
         alt.then(|| cx.tol(LINE_TOL_PX))
     }
@@ -485,6 +519,28 @@ impl ShapeBuilderTool {
 impl Tool for ShapeBuilderTool {
     fn id(&self) -> &'static str {
         "shapeBuilder"
+    }
+
+    fn options(&self) -> Value {
+        json!({ "gapDetection": self.gap_detection, "gapLength": self.gap_length })
+    }
+
+    fn set_option(&mut self, key: &str, value: &Value) {
+        match key {
+            "gapDetection" => {
+                if let Some(on) = value.as_bool() {
+                    self.gap_detection = on;
+                }
+            }
+            "gapLength" => {
+                if let Some(len) = value.as_f64().filter(|l| l.is_finite()) {
+                    self.gap_length = len.clamp(0.0, po::SHAPE_BUILDER_MAX_GAP);
+                }
+            }
+            _ => return,
+        }
+        self.cache.gap = self.gap();
+        self.cache.key = None;
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -530,7 +586,7 @@ impl Tool for ShapeBuilderTool {
                 let pts: Vec<Value> = points.iter().map(|q| json!([q.x, q.y])).collect();
                 // The mode the drag started in, which its highlight showed.
                 let erase = self.alt;
-                let mut params = json!({ "ids": json_ids(&roots), "points": pts, "erase": erase });
+                let mut params = json!({ "ids": json_ids(&roots), "points": pts, "erase": erase, "gap": self.gap() });
                 if let Some(t) = Self::line_tol(cx, erase) {
                     params["tolerance"] = json!(t);
                 }
