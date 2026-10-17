@@ -155,6 +155,8 @@ mod tests_sysclip_emf;
 #[cfg(test)]
 mod tests_sysclip_probe;
 #[cfg(test)]
+mod tests_taskbar;
+#[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthtool;
