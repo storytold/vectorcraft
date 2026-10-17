@@ -48,19 +48,17 @@ fn outline_object_is_applied_in_one_undo_step_and_takes_no_parameters() {
 }
 
 #[test]
-fn type_with_outline_object_stays_editable_type_and_keeps_its_bounds() {
+fn type_with_outline_object_stays_editable_type_and_keeps_its_geometric_bounds() {
     let mut s = session();
     let id = text(&mut s);
-    let before = [false, true].map(|preview| {
-        s.prefs.use_preview_bounds = preview;
-        s.transform_bounds(&[id])
-    });
+    let before = s.transform_bounds(&[id]);
     apply(&mut s, id);
-    let after = [false, true].map(|preview| {
-        s.prefs.use_preview_bounds = preview;
-        s.transform_bounds(&[id])
-    });
-    assert_eq!(after, before);
+    assert_eq!(s.transform_bounds(&[id]), before);
+    // With Use Preview Bounds on, the type is measured by its glyph outlines.
+    s.prefs.use_preview_bounds = true;
+    let glyphs = vectorcraft_render::effects::reshape(&node(&s, id), None).unwrap().geometric_bounds();
+    assert_eq!(s.transform_bounds(&[id]), glyphs);
+    s.prefs.use_preview_bounds = false;
     // A native save keeps the effect.
     let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
     let ids: Vec<String> = back.node(id).unwrap().appearance.effects.iter().map(|e| e.id.clone()).collect();

@@ -10,6 +10,7 @@ use vectorcraft_doc::corners::set_corners;
 use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, Node, NodeId, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
+use vectorcraft_render::effects;
 
 use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_transform};
 use super::opacitymask::percent;
@@ -294,7 +295,7 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     // Direct-selected anchors transform alone (see [`apply_transform`]), about their own centre.
     let st = s.doc()?;
     if !bool_or(p, "copy", false)
-        && let Some(b) = st.selection.anchor_bounds(&st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
     {
         return Ok(b.center());
     }
@@ -305,10 +306,16 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
 /// its `strokes` and `corners` params, else the preferences. The values join the command's journal
 /// entry, so replaying it scales the same way whatever the preferences are then.
 pub(crate) fn scaling(s: &mut Session, p: &Value) -> Scaling {
+    let sc = scaling_options(s, p);
+    s.note_journal("strokes", json!(sc.strokes));
+    s.note_journal("corners", json!(!sc.keep_corners));
+    sc
+}
+
+/// [`scaling`] without noting the values in the journal.
+fn scaling_options(s: &Session, p: &Value) -> Scaling {
     let strokes = bool_or(p, "strokes", s.prefs.scale_strokes);
     let corners = bool_or(p, "corners", s.prefs.scale_corners);
-    s.note_journal("strokes", json!(strokes));
-    s.note_journal("corners", json!(corners));
     Scaling {
         strokes,
         effects: strokes.then_some(vectorcraft_render::effects::scale_effect),
@@ -1198,14 +1205,15 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
 
 impl Session {
     /// The bounds of `ids` the Transform panel, the bounding box, Align and Distribute measure:
-    /// visual bounds (strokes included) with Use Preview Bounds on, else geometric bounds.
+    /// with Use Preview Bounds on, visual bounds as drawn (strokes and geometry effects included,
+    /// see [`effects::preview`]), else geometric bounds.
     pub fn transform_bounds(&self, ids: &[NodeId]) -> Option<Rect> {
-        self.doc().ok()?.doc.bounds_of(ids, self.prefs.use_preview_bounds)
+        effects::preview::bounds_of(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
     }
     /// [`Session::transform_bounds`] square to the objects' own angle (their rotated bounding
     /// box, see [`Document::oriented_bounds`]).
     pub fn transform_box(&self, ids: &[NodeId]) -> Option<OrientedBox> {
-        self.doc().ok()?.doc.oriented_bounds(ids, self.prefs.use_preview_bounds)
+        effects::preview::oriented_bounds(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
     }
 }
 
@@ -1241,9 +1249,9 @@ fn spacing(p: &Value, cmd: &str) -> Result<Option<f64>> {
         .transpose()
 }
 
-/// `ids` with their bounds (`preview`: visual bounds).
+/// `ids` with their bounds (`preview`: visual bounds as drawn, see [`effects::preview::bounds_of`]).
 fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rect)> {
-    ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
+    ids.iter().filter_map(|id| Some((*id, effects::preview::bounds_of(d, &[*id], preview)?))).collect()
 }
 
 /// Move each object of `moves` by its offset, as undo step `label`; pattern tiles move too when
@@ -1275,7 +1283,7 @@ fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Resu
     let st = s.doc()?;
     match align_to(s, p) {
         Some("artboard") => {
-            let b = st.doc.bounds_of(ids, preview).unwrap_or_default();
+            let b = effects::preview::bounds_of(&st.doc, ids, preview).unwrap_or_default();
             // Align to Artboard uses artboard `artboard` (the app passes the active one). Without
             // it, or with an index the document doesn't have, it uses the artboard under the center
             // of the selection, or the first one when no artboard is there.
@@ -1285,9 +1293,9 @@ fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Resu
         }
         Some("key") => {
             let k = st.selection.key.ok_or_else(|| EngineError::Other("no key object".into()))?;
-            st.doc.bounds_of(&[k], preview).ok_or(EngineError::NoNode(k))
+            effects::preview::bounds_of(&st.doc, &[k], preview).ok_or(EngineError::NoNode(k))
         }
-        _ => st.doc.bounds_of(ids, preview).ok_or_else(|| EngineError::Other("nothing to align".into())),
+        _ => effects::preview::bounds_of(&st.doc, ids, preview).ok_or_else(|| EngineError::Other("nothing to align".into())),
     }
 }
 
@@ -1564,7 +1572,7 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     if transforms_objects(p)
         && !bool_or(p, "copy", false)
-        && let Some(b) = st.selection.anchor_bounds(&st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
     {
         return set_anchor_bounds(s, p, ids, b);
     }
@@ -1573,12 +1581,12 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     // the math below runs in its frame.
     let frame = d.oriented_bounds(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
     let g = frame.rect;
-    // With Use Preview Bounds the values measure the visual box, whose margins around the
+    // With Use Preview Bounds the values measure the visual box as drawn, whose margins around the
     // geometric box (left, top, right, bottom) scale with the strokes or stay. The margins of
     // `vs`, the visual box without the strokes in symbols' art, scale; those strokes keep their
     // weight when an instance scales, so the rest of the margins stay.
     let (v, vs) = if s.prefs.use_preview_bounds {
-        (d.oriented_bounds(&ids, true).map_or(g, |b| b.rect), scaling_box(d, &ids, &frame).unwrap_or(g))
+        (effects::preview::oriented_bounds(d, &ids, true).map_or(g, |b| b.rect), scaling_box(d, &ids, &frame).unwrap_or(g))
     } else {
         (g, g)
     };
@@ -1627,14 +1635,99 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     // The scales and the point above can miss the size or the reference point when the margins of
     // the objects differ, the members of groups and the objects in symbols' art included, and with
     // strokes that scale, when the sizes are out of proportion. The objects are then measured one
-    // by one ([`Spans::measure`]), and the scales solved for.
-    let solved = if s.prefs.use_preview_bounds && w >= 0.0 && h >= 0.0 {
-        Spans::measure(d, &ids, &frame, strokes).refit(rp, refi, [w, h], (sx, sy, new_rp))
-    } else {
+    // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects are
+    // measured as drawn after each scale tried instead ([`refit_drawn`]).
+    let symbols = d.symbol_boxes();
+    let drawn = || ids.iter().filter_map(|id| d.node(*id)).any(|n| effects::preview::draws_geometry(&symbols, n));
+    let solved = if !(s.prefs.use_preview_bounds && w >= 0.0 && h >= 0.0) {
         None
+    } else if transforms_objects(p) && !bool_or(p, "typeAreas", false) && drawn() {
+        let options = scaling_options(s, p);
+        let to_local = frame.to_doc().inverse();
+        let measure = |sx: f64, sy: f64| {
+            let xf = frame.conjugate(about(rp, Affine::scale_non_uniform(sx, sy)));
+            let sc = if Scaling::factor(xf).is_some() { options } else { Scaling::default() };
+            ids.iter().filter_map(|id| d.node(*id)).fold(None, |acc, n| {
+                let mut n = n.clone();
+                n.transform(xf, sc);
+                vectorcraft_geom::union_opt(acc, effects::preview::bounds_in(&symbols, &n, to_local))
+            })
+        };
+        // The scales above keep the effects' reach as a margin that stays, and give 0 for a size
+        // smaller than that reach. Strokes and effects that scale shrink the reach with the art, so
+        // the search then starts from the size wanted over the size as drawn.
+        let seed = |s: f64, size: f64, now: f64| if s <= 0.0 && size > 0.0 && now > 1e-9 { size / now } else { s };
+        refit_drawn(measure, refi, [w, h], (seed(sx, w, v.width()), seed(sy, h, v.height())), [g.width() > 1e-9, g.height() > 1e-9])
+    } else {
+        Spans::measure(d, &ids, &frame, strokes).refit(rp, refi, [w, h], (sx, sy, new_rp))
     };
     let (scale, new_rp) = solved.map_or((scale, new_rp), |(sx, sy, at)| (about(rp, Affine::scale_non_uniform(sx, sy)), at));
     apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p, false)
+}
+
+/// The scales along x and y that give the box `measure` returns for them the size `size`, and point
+/// `refi` of that box: the point that goes to the reference point's place. The search starts at
+/// `start`. Each step measures how the width and the height change with each scale that `free`
+/// marks true, by measuring again with that scale moved by 1e-4 of it (at least 1e-6), and moves
+/// those scales by the least-squares solution of that linear change, never below 0. The width can
+/// change with the y scale and the height with the x scale (a geometry effect can turn the art). A
+/// scale that `free` marks false stays as it is. The search stops when both sizes are within 1e-9
+/// of the sizes wanted (of the largest of 1 and those sizes), when no scale moves, when `measure`
+/// finds no box, or after 16 steps, and returns the scales that came nearest. `None` when `measure`
+/// finds no box for `start`.
+fn refit_drawn(
+    measure: impl Fn(f64, f64) -> Option<Rect>,
+    refi: usize,
+    size: [f64; 2],
+    start: (f64, f64),
+    free: [bool; 2],
+) -> Option<(f64, f64, Point)> {
+    let [w, h] = size;
+    let tolerance = 1e-9 * w.max(h).max(1.0);
+    let miss = |b: Rect| (b.width() - w).abs() + (b.height() - h).abs();
+    let (mut sx, mut sy) = start;
+    let mut b = measure(sx, sy)?;
+    let mut best = (sx, sy, b);
+    for _ in 0..16 {
+        let f = [b.width() - w, b.height() - h];
+        if f[0].abs() <= tolerance && f[1].abs() <= tolerance {
+            break;
+        }
+        // How the width and the height change with the x scale (`a`) and the y scale (`c`).
+        let change = |x: bool| -> Option<[f64; 2]> {
+            let (on, s) = if x { (free[0], sx) } else { (free[1], sy) };
+            if !on {
+                return Some([0.0, 0.0]);
+            }
+            let ds = (s.abs() * 1e-4).max(1e-6);
+            let m = if x { measure(sx + ds, sy) } else { measure(sx, sy + ds) }?;
+            Some([(m.width() - b.width()) / ds, (m.height() - b.height()) / ds])
+        };
+        let (Some(a), Some(c)) = (change(true), change(false)) else { break };
+        let dot = |u: [f64; 2], v: [f64; 2]| u[0] * v[0] + u[1] * v[1];
+        let (aa, ac, cc, af, cf) = (dot(a, a), dot(a, c), dot(c, c), dot(a, f), dot(c, f));
+        let det = aa * cc - ac * ac;
+        let (dx, dy) = if det > 1e-12 * aa * cc && det > 0.0 {
+            ((ac * cf - cc * af) / det, (ac * af - aa * cf) / det)
+        } else if aa >= cc && aa > 0.0 {
+            (-af / aa, 0.0)
+        } else if cc > 0.0 {
+            (0.0, -cf / cc)
+        } else {
+            break;
+        };
+        let (nx, ny) = ((sx + dx).max(0.0), (sy + dy).max(0.0));
+        if !(nx.is_finite() && ny.is_finite()) || (nx == sx && ny == sy) {
+            break;
+        }
+        let Some(next) = measure(nx, ny) else { break };
+        (sx, sy, b) = (nx, ny, next);
+        if miss(b) < miss(best.2) {
+            best = (sx, sy, b);
+        }
+    }
+    let (sx, sy, b) = best;
+    Some((sx, sy, vectorcraft_geom::reference_point(b, refi)))
 }
 
 /// The `width` and `height` `object.setBounds` asks for a box now `b`: the one not given stays, or

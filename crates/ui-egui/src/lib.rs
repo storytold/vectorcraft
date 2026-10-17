@@ -1037,7 +1037,7 @@ impl VectorcraftApp {
         {
             return b;
         }
-        let b = match st.selection.anchor_bounds(&st.doc, self.session.prefs.use_preview_bounds) {
+        let b = match vectorcraft_effects::preview::anchor_bounds(&st.selection, &st.doc, self.session.prefs.use_preview_bounds) {
             Some(r) => Some(vectorcraft_doc::OrientedBox::aligned(r)),
             None => self.session.transform_box(&st.selection.objects),
         };
@@ -1045,9 +1045,9 @@ impl VectorcraftApp {
         b
     }
 
-    /// The selection's visual bounds (stroke and effects included), square to the page: measured
-    /// once per revision, as the canvas reads it every frame (a traced photo selects a group of
-    /// hundreds of thousands of paths).
+    /// The selection's visual bounds (strokes included, effects left out), square to the page:
+    /// measured once per revision, as the canvas reads it every frame (a traced photo selects a
+    /// group of hundreds of thousands of paths).
     pub fn selection_bounds(&mut self) -> Option<vectorcraft_geom::Rect> {
         let st = self.session.active()?;
         let key = (st.uid, st.revision);

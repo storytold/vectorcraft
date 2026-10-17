@@ -135,7 +135,11 @@ impl Selection {
         if self.anchors.is_empty() {
             return None;
         }
-        let mut acc = doc.bounds_of(&self.whole(), visual);
+        vectorcraft_geom::union_opt(doc.bounds_of(&self.whole(), visual), self.anchors_box(doc))
+    }
+    /// The box around the anchors selected with Direct Selection. `None` without any.
+    pub fn anchors_box(&self, doc: &Document) -> Option<vectorcraft_geom::Rect> {
+        let mut acc = None;
         for (id, set) in &self.anchors {
             let Some(NodeKind::Path { path, .. }) = doc.node(*id).map(|n| &n.kind) else { continue };
             for a in set.iter().filter_map(|&(si, ai)| path.subpaths.get(si)?.anchors.get(ai)) {

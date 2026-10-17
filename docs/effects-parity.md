@@ -23,7 +23,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Convert to Shape | Rectangle, Rounded Rectangle, Ellipse | 3/3 | — |
 | Crop Marks | Crop Marks | 1/1 | — |
 | Distort & Transform | Free Distort, Pucker & Bloat, Roughen, Transform, Tweak, Twist, Zig Zag | 7/7 | Free Distort's dialog has a handle on each corner of the object's bounds, moved by dragging or with the arrow keys; Transform's Transform Objects/Patterns and Scale Strokes & Effects options, invisible Reflect checkboxes (#885); Zig Zag's ridges are evenly spaced along each segment (#1558); Roughen with Smooth keeps turn-backs smooth instead of cusps that draw as spikes (#1646) |
-| Path | Offset Path, Outline Object, Outline Stroke | 3/3 | With Use Preview Bounds on, Align, Distribute and the Transform panel still measure type that carries Outline Object by its layout box (preview bounds leave out effects) |
+| Path | Offset Path, Outline Object, Outline Stroke | 3/3 | — |
 | Pathfinder | Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline, Hard Mix, Soft Mix, Trap | 10/13 | Hard Mix, Soft Mix, Trap |
 | Rasterize | Rasterize… (as a live effect) | 0/1 | the live effect (Object › Rasterize exists) |
 | Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |

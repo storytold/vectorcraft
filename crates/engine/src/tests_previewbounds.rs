@@ -1,9 +1,12 @@
 //! Use Preview Bounds: the Transform panel values, the bounding box, Align and Distribute measure
-//! visual bounds (strokes included) when it is on.
+//! visual bounds (strokes and geometry effects included) when it is on.
+
+use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeId;
-use vectorcraft_geom::Rect;
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, Document, Effect, Node, NodeId, NodeKind, Symbol};
+use vectorcraft_geom::{Affine, Rect, shapes};
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use super::*;
@@ -73,6 +76,335 @@ fn distribute_spacing_measures_preview_bounds() {
     run(&mut s, "object.distributeSpacing", json!({"axis": "horizontal", "spacing": 0}));
     // The strokes touch: the paths are a stroke weight apart.
     assert_eq!(geometric(&s, b).x0 - geometric(&s, a).x1, 10.0);
+}
+
+/// A 100 pt square at (`x`, 100) without a stroke, with Offset Path 10.
+fn offset_square(s: &mut Session, x: f64) -> NodeId {
+    let id = NodeId(run(s, "shape.rectangle", json!({"x": x, "y": 100, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    run(s, "paint.setStroke", json!({"none": true}));
+    run(s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}, "ids": [id.0], "item": null}));
+    id
+}
+
+/// Point type `text` (48 pt) at (`x`, 100) with Outline Object.
+fn outlined_type(s: &mut Session, x: f64, text: &str) -> NodeId {
+    let id = NodeId(run(s, "text.create", json!({"x": x, "y": 100, "text": text, "size": 48}))["id"].as_u64().unwrap());
+    run(s, "effect.apply", json!({"effect": "path.outlineObject", "ids": [id.0], "item": null}));
+    id
+}
+
+/// The box of the glyph outlines that type `id` with Outline Object is drawn as.
+fn glyphs(s: &Session, id: NodeId) -> Rect {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    vectorcraft_render::effects::reshape(&n, None).unwrap().geometric_bounds().unwrap()
+}
+
+fn near(a: Rect, b: Rect, tolerance: f64) -> bool {
+    [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(x, y)| (x - y).abs() <= tolerance)
+}
+
+#[test]
+fn a_square_with_offset_path_is_measured_by_the_offset_shape() {
+    let mut s = session();
+    let a = offset_square(&mut s, 100.0);
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[a]).unwrap(), Rect::new(90.0, 90.0, 210.0, 210.0), 1e-6), "{:?}", s.transform_bounds(&[a]));
+    // Align left with an unstroked rectangle at x 20: the offset shape's left edge lines up with it.
+    rect(&mut s, 20.0, 50.0, 0.0);
+    run(&mut s, "select.all", json!({}));
+    run(&mut s, "object.align", json!({"horizontal": "left"}));
+    assert!((geometric(&s, a).x0 - 30.0).abs() < 1e-6, "{:?}", geometric(&s, a));
+    // Distribute Spacing 0: the offset shapes touch, so the squares are 20 pt apart.
+    let mut s = session();
+    let (a, b) = (offset_square(&mut s, 0.0), offset_square(&mut s, 300.0));
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "object.distributeSpacing", json!({"axis": "horizontal", "spacing": 0}));
+    assert!((geometric(&s, b).x0 - geometric(&s, a).x1 - 20.0).abs() < 1e-6);
+}
+
+#[test]
+fn a_stroke_with_offset_path_of_its_own_is_measured_where_it_paints() {
+    // A 100 pt square with a 10 pt stroke whose own Offset Path 10 moves it 10 pt out: the stroke
+    // paints from 15 pt outside the square to 5 pt outside it.
+    let mut s = session();
+    let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "stroke.set", json!({"weight": 10}));
+    let items = s.doc().unwrap().doc.node(id).unwrap().appearance.items.clone();
+    let stroke = items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).unwrap();
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}, "ids": [id.0], "item": stroke}));
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[id]).unwrap(), Rect::new(85.0, 85.0, 215.0, 215.0), 1e-6), "{:?}", s.transform_bounds(&[id]));
+}
+
+#[test]
+fn a_groups_own_stroke_with_offset_path_is_measured_where_it_paints() {
+    // A group of an unstroked 100 pt square, with a 10 pt stroke of its own whose Offset Path 10
+    // moves it 10 pt out: the stroke paints from 15 pt outside the square to 5 pt outside it.
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    run(&mut s, "paint.setStroke", json!({"ids": [g.0], "item": 0, "color": "#000000"}));
+    run(&mut s, "stroke.set", json!({"ids": [g.0], "item": 0, "weight": 10}));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}, "ids": [g.0], "item": 0}));
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[g]).unwrap(), Rect::new(85.0, 85.0, 215.0, 215.0), 1e-6), "{:?}", s.transform_bounds(&[g]));
+}
+
+#[test]
+fn a_groups_own_fill_is_measured_on_its_members_where_they_are() {
+    // A group with a fill of its own around a 100 pt square whose fill a Transform effect moves
+    // 100 pt right: the group's fill paints the square where it is, and the square's own fill
+    // paints 100 pt to the right of it.
+    let mut s = session();
+    let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let items = s.doc().unwrap().doc.node(id).unwrap().appearance.items.clone();
+    let fill = items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveH": 100}, "ids": [id.0], "item": fill}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [g.0]}));
+    run(&mut s, "paint.setFill", json!({"ids": [g.0], "item": 0, "color": "#000000"}));
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[g]).unwrap(), Rect::new(100.0, 100.0, 300.0, 200.0), 1e-6), "{:?}", s.transform_bounds(&[g]));
+}
+
+#[test]
+fn only_fills_and_strokes_that_paint_are_measured() {
+    let item = |s: &Session, id: NodeId, fill: bool| {
+        let items = s.doc().unwrap().doc.node(id).unwrap().appearance.items.clone();
+        items.iter().position(|i| i.is_fill() == fill).unwrap()
+    };
+    // A 100 pt square without a stroke whose fill a Transform effect moves 100 pt right is measured
+    // where the fill paints, not where the path is.
+    let mut s = session();
+    let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let fill = item(&s, id, true);
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveH": 100}, "ids": [id.0], "item": fill}));
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[id]).unwrap(), Rect::new(200.0, 100.0, 300.0, 200.0), 1e-6), "{:?}", s.transform_bounds(&[id]));
+    // A hidden 10 pt stroke with Offset Path 10 of its own adds nothing to the box of the square,
+    // which Offset Path 5 of the object's own takes 5 pt out.
+    let mut s = session();
+    let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "stroke.set", json!({"weight": 10}));
+    let stroke = item(&s, id, false);
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}, "ids": [id.0], "item": stroke}));
+    run(&mut s, "appearance.setItem", json!({"index": stroke, "visible": false, "ids": [id.0]}));
+    preview(&mut s, true);
+    assert!(near(s.transform_bounds(&[id]).unwrap(), Rect::new(100.0, 100.0, 200.0, 200.0), 1e-6), "{:?}", s.transform_bounds(&[id]));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 5}, "ids": [id.0], "item": null}));
+    assert!(near(s.transform_bounds(&[id]).unwrap(), Rect::new(95.0, 95.0, 205.0, 205.0), 1e-6), "{:?}", s.transform_bounds(&[id]));
+}
+
+#[test]
+fn type_with_outline_object_aligns_by_its_glyphs() {
+    // "ace" has no ascender or descender; "Tg" has a capital and a descender. Aligned top, their
+    // glyph tops line up; aligned bottom, the bottom of the g lines up with the bottom of "ace".
+    let edge = |vertical: &str| {
+        let mut s = session();
+        let a = outlined_type(&mut s, 20.0, "ace");
+        let b = outlined_type(&mut s, 200.0, "Tg");
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        run(&mut s, "object.align", json!({"vertical": vertical}));
+        let (a, b) = (glyphs(&s, a), glyphs(&s, b));
+        if vertical == "top" { (a.y0, b.y0) } else { (a.y1, b.y1) }
+    };
+    for vertical in ["top", "bottom"] {
+        let (a, b) = edge(vertical);
+        assert!((a - b).abs() < 1e-6, "{vertical}: {a} and {b}");
+    }
+}
+
+#[test]
+fn type_with_outline_object_measures_as_its_outlines() {
+    let mut s = session();
+    let id = outlined_type(&mut s, 40.0, "Outline");
+    preview(&mut s, true);
+    let measured = s.transform_bounds(&[id]).unwrap();
+    assert!(near(measured, glyphs(&s, id), 1e-9), "{measured:?}");
+    // The type's Create Outlines copy has the same visual box.
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let outlines: Vec<NodeId> =
+        run(&mut s, "type.createOutlines", json!({}))["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    let copy = s.doc().unwrap().doc.bounds_of(&outlines, true).unwrap();
+    assert!(near(measured, copy, 0.01), "{measured:?} {copy:?}");
+}
+
+#[test]
+fn set_bounds_sizes_the_glyphs_of_type_with_outline_object() {
+    let mut s = session();
+    let id = outlined_type(&mut s, 40.0, "Outline");
+    preview(&mut s, true);
+    let before = glyphs(&s, id);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 100, "reference": 0}));
+    let after = glyphs(&s, id);
+    assert!((after.width() - 100.0).abs() < 1e-6, "{after:?}");
+    assert!((after.x0 - before.x0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} {after:?}");
+    assert!(near(s.transform_bounds(&[id]).unwrap(), after, 1e-9));
+}
+
+#[test]
+fn set_bounds_sizes_the_offset_shape_of_a_square_with_offset_path() {
+    // The offset shape is 120 pt wide. Set to 220 wide from its top-left corner, it is 220 wide and
+    // stays 120 high, with Scale Strokes & Effects off (the offset stays 10 pt) and on (the offset
+    // scales with the square).
+    for strokes in [false, true] {
+        let mut s = session();
+        let id = offset_square(&mut s, 100.0);
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.setBounds", json!({"width": 220, "reference": 0, "strokes": strokes}));
+        let v = s.transform_bounds(&[id]).unwrap();
+        assert!(near(v, Rect::new(90.0, 90.0, 310.0, 210.0), 1e-6), "strokes {strokes}: {v:?}");
+    }
+    // Set to 10 x 10, smaller than the 20 pt the offset adds, with Scale Strokes & Effects on: the
+    // offset shrinks with the square, and the offset shape is 10 x 10.
+    let mut s = session();
+    let id = offset_square(&mut s, 100.0);
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 10, "height": 10, "reference": 0, "strokes": true}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!(near(v, Rect::new(90.0, 90.0, 100.0, 100.0), 1e-6), "{v:?}");
+}
+
+#[test]
+fn set_bounds_sizes_art_that_a_transform_effect_turns() {
+    // A 100 x 50 rectangle that a Transform effect turns 90° is drawn 50 wide and 100 high. Set to
+    // 100 x 100, it is drawn 100 x 100: its width stays 100 and its height doubles.
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 0.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"rotate": 90}, "ids": [id.0], "item": null}));
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 100, "height": 100}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.width() - 100.0).abs() < 1e-6 && (v.height() - 100.0).abs() < 1e-6, "{v:?}");
+    let g = geometric(&s, id);
+    assert!((g.width() - 100.0).abs() < 1e-6 && (g.height() - 100.0).abs() < 1e-6, "{g:?}");
+}
+
+#[test]
+fn a_symbol_instance_is_measured_with_the_geometry_effects_in_its_art() {
+    let mut s = session();
+    offset_square(&mut s, 100.0);
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Offset"}))["id"].as_u64().unwrap());
+    preview(&mut s, true);
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!(near(v, Rect::new(90.0, 90.0, 210.0, 210.0), 1e-6), "{v:?}");
+}
+
+#[test]
+fn blends_envelopes_and_repeats_are_measured_with_the_geometry_effects_of_their_objects() {
+    // A grid repeat of a 100 pt square without a stroke, with Offset Path 10: each copy is drawn
+    // 10 pt out from its square.
+    let mut s = session();
+    let a = offset_square(&mut s, 100.0);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let id = NodeId(run(&mut s, "object.repeat.grid", json!({}))["id"].as_u64().unwrap());
+    preview(&mut s, true);
+    let (g, v) = (geometric(&s, id), s.transform_bounds(&[id]).unwrap());
+    assert!(g.width() > 200.0 && near(v, g.inflate(10.0, 10.0), 1e-6), "{v:?} {g:?}");
+    // A blend between two such squares, 100 pt apart.
+    let mut s = session();
+    let (a, b) = (offset_square(&mut s, 0.0), offset_square(&mut s, 200.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let id = NodeId(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+    preview(&mut s, true);
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!(near(v, Rect::new(-10.0, 90.0, 310.0, 210.0), 1e-6), "{v:?}");
+    // An envelope around one, with a warp that leaves it as it is.
+    let mut s = session();
+    let a = offset_square(&mut s, 100.0);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let id = NodeId(run(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 0}))["id"].as_u64().unwrap());
+    preview(&mut s, true);
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!(near(v, Rect::new(90.0, 90.0, 210.0, 210.0), 1e-6), "{v:?}");
+}
+
+#[test]
+fn an_object_has_the_art_of_at_most_4096_symbol_instances_drawn() {
+    // Symbol S0 is a filled 10 pt square with Offset Path 1, drawn from -1 to 11. Each of S1 to S12
+    // holds two instances of the symbol before it, the second 20 × 2^(k - 1) pt to the right, so an
+    // instance of S12 shows 4,096 squares in a row, 20 pt apart, through 8,191 instances. The art of
+    // the first 4,096 is drawn: the instance itself and the 4,095 in the left half. The squares in
+    // the right half are measured without the offset.
+    let mut d = Document::new(400.0, 400.0);
+    let mut filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    filled.effects.push(Effect { id: "path.offsetPath".into(), params: json!({"offset": 1}), visible: true });
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), filled);
+    d.symbols.push(Symbol { name: "S0".into(), art: Arc::new(square) });
+    for k in 1..=12 {
+        let mut instance =
+            |dx: f64| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("S{}", k - 1), xf: Affine::translate((dx, 0.0)) }));
+        let pair = vec![instance(0.0), instance(20.0 * f64::from(1 << (k - 1)))];
+        let art = Node::group(d.alloc_id(), pair);
+        d.symbols.push(Symbol { name: format!("S{k}"), art: Arc::new(art) });
+    }
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S12".into(), xf: Affine::IDENTITY });
+    let (layer, id) = (d.layers[0].id, instance.id);
+    d.insert(Some(layer), 0, instance).unwrap();
+    let mut s = Session::new();
+    s.add_document(d, None);
+    preview(&mut s, true);
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!(near(v, Rect::new(-1.0, -1.0, 81910.0, 11.0), 1e-6), "{v:?}");
+}
+
+#[test]
+fn a_turned_type_objects_box_follows_its_glyphs() {
+    let mut s = session();
+    let id = outlined_type(&mut s, 40.0, "Outline");
+    preview(&mut s, true);
+    let before = s.transform_box(&[id]).unwrap();
+    assert!(near(before.rect, glyphs(&s, id), 1e-9), "{before:?}");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.rotate", json!({"angle": 30}));
+    let after = s.transform_box(&[id]).unwrap();
+    assert!((after.angle - 30.0).abs() < 1e-9, "{after:?}");
+    assert!(
+        (after.rect.width() - before.rect.width()).abs() < 1e-6 && (after.rect.height() - before.rect.height()).abs() < 1e-6,
+        "{before:?} {after:?}"
+    );
+    assert!(after.center().distance(before.center()) < 1e-6, "{before:?} {after:?}");
+}
+
+#[test]
+fn objects_selected_whole_with_anchors_turn_about_the_box_of_their_offset_shape() {
+    // A square with Offset Path 10 (drawn from 90 to 210) selected whole with the top-left anchor
+    // of an unstroked square at (300, 100); a half turn about the center of the box around both.
+    let center_after = |on: bool| {
+        let mut s = session();
+        let a = offset_square(&mut s, 100.0);
+        let b = NodeId(run(&mut s, "shape.rectangle", json!({"x": 300, "y": 100, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+        preview(&mut s, on);
+        run(&mut s, "select.set", json!({"ids": [a.0]}));
+        run(&mut s, "select.anchors", json!({"id": b.0, "anchors": [[0, 0]], "mode": "add"}));
+        run(&mut s, "object.rotate", json!({"angle": 180}));
+        geometric(&s, a).center()
+    };
+    // On, the box runs from (90, 90) to (300, 210); off, from (100, 100) to (300, 200).
+    assert!(center_after(true).distance(vectorcraft_geom::Point::new(240.0, 150.0)) < 1e-6, "{:?}", center_after(true));
+    assert!(center_after(false).distance(vectorcraft_geom::Point::new(250.0, 150.0)) < 1e-6, "{:?}", center_after(false));
+}
+
+#[test]
+fn without_preview_bounds_geometry_effects_are_not_measured() {
+    let mut s = session();
+    let ids = [offset_square(&mut s, 100.0), outlined_type(&mut s, 40.0, "Outline")];
+    let d = &s.doc().unwrap().doc;
+    for id in ids {
+        assert_eq!(s.transform_bounds(&[id]), d.bounds_of(&[id], false));
+        assert_eq!(s.transform_box(&[id]), d.oriented_bounds(&[id], false));
+    }
 }
 
 #[test]
@@ -355,5 +687,23 @@ fn the_bounding_box_handles_sit_on_the_preview_bounds() {
         geometric(&s, id)
     };
     assert!(drag(true).width() > 150.0, "a scale from the visual edge");
+    assert_eq!(drag(false).width(), 100.0, "off, the point is no handle");
+}
+
+#[test]
+fn the_bounding_box_handles_sit_on_the_offset_shape() {
+    // Drag from the right edge of the offset shape (10 pt outside the square) 100 pt to the right.
+    let drag = |on: bool| {
+        let mut s = session();
+        let id = offset_square(&mut s, 100.0);
+        preview(&mut s, on);
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        for (k, x) in [(PointerKind::Down, 210.0), (PointerKind::Drag, 310.0), (PointerKind::Up, 310.0)] {
+            s.pointer(&PointerEvent::new(k, x, 150.0), v).unwrap();
+        }
+        geometric(&s, id)
+    };
+    assert!(drag(true).width() > 150.0, "a scale from the edge of the offset shape");
     assert_eq!(drag(false).width(), 100.0, "off, the point is no handle");
 }

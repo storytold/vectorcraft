@@ -1912,6 +1912,18 @@ stroke (see Stroke bounds and clicks); off, they measure the paths. The three Al
 `bounds: "preview"|"geometric"` for one call. `object.setBounds` then sets the visual box: with Scale Strokes &
 Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets a 210 pt path.
 
+With Use Preview Bounds on, these measures take in each object as it is drawn after its geometry effects. A path is
+measured by its effected shape, and a fill or stroke with geometry effects of its own is measured by the shape it
+paints. Type, images, live objects and symbol instances are measured by their reshaped art, and a symbol instance is
+also measured by its reshaped art when its symbol's art has geometry effects. A group or layer with geometry or
+Pathfinder effects, or with a fill or stroke of its own that has geometry effects or paints members with geometry
+effects, is measured by its evaluated art. A blend, envelope or repeat whose objects have geometry effects is
+measured by its evaluated art, with those objects measured after their effects. A 100 pt square without a stroke,
+with Offset Path 10, measures 120 pt, and type with Outline Object is measured by its glyph outlines. Raster effects such as shadows and glows are not
+measured. In one object, the art of at most 4,096 symbol instances is measured with its geometry effects, and the
+other instances are measured without them. `object.setBounds` with `width: 100` gives that type a glyph box 100 pt
+wide.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
 ```

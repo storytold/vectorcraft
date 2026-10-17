@@ -20,6 +20,8 @@
 //!   art painting its members (its raster effects then apply to the composite).
 //! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
 //!   PDF writers.
+//! - [`preview`] measures objects as they are drawn, with their geometry effects (Use Preview
+//!   Bounds).
 //! - **Plug-in effects** (`plugin.<plug-in id>`, Effect › Plug-ins) are geometry effects run by an
 //!   installed WebAssembly plug-in (`vectorcraft-plugins`); [`effect_info`] describes them like
 //!   built-in ones, and an effect whose plug-in isn't installed leaves the geometry as it is.
@@ -40,6 +42,7 @@ mod group;
 mod live;
 mod marks;
 pub mod pixel;
+pub mod preview;
 mod raster;
 mod reshape;
 mod revolve;

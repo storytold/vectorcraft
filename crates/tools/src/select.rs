@@ -180,16 +180,16 @@ pub fn matrix_json(a: Affine) -> Value {
     json!([c[0], c[1], c[2], c[3], c[4], c[5]])
 }
 
-/// Selection bounds used for the bounding box: visual bounds with Use Preview Bounds, else
-/// geometric bounds.
+/// Selection bounds used for the bounding box: visual bounds as drawn with Use Preview Bounds
+/// ([`vectorcraft_effects::preview`]), else geometric bounds.
 pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
-    cx.doc.bounds_of(&cx.selection.objects, cx.preview_bounds)
+    vectorcraft_effects::preview::bounds_of(cx.doc, &cx.selection.objects, cx.preview_bounds)
 }
 
 /// [`selection_bounds`] square to the selection's own angle: the bounding box the Selection tool
 /// shows and drags (rotated after a rotation).
 pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
-    cx.doc.oriented_bounds(&cx.selection.objects, cx.preview_bounds)
+    vectorcraft_effects::preview::oriented_bounds(cx.doc, &cx.selection.objects, cx.preview_bounds)
 }
 
 /// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
@@ -249,7 +249,7 @@ impl SelectionTool {
                 if !cx.smart_guides {
                     return None;
                 }
-                let c = cx.doc.bounds_of(&[id], cx.preview_bounds)?.center();
+                let c = vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds)?.center();
                 (c.distance(p) <= reach).then_some((c, "center"))
             })
         })

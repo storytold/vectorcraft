@@ -425,6 +425,21 @@ mod tests {
     }
 
     #[test]
+    fn use_preview_bounds_shows_the_size_after_geometry_effects() {
+        // A 100 × 50 rectangle without a stroke, with Offset Path 10: 120 × 70 as drawn.
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 50})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}, "item": null})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "100 pt") && shown.iter().any(|t| t == "50 pt"), "{shown:?}");
+        set_pref(&mut app, "usePreviewBounds", true);
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "120 pt") && shown.iter().any(|t| t == "70 pt"), "{shown:?}");
+    }
+
+    #[test]
     fn rotation_field_shows_the_angle_the_box_keeps() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
