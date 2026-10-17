@@ -3978,7 +3978,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
-@msg	Replace Spine: select a blend and a path	Korvaa runko: valitse sulautus ja polku
+@msg	Replace Spine: select a blend and a path	Korvaa selkäranka: valitse sulautus ja polku
 @msg	select two or more objects to distribute	valitse kaksi tai useampia objekteja jaettavaksi tasaisesti
 @msg	select paths or anchor points	valitse polkuja tai ankkuripisteitä
 @msg	SVG parse error: {0}	SVG-jäsennysvirhe: {0}

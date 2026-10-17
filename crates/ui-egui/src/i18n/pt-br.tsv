@@ -3340,7 +3340,7 @@ axis	Both	Ambos
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Visualizar no navegador exige o aplicativo para desktop (na web, os arquivos são baixados)
 @msg	Release Guides: no guides	Liberar guias: não há guias
 @msg	Release: no layer to put the rectangle in	Liberar: não há camada para colocar o retângulo
-@msg	Replace Spine: select a blend and a path	Substituir eixo: selecione uma mesclagem e um traçado
+@msg	Replace Spine: select a blend and a path	Substituir coluna: selecione uma mesclagem e um traçado
 @msg	select two or more objects to distribute	selecione dois ou mais objetos para distribuir
 @msg	select paths or anchor points	selecione traçados ou pontos de ancoragem
 @msg	SVG parse error: {0}	Erro de análise do SVG: {0}

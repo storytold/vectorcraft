@@ -696,7 +696,7 @@
 	Delete Selected Item	Изтриване на избран елемент
 	Delete Selection	Изтриване на селекцията
 	Delete Slices	Изтриване на отрязъци
-	Delete Spine Point	Изтриване на точка от гръбна линия
+	Delete Spine Point	Изтриване на точка от оста
 	Delete Stop	Изтриване на репер
 	Delete Swatch	Изтриване на образец
 	Delete Symbol	Изтриване на символ
@@ -2491,7 +2491,7 @@
 	Replace	Замяна
 	Replace Font	Замяна на шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Заменете го с друг файл или го игнорирайте: неговите изображения ще продължат да показват записания с документа преглед.
-	Replace Spine	Замяна на скелет
+	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
 	Replace With Font	Замяна с шрифт
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
@@ -2537,7 +2537,7 @@
 	Reverse Path Direction	Обръщане посоката на пътя
 	Reverse Path Direction Off	Изключване на обръщането на посоката на пътя
 	Reverse Path Direction On	Включване на обръщането на посоката на пътя
-	Reverse Spine	Обръщане на гръбнака
+	Reverse Spine	Обръщане на оста
 	Revert	Връщане към запазеното
 	Revert to the saved version of “{name}”?	Връщане към запазената версия на „{name}“?
 	Replace “{name}”, the file this document was opened from?	Замяна на „{name}“, файла, от който беше отворен този документ?
@@ -3679,7 +3679,7 @@ axis	Both	И двете
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
-@msg	Replace Spine: select a blend and a path	Замяна на гръбнак: изберете плавно преливане и път
+@msg	Replace Spine: select a blend and a path	Замяна на оста: изберете плавно преливане и път
 @msg	select two or more objects to distribute	изберете два или повече обекта за разпределение
 @msg	select paths or anchor points	изберете пътища или опорни точки
 @msg	SVG parse error: {0}	Грешка при анализ на SVG: {0}

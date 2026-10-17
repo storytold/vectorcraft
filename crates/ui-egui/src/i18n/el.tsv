@@ -98,7 +98,7 @@
 	Add Selected Artwork (Alt: as one asset)	Προσθήκη επιλεγμένου γραφικού (Alt: ως ένα στοιχείο)
 	Add Selected Artwork as Multiple Assets	Προσθήκη επιλεγμένου γραφικού ως πολλών στοιχείων
 	Add Selected Artwork as One Asset	Προσθήκη επιλεγμένου γραφικού ως ενός στοιχείου
-	Add Spine Point	Προσθήκη σημείου άξονα
+	Add Spine Point	Προσθήκη σημείου κεντρικής καμπύλης
 	Add Swatches	Προσθήκη δειγμάτων χρωμάτων
 	Add to Graphic Styles	Προσθήκη στα στυλ γραφικών
 	Add to Profiles	Προσθήκη στα προφίλ
@@ -670,7 +670,7 @@
 	Delete Selected Item	Διαγραφή επιλεγμένου στοιχείου
 	Delete Selection	Διαγραφή επιλογής
 	Delete Slices	Διαγραφή τομών
-	Delete Spine Point	Διαγραφή σημείου άξονα
+	Delete Spine Point	Διαγραφή σημείου κεντρικής καμπύλης
 	Delete Stop	Διαγραφή στάσης ντεγκραντέ
 	Delete Swatch	Διαγραφή δείγματος χρώματος
 	Delete Symbol	Διαγραφή συμβόλου
@@ -2047,7 +2047,7 @@ axis	Both	Και τα δύο
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
 @msg	Release: no layer to put the rectangle in	Αποδέσμευση: δεν υπάρχει επίπεδο για να τοποθετηθεί το ορθογώνιο
-@msg	Replace Spine: select a blend and a path	Αντικατάσταση άξονα: επιλέξτε ανάμειξη και διαδρομή
+@msg	Replace Spine: select a blend and a path	Αντικατάσταση κεντρικής καμπύλης: επιλέξτε ανάμειξη και διαδρομή
 @msg	select two or more objects to distribute	Επιλέξτε δύο ή περισσότερα αντικείμενα για κατανομή
 @msg	select paths or anchor points	Επιλέξτε διαδρομές ή σημεία αγκύρωσης
 @msg	SVG parse error: {0}	Σφάλμα ανάλυσης SVG: {0}

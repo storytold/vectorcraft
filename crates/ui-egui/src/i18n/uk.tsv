@@ -2559,7 +2559,7 @@ mark-style	Japanese	Японський
 	Replace	Замінити
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
-	Replace Spine	Замінити кістяк
+	Replace Spine	Замінити вісь
 	Replace Symbol	Замінити символ
 	Replace With Font	Замінити шрифтом
 	Replaces the saved preset of that name.	Замінює збережений набір із таким ім’ям.
@@ -3773,7 +3773,7 @@ axis	Both	Обидві
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
-@msg	Replace Spine: select a blend and a path	Заміна кістяка: виділіть перехід і контур
+@msg	Replace Spine: select a blend and a path	Заміна осі: виділіть перехід і контур
 @msg	select two or more objects to distribute	виділіть два або більше об’єктів для розподілу
 @msg	select paths or anchor points	виділіть контури або опорні точки
 @msg	SVG parse error: {0}	Помилка розбору SVG: {0}

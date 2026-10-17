@@ -234,8 +234,8 @@
 	Blend	ブレンド
 	Blend Options…	ブレンドオプション…
 	Expand	拡張
-	Replace Spine	ブレンド軸を置き換え
-	Reverse Spine	ブレンド軸を反転
+	Replace Spine	スパインを置き換え
+	Reverse Spine	スパインを反転
 	Reverse Front to Back	前後を反転
 	Envelope Distort	エンベロープ
 	Make with Warp…	ワープで作成…
@@ -3950,7 +3950,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
-@msg	Replace Spine: select a blend and a path	ブレンド軸を置き換え: ブレンドとパスを選択してください
+@msg	Replace Spine: select a blend and a path	スパインを置き換え: ブレンドとパスを選択してください
 @msg	nothing to wrap	まとめるものがありません
 @msg	select a blend	ブレンドを選択してください
 @msg	select a blend or give `id`	ブレンドを選択するか、`id` を指定してください

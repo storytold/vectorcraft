@@ -2541,7 +2541,7 @@ mark-style	Japanese	日式
 	Replace	取代
 	Replace Font	取代字體
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
-	Replace Spine	取代軸線
+	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
@@ -2588,7 +2588,7 @@ mark-style	Japanese	日式
 	Reverse Path Direction	反轉路徑方向
 	Reverse Path Direction Off	關閉反轉路徑方向
 	Reverse Path Direction On	開啟反轉路徑方向
-	Reverse Spine	反轉軸線
+	Reverse Spine	反轉脊線
 	Revert	回復
 	Revert to the saved version of “{name}”?	要回復為「{name}」已儲存的版本嗎？
 	Replace “{name}”, the file this document was opened from?	要取代「{name}」（開啟此文件的來源檔案）嗎？

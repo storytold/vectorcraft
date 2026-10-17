@@ -1115,6 +1115,47 @@ fn vietnamese_domain_terms_are_consistent() {
     assert_eq!(message(vi(), "Replace Spine: select a blend and a path"), "Thay thế trục: chọn một đối tượng hòa trộn và một đường dẫn");
 }
 
+/// Each catalog listed here names a blend's spine with one term, in one of the forms listed for
+/// it, in every row whose English text names the spine: the spine commands' labels and the Replace
+/// Spine message. A catalog missing from the list is not checked.
+#[test]
+fn each_catalog_names_the_blend_spine_with_one_term() {
+    const SPINE_TERMS: &[(&str, &[&str])] = &[
+        ("bg", &["оста"]),
+        ("cs", &["páteř"]),
+        ("de", &["achse"]),
+        ("el", &["κεντρικής καμπύλης"]),
+        ("es", &["eje"]),
+        ("fi", &["selkäran"]),
+        ("fr", &["dorsale"]),
+        ("hu", &["gerinc"]),
+        ("it", &["dorsale"]),
+        ("ja", &["スパイン"]),
+        ("ko", &["스파인"]),
+        ("pl", &["grzbiet"]),
+        ("pt-br", &["coluna"]),
+        ("ru", &["остов"]),
+        ("sv", &["ryggrad"]),
+        ("uk", &["вісь", "осі"]),
+        ("vi", &["trục"]),
+        ("zh-hans", &["脊线"]),
+        ("zh-hant", &["脊線"]),
+    ];
+    let mut bad = Vec::new();
+    for (code, terms) in SPINE_TERMS {
+        let lang = Lang::from_code(code).expect("language registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: Vec<_> = entries.iter().filter(|(_, src, _)| src.to_lowercase().contains("spine")).collect();
+        assert!(!rows.is_empty(), "{code}: no row names the spine");
+        for (ctx, src, tr) in rows {
+            if !terms.iter().any(|t| tr.to_lowercase().contains(t)) {
+                bad.push(format!("{code}: {ctx} {src:?} → {tr:?}"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "rows that name the spine with another term:\n{}", bad.join("\n"));
+}
+
 fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
 }
