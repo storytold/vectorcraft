@@ -119,7 +119,7 @@ mod tests {
 
     use super::*;
     use crate::testutil::*;
-    use crate::{PointerEvent, PointerKind, Tool};
+    use crate::{Cursor, Mods, PointerEvent, PointerKind, Tool};
     use vectorcraft_doc::live::{EnvelopeOptions, grid_points};
     use vectorcraft_doc::{Document, Selection};
     use vectorcraft_geom::{Affine, Rect};
@@ -167,6 +167,25 @@ mod tests {
             t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 160.0)),
             vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0}))]
         );
+    }
+
+    /// The plus shows only where a click adds a mesh line or makes a mesh; over a mesh point (a drag
+    /// moves it) and over nothing, the Mesh pointer has none.
+    #[test]
+    fn the_mesh_tool_shows_its_plus_only_where_a_click_adds() {
+        let (d, _) = doc_with_envelope();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let t = crate::meshblend::create("mesh").unwrap();
+        let alt = Mods { alt: true, ..Mods::default() };
+        assert_eq!(t.cursor(&c, Point::new(200.0, 100.0), Mods::default()), Cursor::Mesh, "over a mesh point");
+        assert_eq!(t.cursor(&c, Point::new(200.0, 100.0), alt), Cursor::PenDelete, "Alt over a mesh point deletes it");
+        assert_eq!(t.cursor(&c, Point::new(150.0, 160.0), Mods::default()), Cursor::MeshAdd, "inside the envelope");
+        assert_eq!(t.cursor(&c, Point::new(450.0, 450.0), Mods::default()), Cursor::Mesh, "a click there adds nothing");
+        // Over a path a click makes a mesh of it.
+        let (d, _) = crate::testutil::doc_with_rect();
+        let c = cx(&d, &s, &p);
+        assert_eq!(t.cursor(&c, Point::new(150.0, 150.0), Mods::default()), Cursor::MeshAdd);
     }
 
     #[test]

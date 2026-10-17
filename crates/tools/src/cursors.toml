@@ -1,23 +1,27 @@
 # The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/lib.rs).
 #
-# This is the source of truth for what each cursor is for, written for whoever draws them:
-# designers never decide what a cursor is for, this file does. `cargo xtask cursors` warns about
-# a `Cursor` value without an entry. Adding a cursor: CLAUDE.md › Adding a cursor.
+# This is the source of truth. nibcraft's `pull` turns it into CURSORS.md for designers, and
+# `cargo xtask cursors` wires their drawings in by id. Designers never decide what a cursor is for:
+# this file does. Adding a cursor: CLAUDE.md › Adding a cursor.
 #
 #   app         the app's name as designers read it
-#   id          the `Cursor` variant's name (PenAdd), which names its drawing
+#   seeds       the command, run in this checkout, that writes the cursors drawn in code as
+#               `<id>.svg` into the folder added after it: `pull` gives designers those as starting
+#               points (`<id>-vectorcraft-rendered.svg`)
+#   id          the `Cursor` variant's name (PenAdd); the designer draws `<id>` in nibcraft
 #   group       the heading it's listed under for designers
 #   shown_when  every situation that shows it, one plain sentence each
 #   hotspot     where the click lands
 #   look        optional: only what the drawing must mean or match (a badge, a sibling cursor).
 #               Never describe another app's cursors; describe what ours must say.
 #   designer    optional, default true: false for a cursor the operating system draws on purpose
-#               (nothing to draw)
+#               (left out of CURSORS.md)
 #
 # Wording: plain sentences for a designer, behaviour only. `cargo xtask brands` rejects vendor
 # names here.
 
 app = "VectorCraft"
+seeds = ["cargo", "run", "--release", "-p", "vectorcraft", "--", "--cursor-seeds"]
 
 # ── Selection ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -97,7 +101,6 @@ shown_when = [
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",
-    "The Mesh tool over a mesh point or handle.",
     "The Artboard tool inside an artboard.",
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
@@ -388,9 +391,23 @@ designer = false
 [[cursor]]
 id = "Eyedropper"
 group = "Colour and gradient"
-shown_when = ["The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead."]
+shown_when = [
+    "The Eyedropper tool away from type, whatever the modifier keys.",
+    "Over type the Eyedropper shows EyedropperType.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
 hotspot = "The pipette's tip."
 look = "A pipette."
+
+[[cursor]]
+id = "EyedropperType"
+group = "Colour and gradient"
+shown_when = [
+    "The Eyedropper tool over type, where a click samples the type's attributes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The pipette's tip."
+look = "The Eyedropper pipette with a small T."
 
 [[cursor]]
 id = "AddStop"
@@ -417,9 +434,20 @@ id = "MeshAdd"
 group = "Colour and gradient"
 shown_when = [
     "The Mesh tool over a mesh or a path, off a mesh point: a click adds a mesh point (turning a path into a mesh).",
-    "Elsewhere the Mesh tool shows PenDelete (Alt over a mesh point) and Move (over a point or handle).",
+    "Elsewhere the Mesh tool shows Mesh, or PenDelete with Alt over a mesh point.",
 ]
 hotspot = "Where the mesh point goes."
+
+[[cursor]]
+id = "Mesh"
+group = "Colour and gradient"
+shown_when = [
+    "The Mesh tool over a mesh point or handle, where a drag moves it.",
+    "The Mesh tool away from any mesh or path, where a click adds nothing.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The same point as MeshAdd's."
+look = "MeshAdd without its plus."
 
 [[cursor]]
 id = "LivePaintBucket"

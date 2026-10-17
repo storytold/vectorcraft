@@ -39,7 +39,7 @@ const ALLOW: &str = "brand-ok";
 /// This file lists the names it rejects.
 const SELF: &str = "xtask/src/brands.rs";
 
-/// The cursor manifest, which designers read.
+/// The cursor manifest, which designers read (as nibcraft's CURSORS.md).
 const CURSOR_MANIFEST: &str = "crates/tools/src/cursors.toml";
 
 /// A denied name found in a file.

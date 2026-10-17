@@ -636,6 +636,17 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     }
 }
 
+/// `--cursor-seeds DIR`: write `DIR/<id>.svg` for each cursor drawn in code
+/// ([`vectorcraft_ui_egui::cursors::seed_svgs`]) and print each file's path.
+fn write_cursor_seeds(dir: &std::path::Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for (id, svg) in vectorcraft_ui_egui::cursors::seed_svgs() {
+        let path = dir.join(format!("{id}.svg"));
+        std::fs::write(&path, svg).map_err(|e| format!("{}: {e}", path.display()))?;
+        println!("{}", path.display());
+    }
+    Ok(())
+}
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
 const USAGE: &str = "\
 Usage: vectorcraft [options] [files…]
@@ -683,6 +694,20 @@ fn main() -> std::process::ExitCode {
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
                 return std::process::ExitCode::SUCCESS;
+            }
+            // For nibcraft's `pull`: the cursors drawn in code, as SVG starting points.
+            "--cursor-seeds" => {
+                let Some(dir) = args.next() else {
+                    eprintln!("vectorcraft: --cursor-seeds needs a folder to write the SVGs into");
+                    return std::process::ExitCode::FAILURE;
+                };
+                return match write_cursor_seeds(std::path::Path::new(&dir)) {
+                    Ok(()) => std::process::ExitCode::SUCCESS,
+                    Err(e) => {
+                        eprintln!("vectorcraft: {e}");
+                        std::process::ExitCode::FAILURE
+                    }
+                };
             }
             // Before anything starts, like `--version`: from a terminal or an agent's shell the app
             // used to open (or hang without a display) instead (#2110).

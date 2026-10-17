@@ -169,6 +169,32 @@ impl MeshTool {
     fn grab_at(&self, cx: &ToolContext, p: Point) -> Option<crate::meshedit::MeshGrab> {
         self.edit.hit(cx, &Self::meshes(cx), p)
     }
+
+    /// What a click at `p` off a mesh point does: a mesh line through a mesh or mesh envelope
+    /// (in `color`, a gradient mesh's), or a path or compound path turned into a mesh. `None`
+    /// where a click adds nothing.
+    fn add_at(cx: &ToolContext, p: Point, color: Option<&str>) -> Option<Action> {
+        let (top, leaf) = hit_top(cx, p)?;
+        for id in [leaf, top] {
+            match cx.doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Mesh(_)) => {
+                    let mut params = json!({"id": id.0, "x": p.x, "y": p.y});
+                    if let Some(c) = color {
+                        params["color"] = json!(c);
+                    }
+                    return Some(Action::Exec("object.mesh.addLine".into(), params));
+                }
+                Some(NodeKind::Envelope { .. }) if cx.doc.node(id).and_then(grid_of).is_some() => {
+                    return Some(Action::Exec("object.mesh.addLine".into(), json!({"id": id.0, "x": p.x, "y": p.y})));
+                }
+                Some(NodeKind::Path { guide: false, .. }) | Some(NodeKind::Compound { .. }) => {
+                    return Some(Action::Exec("object.mesh.create".into(), json!({"ids": [id.0], "at": [p.x, p.y]})));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
 }
 
 impl Tool for MeshTool {
@@ -194,30 +220,11 @@ impl Tool for MeshTool {
                     return out;
                 }
                 self.edit.unfocus();
-                let Some((top, leaf)) = hit_top(cx, p) else { return vec![] };
                 let color = match (&cx.paint.fill, ev.mods.shift) {
                     (Paint::Solid { color, .. }, false) => Some(color.to_hex()),
                     _ => None,
                 };
-                for id in [leaf, top] {
-                    match cx.doc.node(id).map(|n| &n.kind) {
-                        Some(NodeKind::Mesh(_)) => {
-                            let mut params = json!({"id": id.0, "x": p.x, "y": p.y});
-                            if let Some(c) = &color {
-                                params["color"] = json!(c);
-                            }
-                            return vec![Action::Exec("object.mesh.addLine".into(), params)];
-                        }
-                        Some(NodeKind::Envelope { .. }) if cx.doc.node(id).and_then(grid_of).is_some() => {
-                            return vec![Action::Exec("object.mesh.addLine".into(), json!({"id": id.0, "x": p.x, "y": p.y}))];
-                        }
-                        Some(NodeKind::Path { guide: false, .. }) | Some(NodeKind::Compound { .. }) => {
-                            return vec![Action::Exec("object.mesh.create".into(), json!({"ids": [id.0], "at": [p.x, p.y]}))];
-                        }
-                        _ => {}
-                    }
-                }
-                vec![]
+                Self::add_at(cx, p, color.as_deref()).into_iter().collect()
             }
             PointerKind::Drag => self.edit.drag_to(p).unwrap_or_default(),
             PointerKind::Up => self.edit.release().unwrap_or_default(),
@@ -240,8 +247,10 @@ impl Tool for MeshTool {
     fn cursor(&self, cx: &ToolContext, p: Point, mods: Mods) -> Cursor {
         match self.grab_at(cx, p) {
             Some(g) if mods.alt && g.handle.is_none() => Cursor::PenDelete,
-            Some(_) => Cursor::Move,
-            None => Cursor::MeshAdd,
+            // Over a mesh point the plus goes away: a drag moves the point.
+            Some(_) => Cursor::Mesh,
+            None if Self::add_at(cx, p, None).is_some() => Cursor::MeshAdd,
+            None => Cursor::Mesh,
         }
     }
     fn options(&self) -> serde_json::Value {

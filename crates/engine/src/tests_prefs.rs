@@ -393,7 +393,7 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
         ("deleteAnchor", Cursor::PenDelete),
         ("anchorPoint", Cursor::AnchorPoint),
         ("curvature", Cursor::Curvature),
-        ("mesh", Cursor::MeshAdd),
+        ("mesh", Cursor::Mesh),
         ("eyedropper", Cursor::Eyedropper),
         ("slice", Cursor::Slice),
         ("blend", Cursor::Blend),

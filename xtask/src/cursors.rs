@@ -1,8 +1,9 @@
-//! `cargo xtask cursors`: does the cursor manifest (`crates/tools/src/cursors.toml`) cover every
-//! `Cursor` value?
+//! `cargo xtask cursors [NIBCRAFT]`: does the cursor manifest (`crates/tools/src/cursors.toml`)
+//! cover every `Cursor` value? With nibcraft's folder, also bring the designers' drawings in
+//! ([`crate::cursor_sync`]).
 //!
 //! The manifest check only warns: a cursor without an entry still works in the app (it falls
-//! back), it just isn't listed for whoever draws the cursors. Development never stops for a missing cursor.
+//! back), it just never reaches designers. Development never stops for a missing cursor.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -10,7 +11,7 @@ use std::path::Path;
 pub const ENUM_FILE: &str = "crates/tools/src/lib.rs";
 pub const MANIFEST: &str = "crates/tools/src/cursors.toml";
 
-pub fn run(root: &Path) -> Result<(), String> {
+pub fn run(root: &Path, args: &[&str]) -> Result<(), String> {
     let read = |p: &str| std::fs::read_to_string(root.join(p)).map_err(|e| format!("{p}: {e}"));
     let (enum_src, manifest) = (read(ENUM_FILE)?, read(MANIFEST)?);
     let warnings = check(&enum_src, &manifest);
@@ -20,7 +21,11 @@ pub fn run(root: &Path) -> Result<(), String> {
     for w in &warnings {
         eprintln!("warning: {w}");
     }
-    Ok(())
+    match args {
+        [] => Ok(()),
+        [nibcraft] => crate::cursor_sync::run(root, Path::new(nibcraft.trim_end_matches('/')), &enum_src, &manifest),
+        _ => Err("usage: cargo xtask cursors [PATH/TO/NIBCRAFT]".into()),
+    }
 }
 
 /// Warnings for `Cursor` variants in `enum_src` and `[[cursor]]` entries in `manifest` that don't
@@ -48,14 +53,15 @@ pub fn check(enum_src: &str, manifest: &str) -> Vec<String> {
         }
     }
     for v in variants.iter().filter(|v| !ids.contains(v.name.as_str())) {
-        out.push(format!("Cursor::{} has no entry in {MANIFEST} (see CLAUDE.md › Adding a cursor)", v.name));
+        out.push(format!("Cursor::{} has no entry in {MANIFEST} (designers won't see it; see CLAUDE.md › Adding a cursor)", v.name));
     }
     out
 }
 
-/// A `Cursor` variant, by name (`RotateToward(u8)` is `RotateToward`).
+/// A `Cursor` variant: its name, and whether it carries a value (`RotateToward(u8)`).
 pub struct Variant {
     pub name: String,
+    pub has_value: bool,
 }
 
 /// The variants of `pub enum Cursor` in `src`, in order.
@@ -66,7 +72,10 @@ pub fn variants(src: &str) -> Vec<Variant> {
         .take_while(|l| !l.starts_with('}'))
         .map(str::trim)
         .filter(|l| l.starts_with(|c: char| c.is_ascii_uppercase()))
-        .map(|l| Variant { name: l.chars().take_while(|c| c.is_ascii_alphanumeric()).collect() })
+        .map(|l| {
+            let name: String = l.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+            Variant { has_value: l[name.len()..].starts_with('('), name }
+        })
         .collect()
 }
 
@@ -77,6 +86,15 @@ pub struct Entry {
     pub id: Option<String>,
     fields: BTreeSet<String>,
     pub designer: bool,
+}
+
+/// The manifest's `app` name (`VectorCraft`), set before the first table.
+pub fn app(manifest: &str) -> Option<String> {
+    manifest
+        .lines()
+        .take_while(|l| !l.trim_start().starts_with('['))
+        .find_map(|l| l.split_once('=').filter(|(k, _)| k.trim() == "app"))
+        .map(|(_, v)| v.trim().trim_matches('"').to_string())
 }
 
 /// The `[[cursor]]` tables of `manifest`, read line by line (keys at the start of a line).
@@ -135,11 +153,13 @@ mod tests {
     }
 
     #[test]
-    fn reads_variants_in_order_and_entries_with_their_designer_flags() {
-        let v: Vec<String> = variants(ENUM).into_iter().map(|v| v.name).collect();
-        assert_eq!(v, ["Arrow", "RotateToward", "Pen"]);
+    fn reads_variants_in_order_entries_designer_flags_and_the_app() {
+        let v: Vec<(String, bool)> = variants(ENUM).into_iter().map(|v| (v.name, v.has_value)).collect();
+        assert_eq!(v, [("Arrow".into(), false), ("RotateToward".into(), true), ("Pen".into(), false)]);
         let m = format!("app = \"TestCraft\"\n\n{}[[cursor]]\nid = \"Pen\"\ndesigner = false\n", entry("Arrow"));
         let e: Vec<(Option<String>, bool)> = entries(&m).into_iter().map(|e| (e.id, e.designer)).collect();
         assert_eq!(e, [(Some("Arrow".into()), true), (Some("Pen".into()), false)]);
+        assert_eq!(app(&m).as_deref(), Some("TestCraft"));
+        assert_eq!(app(&entry("Arrow")), None);
     }
 }

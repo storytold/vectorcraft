@@ -5,6 +5,11 @@
 //! The desktop app shows them as OS cursors ([`Images`]): the system moves those itself, at once,
 //! while a cursor painted into the window follows the pointer a few frames late (#444).
 
+mod glyphs;
+mod seeds;
+
+pub use seeds::seed_svgs;
+
 use egui::epaint::{Mesh, TessellationOptions, Tessellator, Vertex};
 use egui::{Color32, CustomCursorImage, Painter, Pos2, Shape, Stroke, Vec2, pos2, vec2};
 use vectorcraft_tools::Cursor;
@@ -407,9 +412,8 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
     }
 }
 
-/// Every cursor with a glyph: its own, drawn here, or the one it borrows.
-#[cfg(test)]
-const GLYPHS: [Cursor; 74] = [
+/// Every cursor with a glyph: its own, generated or drawn here, or the one it borrows.
+const GLYPHS: [Cursor; 76] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -444,6 +448,7 @@ const GLYPHS: [Cursor; 74] = [
     Cursor::Curvature,
     Cursor::Text,
     Cursor::Eyedropper,
+    Cursor::EyedropperType,
     Cursor::AddStop,
     Cursor::RemoveStop,
     Cursor::Slice,
@@ -483,17 +488,34 @@ const GLYPHS: [Cursor; 74] = [
     Cursor::TypeVertical,
     Cursor::Scissors,
     Cursor::MeshAdd,
+    Cursor::Mesh,
     Cursor::PuppetPin,
 ];
 
+/// The octant of [`Cursor::RotateToward`] nibcraft draws (the top-right corner); the other seven
+/// are that glyph turned.
+const ROTATE_TOWARD_DRAWN: u8 = 1;
+
 /// The shapes of cursor `c` with its hotspot at `p`; `None` for cursors that stay system cursors
-/// (the busy states): the one drawn here, else the glyph of the cursor it borrows
-/// ([`Cursor::stand_in`]).
+/// (the busy states): its generated glyph ([`glyphs`]) if it has one, else the hand-drawn one,
+/// else the glyph of the cursor it borrows ([`Cursor::stand_in`]).
 fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
     let ink = &mut Ink::default();
+    if let Some(g) = glyphs::generated(c) {
+        glyphs::draw_glyph(ink, p, g, 0.0);
+        return Some(std::mem::take(&mut ink.0));
+    }
     // A cursor not drawn yet: the one it borrows.
     if let Some(stand_in) = c.stand_in() {
         return glyph(stand_in, p);
+    }
+    // The rotate cursor beside a box: the one drawn glyph, turned to the pointer's side.
+    if let Cursor::RotateToward(octant) = c
+        && let Some(g) = glyphs::generated(Cursor::RotateToward(ROTATE_TOWARD_DRAWN))
+    {
+        let steps = (octant % 8 + 8 - ROTATE_TOWARD_DRAWN) % 8;
+        glyphs::draw_glyph(ink, p, g, f32::from(steps) * std::f32::consts::FRAC_PI_4);
+        return Some(std::mem::take(&mut ink.0));
     }
     match c {
         Cursor::Arrow => arrow(ink, p, false),
@@ -519,7 +541,6 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::RotateToward(octant) => rotate(ink, p, octant),
         Cursor::CornerRadius => corner_radius(ink, p),
         Cursor::Pen => pen(ink, p, "*"),
-        Cursor::PenDrawing => pen(ink, p, ""),
         Cursor::PenAdd => pen(ink, p, "+"),
         Cursor::PenDelete => pen(ink, p, "-"),
         Cursor::PenClose => pen(ink, p, "o"),
@@ -712,6 +733,25 @@ mod tests {
 
     use crate::VectorcraftApp;
 
+    /// Every cursor's bitmap at 1× and 2× as `<dir>/<Cursor>@<n>.png`, to look at the cursors after
+    /// `cargo xtask cursors`: `CURSOR_SHEET_DIR=/abs/dir cargo test -p vectorcraft-ui-egui --lib write_cursor_pngs -- --ignored`.
+    #[test]
+    #[ignore = "writes files; run by hand to look at the cursors"]
+    fn write_cursor_pngs() {
+        let Some(dir) = std::env::var_os("CURSOR_SHEET_DIR").map(std::path::PathBuf::from) else { return };
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut all: Vec<Cursor> = GLYPHS.to_vec();
+        all.extend(glyphs::GENERATED.iter().map(|&(c, _)| c).filter(|c| !GLYPHS.contains(c)));
+        for c in all {
+            for ppp in [1u32, 2] {
+                let Some(img) = rasterize(c, ppp as f32) else { continue };
+                let [w, h] = img.size.map(u32::from);
+                let buf = image::RgbaImage::from_raw(w, h, img.rgba.to_vec()).unwrap();
+                buf.save(dir.join(format!("{c:?}@{ppp}.png"))).unwrap();
+            }
+        }
+    }
+
     /// The straight RGBA of pixel (x, y).
     fn pixel(img: &CustomCursorImage, x: usize, y: usize) -> [u8; 4] {
         let i = (y * img.size[0] as usize + x) * 4;
@@ -719,7 +759,7 @@ mod tests {
     }
 
     /// The Anchor Point caret's hotspot is the middle of its hollow square: white there, with the
-    /// square's ink a few points above it.
+    /// square's ink a few points above it, however the designer sizes the square.
     #[test]
     fn anchor_point_hotspot_is_inside_its_square() {
         for ppp in [1.0f32, 2.0] {
@@ -766,11 +806,26 @@ mod tests {
         }
     }
 
+    /// The rotate cursor beside a box is the drawn top-right glyph turned to the pointer's side:
+    /// as drawn at the top right, a quarter turn on at the bottom right.
+    #[test]
+    fn the_turned_rotate_cursors_are_the_drawn_glyph_turned() {
+        let pixels = |c: Cursor| rasterize(c, 2.0).map(|i| (i.size, i.hotspot, i.rgba.to_vec())).unwrap();
+        assert!(glyphs::generated(Cursor::RotateToward(ROTATE_TOWARD_DRAWN)).is_some());
+        let drawn = pixels(Cursor::RotateToward(ROTATE_TOWARD_DRAWN));
+        let bottom_right = pixels(Cursor::RotateToward(3));
+        assert_ne!(bottom_right, drawn);
+        assert_eq!((bottom_right.0[0], bottom_right.0[1]), (drawn.0[1], drawn.0[0]), "a quarter turn swaps width and height");
+        assert_eq!(pixels(Cursor::RotateToward(9)), drawn, "octants wrap");
+    }
+
     #[test]
     fn a_cursor_not_drawn_yet_looks_like_the_one_it_borrows() {
         for c in GLYPHS {
             let Some(stand_in) = c.stand_in() else { continue };
-            assert_eq!(rasterize(c, 2.0), rasterize(stand_in, 2.0), "{c:?} borrows {stand_in:?}");
+            if glyphs::generated(c).is_none() {
+                assert_eq!(rasterize(c, 2.0), rasterize(stand_in, 2.0), "{c:?} borrows {stand_in:?}");
+            }
         }
     }
 
@@ -796,7 +851,9 @@ mod tests {
             assert!(pixel(&dropper, hx, hy)[3] > 0, "the tip covers the hotspot at {ppp}");
         }
         assert!(rasterize(Cursor::NotAllowed, 1.0).is_none(), "the busy states stay system cursors");
-        assert!(rasterize(Cursor::ScissorsNotAllowed, 1.0).is_none(), "until it's drawn it borrows the system not-allowed cursor");
+        if glyphs::generated(Cursor::ScissorsNotAllowed).is_none() {
+            assert!(rasterize(Cursor::ScissorsNotAllowed, 1.0).is_none(), "until it's drawn it borrows the system not-allowed cursor");
+        }
         for ppp in [0.0, -1.0, f32::NAN, f32::INFINITY, 1e9] {
             assert!(rasterize(Cursor::Arrow, ppp).is_none(), "{ppp}");
         }
@@ -824,24 +881,17 @@ mod tests {
         assert!(body[3] == 255 && body[..3].iter().all(|&c| c < 40), "{body:?}");
     }
 
-    /// The Pen drawing a path is the same nib as the new-path Pen, without the asterisk.
+    /// The Pen drawing a path shows the Pen's own drawing until a designer draws it: the nib, at
+    /// the same hotspot, so the pointer doesn't jump when the first anchor goes down.
     #[test]
-    fn the_drawing_pen_has_no_new_path_asterisk() {
+    fn the_drawing_pen_borrows_the_pen_until_drawn() {
+        if glyphs::generated(Cursor::PenDrawing).is_some() {
+            return;
+        }
         for ppp in [1.0, 2.0] {
             let (new, drawing) = (rasterize(Cursor::Pen, ppp).unwrap(), rasterize(Cursor::PenDrawing, ppp).unwrap());
-            assert_eq!(new.hotspot, drawing.hotspot, "at {ppp}");
-            // The asterisk's center, 19 × 17 points from the hotspot.
-            let at = |img: &CustomCursorImage| {
-                let [hx, hy] = img.hotspot.map(usize::from);
-                let (x, y) = (hx + (19.0 * ppp) as usize, hy + (17.0 * ppp) as usize);
-                if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y)[3] } else { 0 }
-            };
-            assert_eq!(at(&new), 255, "the new-path Pen has its asterisk at {ppp}");
-            assert_eq!(at(&drawing), 0, "the drawing Pen has no badge at {ppp}");
-            // The nib is the same.
-            let [hx, hy] = drawing.hotspot.map(usize::from);
-            let nib = (hx + (8.0 * ppp) as usize, hy + (8.0 * ppp) as usize);
-            assert_eq!(pixel(&new, nib.0, nib.1), pixel(&drawing, nib.0, nib.1), "at {ppp}");
+            assert_eq!((new.hotspot, new.size), (drawing.hotspot, drawing.size), "at {ppp}");
+            assert_eq!(new.rgba, drawing.rgba, "at {ppp}");
         }
     }
 
