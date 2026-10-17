@@ -8,7 +8,7 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 
 /// Width of a dialog's value fields ([`text`] and [`length`], frame included).
-const FIELD_W: f32 = 132.0;
+pub(super) const FIELD_W: f32 = 132.0;
 
 /// A labelled text field bound to `d.fields[key]` (one grid row).
 pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
@@ -193,6 +193,12 @@ fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, options: &
 /// hidden) in the kind's [`order`], the distances in `unit`, the [`choices`] as dropdowns and the
 /// [`skew_ends`] fields as sliders.
 pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+    grid_then(ui, d, unit, |_, _| {});
+}
+
+/// [`grid`], then the rows `more` draws in the same grid, so that their labels and fields line up
+/// with the generic ones.
+pub(super) fn grid_then(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, more: impl FnOnce(&mut egui::Ui, &mut Dialog)) {
     let rail = Tokens::get(ui.ctx()).input_border;
     let (lengths, first) = (lengths(&d.kind), order(&d.kind));
     let mut keys: Vec<String> = d
@@ -237,6 +243,7 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
                 ui.end_row();
             }
         }
+        more(ui, d);
     });
 }
 
