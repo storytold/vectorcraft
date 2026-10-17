@@ -3842,7 +3842,9 @@ desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`)
 `direction` (°), and `raysOn` and `ringsOn` (the Rays and Rings checkboxes; off, the flare has none). OK keeps them
 (`tool.setOption {tool: "flare", values}`) and the next flare dragged out uses them; a click with the tool opens the
 same dialog, and its OK also draws a flare there. The Artboard tool's are the active artboard's Artboard Options
-(dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's), a graph tool's
+(dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
+are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
+Transform panel uses, counted from the ruler origin), a graph tool's
 the selected graph's Graph Type (an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
 `symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
 Magic Wand tool's its panel. `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard) opens Artboard Options
