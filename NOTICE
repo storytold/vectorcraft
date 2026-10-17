@@ -92,3 +92,11 @@ Assets already bundled through Hayro's default features retain their licences:
   non-visual character-mapping data; see licenses/pdf-backend/hayro-cmap/LICENSE.txt.
   Adobe and contributor names do not endorse or promote this product.
 Per-file hashes and sources are recorded in ASSETS.md.
+
+
+Image Trace showcase
+
+examples/image-trace-showcase contains original VectorCraft layouts and synthetic test
+logos under MIT OR Apache-2.0, plus traces of public-domain artwork by Utagawa Hiroshige
+and H. V. Carter (Gray's Anatomy). Per-file credits and source URLs are in ASSETS.md and
+the showcase README. Fonts named in the poster are references, not redistributed files.

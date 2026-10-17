@@ -341,6 +341,37 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `examples/feature-sheet.vectorcraft` | VectorCraft contributors | Original artwork built through the VectorCraft command API | MIT OR Apache-2.0 |  |
 | `examples/perspective-city.vectorcraft` | VectorCraft contributors | Original artwork built through the VectorCraft command API | MIT OR Apache-2.0 |  |
 
+## Image Trace showcase (2026-10-16)
+
+See `examples/image-trace-showcase/README.md` for settings, crops and known defects.
+
+| Asset | Author | Source | Licence | Notes |
+|---|---|---|---|---|
+| `examples/image-trace-showcase/README.md` | VectorCraft contributors | Original | MIT OR Apache-2.0 | Showcase notes |
+| `examples/image-trace-showcase/settings-and-counts.csv` | VectorCraft contributors | Original; measured with VectorCraft 0.12.0 | MIT OR Apache-2.0 | Settings and path/anchor counts per trace |
+| `examples/image-trace-showcase/posters/hiroshige-poster.jpg` | VectorCraft contributors (layout); Utagawa Hiroshige (artwork, traced) | Layout original; artwork [source](https://commons.wikimedia.org/wiki/File:Hiroshige,_The_moon_over_a_waterfall.jpg) | MIT OR Apache-2.0 for the layout; artwork public domain (PD-old-100) | Poster made with VectorCraft commands, 1000 px web JPEG; fonts referenced, not included |
+| `examples/image-trace-showcase/posters/wpa-poster.jpg` | VectorCraft contributors (layout); C. Don (Chester) Powell, designer, WPA (artwork, traced) | Layout original; artwork [source](https://www.loc.gov/item/2007676131/) | MIT OR Apache-2.0 for the layout; artwork public domain (WPA, US government work) | Poster made with VectorCraft commands, 1000 px web JPEG; fonts referenced, not included |
+| `examples/image-trace-showcase/posters/haeckel-poster.jpg` | VectorCraft contributors (layout); Ernst Haeckel (artwork, traced) | Layout original; artwork [source](https://commons.wikimedia.org/wiki/File:Haeckel_Discomedusae_8.jpg) | MIT OR Apache-2.0 for the layout; artwork public domain (Public Domain Mark 1.0) | Poster made with VectorCraft commands, 1000 px web JPEG; fonts referenced, not included |
+| `examples/image-trace-showcase/posters/leonardo-poster.jpg` | VectorCraft contributors (layout); Leonardo da Vinci (artwork, traced) | Layout original; artwork [source](https://commons.wikimedia.org/wiki/File:Leonardo_da_vinci,_Drawing_of_a_flying_machine.jpg) | MIT OR Apache-2.0 for the layout; artwork public domain (Public Domain Mark 1.0) | Poster made with VectorCraft commands, 1000 px web JPEG; fonts referenced, not included |
+| `examples/image-trace-showcase/posters/family-poster.jpg` | VectorCraft contributors (layout); Hiroshige, C. Don Powell (WPA), Ernst Haeckel, Leonardo da Vinci (artworks, traced) | Layout original; artwork sources as the four posters above | MIT OR Apache-2.0 for the layout; artworks public domain | Poster made with VectorCraft commands, 1000 px web JPEG; fonts referenced, not included |
+| `examples/image-trace-showcase/hiroshige-exhibition-poster.jpg` | VectorCraft contributors (layout); Utagawa Hiroshige (artwork, traced) | Layout original; artwork [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Hiroshige,_The_moon_over_a_waterfall.jpg) | MIT OR Apache-2.0 for the layout; artwork public domain (PD-old-100) | VectorCraft render, downscaled; fonts referenced, not included |
+| `examples/image-trace-showcase/a01-cat-face-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/c05-junctions-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/f01-apple-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/f02-cherries-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/g02-star-badge-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/gray-leg-presets.jpg` | VectorCraft contributors; H. V. Carter, Gray's Anatomy 1918 (artwork) | Layout original; artwork [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Gray259.png) | MIT OR Apache-2.0 for the layout; artwork public domain | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/hiroshige-presets.jpg` | VectorCraft contributors; Utagawa Hiroshige (artwork) | Layout original; artwork [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Hiroshige,_The_moon_over_a_waterfall.jpg) | MIT OR Apache-2.0 for the layout; artwork public domain | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/noise-settings.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/paths-corners-settings.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/s02-waves-presets.jpg` | VectorCraft contributors | Original: synthetic test logos drawn in code, traced in VectorCraft | MIT OR Apache-2.0 | Settings sheet, VectorCraft render, downscaled |
+| `examples/image-trace-showcase/svg/a01-cat-face--03-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+| `examples/image-trace-showcase/svg/c05-junctions--38-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+| `examples/image-trace-showcase/svg/f01-apple--10-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+| `examples/image-trace-showcase/svg/f02-cherries--17-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+| `examples/image-trace-showcase/svg/g02-star-badge--31-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+| `examples/image-trace-showcase/svg/s02-waves--24-6-colors.svg` | VectorCraft contributors | Original: VectorCraft Image Trace output of a synthetic test logo | MIT OR Apache-2.0 | 6 Colors preset |
+
 ## Assets embedded by the PDF backend
 
 The shared PDF backend keeps the existing standard-font and CMap features. These files remain in dependency sources; no font files are copied into this repository. Hashes identify the pinned dependency contents.
