@@ -3538,6 +3538,8 @@ position}` (a range) set what the Character panel's Small Caps, Superscript and 
 default); capitals keep their size, and with All Caps on every letter is a full-size capital. `position: "superscript"`
 or `"subscript"` draws the characters at Document Setup's superscript or subscript size, raised or lowered by its
 position (by default 58.3% of the font size, moved by 33.3% of it), and `"normal"` puts them back on the baseline.
+A file whose characters, character styles or graph label styles hold a superscript or subscript size outside 1 to
+500%, a position outside -500 to 500% or a small caps size outside 1 to 200% opens with the nearer end of each range.
 Setting superscript on subscript characters replaces the subscript, and setting subscript on superscript characters
 replaces the superscript. When `document.setup {superscript, subscript, smallCapsSize}` changes the proportions, the
 characters take the new ones. One undo step.

@@ -179,6 +179,18 @@ pub struct ScriptMetrics {
 
 impl ScriptMetrics {
     pub const DEFAULT: Self = Self { size: 58.3, position: 33.3 };
+    /// Returns these proportions with the size kept to 1 to 500% and the position kept to -500 to
+    /// 500%, the ranges `document.setup` takes for `superscript` and `subscript`. A value outside
+    /// its range becomes the nearer end.
+    pub fn in_range(self) -> Self {
+        Self { size: self.size.clamp(1.0, 500.0), position: self.position.clamp(-500.0, 500.0) }
+    }
+}
+
+/// Returns a small caps size kept to 1 to 200%, the range `document.setup` takes for
+/// `smallCapsSize`. A size outside it becomes the nearer end.
+fn small_caps_in_range(size: f64) -> f64 {
+    size.clamp(1.0, 200.0)
 }
 
 impl Default for ScriptMetrics {
@@ -213,6 +225,14 @@ impl CharPosition {
             CharPosition::Normal => "normal",
             CharPosition::Superscript(_) => "superscript",
             CharPosition::Subscript(_) => "subscript",
+        }
+    }
+    /// Returns this position with its proportions kept by [`ScriptMetrics::in_range`].
+    pub fn in_range(self) -> Self {
+        match self {
+            CharPosition::Normal => CharPosition::Normal,
+            CharPosition::Superscript(m) => CharPosition::Superscript(m.in_range()),
+            CharPosition::Subscript(m) => CharPosition::Subscript(m.in_range()),
         }
     }
 }
@@ -332,6 +352,60 @@ impl CharStyle {
     /// no paint): the appearance the Eyedropper and graphic styles take from type.
     pub fn basic_appearance(&self) -> Appearance {
         Appearance { items: vec![AppearanceItem::Fill(self.fill_layer()), AppearanceItem::Stroke(self.stroke_layer())], ..Default::default() }
+    }
+    /// Keeps the superscript or subscript proportions in range with [`CharPosition::in_range`] and
+    /// keeps the small caps size to 1 to 200%, the range `document.setup` takes for `smallCapsSize`.
+    pub fn keep_scripts_in_range(&mut self) {
+        self.position = self.position.in_range();
+        self.small_caps = self.small_caps.map(small_caps_in_range);
+    }
+}
+
+impl crate::Document {
+    /// Keeps the superscript, subscript and small caps proportions to the ranges `document.setup`
+    /// takes ([`CharStyle::keep_scripts_in_range`]) in the type of the layers, symbols, graph
+    /// designs, pattern swatches and the pattern definition that pattern editing's Cancel puts
+    /// back (opacity-mask art included), in graphs' label styles and in the character styles. It
+    /// recurses through the art: call it on a document no deeper than [`crate::depth::MAX_DEPTH`].
+    pub fn keep_scripts_in_range(&mut self) {
+        let mut fix = |n: &mut crate::Node| {
+            if let crate::NodeKind::Text(t) = &mut n.kind {
+                for r in &mut t.runs {
+                    r.style.keep_scripts_in_range();
+                }
+            }
+            if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+                let l = &mut g.label_styles;
+                for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
+                    st.keep_scripts_in_range();
+                }
+            }
+        };
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
+        for root in roots {
+            crate::placed_document::each_mut(std::sync::Arc::make_mut(root), &mut fix);
+        }
+        // Character styles store the attributes they set by their serialized names.
+        for def in self.char_styles.iter_mut() {
+            if let Some(v) = def.attrs.get_mut("position")
+                && let Ok(p) = serde_json::from_value::<CharPosition>(v.clone())
+                && p.in_range() != p
+            {
+                *v = serde_json::to_value(p.in_range()).unwrap_or(serde_json::Value::Null);
+            }
+            if let Some(v) = def.attrs.get_mut("small_caps")
+                && let Some(size) = v.as_f64()
+                && small_caps_in_range(size) != size
+            {
+                *v = small_caps_in_range(size).into();
+            }
+        }
     }
 }
 

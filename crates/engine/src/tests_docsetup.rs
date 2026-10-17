@@ -199,6 +199,81 @@ fn character_styles_follow_the_setup_sizes() {
     assert_eq!(def.attrs["small_caps"], json!(80.0));
 }
 
+/// A file whose type, symbols, graph label styles, character styles or pattern definition saved in
+/// pattern editing mode hold superscript, subscript or small caps proportions outside the ranges
+/// `document.setup` takes opens with each at the nearer end of its range; the other character
+/// attributes open as saved.
+#[test]
+fn a_file_with_script_proportions_out_of_range_opens_with_them_in_range() {
+    let mut s = session();
+    let id = create_text(&mut s, "E=mc2");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 4, "end": 5, "position": "superscript"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id.0], "smallCaps": true})).unwrap();
+    let water = create_text(&mut s, "H2O");
+    s.execute("text.setRangeStyle", &json!({"id": water.0, "start": 1, "end": 2, "position": "subscript"})).unwrap();
+    let csv = ",2024\nQ1,3\nQ2,5";
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 150, "width": 200, "height": 100, "csv": csv})).unwrap();
+    let graph = NodeId(graph["id"].as_u64().unwrap());
+    let exponent = create_text(&mut s, "x2");
+    s.execute("text.setRangeStyle", &json!({"id": exponent.0, "start": 1, "end": 2, "position": "superscript"})).unwrap();
+    s.execute("select.set", &json!({"ids": [exponent.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Exponent", "width": 20, "height": 20})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    // Saved in pattern editing mode: Cancel puts back the definition from before the edit.
+    s.execute("object.pattern.edit", &json!({"name": "Exponent"})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.small_caps = Some(-5.0);
+        let two = &mut t.runs[1].style;
+        two.position = CharPosition::Superscript(ScriptMetrics { size: 0.0, position: f64::MAX });
+        two.small_caps = Some(f64::MAX);
+    }
+    if let Some(NodeKind::Text(t)) = d.node_mut(water).map(|n| &mut n.kind) {
+        t.runs[1].style.position = CharPosition::Subscript(ScriptMetrics { size: f64::MAX, position: -1000.0 });
+        t.runs[1].style.tracking = -5000.0;
+    }
+    let mut art = d.node(id).unwrap().clone();
+    art.id = NodeId(9000);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Formula".into(), art: Arc::new(art) });
+    if let Some(g) = d.node_mut(graph).and_then(|n| n.extras_if_any()).and_then(|e| e.graph.as_deref_mut()) {
+        let position = CharPosition::Subscript(ScriptMetrics { size: 0.0, position: 1000.0 });
+        g.label_styles.legend = Some(vectorcraft_doc::CharStyle { position, small_caps: Some(0.0), ..vectorcraft_doc::CharStyle::default() });
+    }
+    let original = d.pattern_edit.as_mut().and_then(|pe| pe.original.as_mut()).and_then(|p| p.art.first_mut());
+    if let Some(NodeKind::Text(t)) = original.map(|a| &mut Arc::make_mut(a).kind) {
+        t.runs[1].style.position = CharPosition::Superscript(ScriptMetrics { size: 0.0, position: f64::MAX });
+    }
+    let attrs = json!({"position": {"kind": "superscript", "size": 1000.0, "position": -1000.0}, "small_caps": 0.0, "tracking": -5000.0});
+    d.char_styles.push(TextStyleDef { name: "Note".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "scripts.vectorcraft", "dataBase64": data})).unwrap();
+    let raised = CharPosition::Superscript(ScriptMetrics { size: 1.0, position: 500.0 });
+    let t = text(&s, id);
+    assert_eq!((t.runs[0].style.small_caps, t.runs[1].style.small_caps), (Some(1.0), Some(200.0)));
+    assert_eq!(t.runs[1].style.position, raised);
+    let t = text(&s, water);
+    assert_eq!(t.runs[1].style.position, CharPosition::Subscript(ScriptMetrics { size: 500.0, position: -500.0 }));
+    assert_eq!(t.runs[1].style.tracking, -5000.0, "other attributes open as saved");
+    let doc = &s.doc().unwrap().doc;
+    match &doc.symbols.iter().find(|s| s.name == "Formula").unwrap().art.kind {
+        NodeKind::Text(t) => assert_eq!(t.runs[1].style.position, raised),
+        _ => panic!("the symbol's art is not text"),
+    }
+    let legend = doc.node(graph).unwrap().extras().graph.as_ref().unwrap().label_styles.legend.clone().unwrap();
+    assert_eq!((legend.position, legend.small_caps), (CharPosition::Subscript(ScriptMetrics { size: 1.0, position: 500.0 }), Some(1.0)));
+    let def = doc.char_styles.iter().find(|d| d.name == "Note").unwrap();
+    assert_eq!(def.attrs["position"], json!({"kind": "superscript", "size": 500.0, "position": -500.0}));
+    assert_eq!((&def.attrs["small_caps"], &def.attrs["tracking"]), (&json!(1.0), &json!(-5000.0)));
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    match &s.doc().unwrap().doc.pattern("Exponent").unwrap().art[0].kind {
+        NodeKind::Text(t) => assert_eq!(t.runs[1].style.position, raised),
+        _ => panic!("the pattern's art is not text"),
+    }
+    // With the file's proportions kept as saved, the move failed with "result would exceed the canvas".
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+}
+
 #[test]
 fn setup_survives_save_and_load() {
     let mut s = session();
