@@ -867,6 +867,29 @@ pub(crate) mod testutil {
         (d, id)
     }
 
+    /// [`doc_with_rect`] plus a Shaper Group of two source squares (x from 0 to 100 and from 50 to
+    /// 150, y from 300 to 400) whose visible face is the first square: the document, the group, its
+    /// source shapes and the face.
+    pub fn doc_with_shaper_group() -> (Document, NodeId, NodeId, NodeId) {
+        use std::sync::Arc;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 300.0, x + 100.0, 400.0));
+        let a = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+        let b = Node::path(d.alloc_id(), square(50.0), Appearance::default_art());
+        let mut sources = Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)]);
+        sources.name = Some(vectorcraft_doc::shaper::SOURCES.into());
+        sources.opacity = 0.0;
+        let mut face = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+        face.name = Some(format!("{}0", vectorcraft_doc::shaper::FILL_PREFIX));
+        let (sources_id, face_id) = (sources.id, face.id);
+        let mut group = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+        group.extras_mut().shaper = Some(Box::default());
+        let group_id = group.id;
+        d.insert(Some(l), 1, group).unwrap();
+        (d, group_id, sources_id, face_id)
+    }
+
     pub fn paint() -> PaintDefaults {
         PaintDefaults::default()
     }

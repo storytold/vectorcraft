@@ -298,6 +298,38 @@ mod tests {
         );
     }
 
+    /// The Add Anchor Point, Delete Anchor Point, Anchor Point and Scissors tools pick anchors and
+    /// segments only on the art a click can pick: not on a Shaper Group's original shapes unless
+    /// they are isolated (Construction mode), and in isolation mode only on the isolated object.
+    #[test]
+    fn anchor_tools_leave_out_shaper_sources_and_art_outside_isolation() {
+        let (d, _, sources, face) = doc_with_shaper_group();
+        let rect = d.layers[0].children().unwrap()[0].id;
+        let b = d.node(sources).and_then(|n| n.children()).unwrap()[1].id;
+        let (s, p) = (Selection::default(), paint());
+        // The path the first command of a press with `tool` at (x, y) acts on.
+        let picked = |isolation: Option<NodeId>, tool: &str, x: f64, y: f64| {
+            let cx = ToolContext { isolation, ..cx(&d, &s, &p) };
+            let mut t = AnchorTool::new(tool);
+            let mut a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y));
+            a.extend(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 20.0, y - 10.0)));
+            a.iter().find_map(|a| match a {
+                Action::Exec(_, v) | Action::Preview(_, v) => v["id"].as_u64().map(NodeId),
+                _ => None,
+            })
+        };
+        // The second square's top right corner and its right side, which only its original shape
+        // has.
+        for (tool, x, y) in [("deleteAnchor", 150.0, 300.0), ("anchorPoint", 150.0, 300.0), ("addAnchor", 150.0, 350.0), ("scissors", 150.0, 350.0)] {
+            assert_eq!(picked(None, tool, x, y), None, "{tool}");
+            assert_eq!(picked(Some(sources), tool, x, y), Some(b), "{tool}");
+        }
+        // The face's top left corner, outside the isolated rectangle.
+        assert_eq!(picked(None, "deleteAnchor", 0.0, 300.0), Some(face));
+        assert_eq!(picked(Some(rect), "deleteAnchor", 0.0, 300.0), None);
+        assert_eq!(picked(Some(rect), "deleteAnchor", 100.0, 100.0), Some(rect));
+    }
+
     #[test]
     fn anchor_point_drag_pulls_handles_click_converts() {
         let (d, id) = doc_with_rect();
