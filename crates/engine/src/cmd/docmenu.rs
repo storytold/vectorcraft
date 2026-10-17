@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
-use vectorcraft_geom::Vec2;
+use vectorcraft_geom::{Rect, Vec2};
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
@@ -171,7 +171,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Guide",
             [],
             None,
-            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
+            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer), span?: [along_0: pt, along_1: pt]} → {index}",
             has_doc,
             guide_add
         ),
@@ -210,6 +210,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{index, pos: pt} | {dx?, dy?: pt, copy?: bool} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
             guides_unlocked,
             guide_move
+        ),
+        cmd!(
+            "guide.setBounds",
+            "Move Guide",
+            [],
+            None,
+            "{index?, x?, y?, width?, height?, reference?: 0..8} set the position or size of ruler guide `index`, or the selected guides",
+            guides_unlocked,
+            guide_set_bounds
         ),
         cmd!(
             "guide.setLayer",
@@ -648,8 +657,17 @@ fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
         // Where new art goes (refused when no layer is shown and unlocked), or that group's layer.
         None => st.target_parent()?.and_then(|p| if st.doc.node(p).is_some_and(Node::is_layer) { Some(p) } else { st.doc.layer_containing(p) }),
     };
+    let span = p.get("span").and_then(Value::as_array).and_then(|arr| {
+        if arr.len() == 2 {
+            let a = arr[0].as_f64()?;
+            let b = arr[1].as_f64()?;
+            Some((a, b))
+        } else {
+            None
+        }
+    });
     let i = s.edit("New Guide", |d, _| {
-        d.guides.push(Guide { artboard, layer, ..Guide::new(vertical, pos) });
+        d.guides.push(Guide { artboard, layer, span, ..Guide::new(vertical, pos) });
         Ok(d.guides.len() - 1)
     })?;
     Ok(json!({ "index": i }))
@@ -664,6 +682,9 @@ fn guide_list(s: &mut Session, _: &Value) -> Result<Value> {
         }
         if let Some(l) = g.layer {
             r["layer"] = json!(l.0);
+        }
+        if let Some((a, b)) = g.span {
+            r["span"] = json!([a, b]);
         }
         r["shown"] = json!(st.doc.guide_shown(g));
         r["editable"] = json!(st.doc.guide_editable(g));
@@ -797,6 +818,121 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
             let first = d.guides.len();
             d.guides.extend(copies);
             sel.set_guides(first..d.guides.len());
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+/// Move or resize ruler guides (setting X, Y, W, H with respect to reference point).
+pub(crate) fn guide_set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
+    let targets: Vec<usize> = if let Some(v) = p.get("index") {
+        vec![editable_guide_index(s, Some(v), "guide.setBounds")?]
+    } else {
+        let sel = s.doc()?.selection.guides.clone();
+        if sel.is_empty() {
+            return Err(bad("guide.setBounds", "no guide selected (or give an index)"));
+        }
+        sel
+    };
+
+    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
+    let new_x = p.get("x").and_then(Value::as_f64);
+    let new_y = p.get("y").and_then(Value::as_f64);
+    let new_w = p.get("width").and_then(Value::as_f64).map(|w| w.clamp(0.0, vectorcraft_doc::MAX_GUIDE_LEN));
+    let new_h = p.get("height").and_then(Value::as_f64).map(|h| h.clamp(0.0, vectorcraft_doc::MAX_GUIDE_LEN));
+
+    if new_x.is_none() && new_y.is_none() && new_w.is_none() && new_h.is_none() {
+        return ok();
+    }
+
+    s.edit("Move Guide", |d, _| {
+        let mut overall_box: Option<Rect> = None;
+        for &i in &targets {
+            if let Some(g) = d.guides.get(i) {
+                let r = d.guide_rect(g);
+                overall_box = Some(overall_box.map_or(r, |b| b.union(r)));
+            }
+        }
+        let Some(total_bounds) = overall_box else { return Ok(()) };
+        let current_rp = vectorcraft_geom::reference_point(total_bounds, refi);
+
+        let dx = new_x.map(|x| x - current_rp.x);
+        let dy = new_y.map(|y| y - current_rp.y);
+
+        let target_rp_x = new_x.unwrap_or(current_rp.x);
+        let target_rp_y = new_y.unwrap_or(current_rp.y);
+
+        let old_w = total_bounds.width();
+        let old_h = total_bounds.height();
+
+        for &i in &targets {
+            let Some(mut span) = d.guides.get(i).map(|g| d.guide_effective_span(g)) else { continue };
+            let Some(g) = d.guides.get_mut(i) else { continue };
+
+            // 1. Move by dx / dy if specified
+            if let Some(dx) = dx {
+                if g.vertical {
+                    g.pos += dx;
+                } else if g.span.is_some() {
+                    span = (span.0 + dx, span.1 + dx);
+                    g.span = Some(span);
+                }
+            }
+            if let Some(dy) = dy {
+                if !g.vertical {
+                    g.pos += dy;
+                } else if g.span.is_some() {
+                    span = (span.0 + dy, span.1 + dy);
+                    g.span = Some(span);
+                }
+            }
+
+            // 2. Resize Width (horizontal guides span, vertical guides pos)
+            if let Some(w) = new_w {
+                if !g.vertical {
+                    let (x0, x1) = (span.0.min(span.1), span.0.max(span.1));
+                    let (nx0, nx1) = if old_w > 1e-9 {
+                        let sx = w / old_w;
+                        (target_rp_x + (x0 - target_rp_x) * sx, target_rp_x + (x1 - target_rp_x) * sx)
+                    } else {
+                        let col = refi % 3;
+                        match col {
+                            0 => (target_rp_x, target_rp_x + w),
+                            1 => (target_rp_x - w / 2.0, target_rp_x + w / 2.0),
+                            _ => (target_rp_x - w, target_rp_x),
+                        }
+                    };
+                    span = (nx0.min(nx1), nx0.max(nx1));
+                    g.span = Some(span);
+                } else if old_w > 1e-9 {
+                    let sx = w / old_w;
+                    g.pos = target_rp_x + (g.pos - target_rp_x) * sx;
+                }
+            }
+
+            // 3. Resize Height (vertical guides span, horizontal guides pos)
+            if let Some(h) = new_h {
+                if g.vertical {
+                    let (y0, y1) = (span.0.min(span.1), span.0.max(span.1));
+                    let (ny0, ny1) = if old_h > 1e-9 {
+                        let sy = h / old_h;
+                        (target_rp_y + (y0 - target_rp_y) * sy, target_rp_y + (y1 - target_rp_y) * sy)
+                    } else {
+                        let row = (refi / 3).min(2);
+                        match row {
+                            0 => (target_rp_y, target_rp_y + h),
+                            1 => (target_rp_y - h / 2.0, target_rp_y + h / 2.0),
+                            _ => (target_rp_y - h, target_rp_y),
+                        }
+                    };
+                    span = (ny0.min(ny1), ny0.max(ny1));
+                    g.span = Some(span);
+                } else if old_h > 1e-9 {
+                    let sy = h / old_h;
+                    g.pos = target_rp_y + (g.pos - target_rp_y) * sy;
+                }
+            }
         }
         Ok(())
     })?;

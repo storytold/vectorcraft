@@ -95,36 +95,106 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     });
 }
 
-/// With ruler guides selected and no art: the X of the vertical ones and the Y of the horizontal
-/// ones (the least of each; none where no such guide is selected).
-fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GuideSelection {
+    bounds: Rect,
+    has_vertical: bool,
+    has_horizontal: bool,
+    count: usize,
+}
+
+/// With ruler guides selected and no art: the bounding rect and orientations of the selected guides.
+fn selected_guides(app: &VectorcraftApp) -> Option<GuideSelection> {
     let st = app.session.active()?;
     if !st.selection.objects.is_empty() || st.selection.guides.is_empty() {
         return None;
     }
-    let least = |vertical: bool| {
-        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
-    };
-    Some((least(true), least(false)))
+    let mut bounds: Option<Rect> = None;
+    let mut has_vertical = false;
+    let mut has_horizontal = false;
+    let mut count = 0;
+    for &i in &st.selection.guides {
+        if let Some(g) = st.doc.guides.get(i) {
+            let r = st.doc.guide_rect(g);
+            bounds = Some(bounds.map_or(r, |b| b.union(r)));
+            if g.vertical {
+                has_vertical = true;
+            } else {
+                has_horizontal = true;
+            }
+            count += 1;
+        }
+    }
+    let bounds = bounds?;
+    Some(GuideSelection { bounds, has_vertical, has_horizontal, count })
 }
 
-/// The selected ruler guides' view of the panel (#1597): X moves the vertical ones and Y the
-/// horizontal ones, together.
-fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>)) {
+/// The selected ruler guides' view of the panel: 9-point reference point locator,
+/// X, W, Y, H fields.
+fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, sel: &GuideSelection) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
-    egui::Grid::new("xfp-guide-grid").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-        for (label, id, pos, origin, by) in [("X:", "xfp-guide-x", x, origin.x, "dx"), ("Y:", "xfp-guide-y", y, origin.y, "dy")] {
-            widgets::dim_label(ui, label);
-            ui.add_enabled_ui(pos.is_some(), |ui| {
-                if let (Some(v), Some(pos)) = (widgets::num_field(ui, id, pos.map(|p| p - origin), units, 80.0), pos)
-                    && let Err(e) = app.run("guide.move", json!({ by: v + origin - pos }))
+    let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
+    let rp = vectorcraft_geom::reference_point(sel.bounds, refi);
+
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::reference_point(ui, refi) {
+            ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
+        }
+        ui.add_space(4.0);
+        egui::Grid::new("xfp-guide-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+            widgets::dim_label(ui, "X:");
+            let x_enabled = sel.has_vertical || sel.has_horizontal;
+            ui.add_enabled_ui(x_enabled, |ui| {
+                if let Some(v) = widgets::num_field(ui, "xfp-guide-x", Some(rp.x - origin.x), units, 80.0)
+                    && let Err(e) = app.run("guide.setBounds", json!({ "x": v + origin.x, "reference": refi }))
                 {
                     app.status(e);
                 }
             });
+            widgets::dim_label(ui, "W:");
+            let w_enabled = sel.has_horizontal;
+            ui.add_enabled_ui(w_enabled, |ui| {
+                let w = if sel.has_horizontal { sel.bounds.width() } else { 0.0 };
+                let w_id = "xfp-guide-w";
+                if let Some(v) = widgets::num_field(ui, w_id, Some(w), units, 80.0) {
+                    let clamped = v.clamp(0.0, vectorcraft_doc::MAX_GUIDE_LEN);
+                    if v >= vectorcraft_doc::MAX_GUIDE_LEN || v <= 0.0 {
+                        ui.data_mut(|d| d.remove_temp::<String>(ui.id().with(w_id)));
+                    }
+                    if let Err(e) = app.run("guide.setBounds", json!({ "width": clamped, "reference": refi })) {
+                        app.status(e);
+                    }
+                }
+            });
             ui.end_row();
-        }
+
+            widgets::dim_label(ui, "Y:");
+            let y_enabled = sel.has_vertical || sel.has_horizontal;
+            ui.add_enabled_ui(y_enabled, |ui| {
+                if let Some(v) = widgets::num_field(ui, "xfp-guide-y", Some(rp.y - origin.y), units, 80.0)
+                    && let Err(e) = app.run("guide.setBounds", json!({ "y": v + origin.y, "reference": refi }))
+                {
+                    app.status(e);
+                }
+            });
+            widgets::dim_label(ui, "H:");
+            let h_enabled = sel.has_vertical;
+            ui.add_enabled_ui(h_enabled, |ui| {
+                let h = if sel.has_vertical { sel.bounds.height() } else { 0.0 };
+                let h_id = "xfp-guide-h";
+                if let Some(v) = widgets::num_field(ui, h_id, Some(h), units, 80.0) {
+                    let clamped = v.clamp(0.0, vectorcraft_doc::MAX_GUIDE_LEN);
+                    if v >= vectorcraft_doc::MAX_GUIDE_LEN || v <= 0.0 {
+                        ui.data_mut(|d| d.remove_temp::<String>(ui.id().with(h_id)));
+                    }
+                    if let Err(e) = app.run("guide.setBounds", json!({ "height": clamped, "reference": refi })) {
+                        app.status(e);
+                    }
+                }
+            });
+            ui.end_row();
+        });
     });
 }
 
@@ -139,7 +209,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if let Some(guides) = selected_guides(app) {
-        guide_fields(app, ui, guides);
+        guide_fields(app, ui, &guides);
         return;
     }
     let units = app.session.general_unit();
@@ -482,7 +552,7 @@ mod tests {
         assert!(!shown.iter().any(|t| t == "40 pt" || t == "0°"), "{shown:?}");
     }
 
-    /// #1597: with only ruler guides selected the panel shows their X or Y, and nothing of the art.
+    /// #1597: with only ruler guides selected the panel shows their X, W, Y, H and reference point.
     #[test]
     fn selected_guides_show_their_position() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -490,15 +560,26 @@ mod tests {
         app.run("guide.add", json!({"vertical": true, "pos": 120})).unwrap();
         app.run("guide.add", json!({"vertical": false, "pos": 45})).unwrap();
         app.run("guide.select", json!({"indexes": [0]})).unwrap();
-        assert_eq!(selected_guides(&app), Some((Some(120.0), None)));
+        let sel = selected_guides(&app).unwrap();
+        assert_eq!(sel.bounds.x0, 120.0);
+        assert!(sel.has_vertical && !sel.has_horizontal);
         let shown = texts(&mut app, show);
-        assert!(shown.iter().any(|t| t == "120 pt") && !shown.iter().any(|t| t == "W:" || t == "45 pt"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "120 pt") && shown.iter().any(|t| t == "W:"), "{shown:?}");
+        app.run("guide.select", json!({"indexes": [1]})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "45 pt"), "{shown:?}");
         app.run("guide.select", json!({"indexes": [0, 1]})).unwrap();
         let shown = texts(&mut app, show);
-        assert!(shown.iter().any(|t| t == "120 pt") && shown.iter().any(|t| t == "45 pt"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "150 pt") && shown.iter().any(|t| t == "100 pt"), "{shown:?}");
         // The field's edit: the vertical guide moves, the horizontal one stays.
         app.run("guide.move", json!({"dx": 30})).unwrap();
-        assert_eq!(selected_guides(&app), Some((Some(150.0), Some(45.0))));
+        let sel = selected_guides(&app).unwrap();
+        assert!(sel.has_vertical && sel.has_horizontal);
+        // Resizing guide length with guide.setBounds
+        app.run("guide.select", json!({"indexes": [0]})).unwrap();
+        app.run("guide.setBounds", json!({"height": 80, "reference": 0})).unwrap();
+        let sel = selected_guides(&app).unwrap();
+        assert_eq!(sel.bounds.height(), 80.0);
         // Art selected with them: the art's box, as before.
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
         assert_eq!(selected_guides(&app), None);

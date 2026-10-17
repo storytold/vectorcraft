@@ -457,6 +457,9 @@ impl SavedSelection {
     }
 }
 
+/// Maximum length of a ruler guide (5779.558 mm = 16,383 pt, matching Illustrator's pasteboard limit).
+pub const MAX_GUIDE_LEN: f64 = 16383.0;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Guide {
     /// true = vertical guide at `pos` (x), false = horizontal at `pos` (y).
@@ -471,17 +474,25 @@ pub struct Guide {
     /// from before guides had layers, and from files that don't say), always there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<NodeId>,
+    /// A finite span `(along_0, along_1)` (e.g. y0..y1 for a vertical guide, x0..x1 for horizontal).
+    /// None: runs across its artboard (an artboard guide) or the whole canvas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<(f64, f64)>,
 }
 
 impl Guide {
     /// A canvas guide.
     pub fn new(vertical: bool, pos: f64) -> Self {
-        Self { vertical, pos, artboard: None, layer: None }
+        Self { vertical, pos, artboard: None, layer: None, span: None }
     }
 
-    /// Moved by `d` (a vertical guide across, a horizontal one down).
+    /// Moved by `d` (a vertical guide across by d.x and along by d.y, a horizontal one down by d.y and along by d.x).
     pub fn moved(&self, d: Vec2) -> Self {
-        Self { pos: self.pos + if self.vertical { d.x } else { d.y }, ..self.clone() }
+        let span = self.span.map(|(a, b)| {
+            let delta = if self.vertical { d.y } else { d.x };
+            (a + delta, b + delta)
+        });
+        Self { pos: self.pos + if self.vertical { d.x } else { d.y }, span, ..self.clone() }
     }
 }
 
@@ -1333,12 +1344,39 @@ impl Document {
         }
         art
     }
-    /// Where ruler guide `g` runs along its line (the y range of a vertical guide): across its
-    /// artboard for an artboard guide, None (the whole canvas) for a canvas guide or one whose
-    /// artboard is gone.
+    /// Where ruler guide `g` runs along its line (the y range of a vertical guide): its custom
+    /// span if shortened, across its artboard for an artboard guide, None (the whole canvas) for a
+    /// canvas guide or one whose artboard is gone.
     pub fn guide_span(&self, g: &Guide) -> Option<(f64, f64)> {
+        if let Some((s0, s1)) = g.span {
+            let (min_s, max_s) = if s0 <= s1 { (s0, s1) } else { (s1, s0) };
+            let len = (max_s - min_s).min(MAX_GUIDE_LEN);
+            return Some((min_s, min_s + len));
+        }
         let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
         Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
+    }
+    /// The effective span `(along_0, along_1)` of ruler guide `g`, returning its custom span,
+    /// its artboard bounds, or the standard 16,383 pt (5779.558 mm) canvas span centered on the artboard.
+    pub fn guide_effective_span(&self, g: &Guide) -> (f64, f64) {
+        if let Some(span) = self.guide_span(g) {
+            return span;
+        }
+        let artboard_center = self
+            .artboards
+            .iter()
+            .find(|a| if g.vertical { a.rect.x0 <= g.pos && g.pos <= a.rect.x1 } else { a.rect.y0 <= g.pos && g.pos <= a.rect.y1 })
+            .or_else(|| self.artboards.first())
+            .map(|a| if g.vertical { a.rect.center().y } else { a.rect.center().x })
+            .unwrap_or(0.0);
+        let half = MAX_GUIDE_LEN / 2.0;
+        (artboard_center - half, artboard_center + half)
+    }
+    /// Bounding rectangle of ruler guide `g`.
+    pub fn guide_rect(&self, g: &Guide) -> Rect {
+        let (s0, s1) = self.guide_effective_span(g);
+        let (min_s, max_s) = if s0 <= s1 { (s0, s1) } else { (s1, s0) };
+        if g.vertical { Rect::new(g.pos, min_s, g.pos, max_s) } else { Rect::new(min_s, g.pos, max_s, g.pos) }
     }
     /// The layer (or sublayer) ruler guide `g` is on, if it is on one this document has.
     fn guide_layer(&self, g: &Guide) -> Option<NodeId> {
@@ -1410,7 +1448,10 @@ impl Document {
     /// Does ruler guide `g` run past `p` (up to `tol` beyond its ends)?
     pub fn guide_passes(&self, g: &Guide, p: Point, tol: f64) -> bool {
         let along = if g.vertical { p.y } else { p.x };
-        self.guide_span(g).is_none_or(|(a, b)| along >= a - tol && along <= b + tol)
+        self.guide_span(g).is_none_or(|(a, b)| {
+            let (min, max) = if a <= b { (a, b) } else { (b, a) };
+            along >= min - tol && along <= max + tol
+        })
     }
     /// Keep the ruler guides `keep` accepts (by index), the selected ones left keeping their
     /// place among the rest (the selected art stays selected). Returns how many went.

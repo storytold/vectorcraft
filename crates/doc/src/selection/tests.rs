@@ -72,6 +72,43 @@ fn guides_show_and_lock_with_their_layer() {
 }
 
 #[test]
+fn guide_finite_span_and_bounds() {
+    let d = Document::new(300.0, 200.0);
+    let mut g = crate::Guide::new(true, 100.0);
+    // Canvas guide without explicit span defaults to 16,383 pt centered on artboard.
+    assert_eq!(d.guide_span(&g), None);
+    let (s0, s1) = d.guide_effective_span(&g);
+    assert_eq!(s1 - s0, crate::MAX_GUIDE_LEN);
+    assert_eq!((s0 + s1) / 2.0, 100.0); // centered at artboard center y = 100
+    assert_eq!(d.guide_rect(&g).height(), crate::MAX_GUIDE_LEN);
+    assert!(d.guide_passes(&g, vectorcraft_geom::Point::new(100.0, 50.0), 3.0));
+
+    // Finite span
+    g.span = Some((20.0, 80.0));
+    assert_eq!(d.guide_span(&g), Some((20.0, 80.0)));
+    assert_eq!(d.guide_effective_span(&g), (20.0, 80.0));
+    let r = d.guide_rect(&g);
+    assert_eq!(r.x0, 100.0);
+    assert_eq!(r.height(), 60.0);
+
+    // Hit testing passes within span, fails outside
+    assert!(d.guide_passes(&g, vectorcraft_geom::Point::new(100.0, 50.0), 3.0));
+    assert!(!d.guide_passes(&g, vectorcraft_geom::Point::new(100.0, 95.0), 3.0));
+    assert!(!d.guide_passes(&g, vectorcraft_geom::Point::new(100.0, 5.0), 3.0));
+
+    // Moving moves both pos and span
+    let moved = g.moved(vectorcraft_geom::Vec2::new(15.0, 10.0));
+    assert_eq!(moved.pos, 115.0);
+    assert_eq!(moved.span, Some((30.0, 90.0)));
+
+    // Serde roundtrip
+    let json = serde_json::to_string(&g).unwrap();
+    assert!(json.contains(r#""span":[20.0,80.0]"#));
+    let read: crate::Guide = serde_json::from_str(&json).unwrap();
+    assert_eq!(read.span, Some((20.0, 80.0)));
+}
+
+#[test]
 fn selection_changes_clear_the_target() {
     let mut s = Selection::default();
     s.set([NodeId(2), NodeId(3)]);

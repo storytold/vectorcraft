@@ -1820,6 +1820,97 @@ fn ruler_guides_select_move_and_delete() {
     assert!(matches!(s.execute("edit.clear", &json!({})), Err(EngineError::Disabled(..))));
 }
 
+#[test]
+fn guide_set_bounds_transforms_length_and_reference_points() {
+    let mut s = session();
+    // Add vertical guide at x = 100 with span None
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    // Add horizontal guide at y = 50 with span None
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+
+    // Select vertical guide 0
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+
+    // Resize height to 200 pt with Top reference point (refi = 0)
+    s.execute("guide.setBounds", &json!({"height": 200, "reference": 0})).unwrap();
+    let row = &s.execute("guide.list", &json!({})).unwrap()[0];
+    let span = row["span"].as_array().unwrap();
+    let (y0, y1) = (span[0].as_f64().unwrap(), span[1].as_f64().unwrap());
+    assert_eq!((y1 - y0).round(), 200.0);
+
+    // Resize height to 100 pt with Bottom reference point (refi = 6)
+    s.execute("guide.setBounds", &json!({"height": 100, "reference": 6})).unwrap();
+    let row = &s.execute("guide.list", &json!({})).unwrap()[0];
+    let span = row["span"].as_array().unwrap();
+    assert_eq!((span[1].as_f64().unwrap() - span[0].as_f64().unwrap()).round(), 100.0);
+    // Bottom point was anchored:
+    assert_eq!(span[1].as_f64().unwrap(), y1);
+
+    // Select horizontal guide 1
+    s.execute("guide.select", &json!({"indexes": [1]})).unwrap();
+    // Resize width to 300 pt with Center reference point (refi = 4)
+    s.execute("guide.setBounds", &json!({"width": 300, "reference": 4})).unwrap();
+    let row = &s.execute("guide.list", &json!({})).unwrap()[1];
+    let span = row["span"].as_array().unwrap();
+    assert_eq!((span[1].as_f64().unwrap() - span[0].as_f64().unwrap()).round(), 300.0);
+
+    // Move guide 1 to x = 200, y = 70
+    s.execute("guide.setBounds", &json!({"x": 200, "y": 70, "reference": 4})).unwrap();
+    let row = &s.execute("guide.list", &json!({})).unwrap()[1];
+    assert_eq!(row["pos"], 70.0);
+    let span = row["span"].as_array().unwrap();
+    assert_eq!(((span[0].as_f64().unwrap() + span[1].as_f64().unwrap()) / 2.0).round(), 200.0);
+}
+
+#[test]
+fn multiple_guides_scale_proportionally_and_clamp_max_len() {
+    let mut s = session();
+    // Guide 0: vertical at x=10, span y in [0.0, 10.0]
+    s.execute("guide.add", &json!({"vertical": true, "pos": 10, "span": [0.0, 10.0]})).unwrap();
+    // Guide 1: vertical at x=20, span y in [5.0, 15.0]
+    s.execute("guide.add", &json!({"vertical": true, "pos": 20, "span": [5.0, 15.0]})).unwrap();
+
+    // Select both guides
+    s.execute("guide.select", &json!({"indexes": [0, 1]})).unwrap();
+
+    // 1. Scale height up from 15 to 30 with Top-Left reference (refi = 0)
+    s.execute("guide.setBounds", &json!({"height": 30.0, "reference": 0})).unwrap();
+    let list = s.execute("guide.list", &json!({})).unwrap();
+    let g0_span = list[0]["span"].as_array().unwrap();
+    let g1_span = list[1]["span"].as_array().unwrap();
+    let g0_y = (g0_span[0].as_f64().unwrap(), g0_span[1].as_f64().unwrap());
+    let g1_y = (g1_span[0].as_f64().unwrap(), g1_span[1].as_f64().unwrap());
+    assert_eq!(g0_y, (0.0, 20.0));
+    assert_eq!(g1_y, (10.0, 30.0));
+    let total_h = g1_y.1.max(g0_y.1) - g0_y.0.min(g1_y.0);
+    assert_eq!(total_h, 30.0);
+
+    // 2. Scale height down from 30 to 15: must shrink smoothly without offset drift
+    s.execute("guide.setBounds", &json!({"height": 15.0, "reference": 0})).unwrap();
+    let list = s.execute("guide.list", &json!({})).unwrap();
+    let g0_span = list[0]["span"].as_array().unwrap();
+    let g1_span = list[1]["span"].as_array().unwrap();
+    assert_eq!((g0_span[0].as_f64().unwrap(), g0_span[1].as_f64().unwrap()), (0.0, 10.0));
+    assert_eq!((g1_span[0].as_f64().unwrap(), g1_span[1].as_f64().unwrap()), (5.0, 15.0));
+
+    // 3. Scale down further to 12
+    s.execute("guide.setBounds", &json!({"height": 12.0, "reference": 0})).unwrap();
+    let list = s.execute("guide.list", &json!({})).unwrap();
+    let g0_span = list[0]["span"].as_array().unwrap();
+    let g1_span = list[1]["span"].as_array().unwrap();
+    assert_eq!((g0_span[0].as_f64().unwrap(), g0_span[1].as_f64().unwrap()), (0.0, 8.0));
+    assert_eq!((g1_span[0].as_f64().unwrap(), g1_span[1].as_f64().unwrap()), (4.0, 12.0));
+
+    // 4. Test clamping to MAX_GUIDE_LEN (16,383 pt)
+    s.execute("guide.setBounds", &json!({"height": 99999.0, "reference": 0})).unwrap();
+    let list = s.execute("guide.list", &json!({})).unwrap();
+    let g1_span = list[1]["span"].as_array().unwrap();
+    let g0_span = list[0]["span"].as_array().unwrap();
+    let max_y = g1_span[1].as_f64().unwrap().max(g0_span[1].as_f64().unwrap());
+    let min_y = g0_span[0].as_f64().unwrap().min(g1_span[0].as_f64().unwrap());
+    assert_eq!(max_y - min_y, vectorcraft_doc::MAX_GUIDE_LEN);
+}
+
 /// Shift selects ruler guides and art together, in either order; Delete takes both in one step.
 #[test]
 fn guides_and_art_are_shift_selected_together() {

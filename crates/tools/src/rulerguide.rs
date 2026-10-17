@@ -57,9 +57,19 @@ fn guides_in_rect(cx: &ToolContext, r: Rect) -> Vec<usize> {
         .filter(|(_, g)| cx.doc.guide_editable(g))
         .filter(|(_, g)| {
             if g.vertical {
-                r.min_x() <= g.pos && g.pos <= r.max_x() && cx.doc.guide_span(g).is_none_or(|(y0, y1)| r.max_y() >= y0 && r.min_y() <= y1)
+                r.min_x() <= g.pos
+                    && g.pos <= r.max_x()
+                    && cx.doc.guide_span(g).is_none_or(|(y0, y1)| {
+                        let (min_y, max_y) = if y0 <= y1 { (y0, y1) } else { (y1, y0) };
+                        r.max_y() >= min_y && r.min_y() <= max_y
+                    })
             } else {
-                r.min_y() <= g.pos && g.pos <= r.max_y() && cx.doc.guide_span(g).is_none_or(|(x0, x1)| r.max_x() >= x0 && r.min_x() <= x1)
+                r.min_y() <= g.pos
+                    && g.pos <= r.max_y()
+                    && cx.doc.guide_span(g).is_none_or(|(x0, x1)| {
+                        let (min_x, max_x) = if x0 <= x1 { (x0, x1) } else { (x1, x0) };
+                        r.max_x() >= min_x && r.min_x() <= max_x
+                    })
             }
         })
         .map(|(i, _)| i)
