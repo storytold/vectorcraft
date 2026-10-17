@@ -139,8 +139,10 @@ struct Kept {
 
 #[derive(Clone)]
 enum KeptImage {
-    /// The image on its own grid, as [`Renderer::rasterize_image`] makes it.
-    Grid(std::rc::Rc<(Vec<u8>, usize, usize)>),
+    /// The image on its own grid, as [`Renderer::rasterize_image`] makes it, and how many images
+    /// in the content failed to decode while it was made ([`crate::paint::decode_failures`]):
+    /// each draw of the image from here counts them again ([`crate::paint::add_decode_failures`]).
+    Grid(std::rc::Rc<(Vec<u8>, usize, usize)>, u64),
     /// An image over [`Renderer::rasterize_image`]'s limits: the content's raster with the
     /// Rasterize applied, as the first draw made it, and the transform from its pixels to
     /// document space.
@@ -1641,13 +1643,17 @@ impl Renderer {
             Some(RasterFx::Rasterize(r)) => {
                 let rect = r.image(content.bounds.unwrap_or(content.reach), line);
                 let kept = content.kept.and_then(|k| match &*k.image.borrow() {
-                    Some(KeptImage::Grid(image)) => Some(image.clone()),
+                    Some(KeptImage::Grid(image, failed)) => {
+                        crate::paint::add_decode_failures(*failed);
+                        Some(image.clone())
+                    }
                     _ => None,
                 });
                 let image = kept.or_else(|| {
+                    let failures = crate::paint::decode_failures();
                     let image = self.rasterize_image(f, r, rect, paint).map(std::rc::Rc::new);
                     if let (Some(k), Some(image)) = (content.kept, &image) {
-                        *k.image.borrow_mut() = Some(KeptImage::Grid(image.clone()));
+                        *k.image.borrow_mut() = Some(KeptImage::Grid(image.clone(), crate::paint::decode_failures() - failures));
                     }
                     image
                 });
@@ -2526,6 +2532,38 @@ mod tests {
             assert!(crate::paint::decode_failures() > before, "frame {frame}");
         }
         assert_eq!(r.pixel_fx.len(), 1, "the later frames draw from the raster kept");
+    }
+
+    /// An image that can't be decoded, with Rasterize, a drop shadow and a blur: the shadow draws
+    /// the Rasterize image first, and the blurred content draws the image kept from that draw
+    /// ([`super::Kept`]). Every frame counts the failure, also when the shadow and the blurred
+    /// content are drawn from the rasters kept.
+    #[test]
+    fn rasters_drawn_from_a_kept_rasterize_image_count_the_images_it_could_not_decode() {
+        use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+        let mut d = Document::new(100.0, 100.0);
+        // A PNG signature with nothing after it.
+        d.images.insert("cut".into(), ImageBlob::new("image/png", b"\x89PNG\r\n\x1a\n".to_vec()));
+        let im =
+            ImageObject { key: "cut".into(), width: 40, height: 40, xf: Affine::translate((30.0, 30.0)), link: None, placement: Default::default() };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+        n.appearance.effects = [
+            ("rasterize", json!({"background": "white"})),
+            ("stylize.dropShadow", json!({"mode": "normal", "opacity": 100, "x": 2, "y": 2, "blur": 1, "color": "#0000ff"})),
+            ("blur.gaussian", json!({"radius": 4.0})),
+        ]
+        .into_iter()
+        .map(|(id, params)| Effect { id: id.into(), params, visible: true })
+        .collect();
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        for frame in 0..3 {
+            let before = crate::paint::decode_failures();
+            r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+            assert!(crate::paint::decode_failures() > before, "frame {frame}");
+        }
+        assert_eq!((r.shadows.len(), r.pixel_fx.len()), (1, 1), "the later frames draw from the rasters kept");
     }
 
     /// While interacting, an object that only moved draws its drop shadow and filtered content

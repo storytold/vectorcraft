@@ -6,6 +6,7 @@ use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
+use super::tests_menucmds::place_undecodable_png;
 use super::*;
 
 fn session() -> Session {
@@ -363,6 +364,37 @@ fn every_raster_export_says_when_a_pattern_holds_an_image_that_could_not_be_deco
         let warnings = r["warnings"].as_array().cloned().unwrap_or_default();
         assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("couldn't be decoded"))), "export {n}: {r}");
     }
+}
+
+#[test]
+fn a_raster_export_says_when_a_pattern_tile_draws_an_undecodable_image_from_its_kept_rasterize_image() {
+    // A PNG whose pixel data is cut short, with Rasterize, a drop shadow and a blur: the shadow
+    // draws the Rasterize image, and the blurred content draws the image kept from that draw.
+    let mut s = session();
+    let placed = place_undecodable_png(&mut s);
+    for (effect, params) in [
+        ("rasterize", json!({"background": "white"})),
+        ("stylize.dropShadow", json!({"x": 2, "y": 2, "blur": 1})),
+        ("blur.gaussian", json!({"radius": 4})),
+    ] {
+        s.execute("effect.apply", &json!({"effect": effect, "params": params, "ids": [placed.0]})).unwrap();
+    }
+    sel(&mut s, &[placed]);
+    s.execute("object.pattern.make", &json!({"name": "Cut", "width": 80, "height": 40})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    sel(&mut s, &[placed]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    let big = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Cut"})).unwrap();
+    let warns = |s: &mut Session| {
+        let r = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
+        r["warnings"].as_array().is_some_and(|w| w.iter().any(|w| w.as_str().is_some_and(|w| w.contains("couldn't be decoded"))))
+    };
+    assert!(warns(&mut s), "the first export");
+    // A new overlap draws a new tile of the same art, and the tile renderer draws its shadow and
+    // its blurred content from the rasters it kept.
+    s.execute("pattern.options", &json!({"name": "Cut", "overlap": {"h": "right"}})).unwrap();
+    assert!(warns(&mut s), "the export after Pattern Options");
 }
 
 // ---------- repeat ----------
