@@ -237,12 +237,14 @@ pub(super) const DEFAULT_FONT_SIZE: f64 = 12.0;
 
 /// How lengths become points, from the root `<svg>`'s `width` / `height`.
 ///
-/// A pixel (and a unitless user unit) is a point, as we export, and absolute lengths keep their
-/// physical size at 72 pt per inch: `font-size="12pt"` is 12 pt, `1in` is 72 pt. A root size in
-/// absolute units (`width="210mm"`) is that physical size, and its user units are CSS pixels of it
-/// (96 per inch, 0.75 pt each), so a drawing without a `viewBox` keeps its proportions. With one
-/// side absolute and the other not (`width="96pt" height="96"`), both are: the unitless side is
-/// CSS pixels too, so the drawing isn't stretched (#1010).
+/// Inside a drawing, absolute lengths convert to user units at CSS's 96 px per inch, as SVG
+/// requires, so they fit with unitless lengths (`1in` is as long as `96`, #1555). A pixel (and a
+/// unitless user unit) is a point, as we export, so in a unitless drawing `1in` comes out as 96 pt
+/// and `font-size="12pt"` as 16 pt, the sizes they have next to the drawing's other lengths. A root
+/// size in absolute units (`width="210mm"`) is that physical size, and its user units are CSS
+/// pixels of it (96 per inch, 0.75 pt each), so absolute lengths keep their printed size there.
+/// With one side absolute and the other not (`width="96pt" height="96"`), both are: the unitless
+/// side is CSS pixels too, so the drawing isn't stretched (#1010).
 struct RootUnits {
     /// Pixels per inch usvg (and the text pass) convert absolute lengths at.
     dpi: f64,
@@ -258,7 +260,9 @@ impl RootUnits {
         use svgtypes::LengthUnit as U;
         let physical = |u: Option<U>| matches!(u, Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc));
         let (w, h) = (unit("width"), unit("height"));
-        let (dpi, k) = if physical(w) || physical(h) { (CSS_PX_PER_IN, PT_PER_IN / CSS_PX_PER_IN) } else { (PT_PER_IN, 1.0) };
+        // Absolute lengths always convert at CSS's 96 px per inch, so inside a drawing `1in` is as
+        // long as `96` (#1555); the root's units only set how big a user unit is.
+        let (dpi, k) = if physical(w) || physical(h) { (CSS_PX_PER_IN, PT_PER_IN / CSS_PX_PER_IN) } else { (CSS_PX_PER_IN, 1.0) };
         let unit = match w {
             Some(U::Mm) => Unit::Millimeters,
             Some(U::Cm) => Unit::Centimeters,

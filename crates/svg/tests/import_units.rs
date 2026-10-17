@@ -96,7 +96,9 @@ fn font_size_units_are_honoured() {
     )
     .unwrap();
     let sizes = text_sizes(&d);
-    let want = [12.0, 16.0, 36.0, 20.0, 15.0, 12.0, 14.4, 18.0];
+    // Absolute units convert at 96 per inch, so they fit the unitless ones (#1555): 12pt is 16,
+    // 0.5in is 48.
+    let want = [16.0, 16.0, 48.0, 20.0, 15.0, 12.0, 14.4, 18.0];
     assert_eq!(sizes.len(), want.len(), "{sizes:?}");
     for (s, w) in sizes.iter().zip(want) {
         assert!(close(*s, w), "{sizes:?}");
@@ -122,13 +124,16 @@ fn text_lengths_in_physical_units() {
 }
 
 #[test]
-fn absolute_lengths_in_a_pixel_document_keep_their_size() {
+fn absolute_lengths_in_a_pixel_document_fit_its_unitless_lengths() {
+    // #1555: as in browsers, `1in` is as long as `96` user units (and a user unit is a point).
     let d = import(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
-        <rect width="1in" height="10mm" stroke="black" stroke-width="2pt"/></svg>"#,
+        <rect width="1in" height="10mm" stroke="black" stroke-width="2pt"/><rect x="200" width="96" height="10"/></svg>"#,
     )
     .unwrap();
     let n = art(&d)[0];
-    assert!(close_rect(n.geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 720.0 / 25.4)), "{:?}", n.geometric_bounds());
-    assert!(close(n.appearance.stroke_width(), 2.0));
+    assert!(close_rect(n.geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 96.0, 960.0 / 25.4)), "{:?}", n.geometric_bounds());
+    assert!(close(n.appearance.stroke_width(), 2.0 * 96.0 / 72.0));
+    let unitless = art(&d)[1].geometric_bounds().unwrap();
+    assert!(close(unitless.width(), n.geometric_bounds().unwrap().width()), "1in is as wide as 96");
 }
