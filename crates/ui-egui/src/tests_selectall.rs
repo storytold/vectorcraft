@@ -1,6 +1,7 @@
 //! Select All (Cmd+A) follows the keyboard, from the window and from the system menu bar (macOS):
 //! a focused text field selects its own text, the Type tool editing selects the text being edited,
-//! and only otherwise are all the objects selected.
+//! the Artboards panel selects every artboard after a click on one of its rows with the Artboard
+//! tool, and only otherwise are all the objects selected.
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -170,6 +171,61 @@ fn cmd_a_on_the_canvas_selects_all_objects() {
     a.app.run("select.none", json!({})).unwrap();
     a.menu("select.all");
     assert_eq!(a.selected(), 2, "so does the menu's Select All");
+}
+
+/// With the Artboard tool, Cmd+A after a click on an Artboards panel row selects every artboard
+/// and leaves the active artboard and the art as they are; so does the macOS menu bar's Select All.
+/// After a press on the canvas, with the panel closed, or with the Selection tool, Cmd+A selects
+/// every object.
+#[test]
+fn cmd_a_after_a_click_in_the_artboards_panel_selects_every_artboard() {
+    let mut a = App::new();
+    for x in [500, 1000] {
+        a.app.run("artboard.new", json!({"x": x, "y": 0, "width": 400, "height": 300})).unwrap();
+    }
+    a.app.run("window.panel", json!({"panel": "artboards"})).unwrap();
+    a.app.select_tool("artboard");
+    let picked = |a: &App| (crate::panels::artboards::picked(&a.app, 3), crate::panels::artboards::selected(&a.app, 3));
+    // Artboard 2's row, while Artboard 1 is active (the Control bar and the navigator show its name).
+    let row = |a: &mut App| {
+        crate::panels::artboards::select(&mut a.app, 0);
+        a.frame(vec![]);
+        text_at(&a.frame(vec![]), "Artboard 2", false)
+    };
+    let at = row(&mut a);
+    click_at(&mut a, at);
+    assert_eq!(picked(&a), (vec![1], 1));
+    let art = a.selected();
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(picked(&a), (vec![0, 1, 2], 1), "Cmd+A selects every artboard, and Artboard 2 stays active");
+    assert_eq!(a.selected(), art, "and not the art");
+    // So does Select All in the macOS menu bar.
+    click_at(&mut a, at);
+    assert_eq!(picked(&a), (vec![1], 1));
+    a.menu("select.all");
+    assert_eq!(picked(&a), (vec![0, 1, 2], 1), "the menu's Select All selects every artboard");
+    assert_eq!(a.selected(), art, "and not the art");
+    // A press on the canvas gives the keys back to the art.
+    let canvas = a.app.canvas_rect.unwrap();
+    click_at(&mut a, canvas.left_top() + vec2(20.0, 20.0));
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(a.selected(), 2, "after a press on the canvas, Cmd+A selects every object");
+    // So does closing the panel after the click on a row.
+    a.app.run("select.none", json!({})).unwrap();
+    let at = row(&mut a);
+    click_at(&mut a, at);
+    a.app.run("window.panel", json!({"panel": "artboards", "toggle": true})).unwrap();
+    a.frame(vec![]);
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(a.selected(), 2, "with the panel closed, Cmd+A selects every object");
+    // With the Selection tool, Cmd+A after a click on a row selects every object.
+    a.app.run("select.none", json!({})).unwrap();
+    a.app.run("window.panel", json!({"panel": "artboards"})).unwrap();
+    a.app.select_tool("selection");
+    let at = row(&mut a);
+    click_at(&mut a, at);
+    a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
+    assert_eq!(a.selected(), 2, "with the Selection tool, Cmd+A selects every object");
 }
 
 /// The copied texts of a frame's output.
