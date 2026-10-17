@@ -336,9 +336,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no indents or
 /// paragraph spacing, Hyphenate off with the default Hyphenation options, Auto direction,
-/// Bottom-to-Bottom Leading, Regular burasagari, the Hard kinsoku set and the Every-line Composer.
+/// Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi Set, Regular burasagari,
+/// the Hard kinsoku set, the Every-line Composer and no tab stops, as one undo step named Reset
+/// Panel (inside an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
+    // The Type tool's typing session stays an undo step of its own.
+    super::character::end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
     format(
         app,
@@ -346,14 +354,20 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false,
             "wordsLongerThan": h.words_longer_than, "afterFirst": h.after_first, "beforeLast": h.before_last,
             "hyphenLimit": h.hyphen_limit, "hyphenationZone": h.zone, "hyphenateCapitalized": h.capitalized,
-            "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "kinsoku": "hard", "composer": "everyLine"
+            "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
+            "composer": "everyLine"
         }),
     );
+    para_cmd(app, "text.tabs.clear", json!({}));
+    if !open {
+        app.session.end_undo_group(false);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vectorcraft_doc::Mojikumi;
     use vectorcraft_engine::Session;
 
     fn alignment_row(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> egui::Rect {
@@ -601,5 +615,62 @@ mod tests {
             assert_eq!(para.hyphenation, HyphenationOptions::default());
             assert_eq!(serde_json::to_value(&para).unwrap().get("hyphenation"), None, "saves no hyphenation options");
         }
+    }
+
+    /// Reset Panel gives the paragraphs it acts on new type's Mojikumi Set (Line-end Punctuation
+    /// Half Width) and no tab stops, as one undo step named Reset Panel: while the Type tool edits,
+    /// the paragraph at its caret (the typing before it stays a step of its own), and then the
+    /// selected type's paragraphs. In an undo group that is already open, the reset is part of
+    /// that group's step.
+    #[test]
+    fn reset_panel_resets_the_mojikumi_set_and_tab_stops_in_one_step() {
+        let (mut app, id) = editing_text("First\nSecond");
+        app.run("text.setFormat", json!({"id": id, "mojikumi": "none"})).unwrap();
+        app.run("text.tabs.set", json!({"id": id, "stops": [{"position": 36}, {"position": 90, "align": "right"}]})).unwrap();
+        let text = |app: &VectorcraftApp| {
+            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+            let NodeKind::Text(text) = &node.kind else { panic!("text") };
+            text.as_ref().clone()
+        };
+        let paras = |app: &VectorcraftApp| {
+            let text = text(app);
+            [text.para_at(0), text.para_at(1)].map(|p| (p.mojikumi, p.tabs.len()))
+        };
+        let custom = (Mojikumi::None, 2);
+        let reset = (Mojikumi::LineEndHalf, 0);
+        assert_eq!(paras(&app), [custom, custom]);
+        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let last_step = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().map(|e| e.label.clone());
+        // Type over the second paragraph's text: the typing session is still open.
+        select_range(&mut app, 6, 12);
+        let before = steps(&app);
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { events: vec![egui::Event::Text("X".into())], ..Default::default() };
+        ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+        assert_eq!(app.session.tool_options()["typing"], json!(true));
+        reset_panel(&mut app);
+        assert_eq!(paras(&app), [custom, reset], "only the paragraph at the caret");
+        assert_eq!((steps(&app), last_step(&app)), (before + 2, Some("Reset Panel".to_string())));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(paras(&app), [custom, custom]);
+        assert_eq!(text(&app).plain_text(), "First\nX", "the typing stays");
+        app.run("edit.redo", json!({})).unwrap();
+        app.session.set_tool_option("stopEditing", &json!(true));
+        let doc = app.session.active().unwrap().doc.clone();
+        let before = steps(&app);
+        reset_panel(&mut app);
+        assert_eq!(paras(&app), [reset, reset]);
+        assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+        // In an undo group that is already open (MCP `command_batch` with `atomic`), the reset is
+        // part of that group's step.
+        app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+        let before = steps(&app);
+        reset_panel(&mut app);
+        assert_eq!(paras(&app), [reset, reset]);
+        app.run("text.setFormat", json!({"id": id, "mojikumi": "none"})).unwrap();
+        app.run("edit.undoGroup.end", json!({})).unwrap();
+        assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Batch".to_string())));
     }
 }
