@@ -486,8 +486,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     } else {
         vec![]
     };
+    let held = ui.input(|i| i.modifiers);
+    sampling_ring(app, &painter, &xf, held.shift, held.alt);
     if app.ui.view.edges && !revolve_edit {
-        hover_highlight(app, &painter, &xf);
+        hover_highlight(app, &painter, &xf, held.shift, held.alt);
         selection_overlay(app, &painter, &xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
         if app.ui.view.text_threads {
             thread_overlay(app, &painter, &xf);
@@ -1837,25 +1839,158 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
     }
 }
 
-fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, shift: bool, alt: bool) {
     let Some(h) = app.hover_doc else { return };
     // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on.
     if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting {
         return;
     }
-    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
+    if app.session.tool_busy() {
         return;
     }
     let Some(st) = app.session.active() else { return };
+    let tool = app.session.tool_id();
+    // The Eyedropper outlines the object a click would copy, including one already selected:
+    // the selection is the destination, and this outline is the source.
+    if tool == "eyedropper" {
+        // Shift shows the sampling ring instead of the outline.
+        if shift {
+            return;
+        }
+        let Some(hit) = eyedropper_hit(app, h, xf.zoom, shift, alt) else { return };
+        outline_hover(p, xf, st, hit.source);
+        return;
+    }
+    if !matches!(tool, "selection" | "directSelection" | "groupSelection") {
+        return;
+    }
     let Some(hit) = hit_at(app, h, xf.zoom) else { return };
-    let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
+    let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
     if st.selection.contains(id) {
         return;
     }
+    outline_hover(p, xf, st, id);
+}
+
+fn outline_hover(p: &egui::Painter, xf: &Xf, st: &vectorcraft_engine::DocState, id: vectorcraft_doc::NodeId) {
     if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n, &st.doc.symbol_boxes()), xf, Stroke::new(1.5, color));
     }
+}
+
+/// The Eyedropper's read at `p`, using the same hit as a click there.
+fn eyedropper_hit(app: &VectorcraftApp, p: Point, zoom: f64, shift: bool, alt: bool) -> Option<vectorcraft_tools::xform::EyedropperHit> {
+    let st = app.session.active()?;
+    let prefs = &app.session.prefs;
+    let opt = vectorcraft_doc::hit::HitOptions {
+        tol: prefs.selection_tolerance / zoom,
+        outline: app.ui.view.outline,
+        path_only: false,
+        type_path_only: false,
+        scope: st.isolation,
+    };
+    // Alt writes onto the object, so only editable art; a gradient-stop sample still only reads.
+    let stop = stop_sampling(app);
+    let editable = alt && !shift && !stop;
+    vectorcraft_tools::xform::read_at(&st.doc, p, editable, prefs.eyedropper.sample_size, opt)
+}
+
+/// Shift with the Eyedropper is sampling into a gradient stop (the panel's stop eyedropper).
+fn stop_sampling(app: &VectorcraftApp) -> bool {
+    app.session.tool_options().get("stop").and_then(|v| v.as_str()).is_some() && app.session.selected_stop().is_some()
+}
+
+/// Shift held with the Eyedropper: a ring whose top half is the colour a click would sample and
+/// whose bottom half is the colour that click replaces (the active fill or stroke, when it is a
+/// solid). Shift+Alt appends an appearance instead, so the ring stays hidden.
+fn sampling_ring(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, shift: bool, alt: bool) {
+    if !shift || alt || app.session.tool_id() != "eyedropper" || app.session.tool_busy() {
+        return;
+    }
+    let Some(at) = app.hover_doc else { return };
+    let center = xf.to_screen(at);
+    let top = eyedropper_hit(app, at, xf.zoom, shift, alt).and_then(|h| h.color);
+    let bottom = sampling_bottom(app);
+    let shown = |c: vectorcraft_color::Color| {
+        let [r, g, b, a] = c.to_rgba8(1.0);
+        Color32::from_rgba_unmultiplied(r, g, b, a)
+    };
+    // The colour band is 14 px thick, starting at a 45 px hole. A second band of the same
+    // thickness, opaque mid-gray, sits outside it as the border.
+    const INNER: f32 = 45.0;
+    const BAND: f32 = 14.0;
+    const MID: f32 = INNER + BAND;
+    const OUTER: f32 = MID + BAND;
+    let border = Color32::from_rgb(128, 128, 128);
+    // Where a colour half is missing, the gray band's inner edge is the one against the art.
+    p.add(Shape::Mesh(ring_half(center, MID, OUTER, true, border, top.is_none(), true).into()));
+    p.add(Shape::Mesh(ring_half(center, MID, OUTER, false, border, bottom.is_none(), true).into()));
+    if let Some(c) = top {
+        p.add(Shape::Mesh(ring_half(center, INNER, MID, true, shown(c), true, false).into()));
+    }
+    if let Some(c) = bottom {
+        p.add(Shape::Mesh(ring_half(center, INNER, MID, false, shown(c), true, false).into()));
+    }
+}
+
+/// The colour Shift-click replaces: the selected gradient stop while the stop eyedropper is out,
+/// otherwise the solid behind the active proxy.
+fn sampling_bottom(app: &VectorcraftApp) -> Option<vectorcraft_color::Color> {
+    let paint = crate::panels::active_paint(app);
+    if stop_sampling(app)
+        && let vectorcraft_color::Paint::Gradient(g) = &paint
+        && let Some(i) = app.session.selected_stop()
+        && let Some(stop) = g.gradient.stops.get(i)
+    {
+        return Some(stop.color);
+    }
+    paint.color()
+}
+
+/// One half of a sampling ring, screen pixels, y down. `top` is the upper semicircle.
+/// `fade_inner` and `fade_outer` put a short transparent ramp on that edge so the curve is not a
+/// hard pixel step. The arc is split finely enough that the outline reads as a circle.
+fn ring_half(center: Pos2, inner: f32, outer: f32, top: bool, color: Color32, fade_inner: bool, fade_outer: bool) -> egui::epaint::Mesh {
+    const FEATHER: f32 = 1.5;
+    const N: u32 = 64;
+    let clear = color.gamma_multiply(0.0);
+    let mut stops: Vec<(f32, Color32)> = Vec::with_capacity(4);
+    if fade_inner {
+        stops.push((inner, clear));
+        stops.push(((inner + FEATHER).min(outer), color));
+    } else {
+        stops.push((inner, color));
+    }
+    if fade_outer {
+        stops.push(((outer - FEATHER).max(inner), color));
+        stops.push((outer, clear));
+    } else {
+        stops.push((outer, color));
+    }
+    let mut mesh = egui::epaint::Mesh::default();
+    let nstops = stops.len() as u32;
+    let (start, sweep) = if top { (-std::f32::consts::PI, std::f32::consts::PI) } else { (0.0, std::f32::consts::PI) };
+    for i in 0..=N {
+        let t = start + sweep * (i as f32) / (N as f32);
+        let (s, c) = t.sin_cos();
+        let d = vec2(c, s);
+        for (r, col) in &stops {
+            mesh.colored_vertex(center + d * *r, *col);
+        }
+        if i == 0 {
+            continue;
+        }
+        for s in 0..nstops - 1 {
+            let a = (i - 1) * nstops + s;
+            let b = a + 1;
+            let c = i * nstops + s;
+            let d = c + 1;
+            mesh.add_triangle(a, b, c);
+            mesh.add_triangle(b, d, c);
+        }
+    }
+    mesh
 }
 
 /// Selected anchors are drawn slightly deeper than the layer colour (#4f80ff → #3d82ff for Layer 1).
@@ -4426,6 +4561,70 @@ mod tests {
         app.session.execute("prefs.set", &json!({"key": "objectHighlighting", "value": true})).unwrap();
         app.ui.view.smart_guides = false;
         assert_eq!(outlines(&mut app), 0, "Smart Guides off");
+    }
+
+    /// The Eyedropper outlines the object a click would copy while Smart Guides and Object
+    /// Highlighting are on, including a fill when Object Selection by Path Only is on, and
+    /// including an object that is already selected. Shift shows the sampling ring: the top half
+    /// is the colour under the pointer, the bottom half the active fill.
+    #[test]
+    fn eyedropper_highlights_with_smart_guides_and_shift_shows_the_sampling_ring() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+        app.session.execute("paint.setFill", &json!({"ids": [id], "color": "#00ff00"})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        app.select_tool("eyedropper");
+        app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let over = Xf::new(rect, app.view().unwrap()).to_screen(Point::new(150.0, 150.0));
+        let layer = egui::epaint::ColorMode::Solid(c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id.as_u64().unwrap()))));
+        let outlines = |app: &mut VectorcraftApp, shift: bool| {
+            let mut events = vec![egui::Event::PointerMoved(over)];
+            if shift {
+                events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers::SHIFT));
+            }
+            frame(app, &ctx, events);
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(ps) if ps.stroke.width == 1.5 && ps.stroke.color == layer)).count()
+        };
+        assert!(outlines(&mut app, false) > 0, "a fill is highlighted even with path-only selection");
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        assert!(outlines(&mut app, false) > 0, "the selected source is still outlined");
+        app.ui.view.smart_guides = false;
+        assert_eq!(outlines(&mut app, false), 0, "Smart Guides off");
+        app.ui.view.smart_guides = true;
+        app.session.execute("select.none", &json!({})).unwrap();
+        let greens = Color32::from_rgb(0, 255, 0);
+        let reds = Color32::from_rgb(255, 0, 0);
+        let halves = |app: &mut VectorcraftApp, shift: bool, alt: bool| {
+            let mut mods = egui::Modifiers::NONE;
+            mods.shift = shift;
+            mods.alt = alt;
+            frame(app, &ctx, vec![egui::Event::ModifiersChanged(mods), egui::Event::PointerMoved(over)]);
+            let mut found = vec![];
+            for s in shapes(app, &ctx) {
+                let Shape::Mesh(m) = s else { continue };
+                // The ring sits on the pointer. The art's own mesh does not.
+                if m.vertices.iter().any(|v| (v.pos - over).length() > 75.0) {
+                    continue;
+                }
+                // The solid band colour, ignoring the transparent pixels of the soft edge.
+                for v in &m.vertices {
+                    if v.color == greens || v.color == reds {
+                        found.push(v.color);
+                    }
+                }
+            }
+            found
+        };
+        let shown = halves(&mut app, true, false);
+        assert!(shown.contains(&greens), "top half is the fill under the pointer: {shown:?}");
+        assert!(shown.contains(&reds), "bottom half is the active fill: {shown:?}");
+        assert!(halves(&mut app, true, true).is_empty(), "Shift+Alt appends an appearance, so no ring");
+        assert!(halves(&mut app, false, false).is_empty(), "no ring without Shift");
     }
 
     /// Hide Corner Widget for angles greater than (#394): a rectangle's 90° corners lose their

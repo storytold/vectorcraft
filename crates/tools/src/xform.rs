@@ -19,7 +19,7 @@ use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use crate::{Overlay, Tool};
 
 pub use artboard::ArtboardTool;
-pub use eyedropper::EyedropperTool;
+pub use eyedropper::{EyedropperHit, EyedropperTool, read_at};
 pub use free::{DistortMode, FreeTransformTool};
 pub use gradient::GradientTool;
 pub use measure::MeasureTool;
