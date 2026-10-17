@@ -21,6 +21,10 @@ pub struct ViewInfo {
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
     pub snap_to_point: bool,
+    /// View → Snapping → Snap to Tangent.
+    pub snap_tangent: bool,
+    /// View → Snapping → Snap to Perpendicular.
+    pub snap_perpendicular: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
@@ -40,6 +44,8 @@ impl Default for ViewInfo {
             show_bbox: true,
             snap_to_pixel: false,
             snap_to_point: true,
+            snap_tangent: true,
+            snap_perpendicular: true,
             corner_widgets: true,
             screen: None,
             artboard: 0,
@@ -202,6 +208,8 @@ impl Session {
             // wins instead of pixels quietly rounding every drag to whole points (#1816).
             snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
             snap_to_point: view.snap_to_point,
+            snap_tangent: view.snap_tangent,
+            snap_perpendicular: view.snap_perpendicular,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),

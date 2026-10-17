@@ -388,6 +388,12 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Snap to Grid"), app.ui.view.snap_to_grid, true) {
         app.ui.view.snap_to_grid ^= true;
     }
+    if widgets::check(ui, tl!("Snap to Tangent"), app.ui.view.snap_tangent, true) {
+        app.ui.view.snap_tangent ^= true;
+    }
+    if widgets::check(ui, tl!("Snap to Perpendicular"), app.ui.view.snap_perpendicular, true) {
+        app.ui.view.snap_perpendicular ^= true;
+    }
     divider(ui);
     section_header(ui, tl!("Preferences"));
     let fw = super::field_width(ui);

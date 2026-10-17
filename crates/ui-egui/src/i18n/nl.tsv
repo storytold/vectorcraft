@@ -5154,3 +5154,7 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
+	Snapping	Uitlijnen
+	Snap to Tangent	Uitlijnen op raaklijn
+	Snap to Perpendicular	Uitlijnen op loodlijn
+@msg	unknown snap option `{key}` (use {options})	onbekende uitlijnoptie `{key}` (gebruik {options})

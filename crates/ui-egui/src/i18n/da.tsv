@@ -5154,3 +5154,7 @@ swatch	Bright Violet	Kraftig violet
 	Typing	Indtastning
 	Persistent	Vedvarende
 	Library Panel Options	Indstillinger for bibliotekspanel
+	Snapping	Fastgørelse
+	Snap to Tangent	Fastgør til tangent
+	Snap to Perpendicular	Fastgør vinkelret
+@msg	unknown snap option `{key}` (use {options})	ukendt fastgørelsesindstilling `{key}` (brug {options})
