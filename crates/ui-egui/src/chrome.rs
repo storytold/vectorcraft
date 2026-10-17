@@ -739,7 +739,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         .background
                         .jobs
                         .iter()
-                        .filter(|j| !j.label.is_empty())
+                        .filter(|j| !j.label.is_empty() && !j.cancelled())
                         .map(|j| j.label.as_str())
                         .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
                         .collect();

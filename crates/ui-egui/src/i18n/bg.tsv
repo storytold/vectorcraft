@@ -5130,3 +5130,9 @@ theme	Appearance	Външен вид
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
+	Artboard {n} of {total}	Работна област {n} от {total}
+	Encoding and writing the file…	Кодиране и записване на файла…
+@plural	{n} more export waiting|{n} more exports waiting	Още {n} експортиране в изчакване|Още {n} експортирания в изчакване
+	Continue in Background	Продължаване във фонов режим
+	Cancel Export	Отказ от експортирането
+@msg	Export cancelled	Експортирането е отказано

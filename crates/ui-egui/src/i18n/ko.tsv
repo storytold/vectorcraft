@@ -4737,3 +4737,9 @@ lighting	Light	광원
 @msg	too many library panels were opened in this session	이 세션에서 라이브러리 패널을 너무 많이 열었습니다
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	이미지가 {_1} × {_2}픽셀로 한 변이 {LARGE_TRACE_SIDE}을 넘습니다. 추적은 되지만 더 느립니다. 충실도가 낮은 사전 설정이나 이미지의 작은 사본을 사용하면 더 빠릅니다.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	이미지를 {_3} × {_4}에서 축소한 {_1} × {_2}픽셀로 추적했습니다(최대 {_5}메가픽셀).
+	Artboard {n} of {total}	아트보드 {n} / {total}
+	Encoding and writing the file…	파일을 인코딩하고 쓰는 중…
+@plural	{n} more export waiting|{n} more exports waiting	대기 중인 내보내기 {n}개 더
+	Continue in Background	백그라운드에서 계속
+	Cancel Export	내보내기 취소
+@msg	Export cancelled	내보내기를 취소했습니다

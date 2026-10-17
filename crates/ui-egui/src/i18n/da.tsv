@@ -5154,3 +5154,9 @@ swatch	Bright Violet	Kraftig violet
 	Typing	Indtastning
 	Persistent	Vedvarende
 	Library Panel Options	Indstillinger for bibliotekspanel
+	Artboard {n} of {total}	Tegneflade {n} af {total}
+	Encoding and writing the file…	Koder og skriver filen…
+@plural	{n} more export waiting|{n} more exports waiting	{n} eksport mere venter|{n} eksporter mere venter
+	Continue in Background	Fortsæt i baggrunden
+	Cancel Export	Annullér eksport
+@msg	Export cancelled	Eksport annulleret

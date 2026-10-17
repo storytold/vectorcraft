@@ -4753,3 +4753,9 @@ lighting	Light	Світло
 @msg	too many library panels were opened in this session	у цьому сеансі відкрито забагато панелей бібліотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Зображення {_1} × {_2} пікселів, понад {LARGE_TRACE_SIDE} з одного боку: трасування виконується, але повільніше. Стиль із нижчою точністю або менша копія зображення трасуються швидше.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Зображення трасовано в розмірі {_1} × {_2} пікселів, зменшене з {_3} × {_4} (щонайбільше {_5} мегапікселів).
+	Artboard {n} of {total}	Монтажна область {n} з {total}
+	Encoding and writing the file…	Кодування та запис файлу…
+@plural	{n} more export waiting|{n} more exports waiting	Ще {n} експорт в очікуванні|Ще {n} експорти в очікуванні|Ще {n} експортів в очікуванні
+	Continue in Background	Продовжити у фоні
+	Cancel Export	Скасувати експорт
+@msg	Export cancelled	Експорт скасовано

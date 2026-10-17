@@ -5154,3 +5154,9 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
+	Artboard {n} of {total}	Tekengebied {n} van {total}
+	Encoding and writing the file…	Bestand coderen en schrijven…
+@plural	{n} more export waiting|{n} more exports waiting	Nog {n} export in de wachtrij|Nog {n} exports in de wachtrij
+	Continue in Background	Doorgaan op achtergrond
+	Cancel Export	Export annuleren
+@msg	Export cancelled	Export geannuleerd

@@ -25,6 +25,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 mod edit_toolbar;
+pub mod export_progress;
 pub mod find_font;
 pub mod floating;
 pub mod font_menu;
@@ -1406,6 +1407,7 @@ impl VectorcraftApp {
         dock::floating_panel(self, &ctx);
         floating::show(self, &ctx);
         dialogs::show(self, &ctx);
+        export_progress::show(self, &ctx);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);

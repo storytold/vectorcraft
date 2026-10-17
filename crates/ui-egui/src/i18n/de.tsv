@@ -4735,3 +4735,9 @@ effect	Regular	Regelmäßig
 @msg	too many library panels were opened in this session	in dieser Sitzung wurden zu viele Bibliotheksbedienfelder geöffnet
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Das Bild hat {_1} × {_2} Pixel, mehr als {LARGE_TRACE_SIDE} auf einer Seite: Es wird nachgezeichnet, aber langsamer. Eine Vorgabe mit geringerer Detailtreue oder eine kleinere Kopie des Bildes geht schneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Das Bild wurde mit {_1} × {_2} Pixeln nachgezeichnet, verkleinert von {_3} × {_4} (höchstens {_5} Megapixel).
+	Artboard {n} of {total}	Zeichenfläche {n} von {total}
+	Encoding and writing the file…	Datei wird codiert und geschrieben…
+@plural	{n} more export waiting|{n} more exports waiting	{n} weiterer Export wartet|{n} weitere Exporte warten
+	Continue in Background	Im Hintergrund fortsetzen
+	Cancel Export	Export abbrechen
+@msg	Export cancelled	Export abgebrochen

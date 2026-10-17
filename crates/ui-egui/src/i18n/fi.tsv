@@ -5124,3 +5124,9 @@ mark-style	Japanese	Japanilainen
 @msg	too many library panels were opened in this session	tässä istunnossa on avattu liian monta kirjastopaneelia
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Kuva on {_1} × {_2} kuvapistettä, yhdeltä sivultaan yli {LARGE_TRACE_SIDE}: se jäljitetään, mutta hitaammin. Pienemmän tarkkuuden esiasetus tai kuvan pienempi kopio jäljittyy nopeammin.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Kuva jäljitettiin kokoon {_1} × {_2} kuvapistettä pienennettynä koosta {_3} × {_4} (enintään {_5} megapikseliä).
+	Artboard {n} of {total}	Piirtoalusta {n}/{total}
+	Encoding and writing the file…	Tiedostoa koodataan ja kirjoitetaan…
+@plural	{n} more export waiting|{n} more exports waiting	{n} vienti odottaa|{n} vientiä odottaa
+	Continue in Background	Jatka taustalla
+	Cancel Export	Peruuta vienti
+@msg	Export cancelled	Vienti peruutettiin

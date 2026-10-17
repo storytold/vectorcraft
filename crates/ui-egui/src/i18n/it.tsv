@@ -4773,3 +4773,9 @@ lighting	Light	Luce
 @msg	too many library panels were opened in this session	in questa sessione sono stati aperti troppi pannelli libreria
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	L’immagine è di {_1} × {_2} pixel, più di {LARGE_TRACE_SIDE} su un lato: viene vettorializzata, ma più lentamente. Un predefinito a fedeltà più bassa o una copia più piccola dell’immagine è più veloce.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	L’immagine è stata vettorializzata a {_1} × {_2} pixel, ridotta da {_3} × {_4} (al massimo {_5} megapixel).
+	Artboard {n} of {total}	Tavola da disegno {n} di {total}
+	Encoding and writing the file…	Codifica e scrittura del file…
+@plural	{n} more export waiting|{n} more exports waiting	{n} altra esportazione in attesa|{n} altre esportazioni in attesa
+	Continue in Background	Continua in background
+	Cancel Export	Annulla esportazione
+@msg	Export cancelled	Esportazione annullata

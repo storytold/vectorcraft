@@ -5146,3 +5146,9 @@ imageTrace	Outline	Körvonal
 @msg	too many library panels were opened in this session	ebben a munkamenetben túl sok könyvtárpanel nyílt meg
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A kép {_1} × {_2} képpont, egyik oldalán több mint {LARGE_TRACE_SIDE}: a vektorizálás megtörténik, de lassabban. Kisebb hűségű előbeállítással vagy a kép kisebb másolatával gyorsabb.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A kép vektorizálása {_1} × {_2} képponton történt, {_3} × {_4} méretről kicsinyítve (legfeljebb {_5} megapixel).
+	Artboard {n} of {total}	Rajztábla: {n} / {total}
+	Encoding and writing the file…	A fájl kódolása és írása…
+@plural	{n} more export waiting|{n} more exports waiting	Még {n} exportálás várakozik
+	Continue in Background	Folytatás a háttérben
+	Cancel Export	Exportálás megszakítása
+@msg	Export cancelled	Az exportálás megszakítva

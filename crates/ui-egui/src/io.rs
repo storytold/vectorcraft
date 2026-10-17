@@ -3,7 +3,9 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
+use vectorcraft_doc::cancel;
 use vectorcraft_engine::EngineError;
+use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
 use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan, TEMPLATE_FORMATS};
 
 use crate::background::{self, Writer};
@@ -652,6 +654,25 @@ pub fn recent_files(app: &VectorcraftApp) -> &[String] {
     &r[..r.len().min(app.session.prefs.recent_files_count as usize)]
 }
 
+/// The status once an export was cancelled.
+pub const EXPORT_CANCELLED: &str = "Export cancelled";
+
+/// File → Cancel Export (the progress dialog's Cancel): every export running in the background
+/// stops and writes nothing more → `{cancelled: n}`.
+pub fn cancel_exports(app: &mut VectorcraftApp) -> Value {
+    let n = app.background.cancel_exports();
+    if n > 0 {
+        app.status(EXPORT_CANCELLED);
+    }
+    json!({ "cancelled": n })
+}
+
+/// The progress dialog's Continue in Background: the exports go on, shown in the status bar only
+/// → `{hidden: n}`.
+pub fn hide_exports(app: &mut VectorcraftApp) -> Value {
+    json!({ "hidden": app.background.hide_exports() })
+}
+
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
 /// `document.export` options in `params` (artboard, range, useArtboards, selectedOnly, ppi, SVG
 /// options…): every file it writes (one per artboard, linked images) goes next to `path`. The
@@ -681,18 +702,31 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // Background Export: encoded and written from this snapshot while editing goes on.
     let label = format!("Exporting {}", fileio::file_name(&path));
     let (params, target) = (params.clone(), path.clone());
+    // The progress dialog's counts and Cancel: a cancelled export stops drawing and never starts
+    // writing.
+    let progress = Progress::new();
+    let (reporting, asked) = (progress.clone(), progress.clone());
     let work = move |write: Writer| {
-        let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
-        let files = write_encoded(write, &doc, &path, &enc)?;
-        let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
-        if files.len() > 1 {
-            out["files"] = json!(files);
-        }
-        Ok(out)
+        progress::scope(&reporting, || {
+            cancel::check().map_err(|e| e.to_string())?;
+            let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
+            cancel::check().map_err(|e| e.to_string())?;
+            let files = write_encoded(write, &doc, &path, &enc)?;
+            let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
+            if files.len() > 1 {
+                out["files"] = json!(files);
+            }
+            Ok(out)
+        })
     };
     let enabled = app.session.prefs.background_export;
     let failed = target.clone();
-    let mut r = background::run(app, enabled, label, None, work, move |app, r| {
+    let mut r = background::run_with_progress(app, enabled, label, None, Some(progress), work, move |app, r| {
+        // A file written before the Cancel arrived is reported as written.
+        if r.is_err() && asked.cancelled() {
+            app.status(EXPORT_CANCELLED);
+            return Ok(json!({ "cancelled": true }));
+        }
         let r = r.inspect_err(|e| report_write_error(app, true, &failed, e))?;
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),

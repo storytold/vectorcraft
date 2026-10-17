@@ -4753,3 +4753,9 @@ theme	Appearance	Giao diện
 @msg	too many library panels were opened in this session	đã mở quá nhiều bảng thư viện trong phiên này
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Ảnh có kích thước {_1} × {_2} điểm ảnh, hơn {LARGE_TRACE_SIDE} ở một cạnh: ảnh vẫn được dò, nhưng chậm hơn. Một thiết lập sẵn có độ trung thực thấp hơn hoặc một bản sao nhỏ hơn của ảnh sẽ dò nhanh hơn.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Ảnh đã được dò ở {_1} × {_2} điểm ảnh, thu nhỏ từ {_3} × {_4} (tối đa {_5} megapixel).
+	Artboard {n} of {total}	Bảng vẽ {n} / {total}
+	Encoding and writing the file…	Đang mã hóa và ghi tệp…
+@plural	{n} more export waiting|{n} more exports waiting	Còn {n} lượt xuất đang chờ
+	Continue in Background	Tiếp tục trong nền
+	Cancel Export	Hủy xuất
+@msg	Export cancelled	Đã hủy xuất

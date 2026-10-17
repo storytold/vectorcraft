@@ -742,6 +742,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.openRecent30", "Open Recent File 30", "", "{}"),
     ("file.reveal", "Show in Folder", "", "{} show the document's file in the system file manager (desktop) → {path}"),
     (
+        "file.cancelExport",
+        "Cancel Export",
+        "",
+        "{} stop every export running in the background (Background Export): an export stops between artboards and writes no file once cancelled → {cancelled: n}",
+    ),
+    (
+        "file.exportInBackground",
+        "Continue in Background",
+        "",
+        "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
@@ -1095,6 +1107,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         "file.reveal" => io::reveal(app),
+        "file.cancelExport" => Ok(io::cancel_exports(app)),
+        "file.exportInBackground" => Ok(io::hide_exports(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -2214,6 +2228,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "file.place"
         | "file.export.svg"
         | "file.export.png"

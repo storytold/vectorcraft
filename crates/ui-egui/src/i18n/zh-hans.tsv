@@ -4996,3 +4996,9 @@ lighting	Light	光源
 @msg	too many library panels were opened in this session	本次会话中打开的库面板过多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	图像为 {_1} × {_2} 像素，某一边超过 {LARGE_TRACE_SIDE}：会进行描摹，但速度较慢。使用保真度较低的预设或图像的较小副本会更快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	图像已按 {_1} × {_2} 像素描摹，由 {_3} × {_4} 缩小而来（最多 {_5} 百万像素）。
+	Artboard {n} of {total}	画板 {n} / {total}
+	Encoding and writing the file…	正在编码并写入文件…
+@plural	{n} more export waiting|{n} more exports waiting	另有 {n} 个导出等待中
+	Continue in Background	在后台继续
+	Cancel Export	取消导出
+@msg	Export cancelled	已取消导出

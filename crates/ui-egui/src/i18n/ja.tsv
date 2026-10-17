@@ -4814,3 +4814,9 @@ lighting	Light	ライト
 @msg	too many library panels were opened in this session	このセッションで開いたライブラリパネルが多すぎます
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	画像は {_1} × {_2} ピクセルで、一辺が {LARGE_TRACE_SIDE} を超えています。トレースはできますが、時間がかかります。忠実度の低いプリセットや画像の小さいコピーを使うと速くなります。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	画像は {_3} × {_4} から縮小した {_1} × {_2} ピクセルでトレースされました (最大 {_5} メガピクセル)。
+	Artboard {n} of {total}	アートボード {n} / {total}
+	Encoding and writing the file…	ファイルをエンコードして書き込み中…
+@plural	{n} more export waiting|{n} more exports waiting	待機中の書き出し: あと {n} 件
+	Continue in Background	バックグラウンドで続行
+	Cancel Export	書き出しをキャンセル
+@msg	Export cancelled	書き出しをキャンセルしました

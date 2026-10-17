@@ -5116,3 +5116,9 @@ theme	Appearance	Utseende
 @msg	too many library panels were opened in this session	för många bibliotekspaneler har öppnats i den här sessionen
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Bilden är {_1} × {_2} pixlar, mer än {LARGE_TRACE_SIDE} på en sida: den vektoriseras, men långsammare. En förinställning med lägre återgivning eller en mindre kopia av bilden går snabbare.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Bilden vektoriserades vid {_1} × {_2} pixlar, nedskalad från {_3} × {_4} (högst {_5} megapixlar).
+	Artboard {n} of {total}	Rityta {n} av {total}
+	Encoding and writing the file…	Kodar och skriver filen…
+@plural	{n} more export waiting|{n} more exports waiting	{n} export till väntar|{n} exporter till väntar
+	Continue in Background	Fortsätt i bakgrunden
+	Cancel Export	Avbryt export
+@msg	Export cancelled	Exporten avbröts

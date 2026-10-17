@@ -40,6 +40,7 @@ pub mod pdf;
 mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
+pub mod progress;
 pub mod psdread;
 mod save;
 mod screens;

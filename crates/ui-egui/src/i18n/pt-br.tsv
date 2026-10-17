@@ -5077,3 +5077,9 @@ mark-style	Japanese	Japonesas
 @msg	too many library panels were opened in this session	foram abertos painéis de biblioteca demais nesta sessão
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A imagem tem {_1} × {_2} pixels, mais de {LARGE_TRACE_SIDE} em um lado: ela é traçada, mas mais devagar. Uma predefinição de menor fidelidade ou uma cópia menor da imagem traça mais rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A imagem foi traçada em {_1} × {_2} pixels, reduzida de {_3} × {_4} (no máximo {_5} megapixels).
+	Artboard {n} of {total}	Mesa de Trabalho {n} de {total}
+	Encoding and writing the file…	Codificando e gravando o arquivo…
+@plural	{n} more export waiting|{n} more exports waiting	Mais {n} exportação aguardando|Mais {n} exportações aguardando
+	Continue in Background	Continuar em Segundo Plano
+	Cancel Export	Cancelar Exportação
+@msg	Export cancelled	Exportação cancelada
