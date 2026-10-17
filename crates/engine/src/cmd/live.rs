@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easeIn?/easeOut?/colorEaseIn?/colorEaseOut?: pct 0..100 (as in object.blend.options)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easeIn?: pct, easeOut?: pct, colorEaseIn?: pct, colorEaseOut?: pct (0..100, as in object.blend.options)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
             has_doc,
             blend_make
         ),

@@ -5154,3 +5154,8 @@ swatch	Bright Violet	Violet cerah
 	Typing	Mengetik
 	Persistent	Persisten
 	Library Panel Options	Opsi panel pustaka
+	Ease In:	Awal halus:
+	Ease Out:	Akhir halus:
+	Color Ease In:	Awal warna halus:
+	Color Ease Out:	Akhir warna halus:
+	Easing (0% = even)	Percepatan (0% = merata)

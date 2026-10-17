@@ -5154,3 +5154,8 @@ swatch	Bright Violet	Kraftig violet
 	Typing	Indtastning
 	Persistent	Vedvarende
 	Library Panel Options	Indstillinger for bibliotekspanel
+	Ease In:	Blød start:
+	Ease Out:	Blød afslutning:
+	Color Ease In:	Blød farvestart:
+	Color Ease Out:	Blød farveafslutning:
+	Easing (0% = even)	Acceleration (0 % = jævn)
