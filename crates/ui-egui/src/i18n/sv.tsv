@@ -4975,6 +4975,11 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+# 3D light management.
+	Lights	Ljuskällor
+	Add Light	Lägg till ljus
+	Delete Light	Ta bort ljus
+3d	Light	Ljus
 	 cancels  |  Double-click the tool for options	 avbryter  |  Dubbelklicka på verktyget för alternativ
 	 out from a highlighted edge to place its dimension  |  	 utåt från en framhävd kant för att placera dess mått  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	En äldre .ai-fil rymmer en rityta: varje rityta du markerar sparas som en separat fil.

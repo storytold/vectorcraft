@@ -4894,6 +4894,11 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+# 3D light management.
+	Lights	Światła
+	Add Light	Dodaj światło
+	Delete Light	Usuń światło
+3d	Light	Światło
 	Registration:	Punkt rejestracji:
 	Legacy (version 7)	Starsza (wersja 7)
 	Transparent Images:	Przezroczyste obrazy:

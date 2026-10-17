@@ -27,7 +27,10 @@ fn faces(art: &Node) -> Vec<&Node> {
 
 fn fill_rgb(n: &Node) -> [f32; 3] {
     match &n.appearance.items[0] {
-        AppearanceItem::Fill(f) => f.paint.color().unwrap().to_rgb(),
+        AppearanceItem::Fill(f) => match &f.paint {
+            Paint::Gradient(g) => g.gradient.sample(0.5).0.to_rgb(),
+            p => p.color().unwrap().to_rgb(),
+        },
         _ => panic!("a fill first"),
     }
 }
@@ -183,10 +186,12 @@ fn an_earlier_perspective_strength_draws_as_its_angle() {
 #[test]
 fn an_earlier_light_direction_shades_as_its_rotation_and_height() {
     fn colours(n: &Node, out: &mut Vec<[f32; 3]>) {
-        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first()
-            && let Some(c) = f.paint.color()
-        {
-            out.push(c.to_rgb());
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first() {
+            if let Paint::Gradient(g) = &f.paint {
+                out.extend(g.gradient.stops.iter().map(|s| s.color.to_rgb()));
+            } else if let Some(c) = f.paint.color() {
+                out.push(c.to_rgb());
+            }
         }
         for c in n.children().into_iter().flatten() {
             colours(c, out);
@@ -264,4 +269,53 @@ fn inflate_reads_twist_taper_and_cap() {
     let d = inflate_options(&json!({}));
     assert_eq!((d.twist, d.taper, d.cap), (0.0, 1.0, true));
     assert_eq!(crate::default_params(INFLATE).unwrap()["cap"], json!(true));
+}
+
+#[test]
+fn legacy_white_inflate_keeps_polygon_faces_and_its_seam_range() {
+    let mut n = square_node();
+    n.appearance.effects.push(fx(INFLATE, json!({})));
+    let art = solid_art(&n).unwrap();
+    let original = faces(&art);
+    assert!(original.len() > 1000);
+    assert!(original.iter().any(|f| f.path_data().unwrap().subpaths.iter().any(|p| p.anchors.len() > 3)), "legacy cells remain polygons");
+    for face in original {
+        assert!(matches!(face.kind, NodeKind::Path { .. }));
+        let AppearanceItem::Stroke(stroke) = &face.appearance.items[1] else { panic!("seam") };
+        assert!((0.05..=0.75).contains(&stroke.width));
+        assert_eq!(stroke.join, vectorcraft_doc::LineJoin::Miter);
+    }
+    // A tiny shape exercises the lower bound, which otherwise disappears at grazing angles.
+    n.transform(Affine::scale(0.001), false);
+    let art = solid_art(&n).unwrap();
+    assert!(faces(&art).iter().any(|face| matches!(&face.appearance.items[1], AppearanceItem::Stroke(s) if s.width == 0.05)));
+    // An explicit white light overrides a stale legacy color without switching shading paths.
+    n.appearance.effects[0].params = json!({"lightColor":"#ff0000","lights":[{}]});
+    let art = solid_art(&n).unwrap();
+    assert!(faces(&art).iter().all(|face| matches!(face.kind, NodeKind::Path { .. })));
+}
+
+#[test]
+fn colored_solid_inflate_batches_channels_and_clips_once_per_surface() {
+    let mut n = square_node();
+    n.appearance.effects.push(fx(INFLATE, json!({"lights":[{"color":"#ff0000"},{"color":"#0000ff"}]})));
+    let art = solid_art(&n).unwrap();
+    fn count(n: &Node) -> (usize, usize, usize) {
+        let (mut groups, mut clips, mut paths) = match &n.kind {
+            NodeKind::Group { clip, .. } => (1, usize::from(*clip), 0),
+            NodeKind::Path { .. } => (0, 0, 1),
+            _ => (0, 0, 0),
+        };
+        for child in n.children().into_iter().flatten() {
+            let (g, c, p) = count(child);
+            groups += g;
+            clips += c;
+            paths += p;
+        }
+        (groups, clips, paths)
+    }
+    let (groups, clips, paths) = count(&art);
+    assert!(paths > 1000, "exercise a tessellated surface");
+    assert_eq!(clips, 1);
+    assert_eq!(groups, 7, "group count must not grow with triangle count");
 }

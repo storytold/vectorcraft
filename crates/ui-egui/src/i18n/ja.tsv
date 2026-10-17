@@ -4706,6 +4706,11 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+# 3D light management.
+	Lights	ライト一覧
+	Add Light	ライトを追加
+	Delete Light	ライトを削除
+3d	Light	ライト
 	Registration:	基準点:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	寸法を作成

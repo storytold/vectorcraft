@@ -4628,6 +4628,11 @@ effect	Regular	Regelmäßig
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+# 3D light management.
+	Lights	Lichter
+	Add Light	Licht hinzufügen
+	Delete Light	Licht löschen
+3d	Light	Licht
 	Registration:	Registrierung:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Bemaßung

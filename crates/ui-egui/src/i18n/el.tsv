@@ -4779,6 +4779,11 @@ theme	Appearance	Εμφάνιση
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+# 3D light management.
+	Lights	Φώτα
+	Add Light	Προσθήκη φωτός
+	Delete Light	Διαγραφή φωτός
+3d	Light	Φως
 @msg	give the path `id`	Δώστε το `id` της διαδρομής
 	Fill and Stroke Controls	Στοιχεία ελέγχου γεμίσματος και περιγράμματος
 @msg	give a fraction `t` from 0 to 1	Δώστε μια κλασματική τιμή `t` από 0 έως 1

@@ -3979,6 +3979,11 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+# 3D light management.
+	Lights	Luzes
+	Add Light	Adicionar luz
+	Delete Light	Excluir luz
+3d	Light	Luz
 
 # Completeness follow-up (#1914): remaining UI strings and messages.
 	Glowing Edges	Bordas Brilhantes

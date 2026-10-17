@@ -3997,6 +3997,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+# 3D light management.
+	Lights	光源清單
+	Add Light	新增光源
+	Delete Light	刪除光源
+3d	Light	光源
 	Registration:	對齊點:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	建立尺寸標註

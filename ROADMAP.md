@@ -9,7 +9,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (about 145 community PRs of 2026-10-17: image-decode overflow guards, opaque floating panels, MCP export cancel and progress, editable Illustrator EPS import, scoped `doc_inspect`, Dutch, Danish and Indonesian, Simplified Chinese messages, screen-reader names; headline numbers unchanged; about 160 community PRs of 2026-10-15/16: PDF import crash fixes, Dimension tool, legacy `.ai` save, Intertwine, web pen input, Image Trace fixes, `.ai`/EPS/PDF import fidelity, Bulgarian, Greek, Swedish and Finnish catalogs; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (3D lighting: one to ten colored lights, smooth colored Inflate, legacy white-light appearance preserved; surface batching and restored seam minimum; scores and estimates unchanged; about 145 community PRs of 2026-10-17: image-decode overflow guards, opaque floating panels, MCP export cancel and progress, editable Illustrator EPS import, scoped `doc_inspect`, Dutch, Danish and Indonesian, Simplified Chinese messages, screen-reader names; headline numbers unchanged; about 160 community PRs of 2026-10-15/16: PDF import crash fixes, Dimension tool, legacy `.ai` save, Intertwine, web pen input, Image Trace fixes, `.ai`/EPS/PDF import fidelity, Bulgarian, Greek, Swedish and Finnish catalogs; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -179,6 +179,9 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Colored Inflate: shared membrane normals and smooth RGB vector ramps replace flat polygon bands; channel groups are batched per solid-fill surface. White-light Inflate retains its original polygons, paint composition and seam joins; the 0.05 seam minimum is restored. Scores and hour estimates unchanged. |
+| 2026-10-16 | minor | 3D lighting: one to ten directional lights, a selectable light list, Add Light and Delete Light, independent settings and artboard gestures; ambient applied once and smooth RGB vector export; scores and hour estimates unchanged |
+| 2026-10-16 | minor | 3D lighting: opaque RGB Color for the shared directional light, with neutral ambient, preview/reset controls and smooth vector Revolve shading; scores and hour estimates unchanged |
 | 2026-10-14 | minor | G11: open-path anchor Delete removes adjoining segments without bridging the gap; explicit Remove Anchors keeps its reconnect/refit behavior. Scores and hours unchanged. |
 | 2026-10-14 | minor | Document fonts register every explicitly supplied craft-fonts family after the existing Japanese, Arabic and Thai prefix; optional empty input remains supported. Headline scores and estimates are unchanged. |
 | 2026-10-14 | minor | Progress log rows for the later merges of 2026-10-14 (#1630–#1875 as listed there); headline numbers unchanged. |

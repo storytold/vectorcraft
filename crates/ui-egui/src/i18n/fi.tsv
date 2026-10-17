@@ -4959,6 +4959,11 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+# 3D light management.
+	Lights	Valot
+	Add Light	Lisää valo
+	Delete Light	Poista valo
+3d	Light	Valo
 	2up	2 sivua
 	4up	4 sivua
 	A6	A6

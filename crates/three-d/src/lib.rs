@@ -11,8 +11,14 @@ mod visibility;
 pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, plane};
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
-pub use shading::ShadeGradient;
+pub use shading::{LightGradient, RgbGradient, ShadeGradient};
+mod lights;
+pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
+#[cfg(test)]
+mod tests_lighting;
+#[cfg(test)]
+mod tests_multiple_lights;
 
 use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect, Vec2, kurbo::ParamCurveDeriv};
 
@@ -67,9 +73,13 @@ pub struct Revolve {
     pub light_height: f64,
     /// The light is behind the object (Move light to the back of object) rather than in front.
     pub light_behind: bool,
+    /// Opaque RGB light color, each channel 0..1. Ambient light stays neutral.
+    pub light_color: [f64; 3],
     pub light_intensity: f64,
     /// Softness, 0 (a sharp fall-off) to 1: how far round the object the light reaches.
     pub light_softness: f64,
+    /// Explicit light list. None retains the earlier single-light parameters exactly.
+    pub lights: Option<Lights>,
     /// Ambient Light, 0 to 2.
     pub ambient: f64,
     pub shade: bool,
@@ -98,8 +108,10 @@ impl Default for Revolve {
             light_rotation: DEFAULT_LIGHT.0,
             light_height: DEFAULT_LIGHT.1,
             light_behind: false,
+            light_color: [1.0; 3],
             light_intensity: 0.8,
             light_softness: 0.0,
+            lights: None,
             ambient: 0.25,
             shade: true,
             smooth_shading: true,
@@ -156,9 +168,46 @@ fn brightness(o: &Revolve, n: V3, l: V3) -> f64 {
     if !o.shade {
         return 1.0;
     }
+    if o.lights.is_some() {
+        let rgb = illumination(o, n, l);
+        return (rgb[0] + rgb[1] + rgb[2]) / 3.0;
+    }
     let s = o.light_softness;
     let lit = ((n.dot(l) + s) / (1.0 + s)).max(0.0);
     (o.ambient + o.light_intensity * lit).clamp(0.0, 1.0)
+}
+
+fn direct_light(o: &Revolve, n: V3, l: V3) -> f64 {
+    o.light_intensity * ((n.dot(l) + o.light_softness) / (1.0 + o.light_softness)).max(0.0)
+}
+
+fn illumination(o: &Revolve, n: V3, l: V3) -> [f64; 3] {
+    if !o.shade {
+        return [1.0; 3];
+    }
+    if o.lights.is_some() {
+        return unclipped_illumination(o, n, l).map(|v| v.clamp(0.0, 1.0));
+    }
+    let direct = direct_light(o, n, l);
+    o.light_color.map(|c| (o.ambient + direct * c).clamp(0.0, 1.0))
+}
+
+fn unclipped_illumination(o: &Revolve, n: V3, legacy_light: V3) -> [f64; 3] {
+    let mut rgb = [o.ambient; 3];
+    if let Some(lights) = o.lights {
+        for light in lights.iter() {
+            let direct = light.direct(n);
+            for (out, color) in rgb.iter_mut().zip(light.color) {
+                *out += direct * color;
+            }
+        }
+    } else {
+        let direct = direct_light(o, n, legacy_light);
+        for (out, color) in rgb.iter_mut().zip(o.light_color) {
+            *out += direct * color;
+        }
+    }
+    rgb
 }
 
 fn finite(v: f64, fallback: f64, min: f64, max: f64) -> f64 {
@@ -255,6 +304,7 @@ impl Revolve {
             light_height: finite(self.light_height, DEFAULT_LIGHT.1, 0.0, 90.0),
             light_intensity: finite(self.light_intensity, 0.8, 0.0, 1.0),
             light_softness: finite(self.light_softness, 0.0, 0.0, 1.0),
+            light_color: self.light_color.map(|c| finite(c, 1.0, 0.0, 1.0)),
             ambient: finite(self.ambient, 0.25, 0.0, 2.0),
             ..self
         }
@@ -277,6 +327,10 @@ pub struct Face {
     pub depth: f64,
     pub brightness: f64,
     pub gradient: Option<ShadeGradient>,
+    /// RGB illumination and its unclipped smooth ramp, independent of the legacy white ramp.
+    pub illumination: [f64; 3],
+    pub light_gradient: Option<LightGradient>,
+    pub rgb_gradient: Option<RgbGradient>,
     /// Curved vector boundary; points remain a bounded visibility approximation.
     pub outline: Option<PathData>,
     /// A single endpoint disk or sector, with its axis centre first in points.
@@ -356,11 +410,38 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
     } else {
         (flat_brightness, None)
     };
+    let (illumination, light_gradient) = if let Some(normals) = normals {
+        let normals: Vec<_> = normals.iter().map(|n| if n.dot(normal) < 0.0 { V3(-n.0, -n.1, -n.2) } else { *n }).collect();
+        let mut rgb = [0.0; 3];
+        for n in &normals {
+            for (out, value) in rgb.iter_mut().zip(illumination(&o, *n, light)) {
+                *out += value;
+            }
+        }
+        let rgb = if normals.is_empty() { illumination(&o, normal, light) } else { rgb.map(|v| v / normals.len() as f64) };
+        let ramp = if o.shade && o.lights.is_none() && o.light_color != [1.0; 3] {
+            let values: Vec<_> = normals.iter().map(|n| direct_light(&o, *n, light)).collect();
+            ShadeGradient::triangle(&points, &values).map(|diffuse| LightGradient { diffuse, ambient: o.ambient, color: o.light_color })
+        } else {
+            None
+        };
+        (rgb, ramp)
+    } else {
+        (illumination(&o, normal, light), None)
+    };
+    let rgb_gradient = normals.filter(|_| o.shade && o.lights.is_some()).and_then(|normals| {
+        let values: Vec<_> =
+            normals.iter().map(|n| unclipped_illumination(&o, if n.dot(normal) < 0.0 { V3(-n.0, -n.1, -n.2) } else { *n }, light)).collect();
+        RgbGradient::triangle(&points, &values)
+    });
     Ok(Some(Face {
         points,
         depth: vertices.iter().map(|v| v.2).sum::<f64>() / vertices.len() as f64,
         brightness,
         gradient,
+        illumination,
+        light_gradient,
+        rgb_gradient,
         outline: None,
         cap: false,
         visibility_pieces: None,

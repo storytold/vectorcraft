@@ -5057,6 +5057,11 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+# 3D light management.
+	Lights	Lumières
+	Add Light	Ajouter une lumière
+	Delete Light	Supprimer la lumière
+3d	Light	Lumière
 	Registration:	Repère d'alignement :
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Cote

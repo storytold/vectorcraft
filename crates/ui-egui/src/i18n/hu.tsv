@@ -5043,6 +5043,11 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+# 3D light management.
+	Lights	Fények
+	Add Light	Fény hozzáadása
+	Delete Light	Fény törlése
+3d	Light	Fény
 	Registration:	Regisztráció:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Méret

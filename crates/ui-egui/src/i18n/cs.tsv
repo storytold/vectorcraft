@@ -5057,6 +5057,11 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+# 3D light management.
+	Lights	Světla
+	Add Light	Přidat světlo
+	Delete Light	Odstranit světlo
+3d	Light	Světlo
 	Registration:	Registrace:
 # Dimension tool (linked dimension annotations)
 	Display	Zobrazení

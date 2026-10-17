@@ -4630,6 +4630,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+# 3D light management.
+	Lights	광원 목록
+	Add Light	광원 추가
+	Delete Light	광원 삭제
+3d	Light	광원
 	Registration:	기준점:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	치수

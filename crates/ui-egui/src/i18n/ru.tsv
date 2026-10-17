@@ -4662,6 +4662,11 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+# 3D light management.
+	Lights	Источники света
+	Add Light	Добавить свет
+	Delete Light	Удалить свет
+3d	Light	Свет
 	Registration:	Регистрация:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Размер

@@ -4755,6 +4755,11 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+# 3D light management.
+	Lights	Lichtbronnen
+	Add Light	Lichtbron toevoegen
+	Delete Light	Lichtbron verwijderen
+3d	Light	Lichtbron
 	2up	2up
 	4up	4up
 	A6	A6

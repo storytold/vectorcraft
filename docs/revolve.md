@@ -10,8 +10,9 @@ line, give it a nonzero offset. A vertical line at zero offset lies on the axis 
 **Revolve angle** sweeps 0 to 360 degrees. **Rotation X/Y/Z** rotates the viewing direction, with all three axes defaulting to 0 degrees. **Perspective**
 runs 0° to 160°, as documented: 0° is an orthographic view, and wider angles bring the eye nearer (see
 [three-d.md](three-d.md#perspective)). **Segments** controls radial resolution (8 to 128 for a full turn).
-Lighting is one directional light with the documented Light Settings (see [three-d.md](three-d.md#lighting)):
-**Intensity**, **Rotation**, **Height**, **Softness** and **Ambient Light**, and **Light behind the object**.
+Lighting supports one to ten directional lights with the documented Light Settings (see [three-d.md](three-d.md#lighting)):
+**Color**, **Intensity**, **Rotation**, **Height**, **Softness** and **Ambient Light**, and **Light behind the object**.
+Color is white by default, with a picker and a reset dot. Colored light preserves neutral ambient illumination.
 Turn **Shading** off to keep the source paint without lighting.
 
 Shaded Revolve surfaces automatically use smooth lighting from the profile's tangents,
@@ -44,7 +45,7 @@ horizontally to turn the light round the object; drag the **Height** line or its
 raise or lower it. The labels remain usable when the ring shrinks to a point (Height 90°).
 Hold Shift to snap to 15-degree increments. Light gestures update their matching fields without
 rotating the object, and keep the same temporary preview, Escape, Cancel and undo behaviour.
-Intensity, Softness and Ambient Light are draggable fields and sliders.
+Intensity, Softness and Ambient Light are draggable fields and sliders. The Lights list selects which light the gizmo and settings edit; Add Light and Delete Light manage up to ten lights, keeping at least one. Ambient is shared and applied once. Preview, Cancel, Reset all and undo include the whole list.
 
 **Shading** off hides the light gizmo and disables lighting controls. Switch to **Rotation** to return
 to the object rings. **Show axis** in **Advanced** displays the source's vertical axis on the object.
@@ -89,7 +90,7 @@ with the standard command.
 - Open profiles have circular end caps by default; turning Cap off keeps them open. Partial-sweep angular cut sides remain open. Closed profile boundaries are swept as provided.
 - One Revolve per source object. Edit its options rather than applying another.
 - Object-level Revolve uses the top visible fill, falling back to a stroke. Per-item Revolve uses that item's paint.
-- Smooth diffuse shading, one directional light, no textures, cast shadows or physical materials. Smooth shading interpolates lighting in projected triangles; it does not smooth the silhouette or add specular highlights.
+- Smooth diffuse shading, one to ten directional lights, no textures, cast shadows or physical materials. Smooth shading interpolates lighting in projected triangles; it does not smooth the silhouette or add specular highlights.
 - Faces use back-to-front depth sorting. Caps facing the camera cover their rim seams; caps facing away sit behind the body. Intersecting profiles can have incorrect visibility.
 - Curves use sixteen samples per segment; profiles are limited to 1,024 samples and surfaces to 32,768 faces. Smooth shaded side quads become two triangles and share that same limit. A continuous cap retains its original radial mesh cost within this limit. Projected ring curves have a 0.001-point fitting tolerance and a shared 32,768-curve limit.
 - Axis, bounds and ordinary selection handles continue to refer to the editable 2D source profile.

@@ -4998,6 +4998,11 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+# 3D light management.
+	Lights	Luces
+	Add Light	Añadir luz
+	Delete Light	Eliminar luz
+3d	Light	Luz
 	Registration:	Registro:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	Crear cota

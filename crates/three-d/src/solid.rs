@@ -3,17 +3,17 @@
 //! The 2D art is the front of the solid: its outline is extruded backwards along the view's
 //! z-axis, about the centre of its bounds, at the art's own position and size. Planar faces (caps
 //! and the rotated plane) are drawn whole, holes included, so no triangulation is needed; curved
-//! faces (bevels, side walls under twist or taper, inflated surfaces) are cut into small facets
-//! and flat shaded, like Revolve.
+//! faces are cut into small facets. Colored Inflate interpolates shared membrane normals;
+//! bevels and side walls retain their planar lighting.
 //!
 //! Visibility is a painter's algorithm, as for Revolve: faces of a closed solid that face away
 //! from the viewer are left out, the rest are drawn back to front.
 
-use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect};
+use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec2};
 
 use crate::{MAX_FACES, Revolve, V3, eye_distance, perspective_scale};
 
-/// The view shared by every 3D effect: rotation, perspective and one directional light.
+/// The view shared by every 3D effect: rotation, perspective and directional lighting.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
     pub rotation_x: f64,
@@ -24,8 +24,10 @@ pub struct View {
     pub light_rotation: f64,
     pub light_height: f64,
     pub light_behind: bool,
+    pub light_color: [f64; 3],
     pub light_intensity: f64,
     pub light_softness: f64,
+    pub lights: Option<crate::Lights>,
     pub ambient: f64,
     pub shade: bool,
 }
@@ -41,8 +43,10 @@ impl Default for View {
             light_rotation: r.light_rotation,
             light_height: r.light_height,
             light_behind: r.light_behind,
+            light_color: r.light_color,
             light_intensity: r.light_intensity,
             light_softness: r.light_softness,
+            lights: r.lights,
             ambient: r.ambient,
             shade: r.shade,
         }
@@ -50,6 +54,12 @@ impl Default for View {
 }
 
 impl View {
+    /// Whether the active light setup needs RGB shading rather than neutral brightness.
+    pub fn has_colored_lights(self) -> bool {
+        let view = self.revolve();
+        view.lights.map_or(view.light_color != [1.0; 3], |lights| lights.iter().any(|light| light.color != [1.0; 3]))
+    }
+
     /// The same rotation, projection and lighting maths as Revolve's.
     fn revolve(self) -> Revolve {
         Revolve {
@@ -60,8 +70,10 @@ impl View {
             light_rotation: self.light_rotation,
             light_height: self.light_height,
             light_behind: self.light_behind,
+            light_color: self.light_color,
             light_intensity: self.light_intensity,
             light_softness: self.light_softness,
+            lights: self.lights,
             ambient: self.ambient,
             shade: self.shade,
             ..Revolve::default()
@@ -205,12 +217,15 @@ impl Default for Inflate {
     }
 }
 
-/// One projected, flat-shaded polygon. Holes are contours of their own (nonzero winding).
+/// One projected polygon. Holes are contours of their own (nonzero winding).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facet {
     pub contours: Vec<Vec<Point>>,
     pub depth: f64,
     pub brightness: f64,
+    pub illumination: [f64; 3],
+    /// Smooth lighting on an inflated triangle, before clipping individual RGB channels.
+    pub rgb_gradient: Option<crate::RgbGradient>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -520,11 +535,37 @@ impl Builder<'_> {
             contours,
             depth,
             brightness: self.camera.brightness(n),
+            illumination: crate::illumination(&self.camera.view, n, self.camera.light),
+            rgb_gradient: None,
             #[cfg(test)]
             view,
         });
         if self.facets.len() > MAX_FACES {
             return Err("The 3D surface is too complex; simplify the shape".into());
+        }
+        Ok(())
+    }
+
+    /// A planar surface triangle with shared, smooth outward normals. Culling and sorting
+    /// still use its geometry, rather than the normals used only for lighting.
+    fn smooth_triangle(&mut self, vertices: [V3; 3], normals: [V3; 3], back: bool) -> Result<(), String> {
+        let contours = vec![vertices.to_vec()];
+        let n = newell(&contours);
+        let n = if back { V3(-n.0, -n.1, -n.2) } else { n };
+        let centre = vertices.iter().fold(V3::default(), |s, v| V3(s.0 + v.0 / 3.0, s.1 + v.1 / 3.0, s.2 + v.2 / 3.0));
+        let flip = !self.closed && self.camera.facing(centre, n.unit()) <= 0.0;
+        let before = self.facets.len();
+        self.face(contours, n, Order::Depth)?;
+        if self.facets.len() == before || !self.camera.view.shade {
+            return Ok(());
+        }
+        let values: Vec<_> = normals
+            .into_iter()
+            .map(|n| crate::unclipped_illumination(&self.camera.view, if flip { V3(-n.0, -n.1, -n.2) } else { n }, self.camera.light))
+            .collect();
+        if let Some(face) = self.facets.last_mut() {
+            let points = face.contours.first().map(Vec::as_slice).unwrap_or_default();
+            face.rgb_gradient = crate::RgbGradient::triangle(points, &values);
         }
         Ok(())
     }
@@ -844,6 +885,7 @@ fn edge_distance(rings: &[Vec<Point>], p: Point) -> f64 {
 /// found among the buckets around it rather than among all the edges.
 struct Edges {
     edges: Vec<(Point, Point)>,
+    normals: Vec<(Vec2, Vec2)>,
     origin: Point,
     size: f64,
     n: usize,
@@ -855,6 +897,20 @@ impl Edges {
         const N: usize = 64;
         let edges: Vec<(Point, Point)> =
             rings.iter().flat_map(|r| r.iter().zip(r.iter().cycle().skip(1)).take(r.len()).map(|(a, b)| (*a, *b))).collect();
+        let normals = rings
+            .iter()
+            .flat_map(|r| {
+                let normal = |i: usize| {
+                    let (x, y) = left(r[i], r[(i + 1) % r.len()]);
+                    Vec2::new(x, y)
+                };
+                (0..r.len()).map(move |i| {
+                    let n = normal(i);
+                    let at = |other: Vec2| if n.dot(other) > 0.7 { (n + other).normalize() } else { n };
+                    (at(normal((i + r.len() - 1) % r.len())), at(normal((i + 1) % r.len())))
+                })
+            })
+            .collect();
         let bounds = edges.iter().fold(None, |b: Option<Rect>, (a, c)| Some(b.map_or(Rect::from_points(*a, *c), |b| b.union_pt(*a).union_pt(*c))));
         let bounds = bounds.unwrap_or(Rect::ZERO);
         let size = (bounds.width().max(bounds.height()) / N as f64).max(1e-9);
@@ -869,7 +925,7 @@ impl Edges {
                 }
             }
         }
-        Self { edges, origin: bounds.origin(), size, n: N, buckets }
+        Self { edges, normals, origin: bounds.origin(), size, n: N, buckets }
     }
 
     /// The bucket row or column of coordinate `v`, from the grid's origin `o` on that axis.
@@ -928,15 +984,22 @@ impl Edges {
     /// The distance from `p` to the nearest edge: the buckets are searched in growing squares
     /// around `p`'s, until no unsearched bucket could hold a nearer edge.
     fn distance(&self, p: Point) -> f64 {
+        self.closest(p).2
+    }
+
+    /// Closest outline point, its inward normal and distance. Curved outline samples share
+    /// corner normals, while a sharp source corner keeps each edge's own direction.
+    fn closest(&self, p: Point) -> (Point, Vec2, f64) {
         let (fx, fy) = ((p.x - self.origin.x) / self.size, (p.y - self.origin.y) / self.size);
         if !fx.is_finite() || !fy.is_finite() {
-            return f64::INFINITY;
+            return (p, Vec2::ZERO, f64::INFINITY);
         }
         let n = self.n as isize;
         let (ci, cj) = ((fx.floor() as isize).clamp(0, n - 1), (fy.floor() as isize).clamp(0, n - 1));
         // How far `p` is outside the grid: the nearest point of the grid to it lies in `p`'s bucket.
         let outside = (fx.clamp(0.0, n as f64) - fx).hypot(fy.clamp(0.0, n as f64) - fy) * self.size;
         let mut best = f64::INFINITY;
+        let mut nearest = (p, Vec2::ZERO);
         for r in 0..n {
             for j in (cj - r)..=(cj + r) {
                 for i in (ci - r)..=(ci + r) {
@@ -945,7 +1008,15 @@ impl Edges {
                     }
                     for k in &self.buckets[(j * n + i) as usize] {
                         if let Some((a, b)) = self.edges.get(*k as usize) {
-                            best = best.min(segment_distance(p, *a, *b));
+                            let d = *b - *a;
+                            let t = if d.hypot2() < 1e-18 { 0.0 } else { ((p - *a).dot(d) / d.hypot2()).clamp(0.0, 1.0) };
+                            let q = Point::new(a.x + d.x * t, a.y + d.y * t);
+                            let distance = p.distance(q);
+                            if distance < best {
+                                best = distance;
+                                let n = self.normals.get(*k as usize).map_or(Vec2::ZERO, |(a, b)| *a * (1.0 - t) + *b * t);
+                                nearest = (q, if n.hypot2() > 0.0 { n.normalize() } else { n });
+                            }
                         }
                     }
                 }
@@ -956,7 +1027,7 @@ impl Edges {
                 break;
             }
         }
-        best
+        (nearest.0, nearest.1, best)
     }
 }
 
@@ -1114,11 +1185,29 @@ impl Membrane {
 
     /// φ at `p`, interpolated between the four nodes around it.
     fn at(&self, p: Point) -> f64 {
+        self.interpolate(p, |i, j| self.phi.get(j * self.nx + i).copied().unwrap_or(0.0))
+    }
+
+    /// Interpolate central node derivatives, rather than differentiating each bilinear cell.
+    /// The latter jumps at every grid line and shows the solver's grid in the lighting.
+    fn gradient(&self, p: Point) -> (f64, f64) {
+        let value = |i, j| self.phi.get(j * self.nx + i).copied().unwrap_or(0.0);
+        let dx = self.interpolate(p, |i, j| {
+            let (a, b) = (i.saturating_sub(1), (i + 1).min(self.nx - 1));
+            (value(b, j) - value(a, j)) / ((b - a).max(1) as f64 * self.step)
+        });
+        let dy = self.interpolate(p, |i, j| {
+            let (a, b) = (j.saturating_sub(1), (j + 1).min(self.ny - 1));
+            (value(i, b) - value(i, a)) / ((b - a).max(1) as f64 * self.step)
+        });
+        (dx, dy)
+    }
+
+    fn interpolate(&self, p: Point, v: impl Fn(usize, usize) -> f64) -> f64 {
         let fx = ((p.x - self.origin.x) / self.step).clamp(0.0, (self.nx - 1) as f64);
         let fy = ((p.y - self.origin.y) / self.step).clamp(0.0, (self.ny - 1) as f64);
         let (i, j) = ((fx.floor() as usize).min(self.nx.saturating_sub(2)), (fy.floor() as usize).min(self.ny.saturating_sub(2)));
         let (tx, ty) = (fx - i as f64, fy - j as f64);
-        let v = |i: usize, j: usize| self.phi.get(j * self.nx + i).copied().unwrap_or(0.0);
         if self.nx < 2 || self.ny < 2 {
             return v(0, 0);
         }
@@ -1126,6 +1215,47 @@ impl Membrane {
         let bottom = v(i, j + 1) * (1.0 - tx) + v(i + 1, j + 1) * tx;
         top * (1.0 - ty) + bottom * ty
     }
+}
+
+/// A bounded ear clipping pass on a simple cell contour. Keep its collinear border nodes:
+/// those shared samples can have different heights once lifted onto the membrane. A tiny
+/// cell containing a complete hole, or a complex/degenerate contour, keeps its original fill.
+fn cell_triangles(pieces: &[Vec<Point>]) -> Option<Vec<[Point; 3]>> {
+    let mut triangles = vec![];
+    for ring in pieces {
+        if ring.len() > 128 || signed_area(ring) <= 0.0 {
+            return None;
+        }
+        let mut ring = ring.clone();
+        ring.dedup_by(|a, b| a.distance(*b) < 1e-9);
+        if ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-9) {
+            ring.pop();
+        }
+        while ring.len() > 3 {
+            let ear = (0..ring.len()).find(|&i| {
+                let n = ring.len();
+                let (a, b, c) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+                if (b - a).cross(c - a) <= 1e-12 {
+                    return false;
+                }
+                !ring.iter().enumerate().any(|(j, p)| {
+                    j != i
+                        && j != (i + n - 1) % n
+                        && j != (i + 1) % n
+                        && (b - a).cross(*p - a) >= -1e-12
+                        && (c - b).cross(*p - b) >= -1e-12
+                        && (a - c).cross(*p - c) >= -1e-12
+                })
+            })?;
+            let n = ring.len();
+            triangles.push([ring[(ear + n - 1) % n], ring[ear], ring[(ear + 1) % n]]);
+            ring.remove(ear);
+        }
+        if let [a, b, c] = ring.as_slice() {
+            triangles.push([*a, *b, *c]);
+        }
+    }
+    Some(triangles)
 }
 
 /// The part of `outline` inside `cell`, as rings (holes running the other way).
@@ -1167,6 +1297,24 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
         }
         height * (m.at(p).max(0.0) / m.peak).sqrt()
     };
+    let normal = |p: Point| {
+        let (dx, dy) = m.gradient(p);
+        let (_, inward, distance) = edges.closest(p);
+        let t = (distance / (2.0 * cell)).clamp(0.0, 1.0);
+        let weight = (1.0 - t).powi(2) * (1.0 + 2.0 * t);
+        let gradient = Vec2::new(dx, dy);
+        let slope = gradient.dot(inward).max(0.0);
+        // The zero boundary condition also fixes the tangential derivative at the outline.
+        // Extrapolated outside solver nodes cannot supply it reliably. Blend to that known
+        // direction and its limiting phi near the rim, without showing the grid in highlights.
+        let gradient = gradient * (1.0 - weight) + inward * (slope * weight);
+        let phi = m.at(p).max(0.0) * (1.0 - weight) + slope * distance * weight;
+        // Multiplying the height-function normal by 2√(peak φ) avoids division by
+        // zero at the rim, where the limiting normal is horizontal.
+        let n = V3(-height * gradient.x, -height * gradient.y, 2.0 * (m.peak * phi).sqrt()).unit();
+        if n.dot(n) > 0.5 { n } else { V3(0.0, 0.0, 1.0) }
+    };
+    let smooth = view.shade && view.has_colored_lights();
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height);
     // Without its back cap the object is a shell open behind, its inside showing.
     let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
@@ -1289,6 +1437,26 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
                             out
                         })
                         .collect();
+                    if height > 0.0
+                        && smooth
+                        && let Some(triangles) = cell_triangles(&pieces)
+                    {
+                        for points in triangles {
+                            let front = points.map(|q| camera.place(q, half + lift(q)));
+                            b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false)?;
+                            if o.both_sides && o.cap {
+                                let back = points.map(|q| camera.place(back_turn.apply(q), -half - lift(q) * back_turn.scale));
+                                let normals = points.map(|q| {
+                                    let n = normal(q);
+                                    // A uniform taper scales all three coordinates equally;
+                                    // twist turns the back normal about the shape's z-axis.
+                                    camera.rotate(V3(back_turn.cos * n.0 - back_turn.sin * n.1, back_turn.sin * n.0 + back_turn.cos * n.1, -n.2))
+                                });
+                                b.smooth_triangle(back, normals, true)?;
+                            }
+                        }
+                        continue;
+                    }
                     let lifts: Vec<Vec<f64>> = pieces.iter().map(|p| p.iter().map(|q| lift(*q)).collect()).collect();
                     // Each piece lifted onto the surface. Its normal is the lifted piece's own average
                     // (Newell's), not the slope at one point: near the edge the surface turns
@@ -1340,3 +1508,7 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
 #[cfg(test)]
 #[path = "tests_solid.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests_inflate_shading.rs"]
+mod tests_inflate_shading;

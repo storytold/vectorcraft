@@ -4755,6 +4755,11 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+# 3D light management.
+	Lights	Lyskilder
+	Add Light	Tilføj lyskilde
+	Delete Light	Slet lyskilde
+3d	Light	Lyskilde
 	2up	2 pr. ark
 	4up	4 pr. ark
 	A6	A6

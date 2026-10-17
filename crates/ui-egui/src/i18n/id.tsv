@@ -4755,6 +4755,11 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+# 3D light management.
+	Lights	Lampu
+	Add Light	Tambah Lampu
+	Delete Light	Hapus Lampu
+3d	Light	Lampu
 	2up	2up
 	4up	4up
 	A6	A6

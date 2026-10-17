@@ -53,6 +53,8 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 && let Some(defaults) = defaults.as_object()
             {
                 d.fields.extend(defaults.clone());
+                d.fields.remove("__light");
+                super::revolve_gizmo::clear(ui.ctx());
             }
         });
     });
@@ -295,13 +297,153 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
         }
     });
     ui.add_enabled_ui(d.bool("shade"), |ui| {
-        // The documented Light Settings, in their order (one white light: no Color yet).
-        number(ui, d, "lightIntensity", tl!("Intensity"), (0.0, 100.0), "%", 1, None);
-        number(ui, d, "lightRotation", tl!("Rotation"), (-180.0, 180.0), "°", 1, None);
-        number(ui, d, "lightHeight", tl!("Height"), (0.0, 90.0), "°", 1, None);
-        number(ui, d, "lightSoftness", tl!("Softness"), (0.0, 100.0), "%", 1, None);
+        light_list(ui, d);
+        let mut selected = selected_light(d);
+        let before = light_record(&selected);
+        // The documented Light Settings, in their order.
+        light_color(ui, &mut selected);
+        number(ui, &mut selected, "lightIntensity", tl!("Intensity"), (0.0, 100.0), "%", 1, None);
+        number(ui, &mut selected, "lightRotation", tl!("Rotation"), (-180.0, 180.0), "°", 1, None);
+        number(ui, &mut selected, "lightHeight", tl!("Height"), (0.0, 90.0), "°", 1, None);
+        number(ui, &mut selected, "lightSoftness", tl!("Softness"), (0.0, 100.0), "%", 1, None);
         number(ui, d, "ambient", tl!("Ambient Light"), (0.0, 200.0), "%", 1, None);
-        toggle(ui, d, "lightBehind", tl!("Light behind the object"), false);
+        toggle(ui, &mut selected, "lightBehind", tl!("Light behind the object"), false);
+        if light_record(&selected) != before {
+            store_selected(d, &selected);
+        }
+    });
+}
+
+const LIGHT_KEYS: [(&str, &str); 6] = [
+    ("color", "lightColor"),
+    ("intensity", "lightIntensity"),
+    ("rotation", "lightRotation"),
+    ("height", "lightHeight"),
+    ("softness", "lightSoftness"),
+    ("behind", "lightBehind"),
+];
+
+fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
+    d.fields.get("lights").and_then(Value::as_array).filter(|v| !v.is_empty() && v.len() <= vectorcraft_three_d::MAX_LIGHTS)
+}
+
+fn light_index(d: &Dialog, count: usize) -> usize {
+    d.fields.get("__light").and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).unwrap_or(0).min(count.saturating_sub(1))
+}
+
+/// Only the selected light's six settings are overlaid. Selection is UI state and never
+/// enters effect parameters, so selecting another light creates no document history.
+pub(super) fn selected_light(d: &Dialog) -> Dialog {
+    let mut selected = d.clone();
+    selected.fields.remove("lights");
+    if let Some(list) = explicit_lights(d)
+        && let Some(light) = list.get(light_index(d, list.len()))
+    {
+        let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
+        for (key, field) in LIGHT_KEYS {
+            if let Some(value) = light.get(key).or_else(|| defaults.get(field)) {
+                selected.fields.insert(field.into(), value.clone());
+            }
+        }
+    }
+    selected
+}
+
+pub(super) fn light_options(d: &Dialog) -> vectorcraft_three_d::Revolve {
+    vectorcraft_effects::revolve_options(&super::form::params(&selected_light(d)))
+}
+
+fn light_record(d: &Dialog) -> Value {
+    Value::Object(LIGHT_KEYS.iter().filter_map(|(key, field)| d.fields.get(*field).map(|v| ((*key).into(), v.clone()))).collect())
+}
+
+fn store_selected(d: &mut Dialog, selected: &Dialog) {
+    if let Some(list) = explicit_lights(d) {
+        let index = light_index(d, list.len());
+        let mut list = list.clone();
+        if let Some(light) = list.get_mut(index) {
+            *light = light_record(selected);
+        }
+        d.fields.insert("lights".into(), json!(list));
+    } else {
+        for (_, key) in LIGHT_KEYS {
+            if let Some(value) = selected.fields.get(key) {
+                d.fields.insert(key.into(), value.clone());
+            }
+        }
+    }
+}
+
+pub(super) fn set_light_value(d: &mut Dialog, key: &str, value: Value) {
+    let mut selected = selected_light(d);
+    selected.fields.insert(key.into(), value);
+    store_selected(d, &selected);
+}
+
+fn light_list(ui: &mut egui::Ui, d: &mut Dialog) {
+    let mut list = explicit_lights(d).cloned().unwrap_or_else(|| vec![light_record(d)]);
+    let mut index = light_index(d, list.len());
+    let names: Vec<_> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        label(ui, tl!("Lights"));
+        let labels: Vec<_> = names.iter().map(String::as_str).collect();
+        if let Some(next) =
+            widgets::dropdown(ui, "three-d-lights", names.get(index).map_or("", String::as_str), &labels, VALUE_W + rail_width(ui) + 6.0)
+        {
+            index = next;
+            ui.memory_mut(|m| m.stop_text_input());
+            super::revolve_gizmo::clear(ui.ctx());
+        }
+    });
+    ui.horizontal(|ui| {
+        if ui.add_enabled(list.len() < vectorcraft_three_d::MAX_LIGHTS, egui::Button::new(tl!("Add Light"))).clicked() {
+            let mut added = selected_light(d);
+            let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
+            for (_, key) in LIGHT_KEYS {
+                if let Some(value) = defaults.get(key) {
+                    added.fields.insert(key.into(), value.clone());
+                }
+            }
+            added.fields.insert("lightRotation".into(), json!(0.0));
+            added.fields.insert("lightHeight".into(), json!(90.0));
+            list.push(light_record(&added));
+            index = list.len() - 1;
+            d.fields.insert("lights".into(), json!(list));
+            super::revolve_gizmo::clear(ui.ctx());
+        }
+        if ui.add_enabled(list.len() > 1, egui::Button::new(tl!("Delete Light"))).clicked() && index < list.len() {
+            list.remove(index);
+            index = index.min(list.len().saturating_sub(1));
+            d.fields.insert("lights".into(), json!(list));
+            super::revolve_gizmo::clear(ui.ctx());
+        }
+    });
+    d.fields.insert("__light".into(), json!(index));
+    ui.add_space(4.0);
+}
+
+fn light_color(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        label(ui, tl!("Color"));
+        let color = d
+            .fields
+            .get("lightColor")
+            .and_then(Value::as_str)
+            .filter(|s| s.len() == 7 && s.starts_with('#'))
+            .and_then(vectorcraft_color::Color::from_hex)
+            .unwrap_or(vectorcraft_color::Color::WHITE);
+        // Light colors are display RGB, independent of the document's working profile.
+        let mut rgb = color.to_rgb_uncalibrated().map(|c| (c * 255.0).round() as u8);
+        if ui.color_edit_button_srgb(&mut rgb).on_hover_text(tl!("Color")).changed() {
+            d.fields.insert("lightColor".into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
+        }
+        ui.label(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]));
+        ui.add_space((ui.available_width() - 24.0).max(0.0));
+        if reset_dot(ui, "lightColor", rgb != [255; 3], "#FFFFFF") {
+            d.fields.insert("lightColor".into(), json!("#ffffff"));
+        }
     });
 }
 

@@ -4666,6 +4666,11 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+# 3D light management.
+	Lights	Luci
+	Add Light	Aggiungi luce
+	Delete Light	Elimina luce
+3d	Light	Luce
 	Registration:	Registrazione:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Quota

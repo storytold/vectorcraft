@@ -4648,6 +4648,11 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+# 3D light management.
+	Lights	Danh sách đèn
+	Add Light	Thêm đèn
+	Delete Light	Xóa đèn
+3d	Light	Đèn
 	Registration:	Điểm đăng ký:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Kích thước

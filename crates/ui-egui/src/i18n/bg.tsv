@@ -4977,6 +4977,11 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+# 3D light management.
+	Lights	Светлини
+	Add Light	Добавяне на светлина
+	Delete Light	Изтриване на светлина
+3d	Light	Светлина
 	Automation	Автоматизация
 	Essentials	Основни
 	Essentials Classic	Основни класически
