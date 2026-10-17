@@ -154,15 +154,24 @@ fn area_type(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>, b: &Block)
     let texts: Vec<(&TextObject, &LineFacts)> = nodes.iter().map(|n| line(n, lines)).collect::<Option<_>>()?;
     let (first, _) = texts.first()?;
     let size = first.first_style().size;
-    // Each line's tracking (a line with spaces tracked apart was set by hand).
-    let trackings: Vec<f64> = texts
-        .iter()
-        .map(|(t, _)| {
-            let mut all = t.runs.iter().map(|r| r.style.tracking);
-            let one = all.next()?;
-            all.all(|x| x == one).then_some(one)
-        })
-        .collect::<Option<_>>()?;
+    // A line's tracking: one for all its runs, or (`spaces` false) one for its runs other than
+    // lone spaces.
+    let shared = |t: &TextObject, spaces: bool| {
+        let mut all = t.runs.iter().filter(|r| spaces || r.text != " ").map(|r| r.style.tracking);
+        let one = all.next()?;
+        all.all(|x| x == one).then_some(one)
+    };
+    // As justified type, a wrapped line's tracking leaves out its spaces when each space is a run
+    // of its own, tracked within a fiftieth of an em of the line's first space.
+    let spread = |t: &TextObject| {
+        let tracking = shared(t, false)?;
+        let mut spaces = t.runs.iter().filter(|r| r.text == " ").map(|r| r.style.tracking);
+        let alike =
+            spaces.next().is_some_and(|s| spaces.all(|x| (x - s).abs() <= 20.0)) && !t.runs.iter().any(|r| r.text != " " && r.text.contains(' '));
+        (alike || shared(t, true).is_some()).then_some(tracking)
+    };
+    let trackings: Option<Vec<f64>> = texts.iter().map(|(t, _)| shared(t, true)).collect();
+    let justified: Option<Vec<f64>> = texts.iter().map(|(t, f)| if f.wraps { spread(t) } else { shared(t, true) }).collect();
     let median = |mut v: Vec<f64>| {
         v.sort_by(f64::total_cmp);
         v.get(v.len() / 2).copied()
@@ -173,13 +182,18 @@ fn area_type(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>, b: &Block)
     // Wrapped lines all as long: justified (a paragraph's last line aligned left), tracked as the
     // lines that end paragraphs are (the others are spaced out).
     let full = longest(&wrapped);
-    if wrapped.len() >= 2 && wrapped.iter().all(|l| (full - l).abs() <= size * 0.02) {
-        let ends: Vec<f64> = texts.iter().zip(&trackings).filter(|((_, f), _)| !f.wraps).map(|(_, t)| *t).collect();
-        let tracking = median(ends).or_else(|| trackings.iter().copied().reduce(f64::min))?;
+    if wrapped.len() >= 2
+        && wrapped.iter().all(|l| (full - l).abs() <= size * 0.02)
+        && let Some(justified) = justified
+    {
+        let ends: Vec<f64> = texts.iter().zip(&justified).filter(|((_, f), _)| !f.wraps).map(|(_, t)| *t).collect();
+        let tracking = median(ends).or_else(|| justified.iter().copied().reduce(f64::min))?;
         tries.push((Justify::JustifyLeft, full, tracking));
     }
     let all: Vec<f64> = texts.iter().map(|(_, f)| f.length).collect();
-    tries.push((Justify::Left, longest(&all) + size * 0.02, median(trackings)?));
+    if let Some(trackings) = trackings {
+        tries.push((Justify::Left, longest(&all) + size * 0.02, median(trackings)?));
+    }
     tries.into_iter().find_map(|(justify, width, tracking)| laid_out(&texts, b, justify, width, tracking))
 }
 
