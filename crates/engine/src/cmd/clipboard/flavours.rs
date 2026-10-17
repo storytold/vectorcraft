@@ -130,7 +130,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard as PNG",
             [],
             None,
-            "{scale?: 1 (pixels per point, up to 64)} → {dataBase64, width, height (px)} the copied objects cropped to their visual bounds, transparent around them (dataBase64 null when the clipboard is empty)",
+            "{scale?: 1 (pixels per point, up to 64)} → {dataBase64, width, height (px), warnings} the copied objects cropped to their visual bounds, transparent around them (dataBase64 null when the clipboard is empty); warnings as for document.export (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame)",
             always,
             export_png
         ),
@@ -139,7 +139,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard as PDF",
             [],
             None,
-            "{} → {dataBase64} a one-page PDF of the copied objects, the page their visual bounds (null when the clipboard is empty)",
+            "{} → {dataBase64, warnings} a one-page PDF of the copied objects, the page their visual bounds (dataBase64 null when the clipboard is empty); warnings as for document.export",
             always,
             export_pdf
         ),
@@ -218,6 +218,9 @@ fn type_only(n: &Node) -> bool {
     }
 }
 
+/// A PNG of the copied objects: (bytes, width, height in pixels, the encoder's warnings).
+pub type Png = (Vec<u8>, u32, u32, Vec<String>);
+
 impl Clipboard {
     /// The copied type objects' text, one object per line (`None` unless it holds type only).
     pub fn text(&self) -> Option<String> {
@@ -243,21 +246,21 @@ impl Clipboard {
         Some((fileio::with_single_artboard(self.to_document(), b, "Clipboard"), b))
     }
 
-    /// A PNG of the objects at `scale` pixels per point → (bytes, width, height); `None` when
-    /// there are none.
-    pub fn png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
+    /// A PNG of the objects at `scale` pixels per point → (bytes, width, height, the warnings
+    /// [`fileio::encode_with_warnings`] gives); `None` when there are none.
+    pub fn png(&self, scale: f64) -> Result<Option<Png>> {
         const C: &str = "clipboard.exportPng";
         let Some((doc, b)) = self.cropped() else { return Ok(None) };
         let (w, h) = vectorcraft_render::raster_size(b, scale).map_err(|e| bad(C, e))?;
-        let png = fileio::encode(&doc, "png", &json!({ "scale": scale, "background": "transparent" }))?;
-        Ok(Some((png, w, h)))
+        let (png, warnings) = fileio::encode_with_warnings(&doc, "png", &json!({ "scale": scale, "background": "transparent" }))?;
+        Ok(Some((png, w, h, warnings)))
     }
 
-    /// A one-page PDF of the objects (without the native document inside); `None` when there are
-    /// none.
-    pub fn pdf(&self) -> Result<Option<Vec<u8>>> {
+    /// A one-page PDF of the objects (without the native document inside) → (bytes, the encoder's
+    /// warnings); `None` when there are none.
+    pub fn pdf(&self) -> Result<Option<(Vec<u8>, Vec<String>)>> {
         let Some((doc, _)) = self.cropped() else { return Ok(None) };
-        fileio::encode(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
+        fileio::encode_with_warnings(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
     }
 
     /// The MIME types of [`Self::flavours`], without making them.
@@ -275,23 +278,38 @@ impl Clipboard {
     /// (`pdf`) as given (see `clipboard.flavours`). A [`Flavour`] that can't be made (art too large
     /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side.
     pub fn flavours(&self, svg: bool, pdf: bool) -> Vec<Flavour> {
+        self.flavours_with_warnings(svg, pdf).0
+    }
+
+    /// [`Self::flavours`], with the warnings of the PDF and PNG encoders, each once (an image that
+    /// couldn't be decoded, type in the fallback font).
+    pub fn flavours_with_warnings(&self, svg: bool, pdf: bool) -> (Vec<Flavour>, Vec<String>) {
         let types = self.flavour_types(svg, pdf);
         let svg = types.contains(&SVG).then(|| self.svg()).flatten();
         let mut out = vec![];
+        let mut warnings: Vec<String> = vec![];
+        let mut keep = |(bytes, notes): (Vec<u8>, Vec<String>)| {
+            for w in notes {
+                if !warnings.contains(&w) {
+                    warnings.push(w);
+                }
+            }
+            bytes
+        };
         for mime in types {
             let data = match mime {
                 TEXT => self.text().or_else(|| svg.clone()).map(String::into_bytes),
                 SVG => svg.clone().map(String::into_bytes),
-                PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten(),
+                PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten().map(&mut keep),
                 _ => {
                     let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
                     let scale = (COPY_PNG_SIDE / side).clamp(0.01, 1.0);
-                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, ..)| png)
+                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, _, _, notes)| keep((png, notes)))
                 }
             };
             out.extend(data.map(|data| Flavour { mime, data }));
         }
-        out
+        (out, warnings)
     }
 }
 
@@ -302,15 +320,15 @@ impl Session {
         self.clipboard.text()
     }
 
-    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height); `None`
-    /// when the clipboard is empty.
-    pub fn clipboard_png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
+    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height, the
+    /// encoder's warnings); `None` when the clipboard is empty.
+    pub fn clipboard_png(&self, scale: f64) -> Result<Option<Png>> {
         self.clipboard.png(scale)
     }
 
-    /// A one-page PDF of the copied objects (without the native document inside); `None` when the
-    /// clipboard is empty.
-    pub fn clipboard_pdf(&self) -> Result<Option<Vec<u8>>> {
+    /// A one-page PDF of the copied objects (without the native document inside) → (bytes, the
+    /// encoder's warnings); `None` when the clipboard is empty.
+    pub fn clipboard_pdf(&self) -> Result<Option<(Vec<u8>, Vec<String>)>> {
         self.clipboard.pdf()
     }
 
@@ -356,13 +374,18 @@ fn export_png(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("clipboard.exportPng", "scale must be a number above 0, at most 64"));
     }
     Ok(match s.clipboard_png(scale)? {
-        Some((png, w, h)) => json!({ "dataBase64": vectorcraft_format::base64_encode(&png), "width": w, "height": h }),
+        Some((png, w, h, warnings)) => {
+            json!({ "dataBase64": vectorcraft_format::base64_encode(&png), "width": w, "height": h, "warnings": warnings })
+        }
         None => json!({ "dataBase64": null }),
     })
 }
 
 fn export_pdf(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "dataBase64": s.clipboard_pdf()?.map(|b| vectorcraft_format::base64_encode(&b)) }))
+    Ok(match s.clipboard_pdf()? {
+        Some((pdf, warnings)) => json!({ "dataBase64": vectorcraft_format::base64_encode(&pdf), "warnings": warnings }),
+        None => json!({ "dataBase64": null }),
+    })
 }
 
 fn export_text(s: &mut Session, _: &Value) -> Result<Value> {

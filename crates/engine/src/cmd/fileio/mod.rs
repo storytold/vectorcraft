@@ -213,7 +213,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Office Documents…",
             ["File"],
             None,
-            "{path?, ppi?: 150 (72, 150, 300… pixels per inch), transparent?: false (else on white), artboard?: 0, acknowledgeLoss?: bool (write over the file the document was read from although reading it left things out)} the artboard as a PNG for office documents and slides → {path, bytes, width, height} (pixels); no path → {dataBase64, bytes, width, height}",
+            "{path?, ppi?: 150 (72, 150, 300… pixels per inch), transparent?: false (else on white), artboard?: 0, acknowledgeLoss?: bool (write over the file the document was read from although reading it left things out)} the artboard as a PNG for office documents and slides → {path, bytes, width, height, warnings} (pixels); no path → {dataBase64, bytes, width, height, warnings}; warnings as for document.export (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame)",
             has_doc,
             export::export_for_office
         ),
