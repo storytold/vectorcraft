@@ -213,8 +213,8 @@ pub static LANGUAGES: [LangInfo; 23] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
-    // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
-    // locales all resolve here (see `candidates`).
+    // Traditional Chinese in the vocabulary used in Taiwan: the whole interface and the status and
+    // error messages; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve here (see `candidates`).
     LangInfo {
         code: "zh-hant",
         name: "繁體中文",
