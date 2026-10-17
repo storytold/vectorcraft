@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use kurbo::{Point, Rect};
-use vectorcraft_color::gradient::GradientKind;
+use vectorcraft_color::gradient::{Gradient, GradientKind};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind};
 
@@ -390,9 +390,11 @@ fn gradients() {
     let a = art(&doc);
     let Paint::Gradient(g) = fill(&a[0]) else { panic!("{:?}", fill(&a[0])) };
     assert_eq!(g.gradient.kind, GradientKind::Radial);
-    assert_eq!(g.gradient.stops.len(), 2);
-    assert!((g.gradient.stops[0].midpoint - 0.4).abs() < 1e-6);
-    assert_eq!(g.gradient.stops[1].opacity, 0.5);
+    assert!(g.gradient.stops.len() > 2, "the moved midpoint becomes stops along its curve");
+    assert!(g.gradient.stops.iter().all(|s| s.midpoint == 0.5));
+    assert_eq!(g.gradient.stops.last().unwrap().opacity, 0.5);
+    let (_, opacity) = g.gradient.sample(0.4);
+    assert!((opacity - 0.75).abs() < 0.01, "{opacity}");
     let geom = g.geom.unwrap();
     assert_eq!((geom.start, geom.end), (Point::new(100.0, 50.0), Point::new(150.0, 50.0)));
     // The gradient was the one object's.
@@ -507,8 +509,56 @@ fn stops_listed_upwards_keep_the_midpoint_of_the_one_that_starts_the_ramp() {
     let art_ = format!("{}Bb\n1 (U) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 200.0, 100.0));
     let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
     let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
-    let midpoints: Vec<_> = g.gradient.stops.iter().map(|s| s.midpoint).collect();
-    assert_eq!(midpoints, [0.5, 0.87, 0.5]);
+    assert!(g.gradient.stops.iter().all(|s| s.midpoint == 0.5));
+    let grey = |t: f32| g.gradient.sample(t).0.to_rgb()[0];
+    assert!((grey(0.87) - 0.5).abs() < 0.01, "{}", grey(0.87));
+}
+
+/// White to black with its midpoint at `mid` percent, on a 100 pt wide rectangle.
+fn midpoint_gradient(mid: u32) -> Gradient {
+    let defs = format!(
+        "%AI5_BeginGradient: (M)\n(M) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 1 1 2 1 6 {mid} 0 Bs\n\
+         %_0 0 0 0 0 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n"
+    );
+    let art_ = format!("{}Bb\n1 (M) 0 0 0 1 1 0 0 1 0 0 1 Bg\n100 0 0 100 0 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    g.gradient.clone()
+}
+
+#[test]
+fn a_moved_midpoint_follows_the_curve_the_pdf_part_writes() {
+    // GUARDS: past halfway the ramp is u^N, before it 1 - (1 - u)^N, N putting the midpoint at
+    // half; the renderer's own midpoint bends the ramp straight at the midpoint instead, and u^N
+    // with N < 1 also passes the midpoint at half but is far off elsewhere.
+    for (mid, curve) in
+        [(80, (|u: f32| u.powf(0.5f32.ln() / 0.8f32.ln())) as fn(f32) -> f32), (20, |u| 1.0 - (1.0 - u).powf(0.5f32.ln() / 0.8f32.ln()))]
+    {
+        let gradient = midpoint_gradient(mid);
+        assert!(gradient.stops.iter().all(|s| s.midpoint == 0.5), "{mid}");
+        for step in 0..=100 {
+            let u = step as f32 / 100.0;
+            let grey = gradient.sample(u).0.to_rgb()[0];
+            assert!((grey - (1.0 - curve(u))).abs() < 1.5 / 255.0, "{mid}% at {u}: {grey}");
+        }
+    }
+}
+
+#[test]
+fn a_centered_midpoint_adds_no_stops() {
+    // GUARDS: only a moved midpoint is expanded, so gradients without one import as before.
+    assert_eq!(midpoint_gradient(50).stops.len(), 2);
+}
+
+#[test]
+fn many_moved_midpoints_stay_within_the_stop_limit() {
+    // GUARDS: expansion multiplies the stops a file lists; the cap on them has to hold after it.
+    let stops: String = (0..200).map(|i| format!("%_0 0 0 0 {0} {0} {0} 2 1 6 87 {1} Bs\n", i % 2, f64::from(i) / 2.0)).collect();
+    let defs = format!("%AI5_BeginGradient: (L)\n(L) 0 200 Bd\n[\n<00FF>\n0\n{stops}BD\n%AI5_EndGradient\n");
+    let art_ = format!("{}Bb\n1 (L) 0 0 0 1 1 0 0 1 0 0 1 Bg\n100 0 0 100 0 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!() };
+    assert!(g.gradient.stops.len() > 200 && g.gradient.stops.len() <= 256, "{}", g.gradient.stops.len());
 }
 
 #[test]
