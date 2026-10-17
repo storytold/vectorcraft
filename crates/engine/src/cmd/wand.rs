@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
+use super::select::selectable_ids;
 use super::*;
 
 /// Magic Wand panel settings. Tolerances: colours as 0–255 RGB distance, stroke weight in
@@ -153,7 +154,13 @@ fn magic_wand(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let reference = st.doc.node(id).ok_or(EngineError::NoNode(id))?.clone();
     let w = s.menu.wand.clone();
-    let hits: Vec<NodeId> = paintable(&st.doc).into_iter().filter(|i| st.doc.node(*i).is_some_and(|n| w.matches(&reference, n))).collect();
+    // In isolation mode only the isolated group's contents can be picked, as for Select Same.
+    let inside = st.isolation.map(|iso| selectable_ids(&st.doc, Some(iso)));
+    let hits: Vec<NodeId> = paintable(&st.doc)
+        .into_iter()
+        .filter(|i| inside.as_ref().is_none_or(|set| set.contains(i)))
+        .filter(|i| st.doc.node(*i).is_some_and(|n| w.matches(&reference, n)))
+        .collect();
     let ids: Vec<NodeId> = match str_param(p, "mode").unwrap_or("set") {
         "add" => st.selection.objects.iter().copied().chain(hits.iter().copied().filter(|h| !st.selection.objects.contains(h))).collect(),
         "subtract" => st.selection.objects.iter().copied().filter(|i| !hits.contains(i)).collect(),
@@ -221,5 +228,20 @@ mod tests {
         s.execute("magicWand.set", &json!({"opacity": false, "blendingMode": true})).unwrap();
         s.execute("select.magicWand", &json!({"id": b})).unwrap();
         assert_eq!(selected(&s), [b]);
+    }
+
+    #[test]
+    fn isolation_mode_limits_the_wand_to_the_isolated_group() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+        let a = rect(&mut s, 0.0, "#ff0000", 1.0);
+        let b = rect(&mut s, 20.0, "#ff0000", 1.0);
+        let outside = rect(&mut s, 40.0, "#ff0000", 1.0);
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.isolate", &json!({"id": g})).unwrap();
+        s.execute("select.magicWand", &json!({"id": a})).unwrap();
+        assert_eq!(selected(&s), [a, b]);
+        assert!(!selected(&s).contains(&outside));
     }
 }
