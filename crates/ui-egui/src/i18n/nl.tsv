@@ -134,6 +134,20 @@
 	Forget Import Matches	Importovereenkomsten vergeten
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	komt overeen met {n} standaardsneltoets|komt overeen met {n} standaardsneltoetsen
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	{n} deel van het bestand is niet gelezen|{n} delen van het bestand zijn niet gelezen
+
+# Filter labels and Live Paint gap sizes
+	Edge Fidelity	Randgetrouwheid
+	Edge Intensity	Randintensiteit
+	Edge Simplicity	Randeenvoud
+	Edge Thickness	Randdikte
+	Glow Brightness	Gloedhelderheid
+	Glow Size	Gloedgrootte
+	Large Gaps	Grote openingen
+	Levels	Niveaus
+	Medium Gaps	Middelgrote openingen
+	Posterization	Posterisatie
+	Small Gaps	Kleine openingen
+
 @msg	This shortcut file is in a form VectorCraft can't read.	Dit sneltoetsbestand heeft een vorm die VectorCraft niet kan lezen.
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	geen sneltoetsenset: de tekst begint niet met een slash-naam en een openingsaccolade
 	Preferences…	Voorkeuren…
@@ -5154,3 +5168,32 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
+
+@msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Opslaan schrijft {_1}, niet {_2}: gebruik file.saveAsTemplate om het te schrijven
+@msg	`{key}` must be a #rrggbb color	`{key}` moet een #rrggbb-kleur zijn
+@msg	a key object sits on that point	op dat punt ligt een sleutelobject
+@msg	a linked image can't become a gradient mesh: embed it first	een gekoppelde afbeelding kan geen verloopraster worden: sluit deze eerst in
+@msg	a mask has more than one art block	een masker heeft meer dan één illustratieblok
+@msg	a spine keeps at least two points	een as houdt minstens twee punten
+@msg	cancelled; nothing was changed	geannuleerd; er is niets gewijzigd
+@msg	handle must be in or out	handle moet in of out zijn
+@msg	index must be ≥ 0	index moet ≥ 0 zijn
+@msg	mask art ends outside a mask dictionary	maskerillustratie eindigt buiten een maskerwoordenboek
+@msg	missing number `{key}`	getal `{key}` ontbreekt
+@msg	no such spine point	dat aspunt bestaat niet
+@msg	no such spine segment	dat assegment bestaat niet
+@msg	not a blend	geen vermenging
+@msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
+@msg	t, dx and dy must be finite	t, dx en dy moeten eindig zijn
+@msg	the blend has no spine	de vermenging heeft geen as
+@msg	the image has no usable size or position	de afbeelding heeft geen bruikbare grootte of positie
+@msg	the image's pixels can't be read	de pixels van de afbeelding kunnen niet worden gelezen
+@msg	the spine has no segments	de as heeft geen segmenten
+@msg	variables are locked	variabelen zijn vergrendeld
+@msg	x and y must be finite	x en y moeten eindig zijn
+@msg	Persistent libraries not found: {files}	Permanente bibliotheken niet gevonden: {files}
+@msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` is geen bibliotheekpaneel (zie window.swatchLibrary)
+@msg	library panel `{given}` isn't open	bibliotheekpaneel `{given}` is niet geopend
+@msg	too many library panels were opened in this session	er zijn in deze sessie te veel bibliotheekpanelen geopend
+@msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	De afbeelding is {_1} × {_2} pixels, meer dan {LARGE_TRACE_SIDE} aan één zijde: ze wordt getraceerd, maar langzamer. Een voorinstelling met minder detail of een kleinere kopie van de afbeelding traceert sneller.
+@msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	De afbeelding is getraceerd op {_1} × {_2} pixels, verkleind van {_3} × {_4} (maximaal {_5} megapixels).
