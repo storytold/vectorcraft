@@ -907,6 +907,46 @@ fn optical_margin_alignment_hangs_punctuation_and_letter_edges_outside_the_margi
     assert_eq!(rtl(true), rtl(false));
 }
 
+/// Roman Hanging Punctuation (a paragraph attribute) hangs the punctuation Optical Margin
+/// Alignment hangs, by the same amounts, and no letters; only the paragraphs that have it hang.
+#[test]
+fn roman_hanging_punctuation_hangs_punctuation_but_not_letters() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 400.0);
+    let lay = |text: &str, justify: Justify, on: bool| {
+        let mut t = area(text, style(20.0), frame, justify);
+        t.para.roman_hanging = on;
+        layout(db(), &t).glyphs
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let end = |g: &PositionedGlyph| g.origin.x + g.advance;
+    // Left aligned: the opening quotation mark hangs wholly.
+    let on = lay("“Hello” there", Justify::Left, true);
+    assert!(near(on[1].origin.x, 0.0) && near(on[0].origin.x, -on[0].advance) && on[0].advance > 1.0, "{:?}", on[0].origin);
+    // An em dash hangs by half its advance.
+    let dash = lay("—ab", Justify::Left, true);
+    assert!(near(dash[0].origin.x, -0.5 * dash[0].advance), "{}", dash[0].origin.x);
+    // Letters don't hang, where Optical Margin Alignment hangs an A by a tenth.
+    assert!(near(lay("AVA", Justify::Left, true)[0].origin.x, 0.0));
+    // Right aligned: the full stop and the closing quotation mark after it hang at the right.
+    let r = lay("“Hi.”", Justify::Right, true);
+    assert!(near(end(&r[2]), 300.0), "{}", end(&r[2]));
+    // Justified: a hyphen at each end hangs, the words fill the frame between them.
+    let j = lay("-ab cd-", Justify::JustifyAll, true);
+    let n = j.len();
+    assert!(near(j[1].origin.x, 0.0) && near(j[n - 1].origin.x, 300.0), "{} {}", j[1].origin.x, j[n - 1].origin.x);
+    // Off: nothing hangs.
+    assert!(near(lay("“Hello” there", Justify::Left, false)[0].origin.x, 0.0));
+    // Per paragraph: the second paragraph, without it, doesn't hang.
+    let mut t = area("“One\n“Two", style(20.0), frame, Justify::Left);
+    let mut first = t.para.clone();
+    first.roman_hanging = true;
+    t.set_paragraph_styles(vec![first, t.para.clone()]);
+    let l = layout(db(), &t);
+    let at = |b: usize| l.glyphs.iter().find(|g| g.byte == b).unwrap().origin.x;
+    assert!(at(0) < -1.0, "first paragraph hangs: {}", at(0));
+    assert!(near(at("“One\n".len()), 0.0), "second doesn't: {}", at("“One\n".len()));
+}
+
 /// With craft-fonts and no installed fonts (the web), Thai is set in Noto Sans Thai, not as empty
 /// boxes. Skipped when built without craft-fonts or with a checkout that has no Thai font.
 #[test]

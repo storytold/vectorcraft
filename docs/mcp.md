@@ -3531,6 +3531,22 @@ New type and documents from before it have it off, and it is saved only when on.
 {"name":"run_command","arguments":{"command":"type.opticalMarginAlignment","params":{"on":true}}}
 ```
 
+## Roman Hanging Punctuation
+
+`text.setFormat {romanHangingPunctuation: bool}` (Paragraph panel menu › Roman Hanging Punctuation) turns it on or off
+for the paragraphs of the selected type (or `ids`, or the paragraphs a `start` / `end` range touches). In those
+paragraphs the punctuation Optical Margin Alignment hangs hangs outside the margin by the same amounts (quotation marks,
+hyphens, full stops and commas wholly; asterisks, tildes, ellipses, en and em dashes, colons and semicolons by half),
+on the same sides (left-aligned lines at their left, right-aligned at their right, centered and justified at both), and
+letters don't hang. With Optical Margin Alignment on as well, the letters hang too. East Asian punctuation hangs only
+through burasagari; type on a path and right-to-left paragraphs are laid out as before. Off by default, saved with the
+paragraph (`roman_hanging` in `para`) only when on, carried by paragraph styles, and turned off by Reset Panel. One undo
+step. The menu item is checked while the paragraph the Paragraph panel shows has it on.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"romanHangingPunctuation":true}}}
+```
+
 ## Small Caps, Superscript and Subscript
 `text.setFormat {smallCaps, position}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, smallCaps,
 position}` (a range) set what the Character panel's Small Caps, Superscript and Subscript buttons and menu items set.

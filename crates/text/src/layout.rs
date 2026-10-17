@@ -1354,6 +1354,12 @@ fn optical_share(g: &SGlyph) -> f64 {
     }
 }
 
+/// Roman Hanging Punctuation: the share of glyph `g`'s advance that hangs outside the margin when
+/// `g` starts or ends a line: [`optical_share`]'s punctuation, and no letters.
+fn roman_share(g: &SGlyph) -> f64 {
+    if g.ch.is_alphabetic() { 0.0 } else { optical_share(g) }
+}
+
 /// A punctuation mark that hangs ([`optical_share`]), not a letter.
 fn optical_punct(g: &SGlyph) -> bool {
     !g.ch.is_alphabetic() && optical_share(g) > 0.0
@@ -1364,20 +1370,20 @@ fn is_quote(c: char) -> bool {
     matches!(c, '\'' | '"' | '‘' | '’' | '‚' | '‛' | '“' | '”' | '„' | '‟')
 }
 
-/// Optical Margin Alignment: how far a line hangs outside its left and right margins, from the
-/// glyph at each end of `line` (its glyphs in visual order, each with the advance it is set with)
-/// and its [`optical_share`], and how many glyphs hang at each end → (left, right, left glyphs,
+/// Optical Margin Alignment and Roman Hanging Punctuation: how far a line hangs outside its left
+/// and right margins, from the glyph at each end of `line` (its glyphs in visual order, each with
+/// the advance it is set with) and its `share` ([`optical_share`] or [`roman_share`]), and how many glyphs hang at each end → (left, right, left glyphs,
 /// right glyphs). A punctuation mark followed by a quotation mark hangs together with it: `."`
 /// ending a line and `'"` starting one hang both their glyphs. A line of one glyph hangs at
 /// neither end.
-fn optical_hangs(line: &[(&SGlyph, f64)]) -> (f64, f64, usize, usize) {
+fn optical_hangs(line: &[(&SGlyph, f64)], share: fn(&SGlyph) -> f64) -> (f64, f64, usize, usize) {
     let n = line.len();
     if n < 2 {
         return (0.0, 0.0, 0, 0);
     }
-    let hang = |k: usize| line.get(k).map_or(0.0, |&(g, adv)| optical_share(g) * adv.max(0.0));
+    let hang = |k: usize| line.get(k).map_or(0.0, |&(g, adv)| share(g) * adv.max(0.0));
     let punct = |k: usize| line.get(k).is_some_and(|&(g, _)| optical_punct(g));
-    let quote = |k: usize| line.get(k).is_some_and(|&(g, _)| is_quote(g.ch) && optical_share(g) > 0.0);
+    let quote = |k: usize| line.get(k).is_some_and(|&(g, _)| is_quote(g.ch) && share(g) > 0.0);
     let mut left = hang(0);
     // The glyphs that hang at the left; the right end takes none of them.
     let mut taken = usize::from(left > 0.0);
@@ -1843,15 +1849,18 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, regions: Optio
             // hang at both. A line that ends in a burasagari mark hangs only at its left.
             // Justification adds no space after a punctuation mark hanging at the left, nor before
             // one hanging at the right (`held`). A letter that hangs by part of its width keeps its
-            // gaps.
-            let (opt_l, opt_r, held) = if t.optical_margin && !rtl {
+            // gaps. Roman Hanging Punctuation (a paragraph attribute) hangs the same punctuation
+            // by the same amounts, and no letters; with Optical Margin Alignment on as well, the
+            // letters hang too.
+            let (opt_l, opt_r, held) = if (t.optical_margin || para.roman_hanging) && !rtl {
+                let share: fn(&SGlyph) -> f64 = if t.optical_margin { optical_share } else { roman_share };
                 let at: Vec<usize> = order.iter().map(|&offset| i + offset).filter(|&j| j < body).collect();
                 let mut visible: Vec<(&SGlyph, f64)> =
                     at.iter().filter_map(|&j| sg.get(j).map(|g| (g, if j + 1 == trimmed { g.adv - end_trim } else { g.adv }))).collect();
                 if let Some(h) = &hyphen {
                     visible.push((h, h.adv));
                 }
-                let (l, r, left_glyphs, right_glyphs) = optical_hangs(&visible);
+                let (l, r, left_glyphs, right_glyphs) = optical_hangs(&visible, share);
                 let (r, right_glyphs) = if hang.is_some() { (0.0, 0) } else { (r, right_glyphs) };
                 let n_visible = visible.len();
                 let punct = |k: usize| visible.get(k).is_some_and(|&(g, _)| optical_punct(g));

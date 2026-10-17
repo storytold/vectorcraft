@@ -177,6 +177,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("leading_model", json!(v.leading_model)),
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
+        ("roman_hanging", json!(v.roman_hanging)),
     ] {
         m.insert(k.into(), x);
     }

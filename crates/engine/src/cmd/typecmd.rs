@@ -1061,6 +1061,43 @@ mod area_tests {
         assert_eq!(old.hyphenation, HyphenationOptions::default());
     }
 
+    /// Paragraph panel menu › Roman Hanging Punctuation: `text.setFormat {romanHangingPunctuation}`
+    /// sets it per paragraph in one undo step, the opening quotation mark then hangs left of the
+    /// frame, it is saved only when on, and paragraph styles carry it.
+    #[test]
+    fn roman_hanging_punctuation_is_set_per_paragraph_and_saved_only_when_on() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s
+            .execute("text.create", &json!({"x": 10, "y": 10, "size": 40, "text": "“Quoted”\n“Two”", "area": {"width": 300, "height": 200}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (**t).clone(),
+            _ => panic!("text"),
+        };
+        let left = |s: &Session| text(s).cached_bounds.unwrap().x0;
+        assert!(!text(&s).para_at(0).roman_hanging);
+        assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("roman_hanging").is_none());
+        let inside = left(&s);
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        // Only the first paragraph (the caret's range).
+        s.execute("text.setFormat", &json!({"romanHangingPunctuation": true, "start": 0, "end": 0})).unwrap();
+        assert!(text(&s).para_at(0).roman_hanging && !text(&s).para_at(1).roman_hanging);
+        assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
+        assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["roman_hanging"], true);
+        let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(text(&s).para_at(0)).unwrap()).unwrap();
+        assert!(back.roman_hanging);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!text(&s).para_at(0).roman_hanging);
+        assert!((left(&s) - inside).abs() < 1e-9);
+        // A paragraph style carries it.
+        s.execute("paraStyle.new", &json!({"name": "Hung", "attrs": {"roman_hanging": true}})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": "Hung", "id": id})).unwrap();
+        assert!(text(&s).para_at(1).roman_hanging);
+    }
+
     /// #432: while the interface is in Japanese, new type (text.create, text.createInPath) starts
     /// with em box top-to-top leading and em box centre alignment, and new styles made from nothing
     /// carry them; params override; the values are journaled; imported text keeps the Roman

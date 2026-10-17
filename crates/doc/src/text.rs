@@ -458,6 +458,10 @@ pub struct ParaStyle {
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
     pub kinsoku: Kinsoku,
+    /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
+    /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
+    /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
+    pub roman_hanging: bool,
 }
 
 /// [`ParaStyle`] as saved. [`Justify::Auto`] is written as the alignment it has in the paragraph
@@ -499,6 +503,8 @@ struct ParaStyleFile {
     burasagari: Burasagari,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku: Kinsoku,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    roman_hanging: bool,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -525,6 +531,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            roman_hanging,
             ..
         } = p;
         Self {
@@ -545,6 +552,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            roman_hanging,
         }
     }
 }
@@ -568,6 +576,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            roman_hanging,
             ..
         } = f;
         Self {
@@ -587,6 +596,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            roman_hanging,
         }
     }
 }
