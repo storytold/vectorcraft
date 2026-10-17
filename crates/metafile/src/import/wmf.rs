@@ -99,6 +99,13 @@ fn window(bytes: &[u8], mut at: usize) -> Option<Rect> {
     Some(Rect::new(o.x, o.y, o.x + e.x, o.y + e.y).abs())
 }
 
+/// Logical → document for a placeable file whose window (`org`, `ext`) is mapped onto its box `b`;
+/// a negative extent flips that axis, as in GDI.
+fn window_map(b: Rect, k: f64, org: Point, ext: Point) -> Affine {
+    let ratio = |box_len: f64, e: f64| if e.abs() > 1e-12 { box_len / e } else { 1.0 };
+    Affine::scale_non_uniform(k * ratio(b.width(), ext.x), k * ratio(b.height(), ext.y)) * Affine::translate(-org.to_vec2())
+}
+
 pub(super) fn play(bytes: &[u8]) -> Result<Imported, String> {
     let (start, placeable) = header(bytes).ok_or("the WMF header is damaged")?;
     let (frame, inch) = match placeable {
@@ -109,6 +116,9 @@ pub(super) fn play(bytes: &[u8]) -> Result<Imported, String> {
     let origin = frame.map_or(Point::ZERO, |f| f.origin());
     let artboard = frame.map_or(Rect::new(0.0, 0.0, 1.0, 1.0), |f| Rect::new(0.0, 0.0, f.width() * k, f.height() * k));
     let mut p = Player::new(Kind::Wmf, Affine::scale(k) * Affine::translate(-origin.to_vec2()), 25.4 / inch, artboard);
+    // With a placeable header, the window records map the window onto the box.
+    let placed = placeable.map(|(b, _)| b).filter(|b| b.width() > 0.0 && b.height() > 0.0);
+    let mut win = (placed.map_or(Point::ZERO, |b| b.origin()), placed.map_or(Point::ZERO, |b| Point::new(b.width(), b.height())));
     let mut at = start;
     let mut ended = false;
     while let Some(head) = bytes.get(at..at + 6) {
@@ -122,7 +132,16 @@ pub(super) fn play(bytes: &[u8]) -> Result<Imported, String> {
         if !matches!(function, 0x0213 | 0x0214) {
             p.flush();
         }
-        if record(&mut p, function, rec.get(6..).unwrap_or_default()).is_none() {
+        if let (Some(b), 0x020B | 0x020C) = (placed, function) {
+            if let Some(v) = point_yx(&mut Reader::new(rec.get(6..).unwrap_or_default())) {
+                if function == 0x020B {
+                    win.0 = v;
+                } else {
+                    win.1 = v;
+                }
+                p.dev_to_doc = window_map(b, k, win.0, win.1);
+            }
+        } else if record(&mut p, function, rec.get(6..).unwrap_or_default()).is_none() {
             p.skip();
         }
         at += rec.len();
