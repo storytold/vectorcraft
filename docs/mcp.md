@@ -2849,7 +2849,10 @@ into), `object.slice.fromSelection`, `object.slice.duplicate {dx?, dy?}`, `objec
 `object.slice.options {kind?: image|noImage|htmlText, name?, url?, target?, message?, alt?, text?, background?:
 ""|matte|#rrggbb, hAlign?, vAlign?}` and `object.slice.clipToArtboard {on?}` are each one undo step.
 `view.slices.hide {hidden?}` and `view.slices.lock {locked?}` are session view state; the canvas draws the slices in
-the `sliceLineColor` preference, numbered while `showSliceNumbers` is on.
+the `sliceLineColor` preference, numbered while `showSliceNumbers` is on. Locking deselects the slices in every open
+document. While it is on, a command that selects slices, such as `select.object.slices`, `object.slice.select`,
+`object.slice.create`, `edit.undo` or `edit.redo`, leaves them out; a selected object that is an object slice stays
+selected.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.slice.make","params":{}}}

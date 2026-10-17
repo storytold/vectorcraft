@@ -212,6 +212,7 @@ fn clip_to_artboard_hide_lock_select_and_delete_all() {
     assert_eq!((l["hidden"].clone(), l["locked"].clone(), l["clipToArtboard"].clone()), (json!(true), json!(true), json!(true)));
     run(&mut s, "view.slices.hide", json!({"hidden": false}));
     assert!(!s.slices_hidden());
+    run(&mut s, "view.slices.lock", json!({"locked": false}));
 
     let a = rect(&mut s, 10.0, 10.0, 10.0, 10.0);
     run(&mut s, "object.slice.make", json!({}));
@@ -227,6 +228,92 @@ fn clip_to_artboard_hide_lock_select_and_delete_all() {
     assert_eq!(user_count(&s), 0);
     assert!(s.doc().unwrap().doc.node(NodeId(a)).unwrap().extras().slice.is_none());
     assert!(s.execute("object.slice.deleteAll", &json!({})).is_err(), "nothing to delete");
+}
+
+/// The slices selected with the Slice Selection tool or a slice command.
+fn picked(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().selection.slices.clone()
+}
+
+/// View → Lock Slices deselects the slices in every open document, and while it is on nothing
+/// selects one, so the commands that act on the selected slices leave them alone.
+#[test]
+fn lock_slices_deselects_the_slices_and_keeps_them_unselected() {
+    let mut s = session();
+    let id = user_slice(&mut s, [0.0, 0.0, 50.0, 50.0]);
+    run(&mut s, "select.object.slices", json!({}));
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    assert!(picked(&s).is_empty(), "after Lock Slices");
+    let _ = s.execute("object.slice.move", &json!({"dx": 10, "dy": 0}));
+    let _ = s.execute("object.slice.options", &json!({"name": "hero"}));
+    assert_eq!(rect_of(&mut s, id), [0.0, 0.0, 50.0, 50.0]);
+    assert_eq!(s.doc().unwrap().doc.slices[0].options.name, "");
+    assert_eq!(run(&mut s, "select.object.slices", json!({}))["count"], 0);
+    assert_eq!(run(&mut s, "object.slice.select", json!({"slices": [id]}))["selected"], json!([]));
+    run(&mut s, "object.slice.create", json!({"x": 100, "y": 100, "width": 20, "height": 20}));
+    assert!(picked(&s).is_empty(), "after Create Slice");
+    // Locking from another document deselects this one's slices too.
+    run(&mut s, "view.slices.lock", json!({"locked": false}));
+    assert_eq!(run(&mut s, "select.object.slices", json!({}))["count"], 2);
+    run(&mut s, "file.new", json!({"width": 300, "height": 300}));
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    run(&mut s, "document.activate", json!({"index": 0}));
+    assert!(picked(&s).is_empty(), "in the other document");
+}
+
+/// Undo and Redo bring back a selection without the slices that Lock Slices has locked since, so
+/// a move after them leaves the slice where it is.
+#[test]
+fn undo_and_redo_leave_locked_slices_deselected() {
+    let mut s = session();
+    let id = run(&mut s, "object.slice.create", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut s, "object.slice.move", json!({"dx": 10, "dy": 0}));
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(picked(&s).is_empty(), "after Undo");
+    let _ = s.execute("object.slice.move", &json!({"dx": 10, "dy": 0}));
+    assert_eq!(rect_of(&mut s, id)[0], 0.0);
+    // Undone with the slice selected, redone once it is locked.
+    run(&mut s, "view.slices.lock", json!({"locked": false}));
+    run(&mut s, "object.slice.select", json!({"slices": [id]}));
+    run(&mut s, "object.slice.move", json!({"dx": 10, "dy": 0}));
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    run(&mut s, "edit.redo", json!({}));
+    assert!(picked(&s).is_empty(), "after Redo");
+    let _ = s.execute("object.slice.move", &json!({"dx": 10, "dy": 0}));
+    assert_eq!(rect_of(&mut s, id)[0], 10.0);
+}
+
+/// A failed batch, a canceled undo group, a failed drag preview and a canceled drag bring back the
+/// selection from before them, without the slices that Lock Slices locked inside them.
+#[test]
+fn a_failed_batch_a_canceled_undo_group_and_a_canceled_drag_leave_locked_slices_deselected() {
+    let mut s = session();
+    let id = run(&mut s, "object.slice.create", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    let steps = json!([{"command": "view.slices.lock", "params": {"locked": true}}, {"command": "object.isolate", "params": {}}]);
+    assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
+    assert!(s.slices_locked());
+    assert!(picked(&s).is_empty(), "after the failed batch");
+    run(&mut s, "view.slices.lock", json!({"locked": false}));
+    run(&mut s, "object.slice.select", json!({"slices": [id]}));
+    run(&mut s, "edit.undoGroup.begin", json!({}));
+    run(&mut s, "object.slice.move", json!({"dx": 10, "dy": 0}));
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    run(&mut s, "edit.undoGroup.end", json!({"cancel": true}));
+    assert_eq!(rect_of(&mut s, id)[0], 0.0);
+    assert!(picked(&s).is_empty(), "after the canceled undo group");
+    run(&mut s, "view.slices.lock", json!({"locked": false}));
+    run(&mut s, "object.slice.select", json!({"slices": [id]}));
+    s.begin_interaction("Move Slice").unwrap();
+    s.preview("object.slice.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    // A preview that fails puts back the snapshot, without the locked slice.
+    assert!(s.preview("object.slice.move", &json!({"dx": "far", "dy": 0})).is_err());
+    assert!(picked(&s).is_empty(), "after a failed preview");
+    s.cancel_interaction().unwrap();
+    assert_eq!(rect_of(&mut s, id)[0], 0.0);
+    assert!(picked(&s).is_empty(), "after the canceled drag");
 }
 
 #[test]

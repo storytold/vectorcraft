@@ -1993,6 +1993,23 @@ fn a_canceled_interaction_leaves_locked_guides_deselected() {
     assert!(selected(&s).is_empty());
 }
 
+/// A drag preview that fails puts back the selection from before the drag, without the guide
+/// paths that Lock Guides locked during it, so a move after the drag moves nothing.
+#[test]
+fn a_failed_preview_leaves_locked_guides_deselected() {
+    let mut s = session();
+    let g = guide_path(&mut s, 0.0);
+    sel(&mut s, &[g]);
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert!(s.preview("object.move", &json!({"dx": "far", "dy": 0})).is_err());
+    assert!(selected(&s).is_empty());
+    s.commit_interaction().unwrap();
+    let _ = s.execute("object.move", &json!({"dx": 10, "dy": 0}));
+    assert_eq!(bounds(&s, g).x0, 0.0);
+}
+
 fn guides(s: &Session) -> Vec<(bool, f64)> {
     s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect()
 }

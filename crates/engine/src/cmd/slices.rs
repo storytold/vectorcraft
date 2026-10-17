@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Slices",
             ["View"],
             None,
-            "{locked?: bool} toggle (or set) the slice lock: locked slices can't be selected or edited with the Slice Selection tool → {locked}",
+            "{locked?: bool} toggle (or set) the slice lock: locked slices can't be selected or edited with the Slice Selection tool; locking deselects the slices in every open document, and while it is on no command selects one (an object that is an object slice can still be selected as art) → {locked}",
             has_doc,
             lock
         ),
@@ -212,6 +212,16 @@ fn selected(s: &Session) -> Result<Vec<NodeId>> {
 pub(crate) fn selected_slices(d: &Document, sel: &vectorcraft_doc::Selection) -> Vec<NodeId> {
     let objects = sel.objects.iter().filter(|id| d.node(**id).is_some_and(|n| n.extras().slice.is_some()));
     dedup(sel.slices.iter().chain(objects).copied().collect())
+}
+
+/// Deselect the slices that the Slice Selection tool or a slice command selected
+/// ([`vectorcraft_doc::Selection::slices`]): while View → Lock Slices is on, they can't be
+/// selected, whatever selects them. A selected object that is an object slice stays selected.
+/// → whether any was selected.
+pub(crate) fn deselect_slices(sel: &mut vectorcraft_doc::Selection) -> bool {
+    let any = !sel.slices.is_empty();
+    sel.slices.clear();
+    any
 }
 
 fn dedup(mut ids: Vec<NodeId>) -> Vec<NodeId> {
@@ -595,6 +605,14 @@ fn hide(s: &mut Session, p: &Value) -> Result<Value> {
 fn lock(s: &mut Session, p: &Value) -> Result<Value> {
     let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.slices_locked);
     s.menu.slices_locked = v;
+    // Locked slices can't stay selected, in any open document.
+    if v {
+        for st in &mut s.docs {
+            if deselect_slices(&mut st.selection) {
+                st.revision += 1;
+            }
+        }
+    }
     Ok(json!({ "locked": v }))
 }
 
@@ -618,9 +636,9 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn select_all(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = s.doc()?.doc.slice_ids();
-    let n = ids.len();
     s.select(|_, sel| sel.set_slices(ids))?;
-    Ok(json!({ "count": n }))
+    // None while Lock Slices is on.
+    Ok(json!({ "count": s.doc()?.selection.slices.len() }))
 }
 
 // ---------- the Slice and Slice Selection tools ----------

@@ -1669,6 +1669,7 @@ impl Session {
             cmd::settle_interaction(self)?;
         }
         let guides_locked = self.menu.guides_locked;
+        let slices_locked = self.menu.slices_locked;
         let st = self.doc_mut()?;
         let before = st.doc.clone();
         let before_sel = st.selection.clone();
@@ -1720,6 +1721,10 @@ impl Session {
                 if guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
                 }
+                // An edit that selects the slices it makes leaves them out while they are locked.
+                if slices_locked {
+                    cmd::slices::deselect_slices(&mut st.selection);
+                }
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -1742,6 +1747,7 @@ impl Session {
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
         let guides_locked = self.menu.guides_locked;
+        let slices_locked = self.menu.slices_locked;
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
         f(&st.doc, &mut st.selection);
@@ -1749,6 +1755,10 @@ impl Session {
         // Lock Guides locks the paths made into guides too (#1534), whatever selects them.
         if guides_locked {
             deselect_guides(&st.doc, &mut st.selection);
+        }
+        // Lock Slices: no slice can be selected.
+        if slices_locked {
+            cmd::slices::deselect_slices(&mut st.selection);
         }
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
@@ -1797,6 +1807,8 @@ impl Session {
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
         {
+            let guides_locked = self.menu.guides_locked;
+            let slices_locked = self.menu.slices_locked;
             let st = self.doc_mut()?;
             let Some(it) = &st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
             // Undoing the previous preview counts as a change, so views redraw even when the command
@@ -1808,6 +1820,14 @@ impl Session {
             st.doc = it.doc.clone();
             if selection_changed {
                 st.selection.clone_from(&it.selection);
+            }
+            // Guides and slices locked during the interaction stay deselected, even when the
+            // preview fails.
+            if guides_locked {
+                deselect_guides(&st.doc, &mut st.selection);
+            }
+            if slices_locked {
+                cmd::slices::deselect_slices(&mut st.selection);
             }
         }
         // The previous preview's paint is undone with it.
@@ -1880,11 +1900,15 @@ impl Session {
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.pending_paint = None;
         let guides_locked = self.menu.guides_locked;
+        let slices_locked = self.menu.slices_locked;
         let st = self.doc_mut()?;
         st.undo_interaction();
-        // Guides locked during the interaction stay deselected.
+        // Guides and slices locked during the interaction stay deselected.
         if guides_locked {
             deselect_guides(&st.doc, &mut st.selection);
+        }
+        if slices_locked {
+            cmd::slices::deselect_slices(&mut st.selection);
         }
         Ok(())
     }
@@ -1929,6 +1953,9 @@ impl Session {
                 st.selection = Arc::unwrap_or_clone(e.selection);
                 if self.menu.guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
+                }
+                if self.menu.slices_locked {
+                    cmd::slices::deselect_slices(&mut st.selection);
                 }
                 st.revision += 1;
                 journal = Some(g.journal);
