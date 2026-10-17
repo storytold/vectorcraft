@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type (on omitted: the opposite of the first object's setting): in every left-to-right paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every left-to-right paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -107,9 +107,9 @@ fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step.
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = text_targets(s, p, "Optical Margin Alignment")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t.optical_margin),
         _ => None,

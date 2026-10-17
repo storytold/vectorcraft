@@ -270,9 +270,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     {
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }
-    // Threaded type read from a file flows through its frames.
+    // Threaded type read from a file flows through its frames (the threaded type of a restored
+    // document keeps its text as saved), and every frame of a thread takes its first frame's
+    // Optical Margin Alignment setting.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
+    } else if !doc.text_threads.is_empty() {
+        crate::cmd::threads::share_optical_margin(&mut doc);
     }
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);

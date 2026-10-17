@@ -3516,7 +3516,10 @@ undo step.
 `type.opticalMarginAlignment {on?: bool}` (Type › Optical Margin Alignment) turns Optical Margin Alignment on or off
 for the selected type objects (or `ids`); without `on` it sets the opposite of the first object's setting. It replies
 `{on, ids}`, and the menu item is checked while the first type object it acts on (inside a selected group too) has it
-on. In every left-to-right paragraph of point and area type, these characters hang outside the margin when they
+on. Optical Margin Alignment is a setting of the whole thread: the command sets every frame of a selected frame's
+thread, and `ids` lists them all. Threading frames gives the thread its first frame's setting, frames taken out of
+a thread keep it, and a file whose frames of one thread differ opens with the first frame's setting in all of them.
+In every left-to-right paragraph of point and area type, these characters hang outside the margin when they
 start or end a line: quotation marks, hyphens (a hyphenated line's hyphen too), full stops and commas hang wholly;
 asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half their width; and A, V, W, Y, v, w
 and y hang by a tenth of theirs. A punctuation mark followed by a quotation mark hangs with it.

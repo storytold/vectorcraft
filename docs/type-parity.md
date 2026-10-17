@@ -34,7 +34,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Variable fonts | partial | named instances as styles; Character panel › Variable Font sets each axis (`fontAxes`); the font menu's Variable filter is missing |
 | Colour fonts (OpenType SVG / COLR) | partial | |
 | Every-line and Single-line composers | done | tuned by eye, never compared side by side |
-| Optical Margin Alignment | done | Type › Optical Margin Alignment, `type.opticalMarginAlignment`: per type object, in point and area type of left-to-right paragraphs; type on a path and right-to-left paragraphs do not hang |
+| Optical Margin Alignment | done | Type › Optical Margin Alignment, `type.opticalMarginAlignment`: per type object, with one setting for all the frames of a thread, in point and area type of left-to-right paragraphs; type on a path and right-to-left paragraphs do not hang |
 | Hyphenation… and Justification… options | partial | Hyphenation… (`ui.hyphenation`, `text.setFormat`) sets each paragraph's Words Longer Than, After First, Before Last, Hyphen Limit, Hyphenation Zone (Single-line Composer only) and Hyphenate Capitalized Words, and paragraph styles carry them (#2310); Justification… missing (menu stub) |
 | Tab stops and leaders; Tabs panel | partial | Tabs panel and stops with leaders in the model (`text.tabs.set`); a stop drags from where the press landed (#1458); leaders fill the tab's gap, repeated on a grid so they line up from line to line (#1877) |
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
