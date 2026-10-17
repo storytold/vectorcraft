@@ -267,6 +267,41 @@ fn save_a_copy_while_editing() {
     assert!(doc(&s).pattern("Dots copy").is_some());
 }
 
+/// Make, Save a Copy and Pattern Options trim the name they are given, as the Pattern Options
+/// panel does; the trimmed name is the one compared with the names there are, and a blank name
+/// gives the name the command gives when there is none.
+#[test]
+fn made_copied_and_renamed_patterns_trim_their_names() {
+    let mut s = session();
+    make_dots(&mut s);
+    let make = |s: &mut Session, name: &str| {
+        let r = rect(s, 0.0, 0.0, 10.0, 10.0);
+        s.execute("object.pattern.make", &json!({"ids": [r.0], "name": name, "edit": false})).unwrap()["name"].clone()
+    };
+    assert_eq!(make(&mut s, "  Grid \t"), "Grid");
+    assert_eq!(make(&mut s, " Dots"), "Dots 2");
+    assert_eq!(make(&mut s, ""), "New Pattern 1");
+    assert_eq!(make(&mut s, " \t "), "New Pattern 2");
+    s.execute("object.pattern.edit", &json!({"name": "Grid"})).unwrap();
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({"name": " Lines\t"})).unwrap()["name"], "Lines");
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({"name": "  "})).unwrap()["name"], "Grid copy");
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    assert_eq!(s.execute("pattern.options", &json!({"name": "Dots 2", "newName": " Spots "})).unwrap()["name"], "Spots");
+    assert_eq!(s.execute("pattern.options", &json!({"name": "Spots", "newName": " "})).unwrap()["name"], "Spots");
+    let e = s.execute("pattern.options", &json!({"name": "Spots", "newName": " Lines"})).unwrap_err().to_string();
+    assert!(e.contains("a pattern named `Lines` exists"), "{e}");
+    // Save a Copy names the copy of a pattern whose saved name has white space around it, as a
+    // saved file can hold, from the trimmed name (" Old " gives "Old copy").
+    let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    d.patterns.iter_mut().filter(|p| p.name == "Grid copy").for_each(|p| p.name = " Old ".into());
+    s.execute("object.pattern.edit", &json!({"name": " Old "})).unwrap();
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({})).unwrap()["name"], "Old copy");
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    let names: Vec<&str> = doc(&s).patterns.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["Dots", "Grid", "Spots", "New Pattern 1", "New Pattern 2", "Lines", " Old ", "Old copy"]);
+    assert!(doc(&s).swatch("Spots").is_some() && doc(&s).swatch(" Spots ").is_none());
+}
+
 #[test]
 fn undo_make_pattern() {
     let mut s = session();
