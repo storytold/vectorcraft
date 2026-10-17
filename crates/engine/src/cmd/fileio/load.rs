@@ -470,6 +470,8 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
 /// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
+/// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
 /// A TIFF with more strips or tiles than the decoder can count
@@ -504,7 +506,10 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     };
     let img = match (f.id == "tiff").then(extra_samples).flatten() {
         Some(img) => img,
-        None => reader.decode().map_err(err)?.to_rgba8(),
+        None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
+            Some(read) => read.map_err(err)?,
+            None => reader.decode().map_err(err)?.to_rgba8(),
+        },
     };
     as_png(img, ppi)
 }
