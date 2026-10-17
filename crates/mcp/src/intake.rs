@@ -215,13 +215,24 @@ pub(crate) fn read_loop(shared: &Shared, out: &SyncSender<String>, mut reader: i
 }
 
 /// A reply that is already known: in order behind queued work, or at once when the engine is
-/// tied up for long (then nobody can expect order).
+/// tied up for long (then nobody can expect order). Like a message, it waits while
+/// [`MAX_QUEUED`] lines are queued.
 fn submit_canned(shared: &Shared, out: &SyncSender<String>, reply: String) {
     let mut st = lock(&shared.state);
-    if shared.long_running(&st).is_some() {
-        drop(st);
-        let _ = out.send(reply);
-        return;
+    loop {
+        if st.closed {
+            return;
+        }
+        if shared.long_running(&st).is_some() {
+            drop(st);
+            let _ = out.send(reply);
+            return;
+        }
+        if st.queue.len() < MAX_QUEUED {
+            break;
+        }
+        // Wake now and then: the call ahead may turn long-running while the queue is full.
+        st = shared.wake.wait_timeout(st, Duration::from_millis(50)).unwrap_or_else(PoisonError::into_inner).0;
     }
     st.queue.push_back(Job::Canned(reply));
     shared.wake.notify_all();
@@ -305,5 +316,39 @@ fn cancel(shared: &Shared, params: &Value) {
         log::debug!("dropping queued request {key}");
         st.queue.remove(at);
         shared.wake.notify_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_errors_wait_for_room_in_the_queue() {
+        // No call has run past the busy limit, so the replies queue rather than go out at once.
+        let shared = Shared::new(Arc::new(AtomicBool::new(false)), Duration::from_secs(60));
+        let (out, _replies) = std::sync::mpsc::sync_channel(1);
+        let lines = 3 * MAX_QUEUED;
+        let input = "not json\n".repeat(lines);
+        std::thread::scope(|scope| {
+            let reader = scope.spawn(|| read_loop(&shared, &out, input.as_bytes()));
+            // Nothing takes jobs off the queue yet, so the reader stops at the limit.
+            let end = Instant::now() + Duration::from_secs(10);
+            while !reader.is_finished() && lock(&shared.state).queue.len() < MAX_QUEUED && Instant::now() < end {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            let queued = lock(&shared.state).queue.len();
+            assert!(queued <= MAX_QUEUED, "{queued} lines queued, more than {MAX_QUEUED}");
+            // Once the engine takes jobs, every line is answered with its parse error.
+            let mut answered = 0;
+            while let Some(job) = shared.next() {
+                assert!(matches!(&job, Job::Canned(r) if r.contains("parse error")));
+                answered += 1;
+                shared.finished();
+            }
+            assert_eq!(answered, lines);
+            reader.join().unwrap().unwrap();
+        });
     }
 }
