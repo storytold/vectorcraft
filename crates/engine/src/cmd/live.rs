@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!(
             "object.blend.spine.convertAnchor",
-            "Convert Spine Point",
+            "Convert Anchor Point",
             [],
             None,
             "{id? (default: the selected blend), anchor: index, to: smooth|corner, x?, y?} convert a blend spine point: dragging a corner creates symmetric smooth handles, clicking a point with handles retracts both. Without x/y, smooth uses the neighbouring spine points",
@@ -675,7 +675,7 @@ fn spine_convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         (Some(_), Some(_)) => Some(finite_point(p, C)?),
         _ => return Err(bad(C, "x and y must be given together")),
     };
-    edit_spine(s, p, C, "Convert Spine Point", |sp, _, _| {
+    edit_spine(s, p, C, "Convert Anchor Point", |sp, _, _| {
         if smooth && target.is_none() {
             if index >= sp.anchors.len() {
                 return Err(bad(C, "no such spine point"));
