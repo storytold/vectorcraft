@@ -26,6 +26,9 @@ pub struct Loaded {
     /// Only a stand-in picture of the file (an Affinity document whose native data couldn't be
     /// read): Open shows it with its warning; Place, templates and libraries refuse it.
     pub preview_only: bool,
+    /// A PDF, or a `.ai` or `.ait` that holds a PDF, read through the editor's own copy of its art
+    /// that it carries (its layers), not from its PDF part alone.
+    pub editing_data: bool,
 }
 
 impl Loaded {
@@ -155,22 +158,22 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
 /// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
-/// first page's `UserUnit`).
-fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>) {
+/// first page's `UserUnit`) → (document, warnings, whether its layers were read).
+fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>, bool) {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
-        return (doc, warnings);
+        return (doc, warnings, false);
     }
-    let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings) };
+    let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
     let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
-        return (doc, warnings);
+        return (doc, warnings, false);
     }
     // The layers hold the art that the PDF part leaves out or, in a PDF, that the import clipped
     // to the page.
     warnings.retain(|w| w != vectorcraft_pdf::OFF_ARTBOARD_NOTE && w != vectorcraft_pdf::PAST_PAGE_NOTE);
-    (doc, warnings)
+    (doc, warnings, true)
 }
 
 /// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
@@ -196,6 +199,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let title = file_name(name);
     let mut converted = false;
     let mut preview_only = false;
+    let mut editing_data = false;
     let (mut doc, mut warnings, restored) = match format.id {
         // EPS and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
@@ -230,11 +234,16 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     // Pages of text alone: the editing copy alone where it reads, as for a file
                     // saved without its PDF part (#1387: else the page, which is the art).
                     let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
-                    Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit)))
+                    let (doc, warnings, read) = match alone {
+                        Some((doc, warnings)) => (doc, warnings, true),
+                        None => through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit),
+                    };
+                    editing_data = read;
+                    Ok((doc, warnings))
                 }
                 // Saved without its PDF part: the editing copy is all the file has.
                 Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {
-                    from_editing_data_alone(bytes, opts).unwrap_or(Err(e))
+                    from_editing_data_alone(bytes, opts).unwrap_or(Err(e)).inspect(|_| editing_data = true)
                 }
                 Err(e) => Err(e),
             })?
@@ -276,7 +285,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         doc.title = title;
     }
     warnings.extend(doc.images.values().filter_map(|b| too_large_note(&b.bytes)));
-    Ok(Loaded { doc, format, warnings, restored, converted, preview_only })
+    Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })
 }
 
 /// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's

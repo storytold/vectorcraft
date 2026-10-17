@@ -7,7 +7,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
-use crate::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
+use crate::cmd::clipboard::{AI, BITMAP, EPS, FILE_HEAD, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
 
 fn session() -> Session {
     let mut s = Session::new();
@@ -209,7 +209,8 @@ fn copied_ai_files_paste_as_the_pdf_or_postscript_inside() {
     let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n1 0 0 setrgbcolor\nnewpath 0 0 moveto 40 0 lineto 40 40 lineto closepath fill\nshowpage\n";
     let of = |name: &str, bytes: &[u8]| file_flavour(name, &bytes[..bytes.len().min(FILE_HEAD)], &PASTE_ORDER);
     for name in ["art.ai", "art.ait", "ART.AI"] {
-        assert_eq!(of(name, &pdf), Some(PDF), "{name}");
+        // Asked for as PDF; Paste reads it from its editing data (tests_aiimport).
+        assert_eq!(of(name, &pdf), Some(AI), "{name}");
         assert_eq!(of(name, ps), Some(EPS), "{name}");
     }
     // Neither PDF nor PostScript: nothing to paste, whatever the name says.

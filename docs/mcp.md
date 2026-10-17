@@ -2461,9 +2461,12 @@ area). Each one has a query command:
 transparent around them).
 
 What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
-password?}` (the page's objects), `clipboard.importEps {dataBase64}` (an EPS or other PostScript picture's objects,
-as `document.open` reads one), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its
-physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
+password?, editingData?}` (the page's objects; with `editingData: true` the data is a `.ai` or `.ait` file, and every
+object of its editing data comes in as `document.open` reads it, each layer's objects in stacking order and a hidden
+layer's objects hidden, or the page's objects when `document.open` would not use that copy), `clipboard.importEps
+{dataBase64}` (an EPS or other PostScript picture's objects, as `document.open` reads one, a hidden layer's objects
+hidden), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its physical size) or
+`clipboard.importText {text}` (point text in the default type style), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
 copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
@@ -2475,7 +2478,9 @@ them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). On the web Copy publishes SVG text, and
-Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image).
+Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image). A `.ai`
+or `.ait` file that holds a PDF, copied in a file manager or carried by a paste, is loaded with `clipboard.importPdf
+{editingData: true}`, and its objects go into the active layer.
 
 The `pasteTextFormatting` preference (`keep` or `plain`): with `plain`, text the Type tool copied pastes into type
 without its formatting, taking the style at the caret.

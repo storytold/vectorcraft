@@ -103,6 +103,88 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
 }
 
+/// A page of a square and a line of type, as a `.ai`'s PDF part draws them.
+const SQUARE_AND_TYPE: &str = "0 g 10 10 40 40 re f BT /F1 12 Tf 100 50 Td (Hi) Tj ET";
+
+/// `file` loaded with `clipboard.importPdf` (`editingData` as given) and pasted → the command's
+/// reply and the objects the paste selected, in stacking order.
+fn paste(s: &mut Session, file: &[u8], editing_data: bool) -> (Value, Vec<Node>) {
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(file), "editingData": editing_data});
+    let r = s.execute("clipboard.importPdf", &p).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    (r, st.selection.in_paint_order(&st.doc).into_iter().filter_map(|id| st.doc.node(id).cloned()).collect())
+}
+
+/// Is any of `nodes` (or an object inside one) type?
+fn has_type(nodes: &[Node]) -> bool {
+    let mut found = false;
+    nodes.iter().for_each(|n| n.walk(&mut |c| found |= matches!(c.kind, NodeKind::Text(_))));
+    found
+}
+
+/// A `.ai` copied in a file manager pastes the objects of its editing data, as `document.open`
+/// reads it: both layers' objects in their stacking order, into the active layer, with their names
+/// and hidden members, and its type as type. Without `editingData`, as for a PDF, its page pastes:
+/// the shown layer's art without names, and the type as outlines.
+#[test]
+fn a_copied_ai_file_pastes_from_its_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let file = ai::ai(&compressed(&ai::sample_data()), ai::page_pdf());
+    let (r, pasted) = paste(&mut s, &file, true);
+    assert_eq!(r["count"], 7, "{r}");
+    let pasted_names: Vec<String> = pasted.iter().map(|n| n.name.clone().unwrap_or_default()).collect();
+    assert_eq!(pasted_names, ["Pair", "Ring", "Window", "Shaded", "", "Sub", ""]);
+    let pair = pasted[0].children().unwrap();
+    assert!(pair[0].visible && !pair[1].visible, "the hidden member stays hidden");
+    assert!(matches!(pasted[5].kind, NodeKind::Layer { .. }) && pasted[5].locked, "the sublayer comes as it is");
+    assert_eq!(pasted.iter().map(|n| n.visible).collect::<Vec<_>>(), [true, true, true, false, false, false, false], "the hidden layer's objects");
+    let layers = &s.doc().unwrap().doc.layers;
+    assert_eq!(layers.len(), 1, "no layer is added");
+    assert!(pasted.iter().all(|n| layers[0].children().unwrap().iter().any(|c| c.id == n.id)), "into the active layer");
+    // The same editing data in an EPS: the same objects, the hidden layer's objects hidden.
+    let eps = ai::eps(&ai::sample_data(), ai::page_ps());
+    s.execute("clipboard.importEps", &json!({"dataBase64": vectorcraft_format::base64_encode(&eps)})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let shown = |nodes: Vec<&Node>| nodes.iter().map(|n| (n.name.clone().unwrap_or_default(), n.visible)).collect::<Vec<_>>();
+    assert_eq!(shown(st.selection.in_paint_order(&st.doc).into_iter().filter_map(|id| st.doc.node(id)).collect()), shown(pasted.iter().collect()));
+    let (r, page) = paste(&mut s, &file, false);
+    assert!(page.iter().all(|n| n.name.is_none()), "{r}");
+    // A page of text only, or only a placeholder (saved without PDF compatibility): the editing
+    // data's objects all the same.
+    for (page, boxed) in [(TEXT_ART, "/ArtBox [0 0 200 100]"), (PLACEHOLDER, "")] {
+        let (r, pasted) = paste(&mut s, &ai::ai_with(&compressed(&ai::sample_data()), page, boxed), true);
+        assert_eq!(pasted.first().and_then(|n| n.name.as_deref()), Some("Pair"), "{page}: {r}");
+        assert_eq!(r["count"], 7, "{page}: {r}");
+    }
+    // Type: a text object from the editing data, outlines from the page.
+    let data = ai::editing_data(
+        200.0,
+        100.0,
+        &ai::layer("Art", &format!("0 g\n{}f\n/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n", ai::rect(10.0, 10.0, 50.0, 50.0))),
+    );
+    let typed = ai::ai(&compressed(data.as_bytes()), SQUARE_AND_TYPE);
+    let (r, pasted) = paste(&mut s, &typed, true);
+    assert!(has_type(&pasted), "{r}: {pasted:?}");
+    let (r, pasted) = paste(&mut s, &typed, false);
+    assert!(!has_type(&pasted), "{r}: {pasted:?}");
+    // A `.ai` VectorCraft wrote: the document it carries, its hidden square too.
+    let mut other = Session::new();
+    other.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    for x in [10, 100] {
+        other.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 40, "height": 40})).unwrap();
+    }
+    other.execute("object.hide", &json!({})).unwrap();
+    let saved = other.execute("document.export", &json!({"format": "ai"})).unwrap();
+    let saved = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let (r, pasted) = paste(&mut s, &saved, true);
+    assert_eq!(pasted.iter().map(|n| n.visible).collect::<Vec<_>>(), [true, false], "{r}");
+    let (r, page) = paste(&mut s, &saved, false);
+    assert!(page.iter().all(|n| n.visible), "{r}");
+}
+
 /// A PDF saved with the editing data opens from it, as a `.ai` does (#868).
 #[test]
 fn a_pdf_saved_with_the_editing_data_opens_from_it() {
@@ -145,6 +227,29 @@ fn editing_data_that_cant_be_read_keeps_the_pdf_parts_notes() {
     assert_eq!(r["warnings"], json!([vectorcraft_pdf::OFF_ARTBOARD_NOTE]), "{r}");
     let r = open(&mut s, "damaged.pdf", &ai::pdf(damaged, "0 g 150 20 100 60 re f"), json!({})).unwrap();
     assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE]), "{r}");
+}
+
+/// A copied `.ai` whose editing data can't be read, or isn't there, pastes its page as a PDF
+/// does: the same objects as without `editingData`, its type as outlines.
+#[test]
+fn a_copied_ai_file_whose_editing_data_cant_be_read_pastes_its_page() {
+    let symbols = ai::editing_data(200.0, 100.0, &ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n"));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for (what, private) in
+        [("damaged", b"%AI12_CompressedData not zlib".to_vec()), ("unread layers", compressed(symbols.as_bytes())), ("none", vec![])]
+    {
+        let file = ai::ai(&private, SQUARE_AND_TYPE);
+        let (r, pasted) = paste(&mut s, &file, true);
+        let (want, page) = paste(&mut s, &file, false);
+        assert_eq!((&r["count"], &r["warnings"]), (&want["count"], &want["warnings"]), "{what}");
+        let kinds = |nodes: &[Node]| nodes.iter().map(|n| std::mem::discriminant(&n.kind)).collect::<Vec<_>>();
+        assert_eq!(kinds(&pasted), kinds(&page), "{what}");
+        assert!(!pasted.is_empty() && !has_type(&pasted), "{what}: {r}");
+    }
+    // Editing data that reads and draws as the page does: its objects, not the page's.
+    let (r, _) = paste(&mut s, &ai::ai(&compressed(&ai::sample_data()), ai::page_pdf()), true);
+    assert_eq!(r["count"], 7, "{r}");
 }
 
 #[test]
