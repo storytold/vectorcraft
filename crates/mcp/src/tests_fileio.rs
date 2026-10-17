@@ -92,6 +92,7 @@ fn export_tool_lists_engine_formats_and_options() {
     let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
     assert!(open["description"].as_str().unwrap().contains(".ait"));
     assert!(open["description"].as_str().unwrap().contains(".eps, .epsf, .ps, "), "{open}");
+    assert!(open["description"].as_str().unwrap().contains(".bmp, .tga, .vda, .icb, .vst, "), "{open}");
 }
 
 /// A fake app that records `engine.execute` calls and answers each with an empty object.

@@ -45,6 +45,7 @@ mod save;
 mod screens;
 mod svg;
 mod text;
+mod tgaread;
 mod zip;
 
 use serde_json::{Value, json};
@@ -644,7 +645,16 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
-    Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
+    Format {
+        id: "tga",
+        label: "Targa",
+        extensions: &["tga", "vda", "icb", "vst"],
+        mime: "image/x-tga",
+        read: true,
+        write: true,
+        raster: true,
+        options: TGA_OPTIONS,
+    },
     Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: true, write: true, raster: true, options: PSD_OPTIONS },
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
@@ -672,6 +682,10 @@ pub const OPEN_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "tga",
+    "vda",
+    "icb",
+    "vst",
     "psd",
     "psb",
     "vctemplate",
@@ -688,9 +702,9 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
 /// documents belong to raster editors, so Finder and file managers don't offer a vector app for
-/// them, and the packaging declares no `.epsf` or `.ps` type (File › Open and Place still read
-/// them all).
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps"];
+/// them, and the packaging declares no `.epsf`, `.ps` or Targa type (File › Open and Place still
+/// read them all).
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -727,6 +741,10 @@ pub const PLACE_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "tga",
+    "vda",
+    "icb",
+    "vst",
     "psd",
     "psb",
     "vctemplate",

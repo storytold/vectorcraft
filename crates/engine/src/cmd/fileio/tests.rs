@@ -189,6 +189,22 @@ fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
     assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
 }
 
+/// A 16-bit RGB TIFF whose samples need more than the allowance (6 bytes a pixel), though its RGBA
+/// pixels would fit, is refused as too large to draw before it is decoded.
+#[test]
+fn tiffs_whose_samples_pass_the_allowance_are_too_large() {
+    let plane = |v: u16| vec![v; 6];
+    let mut file = hand_tiff(2, 16, &[], false, &[plane(9000), plane(30_000), plane(60_000)]);
+    // The loop sets ImageWidth, ImageLength and RowsPerStrip (the first, second and eighth entries) to `side`.
+    let side = 20_000u32;
+    assert!(u64::from(side * side) * 6 > MAX_RASTER_ALLOC && u64::from(side * side) * 4 <= MAX_RASTER_ALLOC);
+    for at in [18, 30, 102] {
+        file[at..at + 4].copy_from_slice(&side.to_le_bytes());
+    }
+    let e = raster_image(&file).err().expect("refused");
+    assert_eq!(e.to_string(), "an image of 20000 × 20000 pixels is too large to draw");
+}
+
 /// A planar CMYK TIFF opens and places with its ink amounts, stored as a TIFF the image decoder
 /// reads (#1466).
 #[test]
