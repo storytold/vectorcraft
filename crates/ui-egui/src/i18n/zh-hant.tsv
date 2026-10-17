@@ -1047,6 +1047,7 @@
 	Fill and Stroke	填色與筆畫
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
+	Alt key toggles to Smooth Tool	Alt 鍵切換為平滑工具
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件

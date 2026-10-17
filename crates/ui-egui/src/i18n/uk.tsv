@@ -1069,6 +1069,7 @@
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
 	Fill and Stroke	Заливка та обведення
 	Fill new strokes	Заповнювати нові обведення
+	Alt key toggles to Smooth Tool	Клавіша Alt перемикає на інструмент «Згладжування»
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
 	Fill Color	Колір заливки

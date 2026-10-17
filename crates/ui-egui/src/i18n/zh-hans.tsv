@@ -1023,6 +1023,7 @@
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
 	Fill and Stroke	填色和描边
 	Fill new strokes	为新描边应用填色
+	Alt key toggles to Smooth Tool	Alt 键切换为平滑工具
 	Keep selected	保持选择状态
 	Merge only with selection	仅与所选对象合并
 	Fill Color	填色
