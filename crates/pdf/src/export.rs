@@ -615,6 +615,23 @@ struct GlyphLine {
 /// Most pixels along a side of a freeform gradient's image (its colour field is smooth).
 const MAX_FIELD_PX: f64 = 512.0;
 
+/// The lowest resolution (ppi) of the images a PDF gets from raster work (freeform gradients,
+/// raster effects). A PDF is zoomed and printed, so the 72 ppi screen default looks blurry.
+pub const MIN_RASTER_PPI: f64 = 150.0;
+
+/// The ppi to rasterise at: the document's, but at least [`MIN_RASTER_PPI`].
+pub fn pdf_raster_ppi(doc_ppi: f64) -> f64 {
+    if doc_ppi.is_finite() && doc_ppi >= MIN_RASTER_PPI { doc_ppi } else { MIN_RASTER_PPI }
+}
+
+/// Pixel size of a freeform gradient's image for an area of `w` x `h` points at `ppi`.
+fn field_size(ppi: f64, w: f64, h: f64) -> (u16, u16) {
+    let long = w.max(h);
+    let k = (pdf_raster_ppi(ppi) / 72.0).min(MAX_FIELD_PX / long);
+    let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
+    (along(w), along(h))
+}
+
 /// The largest magnitude a coordinate, length or transform entry may have in the content stream it
 /// is drawn into (for glyph spacing, in thousandths of an em). Art that would go beyond it is left
 /// out. A PDF/A-2 file may hold only integers from -2,147,483,648 to 2,147,483,647 (ISO 19005-2,
@@ -1271,7 +1288,7 @@ impl Exporter<'_> {
     }
 
     /// Draw freeform gradient `g`, placed on `bounds`, as an image of its colour field over `area`,
-    /// sampled at the document's raster effects resolution (at most [`MAX_FIELD_PX`] a side).
+    /// sampled at the document's raster effects resolution, at least [`MIN_RASTER_PPI`] (at most [`MAX_FIELD_PX`] a side).
     fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) {
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
@@ -1280,9 +1297,7 @@ impl Exporter<'_> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
-        let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
-        let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
-        let (cols, rows) = (along(area.width()), along(area.height()));
+        let (cols, rows) = field_size(self.doc.raster_effects_ppi, area.width(), area.height());
         let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
         let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
         let pixels = if self.convert { self.out.pixels() } else { None };
@@ -1801,6 +1816,16 @@ fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool) -> Option<Image> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn freeform_field_image_is_at_least_150_ppi_and_capped() {
+        // 100 pt at the 72 ppi default: 209 px (150 ppi), not 100.
+        assert_eq!(field_size(72.0, 100.0, 50.0), (209, 105));
+        assert_eq!(field_size(f64::NAN, 100.0, 50.0), (209, 105));
+        // A higher document ppi still wins; the side cap holds.
+        assert_eq!(field_size(300.0, 100.0, 50.0), (417, 209));
+        assert_eq!(field_size(300.0, 1000.0, 10.0).0, 512);
+    }
 
     #[test]
     fn writable_bounds_values_the_transform_and_values_through_it() {

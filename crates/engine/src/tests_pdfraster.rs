@@ -221,3 +221,32 @@ fn pdf_resolution_cap_stays_quiet_when_small_effect_meets_requested_ppi() {
     assert!(String::from_utf8_lossy(&r.bytes).contains("/Subtype/Image"));
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
+
+/// Pixel width of the widest image in the PDF of `d`.
+fn widest_pdf_image(d: &Document) -> u32 {
+    let bytes = crate::export_pdf(d, &Default::default()).unwrap();
+    let back = vectorcraft_pdf::import(&bytes).unwrap();
+    let mut widest = 0;
+    back.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            widest = widest.max(im.width);
+        }
+    });
+    widest
+}
+
+#[test]
+fn pdf_effect_images_have_at_least_150_ppi_even_at_72() {
+    // #2485: the New Document default of 72 ppi made soft edges blurry in the PDF.
+    let mut d = Document::new(200.0, 200.0);
+    assert_eq!(d.raster_effects_ppi, 72.0);
+    let r = rect(&mut d, Rect::new(50.0, 50.0, 150.0, 150.0), Color::rgb(0.2, 0.4, 0.8));
+    add(&mut d, with(r, shadow()));
+    // 100 pt of art alone is 208 px at 150 ppi; at 72 ppi the whole image is far below that.
+    assert!(widest_pdf_image(&d) >= 208);
+    // The document itself is left alone, and a higher resolution is kept.
+    assert_eq!(d.raster_effects_ppi, 72.0);
+    let at_72 = widest_pdf_image(&d);
+    d.raster_effects_ppi = 300.0;
+    assert!(widest_pdf_image(&d) > at_72 * 3 / 2);
+}
