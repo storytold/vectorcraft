@@ -511,6 +511,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ime_output(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
+    // A Rotate View drag (the tool, or Space+Shift with any tool) shows the view's angle on a dial
+    // at the canvas center, the point the view turns about.
+    if app.ui.screen_mode < 3 && matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::RotateView { .. })) {
+        rotate_view_dial(&painter, rect.center(), v.rotation, &t);
+    }
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         if let Some(origin) = origin_preview {
@@ -2154,6 +2159,26 @@ fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         let arrow = vec![c + vec2(3.0 * d, 0.0), c + vec2(-2.0 * d, -3.0), c + vec2(-2.0 * d, 3.0)];
         p.add(Shape::convex_polygon(arrow, color, Stroke::NONE));
     }
+}
+
+/// The radius of the Rotate View dial, in screen points.
+const DIAL_RADIUS: f32 = 40.0;
+
+/// The dial a Rotate View drag shows, centered on `c`: a tick every 15° (longer every 90°), a
+/// needle pointing where the document's top points in a view turned by `rotation` degrees, and the
+/// angle under the center, rounded to whole degrees as in the status bar.
+fn rotate_view_dial(p: &egui::Painter, c: Pos2, rotation: f64, t: &Tokens) {
+    // `dir(deg)` is the screen direction `deg` degrees clockwise from straight up.
+    let dir = |deg: f32| vec2(deg.to_radians().sin(), -deg.to_radians().cos());
+    p.circle(c, DIAL_RADIUS, t.panel.gamma_multiply(0.85), Stroke::new(1.0, t.border));
+    for i in 0..24u8 {
+        let len = if i % 6 == 0 { 8.0 } else { 4.0 };
+        let d = dir(f32::from(i) * 15.0);
+        p.line_segment([c + d * (DIAL_RADIUS - len), c + d * DIAL_RADIUS], Stroke::new(1.0, t.text_dim));
+    }
+    p.line_segment([c, c + dir(rotation as f32) * DIAL_RADIUS], Stroke::new(2.0, t.accent));
+    p.circle_filled(c, 2.5, t.accent);
+    p.text(c + vec2(0.0, 8.0), egui::Align2::CENTER_TOP, format!("{rotation:.0}°"), egui::FontId::proportional(11.0), t.text);
 }
 
 fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
@@ -5246,6 +5271,59 @@ mod tests {
         assert_ne!(shown(&mut app, vec![space(false, Modifiers::NONE), Event::ModifiersChanged(Modifiers::NONE)]), CursorIcon::Alias);
         app.select_tool("rotateView");
         assert_eq!(shown(&mut app, vec![Event::PointerMoved(c)]), CursorIcon::Alias, "the Rotate View tool");
+    }
+
+    #[test]
+    fn a_rotate_view_drag_shows_a_dial_with_the_angle() {
+        use egui::{Event, Modifiers};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rotateView");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let c = app.canvas_rect.unwrap().center();
+        let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+        let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        // `dial` returns, from the shapes of one frame, the center of the dial's circle, the needle's
+        // direction in whole degrees clockwise from straight up, and the angle text.
+        let dial = |app: &mut VectorcraftApp| {
+            let s = shapes(app, &ctx);
+            let circle = s.iter().find_map(|s| if let Shape::Circle(k) = s { (k.radius == DIAL_RADIUS).then_some(k.center) } else { None });
+            let needle = s.iter().find_map(|s| match s {
+                Shape::LineSegment { points: [a, b], stroke } if stroke.width == 2.0 && *a == c => {
+                    Some((b.x - a.x).atan2(a.y - b.y).to_degrees().round() as i32)
+                }
+                _ => None,
+            });
+            let text =
+                s.iter().find_map(|s| if let Shape::Text(t) = s { Some(t.galley.text().to_string()).filter(|t| t.ends_with('°')) } else { None });
+            (circle, needle, text)
+        };
+        assert_eq!(dial(&mut app), (None, None, None), "no dial before a drag");
+        // The Rotate View tool: a drag from 0° to 30° about the canvas center.
+        let (right, at_30, below) = (c + vec2(100.0, 0.0), c + vec2(86.6, 50.0), c + vec2(0.0, 100.0));
+        frame(&mut app, &ctx, vec![Event::PointerMoved(right)]);
+        frame(&mut app, &ctx, vec![button(right, true, Modifiers::NONE)]);
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at_30)]);
+        assert_eq!(dial(&mut app), (Some(c), Some(30), Some("30°".to_string())));
+        frame(&mut app, &ctx, vec![button(at_30, false, Modifiers::NONE)]);
+        assert_eq!(dial(&mut app), (None, None, None), "the dial goes with the release");
+        assert!((app.view().unwrap().rotation - 30.0).abs() < 1e-2, "{:?}", app.view());
+        // A Space+Shift drag with another tool shows it too: 30° and 90° more make 120°.
+        app.select_tool("rectangle");
+        frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::SHIFT), space(true, Modifiers::SHIFT), Event::PointerMoved(right)]);
+        frame(&mut app, &ctx, vec![button(right, true, Modifiers::SHIFT)]);
+        frame(&mut app, &ctx, vec![Event::PointerMoved(below)]);
+        assert_eq!(dial(&mut app), (Some(c), Some(120), Some("120°".to_string())));
+        assert!((app.view().unwrap().rotation - 120.0).abs() < 1e-2, "{:?}", app.view());
+        // Presentation Mode turned on during the drag hides the dial.
+        let mode = app.ui.screen_mode;
+        app.ui.screen_mode = 3;
+        assert_eq!(dial(&mut app), (None, None, None), "no dial in Presentation Mode");
+        app.ui.screen_mode = mode;
+        frame(&mut app, &ctx, vec![button(below, false, Modifiers::SHIFT)]);
+        frame(&mut app, &ctx, vec![space(false, Modifiers::NONE), Event::ModifiersChanged(Modifiers::NONE)]);
+        assert_eq!(dial(&mut app), (None, None, None), "the dial goes with the release");
     }
 
     #[test]
