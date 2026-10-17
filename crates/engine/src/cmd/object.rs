@@ -227,7 +227,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             |s, _| clip_edit(s, true)
         ),
-        cmd!("object.isolate", "Enter Isolation Mode", [], None, "{id}", has_doc, isolate),
+        cmd!(
+            "object.isolate",
+            "Enter Isolation Mode",
+            [],
+            None,
+            "{id?} isolate a group, a layer or a single object (default: the first selected object); type, a template layer and an object on a template layer are refused",
+            has_doc,
+            isolate
+        ),
         cmd!("object.exitIsolation", "Exit Isolation Mode", [], None, "{}", has_doc, exit_isolation),
         cmd!(
             "object.setProps",
@@ -1048,6 +1056,10 @@ fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let st = s.doc_mut()?;
+    // A template layer and the objects on one aren't isolated.
+    if st.doc.ancestry(id).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(Node::is_template))) {
+        return Err(bad("object.isolate", "template layers and their objects can't be isolated"));
+    }
     // Groups, layers and single objects (a path, a compound path, an image…); type isn't
     // isolated: a double-click on it edits its text.
     if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {

@@ -1588,7 +1588,9 @@ and `layerRows`, the rows highlighted in the panel.
   `layer.outlineOthers` / `layer.previewAll` (Ctrl/Cmd+Alt-clicking an eye runs Outline Others for the row's layer, or
   Preview All Layers when the others are in Outline already), `layer.lockOthers` / `layer.unlockAll` (Alt-clicking an eye or a lock
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
-  `object.isolate {id}` (a group, a layer or a single object; not type) / `object.exitIsolation`.
+  `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, and
+  not a template layer or an object on one) / `object.exitIsolation`. The menu's Enter Isolation Mode is off for a
+  hidden or locked layer or group, a template layer, and a layer or group inside one of these.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:

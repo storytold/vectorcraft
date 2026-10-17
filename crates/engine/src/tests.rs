@@ -1933,6 +1933,90 @@ fn inspect_reports_a_compound_paths_paint_and_blend_modes() {
     assert!(group["blend"] == "Multiply" && group.get("fill").is_none(), "{group}");
 }
 
+/// `object.isolate` refuses a template layer, an object on one (the layer locked or not), and a
+/// group in a template sublayer. Isolation mode stays off, and a Selection tool drag over `a` leaves it where
+/// it is, as it does without the call. An object on a layer that isn't a template is isolated,
+/// and the drag moves it.
+#[test]
+fn isolate_refuses_template_layers_and_their_objects() {
+    const TEMPLATE: &str = "invalid parameters for `object.isolate`: template layers and their objects can't be isolated";
+    let x0 = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    // A drag 30 pt to the right from the left edge of `a`.
+    let drag = |s: &mut Session| {
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 101.0, 115.0), v).unwrap();
+        for x in [111.0, 121.0, 131.0] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, 115.0), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 131.0, 115.0), v).unwrap();
+    };
+    // `a` and another rectangle on the current layer.
+    fn rects(s: &mut Session) -> NodeId {
+        let a = rect(s, 100.0, 100.0, 30.0, 30.0);
+        rect(s, 200.0, 100.0, 30.0, 30.0);
+        a
+    }
+    fn template(s: &mut Session, layer: NodeId, locked: bool) {
+        s.execute("layer.setProps", &json!({"ids": [layer.0], "template": true, "locked": locked})).unwrap();
+    }
+    // Each case makes `a`, turns a layer into a template layer, and returns the id to isolate and `a`.
+    type Case = (&'static str, fn(&mut Session) -> (NodeId, NodeId));
+    let cases: [Case; 4] = [
+        ("template layer", |s| {
+            let (a, layer) = (rects(s), s.doc().unwrap().doc.layers[0].id);
+            template(s, layer, false);
+            (layer, a)
+        }),
+        ("object on a template layer", |s| {
+            let (a, layer) = (rects(s), s.doc().unwrap().doc.layers[0].id);
+            template(s, layer, false);
+            (a, a)
+        }),
+        ("object on a locked template layer", |s| {
+            let (a, layer) = (rects(s), s.doc().unwrap().doc.layers[0].id);
+            template(s, layer, true);
+            (a, a)
+        }),
+        ("group in a template sublayer", |s| {
+            let sub = NodeId(s.execute("layer.newSublayer", &json!({"name": "Sub"})).unwrap()["id"].as_u64().unwrap());
+            let a = rects(s);
+            assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sub));
+            s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+            let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+            template(s, sub, false);
+            (g, a)
+        }),
+    ];
+    // Each case runs with and without `object.isolate` before the drag. Every case runs, and the
+    // wrong ones are listed: (case, what isolating gave, the isolated id, where the drag left `a`,
+    // where it leaves `a` with no isolating).
+    let mut wrong = vec![];
+    for (name, make) in cases {
+        let run = |isolate: bool| {
+            let mut s = session();
+            let (target, a) = make(&mut s);
+            s.execute("select.none", &json!({})).unwrap();
+            let r = isolate.then(|| s.execute("object.isolate", &json!({"id": target.0})).map_err(|e| e.to_string()));
+            let isolation = s.doc().unwrap().isolation;
+            drag(&mut s);
+            (r, isolation, x0(&s, a))
+        };
+        let ((r, isolation, x), (_, _, without)) = (run(true), run(false));
+        if (&r, isolation, x) != (&Some(Err(TEMPLATE.to_string())), None, without) {
+            wrong.push((name, r, isolation, x, without));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+    // On a layer that isn't a template: isolated, and the drag moves it.
+    let mut s = session();
+    let a = rects(&mut s);
+    s.execute("object.isolate", &json!({"id": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(a));
+    drag(&mut s);
+    assert_eq!(x0(&s, a), 130.0, "the object moved");
+}
+
 #[test]
 fn isolating_an_object_that_doesnt_exist_says_so() {
     let mut s = session();

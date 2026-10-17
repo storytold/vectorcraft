@@ -1688,6 +1688,22 @@ fn select_key_param_error_is_translated() {
     }
 }
 
+/// The parameter error of `object.isolate` for a template layer, whose text [`message_literals`]
+/// doesn't read, is translated whole in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn isolate_template_param_error_is_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let layer = s.execute("layer.new", &json!({"template": true})).unwrap()["id"].clone();
+    let e = s.execute("object.isolate", &json!({"id": layer})).unwrap_err();
+    let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{e}") };
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+        assert!(!shown.contains(msg.as_str()), "{code}: {shown}");
+    }
+}
+
 /// Languages whose catalogs cover every status and error message.
 const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "fi"];
 
