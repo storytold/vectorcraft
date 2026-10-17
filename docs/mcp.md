@@ -2842,14 +2842,17 @@ numbered left to right and top to bottom: `{number, id (null for auto slices), s
 width, height, options, selected}`, plus `clipToArtboard`, `hidden` and `locked`.
 
 The Object → Slice commands act on the selected slices: the ones `select.object.slices` (Select → Object → Slices)
-selects, and the selected objects that are object slices. `object.slice.release` (an object slice leaves its object,
-a user slice becomes an unpainted rectangle), `object.slice.fromGuides` (the grid the ruler guides cut the artboards
-into), `object.slice.fromSelection`, `object.slice.duplicate {dx?, dy?}`, `object.slice.combine`,
-`object.slice.divide {rows? | rowHeight?, columns? | columnWidth?}`, `object.slice.deleteAll`,
-`object.slice.options {kind?: image|noImage|htmlText, name?, url?, target?, message?, alt?, text?, background?:
-""|matte|#rrggbb, hAlign?, vAlign?}` and `object.slice.clipToArtboard {on?}` are each one undo step.
-`view.slices.hide {hidden?}` and `view.slices.lock {locked?}` are session view state; the canvas draws the slices in
-the `sliceLineColor` preference, numbered while `showSliceNumbers` is on.
+selects, and the selected objects that are object slices. `slice.list` reports both kinds as `selected`.
+`object.slice.release` (an object slice leaves its object, a user slice becomes an unpainted rectangle),
+`object.slice.fromGuides` (the grid the ruler guides cut the artboards into), `object.slice.fromSelection`,
+`object.slice.duplicate {dx?, dy?}`, `object.slice.combine`, `object.slice.divide {rows? | rowHeight?, columns? |
+columnWidth?}`, `object.slice.deleteAll`, `object.slice.options {kind?: image|noImage|htmlText, name?, url?, target?,
+message?, alt?, text?, background?: ""|matte|#rrggbb, hAlign?, vAlign?}` and `object.slice.clipToArtboard {on?}` are
+each one undo step. `view.slices.hide {hidden?}` and `view.slices.lock {locked?}` are session view state; the canvas
+draws the slices in the `sliceLineColor` preference, numbered while `showSliceNumbers` is on. Hiding deselects the
+slices in every open document. While they are hidden, a command that selects slices, such as `select.object.slices`,
+`object.slice.select`, `object.slice.create`, `edit.undo` or `edit.redo`, leaves them out; a selected object that is an
+object slice stays selected.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.slice.make","params":{}}}
