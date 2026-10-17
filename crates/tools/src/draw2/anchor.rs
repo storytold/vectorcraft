@@ -6,11 +6,12 @@
 //! handle end → retract that handle only (#2267); drag a handle → move it independently (Shift: at
 //! 45° steps round its anchor); drag a segment → reshape the curve, a selected blend's spine's too,
 //! straight or curved (#1111; Shift: its handles at right angles to the line between its anchors,
-//! at one length).
+//! at one length). Blend spine points and handles follow the same conversions (#2544).
 //! Scissors: click a path to split it there.
 
 use serde_json::json;
 use vectorcraft_doc::NodeId;
+use vectorcraft_geom::Anchor;
 use vectorcraft_geom::Point;
 
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
@@ -31,6 +32,21 @@ enum State {
     Handle {
         id: NodeId,
         si: usize,
+        ai: usize,
+        out: bool,
+        start: Point,
+        began: bool,
+    },
+    /// Dragging a selected blend's spine point into a symmetric smooth point.
+    SpineConvert {
+        id: NodeId,
+        ai: usize,
+        start: Point,
+        began: bool,
+    },
+    /// Dragging or retracting one of a selected blend's spine handles.
+    SpineHandle {
+        id: NodeId,
         ai: usize,
         out: bool,
         start: Point,
@@ -65,6 +81,44 @@ impl AnchorTool {
             _ => "addAnchor",
         };
         Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default() }
+    }
+
+    /// Only selected, editable blends are eligible; their visible spines are
+    /// computed in document coordinates, as for Direct Selection.
+    fn spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, Anchor)> {
+        crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+            path.anchors().find(|(si, _, a)| *si == 0 && a.p.distance(p) <= tol).map(|(_, ai, a)| (id, ai, *a))
+        })
+    }
+
+    fn spine_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, bool)> {
+        crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)).find_map(|(id, path)| {
+            path.anchors().filter(|(si, _, _)| *si == 0).find_map(|(_, ai, a)| {
+                if a.has_out() && a.h_out.distance(p) <= tol {
+                    Some((id, ai, true))
+                } else if a.has_in() && a.h_in.distance(p) <= tol {
+                    Some((id, ai, false))
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    /// Unlike Direct Selection, Anchor Point has no remembered focus after a
+    /// tool switch. Show the handles on selected blends so they stay editable.
+    fn spine_overlays(cx: &ToolContext) -> Vec<Overlay> {
+        let mut out = vec![];
+        for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+            let color = cx.doc.layer_color(id);
+            for (_, _, a) in path.anchors() {
+                for h in [a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6) {
+                    out.push(Overlay::Line { a: a.p, b: h, color, dashed: false });
+                    out.push(Overlay::Handle { p: h, color });
+                }
+            }
+        }
+        out
     }
 
     fn add(cx: &ToolContext, p: Point) -> Vec<Action> {
@@ -115,6 +169,10 @@ impl Tool for AnchorTool {
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
                     self.state = State::Handle { id, si, ai, out, start: p, began: false };
                     self.snap = HandleSnap::default();
+                } else if let Some((id, ai, out)) = Self::spine_handle(cx, p, point) {
+                    self.state = State::SpineHandle { id, ai, out, start: p, began: false };
+                } else if let Some((id, ai, _)) = Self::spine_point(cx, p, point) {
+                    self.state = State::SpineConvert { id, ai, start: p, began: false };
                 } else if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
                     self.state = State::Convert { id, si, ai, start: p, began: false };
                 } else if let Some((id, si, seg, t)) = hit_segment(cx, p, tol) {
@@ -128,7 +186,11 @@ impl Tool for AnchorTool {
                 let mut out = vec![];
                 let (began, far) = match self.state {
                     State::Idle => return out,
-                    State::Convert { began, start, .. } | State::Handle { began, start, .. } | State::Reshape { began, start, .. } => {
+                    State::Convert { began, start, .. }
+                    | State::Handle { began, start, .. }
+                    | State::SpineConvert { began, start, .. }
+                    | State::SpineHandle { began, start, .. }
+                    | State::Reshape { began, start, .. } => {
                         (began, p.distance(start) >= cx.tol(2.0))
                     }
                 };
@@ -136,8 +198,12 @@ impl Tool for AnchorTool {
                     if !far {
                         return out;
                     }
-                    out.push(Action::Begin(if matches!(self.state, State::Convert { .. }) { "Convert Anchor Point" } else { "Reshape" }.into()));
-                    if let State::Convert { began, .. } | State::Handle { began, .. } | State::Reshape { began, .. } = &mut self.state {
+                    out.push(Action::Begin(if matches!(self.state, State::Convert { .. } | State::SpineConvert { .. }) { "Convert Anchor Point" } else { "Reshape" }.into()));
+                    if let State::Convert { began, .. }
+                    | State::Handle { began, .. }
+                    | State::SpineConvert { began, .. }
+                    | State::SpineHandle { began, .. }
+                    | State::Reshape { began, .. } = &mut self.state {
                         *began = true;
                     }
                 }
@@ -146,6 +212,14 @@ impl Tool for AnchorTool {
                     State::Convert { id, si, ai, .. } => Action::Preview(
                         "path.convertAnchor".into(),
                         json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
+                    ),
+                    State::SpineConvert { id, ai, .. } => Action::Preview(
+                        "object.blend.spine.convertAnchor".into(),
+                        json!({"id": id.0, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
+                    ),
+                    State::SpineHandle { id, ai, out, .. } => Action::Preview(
+                        "object.blend.spine.moveAnchor".into(),
+                        json!({"id": id.0, "anchor": ai, "handle": if out { "out" } else { "in" }, "x": p.x, "y": p.y, "independent": true}),
                     ),
                     State::Handle { id, si, ai, out, .. } => {
                         let (q, guides) = self.snap.snap(cx, (id, si, ai), p, ev.mods.shift);
@@ -171,7 +245,11 @@ impl Tool for AnchorTool {
                 self.guides.clear();
                 let st = std::mem::replace(&mut self.state, State::Idle);
                 match st {
-                    State::Convert { began: true, .. } | State::Handle { began: true, .. } | State::Reshape { began: true, .. } => {
+                    State::Convert { began: true, .. }
+                    | State::Handle { began: true, .. }
+                    | State::SpineConvert { began: true, .. }
+                    | State::SpineHandle { began: true, .. }
+                    | State::Reshape { began: true, .. } => {
                         vec![Action::Commit]
                     }
                     State::Convert { id, si, ai, began: false, .. } => {
@@ -186,6 +264,31 @@ impl Tool for AnchorTool {
                         } else {
                             vec![]
                         }
+                    }
+                    State::SpineConvert { id, ai, began: false, .. } => {
+                        let has_handles = crate::direct::spines(cx)
+                            .into_iter()
+                            .find(|(blend, _)| *blend == id)
+                            .and_then(|(_, path)| path.subpaths.first()?.anchors.get(ai).copied())
+                            .is_some_and(|a| a.has_in() || a.has_out());
+                        if has_handles {
+                            vec![Action::Exec("object.blend.spine.convertAnchor".into(), json!({"id": id.0, "anchor": ai, "to": "corner"}))]
+                        } else {
+                            vec![]
+                        }
+                    }
+                    State::SpineHandle { id, ai, out, began: false, .. } => {
+                        let Some(a) = crate::direct::spines(cx)
+                            .into_iter()
+                            .find(|(blend, _)| *blend == id)
+                            .and_then(|(_, path)| path.subpaths.first()?.anchors.get(ai).copied())
+                        else {
+                            return vec![];
+                        };
+                        vec![Action::Exec(
+                            "object.blend.spine.moveAnchor".into(),
+                            json!({"id": id.0, "anchor": ai, "handle": if out { "out" } else { "in" }, "x": a.p.x, "y": a.p.y, "independent": true}),
+                        )]
                     }
                     State::Handle { id, si, ai, out, began: false, .. } => {
                         let Some(a) = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) else {
@@ -205,12 +308,20 @@ impl Tool for AnchorTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let st = std::mem::replace(&mut self.state, State::Idle);
         match st {
-            State::Convert { began: true, .. } | State::Handle { began: true, .. } | State::Reshape { began: true, .. } => vec![Action::Commit],
+            State::Convert { began: true, .. }
+            | State::Handle { began: true, .. }
+            | State::SpineConvert { began: true, .. }
+            | State::SpineHandle { began: true, .. }
+            | State::Reshape { began: true, .. } => vec![Action::Commit],
             _ => vec![],
         }
     }
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        if matches!(self.state, State::Handle { .. }) { self.guides.clone() } else { vec![] }
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let mut out = if self.id == "anchorPoint" { Self::spine_overlays(cx) } else { vec![] };
+        if matches!(self.state, State::Handle { .. }) {
+            out.extend(self.guides.iter().cloned());
+        }
+        out
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         match self.id {
