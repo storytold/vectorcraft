@@ -161,6 +161,35 @@ fn renaming_an_asset_runs_assets_rename() {
     assert_eq!(assets(&mut app)[0]["name"], "Logo");
 }
 
+/// Shift+Enter in an asset's name field renames it and keeps the field open, the new name
+/// selected; Enter then renames it again and closes the field.
+#[test]
+fn shift_enter_renames_an_asset_and_keeps_the_field_open() {
+    let (mut app, _, [a, _]) = app(false);
+    let id = app.run("assets.add", json!({"ids": [a]})).unwrap()["assets"][0].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let rename_id = egui::Id::new("asset-export-rename");
+    let field = rename_id.with("field");
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&ctx, &mut app, vec![], false);
+    // What a double-click on the tile does: its name field opens with the name.
+    ctx.data_mut(|d| d.insert_temp(rename_id, (id, "Asset 1".to_string())));
+    frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Logo".into())], false);
+    frame(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::SHIFT)], false);
+    assert_eq!(assets(&mut app)[0]["name"], "Logo", "Shift+Enter applies the name");
+    assert!(ctx.memory(|m| m.has_focus(field)), "the field keeps the focus");
+    assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id)).is_some(), "and stays open");
+    frame(&ctx, &mut app, vec![], false);
+    let selected = egui::TextEdit::load_state(&ctx, field).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+    assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 4)), "the name shown is selected");
+    frame(&ctx, &mut app, vec![egui::Event::Text("Mark".into())], false);
+    frame(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], false);
+    assert_eq!(assets(&mut app)[0]["name"], "Mark", "typing replaced it, and Enter applies that");
+    assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id)).is_none(), "and closes the field");
+}
+
 #[test]
 fn the_rows_are_the_shared_export_settings() {
     let (mut app, log, [a, b]) = app(true);
