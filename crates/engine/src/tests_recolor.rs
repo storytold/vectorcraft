@@ -367,3 +367,27 @@ fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
     let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "limitTo": lib}));
     assert_eq!(r["swatches"], json!(["Leaf"]));
 }
+
+#[test]
+fn model_param_chooses_the_model_of_the_new_colour() {
+    // RGB art in a CMYK document: by default a CMYK replacement comes out RGB (#2170).
+    let mut s = session();
+    run(&mut s, "file.new", json!({"width": 400, "height": 200, "colorMode": "cmyk"}));
+    let art = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 15, "height": 15}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"ids": [art.0], "color": "#1a1a1a", "keepModel": true}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb);
+    select_all(&mut s);
+    let map = json!({"#1a1a1a": {"c": 0, "m": 0, "y": 0, "k": 100}});
+    let r = run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb, "kept RGB");
+    assert!(r["note"].as_str().is_some_and(|n| n.contains("model")), "warns the model was kept: {r}");
+    run(&mut s, "edit.undo", json!({}));
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "model": "new"}));
+    assert_eq!(fill(&s, art), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    assert!(r.get("note").is_none(), "no note when the model follows the new colour: {r}");
+    run(&mut s, "edit.undo", json!({}));
+    // "document" converts a new RGB colour into the document's CMYK.
+    run(&mut s, "recolor.apply", json!({"map": {"#1a1a1a": "#ff0000"}, "model": "document"}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Cmyk);
+    assert!(s.execute("recolor.apply", &json!({"map": map, "model": "nope"})).is_err());
+}
