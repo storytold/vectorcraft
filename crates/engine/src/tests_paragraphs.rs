@@ -66,6 +66,39 @@ fn ranged_paragraph_commands_touch_only_their_paragraphs() {
     assert_eq!(text(&s, id).para_at(2).space_after, 1.0, "past the end: the last paragraph");
 }
 
+/// A file whose paragraphs hold an indent or a space before or after past `MAX_COORD`, or a tab
+/// stop outside 0 to 100,000 pt, opens with the nearer end of each range, in the type and in
+/// paragraph styles. Values past the Paragraph panel's 1296 pt and within those ranges stay.
+#[test]
+fn a_file_with_paragraph_spacing_out_of_range_opens_with_it_in_range() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 40, "y": 60, "size": 20, "text": "Line\tone\nLine two"})).unwrap()["id"].as_u64().unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let Some(NodeKind::Text(t)) = d.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+    let tab = |position| vectorcraft_doc::TabStop { position, align: vectorcraft_doc::TabAlign::Left, leader: String::new(), align_on: '.' };
+    let mut first = t.para.clone();
+    (first.left_indent, first.first_line_indent, first.space_after) = (f64::MAX, -1e7, 5000.0);
+    first.tabs = vec![tab(-5.0), tab(f64::MAX)];
+    let mut second = t.para.clone();
+    (second.right_indent, second.space_before) = (-f64::MAX, 1e7);
+    t.set_paragraph_styles(vec![first, second]);
+    let attrs = json!({"left_indent": 1e9, "space_after": 2000, "tabs": [serde_json::to_value(tab(-5.0)).unwrap()]});
+    d.para_styles.push(vectorcraft_doc::TextStyleDef { name: "Wide".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "spacing.vectorcraft", "dataBase64": data})).unwrap();
+    let max = vectorcraft_doc::MAX_COORD;
+    let t = text(&s, id);
+    let (p0, p1) = (t.para_at(0), t.para_at(1));
+    assert_eq!((p0.left_indent, p0.first_line_indent, p0.space_after), (max, -max, 5000.0));
+    assert_eq!(p0.tabs.iter().map(|t| t.position).collect::<Vec<_>>(), [0.0, 100_000.0]);
+    assert_eq!((p1.right_indent, p1.space_before), (-max, max));
+    let def = &s.doc().unwrap().doc.para_styles.iter().find(|d| d.name == "Wide").unwrap().attrs;
+    assert_eq!((&def["left_indent"], &def["space_after"], &def["tabs"][0]["position"]), (&json!(max), &json!(2000), &json!(0.0)));
+    // With the spacing kept as saved, the type's bounds were infinite.
+    let b = s.doc().unwrap().doc.bounds_of(&[NodeId(id)], false).unwrap();
+    assert!(b.width().is_finite() && b.height().is_finite(), "{b:?}");
+}
+
 #[test]
 fn editing_splits_and_merges_paragraph_styles() {
     let mut s = session();

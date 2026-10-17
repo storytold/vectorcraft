@@ -430,7 +430,7 @@ fn art_id() -> crate::NodeId {
 }
 
 /// Visit `n` and every descendant (opacity-mask art included) mutably.
-fn each_mut(n: &mut Node, f: &mut impl FnMut(&mut Node)) {
+pub(crate) fn each_mut(n: &mut Node, f: &mut impl FnMut(&mut Node)) {
     f(n);
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
         each_mut(Arc::make_mut(&mut m.art), f);

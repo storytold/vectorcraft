@@ -3682,7 +3682,11 @@ the story re-flows (a paragraph split between frames has them in both).
 In the native file a text object's `para` holds the first paragraph's attributes and `paras` (left out when every
 paragraph is alike) one entry per paragraph, so older readers keep the first paragraph's. SVG export anchors each
 centred or right-aligned line on its own (`<tspan text-anchor>`), and SVG import gives each line's paragraph its
-alignment back, with indents that keep it in place.
+alignment back, with indents that keep it in place. When a native file's type or character styles hold a size, a
+horizontal scale or a vertical scale of 0 or less, the value opens as 12 pt or 100%. A negative leading opens as Auto,
+and a size, leading or scale past 4,000,000 opens as 4,000,000. A baseline shift, an indent or a space before or after
+past 4,000,000 pt either way, in the type or in character or paragraph styles, opens at that limit, and a tab stop
+outside 0 to 100,000 pt opens at the nearer end.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setStyle","params":{"id":42,"justify":"center","start":0,"end":0}}}
