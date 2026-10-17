@@ -1941,6 +1941,88 @@ fn isolating_an_object_that_doesnt_exist_says_so() {
     assert!(!e.to_string().contains("type"), "{e}");
 }
 
+/// `object.isolate` refuses a locked or hidden group, a group in a locked or hidden layer, a locked
+/// or hidden member of a group, and a guide path while Lock Guides is on. Isolation mode stays off,
+/// and a Selection tool drag over the art does what it does without the call. A group that is neither is isolated, and the drag moves its
+/// member.
+#[test]
+fn isolate_refuses_locked_or_hidden_art_and_locked_guides() {
+    const HIDDEN_OR_LOCKED: &str = "invalid parameters for `object.isolate`: the object is hidden or locked";
+    let x0 = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    // A drag 30 pt to the right from the left edge of `a`.
+    let drag = |s: &mut Session| {
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 101.0, 115.0), v).unwrap();
+        for x in [111.0, 121.0, 131.0] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, 115.0), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 131.0, 115.0), v).unwrap();
+    };
+    // A group of `a` and another rectangle, on the only layer.
+    let group = |s: &mut Session| {
+        let a = rect(s, 100.0, 100.0, 30.0, 30.0);
+        let b = rect(s, 200.0, 100.0, 30.0, 30.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        (NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap()), a)
+    };
+    // Each case locks, hides or guides something, given the layer, the group and `a`, and returns
+    // the id to isolate.
+    type Case = (&'static str, fn(&mut Session, NodeId, NodeId, NodeId) -> NodeId, &'static str);
+    let cases: [Case; 7] = [
+        ("locked group", |s, _, g, _| set_then(s, "object.setProps", g, "locked", true, g), HIDDEN_OR_LOCKED),
+        ("hidden group", |s, _, g, _| set_then(s, "object.setProps", g, "visible", false, g), HIDDEN_OR_LOCKED),
+        ("locked layer", |s, l, g, _| set_then(s, "layer.setProps", l, "locked", true, g), HIDDEN_OR_LOCKED),
+        ("hidden layer", |s, l, g, _| set_then(s, "layer.setProps", l, "visible", false, g), HIDDEN_OR_LOCKED),
+        ("locked member", |s, _, _, a| set_then(s, "object.setProps", a, "locked", true, a), HIDDEN_OR_LOCKED),
+        ("hidden member", |s, _, _, a| set_then(s, "object.setProps", a, "visible", false, a), HIDDEN_OR_LOCKED),
+        (
+            "guide path",
+            |s, _, _, a| {
+                s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+                s.execute("view.guides.make", &json!({})).unwrap();
+                s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+                a
+            },
+            "guides are locked",
+        ),
+    ];
+    // Each case runs with and without `object.isolate` before the drag. Every case runs, and the
+    // wrong ones are listed: (case, what isolating gave, the isolated id, where the drag left `a`,
+    // where it leaves `a` with no isolating).
+    let mut wrong = vec![];
+    for (name, make, error) in cases {
+        let run = |isolate: bool| {
+            let mut s = session();
+            let (g, a) = group(&mut s);
+            let layer = s.doc().unwrap().doc.layers[0].id;
+            let target = make(&mut s, layer, g, a);
+            let r = isolate.then(|| s.execute("object.isolate", &json!({"id": target.0})).map_err(|e| e.to_string()));
+            let isolation = s.doc().unwrap().isolation;
+            drag(&mut s);
+            (r, isolation, x0(&s, a))
+        };
+        let ((r, isolation, x), (_, _, without)) = (run(true), run(false));
+        if (&r, isolation, x) != (&Some(Err(error.to_string())), None, without) {
+            wrong.push((name, r, isolation, x, without));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+    // Neither locked nor hidden: isolated, and the drag moves the member.
+    let mut s = session();
+    let (g, a) = group(&mut s);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(g));
+    drag(&mut s);
+    assert_eq!(x0(&s, a), 130.0, "the member moved");
+}
+
+/// Sets `key` of `id` to `on` with `cmd`, and gives back `then`.
+fn set_then(s: &mut Session, cmd: &str, id: NodeId, key: &str, on: bool, then: NodeId) -> NodeId {
+    s.execute(cmd, &json!({"ids": [id.0], key: on})).unwrap();
+    then
+}
+
 /// A ring (a compound path with a hole) and its isolated paths.
 fn isolated_ring(s: &mut Session) -> (NodeId, NodeId, NodeId) {
     let outer = rect(s, 0.0, 0.0, 40.0, 40.0);
