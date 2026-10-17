@@ -500,11 +500,47 @@ pub const THAI_FAMILIES: &[&str] = &[
     "Garuda",
 ];
 
+/// Installed sans-serif families tried first for Chinese characters the font in use lacks, so that
+/// Han next to Hangul (which only these cover) is not set in the bundled Mincho (#2491).
+const HAN_SANS_FAMILIES: &[&str] = &[
+    "PingFang SC",
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Microsoft YaHei",
+    "Yu Gothic",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK JP",
+    "Noto Sans SC",
+    "Noto Sans JP",
+    "Source Han Sans",
+];
+
+/// The same for kana: the Japanese families first.
+const KANA_SANS_FAMILIES: &[&str] = &[
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    "Noto Sans CJK JP",
+    "Noto Sans JP",
+    "Source Han Sans",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Noto Sans CJK SC",
+];
+
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar), or that is set in an installed sans-serif rather than the
+/// bundled Mincho (Han, kana, CJK punctuation); none for other characters. When none of the
+/// families is installed the loaded fonts are used, the Mincho among them.
 fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
+    if matches!(c, '\u{3000}'..='\u{303F}' | '\u{FF00}'..='\u{FFEF}') {
+        // Punctuation is set the Japanese way (the corner brackets sit by the line's start).
+        return KANA_SANS_FAMILIES;
+    }
     match c.script() {
+        Script::Han | Script::Bopomofo => HAN_SANS_FAMILIES,
+        Script::Hiragana | Script::Katakana => KANA_SANS_FAMILIES,
         Script::Thai => THAI_FAMILIES,
         Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
         Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
@@ -1560,6 +1596,13 @@ fn style_italic(style: &str) -> bool {
     s.contains("italic") || s.contains("oblique") || s == "it"
 }
 
+/// How far `face` is from the style asked for: its weight difference, and a penalty for the wrong
+/// slant. The penalty is less than the weight gap between Regular and Bold (and Bold and Black),
+/// so Bold Italic asked of a family with Bold and Italic faces only gets the Bold (#2491).
+fn style_distance(face: &FontFace, weight: f32, italic: bool) -> f32 {
+    (face.weight - weight).abs() + if face.italic != italic { 250.0 } else { 0.0 }
+}
+
 /// [`FontDb::menu_family_list`], with the [`FontDb::family_list`] it was built from.
 type MenuFamilies = (Arc<[String]>, Arc<[String]>);
 
@@ -2207,37 +2250,36 @@ impl FontDb {
             return Some((*f).clone());
         }
         let (tw, ti) = (style_weight(style), style_italic(style));
-        cands
-            .iter()
-            .min_by(|a, b| {
-                let sa = (a.weight - tw).abs() + if a.italic != ti { 1000.0 } else { 0.0 };
-                let sb = (b.weight - tw).abs() + if b.italic != ti { 1000.0 } else { 0.0 };
-                sa.total_cmp(&sb)
-            })
-            .map(|f| (*f).clone())
+        cands.iter().min_by(|a, b| style_distance(a, tw, ti).total_cmp(&style_distance(b, tw, ti))).map(|f| (*f).clone())
     }
 
-    /// First face (fallback family first, then load order) that covers `c`; on native, system
-    /// fonts are loaded lazily the first time no loaded face covers a character.
+    /// [`fallback_for_style`](Self::fallback_for_style) for upright Regular text.
     pub(crate) fn fallback_for(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+        self.fallback_for_style(c, exclude, 400.0, false)
+    }
+
+    /// First family (fallback family first, then load order) with a face that covers `c`, in that
+    /// family's face nearest `weight` and `italic`; on native, system fonts are loaded lazily the
+    /// first time no loaded face covers a character (#2491).
+    pub(crate) fn fallback_for_style(&self, c: char, exclude: u32, weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         // Thai (Lao, Khmer, Myanmar) takes a font made for it, when one is installed, rather than
         // whichever face covering it happened to load first (a display face, say).
         let prefer = script_families(c);
-        if let Some(f) = self.family_fallback(c, exclude, prefer) {
+        if let Some(f) = self.family_fallback(c, exclude, prefer, weight, italic) {
             return Some(f);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if self.load_families(c, prefer)
-            && let Some(f) = self.family_fallback(c, exclude, prefer)
+            && let Some(f) = self.family_fallback(c, exclude, prefer, weight, italic)
         {
             return Some(f);
         }
-        if let Some(f) = self.loaded_fallback(c, exclude) {
+        if let Some(f) = self.loaded_fallback(c, exclude, weight, italic) {
             return Some(f);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if self.system_fallback(c) {
-            return self.loaded_fallback(c, exclude);
+            return self.loaded_fallback(c, exclude, weight, italic);
         }
         None
     }
@@ -2249,14 +2291,14 @@ impl FontDb {
         self.fallback_for(c, 0)
     }
 
-    /// The loaded face of the first of `families` that covers `c` (upright, nearest Regular).
-    fn family_fallback(&self, c: char, exclude: u32, families: &[&str]) -> Option<Arc<FontFace>> {
+    /// The loaded face of the first of `families` that covers `c`, nearest `weight` and `italic`.
+    fn family_fallback(&self, c: char, exclude: u32, families: &[&str], weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         let faces = self.read_faces();
         families.iter().find_map(|fam| {
             faces
                 .iter()
                 .filter(|f| f.id != exclude && f.family.eq_ignore_ascii_case(fam) && f.covers(c))
-                .min_by_key(|f| (f.italic, (f.weight - 400.0).abs() as i32))
+                .min_by(|a, b| style_distance(a, weight, italic).total_cmp(&style_distance(b, weight, italic)))
                 .cloned()
         })
     }
@@ -2268,14 +2310,27 @@ impl FontDb {
         if families.is_empty() || !self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled {
             return false;
         }
-        families.iter().any(|fam| !self.is_loaded(fam) && self.load_cataloged(fam) && self.family_fallback(c, 0, &[fam]).is_some())
+        families.iter().any(|fam| !self.is_loaded(fam) && self.load_cataloged(fam) && self.family_fallback(c, 0, &[fam], 400.0, false).is_some())
     }
 
-    fn loaded_fallback(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+    /// The first loaded family (the fallback family, then load order) with a face covering `c`,
+    /// and in it the face nearest `weight` and `italic`.
+    fn loaded_fallback(&self, c: char, exclude: u32, weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         let faces = self.read_faces();
-        let mut order: Vec<&Arc<FontFace>> = faces.iter().filter(|f| f.id != exclude).collect();
-        order.sort_by_key(|f| (!f.family.eq_ignore_ascii_case(FALLBACK_FAMILY), f.italic, (f.weight - 400.0).abs() as i32));
-        order.into_iter().find(|f| f.covers(c)).cloned()
+        let mut families: Vec<&str> = Vec::new();
+        for f in faces.iter().filter(|f| f.id != exclude && f.covers(c)) {
+            if !families.iter().any(|fam| fam.eq_ignore_ascii_case(&f.family)) {
+                families.push(&f.family);
+            }
+        }
+        // Stable: the fallback family first, the others in load order.
+        families.sort_by_key(|fam| !fam.eq_ignore_ascii_case(FALLBACK_FAMILY));
+        let fam = families.first()?;
+        faces
+            .iter()
+            .filter(|f| f.id != exclude && f.family.eq_ignore_ascii_case(fam) && f.covers(c))
+            .min_by(|a, b| style_distance(a, weight, italic).total_cmp(&style_distance(b, weight, italic)))
+            .cloned()
     }
 
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged
