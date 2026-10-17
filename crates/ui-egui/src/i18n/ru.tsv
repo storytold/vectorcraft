@@ -2934,6 +2934,8 @@ mark-style	Japanese	Японский
 	Show Note	Показать примечание
 	Show Options	Показать параметры
 	Show Original Path	Показать исходный контур
+	Open this dialog with these settings next time	Открывать это диалоговое окно с этими параметрами в следующий раз
+	Auto-Simplify	Автоматическое упрощение
 	Color Panel Options	Параметры панели «Цвет»
 	Show Package	Показать пакет
 	Show Panel	Показать панель
@@ -3876,6 +3878,7 @@ axis	Both	Оба
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
 @msg	the Color Picker is not open	палитра цветов не открыта
+@msg	the Simplify slider is not open	ползунок «Упростить» не открыт
 @msg	the screen color sampler is already open	средство выбора цвета с экрана уже открыто
 @msg	this system has no screen color sampler	в этой системе нет средства выбора цвета с экрана
 @msg	bad colour `{hex}` (#rrggbb)	недопустимый цвет `{hex}` (#rrggbb)

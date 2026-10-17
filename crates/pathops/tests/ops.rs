@@ -343,6 +343,20 @@ fn simplify_straight_lines_option() {
     assert!(max_deviation(&c, &s) <= 1.0 + 1e-6);
 }
 
+/// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every
+/// 10 up; Auto-Simplify takes the lowest level whose tolerance is at most 1/400 of the size, and
+/// level 100 for a size under 12.5 pt.
+#[test]
+fn simplify_levels_and_auto_simplify() {
+    assert_eq!(simplify_level_tolerance(SIMPLIFY_LEVEL), 1.0);
+    assert_eq!((simplify_level_tolerance(0.0), simplify_level_tolerance(100.0)), (32.0, 1.0 / 32.0));
+    assert_eq!((simplify_level_tolerance(-5.0), simplify_level_tolerance(500.0), simplify_level_tolerance(f64::NAN)), (32.0, 1.0 / 32.0, 1.0));
+    assert_eq!((auto_simplify_level(400.0), auto_simplify_level(100.0), auto_simplify_level(300.0)), (50.0, 70.0, 55.0));
+    assert!(simplify_level_tolerance(auto_simplify_level(300.0)) <= 300.0 / 400.0);
+    assert_eq!((auto_simplify_level(12.5), auto_simplify_level(10.0)), (100.0, 100.0));
+    assert_eq!((auto_simplify_level(0.0), auto_simplify_level(f64::INFINITY), auto_simplify_level(1e9)), (100.0, 100.0, 0.0));
+}
+
 #[test]
 fn smooth_rounds_corners() {
     let s = smooth(&rect(0.0, 0.0, 10.0, 10.0), 1.0);

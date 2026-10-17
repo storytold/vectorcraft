@@ -2412,6 +2412,8 @@
 	Show Note	Mostrar Nota
 	Show Options	Mostrar Opções
 	Show Original Path	Mostrar Caminho Original
+	Open this dialog with these settings next time	Abrir este diálogo com estas configurações na próxima vez
+	Auto-Simplify	Simplificar Automaticamente
 	Show Package	Mostrar Pacote
 	Show Panel	Mostrar Painel
 	Show Perspective Grid	Mostrar Grade de Perspectiva
@@ -5022,6 +5024,7 @@ mark-style	Japanese	Japonesas
 @msg	Unknown dimension mode	Modo de cota desconhecido
 @msg	Unknown dimension option {k}	Opção de cota desconhecida {k}
 @msg	the Color Picker is not open	o Seletor de Cores não está aberto
+@msg	the Simplify slider is not open	o controle deslizante Simplificar não está aberto
 @msg	the screen color sampler is already open	o coletor de cores da tela já está aberto
 @msg	this system has no screen color sampler	este sistema não tem coletor de cores da tela
 	Darkness	Escuridão

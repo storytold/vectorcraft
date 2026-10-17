@@ -2740,6 +2740,8 @@ mark-style	Japanese	일본식
 	Show Note	메모 표시
 	Show Options	옵션 표시
 	Show Original Path	원래 패스 표시
+	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
+	Auto-Simplify	자동 단순화
 	Color Panel Options	색상 패널 옵션
 	Show Package	패키지 표시
 	Show Panel	패널 표시
@@ -4125,6 +4127,7 @@ theme	Appearance	외관
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
+@msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
 @msg	the screen color sampler is already open	화면 색상 추출기가 이미 열려 있습니다
 @msg	this system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
 @msg	Corners edits the corners of a path	모퉁이는 패스의 모퉁이를 편집합니다

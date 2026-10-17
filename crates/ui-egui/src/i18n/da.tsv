@@ -5021,6 +5021,8 @@ swatch	Bright Violet	Kraftig violet
 	Outline Object	Objekt til kontur
 	Update Selection	Opdater markering
 	Show Original Path	Vis oprindelig kurve
+	Open this dialog with these settings next time	Åbn denne dialogboks med disse indstillinger næste gang
+	Auto-Simplify	Forenkl automatisk
 @msg	check a layer to export	markér et lag, der skal eksporteres
 @msg	select the art to export first	markér først grafikken, der skal eksporteres
 @msg	no saved selection recalled	ingen gemt markering hentet

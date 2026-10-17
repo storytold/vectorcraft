@@ -1695,6 +1695,8 @@ lighting	Light	Světlo
 	Corner Point Angle Threshold:	Prahový úhel rohových bodů:
 	Convert to Straight Lines	Převést na přímé čáry
 	Show Original Path	Zobrazit původní cestu
+	Open this dialog with these settings next time	Příště otevřít toto dialogové okno s tímto nastavením
+	Auto-Simplify	Automaticky zjednodušit
 	Transparency Options	Možnosti průhlednosti
 	Color Mixer (Shift-click the chip)	Míchání barev (Shift+kliknutí na políčko)
 	Fill: click for swatches, Shift-click for the color mixer	Výplň: kliknutím otevřete vzorník, Shift+kliknutím míchání barev
@@ -4141,6 +4143,7 @@ imageTrace	Outline	Obrys
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
 @msg	the Color Picker is not open	Výběr barvy není otevřený
+@msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)

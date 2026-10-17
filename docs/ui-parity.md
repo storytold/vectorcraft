@@ -63,7 +63,7 @@ tools, never checked side by side) isn't captured row by row.
 | Join tool scrubbing, Average, Join | done | Join merges the direct-selected anchors lying on one another along a path, as after Average, into one (#1533) |
 | Average and Join in one step, with a corner or smooth choice for the joined anchor | missing | `path.join` and `path.average` are separate commands, and Join has no corner/smooth choice; [gap 1](gaps.md) |
 | Smooth tool smooths only the stretch of path under the drag | done | #1512 |
-| Simplify (slider, auto, corner angle threshold) | partial | Tolerance, default-on Preview and original/new point counts (#1272); Corner Point Angle Threshold, Convert to Straight Lines and Show Original Path; slider, auto-simplify and Retain my latest settings remain missing |
+| Simplify (slider, auto, corner angle threshold) | partial | Tolerance, default-on Preview and original/new point counts (#1272); Corner Point Angle Threshold, Convert to Straight Lines and Show Original Path; the slider under the selection with Auto-Simplify and More Options, and the dialog's option to open it directly with its last settings; the slider opens at 1 pt rather than at the Auto-Simplify level, and simplifying only a Direct Selection part of a path remains missing |
 
 ## Direct Selection, anchors and handles
 

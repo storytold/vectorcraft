@@ -1615,6 +1615,8 @@ lighting	Light	Światło
 	Corner Point Angle Threshold:	Próg kąta punktów narożnych:
 	Convert to Straight Lines	Konwertuj na linie proste
 	Show Original Path	Pokaż oryginalną ścieżkę
+	Open this dialog with these settings next time	Następnym razem otwórz to okno dialogowe z tymi ustawieniami
+	Auto-Simplify	Uprość automatycznie
 	Transparency Options	Opcje przezroczystości
 	Color Mixer (Shift-click the chip)	Mikser kolorów (kliknij próbkę z Shift)
 	Fill: click for swatches, Shift-click for the color mixer	Wypełnienie: kliknij, aby wybrać próbkę, z Shift — mikser kolorów
@@ -3963,6 +3965,7 @@ imageTrace	Outline	Kontur
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
+@msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)

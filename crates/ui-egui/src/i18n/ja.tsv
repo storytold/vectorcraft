@@ -2746,6 +2746,8 @@ mark-style	Japanese	日本式
 	Show Note	メモを表示
 	Show Options	オプションを表示
 	Show Original Path	元のパスを表示
+	Open this dialog with these settings next time	次回はこの設定でこのダイアログを開く
+	Auto-Simplify	自動単純化
 	Color Panel Options	カラーパネルオプション
 	Show Package	パッケージを表示
 	Show Panel	パネルを表示
@@ -4193,6 +4195,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
 @msg	the Color Picker is not open	カラーピッカーが開いていません
+@msg	the Simplify slider is not open	単純化スライダーが開いていません
 @msg	the screen color sampler is already open	画面のカラーサンプラーはすでに開いています
 @msg	this system has no screen color sampler	このシステムには画面のカラーサンプラーがありません
 @msg	Corners edits the corners of a path	「コーナー」で編集できるのはパスの角だけです

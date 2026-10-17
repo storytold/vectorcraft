@@ -2887,6 +2887,8 @@ mark-style	Japanese	Japanisch
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
 	Show Original Path	Originalpfad einblenden
+	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
+	Auto-Simplify	Automatisch vereinfachen
 	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
@@ -3778,6 +3780,7 @@ theme	Appearance	Erscheinungsbild
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
 @msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
+@msg	the Simplify slider is not open	der Regler „Vereinfachen“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
