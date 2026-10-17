@@ -35,6 +35,9 @@ fn tags_map_to_languages() {
     for tag in ["vi", "vi-VN", "vi_VN.UTF-8", "VI-vn"] {
         assert_eq!(lang_from_tag(tag), Some(vi()), "{tag}");
     }
+    for tag in ["lo", "lo-LA", "lo_LA.UTF-8", "LO-la"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("lo"), "{tag}");
+    }
     for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8", "SV-se"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("sv"), "{tag}");
     }
@@ -489,6 +492,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
+
 const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
@@ -702,7 +706,31 @@ fn korean_reads_as_korean() {
     let nested = "command `object.group` is not available right now: nothing selected";
     assert_eq!(message(ko(), nested), "명령 `object.group`은(는) 지금 사용할 수 없습니다: 선택된 항목이 없습니다");
 }
+fn lo() -> Lang {
+    Lang::from_code("lo").expect("lo registered")
+}
 
+/// Lao uses the vector-illustration vocabulary its users know, has no plural forms, and
+/// translates the reason inside a message too.
+#[test]
+fn lao_reads_as_lao() {
+    for (en, want) in [
+        ("Artboard Tool", "ເຄື່ອງມືອາດບອດ"),
+        ("Swatches", "ຈານສີ"),
+        ("Pathfinder", "Pathfinder"),
+        ("Stroke", "ເສັ້ນຂອບ"),
+        ("Fill", "ສີພື້ນ"),
+        ("Direct Selection Tool", "ເຄື່ອງມືເລືອກໂດຍກົງ"),
+        ("Save As...", "ບັນທຶກເປັນ…"),
+        ("Undo", "ຍົກເລີກ"),
+        ("Close", "ປິດ"),
+    ] {
+        assert_eq!(tr(lo(), en), want);
+    }
+    for n in [0, 1, 3, 21] {
+        assert_eq!(trn(lo(), n, "{n} Layer", "{n} Layers"), format!("{n} ເລເຍີ"));
+    }
+}
 fn vi() -> Lang {
     Lang::from_code("vi").expect("vi registered")
 }
