@@ -674,7 +674,8 @@ a preset) plus `__view` (`original`, `optimized`, `2up`, `4up`), `__zoom` (`fit`
 `__color` (the colour table's selected colour). `ui.dialog.confirm` remembers the settings and saves (a save panel for
 the image, or the page with HTML output; the web downloads the files); with `discard: true` it is Done: it remembers
 the settings and closes. `file.saveForWeb` with settings saves without the dialog, and `file.saveForWeb.browser`
-writes the HTML page to a temporary folder and opens it in the default browser (desktop).
+writes the HTML page to a temporary folder and opens it in the default browser (desktop). Both return the export's
+`warnings`, and the status bar shows the first one as Save As shows a save's notes.
 
 PSD Options: Export As… with the PSD format (`file.exportAs {format: "psd"}`, then the save dialog) opens `psdOptions`:
 the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK

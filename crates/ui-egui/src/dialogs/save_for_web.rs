@@ -131,7 +131,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them.
+/// output, else the image); the web downloads them. The status bar shows the export's first
+/// warning.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -145,8 +146,11 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
             io::write_to(&mut app.services, name, &bytes)?;
             names.push(json!(name));
         }
-        app.status(format!("Downloaded {} file(s)", names.len()));
-        return Ok(json!({ "files": names, "bytes": r["bytes"] }));
+        match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
+            Some(first) => io::report_saved(app, first, &r),
+            None => app.status(format!("Downloaded {} file(s)", names.len())),
+        }
+        return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
     let ext = if s.output == WebOutput::Html { "html" } else { s.format.ext() };
     let path = io::target_path(app, path, ext)?;
@@ -155,12 +159,23 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
     }
     let r = app.run("document.exportForWeb", p)?;
     let n = r["files"].as_array().map_or(0, Vec::len);
-    app.status(if n > 1 { format!("Saved {n} files beside {path}") } else { format!("Saved {path}") });
+    if n > 1 && !has_warnings(&r) {
+        app.status(format!("Saved {n} files beside {path}"));
+    } else {
+        io::report_saved(app, &path, &r);
+    }
     Ok(r)
 }
 
+/// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
+/// [`io::report_saved`] puts the first in the status bar as a save's note.
+fn has_warnings(r: &Value) -> bool {
+    r["warnings"].as_array().is_some_and(|w| !w.is_empty())
+}
+
 /// `file.saveForWeb.browser`: the HTML page and its images in a temporary folder, opened in the
-/// default browser (desktop).
+/// default browser (desktop). When the export has warnings, the status bar shows the first in
+/// place of "Opened …".
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
@@ -173,9 +188,12 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         o.insert("path".into(), json!(path));
         o.insert("output".into(), json!("html"));
     }
-    app.run("document.exportForWeb", q)?;
+    let r = app.run("document.exportForWeb", q)?;
     app.open_url(&io::file_url(&path));
-    Ok(json!({ "path": path }))
+    if has_warnings(&r) {
+        io::report_saved(app, &path, &r);
+    }
+    Ok(json!({ "path": path, "warnings": r["warnings"] }))
 }
 
 /// The folder browser previews go to.

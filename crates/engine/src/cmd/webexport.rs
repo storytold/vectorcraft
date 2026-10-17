@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity} (colours as the preview's colors[].source), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height}; no path → {files: [{name, dataBase64}], bytes, width, height} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity} (colours as the preview's colors[].source), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web Preview",
             [],
             None,
-            "{…the settings of document.exportForWeb (preset?, format?…), slice?: n (1-based, from slice.list; default the whole image), kbps?: 56.6 (connection speed for the download time), image?: false (also the optimised file as dataBase64)} what Save writes for the whole image (or one slice) → {format, width, height, bytes (exactly the file's size), seconds (to download at kbps), kbps, colors?: [{color: \"#rrggbb\", source: \"#rrggbb\" (the colour the reduction made, as colorTable lists it), transparent, locked, webShifted, webSafe}] (gif/png8: the colour table in file order), mappedToTransparent?: [\"#rrggbb\"…], slices: images an export writes, dataBase64?}",
+            "{…the settings of document.exportForWeb (preset?, format?…), slice?: n (1-based, from slice.list; default the whole image), kbps?: 56.6 (connection speed for the download time), image?: false (also the optimised file as dataBase64)} what Save writes for the whole image (or one slice) → {format, width, height, bytes (exactly the file's size), seconds (to download at kbps), kbps, colors?: [{color: \"#rrggbb\", source: \"#rrggbb\" (the colour the reduction made, as colorTable lists it), transparent, locked, webShifted, webSafe}] (gif/png8: the colour table in file order), mappedToTransparent?: [\"#rrggbb\"…], slices: images an export writes, warnings (as document.exportForWeb's), dataBase64?}",
             has_doc,
             preview
         ),
@@ -970,11 +970,13 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         None => super::fileio::file_stem(&st.doc.title),
     };
     let stem = if stem.trim().is_empty() { "Untitled".to_string() } else { stem };
+    let failed = vectorcraft_render::decode_failures();
     let (files, (width, height)) = export_files(&st.doc, &selected, &settings, &stem).map_err(|e| bad(C, e))?;
+    let warnings = undecoded(failed);
     let total: usize = files.iter().map(|f| f.bytes.len()).sum();
     let Some(path) = path else {
         let rows: Vec<Value> = files.iter().map(|f| json!({ "name": f.name, "dataBase64": vectorcraft_format::base64_encode(&f.bytes) })).collect();
-        return Ok(json!({ "files": rows, "bytes": total, "width": width, "height": height }));
+        return Ok(json!({ "files": rows, "bytes": total, "width": width, "height": height, "warnings": warnings }));
     };
     // Siblings keep the path's own separators.
     let dir = &path[..path.rfind(['/', '\\']).map_or(0, |i| i + 1)];
@@ -988,7 +990,14 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::fileio::write_file(&target, &f.bytes)?;
         written.push(target);
     }
-    Ok(json!({ "path": written.first(), "files": written, "bytes": total, "width": width, "height": height }))
+    Ok(json!({ "path": written.first(), "files": written, "bytes": total, "width": width, "height": height, "warnings": warnings }))
+}
+
+/// The warnings of a rendering that started when this thread's decode failure count was `failed`:
+/// the note the raster exports add (`fileio::encode::encode_all_of`) when an image has failed to
+/// decode since then and so is missing from the image.
+fn undecoded(failed: u64) -> Vec<&'static str> {
+    if vectorcraft_render::decode_failures() > failed { vec!["an image couldn't be decoded and is missing from the picture"] } else { vec![] }
 }
 
 fn preview(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1000,7 +1009,9 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let st = s.doc()?;
     let doc = &st.doc;
+    let failed = vectorcraft_render::decode_failures();
     let r = render(doc, &settings).map_err(|e| bad(P, e))?;
+    let warnings = undecoded(failed);
     let areas = doc.slice_layout();
     let selected = super::slices::selected_slices(doc, &st.selection);
     let cells = cells(&areas, &selected, &settings, &r).map_err(|e| bad(P, e))?;
@@ -1016,7 +1027,7 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     .map_err(|e| bad(P, e))?;
     let mut out = json!({
         "format": settings.format.id(), "width": o.width, "height": o.height, "bytes": o.bytes.len(),
-        "seconds": download_seconds(o.bytes.len(), kbps), "kbps": kbps, "slices": images,
+        "seconds": download_seconds(o.bytes.len(), kbps), "kbps": kbps, "slices": images, "warnings": warnings,
     });
     if settings.format.palette() {
         out["colors"] = o

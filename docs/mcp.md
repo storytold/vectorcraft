@@ -3090,13 +3090,14 @@ transparent, webShift, sort}`; for JPEG `quality`, `progressive`, `optimized`, `
 GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. With slices (`slice.list`) each image slice becomes
 `images/<slice name>.<ext>` (`slices: selected` writes the selected ones, `none` one image); `output: html` adds
 `<stem>.html` placing them, with each slice's URL, target, alt text and status message, and No Image / HTML Text cells.
-Without `path` the files come back as `{name, dataBase64}`.
+Without `path` the files come back as `{name, dataBase64}`. As in the raster exports, `warnings` says when an image
+couldn't be decoded and is missing from the image; the files are written all the same.
 
 `document.exportForWeb.preview` returns what Save writes for the same settings without writing it: `bytes` (the exact
 file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
 (`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
-previews one slice; `image: true` adds the file.
+previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
 
 Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
 `webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
