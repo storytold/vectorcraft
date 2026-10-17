@@ -133,22 +133,46 @@ impl Session {
     }
 
     /// Write the saved preset `preset` to the store, which held it as `old_name` when that is set
-    /// (a rename). Without a store, nothing happens.
+    /// (a rename). A rename writes the new file first and removes the old one only when that write
+    /// succeeded: after a failed write the store still holds the preset under its old name. When
+    /// the two names differ only in case, the old file is written and then renamed to the new name;
+    /// when that rename fails, the old file gets its content back. Without a store, nothing happens.
     pub(crate) fn store_pdf_preset(&self, old_name: Option<&str>, preset: &PdfPreset) {
         let Some(dir) = &self.pdf_preset_dir else { return };
         let mut clean = preset.clone();
         clean.settings.clear_passwords();
         let file = format!("{}.{PRESET_FORMAT}", file_stem(&clean.name));
-        if let Some(old) = old_name.map(|o| format!("{}.{PRESET_FORMAT}", file_stem(o)))
-            && old != file
-        {
-            take(dir, &old);
-        }
-        match serde_json::to_vec_pretty(&PresetFile::new(vec![clean])) {
-            Ok(bytes) => {
+        let bytes = match serde_json::to_vec_pretty(&PresetFile::new(vec![clean])) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                log::warn!("can't save the PDF preset `{}`: {e}", preset.name);
+                return;
+            }
+        };
+        match old_name.map(|o| format!("{}.{PRESET_FORMAT}", file_stem(o))).filter(|old| *old != file) {
+            // Names equal in any case get file names that differ only in case. A file system that
+            // ignores case holds them as one file, which removing the old name would delete.
+            Some(old) if old.to_lowercase() == file.to_lowercase() => match read_capped(&dir.join(&old), MAX_PRESET_FILE) {
+                Ok(before) => {
+                    if put(dir, &old, &bytes)
+                        && let Err(e) = std::fs::rename(dir.join(&old), dir.join(&file))
+                    {
+                        log::warn!("can't rename {} to {file}: {e}", dir.join(&old).display());
+                        put(dir, &old, &before);
+                    }
+                }
+                Err(_) => {
+                    put(dir, &file, &bytes);
+                }
+            },
+            Some(old) => {
+                if put(dir, &file, &bytes) {
+                    take(dir, &old);
+                }
+            }
+            None => {
                 put(dir, &file, &bytes);
             }
-            Err(e) => log::warn!("can't save the PDF preset `{}`: {e}", preset.name),
         }
     }
 
