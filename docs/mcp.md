@@ -2704,7 +2704,9 @@ preferences: `text/plain` (the text of a type-only copy, else the SVG markup wit
 area). Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
 (a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
-transparent around them).
+transparent around them). As in `document.export`, the PDF's and the PNG's replies list their notes in `warnings`
+(type written in the fallback font…; the PNG's also say when an image couldn't be decoded). After Copy or Cut the app
+shows the first note of the PDF and PNG it offers in the status bar.
 
 What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
 password?}` (the page's objects), `clipboard.importEps {dataBase64}` (an EPS or other PostScript picture's objects,
@@ -3148,8 +3150,10 @@ says when CSS can't describe the art exactly (`unsupported`: other shapes, image
 written as its box, or with `rasterize: true` as `background-image: url(<class>.png)`. `units` is `px` (1 px per
 point, as in SVG export), `pt`, `mm`, `cm` or `in`; `unnamed: false` leaves out unnamed objects (counted in
 `skipped`). `css.generate` does the same for the whole document, and `css.export {path?, scope?: selection|all}`
-writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). In the app,
-`css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web downloads it).
+writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). Its
+`warnings` add the PNGs' notes to the CSS's, each once (an image that couldn't be decoded, type written in the
+fallback font…). In the app, `css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web
+downloads it) and shows the first note in the status bar.
 
 ```json
 {"name":"run_command","arguments":{"command":"css.selection","params":{"units":"px","position":true}}}

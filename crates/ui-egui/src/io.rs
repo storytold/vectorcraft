@@ -713,10 +713,10 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
 /// (Export Selection, Save for Office Documents, Text Export Options and the presets dialogs'
-/// Export…).
+/// Export…), reported with the first of the command's warnings ([`report_saved`]).
 pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params: Value) -> Result<String, String> {
-    let (path, _) = run_to_file(app, id, ext, params)?;
-    app.status(format!("Saved {path}"));
+    let (path, v) = run_to_file(app, id, ext, params)?;
+    report_saved(app, &path, &v);
     Ok(path)
 }
 
