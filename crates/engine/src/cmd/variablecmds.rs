@@ -74,13 +74,14 @@ fn names_param(p: &Value, cmd: &str, fallback: Option<String>, nothing: &str) ->
     }
 }
 
-/// Refuse what a variable of `kind` can't be bound to: art that is locked or on a hidden or locked
-/// layer; a text variable only drives type; an image variable only drives an image object.
+/// Refuse what a variable of `kind` can't be bound to: art on a hidden layer or in a hidden group,
+/// and, unless `kind` is visibility, art that is locked or on a locked layer or in a locked group;
+/// a text variable only drives type; an image variable only drives an image object.
 fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: VariableKind, cmd: &str) -> Result<()> {
     for id in ids {
         match doc.node(*id) {
             None => return Err(EngineError::NoNode(*id)),
-            Some(_) if !doc.variable_target(*id) => return Err(bad(cmd, not_a_target(doc, *id))),
+            Some(_) if !doc.variable_target(*id, kind) => return Err(bad(cmd, not_a_target(doc, *id, kind))),
             Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
                 return Err(bad(cmd, format!("node {} is not type", id.0)));
             }
@@ -96,14 +97,17 @@ fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: Variabl
     Ok(())
 }
 
-/// Why `variable_target` refuses `id`: the object is locked, a group or layer that holds it is
-/// locked, or one that holds it is hidden, checked in that order.
-fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
+/// Why `variable_target` refuses `id` for a variable of `kind`: the object is locked, a group or
+/// layer that holds it is locked, or one that holds it is hidden, checked in that order. For a
+/// visibility variable, the lock checks are skipped and the message says the object is in a
+/// hidden group or layer.
+fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId, kind: VariableKind) -> String {
     let holders: Vec<&vectorcraft_doc::Node> =
         doc.ancestry(id).unwrap_or_default().into_iter().filter(|i| *i != id).filter_map(|i| doc.node(i)).collect();
-    if doc.node(id).is_some_and(|n| n.locked) {
+    let locks = kind != VariableKind::Visibility;
+    if locks && doc.node(id).is_some_and(|n| n.locked) {
         format!("node {} is locked", id.0)
-    } else if holders.iter().any(|n| n.locked) {
+    } else if locks && holders.iter().any(|n| n.locked) {
         format!("node {} is in a locked group or layer", id.0)
     } else {
         format!("node {} is in a hidden group or layer", id.0)
@@ -395,8 +399,9 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Update Data Set: write what the bound objects hold now into the row that is active, for each
-/// variable the row holds. A variable whose objects report no value (locked, inside a locked
-/// layer or group, or gone) keeps the row's value. With `all`, every other variable the
+/// variable the row holds. A variable whose objects report no value (gone, or, for a variable
+/// other than a visibility variable, locked or inside a locked layer or group) keeps the row's
+/// value. With `all`, every other variable the
 /// objects report a value for is added to the row. Without an active row there is nothing to
 /// update, so say so rather than picking one.
 fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
@@ -480,10 +485,11 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
                     continue;
                 }
             };
-            // Locked art, art in a locked layer or group, and text whose object is gone, can't be
-            // rewritten: skipped and counted, like the rest. Hidden art is rewritten, in a hidden
-            // layer or group too, and stays hidden unless a visibility value shows it.
-            if !d.dataset_target(id) {
+            // Art that is gone, and art that is locked or in a locked layer or group, is skipped
+            // and counted, like the rest, except that a visibility value shows and hides locked
+            // art. Hidden art is rewritten, in a hidden layer or group too, and stays hidden
+            // unless a visibility value shows it.
+            if !d.dataset_target(id, kind) {
                 skipped += 1;
                 continue;
             }
@@ -903,7 +909,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bind Variable",
             ["Window", "Variables"],
             None,
-            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art is refused. An object may hold several variables, and binding it to one it already has changes nothing → {bound, already}",
+            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art and art in a locked layer or group are refused except by a visibility variable. An object may hold several variables, and binding it to one it already has changes nothing → {bound, already}",
             has_doc,
             bind
         ),
@@ -959,7 +965,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Data Set",
             ["Window", "Variables"],
             None,
-            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (locked, inside a locked layer or group, or gone) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
+            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (gone, or, for a variable other than a visibility variable, locked or inside a locked layer or group) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
             has_doc,
             dataset_update
         ),

@@ -271,7 +271,7 @@ fn unbind_reports_what_it_actually_removed() {
     assert!(v["variables"].get("bindings").is_none_or(|v| v == &json!({})), "{v}");
 }
 
-/// Locked art is the document's to rewrite only while it isn't locked.
+/// Locked type takes no new text variable binding, and a row leaves its text alone.
 #[test]
 fn locked_art_is_neither_bound_nor_rewritten() {
     let mut s = session();
@@ -325,6 +325,90 @@ fn binding_errors_say_whether_a_layer_or_group_is_hidden_or_locked() {
     s.execute("object.lock", &json!({})).unwrap();
     let e = bind(&mut s);
     assert!(e.contains(&format!("node {} is locked", t.0)), "{e}");
+}
+
+/// A visibility variable binds a locked layer and a locked object inside a locked group, and a row
+/// hides and shows them in one undo step without unlocking them. List, Capture and Update Data Set
+/// read whether they show.
+#[test]
+fn a_visibility_variable_shows_and_hides_locked_art() {
+    let mut s = session();
+    let badge = rect(&mut s);
+    let other = rect(&mut s);
+    let g = group(&mut s, &[badge, other]);
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    rect(&mut s);
+    s.execute("object.setProps", &json!({"ids": [badge.0], "locked": true})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [g.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    s.execute("variable.define", &json!({"name": "Layer", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Layer", "ids": [layer.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Badge", "ids": [badge.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Shown", "values": {"Layer": true, "Badge": true}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Hidden", "values": {"Layer": false, "Badge": false}})).unwrap();
+    let shows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().visible;
+    let locked = |s: &Session| [layer, g, badge].iter().all(|id| s.doc().unwrap().doc.node(*id).unwrap().locked);
+
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert!(!shows(&s, layer) && !shows(&s, badge), "the row hides the locked layer and the locked object");
+    assert!(locked(&s), "the row leaves the locks as they were");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let matching: Vec<&Value> = sets["datasets"].as_array().unwrap().iter().filter(|d| d["matches"] == json!(true)).map(|d| &d["name"]).collect();
+    assert_eq!(matching, [&json!("Hidden")], "List reads the locked art: {sets}");
+    assert_eq!(s.execute("dataset.capture", &json!({"name": "Captured"})).unwrap()["values"], 2);
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][2]["values"], json!({"Badge": {"visible": false}, "Layer": {"visible": false}}), "{sets}");
+
+    // Undo puts back what the row hid.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(shows(&s, layer) && shows(&s, badge), "undo shows them again");
+
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!(v["applied"], 2, "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Shown"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert!(shows(&s, layer) && shows(&s, badge), "the row shows them");
+    assert!(locked(&s));
+
+    // Update writes the locked layer's visibility into the active row.
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!((v["values"].clone(), v["left"].clone()), (json!(2), json!([])), "{v}");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Badge": {"visible": true}, "Layer": {"visible": false}}), "{sets}");
+}
+
+/// Text and graph variables refuse locked art and art in a locked layer. A visibility variable is
+/// refused for art on a hidden layer that is also locked, and the error says the art is in a hidden
+/// group or layer.
+#[test]
+fn locked_art_refuses_text_and_graph_variables_and_a_hidden_layer_refuses_visibility() {
+    let mut s = session();
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = text(&mut s, "x");
+    let r = rect(&mut s);
+    s.execute("object.setProps", &json!({"ids": [r.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Chart", "kind": "graph"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    let bind = |s: &mut Session, var: &str, id: NodeId| s.execute("variable.bind", &json!({"variable": var, "ids": [id.0]}));
+
+    let e = bind(&mut s, "Name", t).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is in a locked group or layer", t.0)), "{e}");
+    let e = bind(&mut s, "Chart", r).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is locked", r.0)), "{e}");
+    bind(&mut s, "Show", t).unwrap();
+    assert!(s.doc().unwrap().doc.variables.objects_of("Name").is_empty());
+
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let e = bind(&mut s, "Show", r).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is in a hidden group or layer", r.0)), "{e}");
+    // The hidden layer's own visibility is what the variable drives.
+    bind(&mut s, "Show", layer).unwrap();
 }
 
 /// Make Text Dynamic / Make Visibility Dynamic: what the panel's buttons run. One step from a
@@ -531,7 +615,7 @@ fn updating_writes_only_the_variables_the_row_holds() {
     assert_eq!(sets["datasets"][0]["values"]["Client"], json!({"text": "Typed by hand"}), "{sets}");
 }
 
-/// A variable whose object is locked reports no value, so Update keeps the row's value for it
+/// A text variable whose object is locked reports no value, so Update keeps the row's value for it
 /// rather than dropping it from the row.
 #[test]
 fn updating_keeps_a_value_the_art_does_not_report() {
@@ -762,8 +846,8 @@ fn a_hidden_object_comes_back_and_is_captured_hidden() {
 }
 
 /// A row selected while a layer is hidden rewrites the type on it and applies its other values,
-/// and leaves the layer hidden: showing the layer shows that row's text. A layer that is locked
-/// as well as hidden is still left alone.
+/// and leaves the layer hidden: showing the layer shows that row's text. On a layer that is locked
+/// as well as hidden, the type keeps its text and the row's visibility value applies.
 #[test]
 fn a_row_rewrites_type_on_a_hidden_layer_but_not_on_a_locked_one() {
     let mut s = session();
@@ -791,12 +875,12 @@ fn a_row_rewrites_type_on_a_hidden_layer_but_not_on_a_locked_one() {
     s.execute("layer.setProps", &json!({"id": layer.0, "visible": true})).unwrap();
     assert_eq!(plain(&s, t), "Bob", "showing the layer shows the row's text");
 
-    // Locked and hidden: the row skips both objects and the type keeps its text.
+    // Locked and hidden: the row skips the type, which keeps its text, and shows the rectangle.
     s.execute("layer.setProps", &json!({"id": layer.0, "visible": false, "locked": true})).unwrap();
     let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
-    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(0), Some(2)), "{v}");
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(1)), "{v}");
     assert_eq!(plain(&s, t), "Bob", "the type on the locked layer keeps its text");
-    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    assert!(s.doc().unwrap().doc.node(r).unwrap().visible, "the row's visibility value applies on the locked layer");
 }
 
 /// Type inside a hidden group is rewritten too, and List and Capture Data Set read it.
