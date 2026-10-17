@@ -1691,8 +1691,9 @@ impl Writer<'_> {
                     self.num(*dy),
                     flood(color, *opacity)
                 ),
+                // The glow blurs a solid silhouette: alpha × 255 makes any alpha full.
                 RasterFx::OuterGlow { opacity, blur, color, .. } => format!(
-                    "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\" result=\"glow\"/>{}<feComposite in2=\"glow\" operator=\"in\" result=\"paint\"/><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
+                    "<feComponentTransfer in=\"SourceAlpha\"><feFuncA type=\"linear\" slope=\"255\"/></feComponentTransfer><feGaussianBlur stdDeviation=\"{}\" result=\"glow\"/>{}<feComposite in2=\"glow\" operator=\"in\" result=\"paint\"/><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
                     sd(*blur),
                     flood(color, *opacity)
                 ),

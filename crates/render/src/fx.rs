@@ -705,6 +705,8 @@ pub(crate) struct ShadowEntry {
     /// Pixel offset of the raster's top-left from the anchor's view position.
     rel: (f64, f64),
     image: std::sync::Arc<vello_cpu::Pixmap>,
+    /// View pixels per raster pixel: more than 1 for a glow made coarser to fit the budget.
+    scale: f64,
     made: Made,
     /// What the silhouette read when the raster was made.
     inputs: Inputs,
@@ -712,6 +714,16 @@ pub(crate) struct ShadowEntry {
     /// made before their objects moved: only a frame rendered while interacting draws it.
     moved: bool,
     pub(crate) stamp: u64,
+}
+
+/// A shadow or glow raster ready to draw ([`Renderer::draw_shadow`]).
+struct Shadow {
+    image: std::sync::Arc<vello_cpu::Pixmap>,
+    /// Raster to view pixels.
+    at: Affine,
+    mode: vectorcraft_doc::color::BlendMode,
+    /// Made before its object moved ([`ShadowEntry::moved`]).
+    moved: bool,
 }
 
 impl ShadowEntry {
@@ -971,16 +983,15 @@ pub(crate) struct FxGeom {
 }
 
 impl Renderer {
-    /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) from a cached raster:
-    /// the silhouette is rendered once into a small crop, blurred and tinted on the CPU, and reused
-    /// while the object, the zoom/rotation and what the silhouette reads ([`Inputs`]) are unchanged
-    /// (pans only move it), and while interacting after the object only moved
-    /// ([`Self::move_shadow`]). Returns false when the effect isn't a shadow/glow or the raster
-    /// would be too large (caller falls back).
+    /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
+    /// silhouette `paint` draws is rendered once into a small crop, blurred and tinted on the CPU,
+    /// and reused while the object, the zoom/rotation and what the silhouette reads ([`Inputs`]) are
+    /// unchanged (pans only move it), and while interacting after the object only moved
+    /// ([`Self::move_shadow`]). `None` when the effect isn't a shadow/glow or the raster would be
+    /// too large (caller falls back to [`Self::draw_shadow_filter`]).
     #[allow(clippy::too_many_arguments)]
-    fn draw_shadow_cached(
+    fn shadow_raster(
         &mut self,
-        ctx: &mut RenderContext,
         f: &Frame,
         n: &Node,
         i: usize,
@@ -988,11 +999,11 @@ impl Renderer {
         reach: Rect,
         owner: Option<&Arc<Node>>,
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
-    ) -> bool {
+    ) -> Option<Shadow> {
         let (mode, opacity, dx, dy, blur, color, darkness) = match fx {
             RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => (*mode, *opacity, *dx, *dy, *blur, *color, *darkness),
             RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color, None),
-            _ => return false,
+            _ => return None,
         };
         let linear = linear_key(f.view);
         let key = (n as *const Node as usize, i, f.ink);
@@ -1006,12 +1017,12 @@ impl Renderer {
             self.move_shadow(f, n, key, fx, reach + Vec2::new(dx, dy), owner, &inputs, paint);
         }
         let hit = self.shadows.get_mut(&key).filter(|e| exact(e));
-        let (image, x, y) = match hit {
+        let (image, x, y, scale, moved) = match hit {
             Some(e) => {
                 e.stamp = stamp;
                 self.stats.moved += usize::from(e.moved);
                 let p = f.view * e.anchor;
-                (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round())
+                (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round(), e.scale, e.moved)
             }
             None => {
                 let spread = blur.max(0.0) * 1.5 / f.px + 2.0;
@@ -1019,14 +1030,22 @@ impl Renderer {
                 let r = f.view.transform_rect_bbox(reach).inflate(spread, spread);
                 let (x0, y0) = (r.x0.floor(), r.y0.floor());
                 let (w, h) = (r.x1.ceil() - x0, r.y1.ceil() - y0);
+                // A glow too large for the budget is made coarser, where its blur hides the coarser grid: the filter
+                // layer the caller falls back to can't make its silhouette solid.
+                let scale = if matches!(fx, RasterFx::OuterGlow { .. }) { (w * h / 4.0e6).sqrt().ceil().max(1.0) } else { 1.0 };
+                if scale > 1.0 && blur / 2.0 / f.px / scale < 2.0 {
+                    return None;
+                }
+
+                let (w, h) = ((w / scale).ceil(), (h / scale).ceil());
                 if !(1.0..=8192.0).contains(&w) || !(1.0..=8192.0).contains(&h) || w * h > 4.0e6 {
-                    return false;
+                    return None;
                 }
                 let (w, h) = (w as u16, h as u16);
                 // Silhouette (the object's painted alpha, and its colors under Darkness), offset by
                 // the shadow distance.
                 let mut off = f.offscreen_context(w, h);
-                let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
+                let crop = Frame { mt: false, view: Affine::scale(1.0 / scale) * Affine::translate((-x0, -y0)) * f.view, ..*f };
                 let before = self.stats.moved;
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 // A silhouette drawn over moved rasters makes a moved shadow.
@@ -1038,7 +1057,7 @@ impl Renderer {
                 let made =
                     Made { pixels: silhouette(&pm, darkness.is_some()), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
                 let (wu, hu) = (w as usize, h as usize);
-                let sigma = blur / 2.0 / f.px;
+                let sigma = blur / 2.0 / f.px / scale;
                 if let Some(darkness) = darkness {
                     // The object's own colors, blurred, with the black Darkness adds (premultiplied).
                     let keep = 1.0 - shade(f.ink, darkness);
@@ -1058,7 +1077,9 @@ impl Renderer {
                         *px = vello_cpu::color::PremulRgba8 { r: value(r), g: value(g), b: value(b), a: al as u8 };
                     }
                 } else {
-                    let mut a: Vec<f32> = pm.data().iter().map(|p| p.a as f32).collect();
+                    // An Outer Glow blurs a solid silhouette: wherever the art has any alpha, as AI files draw a glow round a glow.
+                    let solid = matches!(fx, RasterFx::OuterGlow { .. });
+                    let mut a: Vec<f32> = pm.data().iter().map(|p| if solid && p.a > 0 { 255.0 } else { p.a as f32 }).collect();
                     effects::pixel::blur_plane(&mut a, wu, hu, sigma);
                     let [cr, cg, cb] = f.ink.rgb(&color);
                     let tint = |v: f32, ch: f32| (v * ch).round().clamp(0.0, 255.0) as u8;
@@ -1072,23 +1093,71 @@ impl Renderer {
                 let p = f.view * anchor;
                 let node = Drawn::of(n, owner);
                 let rel = (x0 - p.x, y0 - p.y);
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), made, inputs, moved, stamp });
+                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, made, inputs, moved, stamp });
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
-                (image, x0, y0)
+                (image, x0, y0, scale, moved)
             }
         };
-        // The blend mode applies per draw: a blend layer would be a full-viewport compositing pass
-        // per shadow. The raster sits on whole pixels, so the cheapest sampler is exact.
-        let (w, h) = (image.width() as f64, image.height() as f64);
-        ctx.set_transform(Affine::translate((x, y)));
-        ctx.set_blend_mode(blend_mode(mode));
-        let sampler = peniko::ImageSampler { quality: peniko::ImageQuality::Low, ..Default::default() };
+        Some(Shadow { image, at: Affine::translate((x, y)) * Affine::scale(scale), mode, moved })
+    }
+
+    /// Draw shadow raster `s` through `to`, from the view the raster was made for to the one `ctx`
+    /// draws in. The blend mode applies per draw: a blend layer would be a full-viewport compositing
+    /// pass per shadow. A full-size raster drawn as made sits on whole pixels, so the cheapest
+    /// sampler is exact.
+    fn draw_shadow(&mut self, ctx: &mut RenderContext, s: &Shadow, to: Affine) {
+        let (w, h) = (s.image.width() as f64, s.image.height() as f64);
+        let at = to * s.at;
+        ctx.set_transform(at);
+        ctx.set_blend_mode(blend_mode(s.mode));
+        let [a, b, c, d, _, _] = at.as_coeffs();
+        let exact = (a, b, c, d) == (1.0, 0.0, 0.0, 1.0) && at.translation().x.fract() == 0.0 && at.translation().y.fract() == 0.0;
+        let quality = if exact { peniko::ImageQuality::Low } else { peniko::ImageQuality::Medium };
+        let sampler = peniko::ImageSampler { quality, ..Default::default() };
         ctx.reset_paint_transform();
-        ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(image), sampler });
+        ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(s.image.clone()), sampler });
         ctx.fill_rect(&Rect::new(0.0, 0.0, w, h));
         ctx.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
         ctx.set_transform(Affine::IDENTITY);
-        true
+    }
+
+    /// Drop shadow / outer glow `fx` of what `paint` draws (bounded by `reach`) through a vello
+    /// filter layer, when there is no raster for it ([`Self::shadow_raster`]). vello's shadow filter
+    /// blurs the soft alpha, so an Outer Glow drawn here lacks the raster's solid silhouette.
+    fn draw_shadow_filter(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        fx: &RasterFx,
+        reach: Rect,
+        paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
+    ) {
+        let (mode, opacity, dx, dy, blur, color, darkness) = match fx {
+            RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => (*mode, *opacity, *dx, *dy, *blur, *color, *darkness),
+            RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color, None),
+            _ => return,
+        };
+        let filter = match darkness {
+            Some(_) => shade_filter(blur),
+            None => shadow_filter(0.0, 0.0, blur, pcolor(f.ink, &color)),
+        };
+        // The offset moves the content rather than the filter: vello_cpu drops layer content
+        // that lies entirely outside the viewport before filtering.
+        let reach = reach + Vec2::new(dx, dy);
+        self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
+            c.set_transform(fr.view);
+            c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
+            paint(r, c, &shifted(fr, dx, dy));
+            // Darkness: black over the object's own colors, keeping their alpha.
+            if let Some(black) = darkness.map(|d| shade(f.ink, d)).filter(|d| *d > 0.0) {
+                c.set_transform(fr.view);
+                c.set_blend_mode(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::SrcAtop));
+                c.set_paint(peniko::Color::new([0.0, 0.0, 0.0, black]));
+                c.fill_rect(&reach);
+                c.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
+            }
+            c.pop_layer();
+        });
     }
 
     /// While interacting, give `n` (shadow-cache key `key`) the shadow or glow raster an earlier
@@ -1124,7 +1193,8 @@ impl Renderer {
                 && e.inputs == *inputs
                 && e.made.fits(&[fx], size, None, None)
         };
-        let Some((old, rel, w, h)) = self.shadows.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height()))
+        let Some((old, rel, w, h, scale)) =
+            self.shadows.iter().find(|(k, e)| fits(k, e)).map(|(k, e)| (*k, e.rel, e.image.width(), e.image.height(), e.scale))
         else {
             return;
         };
@@ -1132,7 +1202,7 @@ impl Renderer {
         let anchor = reach.origin();
         let p = f.view * anchor;
         let mut off = f.offscreen_context(w, h);
-        let crop = Frame { mt: false, view: Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view, ..*f };
+        let crop = Frame { mt: false, view: Affine::scale(1.0 / scale) * Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view, ..*f };
         self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
@@ -1453,39 +1523,43 @@ impl Renderer {
         let reach = content.reach;
         // The `Arc` drawn: the caller's, or the node `draw_arc` is drawing.
         let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
-        // Below the content: shadows and outer glows.
+        // Below the content: shadows and outer glows, each of the content with the ones before it in the stack, as AI
+        // files draw a glow round a glow and the SVG export nests them. Their rasters are made first to last, each once
+        // and drawn into the later ones' silhouettes as an image (so n of them cost n rasters, not 2^n draws), then
+        // drawn with the last lowest. One without a raster (an object drawn uncached, a glow past the budget) is drawn
+        // through a filter layer from the content alone, and goes into the later silhouettes that way.
+        let mut made: Vec<(&RasterFx, Option<Shadow>)> = vec![];
+        let mut stacked = reach;
         for (i, fx) in rfx.iter().enumerate().filter(|(_, x)| x.is_below()) {
-            if let Some(slot) = content.cache
-                && self.draw_shadow_cached(ctx, f, content.node, slot + i, fx, reach, owner.as_ref(), paint)
-            {
-                continue;
+            let shadow = {
+                let earlier = &made;
+                let view = f.view;
+                let mut art = |r: &mut Self, c: &mut RenderContext, fr: &Frame| {
+                    let to = fr.view * view.inverse();
+                    for (fx, s) in earlier.iter().rev() {
+                        match s {
+                            Some(s) => {
+                                r.stats.moved += usize::from(s.moved);
+                                r.draw_shadow(c, s, to);
+                            }
+                            None => r.draw_shadow_filter(c, fr, fx, reach, paint),
+                        }
+                    }
+                    paint(r, c, fr);
+                };
+                content.cache.and_then(|slot| self.shadow_raster(f, content.node, slot + i, fx, stacked, owner.as_ref(), &mut art))
+            };
+            stacked = match fx {
+                RasterFx::DropShadow { dx, dy, blur, .. } => stacked.union((stacked + Vec2::new(*dx, *dy)).inflate(blur * 1.5, blur * 1.5)),
+                _ => stacked.inflate(fx.outset(stacked), fx.outset(stacked)),
+            };
+            made.push((fx, shadow));
+        }
+        for (fx, s) in made.iter().rev() {
+            match s {
+                Some(s) => self.draw_shadow(ctx, s, Affine::IDENTITY),
+                None => self.draw_shadow_filter(ctx, f, fx, reach, paint),
             }
-            let (mode, opacity, dx, dy, blur, color, darkness) = match fx {
-                RasterFx::DropShadow { mode, opacity, dx, dy, blur, color, darkness } => (*mode, *opacity, *dx, *dy, *blur, *color, *darkness),
-                RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color, None),
-                _ => continue,
-            };
-            let filter = match darkness {
-                Some(_) => shade_filter(blur),
-                None => shadow_filter(0.0, 0.0, blur, pcolor(f.ink, &color)),
-            };
-            // The offset moves the content rather than the filter: vello_cpu drops layer content
-            // that lies entirely outside the viewport before filtering.
-            let reach = reach + Vec2::new(dx, dy);
-            self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
-                c.set_transform(fr.view);
-                c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
-                paint(r, c, &shifted(fr, dx, dy));
-                // Darkness: black over the object's own colors, keeping their alpha.
-                if let Some(black) = darkness.map(|d| shade(f.ink, d)).filter(|d| *d > 0.0) {
-                    c.set_transform(fr.view);
-                    c.set_blend_mode(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::SrcAtop));
-                    c.set_paint(peniko::Color::new([0.0, 0.0, 0.0, black]));
-                    c.fill_rect(&reach);
-                    c.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
-                }
-                c.pop_layer();
-            });
         }
         // The content itself (blurred / feathered / filtered), on its pixels: a filter layer's blur
         // works on a coarser grid tied to the canvas, so the blurred art shifted by up to a pixel
@@ -2415,6 +2489,86 @@ mod tests {
         let feather = render(&doc_with(r, Color::BLACK, vec![("stylize.feather", json!({"radius": 8}))]));
         assert!(lum(feather.pixel(31, 50)) > 20, "feather fades the edge inward");
         assert_eq!(lum(feather.pixel(26, 50)), WHITE, "feather stays inside");
+    }
+
+    #[test]
+    fn an_outer_glow_blurs_a_solid_silhouette_of_faint_art() {
+        // GUARDS: the glow's strength comes from where the art is, not how opaque it is (a glow round a glow relies on it).
+        let r = Rect::new(30.0, 30.0, 70.0, 70.0);
+        let glow = |fill_opacity: f32| {
+            let mut d =
+                doc_with(r, Color::BLACK, vec![("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 100, "blur": 4}))]);
+            let id = d.layers[0].children().unwrap()[0].id;
+            d.node_mut(id).unwrap().appearance.fill_mut().unwrap().opacity = fill_opacity;
+            render(&d).pixel(29, 50)
+        };
+        let (faint, opaque) = (glow(0.2), glow(1.0));
+        assert_eq!(faint[1], opaque[1], "faint {faint:?}, opaque {opaque:?}");
+        assert!(faint[1] < 210, "the glow reaches past the edge: {faint:?}");
+    }
+
+    #[test]
+    fn a_glow_glows_round_the_glows_before_it_in_the_stack() {
+        // GUARDS: the second glow is of the art with the first glow, not of the bare art, as AI files and the SVG export draw it.
+        let r = Rect::new(30.0, 30.0, 70.0, 70.0);
+        let d = doc_with(
+            r,
+            Color::BLACK,
+            vec![
+                ("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 100, "blur": 8})),
+                ("stylize.outerGlow", json!({"color": "#0000ff", "mode": "normal", "opacity": 100, "blur": 2})),
+            ],
+        );
+        let p = render(&d).pixel(22, 50);
+        assert!(p[2] > p[0] + 100, "8 pt out, the tight blue glow round the red one shows: {p:?}");
+    }
+
+    #[test]
+    fn a_glow_too_large_for_a_full_size_raster_keeps_its_solid_silhouette() {
+        // GUARDS: at 40× the glow's raster passes the 4 Mpx budget and is made coarser instead of falling back to the
+        // filter layer, which blurs the faint alpha.
+        let r = Rect::new(30.0, 30.0, 70.0, 70.0);
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let view = Affine::translate((-1100.0, -1900.0)) * Affine::scale(40.0);
+        let glow = |fill_opacity: f32| {
+            let mut d =
+                doc_with(r, Color::BLACK, vec![("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 100, "blur": 4}))]);
+            let id = d.layers[0].children().unwrap()[0].id;
+            d.node_mut(id).unwrap().appearance.fill_mut().unwrap().opacity = fill_opacity;
+            Renderer::new().render(&d, 200, 200, view, &opts).pixel(60, 100)
+        };
+        let (faint, opaque) = (glow(0.2), glow(1.0));
+        assert!(faint[1].abs_diff(opaque[1]) <= 2, "faint {faint:?}, opaque {opaque:?}");
+        assert!(faint[1] < 210, "the glow reaches past the edge: {faint:?}");
+    }
+
+    #[test]
+    fn thirty_stacked_glows_draw_quickly_cached_or_not() {
+        // GUARDS: each glow is of the content with the glows before it; drawing those again for every glow costs 2^n.
+        // A shape draws through the shadow cache, a symbol instance without it (the filter layers).
+        let glows: Vec<(&str, serde_json::Value)> =
+            (0..30).map(|k| ("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 20, "blur": 1 + k % 4}))).collect();
+        let shape = doc_with(Rect::new(30.0, 30.0, 70.0, 70.0), Color::BLACK, glows.clone());
+        let mut instanced = Document::new(100.0, 100.0);
+        let art = Node::path(
+            instanced.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        instanced.symbols.push(vectorcraft_doc::Symbol { name: "Square".into(), art: std::sync::Arc::new(art) });
+        let mut instance = Node::new(
+            instanced.alloc_id(),
+            vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((30.0, 30.0)) },
+        );
+        instance.appearance.effects = glows.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        let l = instanced.layers[0].id;
+        instanced.insert(Some(l), 0, instance).unwrap();
+        for d in [&shape, &instanced] {
+            let start = std::time::Instant::now();
+            let p = render(d).pixel(25, 50);
+            assert!(start.elapsed() < std::time::Duration::from_secs(20), "{:?}", start.elapsed());
+            assert!(p[1] < 250, "the glows show: {p:?}");
+        }
     }
 
     #[test]

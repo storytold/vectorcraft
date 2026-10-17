@@ -229,8 +229,11 @@ fn eval(f: &Filter) -> Option<V> {
                     [Some(r), Some(g), Some(b)] if r == g && g == b && (srgb || r == 0.0 || r == 1.0) => Some(r),
                     _ => None,
                 };
+                // Our Outer Glow's solid silhouette (alpha × 255): an object's silhouette as far as the effects go.
+                let solid = matches!(c.func_a(), TransferFunction::Linear { slope, intercept } if *slope >= 255.0 && *intercept == 0.0);
                 match (input(c.input())?, keep, scale(c.func_a())) {
                     (V::Alpha(s), _, _) if identity && invert && s.sd == 0.0 => V::Alpha(Shape { inverted: !s.inverted, ..s }),
+                    (V::Alpha(s), _, _) if identity && solid && s.plain() => V::Alpha(s),
                     (v @ (V::Graphic | V::Blurred(..) | V::Shade { .. }), Some(keep), Some(opacity)) => v.scaled(keep, opacity)?,
                     _ => return None,
                 }

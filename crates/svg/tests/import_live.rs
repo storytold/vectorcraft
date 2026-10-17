@@ -316,6 +316,27 @@ fn a_drop_shadow_with_darkness_exports_as_the_canvas_draws_it() {
 }
 
 #[test]
+fn an_exported_outer_glow_round_faint_art_draws_as_the_canvas_does() {
+    // GUARDS: the export's glow blurs a solid silhouette like the renderer, not the art's faint alpha.
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(70.0, 40.0, 130.0, 80.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    n.appearance.fill_mut().unwrap().opacity = 0.2;
+    n.appearance.effects = vec![Effect {
+        id: "stylize.outerGlow".into(),
+        params: json!({"blur": 12.0, "color": "#ff0000", "opacity": 100.0, "mode": "normal"}),
+        visible: true,
+    }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 40.0, 0.02);
+}
+
+#[test]
 fn symbols_and_effects_export_import_export_is_stable() {
     // A doc with a symbol instance carrying a shadow: export → import → export is stable.
     let mut d = Document::new(200.0, 120.0);
