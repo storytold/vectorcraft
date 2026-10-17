@@ -1130,15 +1130,20 @@ already walks Image Trace. Short agent entry points:
   values CSV as `graph.setData`). `variable.lock {locked?}` (Lock Variables) locks or unlocks the variables;
   without `locked` it toggles, and the lock is saved with the document. While the variables are locked,
   `variable.define`, `variable.delete`, `variable.rename` and the four `variable.make…Dynamic` commands fail with
-  "variables are locked"; `variable.bind`, `variable.unbind` and the `dataset.*` commands still run, and
-  `variable.list` reports `locked`.
+  "variables are locked"; `variable.bind`, `variable.unbind` and the `dataset.*` commands still run (except a
+  `dataset.import` whose header would define a variable, below), and `variable.list` reports `locked`.
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
   `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated
   files, and files whose first header cell isn't `name`: every header cell is then a variable, and the rows take the
   first free names `Data Set 1`, `Data Set 2` and so on. An import error about a row's values or name gives the file
-  line the row starts on.
+  line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
+  rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
+  a prefix defines a text variable. A prefixed cell whose name is already a variable of the prefix's kind names it;
+  one whose name is a variable of another kind fails the import. A `%` cell that isn't a variable's exact name (graph
+  data files) is refused. The reply's `defined` lists the variables the import defined. While the variables are
+  locked, an import whose header would define a variable fails with "variables are locked".
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…).

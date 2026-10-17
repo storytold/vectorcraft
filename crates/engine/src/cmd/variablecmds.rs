@@ -5,8 +5,9 @@
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
 //! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names); import also reads tab-separated files and files without the
-//! `name` column. Agents reach every command through `run_command`, like all engine
+//! then variable names); import also reads tab-separated files, files without the
+//! `name` column, and header cells that define new variables (`#` for visibility, `@` for
+//! image, no prefix for text). Agents reach every command through `run_command`, like all engine
 //! commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -29,8 +30,9 @@ const MAX_CSV_BYTES: usize = 1_048_576;
 const MAX_CSV_ROWS: usize = 1_000;
 const MAX_CSV_COLS: usize = 256;
 
-/// Lock Variables refuses New Variable, Delete Variable, Rename Variable (Variable Options) and
-/// Make … Dynamic; binding, unbinding and the dataset commands still run.
+/// Lock Variables refuses New Variable, Delete Variable, Rename Variable (Variable Options),
+/// Make … Dynamic and an import whose header would define a variable; binding, unbinding and the
+/// other dataset commands still run.
 fn variables_unlocked(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     if s.active().is_some_and(|st| st.doc.variables.locked) { Err("variables are locked".into()) } else { Ok(()) }
@@ -710,10 +712,52 @@ fn datasets_to_csv(vars: &Variables) -> String {
     out
 }
 
+/// The variable that a datasets CSV header cell (trimmed, not empty) in 1-based `column` names,
+/// and its kind. A cell that is the name of a variable in `kinds` or in `defined` (the variables
+/// that earlier columns define) names that variable. Otherwise `#` before the name makes it a
+/// visibility variable, `@` makes it an image variable, and a cell without a prefix names a text
+/// variable. A prefixed name that is already a variable must be one of the prefix's kind; a new
+/// name is added to `defined`. A `%` cell that names no variable (graph data files) is refused.
+fn header_variable(
+    cell: &str,
+    column: usize,
+    kinds: &BTreeMap<String, VariableKind>,
+    defined: &mut Vec<Variable>,
+    cmd: &str,
+) -> Result<(String, VariableKind)> {
+    let known = |name: &str, defined: &[Variable]| kinds.get(name).copied().or_else(|| defined.iter().find(|v| v.name == name).map(|v| v.kind));
+    if let Some(kind) = known(cell, defined) {
+        return Ok((cell.to_string(), kind));
+    }
+    let (name, kind) = if let Some(rest) = cell.strip_prefix('#') {
+        (rest.trim(), VariableKind::Visibility)
+    } else if let Some(rest) = cell.strip_prefix('@') {
+        (rest.trim(), VariableKind::Image)
+    } else if cell.starts_with('%') {
+        return Err(bad(cmd, format!("column {column}: `{cell}` is a `%` column of graph data files, which are not read")));
+    } else {
+        (cell, VariableKind::Text)
+    };
+    if name.is_empty() {
+        return Err(bad(cmd, format!("column {column}: `{cell}` names no variable")));
+    }
+    match known(name, defined) {
+        Some(k) if k == kind => Ok((name.to_string(), kind)),
+        Some(k) => Err(bad(cmd, format!("column {column}: `{cell}` names `{name}`, which is a {} variable", k.label()))),
+        None if name.chars().count() > MAX_NAME => Err(bad(cmd, format!("column {column}: the variable name is longer than {MAX_NAME} characters"))),
+        None => {
+            defined.push(Variable { name: name.to_string(), kind });
+            Ok((name.to_string(), kind))
+        }
+    }
+}
+
 /// Import datasets from CSV. A first header cell `name` makes the first column the dataset
-/// names; the other headers are variable names. Without it, every header is a variable name
-/// and the rows take the first free names "Data Set 1", "Data Set 2" and so on. Existing rows
-/// of the same name are replaced; new names are appended. One undo step.
+/// names; the other headers name variables, as [`header_variable`] reads them, and the
+/// variables the document doesn't define yet are defined, unbound. Without the `name` column,
+/// every header names a variable and the rows take the first free names "Data Set 1", "Data
+/// Set 2" and so on. Existing rows of the same name are replaced; new names are appended. One
+/// undo step.
 fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
     let bytes = datasets_csv_bytes(p, C)?;
@@ -730,13 +774,18 @@ fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         (kinds, existing)
     };
     let mut columns: Vec<(usize, String, VariableKind)> = Vec::new();
+    let mut defined: Vec<Variable> = Vec::new();
     for (i, h) in header.iter().enumerate().skip(usize::from(name_column)) {
-        let name = h.trim();
-        if name.is_empty() {
+        let cell = h.trim();
+        if cell.is_empty() {
             return Err(bad(C, format!("empty header in column {}", i + 1)));
         }
-        let kind = kinds.get(name).copied().ok_or_else(|| bad(C, format!("no variable named `{name}`")))?;
-        columns.push((i, name.to_string(), kind));
+        let (name, kind) = header_variable(cell, i + 1, &kinds, &mut defined, C)?;
+        columns.push((i, name, kind));
+    }
+    // Lock Variables refuses New Variable, so the import is refused when a header would define one.
+    if !defined.is_empty() {
+        variables_unlocked(s).map_err(|why| EngineError::Disabled(C.into(), why))?;
     }
     if rows.len() == 1 {
         return Err(bad(C, "CSV has a header but no data rows"));
@@ -777,7 +826,9 @@ fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         parsed.push(DataSet { name, values });
     }
     let names: Vec<String> = parsed.iter().map(|d| d.name.clone()).collect();
+    let new_variables: Vec<String> = defined.iter().map(|v| v.name.clone()).collect();
     let (imported, updated) = s.edit("Import Data Sets", |d, _| {
+        d.variables.variables.extend(defined);
         let mut imported = 0usize;
         let mut updated = 0usize;
         for row in parsed {
@@ -791,7 +842,7 @@ fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok((imported, updated))
     })?;
-    Ok(json!({"imported": imported, "updated": updated, "names": names}))
+    Ok(json!({"imported": imported, "updated": updated, "names": names, "defined": new_variables}))
 }
 
 /// Export every dataset as CSV (`name` then variables). With `path`, write the file; else return `{csv}`.
@@ -1003,7 +1054,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). Rows whose name already exists are replaced → {imported, updated, names}",
+            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so is a header that would define a variable while the variables are locked. Rows whose name already exists are replaced → {imported, updated, names, defined}",
             has_doc,
             dataset_import
         ),

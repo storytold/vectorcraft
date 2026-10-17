@@ -1149,6 +1149,114 @@ fn datasets_csv_row_errors_name_the_file_line() {
     assert!(long.contains("line 3:") && long.contains("longer than 255"), "{long}");
 }
 
+/// A header cell that names no variable defines one, unbound, in the import's undo step: `#`
+/// defines a visibility variable, `@` defines an image variable, and a cell without a prefix
+/// defines a text variable. Importing the file again finds them; a prefix of the other kind, a
+/// bare prefix and a long name fail and define nothing.
+#[test]
+fn datasets_csv_header_prefixes_define_variables() {
+    let mut s = session();
+    let csv = "name,#Shown,@Photo,Title\nA,true,a.png,x";
+    let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!(imp["defined"], json!(["Shown", "Photo", "Title"]));
+    assert_eq!((imp["imported"].as_u64(), imp["names"].clone()), (Some(1), json!(["A"])));
+    let listed = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(
+        listed["variables"],
+        json!([
+            {"name": "Shown", "kind": "visibility", "bindings": 0},
+            {"name": "Photo", "kind": "image", "bindings": 0},
+            {"name": "Title", "kind": "text", "bindings": 0},
+        ])
+    );
+    let value = |s: &Session, var: &str| s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(value(&s, "Shown"), Some(vectorcraft_doc::DataValue::Visible(true)));
+    assert_eq!(value(&s, "Photo"), Some(vectorcraft_doc::DataValue::Image("a.png".into())));
+    assert_eq!(value(&s, "Title"), Some(vectorcraft_doc::DataValue::Text("x".into())));
+
+    let again = s.execute("dataset.import", &json!({"csv": "name\t#Shown\t@Photo\tTitle\nA\tfalse\tb.png\ty"})).unwrap();
+    assert_eq!((again["updated"].as_u64(), again["defined"].clone()), (Some(1), json!([])));
+    assert_eq!(value(&s, "Shown"), Some(vectorcraft_doc::DataValue::Visible(false)));
+
+    let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
+    let other_kind = error(&mut s, "name,New,#Title\nB,n,true");
+    assert!(other_kind.contains("column 3:") && other_kind.contains("text variable"), "{other_kind}");
+    let twice = error(&mut s, "Fresh,@Fresh\nn,f.png");
+    assert!(twice.contains("column 2:") && twice.contains("text variable"), "{twice}");
+    let bare = error(&mut s, "name,#\nB,true");
+    assert!(bare.contains("column 2:") && bare.contains("names no variable"), "{bare}");
+    let long = error(&mut s, &format!("name,@{}\nB,b.png", "n".repeat(256)));
+    assert!(long.contains("column 2:") && long.contains("longer than 255"), "{long}");
+    assert_eq!(s.doc().unwrap().doc.variables.variables.len(), 3, "a failed import defines nothing");
+
+    // Each import is one undo step, which takes back the variables it defined with its rows.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(value(&s, "Shown"), Some(vectorcraft_doc::DataValue::Visible(true)));
+    assert_eq!(s.doc().unwrap().doc.variables.variables.len(), 3);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let vars = &s.doc().unwrap().doc.variables;
+    assert!(vars.variables.is_empty() && vars.datasets.is_empty());
+}
+
+/// A header cell that is a variable's exact name names it, even when the name starts with `#`,
+/// `@` or `%`, so a file `dataset.export` wrote imports back without defining anything.
+#[test]
+fn datasets_csv_exact_names_win_over_prefixes() {
+    let mut s = session();
+    for (name, kind) in [("#Shown", "text"), ("@Photo", "visibility"), ("%Chart", "graph"), ("Shown", "visibility")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    let values = json!({"#Shown": "hello", "@Photo": true, "%Chart": ",Q\nX,3", "Shown": false});
+    s.execute("dataset.new", &json!({"name": "A", "values": values})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    assert!(csv.starts_with("name,#Shown,@Photo,%Chart,Shown\n"), "{csv}");
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), imp["defined"].clone()), (Some(1), json!([])));
+    let value = |var: &str| s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(value("#Shown"), Some(vectorcraft_doc::DataValue::Text("hello".into())));
+    assert_eq!(value("@Photo"), Some(vectorcraft_doc::DataValue::Visible(true)));
+    assert_eq!(value("%Chart"), Some(vectorcraft_doc::DataValue::Graph(",Q\nX,3".into())));
+    assert_eq!(value("Shown"), Some(vectorcraft_doc::DataValue::Visible(false)));
+    assert_eq!(s.doc().unwrap().doc.variables.variables.len(), 4);
+}
+
+/// A `%` header cell that isn't a variable's name (graph data files) is refused with its column,
+/// and the import defines nothing.
+#[test]
+fn datasets_csv_refuses_graph_data_file_columns() {
+    let mut s = session();
+    let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
+    let named = error(&mut s, "name,Title,%Sales\nA,x,sales.txt");
+    assert!(named.contains("column 3:") && named.contains("`%Sales`"), "{named}");
+    let unnamed = error(&mut s, "%Sales\tTitle\nsales.txt\tx");
+    assert!(unnamed.contains("column 1:") && unnamed.contains("`%Sales`"), "{unnamed}");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert!(vars.variables.is_empty() && vars.datasets.is_empty());
+}
+
+/// While the variables are locked, an import is refused when a header cell would define a
+/// variable, as New Variable is, and a file whose headers all name variables imports.
+#[test]
+fn locked_variables_refuse_header_cells_that_define_variables() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    for csv in ["name,#Shown,Title,New\nA,true,x,n", "@Photo\nb.png", "name,#Fresh\nA,true"] {
+        let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
+        assert!(matches!(&e, EngineError::Disabled(cmd, why) if cmd == "dataset.import" && why == "variables are locked"), "{csv}: {e}");
+    }
+    let vars = &s.doc().unwrap().doc.variables;
+    assert!(vars.variables.len() == 2 && vars.datasets.is_empty(), "a refused import defines and imports nothing");
+
+    let imp = s.execute("dataset.import", &json!({"csv": "name,#Shown,Title\nA,true,x"})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), imp["defined"].clone()), (Some(1), json!([])));
+    s.execute("variable.lock", &json!({"locked": false})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": "name,New\nB,n"})).unwrap();
+    assert_eq!(imp["defined"], json!(["New"]));
+}
+
 /// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.
 #[test]
 fn datasets_csv_round_trips_and_rejects_bad_input() {
@@ -1185,12 +1293,11 @@ fn datasets_csv_round_trips_and_rejects_bad_input() {
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
     assert_eq!(image(&s, img).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
 
-    // Re-import updates in place; unknown variable and bad visibility are errors.
+    // Re-import updates in place and defines nothing; a bad visibility value is an error.
     let again = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!((again["imported"].as_u64(), again["updated"].as_u64()), (Some(0), Some(2)));
-    assert!(s.execute("dataset.import", &json!({"csv": "name,Ghost\nX,y"})).is_err());
+    assert_eq!(again["defined"], json!([]));
     assert!(s.execute("dataset.import", &json!({"csv": "name,Show\nX,maybe"})).is_err());
-    assert!(s.execute("dataset.import", &json!({"csv": "Title,Name\nX,y"})).is_err(), "no variable named Title");
 
     let out = dir.file("sets.csv");
     s.execute("dataset.export", &json!({"path": out})).unwrap();
