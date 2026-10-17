@@ -227,7 +227,7 @@ and what's next; [`docs/target-app-parity.md`](docs/target-app-parity.md) the fu
 all of Illustrator): everyday
 vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
-files (SVG, PDF and PDF-compatible `.ai` with PDF/X, legacy version 7 `.ai` keeping layers, groups and type, EPS, DXF, EMF/WMF, raster formats, PSD out and PSD/PSB in as their merged image, Print, Package).
+files (SVG, PDF and PDF-compatible `.ai` with PDF/X, legacy version 7 `.ai` keeping layers, groups and type, EPS, DXF, EMF/WMF, raster formats, PSD out and PSD/PSB in as their merged image, JPEG XL in, Print, Package).
 Affinity documents (`.af` from Affinity 3, `.afdesign`, `.afpub` and, by their content, `.afphoto` from Affinity 1 and 2) open
 and place natively: layers, groups, artboards and pages, curves and shapes, fills, gradients and strokes, clipping
 and masks, text and images, with what didn't come in (effects, adjustments, brushes, master pages…) listed in the

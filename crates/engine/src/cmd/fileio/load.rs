@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, jxlread, psdread, read_file};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -93,6 +93,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if psdread::is_psd(bytes) {
         return format(if psdread::is_psb(bytes) { "psb" } else { "psd" });
+    }
+    if jxlread::is_jxl(bytes) {
+        return format("jxl");
     }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
@@ -473,7 +476,8 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
 /// A TIFF with more strips or tiles than the decoder can count
-/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
+/// read with [`jxlread`] and stored as PNG.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -482,6 +486,9 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
         return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+    }
+    if jxlread::is_jxl(bytes) {
+        return as_png(jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     let mut limits = image::Limits::default();
