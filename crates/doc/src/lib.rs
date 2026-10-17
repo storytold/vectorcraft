@@ -98,7 +98,7 @@ pub use graph::{
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
-pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
+pub use live::{BlendEase, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
 pub use live_paint::{GapOptions, GapSize};
 pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;

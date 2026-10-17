@@ -153,3 +153,32 @@ fn start_points_round_trip_and_old_blends_load() {
     assert!(old.starts.is_empty() && old.start(0).is_none());
     assert!(serde_json::to_value(&old).unwrap().get("starts").is_none());
 }
+
+#[test]
+fn easing_is_set_validated_saved_and_old_blends_are_even() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "easeIn": 40})).unwrap());
+    assert_eq!(spec(&s, g).1.ease.ease_in, 0.4, "make takes easing too");
+    sel(&mut s, &[g]);
+    s.execute("object.blend.options", &json!({"easeOut": 25, "colorEaseIn": 100})).unwrap();
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(
+        (info["easeIn"].as_f64(), info["easeOut"].as_f64(), info["colorEaseIn"].as_f64(), info["colorEaseOut"].as_f64()),
+        (Some(40.0), Some(25.0), Some(100.0), Some(0.0))
+    );
+    let before = spec(&s, g).1;
+    for bad in [json!({"easeIn": 101}), json!({"easeOut": -1}), json!({"colorEaseOut": "x"}), json!({"colorEaseIn": 1e308})] {
+        assert!(s.execute("object.blend.options", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(spec(&s, g).1, before, "a rejected change leaves the blend alone");
+    // Saved with the document; a blend without easing writes none and loads as even.
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert_eq!(&back.layers, &d.layers);
+    let old: BlendSpec = serde_json::from_value(json!({"spacing": {"steps": 4}})).unwrap();
+    assert!(old.ease.is_linear() && old.color_ease.is_linear());
+    let v = serde_json::to_value(&old).unwrap();
+    assert!(v.get("ease").is_none() && v.get("colorEase").is_none());
+}

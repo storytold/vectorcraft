@@ -10,8 +10,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::live::{
-    self, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeMap, EnvelopeOptions, GradientMesh, MeshAppearance,
-    PreserveShape, Spine,
+    self, BlendDefaults, BlendEase, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeMap, EnvelopeOptions, GradientMesh,
+    MeshAppearance, PreserveShape, Spine,
 };
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Affine, PathData, Point, Vec2};
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easeIn?: pct, easeOut?: pct, colorEaseIn?: pct, colorEaseOut?: pct (0..100, as in object.blend.options)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
             has_doc,
             blend_make
         ),
@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool} set the options of the selected blends; with no blend selected, the options new blends start with (a tool setting, not an undo step) → {defaults?: true}",
+            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easeIn?: pct, easeOut?: pct, colorEaseIn?: pct, colorEaseOut?: pct} set the options of the selected blends; easeIn/easeOut (0..100, 0 = even) accelerate the steps' shapes and positions away from a key and into the next, colorEaseIn/colorEaseOut do the same for the colours alone (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
@@ -440,6 +440,21 @@ fn orientation_param(p: &Value, current: BlendOrientation) -> BlendOrientation {
     }
 }
 
+/// An easing from the percentages (0..100) under the keys `ein` and `eout`; missing ones keep
+/// `current`'s.
+fn ease_param(p: &Value, cmd: &str, ein: &str, eout: &str, current: BlendEase) -> Result<BlendEase> {
+    let get = |k: &str, cur: f64| -> Result<f64> {
+        match p.get(k).filter(|v| !v.is_null()) {
+            None => Ok(cur),
+            Some(v) => match v.as_f64() {
+                Some(x) if x.is_finite() && (0.0..=100.0).contains(&x) => Ok(x / 100.0),
+                _ => Err(bad(cmd, format!("`{k}` must be a percentage 0..100"))),
+            },
+        }
+    };
+    Ok(BlendEase::new(get(ein, current.ease_in)?, get(eout, current.ease_out)?))
+}
+
 /// `starts`: per object of `ids` (else of `roots`), the anchor its blend starts from.
 fn starts_param(p: &Value, roots: &[NodeId]) -> Result<Vec<(NodeId, u32)>> {
     const C: &str = "object.blend.make";
@@ -522,6 +537,12 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
+    let (ease0, color0) = match base.as_ref().map(|n| &n.kind) {
+        Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_ease),
+        _ => Default::default(),
+    };
+    let ease = ease_param(p, C, "easeIn", "easeOut", ease0)?;
+    let color_ease = ease_param(p, C, "colorEaseIn", "colorEaseOut", color0)?;
     let id = s.edit("Make Blend", |d, sel| {
         wrap(d, sel, &roots, |id, nodes| {
             let (children, starts) = merge_keys(nodes, &starts);
@@ -532,7 +553,7 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
                 n.knockout = vectorcraft_doc::Knockout::On;
                 n
             });
-            let mut spec = BlendSpec { spacing, orientation, starts, ..Default::default() };
+            let mut spec = BlendSpec { spacing, orientation, ease, color_ease, starts, ..Default::default() };
             if let NodeKind::Blend { children: old, spec: old_spec } = &n.kind {
                 extend_spine(&mut spec, old, old_spec, &children);
             }
@@ -730,7 +751,7 @@ fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
 fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.options";
     let Some((_, cur, _)) = selected_spec(s) else {
-        // Nothing to set them on: the options new blends start with.
+        // Nothing to set them on: the options new blends start with (easing is per blend).
         let d = s.prefs.blend_options.unwrap_or_default();
         let spacing = spacing_param(p, C, d.spacing)?;
         s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation) });
@@ -738,9 +759,13 @@ fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
+    let ease = ease_param(p, C, "easeIn", "easeOut", cur.ease)?;
+    let color_ease = ease_param(p, C, "colorEaseIn", "colorEaseOut", cur.color_ease)?;
     edit_blends(s, "Blend Options", |_, spec| {
         spec.spacing = spacing;
         spec.orientation = orientation;
+        spec.ease = ease;
+        spec.color_ease = color_ease;
     })
 }
 
@@ -762,6 +787,10 @@ fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
             let mut v = blend_options_json(spec.spacing, spec.orientation);
             v["target"] = json!("blend");
             v["id"] = json!(id.0);
+            v["easeIn"] = json!(spec.ease.ease_in * 100.0);
+            v["easeOut"] = json!(spec.ease.ease_out * 100.0);
+            v["colorEaseIn"] = json!(spec.color_ease.ease_in * 100.0);
+            v["colorEaseOut"] = json!(spec.color_ease.ease_out * 100.0);
             v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());
             v["keys"] = json!(keys.iter().map(|k| k.0).collect::<Vec<_>>());
             if let Some(NodeKind::Blend { children, .. }) = s.doc()?.doc.node(id).map(|n| &n.kind)

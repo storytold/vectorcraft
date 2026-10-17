@@ -60,12 +60,69 @@ pub enum BlendOrientation {
     AlignToPath,
 }
 
+/// Easing of a blend between two key objects: how fast it moves away from the first key and into
+/// the last. Both strengths run 0 (even, the default) to 1 (strongest). Stored as the control
+/// points of a cubic Bézier curve from (0, 0) to (1, 1): `(ease_in, 0)` and `(1 - ease_out, 1)`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BlendEase {
+    /// Slow start: the steps leave the first key close together and spread out.
+    #[serde(default, rename = "easeIn")]
+    pub ease_in: f64,
+    /// Slow end: the steps crowd together as they reach the next key.
+    #[serde(default, rename = "easeOut")]
+    pub ease_out: f64,
+}
+
+impl BlendEase {
+    /// Both strengths clamped to 0..1 (non-finite counts as 0).
+    pub fn new(ease_in: f64, ease_out: f64) -> Self {
+        let c = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
+        Self { ease_in: c(ease_in), ease_out: c(ease_out) }
+    }
+
+    /// Even spacing (no easing).
+    pub fn is_linear(&self) -> bool {
+        self.ease_in <= 0.0 && self.ease_out <= 0.0
+    }
+
+    /// Where the step at even position `u` (0..1 between two keys) lands: 0 and 1 stay put, the
+    /// curve rises monotonically in between.
+    pub fn apply(&self, u: f64) -> f64 {
+        let u = if u.is_finite() { u.clamp(0.0, 1.0) } else { 0.0 };
+        if self.is_linear() {
+            return u;
+        }
+        let e = Self::new(self.ease_in, self.ease_out);
+        let (x1, x2) = (e.ease_in, 1.0 - e.ease_out);
+        // Bézier x(s) = 3(1-s)²s·x1 + 3(1-s)s²·x2 + s³ is monotone for x1, x2 in 0..1: bisect s.
+        let x = |s: f64| 3.0 * (1.0 - s) * (1.0 - s) * s * x1 + 3.0 * (1.0 - s) * s * s * x2 + s * s * s;
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        for _ in 0..40 {
+            let mid = 0.5 * (lo + hi);
+            if x(mid) < u {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let s = 0.5 * (lo + hi);
+        // y has control values 0, 0, 1, 1.
+        (3.0 * (1.0 - s) * s * s + s * s * s).clamp(0.0, 1.0)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct BlendSpec {
     #[serde(default)]
     pub spacing: BlendSpacing,
     #[serde(default)]
     pub orientation: BlendOrientation,
+    /// Acceleration of the steps' shapes and positions along the spine between two keys.
+    #[serde(default, skip_serializing_if = "BlendEase::is_linear")]
+    pub ease: BlendEase,
+    /// Acceleration of the steps' colours (fills, strokes, opacity), independent of [`Self::ease`].
+    #[serde(default, rename = "colorEase", skip_serializing_if = "BlendEase::is_linear")]
+    pub color_ease: BlendEase,
     /// Replaced spine. `None` = the straight lines between the key objects' centres.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spine: Option<PathData>,

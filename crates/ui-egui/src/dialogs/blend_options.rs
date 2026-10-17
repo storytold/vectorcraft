@@ -4,9 +4,12 @@
 //! previewed live on it; OK keeps the preview as one undo step (`object.blend.options`). With no
 //! blend selected it sets the options new blends start with.
 //!
+//! On a blend, sliders ease its steps: Ease In / Ease Out accelerate shapes and positions away
+//! from a key and into the next, Color Ease In / Out do the same for the colours alone.
+//!
 //! Fields: `spacing` (`smooth` | `steps` | `distance`), `steps` (1..1000), `distance` (pt),
-//! `orientation` (`page` | `path`), `preview`, and `__target` (`blend` or `defaults`, from
-//! `object.blend.info`).
+//! `orientation` (`page` | `path`), `easeIn`, `easeOut`, `colorEaseIn`, `colorEaseOut` (0..100 %,
+//! blends only), `preview`, and `__target` (`blend` or `defaults`, from `object.blend.info`).
 
 use egui::{CornerRadius, Sense, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
@@ -24,6 +27,13 @@ const CMD: &str = "object.blend.options";
 /// Width of the label column.
 const LABEL_W: f32 = 82.0;
 
+/// Width of the label column of the easing sliders.
+const EASE_LABEL_W: f32 = 112.0;
+
+/// Easing fields (percent). Ease In / Ease Out accelerate the steps' shapes and positions, the
+/// colour ones the colours alone.
+const EASING: [&str; 4] = ["easeIn", "easeOut", "colorEaseIn", "colorEaseOut"];
+
 /// Spacing modes: (value, label).
 pub(crate) const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("steps", "Specified Steps"), ("distance", "Specified Distance")];
 
@@ -35,7 +45,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut fields = app.session.execute("object.blend.info", &json!({})).map_err(|e| e.to_string())?;
     let target = fields["target"].clone();
     let Some(o) = fields.as_object_mut() else { return Err("no blend options".into()) };
-    o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation"));
+    o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "easeIn" | "easeOut" | "colorEaseIn" | "colorEaseOut"));
     o.insert("__target".into(), target);
     o.insert("preview".into(), json!(true));
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -54,6 +64,11 @@ fn params(d: &Dialog) -> Value {
         "steps" => p["steps"] = json!(d.f64("steps", 5.0).round().clamp(1.0, 1000.0)),
         "distance" => p["distance"] = json!(d.f64("distance", 10.0)),
         _ => {}
+    }
+    if on_blend(d) {
+        for key in EASING {
+            p[key] = json!(d.f64(key, 0.0).clamp(0.0, 100.0));
+        }
     }
     p
 }
@@ -93,6 +108,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     if on_blend(d) {
+        // Easing is per blend: the options new blends start with have none.
+        ui.add_space(8.0);
+        form::caption(ui, tl!("Easing (0% = even)"));
+        let rail = Tokens::get(ui.ctx()).input_border;
+        let labels = [tl!("Ease In:"), tl!("Ease Out:"), tl!("Color Ease In:"), tl!("Color Ease Out:")];
+        for (key, label) in EASING.iter().zip(labels) {
+            form::slider_w(ui, d, (key, label, EASE_LABEL_W), 0.0..=100.0, "%", &move |_| rail);
+        }
         let p = params(d);
         form::preview(app, ui, d, "Blend Options", CMD, p);
     }
@@ -191,6 +214,27 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         assert_eq!(spec(&app, id).spacing, BlendSpacing::Distance(25.0));
         assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1);
+    }
+
+    #[test]
+    fn easing_sliders_preview_on_the_blend_and_defaults_have_none() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("ui.blendOptions", json!({})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().fields.get("easeIn").is_none(), "new blends start even");
+        crate::dialogs::cancel(&mut app);
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let id = app.run("object.blend.make", json!({"steps": 2})).unwrap()["id"].as_u64().unwrap();
+        app.run("ui.blendOptions", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("easeIn".into(), json!(60));
+        d.fields.insert("colorEaseOut".into(), json!(30));
+        frame(&mut app);
+        assert_eq!((spec(&app, id).ease.ease_in, spec(&app, id).color_ease.ease_out), (0.6, 0.3), "previewed");
+        crate::dialogs::cancel(&mut app);
+        assert!(spec(&app, id).ease.is_linear());
     }
 
     #[test]

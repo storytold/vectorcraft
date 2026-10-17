@@ -5130,3 +5130,8 @@ theme	Appearance	Външен вид
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
+	Ease In:	Плавен старт:
+	Ease Out:	Плавен край:
+	Color Ease In:	Плавен старт на цвета:
+	Color Ease Out:	Плавен край на цвета:
+	Easing (0% = even)	Ускорение (0% = равномерно)
