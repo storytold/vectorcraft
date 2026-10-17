@@ -1075,6 +1075,7 @@
 	Fill (X), double-click for the Color Picker	Fond (X), double-cliquez pour ouvrir le Sélecteur de couleurs
 	Fill and Stroke	Fond et contour
 	Fill new strokes	Remplir les nouveaux contours
+	Alt key toggles to Smooth Tool	La touche Alt bascule sur l’outil Arrondi
 	Keep selected	Garder sélectionné
 	Merge only with selection	Fusionner uniquement avec la sélection
 	Fill Color	Couleur de fond

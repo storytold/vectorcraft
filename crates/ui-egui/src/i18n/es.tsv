@@ -1075,6 +1075,7 @@
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
 	Fill and Stroke	Relleno y trazo
 	Fill new strokes	Rellenar trazos nuevos
+	Alt key toggles to Smooth Tool	La tecla Alt cambia a la herramienta Suavizar
 	Keep selected	Mantener seleccionado
 	Merge only with selection	Combinar solo con la selección
 	Fill Color	Color de relleno

@@ -1059,6 +1059,7 @@
 	Fill (X), double-click for the Color Picker	Fläche (X), Doppelklick öffnet den Farbwähler
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
+	Alt key toggles to Smooth Tool	Alt-Taste schaltet auf Glätten-Werkzeug um
 	Keep selected	Ausgewählt lassen
 	Merge only with selection	Nur mit Auswahl zusammenfügen
 	Fill Color	Flächenfarbe
