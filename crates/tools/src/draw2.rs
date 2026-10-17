@@ -204,11 +204,35 @@ pub fn polyline(pts: &[Point]) -> BezPath {
     bp
 }
 
-/// Editable path nodes, selected ones first, then the rest top-most first.
+/// Visit `n` and everything inside it, depth first in paint order, but a Shaper Group's original
+/// shapes (its first child), which are not shown.
+pub(crate) fn walk_shown<'a>(n: &'a vectorcraft_doc::Node, f: &mut impl FnMut(&'a vectorcraft_doc::Node)) {
+    f(n);
+    for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
+        walk_shown(c, f);
+    }
+}
+
+/// Visit the nodes the anchor tools and the Lasso may pick, bottom to top ([`walk_shown`]). In
+/// isolation mode that is the isolated object and its contents, so in Construction mode, where a
+/// Shaper Group's original shapes are isolated, it visits them.
+pub(crate) fn walk_pickable<'a>(cx: &ToolContext<'a>, mut f: impl FnMut(&'a vectorcraft_doc::Node)) {
+    if let Some(id) = cx.isolation
+        && let Some(n) = cx.doc.node(id)
+    {
+        walk_shown(n, &mut f);
+    } else if cx.isolation.is_none() {
+        for l in &cx.doc.layers {
+            walk_shown(l, &mut f);
+        }
+    }
+}
+
+/// Editable path nodes, selected ones first, then the rest top-most first ([`walk_pickable`]).
 fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
     let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(|n| n.path_data().is_some())).collect();
     let mut rest = vec![];
-    cx.doc.walk(|n| {
+    walk_pickable(cx, |n| {
         if let NodeKind::Path { guide: false, .. } = &n.kind {
             rest.push(n.id);
         }

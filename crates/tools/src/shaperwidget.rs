@@ -82,12 +82,6 @@ pub fn click(cx: &ToolContext, p: Point) -> Option<Action> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use vectorcraft_doc::shaper::FILL_PREFIX;
-    use vectorcraft_doc::{Appearance, Node};
-    use vectorcraft_geom::{Rect, shapes};
-
     use super::*;
     use crate::extra::ShaperTool;
     use crate::select::SelectionTool;
@@ -96,28 +90,6 @@ mod tests {
 
     fn ev(kind: PointerKind, p: Point) -> PointerEvent {
         PointerEvent::new(kind, p.x, p.y)
-    }
-
-    /// A Shaper Group of two source squares (x from 0 to 100 and from 50 to 150, y from 300 to 400)
-    /// whose visible face is the first square: the document, the group, its source shapes and the
-    /// face.
-    fn doc_with_shaper_group() -> (Document, NodeId, NodeId, NodeId) {
-        let (mut d, _) = doc_with_rect();
-        let l = d.layers[0].id;
-        let square = |x: f64| shapes::rectangle(Rect::new(x, 300.0, x + 100.0, 400.0));
-        let a = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
-        let b = Node::path(d.alloc_id(), square(50.0), Appearance::default_art());
-        let mut sources = Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)]);
-        sources.name = Some(SOURCES.into());
-        sources.opacity = 0.0;
-        let mut face = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
-        face.name = Some(format!("{FILL_PREFIX}0"));
-        let (sources_id, face_id) = (sources.id, face.id);
-        let mut group = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
-        group.extras_mut().shaper = Some(Box::default());
-        let group_id = group.id;
-        d.insert(Some(l), 1, group).unwrap();
-        (d, group_id, sources_id, face_id)
     }
 
     #[test]

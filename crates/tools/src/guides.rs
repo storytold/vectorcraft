@@ -137,12 +137,13 @@ fn within<T>(sorted: &[T], key: impl Fn(&T) -> f64, v: f64, tol: f64) -> &[T] {
 }
 
 /// Visit `nodes` and everything inside them, but the nodes in `skip` and everything inside those:
-/// one pass, however many are skipped.
+/// one pass, however many are skipped. A Shaper Group's original shapes, its first child, are
+/// not shown and are skipped too.
 fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
     for n in nodes.iter().filter(|n| !skip.contains(&n.id)) {
         f(n);
         if let Some(ch) = n.children() {
-            walk_but(ch, skip, f);
+            walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), skip, f);
         }
     }
 }
@@ -159,7 +160,7 @@ fn span(r: &Rect, x: bool) -> (f64, f64) {
 
 /// The objects a moved selection (`moving`) spaces itself evenly with, by their bounds: each
 /// visible object on a layer as a whole (a group too), and inside a group holding some of the
-/// moving objects its other objects. At most [`BUDGET`].
+/// moving objects its other objects, but a Shaper Group's original shapes. At most [`BUDGET`].
 fn object_boxes(doc: &Document, moving: &[NodeId]) -> Vec<Rect> {
     fn push(nodes: &[Arc<Node>], moving: &HashSet<NodeId>, holders: &HashSet<NodeId>, out: &mut Vec<Rect>) {
         for n in nodes.iter().filter(|n| n.visible && !moving.contains(&n.id)) {
@@ -167,7 +168,9 @@ fn object_boxes(doc: &Document, moving: &[NodeId]) -> Vec<Rect> {
                 return;
             }
             match n.children() {
-                Some(ch) if n.is_layer() || holders.contains(&n.id) => push(ch, moving, holders, out),
+                Some(ch) if n.is_layer() || holders.contains(&n.id) => {
+                    push(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), moving, holders, out)
+                }
                 _ => out.extend(n.geometric_bounds()),
             }
         }
@@ -429,7 +432,7 @@ impl Targets {
     fn points_near(doc: &Document, roots: &[NodeId], near: Rect) -> Self {
         let mut t = Targets::default();
         for n in roots.iter().filter_map(|id| doc.node(*id)) {
-            n.walk(&mut |c| {
+            crate::draw2::walk_shown(n, &mut |c| {
                 if c.is_container() || !c.visible {
                     return;
                 }
@@ -1423,6 +1426,31 @@ mod tests {
         assert_eq!(t.segments.len(), 2);
         assert!(!t.points.iter().any(|(p, k)| *k == Kind::Center && *p == Point::new(150.0, 150.0)), "the rect's centre moves");
         assert_eq!(t.snap_point(Point::new(101.0, 99.0), 4.0).0, Point::new(100.0, 100.0), "in line with its neighbours, not on itself");
+    }
+
+    /// A Shaper Group's original shapes, which are not shown, are no targets: not their
+    /// anchors, edges or segments, not their bounds as an object a moved face spaces itself evenly
+    /// with, and not the anchors a transform tool's reference point snaps to on the selected group.
+    /// Selected, or under the pointer in Construction mode, an original shape still gives its anchors.
+    #[test]
+    fn shaper_sources_are_no_targets() {
+        let (d, g, sources, face) = doc_with_shaper_group();
+        let b = d.node(sources).and_then(|n| n.children()).unwrap()[1].id;
+        // The top right corner of the second source square, which no shown art has.
+        let corner = Point::new(150.0, 300.0);
+        let gives_corner = |t: &Targets| {
+            t.points.iter().any(|(p, _)| *p == corner)
+                || t.xs.iter().chain(&t.ys).any(|(_, p, _)| *p == corner)
+                || t.segments.iter().any(|(_, s)| s.start() == corner || s.end() == corner)
+        };
+        assert!(!gives_corner(&Targets::collect(&d, &[], None)));
+        assert!(!gives_corner(&Targets::for_drawing(&d, &[], None)));
+        assert!(!gives_corner(&Targets::for_anchor_drag(&d, &Selection::default())));
+        assert!(!gives_corner(&Targets::for_handle(&d, face)));
+        assert!(!object_boxes(&d, &[face]).contains(&Rect::new(0.0, 300.0, 150.0, 400.0)), "the source shapes' bounds");
+        let near = Rect::new(146.0, 296.0, 154.0, 304.0);
+        assert!(!gives_corner(&Targets::points_near(&d, &[g], near)));
+        assert!(gives_corner(&Targets::points_near(&d, &[b], near)));
     }
 
     /// #2120: the dragged end of a straight segment at any angle lands on the segment's own
