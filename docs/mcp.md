@@ -3733,7 +3733,7 @@ active tool, `tool` names another one, and `{}` just reads them; the result is t
 tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
-polygon sides and star points, and the Flare Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+polygon sides and star points, the Flare Tool Options and the Shape Builder Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
 intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
 
 ```json
@@ -3755,6 +3755,21 @@ for a new artboard, with `new: true` and the name, position and size that `artbo
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
+```
+
+The Shape Builder tool's options are its Shape Builder Tool Options (dialog `shapeBuilderOptions`):
+`openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; off: it cuts regions
+as an unfilled path does), `pickColorFrom` (`artwork`, the default: a merged shape takes the fill of the front-most
+object over the first region the drag touches that an object covers, and the current fill when only lines enclose
+every region touched; `swatches`: the current fill, and the Left and Right arrow keys step the current fill through the
+document's color swatches), `cursorSwatchPreview` (off; with `swatches`, chips above the pointer show the current fill
+and the swatches before and after it), `selection` (`freeform`, the default, or `straightLine`: a drag touches what
+the line from its first point to the pointer crosses) and `highlightFill` (on by default; when it is off, merge mode
+shades no regions). The tool sends `openFilledAsClosed` and `pickColorFrom` with `shapeBuilder.merge`, which takes
+both as params, and `shapeBuilder.regions` takes `openFilledAsClosed`.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"shapeBuilder","values":{"selection":"straightLine","pickColorFrom":"swatches"}}}}
 ```
 
 ## Perspective grid

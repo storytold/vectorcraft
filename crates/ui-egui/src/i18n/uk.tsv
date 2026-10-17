@@ -1071,6 +1071,14 @@
 	Fill new strokes	Заповнювати нові обведення
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
+	Consider Open Filled Paths as Closed	Вважати відкриті контури із заливкою замкненими
+	Pick Color From:	Джерело кольору:
+	Artwork	Графіка
+	Cursor Swatch Preview	Зразки біля вказівника
+	Selection:	Виділення:
+	Freeform	Довільно
+	Straight Line	Пряма лінія
+	Highlight:	Підсвічування:
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
 	Fill Rule	Правило заливки

@@ -1364,6 +1364,13 @@
 	Fill new strokes	Új vonások kitöltése
 	Keep selected	Kijelölés megtartása
 	Merge only with selection	Összeolvasztás csak a kijelöléssel
+	Consider Open Filled Paths as Closed	A nyitott kitöltött útvonalak zártnak számítanak
+	Pick Color From:	Szín forrása:
+	Artwork	Grafika
+	Cursor Swatch Preview	Színminta-előnézet a mutató mellett
+	Selection:	Kijelölés:
+	Straight Line	Egyenes vonal
+	Highlight:	Kiemelés:
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
 	Fill Rule	Kitöltési szabály
 	Fill with Placeholder Text	Kitöltés helykitöltő szöveggel

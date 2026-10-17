@@ -14,11 +14,12 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_color::{Paint, Swatch};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Shape as _};
 use vectorcraft_pathops as po;
 
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
 /// Names starting with this mark a Live Paint group.
 pub const LIVE_PAINT_PREFIX: &str = "Live Paint";
@@ -159,12 +160,13 @@ pub fn shapes_for<'a>(doc: &'a Document, roots: &[NodeId]) -> (Vec<po::Shape>, V
 }
 
 /// Shape Builder inputs: [`shapes_for`], with the open subpaths of filled paths closed where that
-/// encloses an area (the fill bounds a region, as if an invisible edge closed it). Unfilled open
-/// paths and straight lines stay open and cut the regions they cross.
-fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId]) -> (Vec<po::Shape>, Vec<&'a Node>) {
+/// encloses an area (the fill bounds a region, as if an invisible edge closed it) when
+/// `open_filled_as_closed`. Unfilled open paths and straight lines stay open and cut the regions
+/// they cross, and so do filled open paths without `open_filled_as_closed`.
+fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_for(doc, roots);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
-        if l.appearance.fill_paint().is_none() {
+        if !open_filled_as_closed || l.appearance.fill_paint().is_none() {
             continue;
         }
         for sp in s.path.subpaths.iter_mut().filter(|sp| !sp.closed) {
@@ -194,7 +196,8 @@ pub struct BuilderMap {
     /// The inputs, back → front (see [`po::shape_builder`]).
     pub shapes: Vec<po::Shape>,
     pub regions: Vec<Face>,
-    /// Pieces of the unfilled open paths, keyed by input index, with their bounds.
+    /// Pieces of the open paths that cut regions (see [`BuilderMap::new`]), keyed by input index,
+    /// with their bounds.
     pub lines: Vec<(po::Shape, Rect)>,
     /// Pieces of the other inputs' outlines (cut wherever paths meet), keyed by input index, with
     /// their bounds: the edges erasing deletes. Only in a map made `with_edges`.
@@ -226,9 +229,11 @@ fn piece_near(pieces: &[(po::Shape, Rect)], p: Point, tol: f64) -> Option<(f64, 
 
 impl BuilderMap {
     /// The map of `roots` (sorted back → front), with the leaves the inputs came from; the outline
-    /// edges only `with_edges` (they cost a planar map of their own when no open path is in).
-    pub fn new<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool) -> (Self, Vec<&'a Node>) {
-        let (shapes, leaves) = shape_builder_shapes(doc, roots);
+    /// edges only `with_edges` (they cost a planar map of their own when no open path is in). With
+    /// `open_filled_as_closed` (Consider Open Filled Paths as Closed), a filled open path bounds a
+    /// region as if an invisible edge closed it; without it, the path cuts like a line.
+    pub fn new<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool, open_filled_as_closed: bool) -> (Self, Vec<&'a Node>) {
+        let (shapes, leaves) = shape_builder_shapes(doc, roots, open_filled_as_closed);
         if shapes.is_empty() {
             return (Self::default(), leaves);
         }
@@ -407,10 +412,11 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
     out
 }
 
-/// The planar map of the current selection, cached by document identity and selection.
+/// The planar map of the current selection, cached by document identity, selection and whether
+/// filled open paths count as closed.
 #[derive(Default)]
 struct RegionCache {
-    key: Option<(usize, Vec<NodeId>)>,
+    key: Option<(usize, Vec<NodeId>, bool)>,
     map: BuilderMap,
     /// Live Paint faces (every path an edge, filled or not) rather than Shape Builder regions.
     live: bool,
@@ -422,9 +428,10 @@ impl RegionCache {
     fn live_paint() -> Self {
         Self { live: true, ..Default::default() }
     }
-    /// The map, with the outline edges when `edges` (built the first time they're wanted).
-    fn get(&mut self, cx: &ToolContext, edges: bool) -> &BuilderMap {
-        let key = (cx.doc as *const Document as usize, cx.selection.objects.clone());
+    /// The map, with the outline edges when `edges` (built the first time they're wanted), and
+    /// filled open paths closed when `open_filled_as_closed` (Shape Builder only).
+    fn get(&mut self, cx: &ToolContext, edges: bool, open_filled_as_closed: bool) -> &BuilderMap {
+        let key = (cx.doc as *const Document as usize, cx.selection.objects.clone(), open_filled_as_closed);
         if self.key.as_ref() != Some(&key) || (edges && !self.edges) {
             let roots = sorted_roots(cx.doc, &cx.selection.objects);
             self.map = if self.live {
@@ -432,7 +439,7 @@ impl RegionCache {
                 let regions = if shapes.is_empty() { vec![] } else { faces_of(po::live_paint(&shapes).0) };
                 BuilderMap { regions, ..Default::default() }
             } else {
-                BuilderMap::new(cx.doc, &roots, edges).0
+                BuilderMap::new(cx.doc, &roots, edges, open_filled_as_closed).0
             };
             self.key = Some(key);
             self.edges = edges;
@@ -440,16 +447,79 @@ impl RegionCache {
         &self.map
     }
     fn at(&mut self, cx: &ToolContext, p: Point) -> Option<usize> {
-        self.get(cx, false).region_at(p)
+        self.get(cx, false, true).region_at(p)
     }
 }
 
 // ---------- Shape Builder ----------
 
+/// Shape Builder Tool Options (double-click the tool; `tool.setOption`), kept across tool switches
+/// and saved with the preferences.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShapeBuilderOptions {
+    /// Consider Open Filled Paths as Closed (`openFilledAsClosed`, on): a filled open path bounds a
+    /// region as if an invisible edge closed it. When it is off, the path cuts the regions it crosses
+    /// as a line does.
+    pub open_filled_as_closed: bool,
+    /// Pick Color From Color Swatches (`pickColorFrom: "swatches"`; off: `"artwork"`): a merge
+    /// fills the new shape with the current fill, and the Left and Right arrow keys step the current
+    /// fill through the document's color swatches. With Artwork, the shape takes the look of the
+    /// art it is merged from.
+    pub swatches: bool,
+    /// Cursor Swatch Preview (`cursorSwatchPreview`, off): with Color Swatches, the current fill
+    /// and the swatches before and after it show as chips above the pointer while no drag is on.
+    pub cursor_swatch_preview: bool,
+    /// Selection Straight Line (`selection: "straightLine"`; off: `"freeform"`): a drag touches
+    /// what the straight line from where it started to the pointer crosses, not what the pointer
+    /// passed over.
+    pub straight_line: bool,
+    /// Highlight Fill (`highlightFill`, on): in merge mode, the regions under the pointer or
+    /// touched by the drag are shaded with a gray mesh. When it is off, they are not highlighted.
+    pub highlight_fill: bool,
+}
+
+impl Default for ShapeBuilderOptions {
+    fn default() -> Self {
+        Self { open_filled_as_closed: true, swatches: false, cursor_swatch_preview: false, straight_line: false, highlight_fill: true }
+    }
+}
+
+/// The document's color swatches in the Swatches panel's order (the swatches outside groups, then
+/// each group's): the solid colors, without None.
+pub fn color_swatches(doc: &Document) -> Vec<&Swatch> {
+    let groups = doc.swatch_groups.iter().flat_map(|g| &g.swatches);
+    doc.swatches.iter().chain(groups).filter(|s| matches!(s.paint, Paint::Solid { .. })).collect()
+}
+
+/// Is `fill` swatch `s`: linked to it by name, or the same paint?
+fn is_swatch(s: &Swatch, fill: &Paint) -> bool {
+    s.paint == *fill || matches!(fill, Paint::Solid { swatch: Some(name), tint, .. } if *tint >= 1.0 && *name == s.name)
+}
+
+/// The index in `list` of the swatch `fill` is: `last` (the swatch picked last) while `fill` is still
+/// that swatch, so swatches of the same color are each reached in turn; otherwise the first swatch
+/// it is.
+fn swatch_index(list: &[&Swatch], fill: &Paint, last: Option<usize>) -> Option<usize> {
+    last.filter(|&i| list.get(i).is_some_and(|s| is_swatch(s, fill))).or_else(|| list.iter().position(|s| is_swatch(s, fill)))
+}
+
+/// The index of the swatch of `list` after (`forward`) or before the one `fill` is (see
+/// [`swatch_index`]), wrapping around; the first or the last one when `fill` is none of them.
+fn step_swatch(list: &[&Swatch], fill: &Paint, last: Option<usize>, forward: bool) -> Option<usize> {
+    let n = list.len();
+    match (swatch_index(list, fill, last), forward) {
+        (Some(i), true) => Some((i + 1) % n),
+        (Some(i), false) => Some((i + n - 1) % n),
+        (None, true) => (n > 0).then_some(0),
+        (None, false) => n.checked_sub(1),
+    }
+}
+
 /// Shape Builder tool: drag across regions to merge them. Holding Alt (Option) switches to erase
 /// mode while it is held: the pointer shows a minus, what a click or drag would delete highlights in
 /// red, and the gesture deletes the regions it touches, the pieces of open paths and the edges
-/// (outline pieces between the points where paths meet) it passes over.
+/// (outline pieces between the points where paths meet) it passes over. Its options are
+/// [`ShapeBuilderOptions`].
 #[derive(Default)]
 pub struct ShapeBuilderTool {
     cache: RegionCache,
@@ -459,6 +529,11 @@ pub struct ShapeBuilderTool {
     dragging: bool,
     /// Erase mode: Alt held while hovering, or when the drag started.
     alt: bool,
+    /// Where the pointer last moved (the cursor swatch preview sits above it).
+    at: Option<Point>,
+    /// The index in [`color_swatches`] of the swatch the arrow keys picked last.
+    picked: Option<usize>,
+    opts: ShapeBuilderOptions,
 }
 
 /// How close (screen px) the pointer must come to a line piece or an edge to delete it.
@@ -475,10 +550,42 @@ impl ShapeBuilderTool {
             None => vec![to],
         };
         let tol = Self::line_tol(cx, self.alt);
-        let map = self.cache.get(cx, self.alt);
+        let map = self.cache.get(cx, self.alt, self.opts.open_filled_as_closed);
         for p in pts {
             self.touched.add(map.hit(p, tol));
         }
+    }
+
+    /// Selection Straight Line: the drag touches what the line from its first point to `p` crosses.
+    fn straight_to(&mut self, cx: &ToolContext, p: Point) {
+        let Some(&start) = self.points.first() else { return };
+        self.touched = Touched::default();
+        if start == p {
+            self.points = vec![start];
+            self.touch(cx, None, start);
+        } else {
+            self.points = vec![start, p];
+            self.touch(cx, Some(start), p);
+        }
+    }
+
+    /// The cursor swatch preview: the swatch before the current fill, the current fill (ringed)
+    /// and the swatch after it, side by side above the pointer.
+    fn swatch_chips(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let Some(at) = self.at else { return vec![] };
+        let list = color_swatches(cx.doc);
+        let fill = &cx.paint.fill;
+        let rgba = |p: &Paint| match p {
+            Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
+            _ => None,
+        };
+        let chip = |forward| step_swatch(&list, fill, self.picked, forward).and_then(|i| rgba(&list.get(i)?.paint));
+        let (before, after) = (chip(false), chip(true));
+        let y = at.y - cx.tol(22.0);
+        [(before, -16.0, false), (rgba(fill), 0.0, true), (after, 16.0, false)]
+            .into_iter()
+            .filter_map(|(color, dx, selected)| Some(Overlay::Swatch { p: Point::new(at.x + cx.tol(dx), y), color: color?, selected }))
+            .collect()
     }
 }
 
@@ -492,7 +599,8 @@ impl Tool for ShapeBuilderTool {
         match ev.kind {
             PointerKind::Move => {
                 self.alt = ev.mods.alt;
-                self.hover = self.cache.get(cx, self.alt).hit(p, Self::line_tol(cx, self.alt));
+                self.at = Some(p);
+                self.hover = self.cache.get(cx, self.alt, self.opts.open_filled_as_closed).hit(p, Self::line_tol(cx, self.alt));
                 vec![]
             }
             PointerKind::Down => {
@@ -507,6 +615,11 @@ impl Tool for ShapeBuilderTool {
                 vec![]
             }
             PointerKind::Drag if self.dragging => {
+                self.at = Some(p);
+                if self.opts.straight_line {
+                    self.straight_to(cx, p);
+                    return vec![];
+                }
                 let last = self.points.last().copied();
                 if last.is_none_or(|q| q.distance(p) >= cx.tol(1.0)) {
                     self.touch(cx, last, p);
@@ -516,7 +629,9 @@ impl Tool for ShapeBuilderTool {
             }
             PointerKind::Up if self.dragging => {
                 self.dragging = false;
-                if self.points.last().is_none_or(|q| *q != p) {
+                if self.opts.straight_line {
+                    self.straight_to(cx, p);
+                } else if self.points.last().is_none_or(|q| *q != p) {
                     let last = self.points.last().copied();
                     self.touch(cx, last, p);
                     self.points.push(p);
@@ -533,6 +648,12 @@ impl Tool for ShapeBuilderTool {
                 let mut params = json!({ "ids": json_ids(&roots), "points": pts, "erase": erase });
                 if let Some(t) = Self::line_tol(cx, erase) {
                     params["tolerance"] = json!(t);
+                }
+                if !self.opts.open_filled_as_closed {
+                    params["openFilledAsClosed"] = json!(false);
+                }
+                if self.opts.swatches {
+                    params["pickColorFrom"] = json!("swatches");
                 }
                 vec![Action::Exec("shapeBuilder.merge".into(), params)]
             }
@@ -553,6 +674,8 @@ impl Tool for ShapeBuilderTool {
         };
         for hit in show {
             match hit {
+                // Highlight Fill off: merge mode leaves the regions as they are.
+                Hit::Region(_) if !self.alt && !self.opts.highlight_fill => {}
                 Hit::Region(i) => {
                     if let Some((_, bp, _)) = map.regions.get(i) {
                         out.push(Overlay::Path { path: hatch(bp, cx.tol(4.0)), color, width: 1.0, dashed: false });
@@ -575,6 +698,9 @@ impl Tool for ShapeBuilderTool {
             }
             out.push(Overlay::Path { path: bp, color, width: 1.0, dashed: false });
         }
+        if self.opts.swatches && self.opts.cursor_swatch_preview && !self.dragging {
+            out.extend(self.swatch_chips(cx));
+        }
         out
     }
 
@@ -586,6 +712,48 @@ impl Tool for ShapeBuilderTool {
 
     fn busy(&self) -> bool {
         self.dragging
+    }
+
+    /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch
+    /// before or after the current fill.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)
+    }
+
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if !self.claims_key(cx, key) {
+            return vec![];
+        }
+        let list = color_swatches(cx.doc);
+        let Some((i, s)) = step_swatch(&list, &cx.paint.fill, self.picked, key == ToolKey::Right).and_then(|i| Some((i, list.get(i)?))) else {
+            return vec![];
+        };
+        self.picked = Some(i);
+        // The current fill only (no `ids`): the selected art keeps its own.
+        vec![Action::Exec("paint.setFill".into(), json!({ "swatch": s.name, "ids": [] }))]
+    }
+
+    fn options(&self) -> Value {
+        let o = &self.opts;
+        json!({
+            "openFilledAsClosed": o.open_filled_as_closed,
+            "pickColorFrom": if o.swatches { "swatches" } else { "artwork" },
+            "cursorSwatchPreview": o.cursor_swatch_preview,
+            "selection": if o.straight_line { "straightLine" } else { "freeform" },
+            "highlightFill": o.highlight_fill,
+        })
+    }
+
+    fn set_option(&mut self, key: &str, v: &Value) {
+        let o = &mut self.opts;
+        match key {
+            "openFilledAsClosed" => o.open_filled_as_closed = v.as_bool().unwrap_or(o.open_filled_as_closed),
+            "pickColorFrom" => o.swatches = v.as_str().map_or(o.swatches, |s| s == "swatches"),
+            "cursorSwatchPreview" => o.cursor_swatch_preview = v.as_bool().unwrap_or(o.cursor_swatch_preview),
+            "selection" => o.straight_line = v.as_str().map_or(o.straight_line, |s| s == "straightLine"),
+            "highlightFill" => o.highlight_fill = v.as_bool().unwrap_or(o.highlight_fill),
+            _ => {}
+        }
     }
 }
 

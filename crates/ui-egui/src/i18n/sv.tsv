@@ -5009,6 +5009,13 @@ theme	Appearance	Utseende
 	Isolate Selected Object	Isolera markerat objekt
 	Keep selected	Behåll markerad
 	Merge only with selection	Sammanfoga endast med markeringen
+	Consider Open Filled Paths as Closed	Behandla öppna fyllda banor som slutna
+	Pick Color From:	Hämta färg från:
+	Artwork	Bildmaterial
+	Cursor Swatch Preview	Förhandsvisning av färgprover vid pekaren
+	Selection:	Markering:
+	Straight Line	Rak linje
+	Highlight:	Framhävning:
 	Legacy (version 7)	Äldre (version 7)
 	Legacy .ai Options	Alternativ för äldre .ai
 	Linked Files	Länkade filer

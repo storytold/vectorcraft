@@ -963,6 +963,13 @@
 	Fill new strokes	Preencher novos traçados
 	Keep selected	Manter selecionado
 	Merge only with selection	Mesclar somente com a seleção
+	Consider Open Filled Paths as Closed	Tratar caminhos abertos preenchidos como fechados
+	Pick Color From:	Origem da cor:
+	Artwork	Ilustração
+	Cursor Swatch Preview	Visualização de amostras junto ao cursor
+	Selection:	Seleção:
+	Straight Line	Linha reta
+	Highlight:	Destaque:
 	Fill with Placeholder Text	Preencher com Texto de Placeholder
 	Insert Inline Symbol	Inserir Símbolo no Texto
 	Fill:	Preenchimento:

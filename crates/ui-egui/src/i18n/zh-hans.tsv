@@ -1025,6 +1025,14 @@
 	Fill new strokes	为新描边应用填色
 	Keep selected	保持选择状态
 	Merge only with selection	仅与所选对象合并
+	Consider Open Filled Paths as Closed	将有填色的开放路径视为闭合路径
+	Pick Color From:	颜色来源：
+	Artwork	图稿
+	Cursor Swatch Preview	在指针旁预览色板
+	Selection:	选择方式：
+	Freeform	自由
+	Straight Line	直线
+	Highlight:	突出显示：
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
 	Fill Rule	填充规则

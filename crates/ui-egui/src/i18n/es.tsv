@@ -1077,6 +1077,13 @@
 	Fill new strokes	Rellenar trazos nuevos
 	Keep selected	Mantener seleccionado
 	Merge only with selection	Combinar solo con la selección
+	Consider Open Filled Paths as Closed	Tratar los trazados abiertos con relleno como cerrados
+	Pick Color From:	Tomar el color de:
+	Artwork	Ilustración
+	Cursor Swatch Preview	Vista previa de muestras junto al cursor
+	Selection:	Selección:
+	Straight Line	Línea recta
+	Highlight:	Resaltado:
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
 	Fill Rule	Regla de relleno

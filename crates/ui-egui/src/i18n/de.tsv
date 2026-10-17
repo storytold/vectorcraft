@@ -1061,6 +1061,14 @@
 	Fill new strokes	Neue Striche füllen
 	Keep selected	Ausgewählt lassen
 	Merge only with selection	Nur mit Auswahl zusammenfügen
+	Consider Open Filled Paths as Closed	Offene gefüllte Pfade als geschlossen behandeln
+	Pick Color From:	Farbe aufnehmen aus:
+	Artwork	Bildmaterial
+	Cursor Swatch Preview	Farbfeldvorschau am Zeiger
+	Selection:	Auswahl:
+	Freeform	Freiform
+	Straight Line	Gerade Linie
+	Highlight:	Hervorheben:
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
 	Fill Rule	Füllregel

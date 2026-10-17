@@ -7,7 +7,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_testkit::pdf::{PdfPage, pdf};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
 
@@ -378,6 +378,142 @@ fn shape_builder_closes_filled_open_paths() {
     let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
     assert_eq!(r["regions"], json!([]));
     assert_eq!(r["lines"].as_array().unwrap().len(), 1);
+}
+
+/// Consider Open Filled Paths as Closed off: a filled open path is only an edge, as an unfilled
+/// one is, so it forms no region and a click inside it merges nothing.
+#[test]
+fn shape_builder_open_filled_paths_cut_without_open_filled_as_closed() {
+    let mut s = session();
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}]})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    set_fill(&mut s, p, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({"openFilledAsClosed": false})).unwrap();
+    assert_eq!(r["regions"], json!([]));
+    assert_eq!(r["lines"].as_array().unwrap().len(), 1);
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]], "openFilledAsClosed": false})).is_err());
+    // On (the default), the click makes the area the fill closes a shape.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]]})).unwrap();
+    assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6);
+}
+
+/// Pick Color From Color Swatches: the merged shape takes the current fill, not the fill of the
+/// object under the first point; setting the current fill without `ids` leaves the selection's.
+#[test]
+fn shape_builder_pick_color_from_swatches_fills_with_the_current_fill() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    let green = s.paint.fill.clone();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]], "pickColorFrom": "swatches"})).unwrap();
+    assert_eq!(node(&s, NodeId(r["merged"].as_u64().unwrap())).appearance.fill_paint(), green);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]], "pickColorFrom": "artwork"})).unwrap();
+    assert_eq!(node(&s, NodeId(r["merged"].as_u64().unwrap())).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]], "pickColorFrom": "layers"})).is_err());
+}
+
+/// The Shape Builder Tool Options reach what the tool does: Straight Line sends the drag's first
+/// and last points, and the other options go with them to `shapeBuilder.merge`.
+#[test]
+fn shape_builder_tool_options_reach_the_command() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let values = json!({"openFilledAsClosed": false, "pickColorFrom": "swatches", "selection": "straightLine"});
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": values})).unwrap();
+    // A drag that bends up through (60, 20) on its way.
+    for (kind, x, y) in
+        [(PointerKind::Down, 25.0, 50.0), (PointerKind::Drag, 60.0, 20.0), (PointerKind::Drag, 75.0, 50.0), (PointerKind::Up, 75.0, 50.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+    }
+    let (cmd, p) = s.journal.last().unwrap().clone();
+    assert_eq!(cmd, "shapeBuilder.merge");
+    assert_eq!(
+        (&p["points"], &p["openFilledAsClosed"], &p["pickColorFrom"]),
+        (&json!([[25.0, 50.0], [75.0, 50.0]]), &json!(false), &json!("swatches"))
+    );
+}
+
+/// Highlight Fill off: hovering a region in merge mode highlights nothing; erase mode still shows
+/// what a click would delete.
+#[test]
+fn shape_builder_highlight_fill_off_leaves_regions_unshaded() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty());
+    s.set_tool_option_cmd(&json!({"key": "highlightFill", "value": false})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 76.0, 50.0), v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0).with_mods(alt), v).unwrap();
+    assert!(!s.overlays(v).is_empty());
+}
+
+/// Pick Color From Color Swatches: Left and Right step the current fill through the document's
+/// color swatches (the selection keeps its fills), and Cursor Swatch Preview shows the current fill
+/// between the swatches before and after it.
+#[test]
+fn shape_builder_arrow_keys_step_the_current_fill_through_the_swatches() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let chips = |s: &mut Session| s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count();
+    assert!(!s.tool_claims_key(ToolKey::Right, v), "Artwork leaves the arrows to nudging");
+    let values = json!({"pickColorFrom": "swatches", "cursorSwatchPreview": true});
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": values})).unwrap();
+    assert!(s.tool_claims_key(ToolKey::Right, v));
+    let (first, swatches): (String, Vec<Paint>) = {
+        let list = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc);
+        (list[0].name.clone(), list.iter().take(3).map(|sw| sw.paint.clone()).collect())
+    };
+    assert_eq!(swatches.len(), 3);
+    s.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, swatches[2]);
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, swatches[1]);
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0), v).unwrap();
+    assert_eq!(chips(&mut s), 3);
+    s.set_tool_option_cmd(&json!({"key": "cursorSwatchPreview", "value": false})).unwrap();
+    assert_eq!(chips(&mut s), 0);
+}
+
+/// Two swatches of the same color next to each other: the arrow keys step through both and on to
+/// the swatch after them.
+#[test]
+fn shape_builder_arrow_keys_pass_swatches_of_the_same_color() {
+    let mut s = session();
+    two(&mut s);
+    for name in ["Twin A", "Twin B"] {
+        s.execute("swatch.new", &json!({"name": name, "color": "#123456"})).unwrap();
+    }
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": {"pickColorFrom": "swatches"}})).unwrap();
+    let names: Vec<String> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.name.clone()).collect();
+    let a = names.iter().position(|n| n == "Twin A").unwrap();
+    assert_eq!(names[a + 1], "Twin B");
+    s.execute("paint.setFill", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    let twin = s.paint.fill.clone();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, twin, "Twin B");
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
+    assert_eq!(s.paint.fill, after, "the swatch after Twin B");
 }
 
 #[test]

@@ -85,6 +85,7 @@ mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod script_check;
+pub mod shape_builder_options;
 mod shapes;
 pub mod shortcut_import;
 pub mod slices;
@@ -311,6 +312,7 @@ registry! {
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
+    ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     SymbolismOptions: [symbolism_options::KIND] => symbolism_options::SPEC,

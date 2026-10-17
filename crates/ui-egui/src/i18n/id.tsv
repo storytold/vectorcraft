@@ -5025,6 +5025,13 @@ swatch	Bright Violet	Violet cerah
 @msg	select the art to export first	pilih dulu karya yang akan diekspor
 @msg	no saved selection recalled	tidak ada seleksi tersimpan yang dipanggil
 	Merge only with selection	Gabungkan hanya dengan seleksi
+	Consider Open Filled Paths as Closed	Anggap jalur terbuka yang terisi sebagai tertutup
+	Pick Color From:	Ambil warna dari:
+	Artwork	Karya seni
+	Cursor Swatch Preview	Pratinjau swatch di kursor
+	Selection:	Seleksi:
+	Straight Line	Garis lurus
+	Highlight:	Sorotan:
 	Sketch	Sketsa
 	Halftone Pattern…	Pola halftone…
 	Halftone Pattern	Pola halftone

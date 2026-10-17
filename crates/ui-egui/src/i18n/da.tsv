@@ -5025,6 +5025,13 @@ swatch	Bright Violet	Kraftig violet
 @msg	select the art to export first	markér først grafikken, der skal eksporteres
 @msg	no saved selection recalled	ingen gemt markering hentet
 	Merge only with selection	Flet kun med markering
+	Consider Open Filled Paths as Closed	Behandl åbne udfyldte kurver som lukkede
+	Pick Color From:	Hent farve fra:
+	Artwork	Grafik
+	Cursor Swatch Preview	Forhåndsvisning af farveprøver ved markøren
+	Selection:	Markering:
+	Straight Line	Lige linje
+	Highlight:	Fremhævning:
 	Sketch	Skitse
 	Halftone Pattern…	Rastermønster…
 	Halftone Pattern	Rastermønster

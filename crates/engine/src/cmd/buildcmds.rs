@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shape Builder",
             [],
             None,
-            "{ids?|id?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click), erase?: bool (erase mode, Alt: deletes the regions touched, and the pieces of unfilled open paths and the edges (outline pieces between the points where paths meet; see shapeBuilder.regions) within tolerance; a deleted edge opens its path there, and edges bounding a deleted region go with it), tolerance?: pt (2, erase only), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (default: the fill of the object under the first point; the current fill for an area only lines enclose)} → {ids, merged, regions, lines, edges} (counts deleted or merged)",
+            "{ids?|id?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click), erase?: bool (erase mode, Alt: deletes the regions touched, and the pieces of open paths that cut regions and the edges (outline pieces between the points where paths meet; see shapeBuilder.regions) within tolerance; a deleted edge opens its path there, and edges bounding a deleted region go with it), tolerance?: pt (2, erase only), openFilledAsClosed?: true (Consider Open Filled Paths as Closed: a filled open path bounds a region as if an invisible edge closed it; false: it cuts the regions it crosses like an unfilled one), pickColorFrom?: \"artwork\" (default: the merged shape takes the fill of the front-most object over the first region the drag touches that an object covers; the current fill when only lines enclose every region touched) | \"swatches\" (the current fill), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (overrides pickColorFrom)} → {ids, merged, regions, lines, edges} (counts deleted or merged)",
             has_selection_or_ids,
             sb_merge
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shape Builder Regions",
             [],
             None,
-            "{ids?|id?} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}], lines: [{bounds, source: id}], edges: [{bounds, source: id}]} faces of the planar arrangement (unfilled open paths cut them; sources is empty for an area only they enclose), the pieces of those open paths and the edges (the other paths' outlines cut where paths meet; source: the front-most path along it), which erasing deletes",
+            "{ids?|id?, openFilledAsClosed?: true (as shapeBuilder.merge)} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}], lines: [{bounds, source: id}], edges: [{bounds, source: id}]} faces of the planar arrangement (unfilled open paths cut them, and filled ones too with openFilledAsClosed false; sources is empty for an area only they enclose), the pieces of those open paths and the edges (the other paths' outlines cut where paths meet; source: the front-most path along it), which erasing deletes",
             has_selection_or_ids,
             sb_regions
         ),
@@ -245,12 +245,24 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
     let erase = bool_or(p, "erase", false);
     // Line pieces and edges are only deleted (erase mode), never merged.
     let piece_tol = erase.then(|| f64_or(p, "tolerance", 2.0).clamp(0.0, 1000.0));
-    let fill = fill_param(s, p, C)?;
+    let open_filled_as_closed = bool_or(p, "openFilledAsClosed", true);
+    let swatches = match p.get("pickColorFrom") {
+        None | Some(Value::Null) => false,
+        Some(v) => match v.as_str() {
+            Some("artwork") => false,
+            Some("swatches") => true,
+            _ => return Err(bad(C, format!("pickColorFrom is \"artwork\" or \"swatches\", not {v}"))),
+        },
+    };
     let current_fill = s.paint.fill.clone();
+    let fill = match fill_param(s, p, C)? {
+        None if swatches => Some(current_fill.clone()),
+        f => f,
+    };
     let roots = root_ids(s, p)?;
     let label = if erase { "Shape Builder Delete" } else { "Shape Builder" };
     let (ids, merged, touched) = s.edit(label, |d, sel| {
-        let (map, leaves) = BuilderMap::new(d, &roots, erase);
+        let (map, leaves) = BuilderMap::new(d, &roots, erase, open_filled_as_closed);
         let leaves: Vec<Node> = leaves.into_iter().cloned().collect();
         if map.shapes.is_empty() {
             return Err(EngineError::Other("Shape Builder: select paths or compound paths".into()));
@@ -311,7 +323,7 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                 } else {
                     b::node_outline(leaf).map_or_else(|| sh.path.clone(), |o| o.0)
                 };
-                let fill_closes = !leaf.appearance.fill_paint().is_none();
+                let fill_closes = open_filled_as_closed && !leaf.appearance.fill_paint().is_none();
                 let mut cut = false;
                 for piece in &cuts {
                     if let Some(r) = po::cut_out(&rest, piece, fill_closes, cut_tol) {
@@ -366,7 +378,7 @@ fn replace_roots(d: &mut Document, roots: &[NodeId], nodes: Vec<Node>) -> Result
 fn sb_regions(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = root_ids(s, p)?;
     let d = &s.doc()?.doc;
-    let (map, leaves) = BuilderMap::new(d, &roots, true);
+    let (map, leaves) = BuilderMap::new(d, &roots, true, bool_or(p, "openFilledAsClosed", true));
     let id_of = |i: usize| leaves.get(i).map(|n| n.id.0);
     let regions: Vec<Value> = map
         .regions

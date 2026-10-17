@@ -37,6 +37,8 @@ const ROWS: &[Row] = &[
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),
+    // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
+    (&["shapeBuilder"], None, &["openFilledAsClosed", "pickColorFrom", "cursorSwatchPreview", "selection", "highlightFill"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
     // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
     (

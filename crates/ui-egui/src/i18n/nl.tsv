@@ -5025,6 +5025,13 @@ swatch	Bright Violet	Felviolet
 @msg	select the art to export first	selecteer eerst de illustratie die je wilt exporteren
 @msg	no saved selection recalled	geen opgeslagen selectie opgeroepen
 	Merge only with selection	Alleen samenvoegen met selectie
+	Consider Open Filled Paths as Closed	Open gevulde paden als gesloten beschouwen
+	Pick Color From:	Kleur kiezen uit:
+	Artwork	Artwork
+	Cursor Swatch Preview	Staalvoorbeeld bij de cursor
+	Selection:	Selectie:
+	Straight Line	Rechte lijn
+	Highlight:	Markering:
 	Sketch	Schets
 	Halftone Pattern…	Rasterpatroon…
 	Halftone Pattern	Rasterpatroon

@@ -5005,6 +5005,13 @@ effect	Points	Σημεία
 	Isolate Selected Object	Απομόνωση επιλεγμένου αντικειμένου
 	Keep selected	Διατήρηση επιλογής
 	Merge only with selection	Συγχώνευση μόνο με την επιλογή
+	Consider Open Filled Paths as Closed	Οι ανοιχτές γεμισμένες διαδρομές θεωρούνται κλειστές
+	Pick Color From:	Λήψη χρώματος από:
+	Artwork	Γραφικά
+	Cursor Swatch Preview	Προεπισκόπηση δείγματος δίπλα στον δείκτη
+	Selection:	Επιλογή:
+	Straight Line	Ευθεία γραμμή
+	Highlight:	Επισήμανση:
 	Legacy (version 7)	Παλαιού τύπου (έκδοση 7)
 	Legacy .ai Options	Επιλογές .ai παλαιού τύπου
 	Linked Files	Συνδεδεμένα αρχεία

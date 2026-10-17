@@ -5017,6 +5017,13 @@ mark-style	Japanese	Japanilainen
 	Isolate Selected Object	Eristä valittu objekti
 	Keep selected	Pidä valittuna
 	Merge only with selection	Yhdistä vain valintaan
+	Consider Open Filled Paths as Closed	Käsittele avoimia täytettyjä polkuja suljettuina
+	Pick Color From:	Värin lähde:
+	Artwork	Kuvitus
+	Cursor Swatch Preview	Värimallien esikatselu osoittimen vieressä
+	Selection:	Valinta:
+	Straight Line	Suora viiva
+	Highlight:	Korostus:
 	Legacy (version 7)	Vanha (versio 7)
 	Legacy .ai Options	Vanhan .ai-muodon asetukset
 	Linked Files	Linkitetyt tiedostot

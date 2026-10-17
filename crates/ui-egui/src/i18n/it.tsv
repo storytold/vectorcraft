@@ -1077,6 +1077,14 @@
 	Fill new strokes	Riempi nuove tracce
 	Keep selected	Mantieni selezionato
 	Merge only with selection	Unisci solo con la selezione
+	Consider Open Filled Paths as Closed	Considera chiusi i tracciati aperti con riempimento
+	Pick Color From:	Prendi il colore da:
+	Artwork	Grafica
+	Cursor Swatch Preview	Anteprima dei campioni accanto al cursore
+	Selection:	Selezione:
+	Freeform	Libera
+	Straight Line	Linea retta
+	Highlight:	Evidenziazione:
 	Fill Color	Colore riempimento
 	Fill New Type Objects With Placeholder Text	Riempi i nuovi oggetti di testo con testo segnaposto
 	Fill Rule	Regola di riempimento

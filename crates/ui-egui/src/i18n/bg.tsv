@@ -5059,6 +5059,13 @@ theme	Appearance	Външен вид
 	Isolate Selected Object	Изолиране на избрания обект
 	Keep selected	Запазване на избора
 	Merge only with selection	Сливане само с избраното
+	Consider Open Filled Paths as Closed	Отворените запълнени пътища се смятат за затворени
+	Pick Color From:	Цвят от:
+	Artwork	Графика
+	Cursor Swatch Preview	Преглед на образеца до курсора
+	Selection:	Селекция:
+	Straight Line	Права линия
+	Highlight:	Открояване:
 	Sample Color from Screen	Взимане на цвят от екрана
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана

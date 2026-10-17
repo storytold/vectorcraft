@@ -326,8 +326,8 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
-/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush and Eraser tools' are their Tool
-/// Options.
+/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser and Shape Builder tools' are
+/// their Tool Options.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "dimension" => crate::dialogs::dimension::open(app),
@@ -358,6 +358,7 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::perspective_options::open(app);
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
+        "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
         // The Flare tool: its options, which draw the next flare (OK draws none).
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.

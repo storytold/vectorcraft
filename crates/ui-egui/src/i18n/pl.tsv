@@ -2149,6 +2149,13 @@ lighting	Light	Światło
 	Fill new strokes	Wypełniaj nowe pociągnięcia
 	Keep selected	Zachowaj zaznaczenie
 	Merge only with selection	Scalaj tylko z zaznaczeniem
+	Consider Open Filled Paths as Closed	Traktuj otwarte wypełnione ścieżki jako zamknięte
+	Pick Color From:	Źródło koloru:
+	Artwork	Grafika
+	Cursor Swatch Preview	Podgląd próbek przy kursorze
+	Selection:	Zaznaczanie:
+	Straight Line	Linia prosta
+	Highlight:	Podświetlenie:
 	The document has no colour swatches.	Dokument nie zawiera próbek kolorów.
 	Style Name:	Nazwa stylu:
 	Crop To	Kadruj do

@@ -1476,6 +1476,14 @@
 	Fill new strokes	新しいストロークに塗りを適用
 	Keep selected	選択を保持
 	Merge only with selection	選択範囲とのみ結合
+	Consider Open Filled Paths as Closed	塗りのある開いたパスを閉じたパスとみなす
+	Pick Color From:	色の取得元:
+	Artwork	アートワーク
+	Cursor Swatch Preview	ポインター横のスウォッチプレビュー
+	Selection:	選択方法:
+	Freeform	自由形状
+	Straight Line	直線
+	Highlight:	強調表示:
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索

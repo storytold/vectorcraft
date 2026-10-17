@@ -1471,6 +1471,14 @@
 	Fill new strokes	새 선 칠하기
 	Keep selected	선택 유지
 	Merge only with selection	선택 영역과만 병합
+	Consider Open Filled Paths as Closed	칠이 있는 열린 패스를 닫힌 패스로 처리
+	Pick Color From:	색상 출처:
+	Artwork	아트워크
+	Cursor Swatch Preview	포인터 옆 견본 미리 보기
+	Selection:	선택 방식:
+	Freeform	자유 형태
+	Straight Line	직선
+	Highlight:	강조:
 	Fill:	칠:
 	Find	찾기
 	Find Font	글꼴 찾기

@@ -1242,6 +1242,14 @@
 	Fill new strokes	Tô nét mới
 	Keep selected	Giữ trạng thái đã chọn
 	Merge only with selection	Chỉ hợp nhất với vùng chọn
+	Consider Open Filled Paths as Closed	Coi đường dẫn mở có tô là đường dẫn đóng
+	Pick Color From:	Lấy màu từ:
+	Artwork	Tác phẩm
+	Cursor Swatch Preview	Xem trước mẫu màu cạnh con trỏ
+	Selection:	Cách chọn:
+	Freeform	Tự do
+	Straight Line	Đường thẳng
+	Highlight:	Làm nổi bật:
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
 	Fill Rule	Quy tắc tô
 	Fill with Placeholder Text	Tô bằng văn bản giữ chỗ
