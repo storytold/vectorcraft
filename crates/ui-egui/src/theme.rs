@@ -164,6 +164,9 @@ pub struct Tokens {
     pub axis_x: Color32,
     pub axis_y: Color32,
     pub axis_z: Color32,
+    /// Bounded drawing area outline and tint.
+    pub drawing_area_border: Color32,
+    pub drawing_area_tint: Color32,
 }
 
 impl Tokens {
@@ -214,6 +217,8 @@ impl Tokens {
             axis_x: hex(0xef6058),
             axis_y: hex(0x45af63),
             axis_z: hex(0x378ef0),
+            drawing_area_border: Color32::from_black_alpha(140),
+            drawing_area_tint: Color32::from_black_alpha(24),
         };
         match b {
             Brightness::Dark => base,
@@ -269,6 +274,8 @@ impl Tokens {
                 measure_bg: Color32::from_rgba_unmultiplied(211, 216, 224, 235),
                 button: hex(0xc9d0da),
                 button_border: hex(0x8a93a2),
+                drawing_area_border: Color32::from_black_alpha(90),
+                drawing_area_tint: Color32::from_black_alpha(18),
                 ..base
             },
             Brightness::Light => Tokens {
@@ -298,6 +305,8 @@ impl Tokens {
                 measure_bg: Color32::from_rgba_unmultiplied(243, 245, 248, 235),
                 button: hex(0xe3e7ed),
                 button_border: hex(0xa4abb8),
+                drawing_area_border: Color32::from_black_alpha(90),
+                drawing_area_tint: Color32::from_black_alpha(18),
                 ..base
             },
         }
@@ -386,6 +395,8 @@ impl Tokens {
                 button: hex(0xcacaca),
                 button_border: hex(0x7a7a7a),
                 flyout_active: hex(0x1473e6),
+                drawing_area_border: Color32::from_black_alpha(90),
+                drawing_area_tint: Color32::from_black_alpha(18),
                 ..base
             },
             Brightness::Light => Tokens {
@@ -413,6 +424,8 @@ impl Tokens {
                 button: hex(0xe0e0e0),
                 button_border: hex(0x9a9a9a),
                 flyout_active: hex(0x1473e6),
+                drawing_area_border: Color32::from_black_alpha(90),
+                drawing_area_tint: Color32::from_black_alpha(18),
                 ..base
             },
         }

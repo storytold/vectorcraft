@@ -141,6 +141,15 @@ pub enum DocError {
     Invalid(String),
 }
 
+/// Adobe Illustrator's standard drawing area (canvas) side length in points ($2^{14} - 1$ = 16,383 pt = 5,779.558 mm).
+pub const DRAWING_AREA_SIDE: f64 = 16383.0;
+/// Half of the standard drawing area side (8,191.5 pt).
+pub const DRAWING_AREA_HALF: f64 = DRAWING_AREA_SIDE / 2.0;
+/// Large Canvas side length (10x standard canvas = 163,830 pt).
+pub const LARGE_CANVAS_SIDE: f64 = DRAWING_AREA_SIDE * 10.0;
+/// Half of the large canvas side (81,915 pt).
+pub const LARGE_CANVAS_HALF: f64 = LARGE_CANVAS_SIDE / 2.0;
+
 /// Measurement units (display only; the model is always in points).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Unit {
@@ -1347,6 +1356,49 @@ impl Document {
         let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
         Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
     }
+    /// Does this document qualify as a "Large Canvas" document (any artboard larger than 16,383 pt)?
+    pub fn is_large_canvas(&self) -> bool {
+        self.artboards.iter().any(|a| a.rect.width() > DRAWING_AREA_SIDE || a.rect.height() > DRAWING_AREA_SIDE)
+    }
+    /// The document's drawing area (canvas boundary), matching Adobe Illustrator's 16,383 pt
+    /// standard canvas (or 163,830 pt for Large Canvas documents).
+    /// It is centered on the first artboard (or origin), as in Illustrator's %AI3_TemplateBox.
+    pub fn drawing_area(&self) -> Rect {
+        let half = if self.is_large_canvas() { LARGE_CANVAS_HALF } else { DRAWING_AREA_HALF };
+        let center = self.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ORIGIN);
+        Rect::new(center.x - half, center.y - half, center.x + half, center.y + half)
+    }
+    /// Does bounding box `r` fall completely off the document's drawing area?
+    pub fn falls_off_drawing_area(&self, r: Rect) -> bool {
+        let da = self.drawing_area();
+        r.x1 < da.x0 || r.x0 > da.x1 || r.y1 < da.y0 || r.y0 > da.y1
+    }
+    /// The bounding box of ruler guide `g`:
+    /// - For an artboard guide, its span across that artboard.
+    /// - For a canvas guide, its span across the document's [`Document::drawing_area`].
+    pub fn guide_bounds(&self, g: &Guide) -> Rect {
+        match self.guide_span(g) {
+            Some((a, b)) => {
+                if g.vertical {
+                    Rect::new(g.pos, a, g.pos, b)
+                } else {
+                    Rect::new(a, g.pos, b, g.pos)
+                }
+            }
+            None => {
+                let da = self.drawing_area();
+                if g.vertical { Rect::new(g.pos, da.y0, g.pos, da.y1) } else { Rect::new(da.x0, g.pos, da.x1, g.pos) }
+            }
+        }
+    }
+    /// The length of ruler guide `g`:
+    /// - For an artboard guide, the width or height of its artboard.
+    /// - For a canvas guide, the side length of the document's [`Document::drawing_area`] (16,383 pt).
+    pub fn guide_length(&self, g: &Guide) -> f64 {
+        let b = self.guide_bounds(g);
+        if g.vertical { b.height() } else { b.width() }
+    }
+
     /// The layer (or sublayer) ruler guide `g` is on, if it is on one this document has.
     fn guide_layer(&self, g: &Guide) -> Option<NodeId> {
         g.layer.filter(|l| self.node(*l).is_some_and(Node::is_layer))
@@ -1417,7 +1469,11 @@ impl Document {
     /// Does ruler guide `g` run past `p` (up to `tol` beyond its ends)?
     pub fn guide_passes(&self, g: &Guide, p: Point, tol: f64) -> bool {
         let along = if g.vertical { p.y } else { p.x };
-        self.guide_span(g).is_none_or(|(a, b)| along >= a - tol && along <= b + tol)
+        let (a, b) = self.guide_span(g).unwrap_or_else(|| {
+            let da = self.drawing_area();
+            if g.vertical { (da.y0, da.y1) } else { (da.x0, da.x1) }
+        });
+        along >= a - tol && along <= b + tol
     }
     /// Keep the ruler guides `keep` accepts (by index), the selected ones left keeping their
     /// place among the rest (the selected art stays selected). Returns how many went.
@@ -1921,6 +1977,39 @@ mod tests {
         assert_eq!(Unit::Points.parse("-0p6"), Some(-6.0));
         assert_eq!(Unit::Points.parse("-2p"), Some(-24.0));
         assert_eq!(Unit::Points.parse("2p6"), Some(30.0));
+    }
+
+    #[test]
+    fn drawing_area_and_guide_bounds() {
+        let doc = Document::new(800.0, 600.0);
+        assert!(!doc.is_large_canvas());
+        let da = doc.drawing_area();
+        assert_eq!(da.width(), DRAWING_AREA_SIDE);
+        assert_eq!(da.height(), DRAWING_AREA_SIDE);
+        assert_eq!(da.center(), Point::new(400.0, 300.0));
+
+        let v_guide = Guide::new(true, 100.0);
+        let h_guide = Guide::new(false, 200.0);
+        assert_eq!(doc.guide_length(&v_guide), DRAWING_AREA_SIDE);
+        assert_eq!(doc.guide_length(&h_guide), DRAWING_AREA_SIDE);
+        assert_eq!(doc.guide_bounds(&v_guide), Rect::new(100.0, da.y0, 100.0, da.y1));
+        assert_eq!(doc.guide_bounds(&h_guide), Rect::new(da.x0, 200.0, da.x1, 200.0));
+
+        let mut ab_v = Guide::new(true, 150.0);
+        ab_v.artboard = Some(doc.artboards[0].id);
+        assert_eq!(doc.guide_length(&ab_v), 600.0);
+        assert_eq!(doc.guide_bounds(&ab_v), Rect::new(150.0, 0.0, 150.0, 600.0));
+
+        assert!(!doc.falls_off_drawing_area(Rect::new(0.0, 0.0, 50.0, 50.0)));
+        assert!(doc.falls_off_drawing_area(Rect::new(50000.0, 50000.0, 50100.0, 50100.0)));
+
+        assert!(doc.guide_passes(&v_guide, Point::new(100.0, 0.0), 1.0));
+        assert!(!doc.guide_passes(&v_guide, Point::new(100.0, da.y1 + 50.0), 1.0));
+
+        let large_doc = Document::new(20000.0, 20000.0);
+        assert!(large_doc.is_large_canvas());
+        assert_eq!(large_doc.drawing_area().width(), LARGE_CANVAS_SIDE);
+        assert_eq!(large_doc.drawing_area().height(), LARGE_CANVAS_SIDE);
     }
 }
 
