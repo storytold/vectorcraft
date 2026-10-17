@@ -1349,6 +1349,9 @@ file-filter	Templates	Шаблони
 	Highlight Substituted Glyphs	Виділяти замінені гліфи
 	History	Історія
 	History Options…	Параметри історії…
+	Step Backward	Крок назад
+	Step Forward	Крок вперед
+	Set History Limit…	Задати межу історії…
 	History States	Стан історії
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Застосувати набір даних

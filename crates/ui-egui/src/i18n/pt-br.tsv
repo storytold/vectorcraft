@@ -1160,6 +1160,9 @@
 	Highlight anchors on mouse over	Realçar pontos de ancoragem ao passar o mouse
 	History	Histórico
 	History Options…	Opções do Histórico…
+	Step Backward	Voltar um Passo
+	Step Forward	Avançar um Passo
+	Set History Limit…	Definir Limite do Histórico…
 	History States	Estados do Histórico
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Aplicar Conjunto de Dados

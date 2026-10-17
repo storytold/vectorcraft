@@ -75,7 +75,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (label, cmd) in [(tl!("Step Backward"), "edit.undo"), (tl!("Step Forward"), "edit.redo")] {
+        if menu_item(ui, label, crate::menus::enabled(app, cmd), false) {
+            crate::menus::invoke(app, cmd, json!({}));
+        }
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Set History Limit…"), true, false) {
+        crate::menus::invoke(app, "edit.preferences", json!({ "category": "Performance" }));
+    }
     menu_item(ui, tl!("History Options…"), false, false);
 }
 
@@ -98,5 +107,90 @@ mod tests {
         assert_eq!(step_name(ja, "Revolve").as_deref(), Some("回転体"));
         assert_eq!(step_name(ja, "Feather").as_deref(), Some("ぼかし"));
         assert_eq!(step_name(ja, "No Such Step"), None);
+    }
+
+    fn app_with_two_rectangles() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [10, 60] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
+        }
+        app
+    }
+
+    /// Returns the number of steps to undo and to redo.
+    fn depth(app: &VectorcraftApp) -> (usize, usize) {
+        let h = &app.session.active().unwrap().history;
+        (h.undo.len(), h.redo.len())
+    }
+
+    /// Clicks the panel menu's item labeled `label`.
+    fn click(app: &mut VectorcraftApp, label: &str) {
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let item = frame(app, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == label => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no `{label}` in the panel menu"));
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+    }
+
+    /// The panel menu's Step Backward undoes one step and Step Forward redoes one, as Edit › Undo
+    /// and Edit › Redo do.
+    #[test]
+    fn the_panel_menu_steps_backward_and_forward() {
+        let mut app = app_with_two_rectangles();
+        let objects = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+        assert_eq!((depth(&app), objects(&app)), ((2, 0), 2));
+        click(&mut app, "Step Backward");
+        assert_eq!((depth(&app), objects(&app)), ((1, 1), 1));
+        click(&mut app, "Step Backward");
+        assert_eq!((depth(&app), objects(&app)), ((0, 2), 0));
+        click(&mut app, "Step Forward");
+        assert_eq!((depth(&app), objects(&app)), ((1, 1), 1));
+    }
+
+    /// Step Backward is disabled when there is nothing to undo, and Step Forward is disabled when
+    /// there is nothing to redo. A click on a disabled item changes nothing.
+    #[test]
+    fn the_step_items_are_disabled_with_nothing_to_undo_or_redo() {
+        use crate::widgets::accessibility_tests::tree;
+        let disabled = |app: &mut VectorcraftApp| {
+            let tree = tree(|ui| menu(app, ui));
+            let off =
+                |label: &str| tree.iter().find(|n| n.label().map(str::trim) == Some(label)).unwrap_or_else(|| panic!("no `{label}`")).is_disabled();
+            (off("Step Backward"), off("Step Forward"))
+        };
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(disabled(&mut app), (true, true), "no document");
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        assert_eq!(disabled(&mut app), (true, true), "a new document");
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        assert_eq!(disabled(&mut app), (false, true), "one step to undo");
+        click(&mut app, "Step Forward");
+        assert_eq!(depth(&app), (1, 0));
+        click(&mut app, "Step Backward");
+        assert_eq!(disabled(&mut app), (true, false), "one step to redo");
+        click(&mut app, "Step Backward");
+        assert_eq!(depth(&app), (0, 1));
+    }
+
+    /// Set History Limit… opens Preferences at Performance, the page with History States.
+    #[test]
+    fn set_history_limit_opens_the_history_states_preference() {
+        let mut app = app_with_two_rectangles();
+        click(&mut app, "Set History Limit…");
+        let d = app.ui.dialog.take().expect("a dialog");
+        assert_eq!((d.kind.as_str(), d.str("__category")), ("preferences", "Performance".to_string()));
+        assert!(d.fields.contains_key("historyStates"), "{:?}", d.fields.keys());
     }
 }

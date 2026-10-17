@@ -1320,6 +1320,9 @@
 	Highlight Substituted Glyphs	Маркиране на заменени глифи
 	History	История
 	History Options…	Опции за историята…
+	Step Backward	Стъпка назад
+	Step Forward	Стъпка напред
+	Set History Limit…	Задаване на ограничение на историята…
 	History States	Състояния на историята
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Прилагане на набор от данни

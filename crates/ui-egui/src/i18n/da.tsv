@@ -1434,6 +1434,9 @@ lighting	Light	Lys
 	Use Text for Previews	Brug tekst til forhåndsvisninger
 	{percent}% opacity	{percent}% opacitet
 	History Options…	Indstillinger for historik…
+	Step Backward	Et trin tilbage
+	Step Forward	Et trin frem
+	Set History Limit…	Angiv historikgrænse…
 	Open a document to see its history.	Åbn et dokument for at se dets historik.
 	Abutting	Stødende
 	Black and White	Sort-hvid

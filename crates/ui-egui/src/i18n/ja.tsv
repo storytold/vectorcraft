@@ -1600,6 +1600,9 @@
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
 	History Options…	ヒストリーオプション…
+	Step Backward	一段階戻る
+	Step Forward	一段階進む
+	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	データセットを適用

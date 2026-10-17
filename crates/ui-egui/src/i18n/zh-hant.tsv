@@ -1327,6 +1327,9 @@ file-filter	Templates	範本
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
 	History Options…	步驟記錄選項…
+	Step Backward	後退一步
+	Step Forward	前進一步
+	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	套用資料集

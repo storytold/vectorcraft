@@ -1345,6 +1345,9 @@
 	Highlight Substituted Glyphs	Surligner les glyphes remplacés
 	History	Historique
 	History Options…	Options d’historique…
+	Step Backward	Pas en arrière
+	Step Forward	Pas en avant
+	Set History Limit…	Définir la limite de l’historique…
 	History States	États de l’historique
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Appliquer le jeu de données

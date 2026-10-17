@@ -1513,6 +1513,9 @@ lighting	Light	Světlo
 	Use Text for Previews	Náhledy na textu
 	{percent}% opacity	krytí {percent} %
 	History Options…	Možnosti historie…
+	Step Backward	Krok zpět
+	Step Forward	Krok vpřed
+	Set History Limit…	Nastavit limit historie…
 	Open a document to see its history.	Otevřete dokument, abyste viděli jeho historii.
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Použít sadu dat

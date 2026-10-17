@@ -1297,6 +1297,9 @@ file-filter	Templates	模板
 	Highlight Substituted Glyphs	突出显示替代字形
 	History	历史记录
 	History Options…	历史记录选项…
+	Step Backward	后退一步
+	Step Forward	前进一步
+	Set History Limit…	设置历史记录上限…
 	History States	历史记录步数
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	应用数据集
