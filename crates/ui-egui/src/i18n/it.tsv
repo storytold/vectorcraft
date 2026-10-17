@@ -4563,6 +4563,8 @@ lighting	Light	Luce
 @msg	missing panel layout	Disposizione dei pannelli mancante
 @msg	unsupported native docking operation	Operazione nativa di ancoraggio non supportata
 	Linux Display Server	Server di visualizzazione Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) quando è collegata una penna
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Se la penna di una tavoletta grafica non disegna, scegli un'opzione X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Origine dei righelli
 	Reset Ruler Origin	Ripristina origine dei righelli

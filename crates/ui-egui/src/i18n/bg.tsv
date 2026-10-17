@@ -4455,6 +4455,8 @@ lighting	Light	Светлина
 @msg	missing panel layout	липсващо оформление на панели
 @msg	unsupported native docking operation	неподдържана вградена операция за скачване
 	Linux Display Server	Дисплейен сървър за Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) при свързана писалка
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ако писалката на графичния таблет не рисува, изберете опция X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Начало на линийката
 	Reset Ruler Origin	Нулиране началото на линийката

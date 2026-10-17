@@ -4543,6 +4543,8 @@ lighting	Light	Світло
 @msg	missing panel layout	Відсутнє розташування панелей
 @msg	unsupported native docking operation	Непідтримувана власна операція прикріплення
 	Linux Display Server	Дисплейний сервер Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), коли підключено перо
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Якщо перо графічного планшета не малює, виберіть варіант X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Початок координат лінійок
 	Reset Ruler Origin	Скинути початок координат лінійок

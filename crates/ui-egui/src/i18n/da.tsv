@@ -3370,6 +3370,8 @@ axis	Both	Begge
 	Star	Stjerne
 	Power Saving (integrated)	Strømbesparende (integreret)
 	Target	Mål
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), når en pen er tilsluttet
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Hvis pennen til en tegneplade ikke tegner, skal du vælge en X11 (XWayland)-indstilling.
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Udskriv som bitmap
 	Draft	Udkast

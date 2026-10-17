@@ -788,14 +788,19 @@ fn main() -> std::process::ExitCode {
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
-    // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151).
+    // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
+    // and X11 (XWayland) When a Pen Is Attached does so when a pen is attached, where the pen draws (#2028).
     #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
-        if xwayland::wanted(pref, |name| std::env::var_os(name)) {
+        if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
-                log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                if pref == Some("x11WithPen") {
+                    log::info!("pen found: opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                } else {
+                    log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                }
                 use winit::platform::x11::EventLoopBuilderExtX11 as _;
                 options.event_loop_builder = Some(Box::new(|builder| {
                     builder.with_x11();

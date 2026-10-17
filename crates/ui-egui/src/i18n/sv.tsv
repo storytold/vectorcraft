@@ -4454,6 +4454,8 @@ lighting	Light	Ljus
 @msg	missing panel layout	panellayout saknas
 @msg	unsupported native docking operation	inbyggd dockningsåtgärd som inte stöds
 	Linux Display Server	Linux-skärmserver
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) när en penna är ansluten
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Om ritplattans penna inte ritar väljer du ett X11 (XWayland)-alternativ.
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Linjalens origo
 	Reset Ruler Origin	Återställ linjalens origo

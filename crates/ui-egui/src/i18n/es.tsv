@@ -4522,6 +4522,8 @@ lighting	Light	Luz
 @msg	missing panel layout	Falta la distribución de paneles
 @msg	unsupported native docking operation	Operación nativa de anclaje no admitida
 	Linux Display Server	Servidor de pantalla de Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) cuando hay un lápiz conectado
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Si el lápiz de una tableta digitalizadora no dibuja, elige una opción X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Origen de las reglas
 	Reset Ruler Origin	Restablecer el origen de las reglas

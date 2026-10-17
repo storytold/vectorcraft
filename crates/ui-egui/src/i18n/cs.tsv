@@ -3600,6 +3600,8 @@ axis	Both	Obě
 	Star	Hvězda
 	Power Saving (integrated)	Úsporný režim (integrovaná)
 	Target	Cíl
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) při připojeném peru
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Pokud pero grafického tabletu nekreslí, zvolte možnost X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Tisknout jako bitmapu
 	Draft	Koncept

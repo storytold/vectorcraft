@@ -3866,6 +3866,8 @@ mark-style	Japanese	Kiểu Nhật
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
 	Write Layers	Ghi các lớp
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) khi có bút được kết nối
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Nếu bút của bảng vẽ không vẽ được, hãy chọn một tùy chọn X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	XML ID	XML ID
 	Yards	Yard

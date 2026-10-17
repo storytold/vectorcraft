@@ -3902,6 +3902,8 @@ lighting	Light	光源
 	Horizontal Guide	水平參考線
 	Move Guide to Layer	將參考線移至圖層
 	Linux Display Server	Linux 顯示伺服器
+	X11 (XWayland) When a Pen Is Attached	連接觸控筆時使用 X11 (XWayland)
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	如果繪圖板的筆無法繪圖，請選擇一個 X11 (XWayland) 選項。
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	尺標原點
 	Reset Ruler Origin	重設尺標原點

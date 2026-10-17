@@ -918,7 +918,8 @@ pub struct Prefs {
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
     /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151). Read when the app starts.
+    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
+    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,

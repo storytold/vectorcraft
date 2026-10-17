@@ -3370,6 +3370,8 @@ axis	Both	Keduanya
 	Star	Bintang
 	Power Saving (integrated)	Hemat daya (terintegrasi)
 	Target	Target
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) saat pena terpasang
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Jika pena tablet gambar tidak menggambar, pilih opsi X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Cetak sebagai bitmap
 	Draft	Draf

@@ -3370,6 +3370,8 @@ axis	Both	Beide
 	Star	Ster
 	Power Saving (integrated)	Energiebesparend (geïntegreerd)
 	Target	Doel
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) als er een pen is aangesloten
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Als de pen van een tekentablet niet tekent, kies dan een X11 (XWayland)-optie.
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Afdrukken als bitmap
 	Draft	Concept

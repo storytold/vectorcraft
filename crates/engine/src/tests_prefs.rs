@@ -240,6 +240,20 @@ fn linux_display_server_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.linux_display_server, "automatic");
 }
 
+/// Linux Display Server's pen choice (#2028): set by value or by label, saved, and off by default.
+#[test]
+fn linux_display_server_has_a_choice_for_an_attached_pen() {
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "x11WithPen"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11WithPen");
+    assert_eq!(s.prefs.to_json()["linuxDisplayServer"], "x11WithPen");
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "automatic"})).unwrap();
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "X11 (XWayland) When a Pen Is Attached"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11WithPen");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+}
+
 /// Selection & Anchor Display › Tolerance, Object Selection by Path Only and Command Click to
 /// Select Objects Behind, and General › Double Click To Isolate, as the Selection tool sees them
 /// (#394).

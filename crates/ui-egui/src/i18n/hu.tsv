@@ -4205,6 +4205,8 @@ mark-style	Japanese	Japán
 	Wrinkle Tool	Gyűrés
 	Write Layers	Rétegek írása
 	x Height	x-magasság
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), ha toll csatlakozik
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ha a grafikus tábla tolla nem rajzol, válassz egy X11 (XWayland) beállítást.
 	X11 (XWayland)	X11 (XWayland)
 	X:	X:
 	XML ID	XML-azonosító

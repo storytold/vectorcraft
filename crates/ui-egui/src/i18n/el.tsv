@@ -4939,6 +4939,8 @@ effect	Points	Σημεία
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) όταν είναι συνδεδεμένη πένα
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Αν η πένα μιας ταμπλέτας σχεδίασης δεν σχεδιάζει, επιλέξτε μία από τις ρυθμίσεις X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Mac	Mac
 	Phone 360×800	Phone 360×800

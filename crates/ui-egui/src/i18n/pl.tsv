@@ -3442,6 +3442,8 @@ axis	Both	Obie
 	Star	Gwiazda
 	Power Saving (integrated)	Oszczędzanie energii (zintegrowany)
 	Target	Cel
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), gdy podłączone jest pióro
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Jeśli pióro tabletu graficznego nie rysuje, wybierz opcję X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Drukuj jako bitmapę
 	Draft	Robocza

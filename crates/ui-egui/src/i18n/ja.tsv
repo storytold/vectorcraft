@@ -4603,6 +4603,8 @@ lighting	Light	ライト
 @msg	missing panel layout	パネル配置がありません
 @msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
 	Linux Display Server	Linux ディスプレイサーバー
+	X11 (XWayland) When a Pen Is Attached	ペン接続時は X11 (XWayland)
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	ペンタブレットのペンで描画できない場合は、X11 (XWayland) のいずれかを選択してください。
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	定規の原点
 	Reset Ruler Origin	定規の原点をリセット
