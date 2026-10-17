@@ -565,6 +565,11 @@
 	Color	Kleur
 	Color Guide	Kleurhulp
 	Color Themes	Kleurthema's
+	Color Wheel	Kleurenwiel
+	Hue ring	Tintring
+	Saturation and brightness	Verzadiging en helderheid
+	Color field	Kleurveld
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld

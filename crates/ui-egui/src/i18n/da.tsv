@@ -565,6 +565,11 @@
 	Color	Farve
 	Color Guide	Farveguide
 	Color Themes	Farvetemaer
+	Color Wheel	Farvehjul
+	Hue ring	Ring for farvetone
+	Saturation and brightness	Mætning og lysstyrke
+	Color field	Farvefelt
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
