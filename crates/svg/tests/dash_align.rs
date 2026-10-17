@@ -25,7 +25,9 @@ fn rect_doc(align_corners: bool) -> Document {
 
 /// The SVG rendered by resvg on white at 1 px/pt.
 fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
-    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default()).expect("parse");
+    // #864: pin usvg's DPI to 72 so pt-typed SVGs render at 1 px/pt (the test's invariant).
+    let opts = resvg::usvg::Options { dpi: 72.0, ..Default::default() };
+    let tree = resvg::usvg::Tree::from_str(svg, &opts).expect("parse");
     let mut pm = resvg::tiny_skia::Pixmap::new(w, h).unwrap();
     pm.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut pm.as_mut());
