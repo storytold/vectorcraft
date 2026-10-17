@@ -43,6 +43,8 @@ mod mac_screen_color;
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
+mod portal_save;
 mod prefs_dir;
 mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
@@ -359,10 +361,20 @@ fn make_folder(request: &PickRequest) {
     }
 }
 
-/// Show `dialog` for `request` (on the calling thread, until it closes) → the paths picked.
+/// Show `dialog` for `request` (on the calling thread, until it closes) → the paths picked. On
+/// Linux and the BSDs a save dialog with two or more file types is the desktop portal's, over
+/// `parent`, and its answer also names the file type picked ([`portal_save`]); `dialog` shows when
+/// the portal can't.
 #[cfg(not(target_os = "macos"))]
-fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest) -> Vec<String> {
+#[cfg_attr(windows, allow(unused_variables))]
+fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) -> Vec<String> {
     make_folder(request);
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    if let PickRequest::Save(pick) = request
+        && let Some(answer) = portal_save::pick(pick, parent.as_deref())
+    {
+        return answer;
+    }
     let paths = match request {
         PickRequest::Open(_) => dialog.pick_file().into_iter().collect(),
         PickRequest::OpenMany => dialog.pick_files().unwrap_or_default(),
@@ -375,7 +387,7 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest) -> Vec<String> {
 /// Show the dialog for `request` over `parent` now → the paths picked.
 #[cfg(not(target_os = "macos"))]
 fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
-    show_dialog(file_dialog(&request, parent), &request)
+    show_dialog(file_dialog(&request, parent), &request, parent)
 }
 
 /// macOS shows no dialog in line: its modal loop would run inside winit's event handler, and an
@@ -430,11 +442,12 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
     let dialog = file_dialog(&request, parent);
     let (tx, rx) = std::sync::mpsc::channel();
     let ui = ui.clone();
+    let parent = parent.clone();
     std::thread::Builder::new()
         .name("file-dialog".into())
         .spawn(move || {
             // The app gone meanwhile has no use for the answer.
-            let _ = tx.send(show_dialog(dialog, &request));
+            let _ = tx.send(show_dialog(dialog, &request, &parent));
             ui.request_repaint();
         })
         .ok()?;

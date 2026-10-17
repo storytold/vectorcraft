@@ -115,6 +115,91 @@ fn saves_add_the_format_extension_to_a_bare_name() {
     assert_eq!(last(&w), "/tmp/as.pdf");
 }
 
+/// An app with a document whose save dialogs show off the UI thread, as on Linux.
+fn portal_app() -> (VectorcraftApp, crate::tests_picks::Shown, crate::tests_picks::Written) {
+    let mut services = Services::default();
+    let (shown, written) = crate::tests_picks::off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    (app, shown, written)
+}
+
+/// Run `cmd`, whose save dialog answers `answer` (the path, then the extension of the file type
+/// picked, as the Linux portal's dialog answers) → the path the save goes on with: the one written,
+/// or the one the dialog that opens next holds (the options of SVG, PDF, and of native and .ai
+/// files on Save As; the question whether to replace a file).
+fn saved_from(app: &mut VectorcraftApp, shown: &crate::tests_picks::Shown, written: &Written, cmd: &str, answer: &[&str]) -> String {
+    written.borrow_mut().clear();
+    assert!(app.run(cmd, json!({})).is_err(), "{cmd} waits for its dialog");
+    shown.answer(answer);
+    crate::picks::poll(app, &egui::Context::default());
+    match app.ui.dialog.as_ref() {
+        Some(d) => d.str("path"),
+        None => last(written),
+    }
+}
+
+/// The file type picked in a save dialog that reports it decides the format (#2679): a bare name, or
+/// one with the suggested name's extension, gets the picked type's extension; an extension typed for
+/// another save format stays as typed, and any other gets the picked type's added.
+#[test]
+fn the_file_type_picked_in_the_save_dialog_decides_the_format() {
+    for (answer, expected) in [
+        (&["/art/poster", "ai"][..], "/art/poster.ai"),
+        (&["/art/Untitled-1.vectorcraft", "ai"], "/art/Untitled-1.ai"),
+        (&["/art/poster.SVG", "ai"], "/art/poster.SVG"),
+        (&["/art/poster.foo", "ai"], "/art/poster.foo.ai"),
+        (&["/art/poster.ai", "vectorcraft"], "/art/poster.ai"),
+        (&["/art/poster", "svg"], "/art/poster.svg"),
+        // A dialog that doesn't say, as on Windows and macOS: the default format's extension.
+        (&["/art/poster"], "/art/poster.vectorcraft"),
+    ] {
+        let (mut app, shown, written) = portal_app();
+        assert_eq!(saved_from(&mut app, &shown, &written, "file.save", answer), expected, "{answer:?}");
+    }
+}
+
+/// Save As to the type picked asks for that format's options: the .ai options (Version first),
+/// not VectorCraft's.
+#[test]
+fn save_as_asks_for_the_options_of_the_file_type_picked() {
+    let (mut app, shown, written) = portal_app();
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveAs", &["/art/poster", "ai"]), "/art/poster.ai");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.kind.as_str(), d.str("format")), (dialogs::save_options::KIND, "ai".to_string()));
+}
+
+/// A document saved as .ai lists .ai first: VectorCraft picked with a bare name or with the
+/// suggested name saves a native file. Save a Copy and Save as Template follow the type picked too.
+#[test]
+fn a_document_in_another_format_saves_as_the_type_picked() {
+    let (mut app, shown, written) = portal_app();
+    app.run("file.saveAs", json!({"path": "/art/a.ai", "options": {}})).unwrap();
+    assert_eq!(*written.borrow(), ["/art/a.ai"]);
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveAs", &["/art/poster", "vectorcraft"]), "/art/poster.vectorcraft");
+    dialogs::cancel(&mut app);
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveAs", &["/art/a.ai", "vectorcraft"]), "/art/a.vectorcraft");
+    dialogs::cancel(&mut app);
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveCopy", &["/art/copy", "svg"]), "/art/copy.svg");
+    dialogs::cancel(&mut app);
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveAsTemplate", &["/art/card", "ait"]), "/art/card.ait");
+}
+
+/// The name the type picked gives names a file that is there, which the dialog did not ask about:
+/// the save asks first, and the question's OK writes that file in the picked format.
+#[test]
+fn a_name_given_the_picked_types_extension_asks_before_replacing() {
+    let (mut app, shown, written) = portal_app();
+    app.services.exists = Some(Box::new(|p: &str| p == "/art/poster.ai"));
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.save", &["/art/poster", "ai"]), "/art/poster.ai");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::REPLACE));
+    assert!(written.borrow().is_empty());
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(*written.borrow(), ["/art/poster.ai"]);
+    assert_eq!(app.session.active().unwrap().format, "ai");
+}
+
 #[test]
 fn exports_add_the_format_extension_to_a_bare_name() {
     let (mut app, w) = saving_app("/tmp/art");
