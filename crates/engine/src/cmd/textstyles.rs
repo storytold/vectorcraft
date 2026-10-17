@@ -164,12 +164,13 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
 }
 
 /// Every paragraph attribute of `v` as a JSON map, without the style name: those the paragraph's
-/// JSON leaves out at their defaults (the Hyphenation options, the Every-line Composer, no tab
+/// JSON leaves out at their defaults (the Hyphenation and Justification options, the Every-line Composer, no tab
 /// stops, Auto direction…) are written out, as [`char_attrs`] does for characters.
 pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
     for (k, x) in [
         ("hyphenation", json!(v.hyphenation)),
+        ("justification", json!(v.justification)),
         ("composer", json!(v.composer)),
         ("tabs", json!(v.tabs)),
         ("mojikumi", json!(v.mojikumi)),

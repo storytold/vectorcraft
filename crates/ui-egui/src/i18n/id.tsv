@@ -5154,3 +5154,13 @@ swatch	Bright Violet	Violet cerah
 	Typing	Mengetik
 	Persistent	Persisten
 	Library Panel Options	Opsi panel pustaka
+# Paragraph panel menu › Justification…
+	Desired	Diinginkan
+	Word Spacing:	Spasi Kata:
+	Letter Spacing:	Spasi Huruf:
+	Glyph Scaling:	Penskalaan Glif:
+	Auto Leading:	Spasi Baris Otomatis:
+	Single Word Justification:	Perataan Kata Tunggal:
+	Full Justify	Rata Penuh
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum.
+	Justification	Justifikasi

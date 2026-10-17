@@ -5,18 +5,18 @@
 //! (badness + penalty) demerits over the whole paragraph, plus a demerit when neighbouring lines
 //! fall in fitness classes more than one apart (a tight line next to a loose one).
 //!
-//! - **Justified** lines: word spacing may stretch to 150% and shrink to 80%; the badness comes
-//!   from the stretch/shrink ratio, so loose lines are traded for evenly spaced ones.
+//! - **Justified** lines: word spacing, letter spacing and glyph scaling may stretch and shrink
+//!   within the paragraph's Justification options (each glyph's [`Flex`]); the badness comes from
+//!   the stretch/shrink ratio, so loose lines are traded for evenly spaced ones.
 //! - **Ragged** lines (left/centre/right aligned): spaces keep their width, so a line never
 //!   shrinks (it must fit). The badness comes from the line's leftover space measured against a
 //!   rag zone of a sixth of the line width, so the rag is even rather than full lines followed by
 //!   a short one, and hyphenating costs less. The last line costs nothing unless it is shorter
 //!   than a third of the width (a word or two left dangling).
 
+use crate::justify::Flex;
 use crate::shape::SGlyph;
 
-const STRETCH: f64 = 0.5;
-const SHRINK: f64 = 0.2;
 const HYPHEN_PENALTY: f64 = 50.0;
 const DOUBLE_HYPHEN_DEMERITS: f64 = 3000.0;
 const LINE_PENALTY: f64 = 10.0;
@@ -90,7 +90,8 @@ fn fitness(r: f64, ragged: bool) -> u8 {
 /// Compose the paragraph `g` into lines. `width(k)` is the available width of line `k`;
 /// `start_credit(i)` is the width a wrapped line starting at glyph `i` gives back (Mojikumi sets
 /// an opening bracket there flush with the line's start); `cands` are the break opportunities
-/// in increasing order (the paragraph end is added).
+/// in increasing order (the paragraph end is added); `flex` holds how far each glyph may stretch
+/// and shrink in a justified line.
 /// Returns `(end, hyphen)` per line, or `None` if no set of breaks fits within the tolerance
 /// (the caller then falls back to single-line breaking).
 pub(crate) fn compose(
@@ -98,18 +99,22 @@ pub(crate) fn compose(
     width: &dyn Fn(usize) -> f64,
     start_credit: &dyn Fn(usize) -> f64,
     cands: &[Breakpoint],
+    flex: &[Flex],
     p: &Params,
 ) -> Option<Vec<(usize, bool)>> {
     let n = g.len();
     if n == 0 {
         return Some(vec![]);
     }
-    // Prefix sums of advances and of space advances.
+    // Prefix sums of advances and of how far the glyphs may stretch and shrink.
     let mut w = vec![0.0; n + 1];
-    let mut sp = vec![0.0; n + 1];
+    let mut st = vec![0.0; n + 1];
+    let mut sh = vec![0.0; n + 1];
     for (i, gl) in g.iter().enumerate() {
+        let f = flex.get(i).copied().unwrap_or_default();
         w[i + 1] = w[i] + gl.adv;
-        sp[i + 1] = sp[i] + if gl.is_space() { gl.adv } else { 0.0 };
+        st[i + 1] = st[i] + f.stretch();
+        sh[i + 1] = sh[i] + f.shrink();
     }
     if !w[n].is_finite() {
         return None;
@@ -152,17 +157,17 @@ pub(crate) fn compose(
                     (lw - natural).max(0.0) / (lw * RAG_ZONE).max(1.0)
                 }
             } else {
-                let spaces = sp[t] - sp[a.pos];
+                let (stretch, shrink) = (st[t] - st[a.pos], sh[t] - sh[a.pos]);
                 if natural < lw {
                     if last && !p.justify_last {
                         0.0
-                    } else if spaces > 0.0 {
-                        (lw - natural) / (spaces * STRETCH)
+                    } else if stretch > EPS {
+                        (lw - natural) / stretch
                     } else {
                         f64::INFINITY
                     }
                 } else if natural > lw {
-                    if spaces > 0.0 { (lw - natural) / (spaces * SHRINK) } else { f64::NEG_INFINITY }
+                    if shrink > EPS { (lw - natural) / shrink } else { f64::NEG_INFINITY }
                 } else {
                     0.0
                 }
@@ -176,10 +181,15 @@ pub(crate) fn compose(
                 continue;
             }
             let free_last = last && (p.ragged || !p.justify_last);
-            if ratio > p.tolerance && !(last && (p.ragged || (ratio.is_infinite() && p.justify_last))) {
+            // A line that can't stretch at all (no word spaces, nor letter spacing or glyph scaling
+            // to vary) never fills its measure, however loose the tolerance.
+            if (ratio > p.tolerance || ratio == f64::INFINITY) && !(last && (p.ragged || (ratio.is_infinite() && p.justify_last))) {
                 continue;
             }
-            let badness = if ratio.is_finite() { (100.0 * ratio.abs().powi(3)).min(10_000.0) } else { 10_000.0 };
+            // Justified lines aren't capped: past a ratio of 4.6 (only reached in the unbounded pass)
+            // a looser line must still score worse than a less loose one.
+            let cap = if p.ragged { 10_000.0 } else { f64::INFINITY };
+            let badness = if ratio.is_finite() { (100.0 * ratio.abs().powi(3)).min(cap) } else { 10_000.0 };
             let penalty = if hyphen { hyphen_penalty } else { 0.0 };
             let mut d = (LINE_PENALTY + badness).powi(2) + penalty * penalty;
             if hyphen && a.hyphens > 0 {

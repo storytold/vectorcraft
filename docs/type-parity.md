@@ -35,7 +35,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Colour fonts (OpenType SVG / COLR) | partial | |
 | Every-line and Single-line composers | done | tuned by eye, never compared side by side |
 | Optical Margin Alignment | done | Type › Optical Margin Alignment, `type.opticalMarginAlignment`: per type object, in point and area type of left-to-right paragraphs; type on a path and right-to-left paragraphs do not hang |
-| Hyphenation… and Justification… options | partial | Hyphenation… (`ui.hyphenation`, `text.setFormat`) sets each paragraph's Words Longer Than, After First, Before Last, Hyphen Limit, Hyphenation Zone (Single-line Composer only) and Hyphenate Capitalized Words, and paragraph styles carry them (#2310); Justification… missing (menu stub) |
+| Hyphenation… and Justification… options | done | Hyphenation… (`ui.hyphenation`, `text.setFormat`) sets each paragraph's Words Longer Than, After First, Before Last, Hyphen Limit, Hyphenation Zone (Single-line Composer only) and Hyphenate Capitalized Words, and paragraph styles carry them (#2310). Justification… (`ui.justification`, `text.setFormat`, #2755) sets Word Spacing, Letter Spacing and Glyph Scaling (Minimum, Desired, Maximum), Auto Leading and Single Word Justification; Desired applies to every line, justified lines and the Every-line Composer use the ranges. Vertical type isn't glyph scaled; type on a path doesn't use them. Evidence: `crates/text/src/tests_justify.rs`, `dialogs::justification::tests` |
 | Tab stops and leaders; Tabs panel | partial | Tabs panel and stops with leaders in the model (`text.tabs.set`); a stop drags from where the press landed (#1458); leaders fill the tab's gap, repeated on a grid so they line up from line to line (#1877) |
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
@@ -61,6 +61,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Justification… (#2755): word and letter spacing, glyph scaling, Auto Leading and Single Word Justification per paragraph; the default word spacing range is 80/100/133%, so justified lines break differently than with the old fixed 80–150%; scores unchanged |
 | 2026-10-17 | minor | A click on area type's red out port loads the Selection tool with the overflow text; the next click threads it into a closed path or a new frame of the same shape there, a drag into a new rectangle (`text.thread.add`, #2572 in part). The out port moved up the frame's right side, clear of the corner handle. Scores and hours unchanged. |
 | 2026-10-16 | minor | Native font-family labels fall back from English-only typographic names to localized legacy names (#2208). English labels and native typographic precedence are preserved; synthetic loaded/catalog tests. Scores and estimates unchanged. |
 | 2026-10-16 | minor | Align Stroke on live type: the characters' stroke goes inside or outside the glyphs without creating outlines, for every run or a range; kept in the native file and in canvas, PDF, EPS and SVG output (#2294); beyond Illustrator, scores and hours unchanged |

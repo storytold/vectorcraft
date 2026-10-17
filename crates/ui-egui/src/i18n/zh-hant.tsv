@@ -4063,3 +4063,14 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
+# Paragraph panel menu › Justification…
+	Desired	所需
+	Word Spacing:	字間距：
+	Letter Spacing:	字母間距：
+	Glyph Scaling:	字符比例：
+	Auto Leading:	自動行距：
+	Single Word Justification:	單字對齊：
+	Full Justify	全部強迫齊行
+	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
+	Minimum	最小值
+	Justification	對齊設定

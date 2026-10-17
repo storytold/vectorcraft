@@ -187,7 +187,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Improved:** mixed paragraph alignments leave the existing Paragraph/Properties alignment buttons unselected; choosing an alignment still uses the range-aware command. Headless regressions, full integration CI and visual review pass. Other mixed paragraph fields remain; estimate unchanged.
 - **Improved (#1258):** full font names (name ID 4) resolve the face instead of falling back, and Missing Fonts searches recognize the same aliases. Synthetic regressions cover loaded/cataloged fonts, localized names, real-family precedence and variable default faces. Windows font-service activation still needs reporter QA; estimate unchanged.
-- **Missing:** hyphenation and justification options, Optical Margin Alignment (type core); CJK vertical
+- **Done:** Paragraph panel menu › Justification… (#2755): word and letter spacing, glyph scaling (Minimum, Desired,
+  Maximum), Auto Leading and Single Word Justification per paragraph, used by both composers; estimate unchanged.
+- **Missing:** Roman Hanging Punctuation (#2756, type core); CJK vertical
   composition (ruby, mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi and digit types (Character Direction, kashidas, composers), variable font axes, spell check with an open dictionary,
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).

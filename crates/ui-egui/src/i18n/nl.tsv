@@ -5154,3 +5154,13 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
+# Paragraph panel menu › Justification…
+	Desired	Gewenst
+	Word Spacing:	Woordafstand:
+	Letter Spacing:	Letterafstand:
+	Glyph Scaling:	Glyphschaal:
+	Auto Leading:	Automatische regelafstand:
+	Single Word Justification:	Uitvullen van één woord:
+	Full Justify	Volledig uitvullen
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum mag niet groter zijn dan Gewenst, en Gewenst niet groter dan Maximum.
+	Justification	Uitvullen

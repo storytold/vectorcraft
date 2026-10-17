@@ -2,7 +2,7 @@
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Composer, NodeKind, Scaling};
+use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify};
 use vectorcraft_geom::{Rect, Vec2};
 
 use super::*;
@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -236,6 +236,34 @@ pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vector
 /// Largest indent or paragraph spacing (points; Illustrator's limit).
 const MAX_PARA: f64 = 1296.0;
 
+/// A justification spacing of `text.setFormat` (`wordSpacing`, `letterSpacing`, `glyphScaling`):
+/// `[min, desired, max]` or `{min?, desired?, max?}`, in percent. The values not given are kept.
+fn spacing_param(p: &Value, key: &str, c: &str) -> Result<Option<[Option<f64>; 3]>> {
+    let number = |v: &Value| v.as_f64().filter(|v| v.is_finite());
+    let err = || bad(c, format!("`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent"));
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(a)) if a.len() == 3 => {
+            let mut out = [None; 3];
+            for (o, v) in out.iter_mut().zip(a) {
+                *o = Some(number(v).ok_or_else(err)?);
+            }
+            Ok(Some(out))
+        }
+        Some(Value::Object(o)) => {
+            let mut out = [None; 3];
+            for (k, v) in o {
+                let i = ["min", "desired", "max"].iter().position(|n| n == k).ok_or_else(err)?;
+                if let Some(slot) = out.get_mut(i) {
+                    *slot = Some(number(v).ok_or_else(err)?);
+                }
+            }
+            Ok(Some(out))
+        }
+        Some(_) => Err(err()),
+    }
+}
+
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
     let ids = super::typecmd::text_targets(s, p, C)?;
@@ -269,6 +297,11 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "hyphenLimit",
         "hyphenationZone",
         "hyphenateCapitalized",
+        "wordSpacing",
+        "letterSpacing",
+        "glyphScaling",
+        "autoLeading",
+        "singleWordJustification",
         "mojikumi",
         "kinsoku",
         "direction",
@@ -338,6 +371,24 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, "`burasagari` must be \"none\", \"standard\" or \"forced\"")),
         }),
     };
+    let spacing = |k: &str| spacing_param(p, k, C);
+    let (word_spacing, letter_spacing, glyph_scaling) = (spacing("wordSpacing")?, spacing("letterSpacing")?, spacing("glyphScaling")?);
+    let single_word = match p.get("singleWordJustification") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("fullJustify") => SingleWordJustify::FullJustify,
+            Some("alignLeft") => SingleWordJustify::AlignLeft,
+            Some("alignCenter") => SingleWordJustify::AlignCenter,
+            Some("alignRight") => SingleWordJustify::AlignRight,
+            _ => return Err(bad(C, "`singleWordJustification` must be \"fullJustify\", \"alignLeft\", \"alignCenter\" or \"alignRight\"")),
+        }),
+    };
+    let auto_leading = match p.get("autoLeading") {
+        None => None,
+        Some(v) => Some(v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(C, "`autoLeading` must be a number"))?),
+    };
+    // A paragraph whose Minimum, Desired and Maximum would no longer be in order.
+    let mut out_of_order: Option<&str> = None;
     let range = super::typecmd::TextRange::parse(p, C)?;
     // The character attributes, given the baseline shift and horizontal scale in the type's own units.
     let chars = |st: &mut vectorcraft_doc::CharStyle, baseline_shift: Option<f64>, h_scale: Option<f64>| {
@@ -429,6 +480,28 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = flag("hyphenateCapitalized") {
                     para.hyphenation.capitalized = v;
                 }
+                let j = &mut para.justification;
+                for (name, given, value, limits) in [
+                    ("wordSpacing", &word_spacing, &mut j.word_spacing, JustificationOptions::WORD_SPACING),
+                    ("letterSpacing", &letter_spacing, &mut j.letter_spacing, JustificationOptions::LETTER_SPACING),
+                    ("glyphScaling", &glyph_scaling, &mut j.glyph_scaling, JustificationOptions::GLYPH_SCALING),
+                ] {
+                    let Some(given) = given else { continue };
+                    for (v, g) in value.iter_mut().zip(given) {
+                        if let Some(g) = g {
+                            *v = g.clamp(limits.0, limits.1);
+                        }
+                    }
+                    if !(value[0] <= value[1] && value[1] <= value[2]) {
+                        out_of_order.get_or_insert(name);
+                    }
+                }
+                if let Some(v) = auto_leading {
+                    j.auto_leading = v.clamp(JustificationOptions::AUTO_LEADING.0, JustificationOptions::AUTO_LEADING.1);
+                }
+                if let Some(v) = single_word {
+                    j.single_word = v;
+                }
                 if let Some(v) = mojikumi {
                     para.mojikumi = v;
                 }
@@ -448,6 +521,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                     para.composer = v;
                 }
             });
+            if let Some(name) = out_of_order {
+                return Err(bad(C, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum")));
+            }
             super::typecmd::refresh_bounds(t);
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again.

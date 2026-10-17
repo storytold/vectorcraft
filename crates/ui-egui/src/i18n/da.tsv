@@ -5154,3 +5154,13 @@ swatch	Bright Violet	Kraftig violet
 	Typing	Indtastning
 	Persistent	Vedvarende
 	Library Panel Options	Indstillinger for bibliotekspanel
+# Paragraph panel menu › Justification…
+	Desired	Ønsket
+	Word Spacing:	Ordafstand:
+	Letter Spacing:	Bogstavafstand:
+	Glyph Scaling:	Skalering af glyffer:
+	Auto Leading:	Automatisk linjeafstand:
+	Single Word Justification:	Justering af enkeltord:
+	Full Justify	Lige margener
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+	Justification	Justering

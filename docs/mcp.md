@@ -3484,6 +3484,31 @@ changed.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"hyphenate":true,"wordsLongerThan":8,"hyphenLimit":2}}}
 ```
 
+
+## Justification options
+
+`text.setFormat` sets the Paragraph panel menu's Justification… options of the selected type (or `ids`, or the
+paragraphs a `start` / `end` range touches), in percent:
+
+- `wordSpacing` (0 to 1000, default 80 / 100 / 133), `letterSpacing` (-100 to 500, a share of the font's word space,
+  default 0 / 0 / 0) and `glyphScaling` (50 to 200, default 100 / 100 / 100), each `[min, desired, max]` or
+  `{min?, desired?, max?}` (the values not given are kept). Desired applies to every line: word spaces are that share
+  of the font's word space, each letter followed by another is followed by that share of a word space, and glyphs are
+  that wide. A justified line may move them between Minimum and Maximum to fill its measure: word spacing first, then
+  letter spacing, then glyph scaling; past all three its word spaces take the rest. Values are clamped to their range,
+  and Minimum ≤ Desired ≤ Maximum must hold in every paragraph afterwards, or nothing changes and the command fails.
+- `autoLeading` (0 to 500, default 120): the leading of characters whose leading is Auto, as a share of their size.
+- `singleWordJustification` (`"fullJustify"` (default), `"alignLeft"`, `"alignCenter"` or `"alignRight"`): how a
+  justified line holding a single word is set.
+
+The options are saved with the paragraph (`justification` in `para`) only when they differ from the defaults, and
+paragraph styles carry them (`paraStyle.new {attrs: {justification: {auto_leading: 150}}}`). Vertical type isn't glyph
+scaled, and type on a path doesn't use them. One undo step. `ui.justification` opens the Justification dialog on the
+values the Paragraph panel shows, with Preview; OK sends the values that changed.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"wordSpacing":[80,100,150],"letterSpacing":{"max":5},"singleWordJustification":"alignLeft"}}}
+```
 ## Kinsoku Set
 
 `text.setFormat {kinsoku: "hard"|"soft"|"none"}` sets the Paragraph panel's Kinsoku Set of the selected type (or `ids`):

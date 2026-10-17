@@ -418,6 +418,77 @@ impl Default for HyphenationOptions {
     }
 }
 
+/// How a justified line holding a single word is set ([`JustificationOptions::single_word`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SingleWordJustify {
+    /// Spread across the line, between its letters.
+    #[default]
+    FullJustify,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+}
+
+/// A paragraph's justification options (Paragraph panel menu › Justification…), in percent.
+///
+/// Each spacing has a Minimum, a Desired and a Maximum value (`[min, desired, max]`). Desired
+/// applies to every line of the paragraph, justified or not: word spaces are that share of the
+/// font's word space, each letter is followed by that share of a word space, and glyphs are that
+/// wide. Justified lines may vary them between Minimum and Maximum to fill the measure. Saved only
+/// when they differ from the defaults: word spacing 80/100/133, letter spacing 0/0/0, glyph
+/// scaling 100/100/100, Auto Leading 120 and Full Justify.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct JustificationOptions {
+    /// Word Spacing, percent of the font's word space (0..1000).
+    pub word_spacing: [f64; 3],
+    /// Letter Spacing, percent of the font's word space added after each letter (-100..500).
+    pub letter_spacing: [f64; 3],
+    /// Glyph Scaling, percent of the glyphs' width (50..200).
+    pub glyph_scaling: [f64; 3],
+    /// Auto Leading: the leading of characters whose leading is Auto, in percent of their size
+    /// (0..500).
+    pub auto_leading: f64,
+    /// Single Word Justification: how a justified line holding one word is set.
+    pub single_word: SingleWordJustify,
+}
+
+impl JustificationOptions {
+    /// Word Spacing's range (percent).
+    pub const WORD_SPACING: (f64, f64) = (0.0, 1000.0);
+    /// Letter Spacing's range (percent).
+    pub const LETTER_SPACING: (f64, f64) = (-100.0, 500.0);
+    /// Glyph Scaling's range (percent).
+    pub const GLYPH_SCALING: (f64, f64) = (50.0, 200.0);
+    /// Auto Leading's range (percent).
+    pub const AUTO_LEADING: (f64, f64) = (0.0, 500.0);
+
+    /// Are Desired word spacing, letter spacing and glyph scaling the defaults (nothing to change
+    /// in a line's natural widths)?
+    pub fn desired_is_default(&self) -> bool {
+        let d = Self::default();
+        self.word_spacing[1] == d.word_spacing[1] && self.letter_spacing[1] == d.letter_spacing[1] && self.glyph_scaling[1] == d.glyph_scaling[1]
+    }
+
+    /// A paragraph's leading for characters of `size` whose leading is Auto.
+    pub fn auto_leading_for(&self, size: f64) -> f64 {
+        size * self.auto_leading / 100.0
+    }
+}
+
+impl Default for JustificationOptions {
+    fn default() -> Self {
+        Self {
+            word_spacing: [80.0, 100.0, 133.0],
+            letter_spacing: [0.0, 0.0, 0.0],
+            glyph_scaling: [100.0, 100.0, 100.0],
+            auto_leading: 120.0,
+            single_word: SingleWordJustify::FullJustify,
+        }
+    }
+}
+
 /// Paragraph attributes (the Paragraph panel).
 ///
 /// Saved through [`ParaStyleFile`], which keeps files with text openable by builds from before
@@ -434,6 +505,9 @@ pub struct ParaStyle {
     pub hyphenate: bool,
     /// The limits automatic hyphenation keeps to (Paragraph panel menu › Hyphenation…).
     pub hyphenation: HyphenationOptions,
+    /// Word and letter spacing, glyph scaling, Auto Leading and Single Word Justification
+    /// (Paragraph panel menu › Justification…).
+    pub justification: JustificationOptions,
     /// Line breaking: Single-line or Every-line Composer.
     pub composer: Composer,
     /// Tab stops (Tabs panel), sorted by position.
@@ -483,6 +557,8 @@ struct ParaStyleFile {
     hyphenate: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     hyphenation: HyphenationOptions,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    justification: JustificationOptions,
     #[serde(default, skip_serializing_if = "Composer::is_default")]
     composer: Composer,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -517,6 +593,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_after,
             hyphenate,
             hyphenation,
+            justification,
             composer,
             tabs,
             style_name,
@@ -537,6 +614,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_after,
             hyphenate,
             hyphenation,
+            justification,
             composer,
             tabs,
             style_name,
@@ -560,6 +638,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_after,
             hyphenate,
             hyphenation,
+            justification,
             composer,
             tabs,
             style_name,
@@ -579,6 +658,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_after,
             hyphenate,
             hyphenation,
+            justification,
             composer,
             tabs,
             style_name,

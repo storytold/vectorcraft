@@ -672,7 +672,9 @@ fn hyphenation_zone_breaks_before_the_word_with_the_single_line_composer() {
 
 /// The default Hyphenation options keep the line breaks of hyphenated text: the copy twice over
 /// at three widths, ragged and justified, with either composer. The constant is an FNV-1a hash of
-/// each line's end and whether it ends with a hyphen.
+/// each line's end and whether it ends with a hyphen. It changed once since: justified lines
+/// follow the default Justification options (word spacing up to 133%, where the composer used
+/// to stretch spaces to 150%), and the every-line composer no longer gives up on loose lines.
 #[test]
 fn default_hyphenation_options_keep_the_line_breaks() {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -695,7 +697,7 @@ fn default_hyphenation_options_keep_the_line_breaks() {
             }
         }
     }
-    assert_eq!(hash, 8_558_443_895_699_068_077);
+    assert_eq!(hash, 4_188_642_633_634_327_633);
 }
 
 /// The longest run of consecutive lines of `l` that end with a hyphen.

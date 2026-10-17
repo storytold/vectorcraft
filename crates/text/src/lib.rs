@@ -18,6 +18,7 @@ mod features;
 mod fontconfig;
 mod fontdb;
 pub mod hyphen;
+mod justify;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -112,6 +113,10 @@ pub struct PositionedGlyph {
     pub xf: Affine,
     /// True when the logical leading edge is the glyph’s right edge.
     pub rtl: bool,
+    /// How much wider than its font draws it the glyph is drawn by its paragraph's Glyph Scaling
+    /// (Justification…), Desired and justification together: 1 at 100%. Horizontal Scale isn't
+    /// included.
+    pub scale: f64,
 }
 
 /// One line of laid-out text.
@@ -538,6 +543,8 @@ mod tests_embed;
 mod tests_fit;
 #[cfg(test)]
 mod tests_inline;
+#[cfg(test)]
+mod tests_justify;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

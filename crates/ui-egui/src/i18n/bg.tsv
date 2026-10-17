@@ -5130,3 +5130,13 @@ theme	Appearance	Външен вид
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
+# Paragraph panel menu › Justification…
+	Desired	Желано
+	Word Spacing:	Разстояние между думите:
+	Letter Spacing:	Разстояние между буквите:
+	Glyph Scaling:	Мащабиране на знаците:
+	Auto Leading:	Автоматична междуредова разредка:
+	Single Word Justification:	Подравняване на единична дума:
+	Full Justify	Пълно двустранно
+	Minimum must not exceed Desired, nor Desired Maximum.	Минималната стойност не може да надвишава желаната, нито желаната – максималната.
+	Justification	Подравняване

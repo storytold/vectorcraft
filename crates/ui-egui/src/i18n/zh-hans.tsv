@@ -4996,3 +4996,14 @@ lighting	Light	光源
 @msg	too many library panels were opened in this session	本次会话中打开的库面板过多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	图像为 {_1} × {_2} 像素，某一边超过 {LARGE_TRACE_SIDE}：会进行描摹，但速度较慢。使用保真度较低的预设或图像的较小副本会更快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	图像已按 {_1} × {_2} 像素描摹，由 {_3} × {_4} 缩小而来（最多 {_5} 百万像素）。
+# Paragraph panel menu › Justification…
+	Desired	所需
+	Word Spacing:	字间距：
+	Letter Spacing:	字母间距：
+	Glyph Scaling:	字形缩放：
+	Auto Leading:	自动行距：
+	Single Word Justification:	单字对齐：
+	Full Justify	全部强制双齐
+	Minimum must not exceed Desired, nor Desired Maximum.	最小值不能超过所需值，所需值不能超过最大值。
+	Minimum	最小值
+	Justification	对齐设置
