@@ -812,6 +812,9 @@ pub struct Prefs {
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
+    /// A Selection tool marquee dragged to the right takes only the objects entirely inside it,
+    /// one dragged to the left the objects it touches (#2449).
+    pub marquee_by_direction: bool,
     pub zoom_to_selection: bool,
     pub move_locked_with_artboard: bool,
     pub anchor_size: u32,
@@ -1066,6 +1069,7 @@ impl Default for Prefs {
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,
+            marquee_by_direction: false,
             zoom_to_selection: true,
             move_locked_with_artboard: false,
             anchor_size: 3,

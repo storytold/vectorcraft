@@ -301,6 +301,10 @@ pub struct ToolContext<'a> {
     /// Selection tool selects the object under the selected one, the next click the one under
     /// that.
     pub select_behind: bool,
+    /// Selection & Anchor Display → Marquee Selection by Drag Direction: a marquee dragged to the
+    /// right takes only the objects entirely inside it, one dragged to the left (or straight
+    /// down or up) the objects it touches. E during the drag still flips the choice.
+    pub marquee_by_direction: bool,
     /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
     /// anchor under the pointer.
     pub highlight_anchors: bool,
@@ -914,6 +918,7 @@ pub(crate) mod testutil {
             type_path_only: false,
             double_click_isolate: true,
             select_behind: true,
+            marquee_by_direction: false,
             highlight_anchors: true,
             snap_tolerance: 2.0,
             handles_multiple: true,

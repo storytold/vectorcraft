@@ -222,6 +222,7 @@ impl Session {
             type_path_only: self.prefs.type_selection_by_path_only,
             double_click_isolate: self.prefs.double_click_to_isolate,
             select_behind: self.prefs.ctrl_click_selects_behind,
+            marquee_by_direction: self.prefs.marquee_by_direction,
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
             snap_tolerance: self.prefs.snap_to_point_tolerance,
             handles_multiple: self.prefs.show_handles_multiple_anchors,

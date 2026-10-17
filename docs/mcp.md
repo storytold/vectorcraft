@@ -2134,6 +2134,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
   elsewhere) selects the object under the selected one there, the next such click the one under that, then the
   topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
+- `marqueeByDirection` (off by default): a Selection tool marquee dragged to the right of where it started takes only the
+  objects entirely inside it, one dragged to the left the objects it touches; `E` during the drag still flips the choice.
 - `doubleClickToIsolate` (on by default): a `doubleclick` with the Selection tool isolates a group, a compound path or a
   single path, image, mesh or placed file (not type, blends, envelopes, repeats or symbol instances); off, it no longer does.
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.

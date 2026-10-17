@@ -15,7 +15,9 @@
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
 //! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
-//! E pressed again makes it take the objects it touches.
+//! E pressed again makes it take the objects it touches. With Marquee Selection by Drag Direction
+//! on, a marquee dragged to the right takes only the objects inside it and one dragged to the left
+//! the objects it touches.
 //! A click on the red out port of selected area type whose text overflows loads the pointer with
 //! that text ([`Cursor::LoadedText`]): the next click threads it into the closed path or area type
 //! under the pointer, or into a new frame of the same shape and size at the click on empty canvas,
@@ -588,6 +590,9 @@ impl Tool for SelectionTool {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 let touched = marquee(cx.doc, r, cx.isolation, false);
+                // Dragged to the right with the preference on, the marquee takes only what lies
+                // inside it; E flips that, as it flips the plain marquee.
+                let enclosed = enclosed != (cx.marquee_by_direction && p.x > start.x);
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
                 std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, enclosed)).collect()
@@ -1324,6 +1329,36 @@ mod tests {
         let mut t = SelectionTool::default();
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
         assert!(t.busy() && !t.claims_key(&cx, e));
+    }
+
+    /// Marquee Selection by Drag Direction (#2449): dragged to the right the marquee takes only
+    /// the objects inside it, dragged to the left the objects it touches; E flips either.
+    #[test]
+    fn a_marquee_dragged_right_takes_only_the_objects_inside_when_asked() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, inside) = doc_with_rect();
+        let l = d.layers[0].id;
+        let touched = d.alloc_id();
+        let r = Rect::new(250.0, 100.0, 350.0, 200.0);
+        d.insert(Some(l), 1, Node::path(touched, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let mut cx = cx(&d, &s, &p);
+        let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(ids) }))];
+        let drag = |cx: &ToolContext, from: (f64, f64), to: (f64, f64), e: bool| {
+            let mut t = SelectionTool::default();
+            t.pointer(cx, &ev(PointerKind::Down, from.0, from.1));
+            t.pointer(cx, &ev(PointerKind::Drag, to.0, to.1));
+            if e {
+                t.key(cx, ToolKey::Letter('e'), Mods::default());
+            }
+            t.pointer(cx, &ev(PointerKind::Up, to.0, to.1))
+        };
+        // Off: both directions take what the marquee touches.
+        assert_eq!(drag(&cx, (50.0, 50.0), (300.0, 250.0), false), set(&[inside, touched]));
+        cx.marquee_by_direction = true;
+        assert_eq!(drag(&cx, (50.0, 50.0), (300.0, 250.0), false), set(&[inside]), "right: enclosed");
+        assert_eq!(drag(&cx, (300.0, 250.0), (50.0, 50.0), false), set(&[inside, touched]), "left: touched");
+        assert_eq!(drag(&cx, (50.0, 50.0), (300.0, 250.0), true), set(&[inside, touched]), "E flips it");
     }
 
     /// With E pressed during the drag, a marquee takes only the artboard guides that lie entirely

@@ -144,6 +144,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("objectSelectionByPathOnly", "Selection & Anchor Display", "Selection", "Object Selection by Path Only", bool),
     p!("snapToPointTolerance", "Selection & Anchor Display", "Selection", "Snap to Point", num(1.0, 8.0, "px")),
     p!("ctrlClickSelectsBehind", "Selection & Anchor Display", "Selection", "Command Click to Select Objects Behind", bool),
+    p!("marqueeByDirection", "Selection & Anchor Display", "Selection", "Marquee Selection by Drag Direction", bool),
     p!("zoomToSelection", "Selection & Anchor Display", "Selection", "Zoom to Selection", bool),
     p!("moveLockedWithArtboard", "Selection & Anchor Display", "Selection", "Move Locked and Hidden Artwork with Artboard", bool),
     p!("anchorSize", "Selection & Anchor Display", "Anchor Points, Handle, and Bounding Box Display", "Size", int(1, 7)),
