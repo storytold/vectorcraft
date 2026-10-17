@@ -77,7 +77,14 @@ impl Tool for EyedropperTool {
         // Reading a source is independent of its editability. Only Alt's reverse operation
         // writes to the clicked object; Shift+Alt appends its appearance to the selection.
         let h = if ev.mods.alt && !ev.mods.shift && stop.is_none() { hit_test(cx.doc, ev.pos, opts) } else { hit_test_visible(cx.doc, ev.pos, opts) };
-        let Some(h) = h else { return vec![] };
+        let Some(h) = h else {
+            // Empty artboard: the colour under the cursor is the paper. A gradient stop still
+            // waits for an object, and Alt has nothing to paint onto.
+            if stop.is_some() || ev.mods.alt || !cx.doc.artboards.iter().any(|a| a.rect.contains(ev.pos)) {
+                return vec![];
+            }
+            return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color_json(&cx.doc.setup.paper()) }))];
+        };
         let src = paint_owner(cx.doc, h.leaf);
         let Some(n) = cx.doc.node(src) else { return vec![] };
         if ev.mods.alt && stop.is_none() {
@@ -133,7 +140,14 @@ mod tests {
         // On the stroke edge → the stroke colour.
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": color_json(&Color::BLACK)}))]);
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+        // On the artboard, past every object: the paper colour.
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)),
+            vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]
+        );
+        // Outside every artboard there is nothing to sample.
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 2000.0, 2000.0)).is_empty());
     }
 
     #[test]
