@@ -250,6 +250,35 @@ fn area_and_path_tools_convert_clicked_paths() {
 }
 
 #[test]
+fn type_on_a_path_takes_a_compound_path_and_area_type_does_not() {
+    // Two open lines as one compound path, as a GIS export makes of a river's pieces.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let c = d.alloc_id();
+    let pieces = [(100.0, 300.0), (100.0, 400.0)].map(|(x, y)| {
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::shapes::line(Point::new(x, y), Point::new(x + 300.0, y));
+        Arc::new(Node::path(id, line, vectorcraft_doc::Appearance::default_art()))
+    });
+    let compound = NodeKind::Compound { children: pieces.to_vec(), rule: vectorcraft_geom::FillRule::NonZero };
+    d.insert(Some(l), 0, Node::new(c, compound)).unwrap();
+    let (sel, p) = (Selection::default(), paint());
+    let cx = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("typeOnPath");
+    tool.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 400.0));
+    let acts = tool.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 400.0));
+    assert!(
+        acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.createInPath" && p["path"] == json!(c.0) && p["mode"] == "onPath")),
+        "{acts:?}"
+    );
+    assert_eq!(tool.cursor(&cx, Point::new(250.0, 300.0), Mods::default()), Cursor::Crosshair);
+    let mut tool = TypeTool::new("areaType");
+    tool.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 400.0));
+    let acts = tool.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 400.0));
+    assert!(acts.iter().all(|a| !matches!(a, Action::Exec(cmd, _) if cmd == "text.createInPath")), "{acts:?}");
+}
+
+#[test]
 fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
     for id in ["verticalType", "verticalAreaType", "verticalTypeOnPath"] {
         let tool = TypeTool::new(id);

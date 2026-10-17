@@ -252,3 +252,58 @@ fn dragging_the_start_and_end_brackets_sets_where_the_type_runs() {
     let r = ink(&s, id);
     assert!(r.x0 > 199.0 && r.x1 < 401.0, "between the brackets: {r:?}");
 }
+
+/// A compound path of the two lines (100, 300)–(500, 300) and (100, 400)–(500, 400), as a GIS
+/// export makes of a river's pieces.
+fn two_line_compound(s: &mut Session) -> NodeId {
+    let ids: Vec<u64> = ["M100 300 L500 300", "M100 400 L500 400"]
+        .iter()
+        .map(|d| s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap())
+        .collect();
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+    NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+#[test]
+fn type_on_a_compound_path_goes_on_the_piece_nearest_the_click() {
+    let mut s = session();
+    let c = two_line_compound(&mut s);
+    let r = s.execute("text.createInPath", &json!({"path": c.0, "mode": "onPath", "text": "Columbia", "at": [300, 395]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let TextKind::OnPath { path, start, .. } = text(&s, id).kind else { panic!("not type on a path") };
+    let b = path.bounds().unwrap();
+    assert!(near(b.y0, 400.0) && near(b.y1, 400.0), "on the lower piece: {b:?}");
+    assert!(near(start, 0.5), "{start}");
+    // The other piece stays a compound path, and the type sits just above it.
+    let doc = &s.doc().unwrap().doc;
+    let NodeKind::Compound { children, .. } = &doc.node(c).unwrap().kind else { panic!("the compound went") };
+    assert_eq!(children.len(), 1);
+    let (cp, ci, _) = doc.position(c).unwrap();
+    assert_eq!(doc.position(id).unwrap(), (cp, ci + 1, doc.children(cp).unwrap().len()));
+    // One undo step brings the piece back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.node(id).is_none());
+    assert!(matches!(&doc.node(c).unwrap().kind, NodeKind::Compound { children, .. } if children.len() == 2));
+}
+
+#[test]
+fn type_on_the_last_piece_of_a_compound_path_replaces_the_compound() {
+    let mut s = session();
+    let c = two_line_compound(&mut s);
+    let (cp, ci, _) = s.doc().unwrap().doc.position(c).unwrap();
+    for at in [[300, 300], [300, 400]] {
+        s.execute("text.createInPath", &json!({"path": c.0, "mode": "onPath", "text": "A", "at": at})).unwrap();
+    }
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.node(c).is_none(), "no empty compound path is left");
+    let kids = doc.children(cp).unwrap();
+    assert!(kids.iter().skip(ci).take(2).all(|n| matches!(n.kind, NodeKind::Text(_))), "both types where the compound was");
+}
+
+#[test]
+fn area_type_still_needs_a_path_object() {
+    let mut s = session();
+    let c = two_line_compound(&mut s);
+    assert!(s.execute("text.createInPath", &json!({"path": c.0, "mode": "area", "text": "A"})).is_err());
+}
