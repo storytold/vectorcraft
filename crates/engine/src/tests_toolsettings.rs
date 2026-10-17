@@ -96,3 +96,64 @@ fn options_are_saved_with_the_preferences() {
     t.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(t.prefs.tool_settings["polygon"]["sides"], json!(9));
 }
+
+#[test]
+fn spiral_decay_is_normalized_for_active_and_inactive_tools_and_preferences() {
+    let mut s = session();
+    for active in [false, true] {
+        select(&mut s, if active { "spiral" } else { "selection" });
+        let options = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 150, "segments": 4, "clockwise": false}})).unwrap();
+        assert_eq!(options["decay"], json!(99.99));
+        assert_eq!(s.tool_options_of("spiral")["decay"], json!(99.99));
+        assert_eq!(s.prefs.tool_settings["spiral"]["decay"], json!(99.99));
+        assert_eq!(s.tool_id(), if active { "spiral" } else { "selection" });
+        select(&mut s, "selection");
+        select(&mut s, "spiral");
+        assert_eq!(s.tool_options()["decay"], json!(99.99));
+    }
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut restored = session();
+    restored.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut restored, "spiral");
+    assert_eq!(restored.tool_options(), json!({"decay": 99.99, "segments": 4, "clockwise": false}));
+}
+
+#[test]
+fn legacy_spiral_decay_preferences_report_the_ratio_drawn_after_reopening() {
+    use vectorcraft_geom::Point;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+
+    // Older versions saved 100–150, although their geometry already capped the ratio at 0.9999.
+    for clockwise in [false, true] {
+        let mut s = session();
+        let mut prefs = Prefs::default();
+        prefs.tool_settings.insert("spiral".into(), json!({"decay": 150, "segments": 4, "clockwise": clockwise}).as_object().unwrap().clone());
+        s.apply_prefs(serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap());
+        let view = ViewInfo { smart_guides: false, ..Default::default() };
+        s.select_tool("spiral", view).unwrap();
+        let decay = s.tool_options()["decay"].as_f64().unwrap();
+        assert_eq!(decay, 99.99);
+        let before = s.doc().unwrap().history.undo.len();
+        for (kind, x) in [(PointerKind::Down, 200.0), (PointerKind::Drag, 300.0), (PointerKind::Up, 300.0)] {
+            s.pointer(&PointerEvent::new(kind, x, 200.0), view).unwrap();
+        }
+        let d = s.doc().unwrap();
+        assert_eq!(d.history.undo.len(), before + 1);
+        assert_eq!(d.selection.objects.len(), 1);
+        let id = d.selection.objects[0];
+        let path = d.doc.node(id).unwrap().path_data().unwrap().clone();
+        let anchors = &path.subpaths[0].anchors;
+        assert_eq!(anchors.len(), 5);
+        assert!(!path.is_closed());
+        let center = Point::new(200.0, 200.0);
+        for pair in anchors.windows(2) {
+            let ratio = pair[0].p.distance(center) / pair[1].p.distance(center);
+            assert!((100.0 * ratio - decay).abs() < 1e-10);
+        }
+        assert_eq!(s.prefs.tool_settings["spiral"]["decay"], json!(99.99));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.node(id).is_none());
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap(), &path);
+    }
+}

@@ -225,7 +225,8 @@ impl Tool for FamilyTool {
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
             "closed" => self.closed = v.as_bool().unwrap_or(self.closed),
-            "decay" => self.decay = v.as_f64().unwrap_or(self.decay).clamp(5.0, 150.0),
+            // Report and persist the decay that shapes::spiral can actually draw.
+            "decay" => self.decay = v.as_f64().unwrap_or(self.decay).clamp(5.0, 99.99),
             "segments" => self.segments = v.as_u64().unwrap_or(10).clamp(2, 1000) as u32,
             "clockwise" => self.clockwise = v.as_bool().unwrap_or(self.clockwise),
             "rows" | "concentric" => self.rows = v.as_u64().unwrap_or(5).min(999) as u32,
@@ -251,6 +252,54 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    #[test]
+    fn spiral_reports_the_decay_its_command_draws() {
+        let mut t = FamilyTool::new("spiral");
+        assert_eq!(t.options()["decay"], json!(80.0));
+        for (requested, expected) in [(-10.0, 5.0), (5.0, 5.0), (80.0, 80.0), (99.99, 99.99), (100.0, 99.99), (150.0, 99.99), (200.0, 99.99)] {
+            t.set_option("decay", &json!(requested));
+            assert_eq!(t.options()["decay"], json!(expected));
+            let (id, params) = t.command(Point::ZERO, Point::new(100.0, 0.0), Mods::default());
+            assert_eq!(id, "shape.spiral");
+            assert_eq!(params["decay"], json!(expected));
+            // Inspect the actual adjacent radii, not a second copy of the tool's clamp.
+            let path = vectorcraft_geom::shapes::spiral(Point::ZERO, 100.0, params["decay"].as_f64().unwrap(), 2, true);
+            let anchors = &path.subpaths[0].anchors;
+            let outer = anchors[2].p.distance(Point::ZERO);
+            let next = anchors[1].p.distance(Point::ZERO);
+            assert!((100.0 * next / outer - expected).abs() < 1e-10);
+        }
+        for invalid in [Value::Null, json!("80"), json!(false), json!({})] {
+            t.set_option("decay", &invalid);
+            assert_eq!(t.options()["decay"], json!(99.99));
+        }
+    }
+
+    #[test]
+    fn normalized_spiral_decay_preserves_existing_capped_paths_within_roundoff() {
+        for requested in [100.0, 150.0] {
+            let mut t = FamilyTool::new("spiral");
+            t.set_option("decay", &json!(requested));
+            for clockwise in [false, true] {
+                for segments in [2, 10, 1000] {
+                    for radius in [1.0, 100.0, 1e6] {
+                        let previous = vectorcraft_geom::shapes::spiral(Point::ZERO, radius, requested, segments, clockwise);
+                        let normalized = vectorcraft_geom::shapes::spiral(Point::ZERO, radius, t.decay, segments, clockwise);
+                        let old = &previous.subpaths[0].anchors;
+                        let new = &normalized.subpaths[0].anchors;
+                        assert_eq!(old.len(), new.len());
+                        for (a, b) in old.iter().zip(new) {
+                            assert_eq!(a.kind, b.kind);
+                            for (p, q) in [(a.p, b.p), (a.h_in, b.h_in), (a.h_out, b.h_out)] {
+                                assert!(p.distance(q) <= 1e-10 * (1.0 + radius), "{requested}% / {segments} / {radius}: {p:?} != {q:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn grid_drag_and_arrows() {
