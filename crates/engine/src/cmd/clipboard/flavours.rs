@@ -122,6 +122,13 @@ pub struct Flavour {
 const COPY_PNG_SIDE: f64 = 4096.0;
 /// Most bytes of text `clipboard.importText` takes.
 const MAX_TEXT: usize = 1 << 20;
+/// Most bytes of images the SVG markup may embed and still go out as plain text. A paste reads the
+/// clipboard's text first (eframe reads it on every paste key; on Linux and macOS it is the one
+/// format the app writes, and checking that the clipboard still holds our copy reads it again), so
+/// a placed photo in it made each paste move megabytes of base64 through the system clipboard on
+/// the UI thread, and on a GNOME desktop the app stopped responding (#2213). A copy with more image
+/// data than this offers its SVG under its own type and its PNG, not as text.
+const COPY_TEXT_IMAGE_BYTES: usize = 1 << 20;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -157,7 +164,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard Formats",
             [],
             None,
-            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); the app publishes them on Copy and Cut",
+            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg when the images it embeds total at most 1 MiB), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); the app publishes them on Copy and Cut",
             always,
             flavours
         ),
@@ -260,12 +267,17 @@ impl Clipboard {
         fileio::encode(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
     }
 
+    /// Bytes of the encoded images the objects show (what their SVG embeds as base64).
+    fn image_bytes(&self) -> usize {
+        self.images.values().fold(0usize, |sum, b| sum.saturating_add(b.bytes.len()))
+    }
+
     /// The MIME types of [`Self::flavours`], without making them.
     pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
         if self.is_empty() {
             return vec![];
         }
-        let text = svg || self.nodes.iter().all(type_only);
+        let text = (svg && self.image_bytes() <= COPY_TEXT_IMAGE_BYTES) || self.nodes.iter().all(type_only);
         // Art without an area (a lone guide-like line) has no page or picture.
         let area = self.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
         [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area)].into_iter().filter_map(|(m, on)| on.then_some(m)).collect()

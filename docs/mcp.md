@@ -2699,7 +2699,8 @@ They are kept across restarts, in the desktop app and in `vectorcraft-cli` alike
 
 Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their text when they are all type.
 `clipboard.flavours` lists what Copy offers for the current clipboard, best first, by the Clipboard Handling
-preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg`), `image/svg+xml`
+preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg` when the images it
+embeds total at most 1 MiB, so a paste never reads a photo back as text, #2213), `image/svg+xml`
 (`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
 area). Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
