@@ -8,7 +8,7 @@
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForOffice`.
 //! - `screens`: Export for Screens (`document.exportForScreens`, `document.exportSettings`); `zip`
-//!   packs its files as one download.
+//!   packs its files as one download, and reads the files of Word documents placed as type.
 //! - `save`: `document.save`, Save As / a Copy / as Template, New from Template, Revert and the
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
@@ -45,7 +45,7 @@ mod save;
 mod screens;
 mod svg;
 mod text;
-mod zip;
+pub mod zip;
 
 use serde_json::{Value, json};
 
@@ -710,7 +710,11 @@ pub const TEXT_EXTS: &[&str] = &["txt"];
 /// RTF files: File → Place sets them as area type with their formatting.
 pub const RTF_EXTS: &[&str] = &["rtf"];
 
-/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`] and [`RTF_EXTS`].
+/// Word documents: File → Place sets them as area type with their formatting.
+pub const DOCX_EXTS: &[&str] = &["docx"];
+
+/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`] and
+/// [`DOCX_EXTS`].
 pub const PLACE_EXTS: &[&str] = &[
     "vectorcraft",
     "drawcraft",
@@ -741,6 +745,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "afpub",
     "txt",
     "rtf",
+    "docx",
 ];
 
 /// One dialog filter per readable format.
@@ -764,13 +769,14 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
         .chain(std::iter::once(("Plug-ins", super::plugin::EXTS)))
 }
 
-/// File → Place dialog filters: "All placeable files", then one per placeable format, then text
-/// and RTF.
+/// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
+/// RTF and Word.
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All placeable files", PLACE_EXTS))
         .chain(format_filters().filter(|(_, exts)| exts.iter().all(|ext| PLACE_EXTS.contains(ext))))
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
+        .chain(std::iter::once(("Word", DOCX_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).

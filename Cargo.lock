@@ -4656,6 +4656,7 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "proptest",
+ "roxmltree 0.21.1",
  "ruzstd",
  "serde",
  "serde_json",
