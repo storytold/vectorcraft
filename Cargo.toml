@@ -64,7 +64,7 @@ wat = "1.228"
 # Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
 # vectorcraft-text gives it. The other default features stay.
 vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp", "tga"] }
 # Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
 # SVG import reads `<text>` from the XML itself and never gives usvg a font. A test of the SVG
 # crate turns `text` on.

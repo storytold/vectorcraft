@@ -1366,6 +1366,57 @@ proptest! {
     }
 }
 
+/// Targa files, which start with no signature: run-length encoded 24 bits (as the `image` crate
+/// writes them), a 16-bit export with a one-bit alpha, and by hand a 16-bit run-length encoded file
+/// stored right to left and top down, a run-length encoded color-mapped one with 16-bit entries,
+/// and a 32-bit one with an extension area.
+fn targa_samples() -> Vec<(&'static str, Vec<u8>)> {
+    let mut rle = vec![];
+    image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10])).write_to(&mut std::io::Cursor::new(&mut rle), image::ImageFormat::Tga).unwrap();
+    let mut s = rich_session();
+    let r = s.execute("document.export", &json!({"format": "tga", "depth": 16, "ppi": 2})).unwrap();
+    let export = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let mut alpha = vec![0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 2, 0, 16, 0x31, 0x02, 0x00, 0xfc, 0x1f, 0x80, 0x00, 0x00];
+    alpha.extend([0x82, 0xe0, 0x83]);
+    let mut mapped = vec![0, 1, 9, 5, 0, 2, 0, 16, 0, 0, 0, 0, 3, 0, 2, 0, 8, 0x21, 0x00, 0x00, 0x00, 0xfc];
+    mapped.extend([0x80, 6, 0x00, 5, 0x83, 6]);
+    let mut extended = vec![0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0x28, 50, 50, 50, 128];
+    let mut area = vec![0; 495];
+    area[..2].copy_from_slice(&495u16.to_le_bytes());
+    area[494] = 4;
+    extended.extend(area);
+    extended.extend(22u32.to_le_bytes());
+    extended.extend([0; 4]);
+    extended.extend(b"TRUEVISION-XFILE.\0");
+    vec![("a.tga", rle), ("b.tga", export), ("c.tga", alpha), ("d.vda", mapped), ("e.vst", extended)]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated Targa files (headers, run-length packets, color maps, the extension area and the
+    /// footer) never crash placing them.
+    #[test]
+    fn mutated_targa_files_place_without_panics(which in 0usize..5, cut in 0usize..600, edits in prop::collection::vec((0usize..560, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = targa_samples().swap_remove(which);
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at) {
+                *x = b;
+            }
+        }
+        bytes.truncate(cut.max(8));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+}
+
 // ---------- SVG saved with hidden layers and editing data ----------
 
 /// The rich document with a hidden layer, saved as SVG with its editing data.
