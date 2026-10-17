@@ -450,9 +450,8 @@ mod tests {
         if smooth {
             path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(190.0, 330.0));
         }
-        let mut spec = vectorcraft_doc::live::BlendSpec::default();
-        spec.spine = Some(vectorcraft_geom::PathData::single(path));
-        spec.key_anchors = vec![0, 2];
+        let spec =
+            vectorcraft_doc::live::BlendSpec { spine: Some(vectorcraft_geom::PathData::single(path)), key_anchors: vec![0, 2], ..Default::default() };
         let blend = vectorcraft_doc::Node::new(
             id,
             vectorcraft_doc::NodeKind::Blend { children: vec![key(first, 100.0), key(last, 200.0)], spec: Box::new(spec) },
@@ -538,6 +537,26 @@ mod tests {
     }
 
     #[test]
+    fn shift_reshapes_a_blend_spine_segment_perpendicular() {
+        let (d, id, sel) = blend_spine_doc(true);
+        let p = paint();
+        let c = cx(&d, &sel, &p);
+        let spine = crate::direct::spines(&c).pop().unwrap().1;
+        let at = spine.subpaths[0].segment(1).eval(0.5);
+        for shift in [false, true] {
+            let mut tool = AnchorTool::new("anchorPoint");
+            tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x, at.y + 20.0).with_mods(Mods { shift, ..Mods::default() }));
+            assert!(
+                matches!(actions.get(1), Some(Action::Preview(cmd, args))
+                if cmd == "object.blend.spine.reshapeSegment" && args["id"] == id.0
+                && args["perpendicular"] == shift),
+                "{actions:?}"
+            );
+        }
+    }
+
+    #[test]
     fn anchor_point_keeps_blend_spine_handles_visible_and_editable_after_switch() {
         let (d, id, sel) = blend_spine_doc(true);
         let p = paint();
@@ -575,9 +594,8 @@ mod tests {
         };
         let mut path = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
         path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(162.0, 310.0));
-        let mut spec = vectorcraft_doc::live::BlendSpec::default();
-        spec.spine = Some(vectorcraft_geom::PathData::single(path));
-        spec.key_anchors = vec![0, 2];
+        let spec =
+            vectorcraft_doc::live::BlendSpec { spine: Some(vectorcraft_geom::PathData::single(path)), key_anchors: vec![0, 2], ..Default::default() };
         let blend = vectorcraft_doc::Node::new(
             id,
             vectorcraft_doc::NodeKind::Blend { children: vec![key(first, 100.0), key(last, 200.0)], spec: Box::new(spec) },
