@@ -1430,7 +1430,8 @@ under `ui.library_panels`.
 ## Libraries
 
 The Libraries panel's libraries hold graphics, colours and character and paragraph styles that any document can use.
-They are kept on this machine: each is a `.vclibrary` file (JSON) in the `Libraries` folder next to the preferences
+They are kept on this machine: each is a `.vclibrary` file (JSON) named after the library (`CON-.vclibrary` for a
+library named after a Windows device such as `CON`) in the `Libraries` folder next to the preferences
 (none in the web app and headless sessions, where they last for the session). `library.list` lists them (`id`, `name`,
 the count of each kind, `current`, `folder`); `library.get {library?}` returns one's items (graphics with `id`, `name`,
 size and a PNG `thumbnail` in base64; colours with `name`, `hex` and `color`; styles with `name` and `attrs`).
@@ -2076,8 +2077,8 @@ Actions panel plays an action as a `command.batch`. The Actions panel menu's Bat
 `action.batch`: the same steps on every readable file in a folder (or every data set of the open document), with
 destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. Over data sets, the folder
 destination and the overrides name each file after the document and the data set (`<document>_<data set>.<ext>`).
-Batch writes `/`, `\` and `:` in the data set's name as `-`, and adds `-2`, `-3`… to a name an earlier data set
-used (compared without case). Caps: 500 files or data sets, 8
+Batch writes `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters in the data set's name as `-`, and
+adds `-2`, `-3`… to a name an earlier data set used (compared without case). Caps: 500 files or data sets, 8
 folder levels, 256 steps. An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
@@ -2878,7 +2879,11 @@ otherwise. `fullDocument` writes one file per row instead (a PDF of every artboa
 art), `includeBleed` grows each artboard by the document's bleed, `subfolders` puts each row's files in a sub-folder
 (its size or format, or its own `folder`), `preset: "mobile"` or `"density"` (Android-style ldpi…xxxhdpi
 sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
-format its options. The document remembers the last params: `document.exportSettings`.
+format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
+prefix, a suffix, a name pattern or an item's name become `-` in file and folder names, a folder name ends without
+periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) that
+is the whole name or comes before its first period gets a `-` after it (`CON-.png`). The document remembers the last
+params: `document.exportSettings`.
 
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards
@@ -3087,8 +3092,11 @@ File → Export → Save for Web (Legacy) writes optimised web images: `document
 `dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
 transparent, webShift, sort}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
 `transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
-GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. With slices (`slice.list`) each image slice becomes
-`images/<slice name>.<ext>` (`slices: selected` writes the selected ones, `none` one image); `output: html` adds
+GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. `<stem>` is the name of `path` without its extension, or
+without `path` the document's title with the characters Windows does not allow in a file name as `-` and a `-` after
+a Windows device name. With slices (`slice.list`) each image slice becomes `images/<slice name>.<ext>`, with a `-`
+after a Windows device name such as `aux` (`slices: selected` writes the selected ones, `none` one image);
+`output: html` adds
 `<stem>.html` placing them, with each slice's URL, target, alt text and status message, and No Image / HTML Text cells.
 Without `path` the files come back as `{name, dataBase64}`.
 

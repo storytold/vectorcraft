@@ -873,9 +873,11 @@ pub fn export_files(doc: &Document, selected: &[NodeId], s: &WebSettings, stem: 
                 continue;
             }
             let base: String = doc.slice_name(c.area).chars().map(|ch| if ch.is_alphanumeric() || "-_.".contains(ch) { ch } else { '-' }).collect();
-            let base = unique_name(&base, |n| taken.contains(&n.to_lowercase()));
-            taken.insert(base.to_lowercase());
-            let name = format!("{IMAGES}/{base}.{ext}");
+            // A slice named after a Windows device (`aux`, `NUL`…) gets a `-` after the device name.
+            let file = |base: &str| super::fileio::safe_file_name(&format!("{base}.{ext}"));
+            let base = unique_name(&base, |n| taken.contains(&file(n).to_lowercase()));
+            taken.insert(file(&base).to_lowercase());
+            let name = format!("{IMAGES}/{}", file(&base));
             let [x0, y0, x1, y1] = c.px;
             images.push(WebFile { name: name.clone(), bytes: optimize(doc, &crop(&r, c.px), x1 - x0, y1 - y0, s)?.bytes });
             placed.push((Some(c), Some(name)));
@@ -967,7 +969,8 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path").filter(|p| !p.trim().is_empty());
     let stem = match path {
         Some(p) => super::fileio::file_stem(p),
-        None => super::fileio::file_stem(&st.doc.title),
+        // Without a path the files are named after the title, following Windows' file-naming rules.
+        None => super::fileio::safe_file_name(&super::fileio::file_stem(&st.doc.title)),
     };
     let stem = if stem.trim().is_empty() { "Untitled".to_string() } else { stem };
     let (files, (width, height)) = export_files(&st.doc, &selected, &settings, &stem).map_err(|e| bad(C, e))?;

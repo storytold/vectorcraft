@@ -21,7 +21,8 @@ use super::encode::single_artboard;
 use super::export::{isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode, unique_file_names, with_black_output, writable,
+    write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -148,10 +149,29 @@ fn safe_name(s: &str) -> Option<String> {
     (!n.trim_matches('.').is_empty()).then_some(n)
 }
 
-/// Text that goes into a file name (prefix, suffix, a data set's name in Batch): path separators and
-/// `:` become `-`, so the name cannot make a subfolder or point outside the folder the file is written to.
+/// Text that goes into a file name (prefix, suffix, a data set's name in Batch, a name pattern's text
+/// and the names it puts in): the characters Windows does not allow in a file name (`/`, `\`, `:`,
+/// `<`, `>`, `"`, `|`, `?`, `*` and the control characters U+0000 to U+001F,
+/// <https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file>) become `-` on every
+/// platform, so the name cannot make a subfolder or point outside the folder the file is written to.
 pub(super) fn file_part(s: &str) -> String {
-    s.chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect()
+    s.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*') || c < ' ' { '-' } else { c }).collect()
+}
+
+/// A whole file or folder name (`Logo@2x.png`, a sub-folder) through [`file_part`], without
+/// trailing periods and spaces, and with `-` after a Windows device name that is the whole name or
+/// comes before its first period: `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9` and `LPT1` to `LPT9`,
+/// also with `¹`, `²` or `³` for the digit, in any case (`CON.png` becomes `CON-.png`). The same on
+/// every platform.
+pub(crate) fn safe_file_name(s: &str) -> String {
+    let name = file_part(s);
+    let name = name.trim_end_matches(['.', ' ']);
+    let (base, rest) = name.split_at(name.find('.').unwrap_or(name.len()));
+    let upper = base.to_ascii_uppercase();
+    let numbered = |n: &str| n.chars().count() == 1 && n.chars().all(|c| matches!(c, '1'..='9' | '¹' | '²' | '³'));
+    let device = matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper.strip_prefix("COM").or_else(|| upper.strip_prefix("LPT")).is_some_and(numbered);
+    if device { format!("{base}-{rest}") } else { name.to_string() }
 }
 
 /// Keys of a format row that aren't encoder options.
@@ -615,10 +635,10 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 None => format!("{prefix}{}{}", item.stem, r.suffix),
             };
-            let file = format!("{stem}.{ext}");
+            let file = safe_file_name(&format!("{stem}.{ext}"));
             let sub = match folders {
                 Folders::None => None,
-                Folders::Rows => Some(r.folder.clone()),
+                Folders::Rows => Some(safe_file_name(&r.folder)),
                 Folders::Format => Some(ext.to_string()),
                 Folders::Item => Some(item.stem.clone()),
                 Folders::ItemFormat => Some(format!("{}/{ext}", item.stem)),
@@ -644,7 +664,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let names: Vec<&str> = out.kept.iter().map(|(n, _)| n.as_str()).collect();
     if o.zip {
         let zip = super::zip::store(&out.kept).map_err(|e| bad(C, e))?;
-        let zip_name = format!("{prefix}{filename}.zip");
+        let zip_name = safe_file_name(&format!("{prefix}{filename}.zip"));
         return match folder {
             Some(dir) => {
                 let path = format!("{dir}/{zip_name}");
@@ -670,8 +690,10 @@ fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selecte
     let alone = |ids: &[NodeId], name: &str| -> Option<(Arc<Document>, Rect)> {
         isolated(doc, &doc.paint_order(ids.iter().copied()), name).map(|(d, r)| (Arc::new(d), r))
     };
+    // Each item's stem follows Windows' file-naming rules, and no two items share one.
+    let safe = |stems: Vec<String>| distinct_names(stems.iter().map(|s| safe_file_name(s)));
     let named = |pieces: Vec<(String, Arc<Document>, Option<usize>, Rect)>, fallback: &str| -> Vec<Item> {
-        let stems = unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string())));
+        let stems = safe(unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
         pieces
             .into_iter()
             .zip(stems)
@@ -688,7 +710,8 @@ fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selecte
             (doc.clone(), Rect::ZERO)
         };
         let name = filename.to_string();
-        return Ok(vec![Item { name: name.clone(), stem: name, doc: whole, artboard: Some(0), region, every_artboard: Some(doc.clone()) }]);
+        let stem = safe_file_name(&name);
+        return Ok(vec![Item { name, stem, doc: whole, artboard: Some(0), region, every_artboard: Some(doc.clone()) }]);
     }
     if let Some(ids) = &o.assets {
         let mut pieces = vec![];
@@ -742,7 +765,7 @@ fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selecte
     if boards.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
-    let stems = artboard_file_names(doc, &boards);
+    let stems = safe(artboard_file_names(doc, &boards));
     Ok(boards
         .into_iter()
         .zip(stems)

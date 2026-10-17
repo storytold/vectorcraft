@@ -391,11 +391,12 @@ fn remove_file(_: &str) -> Result<()> {
 }
 
 /// Library `name` as a file name without its extension: letters, digits, spaces, `-` and `_`
-/// kept, other characters as `-` ("Library" when nothing is left).
+/// kept, other characters as `-`, and a `-` after a Windows device name such as `CON` or `COM1`
+/// (`fileio::safe_file_name`); "Library" when nothing is left.
 pub fn file_stem_for(name: &str) -> String {
     let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '-' }).collect();
     let safe = safe.trim();
-    if safe.is_empty() { "Library".to_string() } else { safe.to_string() }
+    if safe.is_empty() { "Library".to_string() } else { super::fileio::safe_file_name(safe) }
 }
 
 fn stem_of(path: &str) -> String {

@@ -262,6 +262,36 @@ fn slices_give_one_image_each_and_a_page() {
     assert_eq!((one_slice["width"].as_f64(), one_slice["height"].as_f64()), (layout[0]["width"].as_f64(), layout[0]["height"].as_f64()));
 }
 
+/// Save for Web writes the image of a slice named after a Windows device (`aux`, `NUL`, `COM1`…)
+/// with a `-` after the device name, on every platform.
+#[test]
+fn a_slice_named_after_a_windows_device_gets_a_dash() {
+    let mut s = session(300.0, 200.0);
+    let a = rect(&mut s, [20.0, 20.0, 100.0, 60.0], "#ff8800");
+    run(&mut s, "object.slice.make", json!({"ids": [a]}));
+    run(&mut s, "object.slice.options", json!({"name": "aux"}));
+    let b = run(&mut s, "object.slice.create", json!({"x": 150, "y": 100, "width": 100, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut s, "object.slice.select", json!({"slices": [b]}));
+    run(&mut s, "object.slice.options", json!({"name": "aux-"}));
+    run(&mut s, "object.slice.select", json!({"slices": [a, b]}));
+    let mut names: Vec<String> = files(&run(&mut s, "document.exportForWeb", json!({"slices": "selected"}))).into_iter().map(|(n, _)| n).collect();
+    names.sort();
+    assert_eq!(names, ["images/aux- 2.gif", "images/aux-.gif"]);
+}
+
+/// Without a path the files are named after the document's title, with the characters Windows does
+/// not allow in a file name as `-` and a `-` after a Windows device name, on every platform.
+#[test]
+fn files_named_after_the_title_follow_windows_naming_rules() {
+    for (title, page, image) in [("a|b?c*\"<d>", "a-b-c---d-.html", "images/a-b-c---d-.gif"), ("nul", "nul-.html", "images/nul-.gif")] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 40, "height": 30, "name": title}));
+        rect(&mut s, [0.0, 0.0, 20.0, 30.0], "#ff0000");
+        let names: Vec<String> = files(&run(&mut s, "document.exportForWeb", json!({"output": "html"}))).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, [page, image], "{title}");
+    }
+}
+
 #[test]
 fn files_are_written_beside_the_path() {
     let dir = vectorcraft_testkit::temp_dir("webexport");

@@ -140,8 +140,9 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     }
     let doc_stem = st.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled").to_string();
     // Data set files are named File + Data Set Name (helpx, for Override Save/Export; the folder
-    // destination uses the same name). `file_part` writes `/`, `\` and `:` in the data set's name as
-    // `-`, and `distinct_names` adds `-2`, `-3`… to a name an earlier data set used.
+    // destination uses the same name). `file_part` writes the characters Windows does not allow in a
+    // file name (`/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters) in the data set's
+    // name as `-`, and `distinct_names` adds `-2`, `-3`… to a name an earlier data set used.
     let stems = distinct_names(names.iter().map(|name| format!("{doc_stem}_{}", file_part(name))));
     let steps = filter_steps(run.steps, true, false);
     let run = Run { steps: &steps, ..*run };
@@ -514,6 +515,32 @@ mod tests {
             .unwrap();
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(file_names(&exports), ["Untitled_a-b.svg", "Untitled_c-d.svg", "Untitled_e-f.svg"], "{r}");
+    }
+
+    /// Windows does not allow `<`, `>`, `"`, `|`, `?`, `*` or control characters in a file name:
+    /// Batch writes them as `-` in a data set's name, on every platform.
+    #[test]
+    fn batch_saves_data_sets_named_with_characters_windows_does_not_allow() {
+        let dest = tmp("set-names-win");
+        let mut s = with_data_sets(&["a?b", "c*d<e>", "f\"g|h", "i\u{7}j"]);
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "source": "datasets",
+                    "destination": "folder",
+                    "destinationFolder": dest.to_string_lossy(),
+                    "stopOnError": false,
+                    "commands": [{"command": "object.unlockAll", "params": {}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(
+            file_names(&dest),
+            ["Untitled_a-b.vectorcraft", "Untitled_c-d-e-.vectorcraft", "Untitled_f-g-h.vectorcraft", "Untitled_i-j.vectorcraft"],
+            "{r}"
+        );
     }
 
     #[test]

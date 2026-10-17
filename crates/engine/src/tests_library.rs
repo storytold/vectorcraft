@@ -43,6 +43,18 @@ fn libraries_are_made_renamed_and_deleted() {
     assert!(s.execute("library.get", &json!({"library": "Client"})).is_err());
 }
 
+/// A library's file is named after it, and a Windows device name (`CON`, `NUL`, `COM1`…) gets a
+/// `-` after it, on every platform.
+#[test]
+fn a_library_named_after_a_windows_device_gets_a_dash() {
+    let mut s = session();
+    let ids: Vec<String> = ["CON", "nul", "Com1", "LPT³", "Console", "COM10"]
+        .iter()
+        .map(|name| run(&mut s, "library.create", json!({"name": name}))["id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, ["CON-", "nul-", "Com1-", "LPT³-", "Console", "COM10"]);
+}
+
 #[test]
 fn a_graphic_goes_into_a_library_and_comes_out_in_another_document() {
     let mut s = session();
