@@ -164,6 +164,45 @@ fn a_zip_is_written_into_the_folder() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The warnings in `r` that contain `text`.
+fn warned<'a>(r: &'a Value, text: &str) -> Vec<&'a str> {
+    r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains(text)).collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn every_reply_says_once_when_an_image_could_not_be_decoded() {
+    let mut s = session(1);
+    let rows = json!([{"format": "png"}, {"format": "jpg", "scale": "2x"}]);
+    assert_eq!(export(&mut s, json!({ "formats": rows }))["warnings"], json!([]));
+    // The renderer can't decode the placed image and draws nothing in its place.
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    let dir = std::env::temp_dir().join(format!("vc-screens-undecoded-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    for p in [
+        json!({ "formats": rows }),
+        json!({ "formats": rows, "zip": true }),
+        json!({ "formats": rows, "folder": folder }),
+        json!({ "formats": rows, "folder": folder, "zip": true }),
+        json!({ "formats": rows, "fullDocument": true }),
+    ] {
+        let r = export(&mut s, p.clone());
+        assert_eq!(warned(&r, "couldn't be decoded").len(), 1, "{p}: {}", r["warnings"]);
+    }
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 3, "the files are still written");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn type_in_a_missing_family_is_named_once_for_every_format() {
+    let mut s = session(2);
+    s.execute("text.create", &json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let r = export(&mut s, json!({"formats": [{"format": "png"}, {"format": "pdf"}, {"format": "eps"}]}));
+    let fallback = warned(&r, "fallback font");
+    assert_eq!(fallback.len(), 1, "{}", r["warnings"]);
+    assert!(fallback[0].contains("Nonexistent Sans Probe"), "{fallback:?}");
+}
+
 #[test]
 fn full_document_gives_one_file_per_format() {
     let mut s = session(3);

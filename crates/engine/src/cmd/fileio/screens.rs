@@ -21,7 +21,8 @@ use super::encode::single_artboard;
 use super::export::{isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode_with_warnings, unique_file_names, with_black_output, writable,
+    write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -541,7 +542,8 @@ pub(super) fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
-/// so do different files the `name` pattern gives one name.
+/// so do different files the `name` pattern gives one name. The reply's `warnings` lists every
+/// warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
@@ -588,8 +590,18 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &filename, crop)?;
     let mut out = Output::default();
+    // The encoders' warnings for every file, each once.
+    let mut warnings: Vec<String> = Vec::new();
     // Appearance of Black › Printing / Exporting for RGB raster rows.
-    let write = |doc: &Document, format: &str, options: &Value| encode(doc, format, &with_black_output(s, options));
+    let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
+        let (bytes, notes) = encode_with_warnings(doc, format, &with_black_output(s, options))?;
+        for w in notes {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        Ok(bytes)
+    };
     // A whole-document copy of an artboard, for the formats that write documents to edit.
     let mut board_docs: std::collections::HashMap<usize, Arc<Document>> = std::collections::HashMap::new();
     let mut files = 0u64;
@@ -649,15 +661,19 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
             Some(dir) => {
                 let path = format!("{dir}/{zip_name}");
                 write_file(&path, &zip)?;
-                Ok(json!({ "path": path, "bytes": zip.len(), "files": names }))
+                Ok(json!({ "path": path, "bytes": zip.len(), "files": names, "warnings": warnings }))
             }
-            None => Ok(json!({ "name": zip_name, "dataBase64": vectorcraft_format::base64_encode(&zip), "bytes": zip.len(), "files": names })),
+            None => Ok(
+                json!({ "name": zip_name, "dataBase64": vectorcraft_format::base64_encode(&zip), "bytes": zip.len(), "files": names, "warnings": warnings }),
+            ),
         };
     }
     Ok(match folder {
-        Some(_) => json!({ "files": out.written }),
+        Some(_) => json!({ "files": out.written, "warnings": warnings }),
         None => {
-            json!({ "files": out.kept.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect::<Vec<_>>() })
+            let files: Vec<Value> =
+                out.kept.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect();
+            json!({ "files": files, "warnings": warnings })
         }
     })
 }

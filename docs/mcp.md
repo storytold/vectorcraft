@@ -2878,7 +2878,9 @@ otherwise. `fullDocument` writes one file per row instead (a PDF of every artboa
 art), `includeBleed` grows each artboard by the document's bleed, `subfolders` puts each row's files in a sub-folder
 (its size or format, or its own `folder`), `preset: "mobile"` or `"density"` (Android-style ldpi…xxxhdpi
 sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
-format its options. The document remembers the last params: `document.exportSettings`.
+format its options. The document remembers the last params: `document.exportSettings`. As in `document.export`,
+the reply's `warnings` lists the notes of every file exported (an image that couldn't be decoded, type written in the
+fallback font…), each note once; the export still writes or returns every file.
 
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards

@@ -566,11 +566,16 @@ fn view_file(app: &mut VectorcraftApp, path: &str) {
 
 /// "Saved <path>", with the first of the result's warnings.
 pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
+    app.status(saved_status(path, r));
+}
+
+/// [`report_saved`]'s message.
+fn saved_status(path: &str, r: &Value) -> String {
     let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    app.status(match warnings.first() {
+    match warnings.first() {
         Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
         None => format!("Saved {path}"),
-    });
+    }
 }
 
 /// Write a planned save through the services and report it in the status bar.
@@ -828,7 +833,9 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
-/// back as base64. With `openLocation`, the file manager shows the first file written.
+/// back as base64. With `openLocation`, the file manager shows the first file written. When an
+/// export into a folder or a download has warnings, the status bar shows the first as
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }
@@ -839,6 +846,7 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
     let r = app.run(id, params)?;
     let count = r["files"].as_array().map_or(0, Vec::len);
+    let warned = r["warnings"].as_array().is_some_and(|w| !w.is_empty());
     // Files that came back as bytes: (name, base64).
     let returned: Vec<(&str, &str)> = match r["dataBase64"].as_str() {
         Some(zip) => vec![(r["name"].as_str().unwrap_or("Export.zip"), zip)],
@@ -849,6 +857,9 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     if returned.is_empty() {
         let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
         let mut status = format!("Exported {count} file(s) to {folder}");
+        if warned {
+            status = saved_status(r["path"].as_str().unwrap_or(&folder), &r);
+        }
         if open_location
             && let Some(first) = first
             && let Err(e) = reveal_path(app, first)
@@ -865,7 +876,10 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
             [(name, _)] => (*name).to_string(),
             files => format!("{} files", files.len()),
         };
-        app.status(format!("Downloaded {what}"));
+        match returned.first().filter(|_| warned) {
+            Some((name, _)) => report_saved(app, name, &r),
+            None => app.status(format!("Downloaded {what}")),
+        }
     }
     Ok(r)
 }

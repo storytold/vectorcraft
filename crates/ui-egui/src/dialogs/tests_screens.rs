@@ -250,6 +250,43 @@ fn the_web_downloads_one_zip_or_the_file() {
 }
 
 #[test]
+fn the_status_bar_says_when_an_image_could_not_be_decoded() {
+    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
+    png.truncate(idat + 8);
+    let place = |app: &mut VectorcraftApp| {
+        app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [10, 10]})).unwrap()
+    };
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "jpg", "scale": "2x", "suffix": "@2x"}]);
+    let dir = temp_folder("undecoded");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut desktop, log) = app(1, false);
+    desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Exported 2 file(s) to {folder}"));
+    place(&mut desktop);
+    desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "openLocation": true})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"));
+    assert_eq!(log.borrow().len(), 1, "Open Location still shows the first file");
+    let r = desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "zip": true})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {} {NOTE}", r["path"].as_str().unwrap()));
+    // The Asset Export panel's export goes the same way.
+    desktop.run("select.all", json!({})).unwrap();
+    desktop.run("assets.add", json!({"multiple": false})).unwrap();
+    crate::io::export_files(&mut desktop, "assets.export", json!({"folder": folder, "formats": rows})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"), "assets.export");
+    let (mut web, _) = app(1, true);
+    place(&mut web);
+    web.run("file.exportForScreens", json!({"zip": true, "formats": rows})).unwrap();
+    assert_eq!(web.ui.status, format!("Saved Untitled-1.zip {NOTE}"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_preset_export_reopens_on_its_rows() {
     let (mut app, _) = app(1, true);
     app.run("file.exportForScreens", json!({"preset": "density", "fullDocument": true})).unwrap();
