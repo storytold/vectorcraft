@@ -1355,6 +1355,9 @@ file-filter	Templates	Modelli
 	Highlight Substituted Glyphs	Evidenzia glifi sostituiti
 	History	Cronologia
 	History Options…	Opzioni cronologia…
+	Step Backward	Passo indietro
+	Step Forward	Passo avanti
+	Set History Limit…	Imposta limite cronologia…
 	History States	Stati cronologia
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Applica set di dati

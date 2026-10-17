@@ -1353,6 +1353,9 @@ file-filter	Templates	Шаблоны
 	Highlight Substituted Glyphs	Выделять заменённые глифы
 	History	История
 	History Options…	Параметры истории…
+	Step Backward	Шаг назад
+	Step Forward	Шаг вперёд
+	Set History Limit…	Задать предел истории…
 	History States	Состояния истории
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Применить набор данных

@@ -1427,6 +1427,9 @@ lighting	Light	Światło
 	Use Text for Previews	Użyj tekstu w podglądach
 	{percent}% opacity	Krycie {percent}%
 	History Options…	Opcje historii…
+	Step Backward	Krok wstecz
+	Step Forward	Krok naprzód
+	Set History Limit…	Ustaw limit historii…
 	Open a document to see its history.	Otwórz dokument, aby zobaczyć jego historię.
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Zastosuj zestaw danych

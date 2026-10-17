@@ -1487,6 +1487,9 @@ lighting	Light	Valo
 	Use Text for Previews	Käytä tekstiä esikatseluissa
 	{percent}% opacity	{percent}% peittävyys
 	History Options…	Historian asetukset…
+	Step Backward	Askel taaksepäin
+	Step Forward	Askel eteenpäin
+	Set History Limit…	Aseta historian raja…
 	Open a document to see its history.	Avaa asiakirja, niin näet sen historian.
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Käytä tietojoukkoa

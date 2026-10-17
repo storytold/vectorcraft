@@ -1719,6 +1719,9 @@ file-filter	Templates	Sablonok
 	Hindi	Hindi
 	History	Előzmények
 	History Options…	Előzmények beállításai…
+	Step Backward	Lépés vissza
+	Step Forward	Lépés előre
+	Set History Limit…	Előzménykorlát beállítása…
 	History States	Előzmények lépésszáma
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Adatkészlet alkalmazása

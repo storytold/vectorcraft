@@ -1283,6 +1283,9 @@
 	Highlight Substituted Glyphs	Επισήμανση υποκατεστημένων γλύφων
 	History	Ιστορικό
 	History Options…	Επιλογές ιστορικού…
+	Step Backward	Ένα βήμα πίσω
+	Step Forward	Ένα βήμα εμπρός
+	Set History Limit…	Ορισμός ορίου ιστορικού…
 	History States	Καταστάσεις ιστορικού
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Εφαρμογή συνόλου δεδομένων

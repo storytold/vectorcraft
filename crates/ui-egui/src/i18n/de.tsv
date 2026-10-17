@@ -1338,6 +1338,9 @@ file-filter	Templates	Vorlagen
 	Highlight Substituted Glyphs	Ersetzte Glyphen hervorheben
 	History	Protokoll
 	History Options…	Protokolloptionen…
+	Step Backward	Schritt zurück
+	Step Forward	Schritt vorwärts
+	Set History Limit…	Protokollgrenze festlegen…
 	History States	Protokollschritte
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Datensatz anwenden

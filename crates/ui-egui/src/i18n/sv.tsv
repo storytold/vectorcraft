@@ -1322,6 +1322,9 @@
 	Highlight Substituted Glyphs	Framhäv ersatta glyfer
 	History	Historik
 	History Options…	Historikalternativ…
+	Step Backward	Stega bakåt
+	Step Forward	Stega framåt
+	Set History Limit…	Ange historikgräns…
 	History States	Historiktillstånd
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Använd datauppsättning

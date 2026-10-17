@@ -1548,6 +1548,9 @@ file-filter	Templates	Mẫu
 	Hindi	Hindi
 	History	Lịch sử
 	History Options…	Tùy chọn lịch sử…
+	Step Backward	Lùi một bước
+	Step Forward	Tiến một bước
+	Set History Limit…	Đặt giới hạn lịch sử…
 	History States	Trạng thái lịch sử
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Áp dụng tập dữ liệu
