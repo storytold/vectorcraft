@@ -9,6 +9,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour, is_address};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::cmd::recovery::{self, Hold, RecoveryStore};
+use vectorcraft_ui_egui::cloud;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
@@ -70,6 +71,17 @@ pub fn start() {
         // Fallback fonts the first frame needs (Noto Sans Arabic), fetched while the loading text
         // shows; the rest load in the background once the app runs.
         crate::fonts::load_startup_fonts().await;
+        // Keyed invite: CollabCraft redeemed the link, set a guest cookie, and sent us here with
+        // `?invite`. Ask once before the canvas starts so a dead link is a page the recipient can
+        // read, not an empty VectorCraft with no reason for it.
+        let invite = match craft_cloud_client::invite::arrive().await {
+            craft_cloud_client::invite::Arrival::Ordinary => None,
+            craft_cloud_client::invite::Arrival::Refused(reason) => {
+                craft_cloud_client::invite::refuse(&reason);
+                return;
+            }
+            craft_cloud_client::invite::Arrival::Invited(invitation) => Some(invitation),
+        };
         let host = Host {
             runner: eframe::WebRunner::new(),
             inbox: Arc::default(),
@@ -81,7 +93,7 @@ pub fn start() {
             restarts: 0,
         };
         track_paste(&host.pasted);
-        run(host, canvas, None).await;
+        run(host, canvas, None, invite).await;
     });
 }
 
@@ -93,14 +105,15 @@ struct Moving {
 }
 
 /// Run the app on `canvas`: the `moving` one when starting again after losing the graphics, else
-/// a new one.
-async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Moving>) {
+/// a new one. `invite` is only set on the first start after a keyed link handed us here.
+async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Moving>, invite: Option<craft_cloud_client::invite::Invitation>) {
     track_drag(&canvas, &host.drag);
     let kept = moving.as_ref().map(|m| m.kept);
     // The app until the new runner takes it (still here if starting fails before).
     let slot = Rc::new(RefCell::new(moving.map(|m| m.app)));
     let (runner, taken, page) = (host.runner.clone(), slot.clone(), canvas.clone());
     let (pointers, pen_canvas) = (host.pointers.clone(), canvas.clone());
+    let mut invite = invite;
     let result = runner
         .start(
             canvas,
@@ -117,7 +130,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 }
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone());
-                let app = match taken.borrow_mut().take() {
+                let mut app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
                         app.services = services;
@@ -126,6 +139,15 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     }
                     None => VectorcraftApp::new(Session::new(), services),
                 };
+                app.cloud.connect(crate::cloud::Service::new(ctx.clone()));
+                if let Some(share) = collabcraft_share::CollabCraft::from_env() {
+                    // Name this build so CollabCraft can mint keyed invite links that land here.
+                    app.share.connect(share.for_app("vectorcraft"));
+                }
+                if let Some(invitation) = invite.take() {
+                    open_invite(&mut app, invitation);
+                }
+                cloud::start(&mut app);
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
         )
@@ -181,6 +203,34 @@ fn query_param(name: &str) -> Option<String> {
 
 fn query() -> String {
     web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default()
+}
+
+/// Open the document a keyed invite handed this page.
+///
+/// The bytes, name and permission come from CollabCraft's invite routes. Without
+/// this step the handoff lands on `/vectorcraft/?invite` and the recipient only
+/// ever sees a blank new drawing.
+fn open_invite(app: &mut VectorcraftApp, invitation: craft_cloud_client::invite::Invitation) {
+    let name = invitation.name.clone();
+    match cloud::CloudApp::open_bytes(app, &name, invitation.document.clone()) {
+        Ok(Some(_)) => {
+            let mode = if invitation.read_only() { " (view only)" } else { "" };
+            let who = if invitation.recipient.is_empty() { String::new() } else { format!(" · shared with {}", invitation.recipient) };
+            app.status(format!("Opened \"{name}\"{mode}{who}"));
+            // Live edits are optional: a document nobody can see is not improved by a relay.
+            if let Err(e) = invitation.join() {
+                log::warn!("invite relay join failed: {e}");
+            }
+        }
+        Ok(None) => {
+            // Multi-page PDF / DXF unit picker: the ordinary open dialog will ask.
+            app.status(format!("Shared \"{name}\" needs a choice before it opens"));
+        }
+        Err(e) => {
+            log::error!("invite open failed: {e}");
+            craft_cloud_client::invite::refuse(&format!("The shared document could not be opened. {e}"));
+        }
+    }
 }
 
 fn element(id: &str) -> Option<web_sys::Element> {
@@ -339,7 +389,7 @@ impl WebShell {
         let canvas =
             if host.restarts > MAX_RESTARTS { Err(format!("the graphics were lost {MAX_RESTARTS} times")) } else { fresh_canvas(&self.canvas) };
         match canvas {
-            Ok(canvas) => wasm_bindgen_futures::spawn_local(run(host, canvas, Some(Moving { app, kept }))),
+            Ok(canvas) => wasm_bindgen_futures::spawn_local(run(host, canvas, Some(Moving { app, kept }), None)),
             Err(e) => {
                 log::error!("vectorcraft-web: giving up on the graphics: {e}");
                 let runner = host.runner;

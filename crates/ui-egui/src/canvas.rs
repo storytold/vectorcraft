@@ -2562,6 +2562,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         }
     });
     recent(app, ui);
+    cloud(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
@@ -2580,6 +2581,23 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
+}
+
+/// The Home screen's Cloud section: the user's own cloud files on one side and what other people
+/// shared with them on the other, each with a menu holding Open, Share and Work together.
+///
+/// Drawn by `craft_ui::cloud`, so every Craft app offers the same page. The Home screen is where
+/// this application opens files from, so the section sits beside Recent Files rather than in a
+/// place of its own. Nothing is drawn in a build with no cloud service configured.
+fn cloud(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !crate::cloud::available(app) {
+        return;
+    }
+    let t = Tokens::get(ui.ctx());
+    ui.add_space(28.0);
+    ui.label(egui::RichText::new(tl!("Cloud")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(8.0);
+    crate::cloud::open_page(app, ui);
 }
 
 /// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and

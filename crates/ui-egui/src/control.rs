@@ -23,6 +23,11 @@
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
 //! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
 //!   the host; the document keeps its path. No path → `{dataBase64, format, bytes}` (as headless)
+//! - `cloud.status`, `cloud.open`, `cloud.browse {path?}`, `cloud.shared`, `cloud.link`,
+//!   `cloud.openFile {id?|name?}`, `cloud.save`, `cloud.saveAs {folder?, name?}`, `cloud.reload`:
+//!   Open and Save against cloud storage (`crate::cloud`). Every one is refused in a build with no
+//!   service configured. They answer as soon as the job is stated, never when it is done: the
+//!   transfer runs on a worker thread, and `cloud.status` reports what is in flight
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -168,6 +173,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
+        // Cloud storage: the account, what is listed, where the open drawing came from and any
+        // transfer in flight. `null` in a build with no service configured.
+        "cloud": crate::cloud::available(app).then(|| crate::cloud::status(app)),
     })
 }
 
@@ -452,6 +460,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
         // about; otherwise null, and the host closes the window (#830).
         "app.quit" => wrap(app.run("app.quit", json!({}))),
+        // Cloud storage. Each one states a job and answers at once; the worker reports later, and
+        // `cloud.status` is where that shows up.
+        "cloud.status" | "cloud.open" | "cloud.shared" | "cloud.link" | "cloud.save" | "cloud.reload" => wrap(app.run(&req.method, json!({}))),
+        "cloud.browse" | "cloud.openFile" | "cloud.saveAs" => wrap(app.run(&req.method, if p.is_object() { p.clone() } else { json!({}) })),
         other => err(format!("unknown method `{other}`")),
     }
 }

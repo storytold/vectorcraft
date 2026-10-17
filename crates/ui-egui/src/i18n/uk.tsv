@@ -4556,3 +4556,22 @@ lighting	Light	Світло
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Переглянути хмарну теку
+	Cloud Status	Стан хмари
+	Connect Cloud Storage	Підключити хмарне сховище
+	List Cloud Shares	Список хмарних спільних доступів
+	Open a Cloud Drawing	Відкрити хмарний рисунок
+	Open from the Cloud…	Відкрити з хмари…
+	Reload from the Cloud	Перезавантажити з хмари
+	Save to the Cloud	Зберегти в хмару
+	Save to the Cloud…	Зберегти в хмару…
+	A folder on this computer	Тека на цьому комп'ютері
+	Cloud	Хмара
+	This computer	Цей комп'ютер
+	Where	Куди
+	Your cloud account	Ваш обліковий запис у хмарі
+@msg	VectorCraft cannot open {_1}	VectorCraft не може відкрити {_1}
+@msg	no drawing open	немає відкритого рисунка
+@msg	no such file in the cloud listing	такого файлу немає в хмарному списку

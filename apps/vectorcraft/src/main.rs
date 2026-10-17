@@ -24,6 +24,7 @@ compile_error!("the win7 target requires --no-default-features --features window
 
 mod automation_args;
 mod clipboard;
+mod cloud;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
 mod control_server;
@@ -901,6 +902,13 @@ fn main() -> std::process::ExitCode {
                     app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
                 }
                 app.custom_titlebar = custom_titlebar;
+                // Open and Save against cloud storage, and the share dialog, when a CollabCraft
+                // service is configured. Without one nothing is connected and the interface offers
+                // nothing cloud-shaped.
+                if let Some(backend) = cloud::service(cc.egui_ctx.clone()) {
+                    app.cloud.connect(backend);
+                    app.share.connect(collabcraft_share::CollabCraft::from_fn(cloud::client).for_app("vectorcraft"));
+                }
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());

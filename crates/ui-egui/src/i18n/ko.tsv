@@ -4540,3 +4540,22 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	클라우드 폴더 찾아보기
+	Cloud Status	클라우드 상태
+	Connect Cloud Storage	클라우드 저장소 연결
+	List Cloud Shares	클라우드 공유 목록
+	Open a Cloud Drawing	클라우드 도면 열기
+	Open from the Cloud…	클라우드에서 열기…
+	Reload from the Cloud	클라우드에서 다시 불러오기
+	Save to the Cloud	클라우드에 저장
+	Save to the Cloud…	클라우드에 저장…
+	A folder on this computer	이 컴퓨터의 폴더
+	Cloud	클라우드
+	This computer	이 컴퓨터
+	Where	위치
+	Your cloud account	클라우드 계정
+@msg	VectorCraft cannot open {_1}	VectorCraft에서 {_1}을(를) 열 수 없습니다
+@msg	no drawing open	열린 도면이 없습니다
+@msg	no such file in the cloud listing	클라우드 목록에 해당 파일이 없습니다

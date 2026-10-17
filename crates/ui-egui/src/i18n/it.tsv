@@ -4576,3 +4576,22 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Sfoglia una cartella cloud
+	Cloud Status	Stato del cloud
+	Connect Cloud Storage	Collega archiviazione cloud
+	List Cloud Shares	Elenca condivisioni cloud
+	Open a Cloud Drawing	Apri un disegno cloud
+	Open from the Cloud…	Apri dal cloud…
+	Reload from the Cloud	Ricarica dal cloud
+	Save to the Cloud	Salva nel cloud
+	Save to the Cloud…	Salva nel cloud…
+	A folder on this computer	Una cartella su questo computer
+	Cloud	Cloud
+	This computer	Questo computer
+	Where	Dove
+	Your cloud account	Il tuo account cloud
+@msg	VectorCraft cannot open {_1}	VectorCraft non può aprire {_1}
+@msg	no drawing open	nessun disegno aperto
+@msg	no such file in the cloud listing	nessun file di questo nome nell'elenco cloud

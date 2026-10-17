@@ -57,7 +57,31 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
-            let room = right.width();
+            let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
+            let ui = &mut rui;
+            // Who is signed in, who else is in this drawing, and Share, at the far right where
+            // every office suite puts them. Drawn before the rest because this layout runs right
+            // to left, and what they take is subtracted from the room the rest divides up. A build
+            // with no cloud service draws none of it, and the group below then has the whole width
+            // it always had.
+            crate::cloud::who(app, ui);
+            if crate::cloud::shares(app) {
+                // Progressive hiding, like Discord: the Share split button is suppressed when the
+                // right panel is too narrow to also keep a usable workspace switcher.  The account
+                // badge stays reachable at all widths, and Share is also under File → Share…
+                // Threshold: 8 pt gap + ~72 pt split button + item-spacing + 8 pt before workspace
+                // + item-spacing + 64 pt minimum workspace switcher ≈ 164 pt remaining after who().
+                let room_after_who = ui.available_width();
+                if room_after_who >= 164.0 {
+                    ui.add_space(8.0);
+                    // A split button, drawn by craft-ui so every Craft app offers the same one.
+                    // Only the Save a Copy formats under the chevron are VectorCraft's own.
+                    if let Some(format) = crate::cloud::share_button(app, ui, &crate::cloud::copies()) {
+                        app.run("file.saveCopy", json!({"format": format})).ok();
+                    }
+                }
+            }
+            let room = ui.available_width();
             // Built-in workspace names translate; the user's own stay as typed.
             let ws_name =
                 if crate::workspaces::is_builtin(&app.ui.workspace) { tl!(&app.ui.workspace).to_string() } else { app.ui.workspace.clone() };
@@ -67,18 +91,25 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
             let icon = 28.0;
             let search = room >= 64.0 + 8.0 + gap + icon;
-            let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
-            let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
-            let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
-            let ui = &mut rui;
+            // Cap the workspace switcher to what is actually available.  The former `.max(64.0)`
+            // floor could exceed available_for_ws and push the widget into the menus region at
+            // narrow widths (e.g. ~472 px with cloud controls present).
+            let available_for_ws = (room - 8.0 - gap - if search { icon } else { 0.0 }).max(0.0);
+            // Never force a floor that exceeds the room left after menus / cloud controls.
+            // Below ~32 pt the switcher is unreadable; Window → Workspace still reaches it.
+            let ws_w = ws_w.min(available_for_ws);
+            let show_ws = ws_w >= 32.0;
+            let discord = search && show_ws && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
-            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
-            ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
-            ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
-            icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
-            let wresp = wresp.on_hover_text(tl!("Switch workspace"));
-            egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
-            ui.add_space(8.0);
+            if show_ws {
+                let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
+                ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
+                ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
+                icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
+                let wresp = wresp.on_hover_text(tl!("Switch workspace"));
+                egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
+                ui.add_space(8.0);
+            }
             // Search → command palette (its shortcut opens it too).
             if search {
                 let tip = match menus::shortcut_of("help.commandPalette") {
@@ -1901,6 +1932,51 @@ mod visual_regressions {
         fn sync(&mut self, _: &crate::native_menu::MenuBar) {}
         fn drain(&mut self) -> Vec<crate::native_menu::Event> {
             Vec::new()
+        }
+    }
+
+    /// The workspace switcher must not extend left of the menu bar at narrow widths.
+    ///
+    /// Before the fix the `.max(64.0)` floor on ws_w could push the workspace widget
+    /// past the left edge of the right panel (into the menus region) at ~472 px when
+    /// cloud controls had already consumed most of the right panel.  We find the
+    /// workspace-switcher widget (allocated at exactly `WIDGET_H` = 22 pt tall) and the
+    /// rightmost menu-bar button, and assert the switcher begins to the right of the
+    /// last menu.
+    #[test]
+    fn workspace_switcher_does_not_overlap_menus_at_narrow_width() {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        for scale in [1.0_f32, 2.0] {
+            let ctx = egui::Context::default();
+            egui_extras::install_image_loaders(&ctx);
+            theme::install_fonts(&ctx);
+            theme::apply(&ctx, theme::Brightness::Light);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            let width = 472.0_f32;
+            let mut output = ctx.run_ui(scaled_input(egui::vec2(width, APP_BAR_HEIGHT + 4.0), scale), |ui| app_bar(&mut app, ui));
+            output.textures_delta.clear();
+            // Widget rects from this pass (populated after run_ui).
+            let widgets: Vec<egui::Rect> = ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| w.rect).collect());
+            // The workspace switcher is allocated exactly WIDGET_H = 22 pt tall, with
+            // Sense::click(), somewhere in the right half of the bar.
+            let ws_widgets: Vec<egui::Rect> =
+                widgets.iter().copied().filter(|r| (r.height() - WIDGET_H).abs() < 0.5 && r.right() > width * 0.4).collect();
+            // Menu-bar buttons are the tallest interactive elements in the left portion
+            // of the bar (interact_size.y = 24 pt in our theme). Exclude the MenuBar's own
+            // stretch rect (full leftover width) by capping button width to a title label.
+            let menu_buttons: Vec<egui::Rect> =
+                widgets.iter().copied().filter(|r| r.height() > 20.0 && r.height() < 30.0 && r.width() < 120.0 && r.left() < width * 0.6).collect();
+            let Some(rightmost_menu) = menu_buttons.iter().max_by(|a, b| a.right().total_cmp(&b.right())) else {
+                continue; // menus absent at this scale/size – skip
+            };
+            for ws in &ws_widgets {
+                assert!(
+                    ws.left() >= rightmost_menu.right() - 1.0,
+                    "{width}@{scale}x: workspace switcher left ({:.1}) must be ≥ rightmost menu right ({:.1})",
+                    ws.left(),
+                    rightmost_menu.right()
+                );
+            }
         }
     }
 

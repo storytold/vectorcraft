@@ -4106,3 +4106,22 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	浏览云端文件夹
+	Cloud Status	云端状态
+	Connect Cloud Storage	连接云端存储
+	List Cloud Shares	列出云端共享
+	Open a Cloud Drawing	打开云端绘图
+	Open from the Cloud…	从云端打开…
+	Reload from the Cloud	从云端重新加载
+	Save to the Cloud	保存到云端
+	Save to the Cloud…	保存到云端…
+	A folder on this computer	此电脑上的文件夹
+	Cloud	云端
+	This computer	此电脑
+	Where	位置
+	Your cloud account	您的云端帐户
+@msg	VectorCraft cannot open {_1}	VectorCraft 无法打开 {_1}
+@msg	no drawing open	没有打开的绘图
+@msg	no such file in the cloud listing	云端列表中没有该文件

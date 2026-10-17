@@ -4941,3 +4941,22 @@ mark-style	Japanese	Japonesas
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Explorar una carpeta en la nube
+	Cloud Status	Estado de la nube
+	Connect Cloud Storage	Conectar almacenamiento en la nube
+	List Cloud Shares	Listar compartidos en la nube
+	Open a Cloud Drawing	Abrir un dibujo en la nube
+	Open from the Cloud…	Abrir desde la nube…
+	Reload from the Cloud	Volver a cargar desde la nube
+	Save to the Cloud	Guardar en la nube
+	Save to the Cloud…	Guardar en la nube…
+	A folder on this computer	Una carpeta en este equipo
+	Cloud	Nube
+	This computer	Este equipo
+	Where	Dónde
+	Your cloud account	Su cuenta en la nube
+@msg	VectorCraft cannot open {_1}	VectorCraft no puede abrir {_1}
+@msg	no drawing open	no hay ningún dibujo abierto
+@msg	no such file in the cloud listing	no hay tal archivo en la lista de la nube

@@ -4617,3 +4617,22 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	クラウドフォルダーを参照
+	Cloud Status	クラウドの状態
+	Connect Cloud Storage	クラウドストレージを接続
+	List Cloud Shares	クラウドの共有を一覧表示
+	Open a Cloud Drawing	クラウドの図面を開く
+	Open from the Cloud…	クラウドから開く…
+	Reload from the Cloud	クラウドから再読み込み
+	Save to the Cloud	クラウドに保存
+	Save to the Cloud…	クラウドに保存…
+	A folder on this computer	このコンピュータ上のフォルダー
+	Cloud	クラウド
+	This computer	このコンピュータ
+	Where	場所
+	Your cloud account	クラウドアカウント
+@msg	VectorCraft cannot open {_1}	VectorCraft は {_1} を開けません
+@msg	no drawing open	図面が開かれていません
+@msg	no such file in the cloud listing	クラウドの一覧にそのファイルはありません

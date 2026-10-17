@@ -20,6 +20,11 @@ windows7 = ["eframe/glow"]
 vectorcraft-engine = { workspace = true }
 vectorcraft-ui-egui = { workspace = true }
 vectorcraft-text = { workspace = true }
+# How this app reaches CollabCraft. The frontend states the work and opens no socket, so the
+# transport half lives here, next to the session file this application keeps.
+craft-cloud-client = { workspace = true }
+# The share dialog's backend. The dialog is drawn by vectorcraft-ui-egui, which opens no socket.
+collabcraft-share = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 serde_json = { workspace = true }

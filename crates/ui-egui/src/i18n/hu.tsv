@@ -4966,3 +4966,22 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Felhőmappa tallózása
+	Cloud Status	Felhőállapot
+	Connect Cloud Storage	Felhőtárhely csatlakoztatása
+	List Cloud Shares	Felhőmegosztások listázása
+	Open a Cloud Drawing	Felhőbeli rajz megnyitása
+	Open from the Cloud…	Megnyitás a felhőből…
+	Reload from the Cloud	Újratöltés a felhőből
+	Save to the Cloud	Mentés a felhőbe
+	Save to the Cloud…	Mentés a felhőbe…
+	A folder on this computer	Mappa ezen a számítógépen
+	Cloud	Felhő
+	This computer	Ez a számítógép
+	Where	Hova
+	Your cloud account	A felhőfiókja
+@msg	VectorCraft cannot open {_1}	A VectorCraft nem tudja megnyitni: {_1}
+@msg	no drawing open	nincs megnyitott rajz
+@msg	no such file in the cloud listing	nincs ilyen fájl a felhőlistában

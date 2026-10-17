@@ -12,6 +12,7 @@ pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
 pub mod brush_options;
+pub mod cloud;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -318,6 +319,7 @@ registry! {
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
+    CloudSave: [cloud::KIND] => cloud::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),

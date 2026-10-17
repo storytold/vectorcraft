@@ -10,6 +10,10 @@ workspace = true
 
 [dependencies]
 craft-ui = { workspace = true }
+# The vendor-neutral cloud types (a file entry, a capability). Types and contracts only: the crate
+# opens no socket and names no provider, so this builds for the web too. The service is reached
+# through `Services::cloud`, which the host application supplies (see `cloud`).
+craft-cloud = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

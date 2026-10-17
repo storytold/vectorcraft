@@ -18,6 +18,7 @@ mod brand;
 pub mod canvas;
 pub mod chrome;
 mod clipboard_probe;
+pub mod cloud;
 pub mod community;
 pub mod control;
 pub mod credits;
@@ -367,6 +368,22 @@ pub struct VectorcraftApp {
     pub titlebar_inset: f32,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
+    /// Open and Save against cloud storage ([`cloud`]). Nothing cloud-shaped is offered until the
+    /// host connects a backend, so a build with no service configured is the app as it was.
+    pub cloud: cloud::CloudFiles,
+    /// The drawing each cloud save in flight encoded, so a save that lands clears the modified
+    /// flag for exactly that version and an edit made meanwhile stays unsaved.
+    pub(crate) cloud_sent: cloud::Sent,
+    /// URLs the cloud controls asked for while the frame was being drawn. Those calls hold a
+    /// shared borrow of the window and the host's own opener wants a mutable one, so they wait
+    /// here until [`Self::open_queued_urls`] runs.
+    cloud_urls: std::cell::RefCell<Vec<String>>,
+    /// Share, the same dialog every Craft app offers. It opens no socket; the host connects the
+    /// half that reaches the service.
+    pub share: craft_ui::share::ShareDialog,
+    /// Who else is in the open document, drawn beside the account badge. Nothing is drawn while a
+    /// person works alone.
+    pub presence: craft_ui::presence::PresenceBar,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
     /// moves ([`native_menu::sync`]).
     run_count: u64,
@@ -505,6 +522,13 @@ impl VectorcraftApp {
             perf: Perf::default(),
             titlebar_inset: 0.0,
             last_effect: None,
+            cloud: cloud::CloudFiles::new(),
+            cloud_sent: cloud::Sent::new(),
+            cloud_urls: std::cell::RefCell::new(Vec::new()),
+            share: craft_ui::share::ShareDialog::new(),
+            // Initials alone: the app bar has room for a row of them beside the account, and a
+            // name each would crowd out the controls next to it.
+            presence: craft_ui::presence::PresenceBar::new().badges_only(),
             run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
@@ -764,6 +788,25 @@ impl VectorcraftApp {
             None => self.pending_url = Some(url.to_string()),
         }
         self.ui.status = format!("Opened {url}");
+    }
+
+    /// Keep a URL a control asked for while the window was being drawn ([`cloud`]).
+    ///
+    /// A paint call holds a shared borrow, and [`Self::open_url`] wants a mutable one because the
+    /// host's own opener is `FnMut`. So the URL waits one step rather than the opener being made
+    /// reachable from everywhere.
+    pub(crate) fn queue_url(&self, url: &str) {
+        if let Ok(mut queue) = self.cloud_urls.try_borrow_mut() {
+            queue.push(url.to_owned());
+        }
+    }
+
+    /// Open what [`Self::queue_url`] kept. Once a frame, before anything is drawn.
+    fn open_queued_urls(&mut self) {
+        let queued = self.cloud_urls.try_borrow_mut().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        for url in queued {
+            self.open_url(&url);
+        }
     }
 
     /// Run a Help link command and open the URL it returns.
@@ -1144,6 +1187,9 @@ impl VectorcraftApp {
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
+        // Answers from the cloud worker, and anything still in flight.
+        cloud::pump(self, ctx);
+        self.open_queued_urls();
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
         if !self.background.jobs.is_empty() || !self.opening.pending.is_empty() {
@@ -1379,7 +1425,16 @@ impl VectorcraftApp {
         dock::floating_panel(self, &ctx);
         floating::show(self, &ctx);
         panels::library_panel::show_window(self, &ctx);
+        self.share.show(&ctx);
+        // A share of a drawing that has never been saved. The dialog asked; only this side can
+        // encode one, so it answers.
+        share_save(self);
+        // Above the dialogs: a refused save has to be answered, and the answer decides what
+        // happens to the user's edits.
+        cloud::conflict_modal(self, &ctx);
         dialogs::show(self, &ctx);
+        // Save As that chose this computer instead, which cannot run inside the dialog's own body.
+        dialogs::cloud::settle(self);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
@@ -1390,5 +1445,36 @@ impl VectorcraftApp {
         self.drop_formats_after_egui_copy(&ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
+    }
+}
+
+/// Carry out a save the share dialog asked for, and report the outcome back.
+///
+/// Split into asking and answering because a cloud save is asynchronous. The dialog waits, showing
+/// its own progress, until one of these arrives. A drawing that has never been in the cloud has no
+/// handle to share, which is the one case this exists for.
+fn share_save(app: &mut VectorcraftApp) {
+    if let Some(request) = app.share.take_save_request() {
+        // One destination today. `request.destination` names which, and is carried through so a
+        // second provider needs no change here.
+        let _ = request.destination;
+        match cloud::save_as(app, "/", &request.name) {
+            Ok(_) => app.cloud.sharing_save = true,
+            Err(reason) => app.share.save_failed(reason),
+        }
+    }
+    // The worker reports by clearing `busy`. A new origin means it landed.
+    if app.cloud.sharing_save && app.cloud.busy.is_none() {
+        app.cloud.sharing_save = false;
+        match cloud::origin(app) {
+            Some(origin) => {
+                let (id, name) = (origin.entry.id.clone(), origin.entry.name.clone());
+                app.share.saved(id, name);
+            }
+            None => {
+                let reason = app.cloud.status.clone().unwrap_or_else(|| "the drawing was not saved".to_owned());
+                app.share.save_failed(reason);
+            }
+        }
     }
 }

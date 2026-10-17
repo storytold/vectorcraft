@@ -4963,3 +4963,21 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Selaa pilvikansiota
+	Cloud Status	Pilven tila
+	Connect Cloud Storage	Yhdistä pilvitallennustila
+	List Cloud Shares	Luettele pilvijakamiset
+	Open a Cloud Drawing	Avaa pilvipiirros
+	Open from the Cloud…	Avaa pilvestä…
+	Reload from the Cloud	Lataa uudelleen pilvestä
+	Save to the Cloud	Tallenna pilveen
+	Save to the Cloud…	Tallenna pilveen…
+	A folder on this computer	Kansio tällä tietokoneella
+	Cloud	Pilvi
+	This computer	Tämä tietokone
+	Where	Missä
+	Your cloud account	Pilvitilisi
+@msg	VectorCraft cannot open {_1}	VectorCraft ei voi avata kohdetta {_1}
+@msg	no drawing open	ei avointa piirrosta
+@msg	no such file in the cloud listing	ei sellaista tiedostoa pilviluettelossa

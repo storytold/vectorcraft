@@ -64,6 +64,42 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+O",
         "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
     ),
+    // Cloud storage (`crate::cloud`). Every one of these is refused in a build with no service
+    // configured, and the menu items they belong to are not drawn at all.
+    (
+        "cloud.open",
+        "Open from the Cloud…",
+        "",
+        "{} show the Home screen with its Cloud section (your own cloud files, and what other people shared with you) and ask the service who is signed in → the cloud state, as cloud.status reports it",
+    ),
+    (
+        "cloud.openFile",
+        "Open a Cloud Drawing",
+        "",
+        "{id? | name?} open a file the cloud listing already holds, by the provider handle or by its name (cloud.open or cloud.browse lists them first) → the cloud state; refused for a file VectorCraft cannot open",
+    ),
+    ("cloud.browse", "Browse a Cloud Folder", "", "{path?} list cloud folder `path` (empty: the top of your own storage) → {folder}"),
+    ("cloud.shared", "List Cloud Shares", "", "{} list what other people shared with you, where the provider offers it"),
+    ("cloud.link", "Connect Cloud Storage", "", "{} link a storage account, which the user finishes in their browser → the cloud state"),
+    (
+        "cloud.save",
+        "Save to the Cloud",
+        "",
+        "{} write the open drawing back over the cloud file it came from, under the version it was read at (a stored copy that has moved on refuses the write, and the user is asked what to do) → {saving, bytes, ifMatch}",
+    ),
+    (
+        "cloud.saveAs",
+        "Save to the Cloud…",
+        "",
+        "{folder?, name?} write the open drawing into cloud folder `folder` as `name` (a name with no known extension becomes .vectorcraft) → {saving, folder, bytes}; without both, Save As asks where to save",
+    ),
+    ("cloud.reload", "Reload from the Cloud", "", "{} read the open drawing stored copy again, discarding the edits since → {reloading}"),
+    (
+        "cloud.status",
+        "Cloud Status",
+        "",
+        "{} → the whole of the cloud state: the account, the folder listed, the shares, where the open drawing came from, and whatever transfer is in flight",
+    ),
     (
         "file.save",
         "Save",
@@ -1055,9 +1091,13 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => io::open_dialog(app).map(|_| Value::Null),
         },
         // Saves write through the app (save panel, download); with no path known the panel and the
-        // format's options dialog ask first.
+        // format's options dialog ask first. A drawing that came from the cloud has no file on this
+        // computer, so Save writes back to the cloud file it came from.
+        "file.save" if p.get("path").is_none() && crate::cloud::has_target(app) => crate::cloud::save(app),
         "file.save" => io::save(app, SaveMode::Save, p, true),
-        "file.saveAs" => io::save(app, SaveMode::SaveAs, p, true),
+        // With a cloud service wired, Save As asks whether the drawing is going to this computer or
+        // to the user's account. Without one it is the file panel it always was.
+        "file.saveAs" => crate::dialogs::cloud::save_as(app, p),
         "file.saveCopy" => io::save(app, SaveMode::Copy, p, true),
         "file.saveAsTemplate" => io::save(app, SaveMode::Template, p, true),
         "document.exportSelection" => {
@@ -1071,6 +1111,74 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
+        // ---- cloud storage (File › Open from the Cloud, File › Save to the Cloud)
+        "cloud.status" => Ok(crate::cloud::status(app)),
+        "cloud.open" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            // The Home screen is this application's Open page: the Cloud section sits on it,
+            // beside Recent Files.
+            app.ui.home = Some(home_key(app));
+            crate::cloud::start(app);
+            Ok(crate::cloud::status(app))
+        }
+        "cloud.browse" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            let path = p.get("path").and_then(Value::as_str).unwrap_or("");
+            crate::cloud::browse(app, path);
+            Ok(json!({"folder": path}))
+        }
+        "cloud.shared" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            crate::cloud::load_shared(app);
+            Ok(Value::Null)
+        }
+        "cloud.link" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            crate::cloud::link(app);
+            Ok(crate::cloud::status(app))
+        }
+        // Opens something already listed, by handle or by name. The listing is what the user can
+        // see, which keeps a scripted open and a clicked one on the same footing.
+        "cloud.openFile" => {
+            let id = p.get("id").and_then(Value::as_str);
+            let name = p.get("name").and_then(Value::as_str).unwrap_or("");
+            let found = app
+                .cloud
+                .mine
+                .entries
+                .iter()
+                .chain(app.cloud.shared.entries.iter())
+                .find(|e| id.is_some_and(|id| e.id == id) || (!name.is_empty() && e.name == name))
+                .cloned();
+            match found {
+                Some(entry) if crate::cloud::opens(&entry) => {
+                    crate::cloud::open_entry(app, entry, None);
+                    Ok(crate::cloud::status(app))
+                }
+                Some(entry) => return Some(Err(format!("VectorCraft cannot open {}", entry.name))),
+                None => return Some(Err("no such file in the cloud listing".to_owned())),
+            }
+        }
+        "cloud.save" => crate::cloud::save(app),
+        "cloud.saveAs" => match (p.get("folder").and_then(Value::as_str), p.get("name").and_then(Value::as_str)) {
+            (Some(folder), Some(name)) => crate::cloud::save_as(app, folder, name),
+            _ => {
+                if !crate::cloud::available(app) {
+                    return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+                }
+                crate::dialogs::cloud::open(app, true);
+                Ok(crate::cloud::status(app))
+            }
+        },
+        "cloud.reload" => crate::cloud::reload_active(app),
         "type.findFont" => {
             crate::find_font::open(app);
             Ok(Value::Null)
@@ -1905,7 +2013,10 @@ fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang: crate::i18
 /// Menu slots that are left out while they have nothing to show (unused saved views, recent files,
 /// User Defined swatch and graphic style libraries).
 fn hidden_when_disabled(id: &str) -> bool {
-    id.starts_with("view.goto")
+    // A build with no cloud service configured offers nothing cloud-shaped at all. An item greyed
+    // out for ever would be a promise the application cannot keep.
+    id.starts_with("cloud.")
+        || id.starts_with("view.goto")
         || saved_selection_slot(id).is_some()
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
@@ -2158,6 +2269,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
+        // Cloud storage: nothing without a service, and the ones that act on a drawing need one open.
+        "cloud.open" | "cloud.browse" | "cloud.shared" | "cloud.link" | "cloud.status" => crate::cloud::available(app),
+        "cloud.saveAs" | "cloud.save" | "cloud.reload" | "cloud.openFile" => crate::cloud::available(app) && app.session.active().is_some(),
         "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
@@ -2264,6 +2378,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("New…", "file.newDialog"),
                 c("New from Template…", "file.newFromTemplate"),
                 c("Open…", "file.open"),
+                c("Open from the Cloud…", "cloud.open"),
                 sub("Open Recent Files", {
                     let mut v: Vec<Item> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
                     v.push(Sep);
@@ -2276,6 +2391,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Close All", "file.closeAll"),
                 c("Save", "file.save"),
                 c("Save As…", "file.saveAs"),
+                c("Save to the Cloud…", "cloud.saveAs"),
                 c("Save a Copy…", "file.saveCopy"),
                 c("Save as Template…", "file.saveAsTemplate"),
                 c("Save as PDF…", "file.export.pdf"),

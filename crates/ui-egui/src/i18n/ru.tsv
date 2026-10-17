@@ -4572,3 +4572,22 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Обзор облачной папки
+	Cloud Status	Состояние облака
+	Connect Cloud Storage	Подключить облачное хранилище
+	List Cloud Shares	Список облачных общих доступов
+	Open a Cloud Drawing	Открыть облачный рисунок
+	Open from the Cloud…	Открыть из облака…
+	Reload from the Cloud	Перезагрузить из облака
+	Save to the Cloud	Сохранить в облако
+	Save to the Cloud…	Сохранить в облако…
+	A folder on this computer	Папка на этом компьютере
+	Cloud	Облако
+	This computer	Этот компьютер
+	Where	Куда
+	Your cloud account	Ваша учётная запись в облаке
+@msg	VectorCraft cannot open {_1}	VectorCraft не может открыть {_1}
+@msg	no drawing open	нет открытого рисунка
+@msg	no such file in the cloud listing	такого файла нет в облачном списке

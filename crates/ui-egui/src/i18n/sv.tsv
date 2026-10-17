@@ -4955,3 +4955,21 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Bläddra i en molnmapp
+	Cloud Status	Molnstatus
+	Connect Cloud Storage	Anslut molnlagring
+	List Cloud Shares	Lista molnresurser
+	Open a Cloud Drawing	Öppna en molnritning
+	Open from the Cloud…	Öppna från molnet…
+	Reload from the Cloud	Läs om från molnet
+	Save to the Cloud	Spara till molnet
+	Save to the Cloud…	Spara till molnet…
+	A folder on this computer	En mapp på den här datorn
+	Cloud	Moln
+	This computer	Den här datorn
+	Where	Var
+	Your cloud account	Ditt molnkonto
+@msg	VectorCraft cannot open {_1}	VectorCraft kan inte öppna {_1}
+@msg	no drawing open	ingen ritning öppen
+@msg	no such file in the cloud listing	ingen sådan fil i molnlistan

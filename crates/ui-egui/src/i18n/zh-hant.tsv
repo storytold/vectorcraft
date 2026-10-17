@@ -3894,3 +3894,22 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	瀏覽雲端資料夾
+	Cloud Status	雲端狀態
+	Connect Cloud Storage	連線雲端儲存空間
+	List Cloud Shares	列出雲端共用項目
+	Open a Cloud Drawing	開啟雲端繪圖
+	Open from the Cloud…	從雲端開啟…
+	Reload from the Cloud	從雲端重新載入
+	Save to the Cloud	儲存到雲端
+	Save to the Cloud…	儲存到雲端…
+	A folder on this computer	此電腦上的資料夾
+	Cloud	雲端
+	This computer	此電腦
+	Where	位置
+	Your cloud account	您的雲端帳戶
+@msg	VectorCraft cannot open {_1}	VectorCraft 無法開啟 {_1}
+@msg	no drawing open	尚未開啟繪圖
+@msg	no such file in the cloud listing	雲端清單中沒有該檔案

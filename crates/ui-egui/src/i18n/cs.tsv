@@ -4999,3 +4999,22 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Procházet cloudovou složku
+	Cloud Status	Stav cloudu
+	Connect Cloud Storage	Připojit cloudové úložiště
+	List Cloud Shares	Seznam cloudových sdílení
+	Open a Cloud Drawing	Otevřít cloudovou kresbu
+	Open from the Cloud…	Otevřít z cloudu…
+	Reload from the Cloud	Znovu načíst z cloudu
+	Save to the Cloud	Uložit do cloudu
+	Save to the Cloud…	Uložit do cloudu…
+	A folder on this computer	Složka v tomto počítači
+	Cloud	Cloud
+	This computer	Tento počítač
+	Where	Kam
+	Your cloud account	Váš cloudový účet
+@msg	VectorCraft cannot open {_1}	VectorCraft nemůže otevřít {_1}
+@msg	no drawing open	není otevřená žádná kresba
+@msg	no such file in the cloud listing	takový soubor v cloudovém seznamu není
