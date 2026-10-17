@@ -931,6 +931,34 @@ fn artboard_options_position_follows_the_tool_option_with_another_tool() {
     }
 }
 
+/// Artboard Options shows the artboard's background color on its Background Color: row (None,
+/// White, Black, or Custom for another color) and not as a text field. OK keeps the color while it
+/// applies another field, and a null `color` clears it.
+#[test]
+fn artboard_options_shows_keeps_and_clears_the_background_color() {
+    let mut app = app();
+    let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[0].color.map(|c| c.to_hex());
+    let lines = |app: &mut VectorcraftApp| {
+        let text = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
+        text.lines().map(str::trim).map(str::to_string).collect::<Vec<_>>()
+    };
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Background Color:") && shown.iter().any(|l| l == "None"), "{shown:?}");
+    app.ui.dialog = None;
+    app.run("artboard.setProps", json!({"index": 0, "color": "#336699"})).unwrap();
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Custom") && !shown.iter().any(|l| l == "Color:" || l.starts_with('[')), "{shown:?}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Card"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!((app.session.doc().unwrap().doc.artboards[0].name.as_str(), color(&app).as_deref()), ("Card", Some("#336699")));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(null));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(color(&app), None);
+}
+
 /// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
 /// Corner as radio buttons, not dropdowns (#1133).
 #[test]

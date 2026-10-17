@@ -2,6 +2,7 @@
 
 use egui::Ui;
 use serde_json::json;
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{LiveShape, NodeKind, Unit};
 use vectorcraft_engine::cmd::newdoc;
 
@@ -202,7 +203,7 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 
 /// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
 /// it, and the Artboard Options icon; its position and size, its preset and
-/// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602), Move
+/// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602), its Fill (background color), Move
 /// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
 /// Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -248,6 +249,7 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
+        artboard_fill_row(app, ui, i, ab.color);
         ui.add_space(2.0);
         super::artboards::art_options(app, ui);
     }
@@ -325,6 +327,37 @@ fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, w: f64, h:
     if let Some((width, height)) = size {
         let scale_art = super::artboards::scale_art(app);
         app.run("artboard.setProps", json!({"index": i, "width": width, "height": height, "scaleArt": scale_art})).ok();
+    }
+}
+
+/// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
+/// has none) and a click on it opens the Color Picker for the artboard. The list sets None, White or
+/// Black (in the document's color mode) or opens the Color Picker.
+fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Option<Color>) {
+    let fills = super::artboards::fill_colors(app);
+    let shown = super::artboards::fill_name(app, color);
+    let mut options = super::artboards::FILLS.to_vec();
+    options.push("Color Picker…");
+    let mut set = None;
+    let mut pick = false;
+    ui.horizontal(|ui| {
+        dim_label(ui, tl!("Fill:"));
+        let paint = color.map_or(Paint::None, Paint::solid);
+        let chip = widgets::chip_button(ui, 22.0, false, |ui, r| {
+            widgets::proxy_chip(ui, r, &paint, false, None);
+        });
+        pick = chip.on_hover_text(tl!("Color Picker…")).clicked();
+        match widgets::dropdown(ui, "ab-fill", shown, &options, 110.0) {
+            Some(k) if k < fills.len() => set = Some(fills[k]),
+            Some(_) => pick = true,
+            None => {}
+        }
+    });
+    if let Some(c) = set {
+        app.run("artboard.setProps", json!({"index": i, "color": c.as_ref().map(super::color_json)})).ok();
+    }
+    if pick {
+        app.run("ui.colorPicker", json!({"artboard": i})).ok();
     }
 }
 
@@ -925,6 +958,58 @@ mod tests {
         assert_eq!((d.kind.as_str(), d.f64("index", 9.0), d.str("name").as_str()), (crate::dialogs::artboard_options::KIND, 1.0, "Artboard 2"));
         assert_eq!(d.fields, want, "the fields the tool's double-click shows");
         assert_eq!(app.session.tool_id(), "artboard");
+    }
+
+    /// Edit Artboards' Fill (Properties › Artboards › Fill): the list sets the active artboard's
+    /// background color to Black and back to None, one command and one undo step each, and shows the
+    /// choice. Color Picker… in the list and a click on the chip open the Color Picker for that
+    /// artboard.
+    #[test]
+    fn edit_artboards_fill_sets_the_background_color() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+        app.select_tool("artboard");
+        super::super::artboards::select(&mut app, 1);
+        let colors = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards.iter().map(|a| a.color).collect::<Vec<_>>();
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        // Open the list showing `shown` and choose `option` → the number of commands run.
+        let choose = |app: &mut VectorcraftApp, shown: &str, option: &str| {
+            frame(app, &ctx, vec![]);
+            let texts = frame(app, &ctx, vec![]);
+            click(app, &ctx, &texts, shown);
+            let texts = frame(app, &ctx, vec![]);
+            let commands = app.run_count;
+            click(app, &ctx, &texts, option);
+            app.run_count.wrapping_sub(commands)
+        };
+        let before = undo(&app);
+        assert_eq!(choose(&mut app, "None", "Black"), 1, "one command");
+        assert_eq!(colors(&app), [None, Some(Color::BLACK)]);
+        assert_eq!(undo(&app), before + 1, "one undo step");
+        assert_eq!(choose(&mut app, "Black", "None"), 1);
+        assert_eq!(colors(&app), [None, None]);
+        choose(&mut app, "None", "Color Picker…");
+        let d = app.ui.dialog.take().expect("the Color Picker");
+        assert_eq!((d.kind.as_str(), d.fields.get("artboard")), ("colorPicker", Some(&json!(1))));
+        // The chip is the clickable widget left of the list on the Fill: row.
+        let texts = frame(&mut app, &ctx, vec![]);
+        let row = texts.iter().find(|(t, _)| t == "Fill:").map(|(_, r)| *r).unwrap();
+        let chip = ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.y_range().contains(row.center().y) && w.rect.left() > row.right())
+                .map(|w| w.rect)
+                .min_by(|a, b| a.left().total_cmp(&b.left()))
+                .unwrap()
+                .center()
+        });
+        let press = |pressed| Event::PointerButton { pos: chip, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(chip), press(true)]);
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields.get("artboard")), Some(Some(&json!(1))), "the chip opens it too");
     }
 
     fn artboard_deletion_app(count: usize) -> VectorcraftApp {

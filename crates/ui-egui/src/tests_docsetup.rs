@@ -94,6 +94,38 @@ fn the_grid_takes_the_document_colours_also_rotated() {
     assert!((m.vertices[1].uv.x - 200.0 * zoom / 32.0).abs() < 1e-3, "{:?}", m.vertices[1].uv);
 }
 
+/// An artboard with a background color draws its paper in that color, and with Simulate Colored
+/// Paper on in that color multiplied with the paper color; an artboard without one keeps white or
+/// the paper color. The transparency grid, while it shows, covers both.
+#[test]
+fn an_artboard_color_draws_its_paper_in_that_color() {
+    let mut app = app();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("artboard.setProps", json!({"index": 1, "color": "#336699"})).unwrap();
+    // The fill colors of the closed shapes drawn.
+    let fills = |app: &mut VectorcraftApp| {
+        let mut all = vec![];
+        flatten(&frame(app).0, &mut all);
+        all.into_iter()
+            .filter_map(|s| match s {
+                egui::Shape::Path(p) if p.closed => Some(p.fill),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let blue = egui::Color32::from_rgb(0x33, 0x66, 0x99);
+    let f = fills(&mut app);
+    assert!(f.contains(&blue) && f.contains(&egui::Color32::WHITE), "{f:?}");
+    app.run("document.setup", json!({"simulatePaper": true, "gridColors": ["#ffeecc", "#cccccc"]})).unwrap();
+    // #336699 times #ffeecc, channel by channel: 0x33 × 0xff / 255, 0x66 × 0xee / 255, 0x99 × 0xcc / 255.
+    let inked = egui::Color32::from_rgb(51, 95, 122);
+    let f = fills(&mut app);
+    assert!(f.contains(&inked) && !f.contains(&blue) && f.contains(&egui::Color32::from_rgb(0xff, 0xee, 0xcc)), "{f:?}");
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    assert!(frame(&mut app).2.is_some(), "the grid shows");
+    assert!(!fills(&mut app).contains(&inked), "the grid covers the colored artboard too");
+}
+
 #[test]
 fn white_background_hides_the_grid_and_paper_tints_the_artboard() {
     let mut app = app();

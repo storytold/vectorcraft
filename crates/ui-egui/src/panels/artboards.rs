@@ -7,6 +7,8 @@
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
+use vectorcraft_color::Color;
+use vectorcraft_doc::ColorMode;
 
 use super::{pstate, set_pstate};
 use crate::theme::Tokens;
@@ -35,6 +37,24 @@ pub(crate) fn scale_art(app: &VectorcraftApp) -> bool {
 /// keeps the option while another tool is in use, as when this panel opens Artboard Options.
 pub(crate) fn move_art(app: &VectorcraftApp) -> bool {
     app.session.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true)
+}
+
+/// The Fill list of an artboard (Properties › Artboards › Fill, Artboard Options): no background
+/// color, White and Black.
+pub(crate) const FILLS: [&str; 3] = ["None", "White", "Black"];
+
+/// The background colors [`FILLS`] stand for, White and Black in the document's color mode.
+pub(crate) fn fill_colors(app: &VectorcraftApp) -> [Option<Color>; 3] {
+    if app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk) {
+        [None, Some(Color::cmyk(0.0, 0.0, 0.0, 0.0)), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0))]
+    } else {
+        [None, Some(Color::WHITE), Some(Color::BLACK)]
+    }
+}
+
+/// The name the Fill list shows for background `color`: one of [`FILLS`], else Custom.
+pub(crate) fn fill_name(app: &VectorcraftApp, color: Option<Color>) -> &'static str {
+    fill_colors(app).iter().position(|c| *c == color).map_or("Custom", |i| FILLS[i])
 }
 
 /// The active artboard (of `n`).

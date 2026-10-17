@@ -411,6 +411,12 @@ pub struct Artboard {
     pub show_center_mark: bool,
     #[serde(default)]
     pub show_cross_hairs: bool,
+    /// Background color (Properties › Artboards › Fill, Artboard Options). The canvas draws the
+    /// artboard's paper in it, multiplied with the Simulate Colored Paper color while that is on;
+    /// without one the paper is white, or the Simulate Colored Paper color. Exports and print leave
+    /// it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<vectorcraft_color::Color>,
 }
 
 /// Opacity-mask editing mode: `object`'s mask art lives on the temporary `layer` while editing.
@@ -782,6 +788,7 @@ impl Document {
                 rect: Rect::new(0.0, 0.0, width, height),
                 show_center_mark: false,
                 show_cross_hairs: false,
+                color: None,
             }],
             layers: vec![],
             swatches: swatches.into(),

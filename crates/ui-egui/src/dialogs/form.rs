@@ -69,6 +69,14 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
     }
 }
 
+/// The fields of the form dialogs ([`grid`]) that the dialog's own body draws, by dialog kind.
+fn own_rows(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "artboardOptions" => &["color"],
+        _ => &[],
+    }
+}
+
 /// The fields of the form dialogs ([`grid`]) that come first, in this order (the others follow by
 /// name).
 fn order(kind: &str) -> &'static [&'static str] {
@@ -189,16 +197,17 @@ fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, options: &
     }
 }
 
-/// The generic dialog body: a field per non-boolean value (positions, indices and UI-only keys
-/// hidden) in the kind's [`order`], the distances in `unit`, the [`choices`] as dropdowns and the
-/// [`skew_ends`] fields as sliders.
+/// The generic dialog body: a field per non-boolean value (positions, indices, UI-only keys and the
+/// kind's [`own_rows`] hidden) in the kind's [`order`], the distances in `unit`, the [`choices`] as
+/// dropdowns and the [`skew_ends`] fields as sliders.
 pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     let rail = Tokens::get(ui.ctx()).input_border;
-    let (lengths, first) = (lengths(&d.kind), order(&d.kind));
+    let (lengths, first, own) = (lengths(&d.kind), order(&d.kind), own_rows(&d.kind));
     let mut keys: Vec<String> = d
         .fields
         .iter()
         .filter(|(k, v)| !matches!(k.as_str(), "x" | "y" | "origin" | "index") && !k.starts_with("__") && !v.is_boolean())
+        .filter(|(k, _)| !own.contains(&k.as_str()))
         .map(|(k, _)| k.clone())
         .collect();
     // Stable: the fields `order` doesn't name keep their order after the ones it does.

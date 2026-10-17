@@ -244,6 +244,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
+    // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
+    // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
+    // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
     if app.ui.view.artboards && !app.ui.view.outline {
         let setup = &doc.setup;
@@ -258,7 +261,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             match &grid {
                 Some((tex, cell)) => checker(&painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
                 None => {
-                    painter.add(Shape::convex_polygon(q, paper, Stroke::NONE));
+                    let fill = ab.color.map_or(paper, |c| crate::panels::c32(&c) * paper);
+                    painter.add(Shape::convex_polygon(q, fill, Stroke::NONE));
                 }
             }
         }

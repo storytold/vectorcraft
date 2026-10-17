@@ -214,6 +214,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G13 Illustrator 2026 (30.x) additions
 
 - **Done:** TIFF choices and format settings in Export for Screens and Asset Export (30.2), using the existing encoder; UI-to-file regressions cover selection, scaling, options and persistence.
+- **Done:** artboard background colors on the canvas (30.0): Properties › Artboards › Fill and Artboard Options set
+  each artboard's color, and the canvas draws its paper in it. Exports and print do not draw the color yet.
 
 - **Done:** Object › Intertwine (#1763): Make, Edit and Release; the Intertwine tool highlights the overlap area under
   the pointer, a click swaps which object is on top there, and a path (Shift: a rectangle) drawn around overlaps
@@ -225,7 +227,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   Mesh on an embedded image, which turns it into a mesh of its colours (#1676); radial gradients in Image Trace's
   Gradients option, which traces linear ones only (draft #1849). Inside the estimate below.
 - **Missing:** gradient dither and perceptual blending, gradient presets (30.0); tangent and perpendicular
-  snapping and the consolidated snapping options (30.0); artboard locking, artboard colours and managing
+  snapping and the consolidated snapping options (30.0); artboard locking, artboard colors in exports and print, and managing
   artboards from the canvas (30.0); the Blend panel with ease in/out and separate colour acceleration (30.7);
   the Dimension tool (28.x).
 - **Evidence:** Adobe's 30.0 and 30.7 release announcements, see

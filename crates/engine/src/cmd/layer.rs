@@ -125,7 +125,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Artboard",
             ["Window", "Artboards"],
             None,
-            "{x?, y?, width?, height?, name?} (default: right of the last)",
+            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it; default: none)} (default place: right of the last)",
             has_doc,
             artboard_new
         ),
@@ -143,7 +143,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index, name?, x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
+            "{index, name?, color?: color (\"#rrggbb\", {c,m,y,k}, … as the paint commands take: the background color the canvas draws the artboard's paper in, multiplied with the Simulate Colored Paper color while that is on; exports and print leave it out) | null (no background color), x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
             has_doc,
             artboard_set
         ),
@@ -803,15 +803,26 @@ fn rect_from(p: &Value, default: Rect) -> Rect {
     Rect::new(x, y, x + w, y + h)
 }
 
+/// An artboard command's `color` param, its background color: None when absent, `Some(None)` for
+/// null (no color), else `Some(Some(color))`.
+fn artboard_color(p: &Value, cmd: &str) -> Result<Option<Option<vectorcraft_color::Color>>> {
+    match p.get("color") {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(v) => color_value(v).map(|c| Some(Some(c))).ok_or_else(|| bad(cmd, format!("bad color {v}"))),
+    }
+}
+
 fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let d0 = &s.doc()?.doc;
     let last = d0.artboards.last().map(|a| a.rect).unwrap_or(Rect::new(0.0, 0.0, 612.0, 792.0));
     let def = Rect::new(last.x1 + 20.0, last.y0, last.x1 + 20.0 + last.width(), last.y1);
     let r = rect_from(p, def);
+    let color = artboard_color(p, "artboard.new")?.flatten();
     let idx = s.edit("New Artboard", |d, _| {
         let id = d.next_artboard_id();
         let name = str_param(p, "name").map(str::to_string).unwrap_or_else(|| format!("Artboard {}", d.artboards.len() + 1));
-        d.artboards.push(Artboard { id, name, rect: r, show_center_mark: false, show_cross_hairs: false });
+        d.artboards.push(Artboard { id, name, rect: r, show_center_mark: false, show_cross_hairs: false, color });
         Ok(d.artboards.len() - 1)
     })?;
     Ok(json!({ "index": idx }))
@@ -836,6 +847,8 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
 fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
     let was = s.doc()?.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    // The background color: a color sets it, null clears it, absent leaves it as it is.
+    let color = artboard_color(p, "artboard.setProps")?;
     let now = rect_from(p, was);
     let resized = (now.width() - was.width()).abs() > 1e-6 || (now.height() - was.height()).abs() > 1e-6;
     // Scale Artwork with Artboard: resized, it takes the art fully inside it (as Move Artwork with
@@ -866,6 +879,9 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
         a.rect = now;
         if let Some(n) = str_param(p, "name") {
             a.name = n.to_string();
+        }
+        if let Some(c) = color {
+            a.color = c;
         }
         let id = a.id;
         if let Some(xf) = transform {

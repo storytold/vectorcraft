@@ -1,7 +1,7 @@
 //! Panel-support commands (`cmd/{panelcmds,gradient,appearance,stroke,swatch,style}.rs`).
 
 use serde_json::json;
-use vectorcraft_color::{GradientKind, Paint};
+use vectorcraft_color::{Color, GradientKind, Paint};
 use vectorcraft_doc::{AppearanceItem, NodeKind};
 
 use super::*;
@@ -92,6 +92,61 @@ fn artboards_reorder_and_duplicate() {
     assert!(d.artboards[2].rect.x0 >= d.artboards[1].rect.x1);
     s.execute("artboard.reorder", &json!({"index": 1, "to": 0})).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Second");
+}
+
+/// An artboard's background color (Properties › Artboards › Fill): `artboard.setProps {color}` sets
+/// it and `{color: null}` clears it, each in one undo step. A change without `color` leaves it, a
+/// duplicate keeps it, `inspect_document` reports it, `artboard.new {color}` starts with it, and a
+/// bad color is refused.
+#[test]
+fn artboard_color_is_set_and_cleared_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let color = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].color;
+    let blue = Color::from_hex("#336699");
+    let black = Some(Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    s.execute("artboard.setProps", &json!({"index": 1, "color": "#336699"})).unwrap();
+    assert_eq!((color(&s, 0), color(&s, 1)), (None, blue), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Dark"})).unwrap();
+    assert_eq!(color(&s, 1), blue, "a change without a color leaves it");
+    s.execute("artboard.setProps", &json!({"index": 1, "color": {"c": 0, "m": 0, "y": 0, "k": 100}})).unwrap();
+    assert_eq!(color(&s, 1), black);
+    s.execute("artboard.setProps", &json!({"index": 1, "color": null})).unwrap();
+    assert_eq!(color(&s, 1), None);
+    for was in [black, blue, blue, None] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(color(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    let doc = crate::inspect::document(&s);
+    assert_eq!(doc["artboards"][1]["color"], "#336699");
+    assert!(doc["artboards"][0].get("color").is_none(), "{doc}");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 1})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(color(&s, copy), blue, "a duplicate keeps the color");
+    let made = s.execute("artboard.new", &json!({"color": "#336699"})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(color(&s, made), blue, "a new artboard takes `color` too");
+    let before = s.doc().unwrap().doc.clone();
+    assert!(s.execute("artboard.setProps", &json!({"index": 1, "color": "nope"})).is_err());
+    assert!(s.execute("artboard.new", &json!({"color": "nope"})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad color changes nothing");
+}
+
+/// The native format writes an artboard's background color and reads it back. An artboard without
+/// one is written as before, with no `color` key.
+#[test]
+fn artboard_color_round_trips_through_the_native_format() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "color": {"c": 10, "m": 20, "y": 30, "k": 40}})).unwrap();
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let keys = |i: usize| saved["document"]["artboards"][i].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(keys(0), ["id", "name", "rect", "show_center_mark", "show_cross_hairs"]);
+    assert!(keys(1).contains(&"color".to_string()), "{:?}", keys(1));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards[0].color, None);
+    assert_eq!(back.artboards[1].color, Some(Color::cmyk(0.1, 0.2, 0.3, 0.4)));
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
 }
 
 /// The artboards' left edges and names.

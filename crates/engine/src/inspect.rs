@@ -128,6 +128,15 @@ pub fn document(s: &Session) -> Value {
     document_opts(s, SummaryOpts::default())
 }
 
+/// An artboard's name and rectangle, and its background color (`#rrggbb`) when it has one.
+fn artboard_summary(a: &vectorcraft_doc::Artboard) -> Value {
+    let mut v = json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()});
+    if let Some(c) = a.color {
+        v["color"] = json!(c.to_hex());
+    }
+    v
+}
+
 /// The same summary with [`SummaryOpts`] applied to the layer tree (artboards and
 /// the rest always come whole): `depth: 0` is the skeleton — top layers with counts.
 pub fn document_opts(s: &Session, opts: SummaryOpts) -> Value {
@@ -141,7 +150,7 @@ pub fn document_opts(s: &Session, opts: SummaryOpts) -> Value {
         "revision": st.revision,
         "units": d.units.label(),
         "colorMode": format!("{:?}", d.color_mode),
-        "artboards": d.artboards.iter().map(|a| json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()})).collect::<Vec<_>>(),
+        "artboards": d.artboards.iter().map(artboard_summary).collect::<Vec<_>>(),
         // Top of the stack first, like the Layers panel.
         "layers": d.layers.iter().rev().map(|l| node_summary_opts(l, opts, &symbols)).collect::<Vec<_>>(),
         "currentLayer": st.active_layer.map(|l| l.0),

@@ -441,7 +441,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPicker",
         "Color Picker…",
         "",
-        "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
+        "{stroke?: bool (default: the active proxy), artboard?: index (the picker is for that artboard's background color instead), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's color, or the artboard's color, white when it has none)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke, or artboard.setProps {index, color} for an artboard",
     ),
     (
         "ui.sampleScreenColor",

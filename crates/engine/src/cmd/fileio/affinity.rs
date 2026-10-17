@@ -136,7 +136,7 @@ impl Builder {
             .into_iter()
             .enumerate()
             .filter(|(_, (_, r))| r.width() > 0.0 && r.height() > 0.0)
-            .map(|(i, (name, rect))| Artboard { id: i as u32 + 1, name, rect, show_center_mark: false, show_cross_hairs: false })
+            .map(|(i, (name, rect))| Artboard { id: i as u32 + 1, name, rect, show_center_mark: false, show_cross_hairs: false, color: None })
             .collect();
         if self.doc.artboards.is_empty() {
             return Err(err("the Affinity document has no page with a size"));
