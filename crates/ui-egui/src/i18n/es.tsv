@@ -3580,7 +3580,8 @@ imageTrace	Outline	Contorno
 	 to sample a color	 para muestrear un color
 	 across a selected object to set the gradient direction	 sobre un objeto seleccionado para definir la dirección del degradado
 	 to select an artboard  |  	 para seleccionar una mesa de trabajo  |  
-	 on the canvas to create one	 en el lienzo para crear una
+	 on the canvas to create one (	 en el lienzo para crear una (
+	 selects several, or draws one inside an artboard)	 selecciona varias o crea una dentro de una mesa de trabajo)
 	 a stroke to add a width point  |  	 un trazo para agregar un punto de anchura  |  
 	 to change one side  |  	 para cambiar un solo lado  |  
 	 to select more points  |  	 para seleccionar más puntos  |  

@@ -860,7 +860,14 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             (" to sample a color", false),
         ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
-        "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
+        "artboard" => &[
+            ("Click", true),
+            (" to select an artboard  |  ", false),
+            ("Drag", true),
+            (" on the canvas to create one (", false),
+            ("Shift", true),
+            (" selects several, or draws one inside an artboard)", false),
+        ],
         "width" => &[
             ("Drag", true),
             (" a stroke to add a width point  |  ", false),

@@ -3611,7 +3611,8 @@ imageTrace	Outline	Контур
 	 to sample a color	 для взятия образца цвета
 	 across a selected object to set the gradient direction	 по выделенному объекту для задания направления градиента
 	 to select an artboard  |  	 для выбора монтажной области  |  
-	 on the canvas to create one	 на холсте для создания одной
+	 on the canvas to create one (	 на холсте для создания одной (
+	 selects several, or draws one inside an artboard)	 выбирает несколько или создаёт новую внутри монтажной области)
 	 a stroke to add a width point  |  	 обводку для добавления точки ширины  |  
 	 to change one side  |  	 для изменения одной стороны  |  
 	 to select more points  |  	 для выделения большего числа точек  |  

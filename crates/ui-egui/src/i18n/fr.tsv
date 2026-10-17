@@ -3577,7 +3577,8 @@ imageTrace	Outline	Contour
 	 to sample a color	 pour prélever une couleur
 	 across a selected object to set the gradient direction	 sur un objet sélectionné pour définir la direction du dégradé
 	 to select an artboard  |  	 pour sélectionner un plan de travail  |  
-	 on the canvas to create one	 sur la zone de travail pour en créer un
+	 on the canvas to create one (	 sur la zone de travail pour en créer un (
+	 selects several, or draws one inside an artboard)	 en sélectionne plusieurs ou en crée un dans un plan de travail)
 	 a stroke to add a width point  |  	 sur un contour pour ajouter un point de largeur  |  
 	 to change one side  |  	 pour modifier un seul côté  |  
 	 to select more points  |  	 pour sélectionner d’autres points  |  

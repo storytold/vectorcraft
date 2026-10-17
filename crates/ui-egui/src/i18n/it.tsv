@@ -3615,7 +3615,8 @@ imageTrace	Outline	Contorno
 	 to sample a color	 per campionare un colore
 	 across a selected object to set the gradient direction	 su un oggetto selezionato per impostare la direzione della sfumatura
 	 to select an artboard  |  	 per selezionare una tavola da disegno  |  
-	 on the canvas to create one	 sull'area di disegno per crearne una
+	 on the canvas to create one (	 sull'area di disegno per crearne una (
+	 selects several, or draws one inside an artboard)	 ne seleziona più d'una o ne crea una dentro una tavola da disegno)
 	 a stroke to add a width point  |  	 su una traccia per aggiungere un punto di larghezza  |  
 	 to change one side  |  	 per modificare un solo lato  |  
 	 to select more points  |  	 per selezionare altri punti  |  

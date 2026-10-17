@@ -3512,7 +3512,8 @@ imageTrace	Outline	Kontur
 	 to sample a color	 nimmt eine Farbe auf
 	 across a selected object to set the gradient direction	 über ein ausgewähltes Objekt legt die Verlaufsrichtung fest
 	 to select an artboard  |  	 wählt eine Zeichenfläche aus  |  
-	 on the canvas to create one	 auf der Arbeitsfläche erstellt eine neue
+	 on the canvas to create one (	 auf der Arbeitsfläche erstellt eine neue (
+	 selects several, or draws one inside an artboard)	 wählt mehrere aus oder erstellt eine neue in einer Zeichenfläche)
 	 a stroke to add a width point  |  	 an einer Kontur fügt einen Breitenpunkt hinzu  |  
 	 to change one side  |  	 ändert nur eine Seite  |  
 	 to select more points  |  	 wählt weitere Punkte aus  |  

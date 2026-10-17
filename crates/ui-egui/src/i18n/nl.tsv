@@ -1052,7 +1052,8 @@ lighting	Light	Licht
 	 to sample a color	 om een kleur over te nemen
 	 across a selected object to set the gradient direction	 over een geselecteerd object om de richting van het verloop in te stellen
 	 to select an artboard  |  	 om een tekengebied te selecteren  |  
-	 on the canvas to create one	 op het canvas om er een te maken
+	 on the canvas to create one (	 op het canvas om er een te maken (
+	 selects several, or draws one inside an artboard)	 selecteert er meerdere of maakt er een binnen een tekengebied)
 	 a stroke to add a width point  |  	 op een lijn om een breedtepunt toe te voegen  |  
 	 to change one side  |  	 om één kant te wijzigen  |  
 	 to select more points  |  	 om meer punten te selecteren  |  

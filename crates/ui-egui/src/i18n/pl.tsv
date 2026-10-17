@@ -1058,7 +1058,8 @@ lighting	Light	Światło
 	 to sample a color	 aby pobrać próbkę koloru
 	 across a selected object to set the gradient direction	 przez zaznaczony obiekt, aby ustawić kierunek gradientu
 	 to select an artboard  |  	 aby zaznaczyć obszar kompozycji  |  
-	 on the canvas to create one	 na płótnie, aby go utworzyć
+	 on the canvas to create one (	 na płótnie, aby go utworzyć (
+	 selects several, or draws one inside an artboard)	 zaznacza kilka lub tworzy nowy wewnątrz obszaru kompozycji)
 	 a stroke to add a width point  |  	 obrys, aby dodać punkt szerokości  |  
 	 to change one side  |  	 aby zmienić jedną stronę  |  
 	 to select more points  |  	 aby zaznaczyć więcej punktów  |  

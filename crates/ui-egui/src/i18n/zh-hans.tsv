@@ -3470,7 +3470,8 @@ imageTrace	Outline	轮廓
 	 to sample a color	以取样颜色
 	 across a selected object to set the gradient direction	横跨所选对象以设置渐变方向
 	 to select an artboard  |  	以选择画板  |  
-	 on the canvas to create one	在画布上以创建画板
+	 on the canvas to create one (	在画布上以创建画板 (
+	 selects several, or draws one inside an artboard)	可选择多个，或在画板内创建画板)
 	 a stroke to add a width point  |  	描边可添加宽度点  |  
 	 to change one side  |  	可只更改单侧  |  
 	 to select more points  |  	可选择更多点  |  

@@ -1052,7 +1052,8 @@ lighting	Light	Cahaya
 	 to sample a color	 untuk mengambil sampel warna
 	 across a selected object to set the gradient direction	 melintasi objek terpilih untuk mengatur arah gradien
 	 to select an artboard  |  	 untuk memilih artboard  |  
-	 on the canvas to create one	 di kanvas untuk membuatnya
+	 on the canvas to create one (	 di kanvas untuk membuatnya (
+	 selects several, or draws one inside an artboard)	 memilih beberapa, atau membuat satu di dalam artboard)
 	 a stroke to add a width point  |  	 stroke untuk menambah titik lebar  |  
 	 to change one side  |  	 untuk mengubah satu sisi  |  
 	 to select more points  |  	 untuk memilih lebih banyak titik  |  

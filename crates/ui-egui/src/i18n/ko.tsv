@@ -730,7 +730,8 @@
 	 from center  |  	 중심에서  |  
 	 keeps its proportions)	 비율 유지)
 	 near a selected pin to rotate  |  	 선택한 핀 근처에서 회전  |  
-	 on the canvas to create one	 캔버스에서 만들기
+	 on the canvas to create one (	 캔버스에서 만들기 (
+	 selects several, or draws one inside an artboard)	 여러 개 선택 또는 아트보드 안에 만들기)
 	 over paths to roughen their outlines  |  	 패스 위에서 윤곽선 거칠게 만들기  |  
 	 over paths, and hold still to keep going  |  	 패스 위에서 멈춰 있으면 계속 진행  |  
 	 the art to add a pin  |  	 아트워크를 클릭하여 핀 추가  |  

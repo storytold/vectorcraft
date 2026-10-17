@@ -38,7 +38,8 @@
 	 from center  |  	 – rajzolás a középpontból  |  
 	 keeps its proportions)	 – arányok megtartása)
 	 near a selected pin to rotate  |  	 egy kijelölt tű közelében – forgatás  |  
-	 on the canvas to create one	 a vásznon – új rajztábla
+	 on the canvas to create one (	 a vásznon – új rajztábla (
+	 selects several, or draws one inside an artboard)	 – több kijelölése, vagy új rajztábla egy rajztáblán belül)
 	 over paths to roughen their outlines  |  	 útvonalakon – a körvonaluk eldurvítása  |  
 	 over paths, and hold still to keep going  |  	 útvonalakon – nyomva tartva folytatódik  |  
 	 right or left to zoom in or out  |  	 jobbra vagy balra – nagyítás vagy kicsinyítés  |  

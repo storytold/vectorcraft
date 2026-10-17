@@ -1030,8 +1030,9 @@ impl Leave {
         }
     }
 
-    /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids,
-    /// Artboard): Shift keeps the dragged corner on a diagonal, the box a square.
+    /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids, and
+    /// Artboard, which passes no Shift): Shift keeps the dragged corner on a diagonal, the box a
+    /// square.
     pub fn diagonal(at: Point, shift: bool) -> Self {
         Self { at, shift: shift.then_some(Keep::Square), angles: &[] }
     }

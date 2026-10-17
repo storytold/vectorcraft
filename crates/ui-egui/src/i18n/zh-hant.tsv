@@ -3596,7 +3596,8 @@ imageTrace	Outline	輪廓
 	 to sample a color	可取樣顏色
 	 across a selected object to set the gradient direction	橫越所選物件可設定漸層方向
 	 to select an artboard  |  	可選取工作區域  |  
-	 on the canvas to create one	畫布可建立工作區域
+	 on the canvas to create one (	畫布可建立工作區域 (
+	 selects several, or draws one inside an artboard)	可選取多個，或在工作區域內建立工作區域)
 	 a stroke to add a width point  |  	筆畫可新增寬度點  |  
 	 to change one side  |  	可只變更單側  |  
 	 to select more points  |  	可選取更多點  |  

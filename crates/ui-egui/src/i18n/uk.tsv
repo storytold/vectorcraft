@@ -3608,7 +3608,8 @@ imageTrace	Outline	Контур
 	 to sample a color	 для взяття зразка кольору
 	 across a selected object to set the gradient direction	 по виділеному об’єкту, щоб задати напрям градієнта
 	 to select an artboard  |  	 для вибору монтажної області  |  
-	 on the canvas to create one	 на полотні для створення однієї
+	 on the canvas to create one (	 на полотні для створення однієї (
+	 selects several, or draws one inside an artboard)	 вибирає кілька або створює нову всередині монтажної області)
 	 a stroke to add a width point  |  	 обведення для додавання точки ширини  |  
 	 to change one side  |  	 для зміни однієї сторони  |  
 	 to select more points  |  	 для виділення інших точок  |  

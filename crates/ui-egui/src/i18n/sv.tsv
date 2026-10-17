@@ -3521,7 +3521,8 @@ imageTrace	Outline	Disposition
 	 to sample a color	 för att hämta en färg
 	 across a selected object to set the gradient direction	 över ett markerat objekt för att ange gradientens riktning
 	 to select an artboard  |  	 för att markera en rityta  |  
-	 on the canvas to create one	 på arbetsytan för att skapa en
+	 on the canvas to create one (	 på arbetsytan för att skapa en (
+	 selects several, or draws one inside an artboard)	 markerar flera eller skapar en ny i en rityta)
 	 a stroke to add a width point  |  	 en kontur för att lägga till en breddpunkt  |  
 	 to change one side  |  	 för att ändra en sida  |  
 	 to select more points  |  	 för att markera fler punkter  |  

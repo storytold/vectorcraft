@@ -1127,7 +1127,8 @@ lighting	Light	Světlo
 	 to sample a color	 nabere barvu
 	 across a selected object to set the gradient direction	 přes vybraný objekt nastaví směr přechodu
 	 to select an artboard  |  	 vybere pracovní plochu  |  
-	 on the canvas to create one	 na plátně vytvoří novou
+	 on the canvas to create one (	 na plátně vytvoří novou (
+	 selects several, or draws one inside an artboard)	 vybere více nebo vytvoří novou uvnitř pracovní plochy)
 	 a stroke to add a width point  |  	 tahu přidá bod šířky  |  
 	 to change one side  |  	 změní jednu stranu  |  
 	 to select more points  |  	 vybere další body  |  

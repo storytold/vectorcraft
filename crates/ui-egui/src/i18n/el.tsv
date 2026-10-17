@@ -4751,7 +4751,8 @@ theme	Appearance	Εμφάνιση
 	 to sample a color	 για δειγματοληψία χρώματος
 	 across a selected object to set the gradient direction	 κατά μήκος επιλεγμένου αντικειμένου για ορισμό κατεύθυνσης ντεγκραντέ
 	 to select an artboard  |  	 για επιλογή πίνακα σχεδίασης  |  
-	 on the canvas to create one	 στον καμβά για δημιουργία ενός
+	 on the canvas to create one (	 στον καμβά για δημιουργία ενός (
+	 selects several, or draws one inside an artboard)	 επιλέγει πολλούς ή δημιουργεί νέο μέσα σε πίνακα σχεδίασης)
 	 a stroke to add a width point  |  	 περίγραμμα για προσθήκη σημείου πλάτους  |  
 	 to change one side  |  	 για αλλαγή μίας πλευράς  |  
 	 to select more points  |  	 για επιλογή περισσότερων σημείων  |  

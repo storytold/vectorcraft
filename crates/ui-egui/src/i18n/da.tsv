@@ -1052,7 +1052,8 @@ lighting	Light	Lys
 	 to sample a color	 for at tage en farveprøve
 	 across a selected object to set the gradient direction	 hen over et markeret objekt for at angive gradientretningen
 	 to select an artboard  |  	 for at markere et tegnebræt  |  
-	 on the canvas to create one	 på canvaset for at oprette et
+	 on the canvas to create one (	 på canvaset for at oprette et (
+	 selects several, or draws one inside an artboard)	 markerer flere eller opretter et inde i et tegnebræt)
 	 a stroke to add a width point  |  	 på en kontur for at tilføje et breddepunkt  |  
 	 to change one side  |  	 for at ændre den ene side  |  
 	 to select more points  |  	 for at markere flere punkter  |  

@@ -735,7 +735,8 @@
 	 from center  |  	：中心から描画  |  
 	 keeps its proportions)	：縦横比を固定）
 	 near a selected pin to rotate  |  	：選択したピンの近くで回転  |  
-	 on the canvas to create one	：アートボードを作成
+	 on the canvas to create one (	：アートボードを作成（
+	 selects several, or draws one inside an artboard)	：複数を選択、またはアートボード内に作成）
 	 over paths to roughen their outlines  |  	：パスの輪郭を粗くする  |  
 	 over paths, and hold still to keep going  |  	：パス上で押し続けると効果が続く  |  
 	 the art to add a pin  |  	：アートにピンを追加  |  
