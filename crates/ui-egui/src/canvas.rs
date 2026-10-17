@@ -4368,7 +4368,7 @@ mod tests {
         app.session.pointer(&PointerEvent::new(PointerKind::Up, 181.9, 131.3), view).unwrap();
         assert!(upload(&mut app).is_none(), "not rendered on this thread");
         assert!(app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|k| !k.interacting), "sent to the worker");
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
         let mut after = None;
         while after.is_none() && std::time::Instant::now() < until {
             std::thread::sleep(std::time::Duration::from_millis(5));

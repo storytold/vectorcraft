@@ -383,7 +383,10 @@ mod tests {
         });
         let mut reader = BufReader::new(client.try_clone().unwrap());
         for id in [1, 2] {
-            writeln!(client, "{}", json!({"id": id, "method": "inspect"})).unwrap();
+            // The client sends each line in one write. `writeln!` on the socket sends the JSON in many
+            // small writes, and when the machine is busy, a pause of more than the 120 ms line deadline
+            // between two of them closes the connection.
+            client.write_all(format!("{}\n", json!({"id": id, "method": "inspect"})).as_bytes()).unwrap();
             let mut line = String::new();
             reader.read_line(&mut line).unwrap();
             assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"id": id, "ok": true}));

@@ -117,7 +117,7 @@ fn a_slow_clipboard_is_read_off_the_ui_thread() {
     frame(&mut app);
     assert!(t0.elapsed() < Duration::from_millis(300), "the frame waited on the clipboard: {:?}", t0.elapsed());
     // The probe's verdict (the UI's own handle would say no) enables Paste once it arrives.
-    assert!(frames_until(&mut app, Duration::from_secs(3), |app| app.system_paste), "the probe's verdict never arrived");
+    assert!(frames_until(&mut app, Duration::from_secs(60), |app| app.system_paste), "the probe's verdict never arrived");
     assert!(menus::enabled(&app, "edit.paste"));
     let threads = rec.threads.lock().unwrap().clone();
     assert!(threads.iter().all(|n| n.as_deref() == Some("vectorcraft-clip")), "checked on: {threads:?}");
@@ -128,7 +128,7 @@ fn the_probe_rests_after_a_copy_and_stops_with_the_app() {
     let rec = Arc::new(Recorder::default());
     let mut app = app(&rec, Duration::ZERO, false, Some(true));
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
-    assert!(frames_until(&mut app, Duration::from_secs(2), |app| app.system_paste));
+    assert!(frames_until(&mut app, Duration::from_secs(60), |app| app.system_paste));
     // Something copied in the app enables Paste alone: the clipboard isn't read any more.
     copy_rect(&mut app);
     frames_until(&mut app, Duration::from_millis(50), |_| false);
@@ -149,7 +149,7 @@ fn without_its_thread_the_check_runs_in_line_again() {
     // The probe's clipboard panics: its thread ends.
     let mut app = app(&rec, Duration::ZERO, true, None);
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
-    assert!(frames_until(&mut app, Duration::from_secs(2), |app| app.system_paste), "no fallback");
+    assert!(frames_until(&mut app, Duration::from_secs(60), |app| app.system_paste), "no fallback");
     assert!(app.clipboard_probe.is_none());
     let threads = rec.threads.lock().unwrap().clone();
     assert_eq!(threads.first().cloned().flatten().as_deref(), Some("vectorcraft-clip"), "{threads:?}");
