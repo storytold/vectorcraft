@@ -713,7 +713,8 @@ impl<'a> Scene<'a> {
                 let Some(rgb) = self.paint_rgb(paint) else { continue };
                 let style = self.style(rgb, 1.0, None, None);
                 let text_style = self.text_style(&cs.font_family);
-                let height = cs.size * cs.v_scale / 100.0 * CAP_HEIGHT * across;
+                // The height is that of the size the layout draws: Shrink Text to Fit scales the size by `layout.fit_scale`.
+                let height = cs.size * layout.fit_scale * cs.v_scale / 100.0 * CAP_HEIGHT * across;
                 let width = if cs.v_scale > 0.0 { cs.h_scale / cs.v_scale } else { 1.0 };
                 let origin = run.iter().map(|g| g.origin).min_by(|p, q| p.x.total_cmp(&q.x)).unwrap_or(first.origin);
                 let p = self.pt(t.xf * origin);

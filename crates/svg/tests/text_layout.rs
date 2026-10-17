@@ -321,6 +321,48 @@ fn justified_japanese_lines_keep_the_gaps_between_their_characters() {
     }
 }
 
+/// Area type that Shrink Text to Fit scales down to fit its frame is written at the size the
+/// canvas draws it at: sizes, tracking, manual kerning and baseline shifts, on ragged, anchored
+/// and justified lines.
+#[test]
+fn shrunk_area_type_is_written_at_the_size_it_draws_at() {
+    let tracked = CharStyle { tracking: 80.0, ..style(12.0) };
+    let kerned = CharStyle { kerning: Some(-40.0), ..style(12.0) };
+    let wide = CharStyle { h_scale: 150.0, ..style(12.0) };
+    let shifted = CharStyle { baseline_shift: 3.0, ..style(12.0) };
+    for justify in [Justify::Left, Justify::Center, Justify::JustifyLeft, Justify::JustifyAll] {
+        // Tracked and kerned letters are inside words: usvg also spaces a line's last letter, which
+        // moves an anchored line ending in one.
+        let mut runs = vec![
+            run("plain words ", style(12.0)),
+            run("trac", tracked.clone()),
+            run("ked ", style(12.0)),
+            run("ker", kerned.clone()),
+            run("ned ", style(12.0)),
+            run("up ", shifted.clone()),
+            run("big ", style(18.0)),
+        ];
+        // usvg anchors a centered line by its width before `textLength` stretches it.
+        if justify != Justify::Center {
+            runs.push(run("wide ", wide.clone()));
+        }
+        runs.push(run("and more words at the end", style(12.0)));
+        let mut d = area_doc(runs, 90.0, justify);
+        let id = d.layers[0].children().unwrap()[0].id;
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 90.0, 40.0)) };
+            t.area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 10.0 };
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &the_text(&d));
+        assert!(!lay.overflow && lay.fit_scale < 0.8, "{justify:?}: the text is shrunk to fit ({})", lay.fit_scale);
+        assert_drawn_in_place(&d);
+        // Fewer `<tspan>` Elements writes the shrunk size too.
+        let fewer = export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() });
+        let size = attr(&fewer[fewer.find("<text").unwrap()..], "font-size").unwrap();
+        assert!((size - 12.0 * lay.fit_scale).abs() < 1e-3, "{justify:?}: {fewer}");
+    }
+}
+
 /// Japanese composition (Mojikumi) closes up consecutive punctuation and adds a quarter em between
 /// Japanese and Latin letters; live text keeps that spacing, on anchored lines too.
 #[test]

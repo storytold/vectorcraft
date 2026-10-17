@@ -154,6 +154,28 @@ fn type_gives_font_properties() {
     assert!(prop(&r, "background-color").is_none() && r.unsupported.is_none());
 }
 
+/// Area type that Shrink Text to Fit scales down gives the size, spacing and leading it draws at.
+#[test]
+fn shrunk_area_type_gives_the_size_it_draws_at() {
+    let mut d = doc();
+    let st = CharStyle { size: 18.0, tracking: 50.0, leading: Some(24.0), fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let mut n = text(&mut d, "Area type that is too long for its frame", st);
+    let mut fit = 1.0;
+    if let NodeKind::Text(t) = &mut n.kind {
+        t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 40.0)) };
+        t.area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 10.0 };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        assert!(!lay.overflow && lay.fit_scale < 0.9, "the text is shrunk to fit: {}", lay.fit_scale);
+        fit = lay.fit_scale;
+    }
+    let id = add(&mut d, n);
+    let r = one(&d, id, &CssOptions::default());
+    let px = |v: f64| format!("{}px", vectorcraft_svg::fmt_num(v, 3));
+    assert_eq!(prop(&r, "font-size"), Some(px(18.0 * fit).as_str()), "{r:?}");
+    assert_eq!(prop(&r, "letter-spacing"), Some(px(0.9 * fit).as_str()), "{r:?}");
+    assert_eq!(prop(&r, "line-height"), Some(px(24.0 * fit).as_str()), "{r:?}");
+}
+
 #[test]
 fn shared_properties_read_as_svg_export_writes_them() {
     let mut d = doc();

@@ -552,6 +552,34 @@ fn type_reads_back_as_text() {
     assert!((b.x0 - 150.0).abs() < 1e-3 && (b.y1 - 190.0).abs() < 1e-3, "{b:?}");
 }
 
+/// Area type that Shrink Text to Fit scales down is written at the sizes, leading and baseline
+/// shifts it draws at, so it reads back fitting its frame.
+#[test]
+fn shrunk_area_type_is_written_at_the_size_it_draws_at() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "Area type that is too long ", style(14.0, Paint::solid(Color::BLACK)));
+    let raised = vectorcraft_doc::CharStyle { baseline_shift: 3.0, leading: Some(20.0), ..style(14.0, red()) };
+    area.runs.push(TextRun::new("for its frame shrinks", raised));
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 40.0)) };
+    area.area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 10.0 };
+    area.xf = Affine::translate((20.0, 80.0));
+    let fit = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &area).fit_scale;
+    assert!(fit < 0.9, "the text is shrunk to fit: {fit}");
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(area)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let imported = crate::import(&write(&doc).bytes).unwrap();
+    let found = texts(&imported.document);
+    let (_, back) = found.first().expect("the area type reads back");
+    let sizes: Vec<(f64, f64, Option<f64>)> = back.runs.iter().map(|r| (r.style.size, r.style.baseline_shift, r.style.leading)).collect();
+    assert_eq!(sizes.len(), 2, "{sizes:?}");
+    assert!((sizes[0].0 - 14.0 * fit).abs() < 1e-3 && (sizes[1].0 - 14.0 * fit).abs() < 1e-3, "{sizes:?} at {fit}");
+    assert!((sizes[1].1 - 3.0 * fit).abs() < 1e-3, "{sizes:?} at {fit}");
+    assert!(sizes[1].2.is_some_and(|l| (l - 20.0 * fit).abs() < 1e-3), "{sizes:?} at {fit}");
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), back).overflow, "it fits its frame as written");
+}
+
 #[test]
 fn type_8_bit_text_cant_hold_and_type_asked_for_as_outlines_are_outlines() {
     use vectorcraft_doc::TextObject;

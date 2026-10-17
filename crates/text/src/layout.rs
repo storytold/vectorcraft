@@ -294,7 +294,9 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
 
 /// `t` with every run's size, explicit leading and baseline shift scaled by `f`, inline art's own
 /// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
-fn scaled(t: &TextObject, f: f64) -> TextObject {
+/// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
+/// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
+pub fn scaled(t: &TextObject, f: f64) -> TextObject {
     let mut s = t.clone();
     for r in &mut s.runs {
         r.style.size *= f;

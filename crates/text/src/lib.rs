@@ -34,7 +34,7 @@ pub use fontdb::{
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with};
+pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
