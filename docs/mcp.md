@@ -1141,7 +1141,11 @@ already walks Image Trace. Short agent entry points:
   line the row starts on.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
-  action on every file in a folder or every data set (the Actions panel menu's Batch…).
+  action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override
+  Export end the file name of a step with `format` in that `format`, in lower case and without a leading dot, when it
+  is one of the format's extensions (`.svg` and `SVG` give `.svg`, `.JPEG` gives `.jpeg`), and otherwise in the
+  format's first extension (`png8` gives `.png`, `template` gives `.vctemplate`). A step without `format` keeps the
+  source file's extension (`.vectorcraft` over data sets).
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,

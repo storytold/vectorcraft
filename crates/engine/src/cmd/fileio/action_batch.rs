@@ -246,7 +246,8 @@ fn write_result(s: &mut Session, path: &str, ext: &str, as_copy: bool) -> Result
     Ok(())
 }
 
-/// Point Save / Export steps at `dest_folder/{stem}.{ext}` when overrides are on.
+/// Point Save / Export steps at `dest_folder/{stem}.{ext}` when overrides are on: `ext` is the
+/// extension of the step's `format` ([`format_extension`]), else `default_ext`.
 #[cfg(not(target_arch = "wasm32"))]
 fn rewrite_paths(
     steps: &[Value],
@@ -271,8 +272,10 @@ fn rewrite_paths(
             }
             let params = c.get("params").cloned().unwrap_or(json!({}));
             let mut params = params.as_object().cloned().unwrap_or_default();
-            let ext = params.get("format").and_then(Value::as_str).unwrap_or(default_ext);
-            let ext = if ext.is_empty() { default_ext } else { ext };
+            let ext = match params.get("format").and_then(Value::as_str).filter(|f| !f.is_empty()) {
+                Some(f) => format_extension(f),
+                None => default_ext.to_string(),
+            };
             let file = std::path::Path::new(folder).join(format!("{stem}.{ext}"));
             params.insert("path".into(), json!(file.to_string_lossy()));
             if let Some(o) = c.as_object_mut() {
@@ -281,6 +284,21 @@ fn rewrite_paths(
             c
         })
         .collect()
+}
+
+/// The extension of the file a step writes in `format` (an id or extension, as [`super::format`]
+/// reads it: any case, a leading dot allowed): the extension as written, in lower case and without
+/// the dot, when it is one of the format's (`SVG` → `svg`, `.JPEG` → `jpeg`), else the format's
+/// first (`png8` → `png`, `template` → `vctemplate`). An unknown format (`xyz`) keeps its spelling,
+/// and the step fails with its command's error.
+#[cfg(not(target_arch = "wasm32"))]
+fn format_extension(format: &str) -> String {
+    let written = format.trim_start_matches('.').to_ascii_lowercase();
+    match super::format(format) {
+        Some(f) if f.extensions.contains(&written.as_str()) => written,
+        Some(f) => f.extensions.first().map_or(written, |e| (*e).to_string()),
+        None => format.to_string(),
+    }
 }
 
 /// Readable files under `folder` (and optionally its subfolders), capped.
@@ -408,6 +426,70 @@ mod tests {
             .unwrap();
         assert_eq!(r["failed"], 0, "{r}");
         assert!(dest.join("only.svg").is_file());
+    }
+
+    /// Override Export names each file with the extension of the format the step names, however
+    /// the step spells it; a format given by one of its extensions keeps that extension.
+    #[test]
+    fn batch_override_export_names_files_with_the_format_s_extension() {
+        let src = tmp("ext-src");
+        write_svg(&src, "a.svg", "#f00");
+        let cases = [(".svg", "a.svg"), ("SVG", "a.svg"), ("svg", "a.svg"), ("png8", "a.png"), ("template", "a.vctemplate"), (".JPEG", "a.jpeg")];
+        for (i, (format, want)) in cases.into_iter().enumerate() {
+            let dest = tmp(&format!("ext-out-{i}"));
+            let mut s = Session::new();
+            let r = s
+                .execute(
+                    "action.batch",
+                    &json!({
+                        "folder": src.to_string_lossy(),
+                        "destinationFolder": dest.to_string_lossy(),
+                        "commands": [{"command": "document.export", "params": {"format": format}}]
+                    }),
+                )
+                .unwrap();
+            assert_eq!(r["failed"], 0, "{format}: {r}");
+            assert_eq!(file_names(&dest), [want], "{format}: {r}");
+        }
+        // An unknown format keeps its spelling, and the step fails with the export's error.
+        let dest = tmp("ext-out-unknown");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.export", "params": {"format": "xyz"}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 1, "{r}");
+        assert!(r["processed"][0]["error"].as_str().is_some_and(|e| e.contains("unknown format `xyz`")), "{r}");
+        assert!(file_names(&dest).is_empty(), "{r}");
+    }
+
+    /// Override Save names each file with the extension of the format the step names, also over
+    /// data sets.
+    #[test]
+    fn batch_override_save_names_files_with_the_format_s_extension() {
+        for (i, format) in [".svg", "SVG", ".PDF"].into_iter().enumerate() {
+            let dest = tmp(&format!("ext-save-{i}"));
+            let mut s = with_data_sets(&["a"]);
+            let r = s
+                .execute(
+                    "action.batch",
+                    &json!({
+                        "source": "datasets",
+                        "destinationFolder": dest.to_string_lossy(),
+                        "commands": [{"command": "file.saveAs", "params": {"format": format}}]
+                    }),
+                )
+                .unwrap();
+            assert_eq!(r["failed"], 0, "{format}: {r}");
+            let want = format!("Untitled_a.{}", format.trim_start_matches('.').to_ascii_lowercase());
+            assert_eq!(file_names(&dest), [want], "{format}: {r}");
+        }
     }
 
     #[test]
