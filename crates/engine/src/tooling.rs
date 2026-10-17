@@ -226,6 +226,7 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            type_defaults: &self.type_defaults,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
             anchor_path_labels: self.prefs.anchor_path_labels,

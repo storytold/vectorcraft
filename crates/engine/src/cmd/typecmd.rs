@@ -399,6 +399,26 @@ pub(crate) fn local_type_value(t: &TextObject, value: f64, limits: (f64, f64), h
     Ok(local)
 }
 
+impl Session {
+    /// Remember for the type the Type tools make next ([`vectorcraft_tools::TypeDefaults`]) the
+    /// font and style of the first character of bytes `range` of type `id` when the command that
+    /// just styled them set them (`face`), and the `size` it set (points, as given). A preview (a
+    /// font menu's hover) chooses nothing and isn't remembered.
+    pub(crate) fn remember_type(&mut self, id: NodeId, range: (usize, usize), face: bool, size: Option<f64>) {
+        if self.in_interaction() {
+            return;
+        }
+        if face && let Some(NodeKind::Text(t)) = self.active().and_then(|d| d.doc.node(id)).map(|n| &n.kind) {
+            let st = vectorcraft_text::edit::insertion_style(&t.runs, range.0, range.1);
+            self.type_defaults.font = Some(st.font_family);
+            self.type_defaults.style = Some(st.font_style);
+        }
+        if let Some(v) = size {
+            self.type_defaults.size = Some(v.clamp(0.1, 1296.0));
+        }
+    }
+}
+
 /// Optional `start`/`end` byte offsets of a text command: the character range it styles and the
 /// paragraphs it touches. Without either, the command applies to all the text.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -595,6 +615,10 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    if let Some(first) = ids.first() {
+        let at = range.map_or((0, usize::MAX), |r| (r.start.unwrap_or(0), r.end.unwrap_or(usize::MAX)));
+        s.remember_type(*first, at, font.is_some() || style.is_some(), size);
+    }
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
 

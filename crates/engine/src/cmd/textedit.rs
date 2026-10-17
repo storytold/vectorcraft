@@ -529,6 +529,8 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
     }
+    // What the next new type takes from this change, before its sizes are put in the type's units.
+    let (face, size) = (change.font.is_some() || change.style.is_some(), change.size);
     let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
     let t = text_ref(s, id)?;
     change.localize(&t, C)?;
@@ -547,6 +549,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
         refresh_bounds(t);
         Ok(t.runs.len())
     })?;
+    s.remember_type(id, (a, b), face, size);
     Ok(json!({"id": id.0, "runs": n}))
 }
 
