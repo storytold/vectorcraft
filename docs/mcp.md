@@ -618,7 +618,10 @@ page) opens from its editing data alone: its type is made from the file's text d
 area type and type on a path), and what can't be is left out with a warning. Non-native art (the content of a placed
 PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data) is drawn by the PDF importer,
 as a group named "Non-native art" fitted to the object's box; one whose PDF can't be read is left out with a warning.
-Without editing data it says it can't be opened.
+Without editing data it says it can't be opened. `pages` that name every page of such a file also open it from its
+editing data. `file.place` reads it from its editing data too and places the art of the layers that show on artboard
+`page`, clipped to that artboard unless `crop` is `bounding`. `clipboard.importPdf` takes every object of its editing
+data.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -2461,7 +2464,8 @@ area). Each one has a query command:
 transparent around them).
 
 What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
-password?}` (the page's objects), `clipboard.importEps {dataBase64}` (an EPS or other PostScript picture's objects,
+password?}` (the page's objects; every object of a `.ai` saved without PDF compatibility, from its editing data),
+`clipboard.importEps {dataBase64}` (an EPS or other PostScript picture's objects,
 as `document.open` reads one), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its
 physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and

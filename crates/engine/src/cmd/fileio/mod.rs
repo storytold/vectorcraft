@@ -57,7 +57,9 @@ pub(crate) use export::{export_crop, isolated};
 pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
 pub(crate) use load::import_svg;
+pub(crate) use load::is_placeholder;
 pub(crate) use load::native_file;
+pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{
     Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,

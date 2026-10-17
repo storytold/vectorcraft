@@ -183,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load PDF into Clipboard",
             [],
             None,
-            "{dataBase64, page?: 1, password? (an encrypted PDF), center?: [x, y]} replace the clipboard with the objects of one PDF page (with the images, patterns and swatches they use), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
+            "{dataBase64, page?: 1, password? (an encrypted PDF), center?: [x, y]} replace the clipboard with the objects of one PDF page (with the images, patterns and swatches they use; a .ai saved without PDF compatibility: every object of its editing data, as document.open reads it), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
             has_doc,
             import_pdf
         ),
@@ -445,7 +445,11 @@ fn import_pdf(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => v.as_u64().filter(|n| (1..=100_000).contains(n)).ok_or_else(|| bad(C, "page must be a whole number from 1"))? as usize,
     };
     let opts = fileio::LoadOptions { password: str_param(p, "password").map(str::to_string), ..Default::default() };
-    let (mut doc, warnings) = fileio::page_document(&bytes, page - 1, &opts).map_err(|e| bad(C, e.to_string()))?;
+    // For a .ai saved without PDF compatibility, the clipboard takes every object of its editing
+    // data, as document.open reads it.
+    let read = fileio::page_document(&bytes, page - 1, &opts);
+    let (mut doc, warnings, _) =
+        fileio::page_or_editing_data("Clipboard.ai", &bytes, opts.password.as_deref(), read).map_err(|e| bad(C, e.to_string()))?;
     doc.drop_edit_modes();
     let clip = Clipboard::from_document(&doc);
     if clip.is_empty() {
