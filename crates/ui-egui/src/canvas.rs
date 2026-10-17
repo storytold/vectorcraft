@@ -5631,6 +5631,74 @@ mod tests {
         assert_eq!(plain(&app, id), "雅がくらくか");
     }
 
+    /// Starts editing new point type with the Type tool; returns its id.
+    fn start_typing(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        typing_frame(app, ctx, vec![]);
+        app.select_tool("type");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(100.0, 100.0));
+        let click =
+            |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        typing_frame(app, ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+        typing_frame(app, ctx, vec![click(at, false)]);
+        assert!(app.session.tool_wants_text());
+        app.session.active().unwrap().selection.objects[0].0
+    }
+
+    /// Returns a key press and its release.
+    fn tap(key: egui::Key) -> [egui::Event; 2] {
+        [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() })
+    }
+
+    /// #2615: a keyboard tool can replace a character it typed by sending a Backspace and the new
+    /// character. Here n types ন and g sends a Backspace and ং; s types স and h sends a Backspace
+    /// and শ. The Backspace and the text after it come in one frame.
+    #[test]
+    fn a_backspace_and_the_text_after_it_in_one_frame_apply_in_order() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.placeholder_text = false;
+        let ctx = egui::Context::default();
+        let id = start_typing(&mut app, &ctx);
+        let text = |t: &str| egui::Event::Text(t.into());
+        typing_frame(&mut app, &ctx, vec![text("ন")]);
+        typing_frame(&mut app, &ctx, [tap(egui::Key::Backspace).to_vec(), vec![text("ং")]].concat());
+        assert_eq!(plain(&app, id), "ং");
+        typing_frame(&mut app, &ctx, tap(egui::Key::Backspace).to_vec());
+        assert_eq!(plain(&app, id), "");
+        // b a n g l a d e s h
+        for keys in ["ব", "া", "ন", "\u{8}ং", "ল", "া", "দ", "ে", "স", "\u{8}শ"] {
+            let events = match keys.strip_prefix('\u{8}') {
+                Some(t) => [tap(egui::Key::Backspace).to_vec(), vec![text(t)]].concat(),
+                None => vec![text(keys)],
+            };
+            typing_frame(&mut app, &ctx, events);
+        }
+        assert_eq!(plain(&app, id), "বাংলাদেশ");
+    }
+
+    #[test]
+    fn the_type_tool_takes_text_and_editing_keys_in_the_order_they_came() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.placeholder_text = false;
+        let ctx = egui::Context::default();
+        let id = start_typing(&mut app, &ctx);
+        let text = |t: &str| egui::Event::Text(t.into());
+        typing_frame(&mut app, &ctx, vec![text("abc")]);
+        // Two Backspaces, then text: each Backspace deletes one character before the text goes in.
+        typing_frame(&mut app, &ctx, [tap(egui::Key::Backspace).to_vec(), tap(egui::Key::Backspace).to_vec(), vec![text("x")]].concat());
+        assert_eq!(plain(&app, id), "ax");
+        // Text, then a Backspace: the Backspace deletes the text just typed.
+        typing_frame(&mut app, &ctx, [vec![text("y")], tap(egui::Key::Backspace).to_vec()].concat());
+        assert_eq!(plain(&app, id), "ax");
+        // ← moves the caret before the text that follows it goes in.
+        typing_frame(&mut app, &ctx, [tap(egui::Key::ArrowLeft).to_vec(), vec![text("b")]].concat());
+        assert_eq!(plain(&app, id), "abx");
+        // Enter types its line break between the texts around it, once for each press.
+        typing_frame(&mut app, &ctx, [vec![text("1")], tap(egui::Key::Enter).to_vec(), tap(egui::Key::Enter).to_vec(), vec![text("2")]].concat());
+        assert_eq!(plain(&app, id), "ab1\n\n2x");
+    }
+
     #[test]
     fn frame_moves_keeps_touch_samples_and_pressure_but_leaves_mouse_unchanged() {
         let ctx = egui::Context::default();

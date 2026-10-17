@@ -203,41 +203,37 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
 /// Cmd/Ctrl chords are shortcuts (Create Outlines, Bold, …): their letter is never typed into the
 /// text if a host still emits `Text` for them (#2094). Alt is left to type: Option+key on macOS
 /// and AltGr (Ctrl+Alt) on Windows keyboards type characters such as é, ø and @.
-fn is_shortcut_chord(m: egui::Modifiers) -> bool {
+pub(crate) fn is_shortcut_chord(m: egui::Modifiers) -> bool {
     (m.command || m.ctrl) && !m.alt
 }
 
-/// Typed text and IME events, in the order they came, to the Type tool.
-fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Sends one typed text or IME event to the Type tool. `shortcut_mods`: a Cmd/Ctrl chord is held
+/// this frame, so its text is not typed.
+pub(crate) fn type_event(app: &mut VectorcraftApp, e: egui::Event, shortcut_mods: bool) {
     let view = app.view_info();
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
     // on with it when the window comes back (measured with Kotoeri), as the tool does.
-    let shortcut_mods = ctx.input(|i| is_shortcut_chord(i.modifiers));
-    let events: Vec<egui::Event> =
-        ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
-    for e in events {
-        // Errors are already reported by the engine's interaction (a failed preview keeps it).
-        let _ = match e {
-            // Keys the IME passed through come as text only when nothing is marked.
-            egui::Event::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
-            egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
-                app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
-                app.session.tool_preedit(&text, active_range_chars, view)
-            }
-            // A bare line break confirms the composition (Enter): the marked text, not a newline.
-            egui::Event::Ime(egui::ImeEvent::Commit(t)) if t == "\n" || t == "\r" => {
-                keep_marked_text(app);
-                Ok(vec![])
-            }
-            egui::Event::Ime(egui::ImeEvent::Commit(t)) => {
-                app.ime_marked = None;
-                app.session.tool_text(&t, view)
-            }
-            // `DeleteSurrounding` isn't sent by egui-winit (desktop); the web host has no IME
-            // path to the canvas yet.
-            _ => Ok(vec![]),
-        };
-    }
+    // Errors are already reported by the engine's interaction (a failed preview keeps it).
+    let _ = match e {
+        // Keys the IME passed through come as text only when nothing is marked.
+        egui::Event::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
+        egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
+            app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
+            app.session.tool_preedit(&text, active_range_chars, view)
+        }
+        // A bare line break confirms the composition (Enter): the marked text, not a newline.
+        egui::Event::Ime(egui::ImeEvent::Commit(t)) if t == "\n" || t == "\r" => {
+            keep_marked_text(app);
+            Ok(vec![])
+        }
+        egui::Event::Ime(egui::ImeEvent::Commit(t)) => {
+            app.ime_marked = None;
+            app.session.tool_text(&t, view)
+        }
+        // `DeleteSurrounding` isn't sent by egui-winit (desktop); the web host has no IME
+        // path to the canvas yet.
+        _ => Ok(vec![]),
+    };
 }
 
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -273,7 +269,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let composing = app.session.tool_composing();
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
+    // Enter in the Type tool types a line break, so it goes to the tool with the frame's text,
+    // below.
+    let enter_types = app.session.tool_wants_text();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)] {
+        if k == Key::Enter && enter_types {
+            continue;
+        }
         if !typing && !composing && ctx.input(|i| i.key_pressed(k)) {
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
             let claimed = app.session.tool_claims_key(tk, view);
@@ -356,19 +358,14 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
-        type_text(app, ctx);
-        // Keys of a frame that began composing are the IME's too (a Backspace that empties the
-        // marked text must not delete the committed character before it).
+        // The tool gets the text, editing keys and clipboard events in the order they came. Cmd+A
+        // goes to Select All below, which selects the text.
+        crate::panels::character::route_type_input(app, ctx, composing);
         if composing || app.session.tool_composing() {
-            // The IME owns the keyboard until it commits: no editing keys, clipboard or shortcuts.
-            ctx.input_mut(|i| {
-                i.events.retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_)))
-            });
+            // While the IME composes, no shortcut runs: the remaining key events are removed.
+            ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { .. })));
             return;
         }
-        // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
-        crate::panels::character::route_type_input(app, ctx);
-        // Enter was already delivered above as ToolKey::Enter (newline).
         let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc)));
         if let Some((_, id, p)) = fire {
             crate::menus::invoke(app, id, p);
