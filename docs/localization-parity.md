@@ -45,7 +45,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 
 | Language | Code | Translated | Status |
 |---|---|---|---|
-| Traditional Chinese (Taiwan) | `zh-hant` | 3,425 rows, menus and literals complete; messages in English (80% overall) | partial |
+| Traditional Chinese (Taiwan) | `zh-hant` | 4,741 rows, 742 of them `@msg` (counted 2026-10-17): menus, `tl!` literals and messages complete under the tests (80% overall) | partial |
 | Italian | `it` | 4,011 / 4,020 | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
