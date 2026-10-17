@@ -369,11 +369,15 @@ pub struct PrintColor {
     /// it with the intent (CMYK colours keep their numbers with `preserve_numbers`), and
     /// separations separate with it when it is a CMYK one. Empty: colours print as they are.
     pub profile: String,
+    /// Print the pages in gray: every colour, gradient stop and image pixel of composite output is
+    /// converted to gray (Rec. 709 weights) when the job is composed, so the pages are gray whatever
+    /// the printer driver does with a monochrome request.
+    pub grayscale: bool,
 }
 
 impl Default for PrintColor {
     fn default() -> Self {
-        Self { intent: Intent::RelativeColorimetric, preserve_numbers: true, profile: String::new() }
+        Self { intent: Intent::RelativeColorimetric, preserve_numbers: true, profile: String::new(), grayscale: false }
     }
 }
 
