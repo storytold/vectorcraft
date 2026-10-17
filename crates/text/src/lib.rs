@@ -537,6 +537,8 @@ mod tests_fit;
 #[cfg(test)]
 mod tests_inline;
 #[cfg(test)]
+mod tests_joiners;
+#[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]
 mod tests_snap;
