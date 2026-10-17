@@ -375,6 +375,23 @@ pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     if let Some(stroke) = c.pick {
         app.run("ui.colorPicker", json!({ "stroke": stroke })).ok();
     }
+    if let Some((stroke, d)) = c.drop {
+        proxy_drop(app, stroke, &d);
+    }
+}
+
+/// A paint dropped on the Fill (or `stroke`) proxy: the fill dragged onto the stroke copies it
+/// there (and back), as does a swatch. Applies to the selection, else to the paint new art gets.
+pub(crate) fn proxy_drop(app: &mut VectorcraftApp, stroke: bool, d: &crate::widgets::PanelDrag) {
+    let crate::widgets::PanelDrag::Paint { params, .. } = d else { return };
+    // Colour groups paint nothing.
+    if params.is_null() {
+        return;
+    }
+    let cmd = if stroke { "paint.setStroke" } else { "paint.setFill" };
+    if let Err(e) = app.run(cmd, params.clone()) {
+        app.status(e);
+    }
 }
 
 /// The Fill (or `stroke`) chip of the Control bar and the Properties panel, `size` square (with a

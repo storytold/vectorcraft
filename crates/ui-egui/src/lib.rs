@@ -117,6 +117,8 @@ mod tests_printps;
 #[cfg(test)]
 mod tests_printtiling;
 #[cfg(test)]
+mod tests_proxy_drop;
+#[cfg(test)]
 mod tests_puppetwarp;
 #[cfg(test)]
 mod tests_recolor;

@@ -633,7 +633,7 @@ pub fn chip_button(ui: &mut Ui, size: f32, chevron: bool, draw: impl FnOnce(&Ui,
 }
 
 /// What the user did on a [`fill_stroke_proxy`].
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default)]
 pub struct ProxyClicks {
     pub fill: bool,
     pub stroke: bool,
@@ -641,6 +641,8 @@ pub struct ProxyClicks {
     pub default: bool,
     /// Double-clicked a square: open the Color Picker for it (`true` = the stroke).
     pub pick: Option<bool>,
+    /// A paint (the other square, a swatch) dropped on a square (`true` = the stroke).
+    pub drop: Option<(bool, std::sync::Arc<PanelDrag>)>,
 }
 
 /// The Fill/Stroke proxy pair (two overlapping squares). `mixed` (fill, stroke) draws a "?" square
@@ -689,6 +691,14 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
     ui.painter().rect_stroke(b, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
     ui.painter().rect_filled(a, 0.0, Color32::WHITE);
     ui.painter().rect_stroke(a, 0.0, Stroke::new(1.0, Color32::BLACK), StrokeKind::Inside);
+    // Dropped on a square: the stroke's rect is under the fill's where they overlap unless the
+    // stroke is in front.
+    let drop = match (stroke_resp.dnd_release_payload::<PanelDrag>(), fill_resp.dnd_release_payload::<PanelDrag>()) {
+        (Some(d), None) => Some((true, d)),
+        (None, Some(d)) => Some((false, d)),
+        (Some(s), Some(f)) => Some(if fill_active { (false, f) } else { (true, s) }),
+        (None, None) => None,
+    };
     let pick = if fill_resp.double_clicked() {
         Some(false)
     } else if stroke_resp.double_clicked() {
@@ -702,6 +712,7 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
         swap: swap.on_hover_text(tl!("Swap Fill and Stroke (Shift+X)")).clicked(),
         default: def.on_hover_text(tl!("Default Fill and Stroke (D)")).clicked(),
         pick,
+        drop,
     }
 }
 
