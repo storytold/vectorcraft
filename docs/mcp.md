@@ -2676,6 +2676,15 @@ subscript, baseline shift and color, and each paragraph's alignment, indents, sp
 Table cells are separated by tabs and each row is a paragraph; hidden text, pictures, headers, footers and notes are
 left out. `file.place` answers `format: "rtf"`.
 
+A Word document (a ZIP package named `.docx`, or one that holds `word/document.xml`, except a `.txt` file) is placed
+the same way and keeps the same formatting, taken from the document defaults, the paragraph style and the character
+style (and the styles each is based on) and direct formatting; theme fonts are read from the theme part. Table cells
+are separated by tabs and each row is a paragraph. Hidden and deleted text, field instructions, pictures, text boxes,
+headers, footers, notes and list numbers are left out. A package with more than 10,000 files, a part that unpacks to
+more than 16 MiB or nests elements more than 256 deep, and a document with more than 4 MiB of text or 100,000
+paragraphs or runs are refused.
+`file.place` answers `format: "docx"`.
+
 ## PDF presets
 
 `pdf.preset.list` lists the built-in presets (`VectorCraft Default`, which preserves editing, then High Quality Print,

@@ -1,5 +1,6 @@
 //! Untrusted text files placed with File → Place never crash: any bytes, with any Text Import
-//! Options, place as area type or fail with an error, and so do hostile RTF files.
+//! Options, place as area type or fail with an error, and so do hostile RTF files and Word
+//! documents.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test text_import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -59,6 +60,123 @@ proptest! {
         });
         prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
     }
+
+    #[test]
+    fn any_docx_places_without_panics(
+        body in prop_oneof![1 => prop::collection::vec(arb_docx_token(), 0..120), 3 => prop::collection::vec(arb_docx_paragraph(), 0..12)],
+        styles in prop_oneof![1 => prop::collection::vec(arb_docx_token(), 0..40), 3 => prop::collection::vec(arb_docx_style(), 0..6)],
+        changes in prop_oneof![
+            3 => Just(vec![]),
+            1 => prop::collection::vec((any::<prop::sample::Index>(), any::<u8>()), 1..3),
+        ],
+        name in prop::sample::select(vec!["fuzz.docx", "fuzz.bin"]),
+    ) {
+        vectorcraft_text::FontDb::global().set_system_fallback(false);
+        let w = "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+        let document = format!("<w:document {w}><w:body>{}</w:body></w:document>", body.concat());
+        let styles = format!("<w:styles {w}>{}</w:styles>", styles.concat());
+        let files = [("word/document.xml", document.as_bytes()), ("word/styles.xml", styles.as_bytes())];
+        let mut data = vectorcraft_engine::cmd::fileio::zip::store(&files).unwrap();
+        // A changed byte anywhere: in a header, a size, the directory or the XML.
+        for (at, byte) in changes {
+            let i = at.index(data.len());
+            data[i] = byte;
+        }
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&data), "thumbnail": 8});
+            let _ = s.execute("file.place.info", &p);
+            let _ = s.execute("file.place", &p);
+        });
+        prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
+    }
+}
+
+/// A well-formed paragraph, or a table row of two such paragraphs.
+fn arb_docx_paragraph() -> impl Strategy<Value = String> {
+    prop_oneof![
+        3 => arb_docx_para(),
+        1 => (arb_docx_para(), arb_docx_para()).prop_map(|(a, b)| format!("<w:tbl><w:tr><w:tc>{a}</w:tc><w:tc>{b}</w:tc></w:tr></w:tbl>")),
+    ]
+}
+
+/// A well-formed paragraph: properties and runs of empty elements and text.
+fn arb_docx_para() -> impl Strategy<Value = String> {
+    let leaves = || prop::collection::vec(arb_docx_leaf(), 0..4);
+    (leaves(), prop::collection::vec((leaves(), arb_docx_leaf()), 0..6)).prop_map(|(ppr, runs)| {
+        let runs: String = runs.iter().map(|(rpr, t)| format!("<w:r><w:rPr>{}</w:rPr><w:t>{t}</w:t></w:r>", rpr.concat())).collect();
+        format!("<w:p><w:pPr>{}</w:pPr>{runs}</w:p>", ppr.concat())
+    })
+}
+
+/// Elements the Word document reader knows that hold others, opened or closed by
+/// [`arb_docx_token`].
+const DOCX_TAGS: &str = "p r t pPr rPr tbl tr tc sdt sdtContent hyperlink del ins style docDefaults rPrDefault pPrDefault";
+
+/// Empty elements the Word document reader knows.
+const DOCX_EMPTY: &str = "b i caps smallCaps strike dstrike vanish tab ptab br cr noBreakHyphen softHyphen bidi p";
+
+/// Well-formed document defaults, or a paragraph or character style `S` or `C` (based on `S` or
+/// not), with properties of empty elements.
+fn arb_docx_style() -> impl Strategy<Value = String> {
+    let leaves = || prop::collection::vec(arb_docx_leaf(), 0..4).prop_map(|l| l.concat());
+    let kind = prop::sample::select(vec![("paragraph", "S"), ("character", "C"), ("paragraph", "Normal\" w:default=\"1")]);
+    prop_oneof![
+        (leaves(), leaves()).prop_map(|(r, p)| format!(
+            "<w:docDefaults><w:rPrDefault><w:rPr>{r}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr>{p}</w:pPr></w:pPrDefault></w:docDefaults>"
+        )),
+        (kind, any::<bool>(), leaves(), leaves()).prop_map(|((t, id), based, r, p)| {
+            let based = if based { "<w:basedOn w:val=\"S\"/>" } else { "" };
+            format!("<w:style w:type=\"{t}\" w:styleId=\"{id}\">{based}<w:rPr>{r}</w:rPr><w:pPr>{p}</w:pPr></w:style>")
+        }),
+    ]
+}
+
+/// Pieces of WordprocessingML the Word document reader knows (paragraphs, runs, properties,
+/// tables, fields, styles), a cut-off tag, entities and text.
+fn arb_docx_token() -> impl Strategy<Value = String> {
+    let tags = prop::sample::select(DOCX_TAGS.split_whitespace().collect::<Vec<_>>());
+    let open = (tags, any::<bool>()).prop_map(|(t, end)| format!("<{}w:{t}>", if end { "/" } else { "" }));
+    let styles = prop::sample::select(vec!["<w:style w:type=\"paragraph\" w:styleId=\"S\">", "<w:style w:type=\"character\" w:styleId=\"C\">"]);
+    prop_oneof![open, styles.prop_map(str::to_string), arb_docx_leaf(), Just("<w:t".to_string())]
+}
+
+/// An empty WordprocessingML element the reader knows, with or without a value in or out of
+/// range, entities or text.
+fn arb_docx_leaf() -> impl Strategy<Value = String> {
+    let empty = prop::sample::select(DOCX_EMPTY.split_whitespace().collect::<Vec<_>>());
+    let valued = prop::sample::select(vec![
+        ("pStyle", "val", "S"),
+        ("rStyle", "val", "C"),
+        ("basedOn", "val", "S"),
+        ("sz", "val", "-7"),
+        ("sz", "val", "1e400"),
+        ("sz", "val", "12pt"),
+        ("position", "val", "99999999999"),
+        ("color", "val", "FF00"),
+        ("color", "val", "auto"),
+        ("u", "val", "none"),
+        ("vertAlign", "val", "superscript"),
+        ("jc", "val", "distribute"),
+        ("jc", "val", "end"),
+        ("ind", "hanging", "-360"),
+        ("ind", "left", "3in"),
+        ("spacing", "after", "x"),
+        ("fldChar", "fldCharType", "begin"),
+        ("fldChar", "fldCharType", "separate"),
+        ("fldChar", "fldCharType", "end"),
+        ("rFonts", "asciiTheme", "majorHAnsi"),
+        ("rFonts", "ascii", ""),
+        ("br", "type", "page"),
+        ("b", "val", "0"),
+    ]);
+    prop_oneof![
+        empty.prop_map(|e| format!("<w:{e}/>")),
+        valued.prop_map(|(e, a, v)| format!("<w:{e} w:{a}=\"{v}\"/>")),
+        Just("&amp;&#x1F600;&lt;".to_string()),
+        "[a-z ]{0,6}",
+    ]
 }
 
 /// Control words the RTF reader knows, and one it doesn't.

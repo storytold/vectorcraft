@@ -17,7 +17,8 @@ pub(super) const FORMAT: fileio::Format = fileio::Format {
     options: &[],
 };
 
-/// The most bytes a text or RTF file placed as type may have.
+/// The most bytes a text or RTF file placed as type may have, and the most bytes of text a Word
+/// document may give.
 pub(super) const MAX_TEXT: usize = 4 << 20;
 
 /// Text Import Options (`file.place`'s `text` param).
@@ -190,7 +191,7 @@ fn tabs_for_spaces(s: &str, n: usize) -> String {
     out
 }
 
-/// The text placed type gets from a text or RTF file.
+/// The text placed type gets from a text file, an RTF file or a Word document.
 pub(super) struct Story {
     /// The text in runs of one character formatting; paragraphs are separated by `\n`.
     pub(super) runs: Vec<vectorcraft_doc::TextRun>,

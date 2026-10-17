@@ -17,7 +17,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 23 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, JPEG 2000, PICT, PCX, Pixar, Word, PS |
+| Formats opened or placed | ~30 | 23 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, JPEG 2000, PICT, PCX, Pixar, Word `.doc`, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (no Illustrator editing data) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
@@ -111,7 +111,8 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | CorelDRAW `.cdr` | open | no | no | |
 | Text `.txt` | place, export | place (Text Import Options) | yes | |
 | RTF `.rtf` | place | place (area type with fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests_textimport.rs`, `place/rtf.rs`; fuzzed (`text_import_fuzz.rs`); `\'hh` bytes read as Windows-1252 or Mac Roman only |
-| Word `.doc`/`.docx` | place | no | no | |
+| Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests_textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |
+| Word `.doc` | place | no | no | |
 | CSS | export (CSS Properties) | — | yes | |
 | OBJ / USDA / glTF | 3D export | — | no | needs 3D (gap G3) |
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |

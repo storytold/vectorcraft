@@ -17,6 +17,8 @@
 //! - A text file becomes area type, decoded and cleaned up with the Text Import Options (`text`,
 //!   [`text`]).
 //! - An RTF file becomes area type with its character and paragraph formatting ([`rtf`]).
+//! - A Word document (`.docx`) becomes area type with the character and paragraph formatting its
+//!   styles and direct formatting give ([`docx`]).
 //! - A VectorCraft document placed from a file with Link (the default) becomes a placed document:
 //!   one locked object showing the artboard `page`, linked to the file and read again when it
 //!   changes ([`document`]); without Link, an editable copy of its art.
@@ -28,6 +30,7 @@
 
 pub(crate) mod adopt;
 pub(crate) mod document;
+mod docx;
 mod rtf;
 mod text;
 
@@ -98,7 +101,8 @@ pub fn specs() -> Vec<CommandSpec> {
 /// A file's art at its natural size, before it joins a document.
 enum Art {
     Image(RasterImage),
-    /// A text or RTF file's text, placed as area type filling the natural box.
+    /// A text file's, an RTF file's or a Word document's text, placed as area type filling the
+    /// natural box.
     Text(text::Story),
     /// A VectorCraft document placed linked: the file read, the link, and whether the art's
     /// bounds (not the artboard) are shown.
@@ -154,6 +158,14 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
             return Err(bad(cmd, format!("`{name}` has no text to place")));
         }
         return Ok(Loaded { name, format: &rtf::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings: vec![], link: None, board: None });
+    }
+    // A Word document is recognized by its name or by its package's `word/document.xml`.
+    if docx::is_docx(src.name, &src.bytes) {
+        let story = docx::import(&src.bytes, cmd)?;
+        if story.plain_text().trim().is_empty() {
+            return Err(bad(cmd, format!("`{name}` has no text to place")));
+        }
+        return Ok(Loaded { name, format: &docx::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings: vec![], link: None, board: None });
     }
     let format = fileio::detect(src.name, &src.bytes)
         .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format VectorCraft reads (see document.formats)")))?;
