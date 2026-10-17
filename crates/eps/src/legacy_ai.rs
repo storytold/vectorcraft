@@ -85,6 +85,7 @@ pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, h
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
 pub const TRANSPARENCY: &str = "transparency (opacity, blending modes, opacity masks) is written opaque: legacy .ai files have none";
+pub const LAYER_NAME: &str = "characters outside Windows Latin-1 in layer names are written as ? (legacy .ai files can't hold them)";
 pub const NAMES: &str = "object names are left out (legacy .ai files name only layers)";
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
 const FREEFORM: &str = "freeform gradients are written as their average colour";
@@ -452,6 +453,25 @@ impl<'a> Writer<'a> {
 
     // ---------- layers and objects ----------
 
+    /// A layer's name as a PostScript string in Windows-1252, like the type; a character outside it
+    /// is written as `?`, with a warning.
+    fn layer_name(&mut self, name: &str) -> String {
+        let mut lost = false;
+        let bytes: Vec<u8> = name
+            .chars()
+            .map(|c| {
+                latin::encode(c).unwrap_or_else(|| {
+                    lost = true;
+                    b'?'
+                })
+            })
+            .collect();
+        if lost {
+            self.warn(LAYER_NAME);
+        }
+        ps::bytes(&bytes)
+    }
+
     /// A top-level layer. False when it isn't a layer.
     fn layer(&mut self, n: &Node) -> bool {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return false };
@@ -464,6 +484,7 @@ impl<'a> Writer<'a> {
             _ => -1,
         };
         let flag = |b: bool| u8::from(b);
+        let name = self.layer_name(n.name.as_deref().unwrap_or("Layer"));
         // A template layer doesn't print and shows dimmed.
         let _ = writeln!(
             self.body,
@@ -473,7 +494,7 @@ impl<'a> Writer<'a> {
             flag(!n.locked),
             flag(*printable && !*template),
             flag(dim_images.is_some() || *template),
-            ps::string(n.name.as_deref().unwrap_or("Layer")),
+            name,
         );
         self.locked = false;
         self.line("0 A");
@@ -501,13 +522,14 @@ impl<'a> Writer<'a> {
             _ => -1,
         };
         let name = format!("{} (hidden)", n.name.as_deref().unwrap_or("Layer"));
+        let name = self.layer_name(&name);
         let _ = writeln!(
             self.body,
             "%AI5_BeginLayer\n0 1 {} {} {} 0 {index} {r} {g} {b} Lb\n{} Ln",
             u8::from(!n.locked),
             u8::from(*printable && !*template),
             u8::from(*template),
-            ps::string(&name),
+            name,
         );
         self.locked = false;
         self.line("0 A");
