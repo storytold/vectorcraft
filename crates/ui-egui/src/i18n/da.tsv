@@ -5154,3 +5154,15 @@ swatch	Bright Violet	Kraftig violet
 	Typing	Indtastning
 	Persistent	Vedvarende
 	Library Panel Options	Indstillinger for bibliotekspanel
+	Lock Artboards	Lås tegneflader
+	Unlock Artboards	Lås tegneflader op
+	Artboard Color	Tegnefladefarve
+	Lock Selected	Lås markerede
+	Lock All Except Selected	Lås alle undtagen markerede
+	Lock All	Lås alle
+	Unlock Selected	Lås markerede op
+	Lock Artboard	Lås tegneflade
+	Unlock Artboard	Lås tegneflade op
+	Clear Artboard Color	Fjern tegnefladefarve
+@msg	artboard {_1} is locked	tegneflade {_1} er låst
+	Include Artboard Fill	Medtag tegnefladefarve

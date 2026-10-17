@@ -5154,3 +5154,15 @@ swatch	Bright Violet	Violet cerah
 	Typing	Mengetik
 	Persistent	Persisten
 	Library Panel Options	Opsi panel pustaka
+	Lock Artboards	Kunci artboard
+	Unlock Artboards	Buka kunci artboard
+	Artboard Color	Warna artboard
+	Lock Selected	Kunci yang dipilih
+	Lock All Except Selected	Kunci semua kecuali yang dipilih
+	Lock All	Kunci semua
+	Unlock Selected	Buka kunci yang dipilih
+	Lock Artboard	Kunci artboard
+	Unlock Artboard	Buka kunci artboard
+	Clear Artboard Color	Hapus warna artboard
+@msg	artboard {_1} is locked	artboard {_1} terkunci
+	Include Artboard Fill	Sertakan warna artboard
