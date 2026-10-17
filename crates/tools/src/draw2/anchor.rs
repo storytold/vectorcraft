@@ -486,10 +486,7 @@ mod tests {
         tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
         assert_eq!(
             tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 310.0)),
-            vec![Action::Exec(
-                "object.blend.spine.convertAnchor".into(),
-                json!({"id": id.0, "anchor": 1, "to": "corner"}),
-            )],
+            vec![Action::Exec("object.blend.spine.convertAnchor".into(), json!({"id": id.0, "anchor": 1, "to": "corner"}),)],
         );
     }
 
