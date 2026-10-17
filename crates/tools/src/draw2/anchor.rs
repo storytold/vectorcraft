@@ -377,7 +377,7 @@ impl Tool for AnchorTool {
             _ => match self.state {
                 State::Reshape { .. } => Cursor::ReshapeSegment,
                 State::Idle => press_cursor(cx, p),
-                State::Convert { .. } | State::Handle { .. } => Cursor::AnchorPoint,
+                State::Convert { .. } | State::Handle { .. } | State::SpineConvert { .. } | State::SpineHandle { .. } => Cursor::AnchorPoint,
             },
         }
     }
@@ -390,6 +390,8 @@ pub(crate) fn press_cursor(cx: &ToolContext, p: Point) -> Cursor {
     let (point, tol) = (cx.point_tol(), cx.pick_tol());
     let segment = hit_handle(cx, p, point).is_none()
         && hit_anchor(cx, p, point).is_none()
+        && AnchorTool::spine_handle(cx, p, point).is_none()
+        && AnchorTool::spine_point(cx, p, point).is_none()
         && (hit_segment(cx, p, tol).is_some() || crate::direct::hit_spine_segment(cx, p, tol).is_some());
     if segment { Cursor::ReshapeSegment } else { Cursor::AnchorPoint }
 }
@@ -543,11 +545,32 @@ mod tests {
         let single = ToolContext { handles_multiple: false, ..cx(&d, &sel, &p) };
         let tool = AnchorTool::new("anchorPoint");
         assert!(tool.overlays(&single).iter().all(|o| !matches!(o, Overlay::Handle { .. })));
+        // A press on the hidden handle endpoint converts the anchor, it does not drag a handle.
         let mut tool = AnchorTool::new("anchorPoint");
-        // The press falls through to the spine point, not the hidden handle.
         tool.pointer(&single, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
-        let actions = tool.pointer(&single, &PointerEvent::new(PointerKind::Drag, 190.0, 350.0));
+        assert!(tool.pointer(&single, &PointerEvent::new(PointerKind::Up, 190.0, 330.0)).is_empty());
+        // A drag on the curve away from anchors and handles reshapes the spine segment.
+        // The smooth middle anchor (160, 310) has out handle (190, 330); the second
+        // segment runs (160, 310) -> (210, 310) bending toward (130, 290). Its
+        // midpoint is near (183, 316), clear of every anchor and handle endpoint.
+        let mut tool = AnchorTool::new("anchorPoint");
+        tool.pointer(&single, &PointerEvent::new(PointerKind::Down, 183.0, 316.0));
+        let actions = tool.pointer(&single, &PointerEvent::new(PointerKind::Drag, 183.0, 336.0));
         assert!(matches!(actions.get(1), Some(Action::Preview(cmd, _)) if cmd == "object.blend.spine.reshapeSegment"));
+    }
+
+    /// Hover and click agree: the caret shows where a press converts a spine point or
+    /// edits a spine handle, and ReshapeSegment only where a press reshapes a segment.
+    #[test]
+    fn anchor_point_cursor_matches_spine_press_precedence() {
+        let (d, _, sel) = blend_spine_doc(true);
+        let p = paint();
+        let c = cx(&d, &sel, &p);
+        let tool = AnchorTool::new("anchorPoint");
+        let none = Mods::default();
+        assert_eq!(tool.cursor(&c, Point::new(160.0, 310.0), none), Cursor::AnchorPoint);
+        assert_eq!(tool.cursor(&c, Point::new(190.0, 330.0), none), Cursor::AnchorPoint);
+        assert_eq!(tool.cursor(&c, Point::new(183.0, 316.0), none), Cursor::ReshapeSegment);
     }
 
     /// P1-2: Shift-dragging a blend spine handle constrains it to 45-degree steps round
@@ -562,13 +585,13 @@ mod tests {
         tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
         let drag = PointerEvent { kind: PointerKind::Drag, pos: Point::new(200.0, 340.0), mods: shift, pressure: 1.0 };
         let actions = tool.pointer(&c, &drag);
-        // The pointer is at ~38 degrees from the anchor; Shift snaps it to 45 degrees.
+        // The pointer (40, 30) keeps its length of 50; Shift snaps it to 45 degrees.
         assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
             if cmd == "object.blend.spine.moveAnchor"
             && args["id"] == id.0 && args["anchor"] == 1 && args["handle"] == "out"
             && args["independent"] == true
-            && (args["x"].as_f64().unwrap() - 160.0 - 40.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6
-            && (args["y"].as_f64().unwrap() - 310.0 - 40.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6));
+            && (args["x"].as_f64().unwrap() - 160.0 - 50.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6
+            && (args["y"].as_f64().unwrap() - 310.0 - 50.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6));
         assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 340.0)), vec![Action::Commit]);
     }
 
