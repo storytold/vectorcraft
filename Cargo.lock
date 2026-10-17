@@ -4617,6 +4617,7 @@ dependencies = [
 name = "vectorcraft-doc"
 version = "0.12.0"
 dependencies = [
+ "hayro-ccitt",
  "image",
  "jpeg-encoder",
  "kurbo 0.13.1",
@@ -4883,6 +4884,7 @@ dependencies = [
 name = "vectorcraft-testkit"
 version = "0.12.0"
 dependencies = [
+ "fax",
  "image",
  "kurbo 0.13.1",
  "proptest",

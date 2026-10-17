@@ -208,6 +208,113 @@ fn planar_cmyk_tiffs_open_and_place_with_their_inks() {
     assert!(image::load_from_memory(&blob.bytes).is_ok(), "the image decoder reads the stored image");
 }
 
+/// A 70 × 7 picture, `true` for black: a white row and a black row (runs past 63 take a make-up
+/// code), then runs of several lengths.
+fn fax_picture() -> Vec<Vec<bool>> {
+    (0..7).map(|y| (0..70).map(|x| if y < 2 { y == 1 } else { (x * (y + 2) / 5 + y) % 3 == 0 }).collect()).collect()
+}
+
+/// The first `rows` rows of [`fax_picture`] as a TIFF compressed with CCITT Group 3 in one strip:
+/// `compression` 2 or 3 with `t4_options`, white is zero, the highest bit of each byte first.
+fn group3_tiff(compression: u16, t4_options: u32, rows: usize) -> Vec<u8> {
+    let rows = &fax_picture()[..rows];
+    let g =
+        vectorcraft_testkit::tiff::Group3 { rows, compression, t4_options, photometric: 0, fill_order: 1, rows_per_strip: 7, tile: None, rtc: false };
+    vectorcraft_testkit::tiff::group3(&g)
+}
+
+/// 1-bit TIFFs compressed with CCITT Group 3 open and place with their pixels (#1466): Compression
+/// 2 (modified Huffman) and Compression 3 (ITU-T T.4) with one-dimensional rows or two-dimensional
+/// ones (T4Options bit 0), with and without fill bits (bit 2) and six EOLs at the end, in one strip,
+/// three strips or three 32 × 16 tiles, each byte's highest or lowest bit first (FillOrder 1 and 2),
+/// white or black as zero.
+#[test]
+fn ccitt_group3_tiffs_open_and_place_with_their_pixels() {
+    let rows = fax_picture();
+    let mut s = Session::new();
+    for (compression, t4_options, rtc) in [(2, 0, false), (3, 0, false), (3, 4, true), (3, 1, false), (3, 5, true)] {
+        for (rows_per_strip, tile) in [(7, None), (3, None), (7, Some((32, 16)))] {
+            for fill_order in [1, 2] {
+                for photometric in [0, 1] {
+                    let what = format!(
+                        "Compression {compression}, T4Options {t4_options}, {rows_per_strip} rows a strip, tiles {tile:?}, FillOrder {fill_order}, photometric {photometric}"
+                    );
+                    let g = vectorcraft_testkit::tiff::Group3 {
+                        rows: &rows,
+                        compression,
+                        t4_options,
+                        photometric,
+                        fill_order,
+                        rows_per_strip,
+                        tile,
+                        rtc,
+                    };
+                    let file = vectorcraft_testkit::tiff::group3(&g);
+                    assert!(image::load_from_memory(&file).is_err(), "{what}: the image decoder reads Group 3 now");
+                    // A black run's pixels are 1 bits, which show as black when white is zero.
+                    let want: Vec<u8> = rows.concat().iter().map(|&black| if black == (photometric == 0) { 0 } else { 255 }).collect();
+                    let pixels = |s: &Session| {
+                        let blob = &s.doc().unwrap().doc.images[&image_of(s).key];
+                        image::load_from_memory(&blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_luma8().into_raw()
+                    };
+                    open(&mut s, "fax.tif", &file);
+                    assert_eq!(pixels(&s), want, "{what}: Open");
+                    let mut placed = session(100.0, 100.0, 1);
+                    placed.execute("file.place", &json!({"name": "fax.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+                    assert_eq!(pixels(&placed), want, "{what}: Place");
+                }
+            }
+        }
+    }
+}
+
+/// A Group 3 TIFF whose pixels would take more than the decoding allowance as RGBA is refused as
+/// too large to draw, without a panic at 2^31 × 2^31 pixels too. One whose data ends inside a row,
+/// or after a whole row before the strip's last, is refused as damaged, and so is one whose tiles
+/// are wider than the allowance.
+#[test]
+fn ccitt_group3_tiffs_too_large_or_cut_short_are_refused() {
+    // ImageWidth (the directory's first entry, its value at offset 18), ImageLength (the second, at
+    // 30) and RowsPerStrip (the eighth, at 102).
+    for (width, height) in [(70u32, 1u32 << 30), (1 << 31, 1 << 31)] {
+        let mut big = group3_tiff(3, 1, 7);
+        big[18..22].copy_from_slice(&width.to_le_bytes());
+        big[30..34].copy_from_slice(&height.to_le_bytes());
+        big[102..106].copy_from_slice(&height.to_le_bytes());
+        let e = raster_image(&big).err().expect("refused");
+        assert!(e.to_string().contains(&format!("an image of {width} × {height} pixels is too large to draw")), "{e}");
+    }
+    let mut short = group3_tiff(3, 0, 7);
+    short.truncate(short.len() - 6);
+    let e = raster_image(&short).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // Compression 2 rows start at a byte, so the strip of the first six rows is where the strip of
+    // seven starts. StripByteCounts (the ninth entry, its value at offset 114) gives the six rows'.
+    let (mut seven, six) = (group3_tiff(2, 0, 7), group3_tiff(2, 0, 6));
+    seven[114..118].copy_from_slice(&six[114..118]);
+    assert_eq!(seven[30..34], 7u32.to_le_bytes(), "ImageLength");
+    assert_eq!(seven[78..82], six[78..82], "StripOffsets (the sixth entry, at offset 78)");
+    let e = raster_image(&seven).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // A tile wider than the allowance: TileWidth (the eighth entry, its value at offset 102).
+    let rows = fax_picture();
+    let g = vectorcraft_testkit::tiff::Group3 {
+        rows: &rows,
+        compression: 3,
+        t4_options: 1,
+        photometric: 0,
+        fill_order: 1,
+        rows_per_strip: 7,
+        tile: Some((80, 16)),
+        rtc: false,
+    };
+    let mut wide = vectorcraft_testkit::tiff::group3(&g);
+    assert_eq!(wide[102..106], 80u32.to_le_bytes(), "TileWidth");
+    wide[102..106].copy_from_slice(&u32::MAX.to_le_bytes());
+    let e = raster_image(&wide).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: arithmetic overflow"), "{e}");
+}
+
 #[test]
 fn content_beats_a_wrong_extension() {
     let png = image_bytes(2, 2, image::ImageFormat::Png);
