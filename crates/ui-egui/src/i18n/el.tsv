@@ -4951,3 +4951,21 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+# CollabCraft cloud Open / Save / Share
+	Browse a Cloud Folder	Περιήγηση σε φάκελο cloud
+	Cloud Status	Κατάσταση cloud
+	Connect Cloud Storage	Σύνδεση χώρου αποθήκευσης cloud
+	List Cloud Shares	Λίστα κοινοποιήσεων cloud
+	Open a Cloud Drawing	Άνοιγμα σχεδίου από το cloud
+	Open from the Cloud…	Άνοιγμα από το cloud…
+	Reload from the Cloud	Επαναφόρτωση από το cloud
+	Save to the Cloud	Αποθήκευση στο cloud
+	Save to the Cloud…	Αποθήκευση στο cloud…
+	A folder on this computer	Ένας φάκελος σε αυτόν τον υπολογιστή
+	Cloud	Cloud
+	This computer	Αυτός ο υπολογιστής
+	Where	Πού
+	Your cloud account	Ο λογαριασμός cloud σας
+@msg	VectorCraft cannot open {_1}	Το VectorCraft δεν μπορεί να ανοίξει το {_1}
+@msg	no drawing open	δεν υπάρχει ανοιχτό σχέδιο
+@msg	no such file in the cloud listing	δεν υπάρχει τέτοιο αρχείο στη λίστα cloud
