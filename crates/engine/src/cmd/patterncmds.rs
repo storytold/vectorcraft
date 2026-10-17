@@ -113,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Mirror",
             ["Object", "Repeat"],
             None,
-            "{ids?, angle?: deg (90 = vertical axis), offset?: pt (10)} mirror repeat of the selection → {id}",
+            "{ids?, angle?: deg (90 = vertical axis), offset?: pt (0: the axis on the right edge)} mirror repeat of the selection → {id}",
             has_selection,
             repeat_mirror
         ),
@@ -672,7 +672,7 @@ fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn repeat_mirror(s: &mut Session, p: &Value) -> Result<Value> {
     let angle = f64_or(p, "angle", 90.0);
-    let offset = f64_or(p, "offset", 10.0);
+    let offset = f64_or(p, "offset", 0.0);
     make_repeat(s, p, "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
 }
 
