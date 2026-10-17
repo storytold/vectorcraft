@@ -338,6 +338,7 @@ impl DocSettings {
                 id: i as u32 + 1,
                 name: format!("Artboard {}", i + 1),
                 rect,
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
             })

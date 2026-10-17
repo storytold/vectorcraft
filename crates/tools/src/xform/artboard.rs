@@ -15,7 +15,9 @@
 //! the Selection tool. Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
 //! objects (never to the dragged artboard or the art moving or scaling with it); the artboard's own bleed edges
-//! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]).
+//! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]). A locked artboard (the
+//! Artboards panel's lock column) is selected by a click, but a drag doesn't move it or copy it,
+//! it shows no handles, and Delete leaves it.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
@@ -108,6 +110,21 @@ impl ArtboardTool {
         cx.doc.artboards.get(self.active).map(|a| a.rect)
     }
 
+    /// The active artboard's rectangle when it can be resized: it isn't locked.
+    fn resizable_rect(&self, cx: &ToolContext) -> Option<Rect> {
+        cx.doc.artboards.get(self.active).filter(|a| !a.locked).map(|a| a.rect)
+    }
+
+    /// The artboards a drag from artboard `index` moves: with `many`, the selected ones that
+    /// aren't locked, else `index`; none when `index` is locked.
+    fn movable(&self, cx: &ToolContext, index: usize, many: bool) -> Vec<usize> {
+        let unlocked = |i: &usize| cx.doc.artboards.get(*i).is_some_and(|a| !a.locked);
+        if !unlocked(&index) {
+            return vec![];
+        }
+        if many { self.selected(cx).into_iter().filter(unlocked).collect() } else { vec![index] }
+    }
+
     /// The selected artboards that are still in the document: the active one and the others,
     /// in order.
     fn selected(&self, cx: &ToolContext) -> Vec<usize> {
@@ -138,10 +155,7 @@ impl ArtboardTool {
     fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool) {
         self.guides.clear();
         self.targets = cx.smart_guides.then(|| {
-            let art = match cx.doc.artboards.get(index) {
-                Some(a) if art_moves => cx.doc.art_on_artboard(a.rect, cx.move_locked_with_artboard),
-                _ => vec![],
-            };
+            let art = if art_moves { cx.doc.art_moving_with(index, cx.move_locked_with_artboard) } else { vec![] };
             Targets::for_artboard(cx.doc, index, &art).styled(cx)
         });
         // Nothing to skip: no artboard has this index.
@@ -257,7 +271,7 @@ impl Tool for ArtboardTool {
         match (ev.kind, self.drag) {
             (PointerKind::Down, _) => {
                 self.click_art = None;
-                if let Some(r) = self.active_rect(cx)
+                if let Some(r) = self.resizable_rect(cx)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
                     self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, grab: handle.pos(r) - p, began: false });
@@ -291,8 +305,10 @@ impl Tool for ArtboardTool {
             (PointerKind::Drag, Some(Drag::Move { index, many, start, rect, began, copy })) => {
                 let mut out = vec![];
                 let label = |copy: bool| if copy { "Duplicate Artboard" } else { "Move Artboard" };
+                let moving = self.movable(cx, index, many);
                 if !began {
-                    if p.distance(start) < cx.tol(3.0) {
+                    // A locked artboard doesn't move, and nor is it copied by an Alt-drag.
+                    if p.distance(start) < cx.tol(3.0) || moving.is_empty() {
                         return out;
                     }
                     out.push(Action::Begin(label(m.alt).into()));
@@ -307,7 +323,7 @@ impl Tool for ArtboardTool {
                 self.preview = Some(rect + d);
                 let mut v = json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art, "copy": m.alt });
                 if many {
-                    v["indices"] = json!(self.selected(cx));
+                    v["indices"] = json!(moving);
                 }
                 out.push(Action::Preview("artboard.move".into(), v));
                 out
@@ -349,12 +365,12 @@ impl Tool for ArtboardTool {
                     return create_artboard(r);
                 }
                 match d {
-                    Drag::Move { began: true, copy, many, .. } => {
+                    Drag::Move { index, began: true, copy, many, .. } => {
                         // The copies, last in the previewed document, become the selection (the
                         // last one active).
                         if copy {
                             let n = cx.doc.artboards.len();
-                            let k = if many { self.selected(cx).len().min(n) } else { 1 };
+                            let k = if many { self.movable(cx, index, many).len().min(n) } else { 1 };
                             self.active = n.saturating_sub(1);
                             self.others = (n.saturating_sub(k)..n.saturating_sub(1)).collect();
                         }
@@ -403,8 +419,9 @@ impl Tool for ArtboardTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
             ToolKey::Delete | ToolKey::Backspace => {
-                let mut sel = self.selected(cx);
-                if self.drag.is_some() || cx.doc.artboards.len() <= 1 || self.active >= cx.doc.artboards.len() {
+                // A locked artboard isn't deleted.
+                let mut sel: Vec<usize> = self.selected(cx).into_iter().filter(|i| cx.doc.artboards.get(*i).is_some_and(|a| !a.locked)).collect();
+                if self.drag.is_some() || cx.doc.artboards.len() <= 1 || self.active >= cx.doc.artboards.len() || sel.is_empty() {
                     return vec![];
                 }
                 // With every artboard selected, keep the first one in the current order.
@@ -453,8 +470,11 @@ impl Tool for ArtboardTool {
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
         let r = self.preview.unwrap_or(ab.rect);
         o.push(Overlay::Path { path: polygon(&rect_corners(r), true), color: BLUE, width: 1.0, dashed: true });
-        for h in Handle::ALL {
-            o.push(Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 });
+        // A locked artboard has no handles: it can't be resized.
+        if !ab.locked {
+            for h in Handle::ALL {
+                o.push(Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 });
+            }
         }
         // Where the canvas names the other artboards: on the top edge, flush with the left one
         // (labels are drawn 8 px right of and 14 px above their point).
@@ -473,7 +493,7 @@ impl Tool for ArtboardTool {
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
-        if let Some(r) = self.active_rect(cx)
+        if let Some(r) = self.resizable_rect(cx)
             && let Some(h) = hit_handle(r, p, cx.tol(5.0))
         {
             return match h {
@@ -484,7 +504,13 @@ impl Tool for ArtboardTool {
             }
             .turned(cx.view_angle());
         }
-        if cx.doc.artboard_at(p).is_some() { Cursor::Move } else { Cursor::Crosshair }
+        // The artboard a press would move (the topmost under the pointer, as `artboard_at` finds
+        // it): a locked one shows the arrow.
+        match cx.doc.artboard_at(p).and_then(|i| cx.doc.artboards.get(i)) {
+            Some(a) if a.locked => Cursor::Arrow,
+            Some(_) => Cursor::Move,
+            None => Cursor::Crosshair,
+        }
     }
 
     fn options(&self) -> Value {
@@ -614,6 +640,26 @@ mod tests {
         assert_eq!(drag_board2(&c, &mut t, 52.0, 0.0)["dx"], 50.0);
     }
 
+    /// Art that is also on a locked artboard stays behind when its artboard moves, so the move
+    /// snaps to it, as to any art that stays.
+    #[test]
+    fn moving_snaps_to_the_art_a_locked_artboard_keeps() {
+        let mut d = two_boards();
+        let mut locked = d.artboards[0].clone();
+        locked.rect = Rect::new(640.0, 40.0, 700.0, 70.0);
+        locked.locked = true;
+        d.artboards.push(locked);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let art = vectorcraft_geom::shapes::rectangle(Rect::new(650.0, 50.0, 660.0, 60.0));
+        d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, art, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = ArtboardTool::default();
+        // Artboard 2's left edge, 600 + 52, snaps to the rectangle's at 650.
+        assert_eq!(drag_board2(&c, &mut t, 52.0, 0.0)["dx"], 50.0);
+    }
+
     #[test]
     fn moving_snaps_to_grid_and_pixels() {
         let d = two_boards();
@@ -701,6 +747,39 @@ mod tests {
         assert_eq!(t.options()["selected"], json!([0, 1]));
         click(&mut t, 100.0, 700.0, Mods::default());
         assert_eq!(t.options()["selected"], json!([2]));
+    }
+
+    /// A click selects a locked artboard, but a drag neither moves it nor copies it (Alt), a press
+    /// on its edge doesn't resize it, it shows no handles, the pointer over it is the arrow, and
+    /// Delete leaves it. With an unlocked artboard selected too, a drag and Delete act on that one.
+    #[test]
+    fn a_locked_artboard_is_not_moved_resized_or_deleted() {
+        let mut d = two_boards();
+        d.artboards[1].locked = true;
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = ArtboardTool::default();
+        for m in [Mods::default(), Mods { alt: true, ..Default::default() }] {
+            t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0).with_mods(m));
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, 750.0, 100.0).with_mods(m)).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 750.0, 100.0).with_mods(m)).is_empty());
+        }
+        assert_eq!(t.options()["selected"], json!([1]), "the click selects it");
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Anchor { .. })), "no handles");
+        // A press on its left edge, where a handle would be.
+        t.pointer(&c, &ev(PointerKind::Down, 600.0, 100.0));
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, 550.0, 100.0)).is_empty());
+        t.pointer(&c, &ev(PointerKind::Up, 550.0, 100.0));
+        for x in [600.0, 700.0] {
+            assert_eq!(t.cursor(&c, Point::new(x, 100.0), Mods::default()), Cursor::Arrow);
+        }
+        assert!(t.key(&c, ToolKey::Delete, Mods::default()).is_empty());
+        t.set_option("selected", &json!([0, 1]));
+        t.pointer(&c, &ev(PointerKind::Down, 450.0, 450.0));
+        assert_eq!(preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 470.0, 450.0)))["indices"], json!([0]));
+        t.pointer(&c, &ev(PointerKind::Up, 470.0, 450.0));
+        t.set_option("selected", &json!([0, 1]));
+        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"index": 0}))]);
     }
 
     /// Scale Artwork with Artboard (#602): the resize asks for the art to scale, keeps the artboard's

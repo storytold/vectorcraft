@@ -473,7 +473,8 @@ fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let clipping = |id: NodeId| {
         d.parent_of(id).and_then(|p| d.node(p)).is_some_and(|p| p.clips() && p.children().and_then(|c| c.first()).is_some_and(|c| c.id == id))
     };
-    Ok(roots.into_iter().filter(|id| d.is_visible(*id) && d.is_editable(*id) && !clipping(*id)).collect())
+    let editable = d.editable();
+    Ok(roots.into_iter().filter(|id| d.is_visible(*id) && editable(*id) && !clipping(*id)).collect())
 }
 
 // ---------- preview ----------

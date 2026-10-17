@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -960,6 +960,7 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 id: aid,
                 name: format!("Artboard {aid}"),
                 rect: b,
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
             });
@@ -1009,22 +1010,32 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
     let first = rects.first().map_or(Point::ZERO, |r| r.origin());
     let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
-    let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
+    // A locked artboard stays where it is, and keeps its place in the grid.
+    let deltas: Vec<Vec2> =
+        rects.iter().zip(origins).zip(&d.artboards).map(|((r, o), a)| if a.locked { Vec2::ZERO } else { o - r.origin() }).collect();
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
     if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
         return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
     }
-    // With moveArtwork, each top-level object moves with the artboard its center is on, with symbol
-    // instances measured by their art as `Document::art_on_artboard` measures them; locked and
-    // hidden art moves only when prefs moveLockedWithArtboard is on.
+    // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
+    // artboard its center is on, with symbol instances measured by their art as
+    // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
+    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
+        for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
+            if c.is_layer() { objects(c, all, out) } else { out.push(c) }
+        }
+    }
+    let locks = d.locked_artboards();
     let symbols = d.symbol_boxes();
     let art: Vec<(NodeId, Vec2)> = if move_art {
-        d.layers
-            .iter()
-            .filter(|l| l.rides_with_artboard(locked_and_hidden))
-            .flat_map(|l| l.children().into_iter().flatten())
-            .filter(|n| n.rides_with_artboard(locked_and_hidden))
+        let mut tops = vec![];
+        for l in d.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
+            objects(l, locked_and_hidden, &mut tops);
+        }
+        tops.into_iter()
+            .filter(|n| locked_and_hidden || !locks.holds(n))
             .filter_map(|n| {
                 let c = n.geometric_bounds_with(&symbols)?.center();
                 let dl = *d.artboard_holding(c, false).and_then(|i| deltas.get(i))?;

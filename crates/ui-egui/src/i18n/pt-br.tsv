@@ -3573,6 +3573,7 @@ axis	Both	Ambos
 @msg	no such action	ação inexistente
 @msg	no such anchor	âncora inexistente
 @msg	no such artboard	prancheta inexistente
+@msg	the artboard is locked	a prancheta está bloqueada
 @msg	no such document	documento inexistente
 @msg	no such layer or object	camada ou objeto inexistente
 @msg	no such object {0}	objeto inexistente {0}

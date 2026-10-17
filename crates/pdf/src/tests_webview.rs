@@ -25,6 +25,7 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
             id: i as u32 + 1,
             name: format!("A{i}"),
             rect: Rect::new(x, 0.0, x + 100.0, 100.0),
+            locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
         });

@@ -284,7 +284,8 @@ fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<NodeId> {
             }
         }
     }
-    out.retain(|id| doc.is_editable(*id));
+    let editable = doc.editable();
+    out.retain(|id| editable(*id));
     out
 }
 

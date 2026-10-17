@@ -130,7 +130,8 @@ fn cut_targets(s: &Session) -> Result<Vec<NodeId>> {
         }
     }
     out.dedup();
-    out.retain(|id| doc.is_editable(*id));
+    let editable = doc.editable();
+    out.retain(|id| editable(*id));
     Ok(out)
 }
 

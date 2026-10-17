@@ -219,7 +219,8 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
         }
     });
     v.reverse();
-    v.retain(|(id, _)| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|(id, _)| editable(*id));
     v
 }
 
@@ -276,7 +277,8 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
         }
     });
     v.reverse();
-    v.retain(|id| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|id| editable(*id));
     v
 }
 
@@ -780,7 +782,8 @@ impl Tool for DirectSelectionTool {
                 // (members of groups too), each whole, as a click selects one.
                 if enclosed {
                     let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
-                    touched.retain(|id| cx.doc.is_editable(*id));
+                    let editable = cx.doc.editable();
+                    touched.retain(|id| editable(*id));
                     let ids: Vec<Value> = crate::select::inside(cx, r, touched).into_iter().map(|id| json!(id.0)).collect();
                     let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": ids }));
                     return std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, true)).collect();
@@ -803,7 +806,8 @@ impl Tool for DirectSelectionTool {
                         sel.push((id, vec![]));
                     }
                 }
-                sel.retain(|(id, _)| cx.doc.is_editable(*id));
+                let editable = cx.doc.editable();
+                sel.retain(|(id, _)| editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
                 let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
                 std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, false)).collect()

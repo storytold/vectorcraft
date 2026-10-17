@@ -4025,6 +4025,7 @@ axis	Both	Оба
 @msg	no such action	такого действия нет
 @msg	no such anchor	такой опорной точки нет
 @msg	no such artboard	такой монтажной области нет
+@msg	the artboard is locked	монтажная область заблокирована
 @msg	no such document	такого документа нет
 @msg	no such layer or object	такого слоя или объекта нет
 @msg	no such object {0}	объект {0} не существует

@@ -162,7 +162,8 @@ impl MeshTool {
                 v.push(id);
             }
         }
-        v.retain(|id| cx.doc.is_editable(*id));
+        let editable = cx.doc.editable();
+        v.retain(|id| editable(*id));
         v
     }
 

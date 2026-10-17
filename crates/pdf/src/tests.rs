@@ -79,6 +79,7 @@ fn one_page_per_artboard_with_sizes() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
     });
@@ -86,6 +87,7 @@ fn one_page_per_artboard_with_sizes() {
         id: 3,
         name: "C".into(),
         rect: Rect::new(0.0, 500.0, 612.0, 1292.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
     });
@@ -102,6 +104,7 @@ fn artboard_range_and_bad_index() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
     });
@@ -676,6 +679,7 @@ fn import_max_pages_and_multi_page() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
     });

@@ -3967,6 +3967,7 @@ theme	Appearance	Εμφάνιση
 @msg	no such action	δεν υπάρχει τέτοια ενέργεια
 @msg	no such anchor	δεν υπάρχει τέτοιο σημείο αγκύρωσης
 @msg	no such artboard	δεν υπάρχει τέτοιος πίνακας σχεδίασης
+@msg	the artboard is locked	ο πίνακας σχεδίασης είναι κλειδωμένος
 @msg	no such document	δεν υπάρχει τέτοιο έγγραφο
 @msg	no such layer or object	δεν υπάρχει τέτοιο επίπεδο ή αντικείμενο
 @msg	no such object {0}	δεν υπάρχει τέτοιο αντικείμενο {0}

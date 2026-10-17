@@ -114,7 +114,8 @@ impl Tool for LassoTool {
                         }
                     }
                 });
-                hits.retain(|(id, _)| cx.doc.is_editable(*id) && cx.doc.is_visible(*id));
+                let editable = cx.doc.editable();
+                hits.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
                 let items: Vec<Value> = hits.iter().map(|(id, v)| json!({ "id": id.0, "anchors": anchors_json(v) })).collect();
                 let mode = if sub {
                     "subtract"

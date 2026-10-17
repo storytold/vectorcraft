@@ -3796,6 +3796,7 @@ theme	Appearance	외관
 @msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
 @msg	no saved selections	저장된 선택 영역이 없습니다
 @msg	no such artboard	해당 아트보드가 없습니다
+@msg	the artboard is locked	아트보드가 잠겨 있습니다
 @msg	cannot split an open path at its end point	열린 패스는 끝점에서 나눌 수 없습니다
 @msg	closing needs three anchors	닫으려면 앵커가 세 개 필요합니다
 @msg	empty brush stroke	빈 브러시 선입니다

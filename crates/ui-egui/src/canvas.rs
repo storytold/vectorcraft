@@ -2570,8 +2570,10 @@ fn select_named_artboard(app: &mut VectorcraftApp, index: usize) {
     }
 }
 
+/// Start editing artboard `index`'s name on the canvas, unless the artboard is locked (the
+/// Artboards panel still renames it).
 fn begin_artboard_name_edit(ui: &Ui, app: &VectorcraftApp, index: usize) {
-    let Some(name) = app.session.active().and_then(|st| st.doc.artboards.get(index).map(|a| a.name.clone())) else { return };
+    let Some(name) = app.session.active().and_then(|st| st.doc.artboards.get(index).filter(|a| !a.locked).map(|a| a.name.clone())) else { return };
     ui.data_mut(|d| d.insert_temp(name_edit_id(), ArtboardNameEdit { index, text: name, fresh: true }));
 }
 
@@ -3581,6 +3583,37 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Poster");
         commit_artboard_name(&mut app, 0, "   ");
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Poster", "an empty name is left as it is");
+    }
+
+    /// Double-clicking the name drawn above a locked artboard doesn't edit it (the Artboards panel
+    /// still renames the artboard), fit an artboard or open Artboard Options.
+    #[test]
+    fn double_clicking_a_locked_artboards_name_leaves_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 30, "height": 20})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let mut target = None;
+        let _ =
+            ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() }, |ui| {
+                let ab = &app.session.active().unwrap().doc.artboards[0];
+                target = Some(tool_name_rect(ui.painter(), &xf, ab.rect, 0, &ab.name).center());
+            });
+        let at = target.unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for _ in 0..2 {
+            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(&mut app, &ctx, vec![button(true)]);
+            frame(&mut app, &ctx, vec![button(false)]);
+        }
+        assert!(ctx.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).is_none()), "the name isn't edited");
+        assert_eq!(app.session.active().unwrap().doc.artboards.len(), 1);
+        assert!(app.ui.dialog.is_none(), "Artboard Options stays closed");
     }
 
     /// #949: an artboard's name stays within the artboard's width on screen, ending in "…" when

@@ -4281,6 +4281,7 @@ theme	Appearance	Giao diện
 @msg	no such action	không có hành động như vậy
 @msg	no such anchor	không có điểm neo như vậy
 @msg	no such artboard	không có bảng vẽ như vậy
+@msg	the artboard is locked	bảng vẽ bị khóa
 @msg	no such document	không có tài liệu như vậy
 @msg	no such layer or object	không có lớp hoặc đối tượng như vậy
 @msg	no such object {0}	không có đối tượng như vậy: {0}

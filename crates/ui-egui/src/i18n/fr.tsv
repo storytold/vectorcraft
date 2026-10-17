@@ -3987,6 +3987,7 @@ axis	Both	Les deux
 @msg	no such action	script inexistant
 @msg	no such anchor	point d’ancrage inexistant
 @msg	no such artboard	plan de travail inexistant
+@msg	the artboard is locked	le plan de travail est verrouillé
 @msg	no such document	document inexistant
 @msg	no such layer or object	calque ou objet inexistant
 @msg	no such object {0}	objet {0} inexistant

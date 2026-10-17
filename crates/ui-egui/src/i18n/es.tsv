@@ -3990,6 +3990,7 @@ axis	Both	Ambos
 @msg	no such action	no existe esa acción
 @msg	no such anchor	no existe ese punto de ancla
 @msg	no such artboard	no existe esa mesa de trabajo
+@msg	the artboard is locked	la mesa de trabajo está bloqueada
 @msg	no such document	no existe ese documento
 @msg	no such layer or object	no existe esa capa u objeto
 @msg	no such object {0}	no existe el objeto {0}

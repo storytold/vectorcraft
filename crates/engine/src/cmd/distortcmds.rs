@@ -455,7 +455,8 @@ fn samples_of(p: &Value, key: &str) -> Option<Vec<Sample>> {
 /// What a liquify stroke may reach: the paths it can edit, each with the box no dab outside
 /// changes it ([`reach_bounds`]), and the objects it leaves as they are (type, symbols, images,
 /// graphs, meshes, and envelopes, repeats and blends with their contents), each with its bounds
-/// and what it is. Hidden and locked objects, and guides, are neither.
+/// and what it is. Hidden and locked objects, the art on a locked artboard, and guides are
+/// neither.
 #[derive(Default)]
 struct Targets {
     paths: Vec<(NodeId, Rect)>,
@@ -484,19 +485,21 @@ impl Targets {
     /// The targets under `roots` (the selection), or with none every visible object.
     fn of(d: &Document, roots: &[NodeId]) -> Self {
         let mut t = Self::default();
+        let locks = d.locked_artboards();
         if roots.is_empty() {
-            d.layers.iter().for_each(|l| t.visit(l));
+            d.layers.iter().for_each(|l| t.visit(l, &locks));
             return t;
         }
+        let editable = |id| d.is_editable_with(&locks, id);
         for r in roots {
             let (Some(n), Some(chain)) = (d.node(*r), d.ancestry(*r)) else { continue };
-            if !d.is_editable(*r) {
+            if !editable(*r) {
                 continue;
             }
             // Inside a graph, an envelope, a repeat or a blend: that object is what is left alone.
             match chain.iter().filter_map(|a| d.node(*a)).find_map(|a| Some((a, not_liquified(a)?))) {
                 Some((a, what)) => t.block(a, what),
-                None => t.visit(n),
+                None => t.visit(n, &locks),
             }
         }
         t
@@ -510,7 +513,7 @@ impl Targets {
         }
     }
 
-    fn visit(&mut self, n: &Node) {
+    fn visit(&mut self, n: &Node, locks: &vectorcraft_doc::LockedArtboards) {
         if !n.visible || n.locked {
             return;
         }
@@ -525,7 +528,8 @@ impl Targets {
                     self.paths.push((n.id, b));
                 }
             }
-            _ => n.children().into_iter().flatten().for_each(|c| self.visit(c)),
+            // The objects of a layer on a locked artboard, members and all, are left out.
+            _ => n.children().into_iter().flatten().filter(|c| !(n.is_layer() && locks.holds(c))).for_each(|c| self.visit(c, locks)),
         }
     }
 }
@@ -1144,9 +1148,10 @@ fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The objects on the plane where it was (not those moved off it along its normal).
     let on_plane = |d: &Document| -> Vec<NodeId> {
+        let editable = d.editable();
         persp::attached_roots(d)
             .into_iter()
-            .filter(|(id, pl, depth)| *pl == plane && (depth - from).abs() < 1e-6 && d.is_editable(*id))
+            .filter(|(id, pl, depth)| *pl == plane && (depth - from).abs() < 1e-6 && editable(*id))
             .map(|(id, ..)| id)
             .collect()
     };

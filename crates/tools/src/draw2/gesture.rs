@@ -126,9 +126,10 @@ impl GestureTool {
     /// The selected open path whose end is near `p`.
     fn find_extend(&self, cx: &ToolContext, p: Point) -> Option<(NodeId, bool)> {
         let tol = cx.tol(self.edit_within);
+        let editable = cx.doc.editable();
         for id in &cx.selection.objects {
             let Some(pd) = cx.doc.node(*id).and_then(|n| n.path_data()) else { continue };
-            if !cx.doc.is_editable(*id) {
+            if !editable(*id) {
                 continue;
             }
             let Some(sp) = pd.subpaths.iter().rev().find(|s| !s.closed && !s.anchors.is_empty()) else { continue };

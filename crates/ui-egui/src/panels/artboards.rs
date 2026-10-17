@@ -4,7 +4,9 @@
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
 //! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
-//! the active artboard's icon, or a double-click on another row's icon.
+//! the active artboard's icon, or a double-click on another row's icon. The lock column left of it
+//! shows a lock on a locked artboard, and a click there locks or unlocks the artboard
+//! (`artboard.setProps` with `locked`); Delete leaves locked artboards.
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -153,10 +155,19 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     all
 }
 
-/// Delete the picked artboards and select a remaining one.
+/// The picked artboards that can be deleted: those that aren't locked.
+pub(crate) fn deletable(app: &VectorcraftApp, n: usize) -> Vec<usize> {
+    let locked = |i: &usize| app.session.active().and_then(|d| d.doc.artboards.get(*i)).is_some_and(|a| a.locked);
+    picked(app, n).into_iter().filter(|i| !locked(i)).collect()
+}
+
+/// Delete the picked artboards that aren't locked and select a remaining one.
 pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
-    let mut all = picked(app, n);
+    let mut all = deletable(app, n);
+    if all.is_empty() {
+        return;
+    }
     if n > 1 && all.len() == n {
         // Deleting all artboards keeps artboard 1 (the public Delete artboards guide).
         all.retain(|i| *i != 0);
@@ -247,6 +258,7 @@ pub(crate) fn duplicate_picked(app: &mut VectorcraftApp) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
+    let locked: Vec<bool> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.locked).collect()).unwrap_or_default();
     if abs.is_empty() {
         super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;
@@ -275,7 +287,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.0),
                     t.text_dim,
                 );
-                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 28.0, r.bottom() - 2.0));
+                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 46.0, r.bottom() - 2.0));
                 if editing == Some(i) {
                     let id = ui.id().with(("ab-name", i));
                     let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
@@ -293,6 +305,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 } else {
                     ui.painter().text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
+                }
+                // The lock column, right of the name: the lock shows while the artboard is locked
+                // (dimmed under the pointer while it isn't), and a click locks or unlocks it.
+                let is_locked = locked.get(i).copied().unwrap_or(false);
+                let lock = egui::Rect::from_center_size(r.right_center() - vec2(36.0, 0.0), vec2(14.0, 14.0));
+                let lresp = ui.interact(lock, ui.id().with(("ab-lock", i)), Sense::click());
+                if is_locked {
+                    icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.icon);
+                } else if lresp.hovered() {
+                    icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.text_disabled);
+                }
+                if lresp.clicked() {
+                    app.run("artboard.setProps", json!({"index": i, "locked": !is_locked})).ok();
                 }
                 let opt = egui::Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0));
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
@@ -358,7 +383,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
             select(app, n);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1 && !deletable(app, n).is_empty(), 24.0).clicked() {
             delete_selected(app);
         }
     });
@@ -378,7 +403,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
         duplicate_picked(app);
     }
-    if menu_item(ui, tl!("Delete Artboards"), n > 1, false) {
+    if menu_item(ui, tl!("Delete Artboards"), n > 1 && !deletable(app, n).is_empty(), false) {
         delete_selected(app);
     }
     if menu_item(ui, tl!("Rename"), n > 0, false) {
@@ -1078,6 +1103,60 @@ mod tests {
         let d = &app.session.active().unwrap().doc;
         assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (2, 2), "the artboard and its art");
         assert_eq!(app.view().unwrap().artboard, 1);
+    }
+
+    /// A click in a row's lock column locks its artboard and shows the lock next to the name, a
+    /// second click unlocks it, and each click is one undo step. Delete Artboard leaves a locked
+    /// artboard.
+    #[test]
+    fn the_lock_column_locks_and_unlocks_an_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 400, "y": 0, "width": 200, "height": 150})).unwrap();
+        select(&mut app, 1);
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        // The highlighted row (Artboard 2's): its lock column is 36 points in from its right end.
+        let shapes = frame(&mut app, 0.0, vec![]);
+        let row = shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == Tokens::get(&ctx).row_selected => Some(r.rect),
+                _ => None,
+            })
+            .unwrap();
+        let lock = egui::pos2(row.right() - 36.0, row.center().y);
+        let click = |at: egui::Pos2| {
+            let b = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            vec![egui::Event::PointerMoved(at), b(true), b(false)]
+        };
+        let away = vec![egui::Event::PointerMoved(egui::pos2(-50.0, -50.0))];
+        let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
+        // Whether something is drawn in the lock column of Artboard 2's row.
+        let cell = egui::Rect::from_center_size(lock, vec2(14.0, 14.0));
+        let lock_drawn = |shapes: Vec<egui::epaint::ClippedShape>| {
+            shapes.iter().any(|c| {
+                let b = c.shape.visual_bounding_rect();
+                b.is_positive() && cell.contains_rect(b)
+            })
+        };
+        assert!(!lock_drawn(frame(&mut app, 1.0, away.clone())));
+        frame(&mut app, 2.0, click(lock));
+        assert_eq!(locked(&app), [false, true]);
+        assert!(lock_drawn(frame(&mut app, 3.0, away.clone())), "the lock shows");
+        assert!(deletable(&app, 2).is_empty(), "Delete Artboard leaves it");
+        delete_selected(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards.len(), 2);
+        frame(&mut app, 5.0, click(lock));
+        assert_eq!(locked(&app), [false, false]);
+        assert!(!lock_drawn(frame(&mut app, 6.0, away)));
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(locked(&app), [false, true], "one undo step");
     }
 
     /// Alt-click on New Artboard opens Artboard Options for the new artboard and adds nothing yet:

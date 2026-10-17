@@ -4290,6 +4290,7 @@ imageTrace	Outline	Obrys
 @msg	no such action	taková akce neexistuje
 @msg	no such anchor	takový kotevní bod neexistuje
 @msg	no such artboard	taková pracovní plocha neexistuje
+@msg	the artboard is locked	pracovní plocha je zamčená
 @msg	no such document	takový dokument neexistuje
 @msg	no such layer or object	taková vrstva ani objekt neexistuje
 @msg	no such object {0}	objekt {0} neexistuje

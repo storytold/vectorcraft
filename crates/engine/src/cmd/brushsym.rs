@@ -1122,7 +1122,8 @@ fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        v.retain(|id| d.is_editable(*id));
+        let editable = d.editable();
+        v.retain(|id| editable(*id));
         v
     };
     let label = match tool.as_str() {

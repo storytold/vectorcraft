@@ -412,10 +412,106 @@ pub struct Artboard {
     pub name: String,
     /// Artboard rectangle in document points.
     pub rect: Rect,
+    /// Locked (the Artboards panel's lock column): the Artboard tool and the artboard commands
+    /// don't move, resize or delete it, Rearrange leaves it where it is, and the art on it can't be
+    /// selected or edited ([`Document::on_locked_artboard`]), except new art while it stays
+    /// selected ([`Document::new_art`]).
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub locked: bool,
     #[serde(default)]
     pub show_center_mark: bool,
     #[serde(default)]
     pub show_cross_hairs: bool,
+}
+
+/// A document's locked artboards ([`Document::locked_artboards`]).
+pub struct LockedArtboards<'a> {
+    rects: Vec<Rect>,
+    symbols: SymbolBoxes<'a>,
+    /// The new art, which isn't on them ([`Document::new_art`]).
+    new_art: Arc<std::collections::HashSet<NodeId>>,
+    /// The objects of pattern editing mode's layer ([`Document::pattern_edit`]), which are on no
+    /// artboard.
+    pattern_art: std::collections::HashSet<NodeId>,
+    /// What [`LockedArtboards::overlaps`] found for each object it measured: the members of a
+    /// group are each answered with one measurement of the group.
+    held: std::cell::RefCell<std::collections::HashMap<NodeId, bool>>,
+}
+
+impl LockedArtboards<'_> {
+    /// No artboard is locked.
+    pub fn is_empty(&self) -> bool {
+        self.rects.is_empty()
+    }
+    /// Is `n`, an object of a layer or sublayer, on a locked artboard: shown, not a guide, and its
+    /// visual bounds (with its strokes, a symbol instance by its art) overlapping the artboard? An
+    /// object counts for every artboard it overlaps, as Fit to Artwork Bounds counts it. A layer or
+    /// sublayer is on none, nor is the art of pattern editing mode ([`Document::pattern_edit`]) or
+    /// new art while it stays selected ([`Document::new_art`]).
+    pub fn holds(&self, n: &Node) -> bool {
+        !self.new_art.contains(&n.id) && self.overlaps(n)
+    }
+    /// [`LockedArtboards::holds`] for new art too: is `n` on a locked artboard, whether or not it
+    /// is new art?
+    pub fn overlaps(&self, n: &Node) -> bool {
+        if self.rects.is_empty()
+            || !n.visible
+            || n.is_layer()
+            || matches!(n.kind, NodeKind::Path { guide: true, .. })
+            || self.pattern_art.contains(&n.id)
+        {
+            return false;
+        }
+        if let Some(held) = self.held.borrow().get(&n.id) {
+            return *held;
+        }
+        let held =
+            n.visual_bounds_with(&self.symbols).is_some_and(|b| self.rects.iter().any(|r| b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0));
+        self.held.borrow_mut().insert(n.id, held);
+        held
+    }
+    /// Is node `id` on a locked artboard: is the object of a layer or sublayer that holds it (`id`
+    /// itself when it is one, a group counting as one object) on one ([`LockedArtboards::holds`])?
+    pub fn holds_id(&self, id: NodeId) -> bool {
+        !self.rects.is_empty() && self.symbols.document().layer_object(id).is_some_and(|n| self.holds(n))
+    }
+}
+
+/// New art on a locked artboard ([`Document::new_art`]). Setting it changes the document in
+/// place, so a selection change that sets it doesn't replace the document.
+#[derive(Default)]
+pub struct NewArtIds(std::sync::RwLock<Arc<std::collections::HashSet<NodeId>>>);
+
+impl NewArtIds {
+    /// The objects.
+    pub fn get(&self) -> Arc<std::collections::HashSet<NodeId>> {
+        self.0.read().map(|g| g.clone()).unwrap_or_default()
+    }
+    /// Make `ids` the objects.
+    pub fn set(&self, ids: Arc<std::collections::HashSet<NodeId>>) {
+        if let Ok(mut g) = self.0.write() {
+            *g = ids;
+        }
+    }
+}
+
+impl Clone for NewArtIds {
+    fn clone(&self) -> Self {
+        NewArtIds(std::sync::RwLock::new(self.get()))
+    }
+}
+
+/// Editing state, not document content: two documents are equal whatever new art they name.
+impl PartialEq for NewArtIds {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for NewArtIds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("NewArtIds").field(&self.get()).finish()
+    }
 }
 
 /// Opacity-mask editing mode: `object`'s mask art lives on the temporary `layer` while editing.
@@ -769,6 +865,12 @@ pub struct Document {
     /// state, never saved.
     #[serde(skip)]
     pub puppet: Option<Arc<PuppetPins>>,
+    /// New art on a locked artboard: objects of layers on a locked artboard that an edit made and
+    /// left selected (a group with selected members counts), kept while they stay selected and on
+    /// one. They and their contents can be selected and edited ([`LockedArtboards::holds`]). The
+    /// engine sets it from the selection's ([`Selection::new_art`]). Editing state, never saved.
+    #[serde(skip)]
+    pub new_art: NewArtIds,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -850,6 +952,7 @@ impl Document {
                 id: 1,
                 name: "Artboard 1".into(),
                 rect: Rect::new(0.0, 0.0, width, height),
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
             }],
@@ -893,6 +996,7 @@ impl Document {
             assets: vec![],
             svg_scripts: vec![],
             puppet: None,
+            new_art: Default::default(),
             dimensions: false,
             index: Default::default(),
         };
@@ -1326,9 +1430,69 @@ impl Document {
     pub fn node_count(&self) -> usize {
         self.layers.iter().map(|l| l.count()).sum()
     }
-    /// Is the node (and every ancestor) visible and unlocked?
+    /// Is the node (and every ancestor) visible and unlocked, and not on a locked artboard
+    /// ([`Document::on_locked_artboard`])?
     pub fn is_editable(&self, id: NodeId) -> bool {
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible && !n.locked)))
+        self.is_editable_with(&self.locked_artboards(), id)
+    }
+    /// [`Document::is_editable`] with the locked artboards `locks` of this document, measured
+    /// once for many ids.
+    pub fn is_editable_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible && !n.locked))) && !locks.holds_id(id)
+    }
+    /// [`Document::is_editable`] for many ids: the art on the locked artboards is measured once
+    /// for all of them, a group once for all its members.
+    pub fn editable(&self) -> impl Fn(NodeId) -> bool + '_ {
+        let locks = self.locked_artboards();
+        move |id| self.is_editable_with(&locks, id)
+    }
+    /// The locked artboards, for asking which art is on them ([`LockedArtboards::holds`]).
+    pub fn locked_artboards(&self) -> LockedArtboards<'_> {
+        self.locked_artboards_except(usize::MAX)
+    }
+    /// [`Document::locked_artboards`] leaving out artboard `index`.
+    pub fn locked_artboards_except(&self, index: usize) -> LockedArtboards<'_> {
+        // Art flush with an edge from outside can overlap it by a rounding error, as in
+        // `art_bounds_on` (#1295).
+        let rects: Vec<Rect> =
+            self.artboards.iter().enumerate().filter(|(i, a)| a.locked && *i != index).map(|(_, a)| a.rect.inflate(-1e-6, -1e-6)).collect();
+        // The objects of pattern editing mode's layer, a sublayer's objects included.
+        fn objects(n: &Node, out: &mut std::collections::HashSet<NodeId>) {
+            for c in n.children().into_iter().flatten() {
+                if c.is_layer() {
+                    objects(c, out);
+                } else {
+                    out.insert(c.id);
+                }
+            }
+        }
+        let mut pattern_art = std::collections::HashSet::new();
+        if let Some(layer) = self.pattern_edit.as_ref().filter(|_| !rects.is_empty()).and_then(|e| self.layers.iter().find(|l| l.id == e.layer)) {
+            objects(layer, &mut pattern_art);
+        }
+        LockedArtboards { rects, symbols: self.symbol_boxes(), new_art: self.new_art.get(), pattern_art, held: Default::default() }
+    }
+    /// Is `id` on a locked artboard ([`LockedArtboards::holds_id`])? A layer or sublayer is on none.
+    pub fn on_locked_artboard(&self, id: NodeId) -> bool {
+        self.locked_artboards().holds_id(id)
+    }
+    /// The object of a layer or sublayer that holds node `id`: `id` itself when it is one, else
+    /// the group or other object around it right inside a layer. None for a layer or sublayer.
+    pub fn layer_object(&self, id: NodeId) -> Option<&Node> {
+        self.layer_object_at(&self.index_path(id)?)
+    }
+    /// [`Document::layer_object`] for the node at index path `path`.
+    pub fn layer_object_at(&self, path: &[usize]) -> Option<&Node> {
+        // Down the path to the first node that isn't a layer.
+        let mut nodes = &self.layers;
+        for &i in path {
+            let n = nodes.get(i)?;
+            if !n.is_layer() {
+                return Some(n.as_ref());
+            }
+            nodes = n.children()?;
+        }
+        None
     }
     pub fn is_visible(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible)))
@@ -1339,9 +1503,16 @@ impl Document {
         a.iter().rev().copied().find(|i| self.node(*i).is_some_and(Node::is_layer))
     }
     /// Every art object the Selection tool can reach (Select All): the visible, unlocked objects
-    /// of the visible, unlocked, non-template layers, looking through sublayers (bottom first).
+    /// of the visible, unlocked, non-template layers, looking through sublayers (bottom first),
+    /// except those on a locked artboard.
     pub fn selectable_art(&self) -> Vec<NodeId> {
-        self.layers.iter().filter(|l| l.visible && !l.locked && !l.is_template()).flat_map(|l| l.layer_art(true)).collect()
+        let locks = self.locked_artboards();
+        self.layers
+            .iter()
+            .filter(|l| l.visible && !l.locked && !l.is_template())
+            .flat_map(|l| l.layer_art(true))
+            .filter(|id| locks.is_empty() || !self.node(*id).is_some_and(|n| locks.holds(n)))
+            .collect()
     }
     /// Colour of the innermost layer or sublayer containing `id` (selection highlight colour).
     pub fn layer_color(&self, id: NodeId) -> [u8; 3] {
@@ -1411,6 +1582,18 @@ impl Document {
         let mut art = vec![];
         for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
             collect(l, &symbols, rect, locked_and_hidden, &mut art);
+        }
+        art
+    }
+    /// The art that moves, scales or is cut with artboard `index`: [`Document::art_on_artboard`]
+    /// without the objects on another locked artboard, which stay unless `locked_and_hidden`, as
+    /// locked art does.
+    pub fn art_moving_with(&self, index: usize, locked_and_hidden: bool) -> Vec<NodeId> {
+        let Some(rect) = self.artboards.get(index).map(|a| a.rect) else { return vec![] };
+        let mut art = self.art_on_artboard(rect, locked_and_hidden);
+        let locks = self.locked_artboards_except(index);
+        if !locked_and_hidden && !locks.is_empty() {
+            art.retain(|id| !self.node(*id).is_some_and(|n| locks.holds(n)));
         }
         art
     }
@@ -1849,6 +2032,90 @@ mod tests {
         {
             assert!(d.art_on_artboard(board, false).is_empty(), "overhang at {board:?}");
         }
+    }
+
+    /// The art on a locked artboard (each object of a layer whose bounds overlap it, a group as one
+    /// object) can't be edited, and Select All, a click and a marquee pass over it; art flush with
+    /// the artboard from outside isn't on it, a layer is on no artboard, and new art isn't on one.
+    /// Unlocking the artboard gives the art back.
+    #[test]
+    fn art_on_a_locked_artboard_cannot_be_selected_or_edited() {
+        use crate::hit::{HitOptions, hit_test, marquee, objects_at};
+        let (mut d, a, b) = doc_with_rects();
+        let layer = d.layers[0].id;
+        d.artboards.push(Artboard {
+            id: 2,
+            name: "Artboard 2".into(),
+            rect: Rect::new(700.0, 0.0, 900.0, 200.0),
+            locked: false,
+            show_center_mark: false,
+            show_cross_hairs: false,
+        });
+        let rect = |d: &mut Document, r: Rect, appearance: Appearance| {
+            let id = d.alloc_id();
+            d.insert(Some(layer), usize::MAX, Node::path(id, shapes::rectangle(r), appearance)).unwrap();
+            id
+        };
+        let c = rect(&mut d, Rect::new(710.0, 10.0, 730.0, 30.0), Appearance::default_art());
+        // A group with one member on the artboard and one right of it.
+        let (g, m1, m2) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let members = [(m1, 750.0), (m2, 950.0)]
+            .map(|(id, x)| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 50.0, x + 10.0, 60.0)), Appearance::default_art())));
+        d.insert(Some(layer), usize::MAX, Node::group(g, members.to_vec())).unwrap();
+        // Unstroked and flush with the artboard's left edge, from outside.
+        let e = rect(&mut d, Rect::new(680.0, 10.0, 700.0, 30.0), Appearance::default());
+        let opt = HitOptions::default();
+        let top = |d: &Document, x, y| hit_test(d, Point::new(x, y), opt).map(|h| h.top_object(None));
+        let all = Rect::new(-10.0, -10.0, 1000.0, 800.0);
+        assert_eq!(top(&d, 720.0, 20.0), Some(c));
+        d.artboards[1].locked = true;
+        for id in [c, g, m1, m2] {
+            assert!(d.on_locked_artboard(id) && !d.is_editable(id), "{id:?} is on the locked artboard");
+        }
+        for id in [a, b, e, layer] {
+            assert!(!d.on_locked_artboard(id) && d.is_editable(id), "{id:?} isn't");
+        }
+        assert_eq!(d.selectable_art(), [a, b, e]);
+        assert_eq!(top(&d, 720.0, 20.0), None, "a click passes over c");
+        assert_eq!(top(&d, 955.0, 55.0), None, "and over the group's member off the artboard");
+        let isolated = HitOptions { scope: Some(g), ..opt };
+        assert!(hit_test(&d, Point::new(755.0, 55.0), isolated).is_none(), "and inside the group isolated before the lock");
+        assert!(objects_at(&d, Point::new(720.0, 20.0), opt, None).is_empty());
+        assert_eq!(marquee(&d, all, None, false), [a, b, e]);
+        assert_eq!(marquee(&d, all, None, true), [a, b, e], "the Direct Selection tool's marquee too");
+        // Deselected in one pass, with the key object and the anchors.
+        let mut sel = Selection::default();
+        sel.set([a, c]);
+        sel.key = Some(c);
+        sel.anchors.insert(c, [(0, 0)].into());
+        sel.deselect_on_locked_artboards(&d);
+        assert_eq!((sel.objects.clone(), sel.key, sel.anchors.is_empty()), (vec![a], None, true));
+        // A targeted layer stays targeted, with its art off the locked artboard selected.
+        sel.set_target(&d, layer);
+        sel.deselect_on_locked_artboards(&d);
+        assert_eq!((sel.objects.clone(), sel.target), (vec![a, b, e], Some(layer)));
+        // A sublayer with art on both artboards: its art off the locked artboard can still be clicked.
+        let (sub, s1, s2) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(Some(layer), usize::MAX, Node::layer(sub, "Sub", LayerColor::Preset(2))).unwrap();
+        for (id, x, y) in [(s1, 300.0, 300.0), (s2, 800.0, 100.0)] {
+            d.insert(Some(sub), usize::MAX, Node::path(id, shapes::rectangle(Rect::new(x, y, x + 10.0, y + 10.0)), Appearance::default_art()))
+                .unwrap();
+        }
+        assert_eq!((top(&d, 305.0, 305.0), top(&d, 805.0, 105.0)), (Some(s1), None));
+        assert!(!d.on_locked_artboard(sub));
+        let mut both = Selection::default();
+        both.set([s1, s2]);
+        both.deselect_on_locked_artboards(&d);
+        assert_eq!(both.objects, [s1]);
+        // New art on it is editable and can be clicked while it is new art.
+        d.new_art.set(Arc::new([c].into()));
+        assert!(!d.on_locked_artboard(c) && d.is_editable(c), "new art");
+        assert_eq!(top(&d, 720.0, 20.0), Some(c));
+        d.new_art.set(Default::default());
+        d.artboards[1].locked = false;
+        assert_eq!(d.selectable_art(), [a, b, c, g, e, s1, s2]);
+        assert_eq!(top(&d, 955.0, 55.0), Some(g));
+        assert_eq!(marquee(&d, all, None, false), [a, b, c, g, e, s1, s2]);
     }
 
     #[test]

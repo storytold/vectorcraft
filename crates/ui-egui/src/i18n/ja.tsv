@@ -3864,6 +3864,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no saved selection recalled	保存した選択範囲を呼び出していません
 @msg	no saved selections	保存した選択範囲はありません
 @msg	no such artboard	指定されたアートボードが見つかりません
+@msg	the artboard is locked	アートボードがロックされています
 @msg	cannot split an open path at its end point	オープンパスは端点で分割できません
 @msg	closing needs three anchors	閉じるには 3 つのアンカーポイントが必要です
 @msg	empty brush stroke	ブラシストロークが空です

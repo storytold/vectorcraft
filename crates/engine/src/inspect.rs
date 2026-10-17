@@ -245,7 +245,14 @@ fn document_base(s: &Session) -> Value {
         "revision": st.revision,
         "units": d.units.label(),
         "colorMode": format!("{:?}", d.color_mode),
-        "artboards": d.artboards.iter().map(|a| json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()})).collect::<Vec<_>>(),
+        // An artboard's name and rectangle, and `locked: true` when it is locked.
+        "artboards": d.artboards.iter().map(|a| {
+            let mut v = json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()});
+            if a.locked {
+                v["locked"] = json!(true);
+            }
+            v
+        }).collect::<Vec<_>>(),
         "currentLayer": st.active_layer.map(|l| l.0),
         // The rows highlighted in the Layers panel (`layer.setCurrent`, `layer.highlight`).
         "layerRows": st.highlighted_rows().iter().map(|i| i.0).collect::<Vec<_>>(),

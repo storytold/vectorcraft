@@ -4213,6 +4213,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no such action	toimintoa ei ole
 @msg	no such anchor	ankkuria ei ole
 @msg	no such artboard	piirtoalustaa ei ole
+@msg	the artboard is locked	piirtoalusta on lukittu
 @msg	no such document	asiakirjaa ei ole
 @msg	no such layer or object	tasoa tai objektia ei ole
 @msg	no such object {0}	objektia {0} ei ole

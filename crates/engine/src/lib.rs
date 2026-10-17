@@ -597,6 +597,7 @@ impl DocState {
         if let Some(it) = self.interaction.take() {
             self.doc = it.doc;
             self.selection = Arc::unwrap_or_clone(it.selection);
+            self.sync_new_art();
             self.active_layer = it.active_layer;
             self.layer_rows = it.layer_rows;
             self.variables_highlight = it.variables_highlight;
@@ -607,6 +608,60 @@ impl DocState {
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).
     pub fn mark_unsaved(&mut self) {
         self.saved_doc = Arc::new(Document::new(1.0, 1.0));
+    }
+    /// Deselect the art on a locked artboard, except new art ([`Document::new_art`]). New art
+    /// becomes the objects of layers on a locked artboard that hold selected objects (a group for
+    /// its selected members) and that an edit made (those not in `before`, the document before
+    /// it), or that held objects selected in `was` that were new art (`old`, the new art of that
+    /// selection), or were inside new art in `before` (the members of an ungrouped group). New art
+    /// that a selection leaves out, or that leaves the locked artboards, is protected from then
+    /// on. The selection and the document get the new art; the document's changes in place, so a
+    /// selection change doesn't replace the document.
+    fn protect_locked_artboards(&mut self, was: &[NodeId], old: &std::collections::HashSet<NodeId>, before: Option<&Document>) {
+        let new_art: std::collections::HashSet<NodeId> = {
+            let (doc, locks) = (&self.doc, self.doc.locked_artboards());
+            if locks.is_empty() {
+                Default::default()
+            } else {
+                // `was` and `old` name the objects of the document they were selected in.
+                let then = before.unwrap_or(doc);
+                let was: std::collections::HashSet<NodeId> =
+                    was.iter().filter_map(|o| then.layer_object(*o)).map(|n| n.id).filter(|o| old.contains(o)).collect();
+                let selected: Vec<(NodeId, &vectorcraft_doc::Node)> =
+                    self.selection.objects.iter().filter_map(|o| doc.layer_object(*o).map(|n| (*o, n))).collect();
+                // One walk of the document before the edit finds where the selected objects were;
+                // the objects the edit made aren't in it.
+                let paths = before.filter(|_| !selected.is_empty()).map(|b| b.index_paths(selected.iter().flat_map(|(o, n)| [*o, n.id])));
+                let new = |o: NodeId, object: NodeId| {
+                    was.contains(&object)
+                        || before.zip(paths.as_ref()).is_some_and(|(b, p)| {
+                            !p.contains_key(&object) || p.get(&o).and_then(|p| b.layer_object_at(p)).is_some_and(|n| was.contains(&n.id))
+                        })
+                };
+                selected.into_iter().filter(|(o, n)| new(*o, n.id) && locks.overlaps(n)).map(|(_, n)| n.id).collect()
+            }
+        };
+        if new_art != *self.selection.new_art {
+            self.selection.new_art = Arc::new(new_art);
+        }
+        self.sync_new_art();
+        self.selection.deselect_on_locked_artboards(&self.doc);
+    }
+    /// Give the document the selection's new art ([`Selection::new_art`]), less the objects the
+    /// selection no longer holds: after Undo, Redo or a failed batch brings back a document and
+    /// a selection, and after a command that changed the selection directly.
+    pub(crate) fn sync_new_art(&mut self) {
+        if !self.selection.new_art.is_empty() {
+            let held: std::collections::HashSet<NodeId> =
+                self.selection.objects.iter().filter_map(|o| self.doc.layer_object(*o)).map(|n| n.id).collect();
+            if !self.selection.new_art.is_subset(&held) {
+                self.selection.new_art = Arc::new(self.selection.new_art.intersection(&held).copied().collect());
+            }
+        }
+        let doc = self.doc.new_art.get();
+        if !Arc::ptr_eq(&doc, &self.selection.new_art) && *doc != *self.selection.new_art {
+            self.doc.new_art.set(self.selection.new_art.clone());
+        }
     }
     pub fn title(&self) -> String {
         let name = self
@@ -1639,7 +1694,7 @@ impl Session {
     fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
         let snapshot = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone()));
         let active = self.active;
-        match guard::catch_panic(|| self.run_nested(f)) {
+        let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
             Err(msg) => {
                 self.depth = 0;
@@ -1657,7 +1712,13 @@ impl Session {
                 }
                 Err(EngineError::Internal { cmd: id.to_string(), msg })
             }
+        };
+        // Undo, Redo and a failed batch bring back documents with their selections: each document
+        // gets its selection's new art on a locked artboard.
+        for st in &mut self.docs {
+            st.sync_new_art();
         }
+        r
     }
 
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -1720,6 +1781,9 @@ impl Session {
                 if guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
                 }
+                // The art on a locked artboard can't stay selected, however it got there, except
+                // the new art this edit made and new art still selected.
+                st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -1744,12 +1808,16 @@ impl Session {
         let guides_locked = self.menu.guides_locked;
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
+        let new_art = st.selection.new_art.clone();
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
         // Lock Guides locks the paths made into guides too (#1534), whatever selects them.
         if guides_locked {
             deselect_guides(&st.doc, &mut st.selection);
         }
+        // The art on a locked artboard can't be selected, whatever selects it, except new art
+        // that was selected and still is.
+        st.protect_locked_artboards(&before, &new_art, None);
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
         if st.selection.objects != before
@@ -1930,6 +1998,7 @@ impl Session {
                 if self.menu.guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
                 }
+                st.sync_new_art();
                 st.revision += 1;
                 journal = Some(g.journal);
             }

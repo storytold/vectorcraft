@@ -54,9 +54,10 @@ struct PathWidgets {
 
 impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
-    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection.
+    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection. `id` is
+    /// editable ([`Document::is_editable`]).
     fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
-        if !doc.is_editable(id) || selection.segments.contains_key(&id) {
+        if selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
@@ -103,7 +104,9 @@ impl CornerWidgets {
     /// The widgets at `zoom` (screen px per document point), if the selection has them: on any
     /// path with Direct Selection (`any_path`), on live rectangles and polygons with Selection.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, any_path: bool) -> Option<Self> {
-        let paths: Vec<_> = selection.objects.iter().filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
+        let editable = doc.editable();
+        let paths: Vec<_> =
+            selection.objects.iter().filter(|id| editable(**id)).filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
         (!paths.is_empty()).then_some(Self { paths })
     }
 

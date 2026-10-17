@@ -511,10 +511,11 @@ fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Resul
     let supplied = p.get("ids").map(|_| checked_ids_param(s, p, "ids", "shaper.scribble")).transpose()?;
     let expand = supplied.is_none() && st.selection.objects.len() < 2;
     let ids = supplied.unwrap_or_else(|| if st.selection.objects.len() > 1 { st.selection.objects.clone() } else { st.doc.selectable_art() });
+    let editable = st.doc.editable();
     let eligible: Vec<NodeId> = ids
         .into_iter()
         .filter(|id| {
-            st.doc.is_editable(*id)
+            editable(*id)
                 && st.doc.node(*id).is_some_and(|n| {
                     !matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
                         && (n.extras().shaper.is_some() || b::node_outline(n).is_some())
@@ -691,10 +692,11 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
 /// When `within` is given, only that group is considered.
 fn group_at(d: &Document, point: Point, construction: bool, within: Option<NodeId>) -> Option<NodeId> {
     let mut groups = vec![];
+    let editable = d.editable();
     d.walk(|n| {
         if n.extras().shaper.is_some()
             && within.is_none_or(|g| g == n.id)
-            && d.is_editable(n.id)
+            && editable(n.id)
             && (if construction { source_group(n).and_then(Node::geometric_bounds) } else { n.geometric_bounds() })
                 .is_some_and(|b| b.inflate(6.0, 6.0).contains(point))
         {

@@ -939,6 +939,18 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Find and Replace with no ids leaves the type on a locked artboard as it is.
+#[test]
+fn find_and_replace_leaves_type_on_a_locked_artboard() {
+    let mut s = session();
+    let a = text(&mut s, "cat");
+    let b = id_of(&s.execute("text.create", &json!({"x": 2050, "y": 50, "text": "cat"})).unwrap());
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, a), plain(&s, b)), (Some(1), "dog".to_string(), "cat".to_string()));
+}
+
 /// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
 /// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
 /// unmodified. It still replies with the count. A replacement that changes the text is one undo step.

@@ -4634,6 +4634,7 @@ imageTrace	Outline	Körvonal
 @msg	no such action	nincs ilyen művelet
 @msg	no such anchor	nincs ilyen horgonypont
 @msg	no such artboard	nincs ilyen rajztábla
+@msg	the artboard is locked	a rajztábla zárolt
 @msg	no such document	nincs ilyen dokumentum
 @msg	no such layer or object	nincs ilyen réteg vagy objektum
 @msg	no such object {0}	nincs ilyen objektum: {0}

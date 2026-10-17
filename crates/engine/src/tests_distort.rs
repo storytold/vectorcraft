@@ -217,6 +217,22 @@ fn liquify_without_selection_hits_paths_under_the_brush() {
     assert!(path(&s, b).bounds().unwrap().width() < 100.0);
 }
 
+/// With nothing selected, a stroke leaves the art on a locked artboard as it is.
+#[test]
+fn liquify_without_selection_leaves_the_art_on_a_locked_artboard() {
+    let mut s = session();
+    let b = rect(&mut s, 500.0, 400.0, 100.0, 100.0);
+    s.execute("artboard.new", &json!({"x": 450, "y": 350, "width": 300, "height": 300})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let pucker = json!({"tool": "pucker", "points": [[550, 450]], "diameter": 150, "intensity": 1});
+    let r = s.execute("object.liquify", &pucker);
+    assert_eq!(path(&s, b).bounds().unwrap(), Rect::new(500.0, 400.0, 600.0, 500.0), "{r:?}");
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    s.execute("object.liquify", &pucker).unwrap();
+    assert!(path(&s, b).bounds().unwrap().width() < 100.0, "unlocked");
+}
+
 #[test]
 fn liquify_tool_replays_from_the_journal() {
     let mut s = session();

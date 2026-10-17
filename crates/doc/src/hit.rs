@@ -110,6 +110,11 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
             return objects_at_repeated(doc, p, opt, scope);
         }
     }
+    // The objects on a locked artboard can't be selected, as `hit_test_skipping` passes over them.
+    let locks = doc.locked_artboards();
+    if !locks.is_empty() {
+        tops.retain(|id| !doc.node(*id).is_some_and(|n| locks.holds(n)));
+    }
     tops
 }
 
@@ -243,14 +248,24 @@ fn locked_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> boo
     }
 }
 
-/// [`hit_test`] passing over the nodes `skip` names (and their contents). Symbol instances are
-/// measured by their art ([`Node::geometric_bounds_with`]).
+/// [`hit_test`] passing over the nodes `skip` names (and their contents), and with
+/// `editable_only` over the objects of layers and sublayers on a locked artboard, and over all of
+/// an isolated group on one ([`crate::LockedArtboards::holds`]). Symbol instances are measured by their art
+/// ([`Node::geometric_bounds_with`]).
 fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, editable_only: bool) -> Option<Hit> {
     let finish = |mut h: Hit| {
         h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
         h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
         h
     };
+    let locks = doc.locked_artboards();
+    let on_locked = |id: NodeId| {
+        editable_only
+            && !locks.is_empty()
+            && doc.parent_of(id).and_then(|l| doc.node(l)).is_some_and(Node::is_layer)
+            && doc.node(id).is_some_and(|n| locks.holds(n))
+    };
+    let skip = &|id| skip(id) || on_locked(id);
     let symbols = doc.symbol_boxes();
     // Isolation mode: only what is inside the isolated container hits. The art around it is
     // locked, and clicks pass through it (#833).
@@ -259,6 +274,10 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
+        // Isolated before its artboard was locked: nothing in it hits.
+        if locks.holds_id(scope) {
+            return None;
+        }
         if isolated.is_container() {
             return hit_children(isolated, p, opt, &symbols, skip, &mut chain, editable_only).map(finish);
         }
@@ -484,10 +503,11 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
     parts.iter().filter(|(_, bp, _)| fill_contains(bp, *rule, p)).min_by(|a, b| size(&a.2).total_cmp(&size(&b.2))).map(|(id, ..)| *id)
 }
 
-/// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect. Symbol
-/// instances are measured by their art ([`Node::geometric_bounds_with`]). The art of a clip group
-/// or of a layer with a clipping mask counts only when the marquee meets the region its clipping
-/// path clips to, and then only within that region's bounds.
+/// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect, leaving
+/// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
+/// by their art ([`Node::geometric_bounds_with`]). The art of a clip group or of a layer with a
+/// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
+/// only within that region's bounds.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
@@ -562,8 +582,9 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
         }
     }
     let symbols = doc.symbol_boxes();
+    let locks = doc.locked_artboards();
     for (t, r) in tops {
-        if !t.visible || t.locked {
+        if !t.visible || t.locked || locks.holds_id(t.id) {
             continue;
         }
         if leaves {

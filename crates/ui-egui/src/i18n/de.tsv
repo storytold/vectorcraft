@@ -3928,6 +3928,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no such action	keine solche Aktion
 @msg	no such anchor	kein solcher Ankerpunkt
 @msg	no such artboard	keine solche Zeichenfläche
+@msg	the artboard is locked	die Zeichenfläche ist gesperrt
 @msg	no such document	kein solches Dokument
 @msg	no such layer or object	keine solche Ebene und kein solches Objekt
 @msg	no such object {0}	kein solches Objekt {0}

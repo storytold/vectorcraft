@@ -3915,6 +3915,7 @@ axis	Both	Båda
 @msg	no such action	åtgärden finns inte
 @msg	no such anchor	ankaret finns inte
 @msg	no such artboard	ritytan finns inte
+@msg	the artboard is locked	ritytan är låst
 @msg	no such document	dokumentet finns inte
 @msg	no such layer or object	lagret eller objektet finns inte
 @msg	no such object {0}	objektet {0} finns inte

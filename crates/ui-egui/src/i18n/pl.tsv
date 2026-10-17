@@ -4112,6 +4112,7 @@ imageTrace	Outline	Kontur
 @msg	no such action	brak takiej operacji
 @msg	no such anchor	brak takiego punktu
 @msg	no such artboard	brak takiego obszaru kompozycji
+@msg	the artboard is locked	obszar kompozycji jest zablokowany
 @msg	no such document	brak takiego dokumentu
 @msg	no such layer or object	brak takiej warstwy lub obiektu
 @msg	no such object {0}	brak obiektu {0}

@@ -3619,6 +3619,7 @@ imageTrace	Outline	轮廓
 @msg	no saved selection recalled	未调出任何已保存的选区
 @msg	no saved selections	没有已保存的选区
 @msg	no such artboard	没有此画板
+@msg	the artboard is locked	该画板已锁定
 @msg	cannot split an open path at its end point	无法在开放路径的端点处拆分该路径
 @msg	closing needs three anchors	闭合需要三个锚点
 @msg	empty brush stroke	画笔描边为空

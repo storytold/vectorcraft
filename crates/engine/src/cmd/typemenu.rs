@@ -635,9 +635,10 @@ pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bo
 
 fn all_texts(d: &Document) -> Vec<NodeId> {
     let mut v = vec![];
+    let locks = d.locked_artboards();
     for l in d.layers.iter().filter(|l| l.visible && !l.locked) {
         l.walk(&mut |n| {
-            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked {
+            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked && !locks.holds_id(n.id) {
                 v.push(n.id);
             }
         });

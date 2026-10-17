@@ -4013,6 +4013,7 @@ axis	Both	Обидві
 @msg	no such action	такої дії немає
 @msg	no such anchor	такої опорної точки немає
 @msg	no such artboard	такої монтажної області немає
+@msg	the artboard is locked	монтажна область заблокована
 @msg	no such document	такого документа немає
 @msg	no such layer or object	такого шару чи об’єкта немає
 @msg	no such object {0}	об’єкт {0} не існує

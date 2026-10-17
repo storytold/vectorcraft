@@ -4029,6 +4029,7 @@ axis	Both	Entrambi
 @msg	no such action	azione inesistente
 @msg	no such anchor	punto di ancoraggio inesistente
 @msg	no such artboard	tavola da disegno inesistente
+@msg	the artboard is locked	la tavola da disegno è bloccata
 @msg	no such document	documento inesistente
 @msg	no such layer or object	livello o oggetto inesistente
 @msg	no such object {0}	oggetto {0} inesistente

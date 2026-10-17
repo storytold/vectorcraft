@@ -388,6 +388,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     if guides_locked {
         crate::deselect_guides(&st.doc, &mut st.selection);
     }
+    st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     Ok(json!({ "undone": label }))
 }
@@ -410,6 +411,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     if guides_locked {
         crate::deselect_guides(&st.doc, &mut st.selection);
     }
+    st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     Ok(json!({ "redone": label }))
 }

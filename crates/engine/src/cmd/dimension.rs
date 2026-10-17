@@ -165,11 +165,13 @@ fn apply_to_all(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let o = dimension_of(&st.doc, from)?.options;
     let mut ids = vec![];
+    let editable = st.doc.editable();
     st.doc.walk(|n| {
-        if n.extras().dimension.is_some() && st.doc.is_editable(n.id) {
+        if n.extras().dimension.is_some() && editable(n.id) {
             ids.push(n.id);
         }
     });
+    drop(editable);
     s.edit("Apply to All", |doc, _| {
         for id in &ids {
             let mut dim = dimension_of(doc, *id)?;

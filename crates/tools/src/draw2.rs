@@ -219,17 +219,19 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
             v.push(id);
         }
     }
-    v.retain(|id| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|id| editable(*id));
     v
 }
 
 /// The selected paths the Pen and the Curvature tool edit (not guides, nor locked or hidden ones).
 pub(crate) fn editable_paths<'a>(cx: &'a ToolContext) -> impl Iterator<Item = NodeId> + 'a {
+    let editable = cx.doc.editable();
     cx.selection
         .objects
         .iter()
         .copied()
-        .filter(|&id| cx.doc.is_editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
+        .filter(move |&id| editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
 }
 
 /// The paths whose anchors show with the Pen: the selected ones, and those inside selected groups
@@ -251,7 +253,8 @@ pub(crate) fn shown_paths(cx: &ToolContext) -> Vec<NodeId> {
     for n in cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)) {
         inside(n, &mut v);
     }
-    v.retain(|id| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|id| editable(*id));
     v
 }
 

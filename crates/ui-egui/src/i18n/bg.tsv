@@ -3915,6 +3915,7 @@ axis	Both	И двете
 @msg	no such action	няма такова действие
 @msg	no such anchor	няма такава опорна точка
 @msg	no such artboard	няма такава работна област
+@msg	the artboard is locked	работната област е заключена
 @msg	no such document	няма такъв документ
 @msg	no such layer or object	няма такъв слой или обект
 @msg	no such object {0}	няма такъв обект {0}
