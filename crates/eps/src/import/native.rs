@@ -740,13 +740,14 @@ fn differ_in_colour(p: &[u8; 4], q: &[u8; 4]) -> bool {
     p.iter().zip(q).any(|(a, b)| a.abs_diff(b) > SAME_COLOUR)
 }
 
-/// How much two documents draw differently: the share (0 to 1) of the pixels that differ, and of
-/// those whose neighbours all differ too, away from type (where one draws an object that the other
-/// doesn't, not the edges of one drawn a little differently, or type laid out a little
-/// differently: a line the page sets in pieces is laid out afresh as one).
+/// How much two documents draw differently: the share (0 to 1) of the pixels that differ, of those
+/// that differ away from type, and of those whose neighbors all differ too, away from type (where
+/// one draws an object that the other doesn't, not the edges of one drawn a little differently, or
+/// type laid out a little differently: a line the page sets in pieces is laid out afresh as one).
 #[derive(Clone, Copy)]
 struct Difference {
     any: f64,
+    art: f64,
     solid: f64,
 }
 
@@ -866,19 +867,20 @@ fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> Difference {
 /// and what the comparison looks for is art that is missing or out of place.
 fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect]) -> Difference {
     if x.width == 0 || x.height == 0 || x.width != y.width || x.height != y.height {
-        return Difference { any: 1.0, solid: 1.0 };
+        return Difference { any: 1.0, art: 1.0, solid: 1.0 };
     }
     let differs: Vec<bool> = x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).map(|(p, q)| differ(p, q)).collect();
     let (w, h) = (x.width as usize, x.height as usize);
     let at = |i: usize, j: usize| j.checked_mul(w).and_then(|row| row.checked_add(i)).and_then(|k| differs.get(k)).copied().unwrap_or(false);
     let typed = in_areas(areas, w, h);
+    let art = differs.iter().zip(&typed).filter(|(d, t)| **d && !**t).count();
     // A pixel on the region's edge has neighbours outside it, which don't count as differing.
     let solid = (1..h.saturating_sub(1))
         .flat_map(|j| (1..w.saturating_sub(1)).map(move |i| (i, j)))
         .filter(|&(i, j)| !typed.get(j * w + i).copied().unwrap_or(true) && (j - 1..=j + 1).all(|n| (i - 1..=i + 1).all(|m| at(m, n))))
         .count();
     let area = (w as f64 * h as f64).max(1.0);
-    Difference { any: differs.iter().filter(|d| **d).count() as f64 / area, solid: solid as f64 / area }
+    Difference { any: differs.iter().filter(|d| **d).count() as f64 / area, art: art as f64 / area, solid: solid as f64 / area }
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin
@@ -1243,7 +1245,9 @@ fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document) -> u
 const PAST_THE_PAGE: f64 = 1.0;
 
 /// Do the layers' art and the page's own look alike (where the page holds all the art that prints,
-/// also round it)? An error says they don't; `Ok` has the note to give when they differ a little.
+/// also round it)? An error says they don't; `Ok` has the note to give when they differ a little:
+/// with the share of the pixels that differ away from type when that is notable, otherwise with the
+/// share of those that differ in the type's areas.
 fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result<Option<String>, String> {
     let mut diff = view.difference(layered, frame.rect);
     if frame.whole
@@ -1254,15 +1258,23 @@ fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result
         let all = frame.rect.union(art);
         let (dx, dy) = (frame.page_rect.x0 - frame.rect.x0, frame.page_rect.y0 - frame.rect.y0);
         let round = difference(frame.page, Rect::new(all.x0 + dx, all.y0 + dy, all.x1 + dx, all.y1 + dy), layered, all);
-        diff = Difference { any: diff.any.max(round.any), solid: diff.solid.max(round.solid) };
+        diff = Difference { any: diff.any.max(round.any), art: diff.art.max(round.art), solid: diff.solid.max(round.solid) };
     }
     if diff.any > MAX_DIFFERENCE || diff.solid > MAX_SOLID_DIFFERENCE {
         return Err(format!("the art on them differs from the page's in {:.1}% of it", diff.any * 100.0));
     }
-    Ok((diff.any > NOTABLE_DIFFERENCE).then(|| {
+    if diff.any <= NOTABLE_DIFFERENCE {
+        return Ok(None);
+    }
+    Ok(Some(if diff.art > NOTABLE_DIFFERENCE {
         format!(
             "the art on the layers differs from the file's own page in about {:.1}% of it (brush strokes, live effects and the like that the layers' data doesn't describe)",
-            diff.any * 100.0
+            diff.art * 100.0
+        )
+    } else {
+        format!(
+            "the type on the layers differs from the file's own page in about {:.1}% of it (type laid out again from the file's text, or drawn in another font)",
+            (diff.any - diff.art) * 100.0
         )
     }))
 }
