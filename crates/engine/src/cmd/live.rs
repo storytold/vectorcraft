@@ -14,7 +14,7 @@ use vectorcraft_doc::live::{
     PreserveShape, Spine,
 };
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::{Affine, PathData, Point, Vec2};
+use vectorcraft_geom::{Affine, Anchor, PathData, Point, Vec2};
 
 use super::edit::selected_roots;
 use super::expand::gradient_sampler;
@@ -95,6 +95,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id? (default: the selected blend), anchor: index, x, y, handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on the point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
+        ),
+        cmd!(
+            "object.blend.spine.convertAnchor",
+            "Convert Anchor Point",
+            [],
+            None,
+            "{id? (default: the selected blend), anchor: index, to: smooth|corner, x?, y?} convert a blend spine point: dragging a corner creates symmetric smooth handles, clicking a point with handles retracts both. Without x/y, smooth uses the neighbouring spine points",
+            has_doc,
+            spine_convert_anchor
         ),
         cmd!(
             "object.blend.spine.reshapeSegment",
@@ -647,6 +656,37 @@ fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(key) = keys.get_mut(k) {
                 Arc::make_mut(key).transform(Affine::translate(delta), false);
             }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+fn spine_convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.spine.convertAnchor";
+    let index = index_param(p, "anchor", C)?;
+    let smooth = match str_param(p, "to") {
+        Some("smooth") => true,
+        Some("corner") => false,
+        _ => return Err(bad(C, "to must be smooth or corner")),
+    };
+    let target = match (p.get("x"), p.get("y")) {
+        (None, None) => None,
+        (Some(_), Some(_)) => Some(finite_point(p, C)?),
+        _ => return Err(bad(C, "x and y must be given together")),
+    };
+    edit_spine(s, p, C, "Convert Anchor Point", |sp, _, _| {
+        if smooth && target.is_none() {
+            if index >= sp.anchors.len() {
+                return Err(bad(C, "no such spine point"));
+            }
+            vectorcraft_tools::draw2::curvature_smooth(sp, index);
+            return Ok(());
+        }
+        let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
+        match target {
+            Some(q) if smooth && q.distance(a.p) > 1e-9 => *a = Anchor::smooth(a.p, q),
+            _ => a.retract(),
         }
         Ok(())
     })?;
