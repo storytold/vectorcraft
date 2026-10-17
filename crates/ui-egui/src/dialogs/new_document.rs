@@ -538,7 +538,7 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.add_enabled_ui(several, |ui| {
             widgets::label_row(ui, tl!("Spacing:"), L, |ui| {
                 if let Some(v) = widgets::num_field(ui, "newdoc-spacing", Some(spacing), unit(&d), 100.0) {
-                    set_layout(&mut d, "spacing", json!(v.max(0.0)));
+                    set_layout(&mut d, "spacing", json!(v));
                 }
                 ui.add_space(20.0);
                 widgets::field_label(ui, egui::RichText::new(tl!("Columns:")).color(t.text));
@@ -824,5 +824,48 @@ mod tests {
         assert!((field(&app, "width").as_f64().unwrap() - 148.0 * 72.0 / 25.4).abs() < 1e-6, "A5 wide");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.session.prefs.recent_new_docs[0].name, "Zine");
+    }
+
+    /// More Settings' Spacing keeps a negative number typed in it, so the artboards overlap (#2262).
+    #[test]
+    fn a_negative_spacing_typed_in_more_settings_overlaps_the_artboards() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().kind = super::MORE.into();
+        set(&mut app, "units", json!("Points"));
+        set(&mut app, "width", json!(100));
+        set(&mut app, "artboards", json!(2));
+        set(&mut app, "artboardLayout", json!({"layout": "row", "spacing": 17}));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let run = |app: &mut VectorcraftApp, events| {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+            let raw = egui::RawInput { screen_rect, events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        run(&mut app, vec![]);
+        let out = run(&mut app, vec![]);
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        let at = texts.into_iter().find(|(t, _)| t == "17 pt").map(|(_, r)| r.center()).unwrap();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(&mut app, vec![press(false)]);
+        run(&mut app, vec![egui::Event::Text("-30".into())]);
+        let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        run(&mut app, vec![tab]);
+        assert_eq!(field(&app, "artboardLayout")["spacing"], json!(-30.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.artboards.iter().map(|a| a.rect.x0).collect::<Vec<_>>(), [0.0, 70.0]);
     }
 }
