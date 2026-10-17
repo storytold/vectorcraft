@@ -423,6 +423,20 @@ fn after_shift_enter(ui: &Ui, id: egui::Id) -> bool {
     ui.data_mut(|d| d.remove_temp::<bool>(id.with("shift-enter"))).unwrap_or(false) && ui.memory(|m| m.has_focus(id))
 }
 
+/// Handles Shift+Enter in a single-line panel field that draws its own text box `id` (Pattern
+/// Options' Name, the inline renames in the Layers, Artboards and Asset Export panels). Call it
+/// before the box is drawn, with `buf` the text the box will show and `shown` the value as it is
+/// now. When the field took Shift+Enter in the last frame, `buf` becomes `shown`, all of it
+/// selected. Returns whether Shift+Enter was pressed in this frame ([`shift_enter_keeps_focus`]):
+/// the field then applies `buf` as Enter does and keeps the focus.
+pub(crate) fn own_field_shift_enter(ui: &Ui, id: egui::Id, buf: &mut String, shown: &str) -> bool {
+    if after_shift_enter(ui, id) {
+        *buf = shown.to_string();
+        select_all(ui, id, buf);
+    }
+    shift_enter_keeps_focus(ui, id)
+}
+
 /// Numeric fields select the whole text on keyboard focus, a completed focus click or a
 /// double-click. A pointer press keeps its caret so dragging selects from the pressed position,
 /// and a short drag the toolkit still counts as a click keeps it too (#1326): only a tap

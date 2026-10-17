@@ -279,6 +279,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if editing == Some(i) {
                     let id = ui.id().with(("ab-name", i));
                     let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
+                    let kept = widgets::own_field_shift_enter(ui, id, &mut buf, name);
                     let te = ui.put(name_rect, egui::TextEdit::singleline(&mut buf).id(id).font(egui::FontId::proportional(12.0)));
                     if !te.has_focus() && !te.lost_focus() {
                         te.request_focus();
@@ -290,6 +291,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if !ui.input(|i| i.key_pressed(egui::Key::Escape)) && !buf.trim().is_empty() && buf != *name {
                             app.run("artboard.setProps", json!({"index": i, "name": buf.trim()})).ok();
                         }
+                    } else if kept && !buf.trim().is_empty() && buf != *name {
+                        // Shift+Enter renames it and keeps the field open.
+                        app.run("artboard.setProps", json!({"index": i, "name": buf.trim()})).ok();
                     }
                 } else {
                     ui.painter().text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
@@ -624,6 +628,39 @@ mod tests {
             crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(kind, 100.0, 100.0), view);
         }
         assert_eq!((app.session.tool_options()["active"].clone(), selected(&app, 2)), (json!(0), 0));
+    }
+
+    /// Shift+Enter in a row's name field renames the artboard and keeps the field open, the new
+    /// name selected; Enter then renames it again and closes the field.
+    #[test]
+    fn shift_enter_renames_an_artboard_and_keeps_the_field_open() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        let name = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards[1].name.clone();
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        // What a double-click on the second row's name does: its name field opens.
+        set_pstate::<Option<usize>>(&ctx, "ab-edit", Some(1));
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Cover".into())]);
+        frame(&mut app, vec![key(egui::Key::Enter, egui::Modifiers::SHIFT)]);
+        assert_eq!(name(&app), "Cover", "Shift+Enter applies the name");
+        let field = ctx.memory(|m| m.focused()).expect("the field keeps the focus");
+        assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), Some(1), "and stays open");
+        frame(&mut app, vec![]);
+        let selected = egui::TextEdit::load_state(&ctx, field).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+        assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 5)), "the name shown is selected");
+        frame(&mut app, vec![egui::Event::Text("Back".into())]);
+        frame(&mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+        frame(&mut app, vec![]);
+        assert_eq!(name(&app), "Back", "typing replaced it, and Enter applies that");
+        assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), None, "and closes the field");
     }
 
     /// A row's options icon opens Artboard Options for that row's artboard and leaves the tool as
