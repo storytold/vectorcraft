@@ -738,6 +738,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 | 2026-10-16 | minor | Image Trace: the contour walk works out each turn from the pixels as it goes instead of following a precomputed table of per-corner directions; identical loops on all 65,536 4 × 4 masks and 400 seeded masks, and no slower (whole 1 MP traces 1–5% faster). Scores and hours unchanged. |
 | 2026-10-16 | minor | Native documents restore transparency grid visibility (#1968); save/open regression covers on/off, old files and SVG; scores and hours unchanged (estimated) |
 | 2026-10-17 | minor | Evidence: Group Selection picks one path of a compound path (#2441, in part); scores unchanged |
+| 2026-10-17 | minor | Evidence: 67 cursors from original nibcraft designs, wired by id with `cargo xtask cursors`; Eyedropper's T over type and the Mesh tool's plus only where a click adds; scores unchanged |
 | 2026-10-16 | minor | Agent automation: MCP cancellation, progress notifications and busy answers during long exports (#2165, #2171, #2172); scores and hours unchanged |
 | 2026-10-16 | minor | EPS editing data: legacy mesh corners, vector opacity masks and compound member paint retained; raster page comparison filters minification without relaxing limits; scores and hours unchanged. Synthetic EPS/parser/minification regressions; user EPS/SVG/JPG kept local. |
 | 2026-10-16 | minor | Type: localized legacy family names remain available when typographic names are English-only (#2208); loaded and catalog paths tested. Scores and estimates unchanged. |

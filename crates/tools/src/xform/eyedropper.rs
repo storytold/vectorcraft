@@ -107,8 +107,14 @@ impl Tool for EyedropperTool {
         }
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Eyedropper
+    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+        // Over type a click samples the type's attributes: the pointer shows a small T. The same
+        // hit as a click's.
+        let opts = vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..cx.hit_options() };
+        let over_type = hit_test_visible(cx.doc, p, opts)
+            .and_then(|h| cx.doc.node(paint_owner(cx.doc, h.leaf)))
+            .is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+        if over_type { Cursor::EyedropperType } else { Cursor::Eyedropper }
     }
 }
 
@@ -117,6 +123,18 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    /// Over type a click samples the type's attributes: the pointer shows a small T.
+    #[test]
+    fn the_pointer_shows_a_t_over_type() {
+        let (d, _) = doc_with_area_type();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let t = EyedropperTool::default();
+        assert_eq!(t.cursor(&cx, Point::new(310.0, 310.0), Mods::default()), Cursor::EyedropperType);
+        assert_eq!(t.cursor(&cx, Point::new(150.0, 150.0), Mods::default()), Cursor::Eyedropper, "over a path");
+        assert_eq!(t.cursor(&cx, Point::new(450.0, 450.0), Mods::default()), Cursor::Eyedropper, "over nothing");
+    }
 
     #[test]
     fn click_copies_appearance_shift_samples_color() {

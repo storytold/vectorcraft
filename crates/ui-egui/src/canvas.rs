@@ -665,6 +665,8 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::Scissors
         | Cursor::ScissorsNotAllowed
         | Cursor::MeshAdd
+        | Cursor::Mesh
+        | Cursor::EyedropperType
         | Cursor::PuppetPin => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
     }
 }
@@ -2962,6 +2964,7 @@ mod tests {
             Cursor::PenJoin,
             Cursor::PenConvert,
             Cursor::Eyedropper,
+            Cursor::EyedropperType,
             Cursor::Slice,
             Cursor::Blend,
             Cursor::BlendObject,
@@ -3128,10 +3131,39 @@ mod tests {
     }
 
     /// One headless canvas frame on an 800 × 600 window.
-    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
+        out
+    }
+
+    /// Over the canvas a tool's glyph cursor is an OS cursor bitmap, which the system moves at
+    /// hardware speed (a painted one trails the mouse), with the nearest system cursor as the
+    /// fallback; the pointer leaving the canvas drops the bitmap.
+    #[test]
+    fn glyph_cursors_are_os_cursor_bitmaps() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let at = pos2(400.0, 300.0);
+        // egui hit-tests against the previous frame's widgets.
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let out = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + vec2(1.0, 1.0))]);
+        assert!(out.platform_output.cursor_image.is_some(), "the arrow is an OS cursor");
+        assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Default, "the system arrow is its fallback");
+
+        app.select_tool("hand");
+        let out = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + vec2(1.0, 0.0))]);
+        assert!(out.platform_output.cursor_image.is_some(), "the hand is an OS cursor");
+        assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Grab, "the system grab hand is its fallback");
+
+        app.select_tool("pen");
+        let out = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        assert!(out.platform_output.cursor_image.is_some(), "the pen is an OS cursor");
+        let out = frame(&mut app, &ctx, vec![egui::Event::PointerGone]);
+        assert_eq!(out.platform_output.cursor_image, None, "off the canvas the bitmap is dropped");
     }
 
     /// A click with the Selection tool inside an artboard makes it the active one, and Paste in

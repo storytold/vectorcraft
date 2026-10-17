@@ -42,6 +42,7 @@ web-time = "1"
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 vectorcraft-testkit = { workspace = true }
 wat = { workspace = true }
+toml = "1"
 
 [build-dependencies]
 serde_json = { workspace = true }
