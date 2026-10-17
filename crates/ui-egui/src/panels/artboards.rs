@@ -203,6 +203,32 @@ fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
     app.session.set_tool_option("selected", &json!(all));
 }
 
+/// Whether the panel has the keyboard: one of its rows was clicked, and in every frame since then
+/// the panel was drawn and the pointer was not pressed outside its list.
+fn has_keyboard(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    pstate::<Option<u64>>(ctx, "ab-keys").is_some_and(|f| f + 1 >= app.frame)
+}
+
+/// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the
+/// panel has the keyboard and the Artboard tool is in use. [`crate::shortcuts::handle`] and
+/// [`crate::menus::invoke_from_system_menu`] read it before they run `select.all`, which they reach
+/// only while no text field has the keyboard.
+pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    app.session.tool_id() == "artboard" && has_keyboard(app, ctx)
+}
+
+/// Ctrl/Cmd+A while [`selects_all`]: the Artboard tool selects every artboard, and the active
+/// artboard stays active. The art's selection stays as it is.
+pub(crate) fn select_all(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if n == 0 {
+        return;
+    }
+    let active = selected(app, n);
+    let all: Vec<usize> = std::iter::once(active).chain((0..n).filter(|i| *i != active)).collect();
+    app.session.set_tool_option("selected", &json!(all));
+}
+
 /// Make artboard `i` the active one, leaving the view where it is: the navigator's and, while it
 /// is the tool, the Artboard tool's.
 pub(crate) fn select(app: &mut VectorcraftApp, i: usize) {
@@ -254,10 +280,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = selected(app, abs.len());
     let all = picked(app, abs.len());
     let editing: Option<usize> = pstate(ui.ctx(), "ab-edit");
-    widgets::list_box(ui, |ui| {
+    let mut row_clicked = false;
+    let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.spacing_mut().item_spacing.y = 0.0;
-        egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(220.0).show(ui, |ui| {
+        let scrolled = egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(220.0).show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
                 if resp.drag_started() {
@@ -308,6 +335,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 let m = ui.input(|inp| inp.modifiers);
                 let tool = app.session.tool_id() == "artboard";
+                row_clicked |= resp.clicked();
                 if resp.clicked() && tool && m.shift {
                     let from = select_range(app, pstate(ui.ctx(), "ab-anchor"), i, abs.len());
                     set_pstate(ui.ctx(), "ab-anchor", Some(from));
@@ -329,7 +357,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
+        scrolled.inner_rect
     });
+    // Keyboard: the panel takes it with a click on a row and gives it up when the pointer is
+    // pressed outside the list or the panel is not drawn (`ab-keys`: the frame it last had it in).
+    let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
+    let keys = row_clicked || (has_keyboard(app, ui.ctx()) && !pressed_outside);
+    set_pstate(ui.ctx(), "ab-keys", keys.then_some(app.frame));
     let n = abs.len();
     widgets::bottom_bar(ui, |ui| {
         if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {

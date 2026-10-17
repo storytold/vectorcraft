@@ -3359,11 +3359,13 @@ fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
 
 /// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
 /// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
-/// Copy and Paste act on the field's text, as their keys do; everything else (and those commands
-/// with no field focused) goes to [`invoke`].
+/// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
+/// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
+/// commands with no field focused) goes to [`invoke`].
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
+        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
 }
