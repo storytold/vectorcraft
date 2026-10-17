@@ -5145,6 +5145,11 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Upravit originál otevírá pouze soubory obrázků a dokumentů; „{name}“ mezi ně nepatří
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	v prohlížeči se otevírají pouze adresy URL http, https a mailto, ne „{url}“
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} otevírá jinou aplikaci: spustit ho může pouze člověk u klávesnice
+@msg	“{name}” is not a file	„{name}“ není soubor
 	Enable Guides for 9-Slice Scaling	Povolit vodítka pro 9-slice škálování
 @msg	a mask has more than one art block	maska má více než jeden blok kresby
 @msg	mask art ends outside a mask dictionary	kresba masky končí mimo slovník masky

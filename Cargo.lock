@@ -807,6 +807,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-docpath"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=82a24b006eefa036b43c09a67fb9a3fbd17ffe63#82a24b006eefa036b43c09a67fb9a3fbd17ffe63"
+
+[[package]]
 name = "craft-pdf"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
@@ -4650,6 +4655,7 @@ dependencies = [
 name = "vectorcraft-engine"
 version = "0.12.0"
 dependencies = [
+ "craft-docpath",
  "crc32fast",
  "flate2",
  "image",
@@ -4859,6 +4865,7 @@ dependencies = [
 name = "vectorcraft-svg"
 version = "0.12.0"
 dependencies = [
+ "craft-docpath",
  "flate2",
  "image",
  "kurbo 0.13.1",

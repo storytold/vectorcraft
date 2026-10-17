@@ -5097,6 +5097,11 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	η Επεξεργασία πρωτοτύπου ανοίγει μόνο αρχεία εικόνων και εγγράφων· το «{name}» δεν είναι τέτοιο αρχείο
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	στο πρόγραμμα περιήγησης ανοίγουν μόνο URL http, https και mailto, όχι το «{url}»
+@msg	{id} opens another app: only the person at the keyboard can run it	η εντολή {id} ανοίγει άλλη εφαρμογή: μόνο όποιος βρίσκεται στο πληκτρολόγιο μπορεί να την εκτελέσει
+@msg	“{name}” is not a file	το «{name}» δεν είναι αρχείο
 	Enable Guides for 9-Slice Scaling	Ενεργοποίηση οδηγών για κλιμάκωση 9-slice
 @msg	a mask has more than one art block	η μάσκα έχει περισσότερα από ένα μπλοκ γραφικών
 @msg	mask art ends outside a mask dictionary	τα γραφικά της μάσκας τελειώνουν έξω από το λεξικό της μάσκας

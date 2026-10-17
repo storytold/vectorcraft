@@ -4758,6 +4758,11 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Modifica originale apre solo file di immagini e documenti; “{name}” non lo è
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	nel browser si aprono solo URL http, https e mailto, non “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} apre un'altra applicazione: solo chi è alla tastiera può eseguirlo
+@msg	“{name}” is not a file	“{name}” non è un file
 	Enable Guides for 9-Slice Scaling	Abilita guide per il ridimensionamento 9-slice
 @msg	a mask has more than one art block	una maschera contiene più di un blocco grafico
 @msg	mask art ends outside a mask dictionary	la grafica della maschera termina fuori da un dizionario di maschera

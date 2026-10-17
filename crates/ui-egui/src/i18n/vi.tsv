@@ -4738,6 +4738,11 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Chỉnh sửa bản gốc chỉ mở tệp hình ảnh và tài liệu; “{name}” không thuộc loại đó
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	chỉ URL http, https và mailto mới được mở trong trình duyệt, không mở “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} mở một ứng dụng khác: chỉ người đang ở bàn phím mới chạy được lệnh này
+@msg	“{name}” is not a file	“{name}” không phải là tệp
 	Enable Guides for 9-Slice Scaling	Bật đường dẫn cho co giãn 9-slice
 @msg	a mask has more than one art block	mặt nạ có nhiều hơn một khối đồ họa
 @msg	mask art ends outside a mask dictionary	đồ họa mặt nạ kết thúc bên ngoài từ điển mặt nạ

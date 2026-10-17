@@ -5144,6 +5144,11 @@ theme	Appearance	Apparence
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Modifier l’original n’ouvre que les fichiers d’image et de document ; « {name} » n’en est pas un
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	seules les URL http, https et mailto s’ouvrent dans le navigateur, pas « {url} »
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} ouvre une autre application : seule la personne devant le clavier peut l’exécuter
+@msg	“{name}” is not a file	« {name} » n’est pas un fichier
 	Enable Guides for 9-Slice Scaling	Activer les repères pour la mise à l’échelle 9-slice
 @msg	a mask has more than one art block	un masque contient plusieurs blocs graphiques
 @msg	mask art ends outside a mask dictionary	les éléments graphiques du masque se terminent en dehors d’un dictionnaire de masque

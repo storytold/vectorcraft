@@ -5087,6 +5087,11 @@ mark-style	Japanese	Japonesas
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Editar original solo abre archivos de imagen y de documento; “{name}” no lo es
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	solo se abren en el navegador las URL http, https y mailto, no “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} abre otra aplicación: solo puede ejecutarlo la persona que está frente al teclado
+@msg	“{name}” is not a file	“{name}” no es un archivo
 	Enable Guides for 9-Slice Scaling	Activar guías para escalado de 9 sectores
 @msg	a mask has more than one art block	una máscara tiene más de un bloque de ilustración
 @msg	mask art ends outside a mask dictionary	la ilustración de la máscara termina fuera de un diccionario de máscara

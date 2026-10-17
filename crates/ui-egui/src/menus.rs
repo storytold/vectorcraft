@@ -634,7 +634,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "attributes.openUrl",
         "Browser",
         "",
-        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button) → {url}",
+        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button; http, https and mailto URLs only; not over the control channel or MCP) → {url}",
     ),
     (
         "ui.javascriptFilesDialog",
@@ -751,7 +751,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "links.editOriginal",
         "Edit Original",
         "",
-        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
+        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original; only a regular file with the extension of a format document.open reads, and not over the control channel or MCP); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
     ),
     (
         "links.reveal",

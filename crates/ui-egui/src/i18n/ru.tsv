@@ -4754,6 +4754,11 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	«Редактировать оригинал» открывает только файлы изображений и документов; «{name}» к ним не относится
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузере открываются только URL с http, https и mailto, а не «{url}»
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} открывает другое приложение: выполнить эту команду может только человек за клавиатурой
+@msg	“{name}” is not a file	«{name}» не является файлом
 	Enable Guides for 9-Slice Scaling	Включить направляющие для 9-slice масштабирования
 @msg	a mask has more than one art block	маска содержит более одного блока графики
 @msg	mask art ends outside a mask dictionary	графика маски заканчивается за пределами словаря маски

@@ -4722,6 +4722,11 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	원본 편집은 이미지 및 문서 파일만 엽니다. “{name}”은(는) 해당하지 않습니다
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	브라우저에서는 http, https, mailto URL만 열립니다. “{url}”은(는) 열 수 없습니다
+@msg	{id} opens another app: only the person at the keyboard can run it	{id}은(는) 다른 앱을 엽니다. 키보드 앞에 있는 사용자만 실행할 수 있습니다
+@msg	“{name}” is not a file	“{name}”은(는) 파일이 아닙니다
 	Enable Guides for 9-Slice Scaling	9-슬라이스 크기 조절용 안내선 사용
 @msg	a mask has more than one art block	마스크에 아트 블록이 두 개 이상 있습니다
 @msg	mask art ends outside a mask dictionary	마스크 아트가 마스크 사전 밖에서 끝납니다

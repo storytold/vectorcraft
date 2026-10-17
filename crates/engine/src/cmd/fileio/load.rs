@@ -293,8 +293,11 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
     // The importer reads on a thread of its own (for its stack): what may be read is what may be
     // read here.
     let scope = crate::file_access::ScopeHandle::capture();
+    // Paths are checked as stored in a document inside `folder` (only the folder is used).
+    let document = folder.map(|f| std::path::Path::new(f).join("-").to_string_lossy().into_owned());
     let read = |path: &str| {
         scope.clone().run(|| {
+            let path = &super::document_path(path, document.as_deref()).ok()?;
             // Only files (not folders or devices) are read.
             file_stamp(path)?;
             let bytes = read_file(path).ok()?;

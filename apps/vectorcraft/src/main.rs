@@ -389,6 +389,7 @@ fn pick_now(request: PickRequest, _parent: &Parent) -> Vec<String> {
 
 /// File → Show in Folder: select `path` in Finder / Explorer, or open its folder elsewhere.
 fn reveal(path: &str) -> Result<(), String> {
+    explorer_safe(path)?;
     reveal_command(path).spawn().map(|_| ()).map_err(|e| format!("can't show {path}: {e}"))
 }
 
@@ -559,8 +560,15 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
     }
 }
 
+/// Windows passes `path` to Explorer inside quotes it adds itself, so a path holding a quote (which
+/// no Windows file name has) is refused rather than split into other arguments.
+fn explorer_safe(path: &str) -> Result<(), String> {
+    if cfg!(windows) && path.contains('"') { Err(format!("can't open {path}: the path contains a quotation mark")) } else { Ok(()) }
+}
+
 /// Edit Original, Show Package: open `path` (a file or a folder) in the system's default app for it.
 fn open_file(path: &str) -> Result<(), String> {
+    explorer_safe(path)?;
     #[cfg(windows)]
     let mut c = {
         use std::os::windows::process::CommandExt as _;

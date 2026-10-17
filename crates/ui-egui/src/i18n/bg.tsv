@@ -5127,6 +5127,11 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	„Редактиране на оригинал“ отваря само файлове с изображения и документи; „{name}“ не е такъв файл
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузъра се отварят само URL адреси с http, https и mailto, не „{url}“
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} отваря друга програма: само човекът пред клавиатурата може да изпълни командата
+@msg	“{name}” is not a file	„{name}“ не е файл
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека

@@ -5062,6 +5062,11 @@ mark-style	Japanese	Japonesas
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Editar Original abre apenas arquivos de imagem e de documento; “{name}” não é um deles
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	apenas URLs http, https e mailto abrem no navegador, não “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} abre outro aplicativo: apenas a pessoa ao teclado pode executá-lo
+@msg	“{name}” is not a file	“{name}” não é um arquivo
 	Enable Guides for 9-Slice Scaling	Ativar guias para dimensionamento 9-slice
 @msg	a mask has more than one art block	uma máscara contém mais de um bloco de arte
 @msg	mask art ends outside a mask dictionary	a arte da máscara termina fora de um dicionário de máscara

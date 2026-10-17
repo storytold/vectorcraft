@@ -410,6 +410,8 @@ one undo step.
 Attributes panel: `window.panel {panel: "attributes"}` (Cmd+F11) shows it; its controls run `attributes.set`,
 `path.reverse {reversed}` and `path.setFillRule {rule}`, and its Browser button runs the UI command
 `attributes.openUrl {url?}`, which opens the URL (default: the selection's) in the web browser and answers `{url}`.
+It opens `http:`, `https:` and `mailto:` URLs only, and answers a control request with an error: it hands the URL to
+another app.
 
 SVG Interactivity panel: `window.panel {panel: "svgInteractivity"}` shows it; its controls run
 `svgInteractivity.setEvent`, `svgInteractivity.removeEvent` and `svgInteractivity.clearEvents`, and its Link JavaScript
@@ -609,7 +611,8 @@ Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?
 `fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as
 one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
-the system and return `{path}`.
+the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
+reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).
 
 Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),

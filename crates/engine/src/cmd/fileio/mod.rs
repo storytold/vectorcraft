@@ -843,7 +843,34 @@ fn formats(_: &mut Session, _: &Value) -> Result<Value> {
 /// `path` checked for reading against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
 fn may_read(path: &str) -> Result<()> {
+    #[cfg(test)]
+    touch(path);
     crate::file_access::check_read(path).map_err(EngineError::Other)
+}
+
+/// Paths read while [`touched`] runs, on any thread (the SVG importer reads on one of its own).
+#[cfg(test)]
+static TOUCHED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+#[cfg(test)]
+static RECORDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(test)]
+fn touch(path: &str) {
+    if RECORDING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+        TOUCHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(path.to_string());
+    }
+}
+
+/// Run `f` and list the paths read through this module meanwhile (by any test running then).
+#[cfg(test)]
+pub(crate) fn touched<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
+    use std::sync::atomic::Ordering::SeqCst;
+    let start = TOUCHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
+    RECORDING.fetch_add(1, SeqCst);
+    let out = f();
+    RECORDING.fetch_sub(1, SeqCst);
+    let seen = TOUCHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(start..).unwrap_or_default().to_vec();
+    (out, seen)
 }
 
 /// `path` checked for writing against the automation roots in force.
@@ -1003,8 +1030,7 @@ fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
 /// keeps one); `None` when there is no file at `path` (or automation may not read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
-    may_read(path).ok()?;
-    let m = std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file)?;
+    let m = file_metadata(path).filter(std::fs::Metadata::is_file)?;
     let modified = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
     Some((m.len(), modified))
 }
@@ -1013,9 +1039,15 @@ pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
 /// (and automation may read it).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_created(path: &str) -> Option<u64> {
-    may_read(path).ok()?;
-    let t = std::fs::metadata(path).ok()?.created().ok()?;
+    let t = file_metadata(path)?.created().ok()?;
     t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
+}
+
+/// The file system's metadata of `path`, following links (when automation may read it).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn file_metadata(path: &str) -> Option<std::fs::Metadata> {
+    may_read(path).ok()?;
+    std::fs::metadata(path).ok()
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1031,6 +1063,21 @@ pub(crate) fn absolute_path(path: &str) -> String {
         return path.to_string();
     }
     std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
+/// The file to open for `stored`, a path or `file:` URL stored in a document (a linked file, an
+/// SVG image's href), or why it is not followed. `document` is the path of the document it is
+/// stored in, when it has one: a relative path is taken from its folder. Only files on this
+/// computer, or on the network share the document is on, are followed (see `craft_docpath`); a
+/// path that is still relative (no document) is refused, as the working directory isn't the
+/// document's choice. Every stored path reaches the file system through this.
+pub(crate) fn document_path(stored: &str, document: Option<&str>) -> std::result::Result<String, craft_docpath::Refused> {
+    let document = document.map(absolute_path);
+    let path = craft_docpath::resolve(stored, document.as_deref().map(std::path::Path::new))?;
+    if !path.is_absolute() {
+        return Err(craft_docpath::Refused::Invalid);
+    }
+    path.into_os_string().into_string().map_err(|_| craft_docpath::Refused::Invalid)
 }
 
 #[cfg(target_arch = "wasm32")]

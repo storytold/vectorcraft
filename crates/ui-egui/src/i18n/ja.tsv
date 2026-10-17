@@ -4799,6 +4799,11 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	「オリジナルを編集」で開けるのは画像ファイルとドキュメントファイルだけです: 「{name}」はどちらでもありません
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	ブラウザーで開けるのは http、https、mailto の URL だけです: 「{url}」は開けません
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} は別のアプリを開きます: 実行できるのはキーボードの前にいるユーザーだけです
+@msg	“{name}” is not a file	「{name}」はファイルではありません
 	Enable Guides for 9-Slice Scaling	9スライス拡大・縮小用ガイドを有効にする
 @msg	a mask has more than one art block	マスクに複数のアートブロックがあります
 @msg	mask art ends outside a mask dictionary	マスクのアートがマスク辞書の外で終わっています

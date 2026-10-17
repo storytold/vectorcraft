@@ -201,6 +201,18 @@ pub type DownloadFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 
+/// Whether a URL from a document may open in the browser: an `http:`, `https:` or `mailto:` URL
+/// without control characters. The system hands other schemes (`file:`, application schemes) to
+/// other programs.
+pub(crate) fn browsable_url(url: &str) -> Result<(), String> {
+    let scheme = url.split_once(':').map_or("", |(s, _)| s);
+    if ["http", "https", "mailto"].iter().any(|k| scheme.eq_ignore_ascii_case(k)) && !url.chars().any(char::is_control) {
+        Ok(())
+    } else {
+        Err(format!("only http, https and mailto URLs open in the browser, not “{url}”"))
+    }
+}
+
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
@@ -789,6 +801,24 @@ impl VectorcraftApp {
             None => self.pending_url = Some(url.to_string()),
         }
         self.ui.status = format!("Opened {url}");
+    }
+
+    /// Open `url`, which came from a document (an object's URL attribute), in the browser:
+    /// [`browsable_url`]s only.
+    pub(crate) fn open_document_url(&mut self, url: &str) -> Result<(), String> {
+        browsable_url(url)?;
+        self.open_url(url);
+        Ok(())
+    }
+
+    /// Refuse UI command `id`, which hands something to another app, when automation sent it (a
+    /// control or MCP request, or a frame of synthetic input): the automation roots don't confine
+    /// what that app does.
+    pub(crate) fn refuse_automation(&self, id: &str) -> Result<(), String> {
+        if self.ui.answering_control || self.synthetic_frame {
+            return Err(format!("{id} opens another app: only the person at the keyboard can run it"));
+        }
+        Ok(())
     }
 
     /// Run a Help link command and open the URL it returns.

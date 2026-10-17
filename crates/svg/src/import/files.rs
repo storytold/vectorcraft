@@ -79,33 +79,25 @@ fn percent_decoded(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Is `p` an absolute path here or on another system (`/…`, `C:/…`, `C:\…`)?
-fn is_absolute(p: &str) -> bool {
-    Path::new(p).is_absolute() || p.starts_with('/') || matches!(p.as_bytes(), [d, b':', b'/' | b'\\', ..] if d.is_ascii_alphabetic())
-}
-
-/// Where href `h` points (a path, made absolute from `folder`, or a URL) and whether it is a
-/// file that can be read.
+/// Where href `h` points (a path, or a URL) and whether it is a file that may be read: a local
+/// file, or one on the network share the SVG is on. A relative path is taken from `folder`, the
+/// SVG's own; without it, only absolute paths are read (see `craft_docpath`).
 fn target(h: &str, folder: Option<&str>) -> (String, bool) {
-    let h = percent_decoded(h.trim());
-    let path = match h.strip_prefix("file://") {
-        Some(rest) => {
-            let rest = rest.strip_prefix("localhost").unwrap_or(rest);
-            // `file:///C:/art.png` → `C:/art.png`.
-            match rest.as_bytes() {
-                [b'/', d, b':', ..] if d.is_ascii_alphabetic() => rest.get(1..).unwrap_or(rest).to_string(),
-                _ => rest.to_string(),
-            }
-        }
-        None if h.contains("://") => return (h, false),
-        None => h,
-    };
-    if is_absolute(&path) {
-        return (path, true);
+    let h = h.trim();
+    // `craft_docpath` decodes a `file:` URL itself; any other href is decoded here, once.
+    let file_url = h.get(..5).is_some_and(|s| s.eq_ignore_ascii_case("file:"));
+    let stored = if file_url { h.to_string() } else { percent_decoded(h) };
+    if !file_url && stored.contains("://") {
+        return (stored, false);
     }
-    match folder {
-        Some(f) => (Path::new(f).join(&path).to_string_lossy().into_owned(), true),
-        None => (path, false),
+    // Resolved as a document inside `folder`: only the folder is used.
+    let document = folder.map(|f| Path::new(f).join("-"));
+    match craft_docpath::resolve(&stored, document.as_deref()) {
+        Ok(path) => {
+            let local = path.is_absolute();
+            (path.to_string_lossy().into_owned(), local)
+        }
+        Err(_) => (stored, false),
     }
 }
 
@@ -235,12 +227,32 @@ mod tests {
     #[test]
     fn hrefs_resolve_against_the_folder() {
         let sep = std::path::MAIN_SEPARATOR;
-        assert_eq!(target("photo%20one.png", Some("/art")), (format!("/art{sep}photo one.png"), true));
-        assert_eq!(target("photo.png", None), ("photo.png".into(), false));
-        assert_eq!(target("/abs/photo.png", Some("/art")), ("/abs/photo.png".into(), true));
-        assert_eq!(target("file:///C:/art/a.png", None), ("C:/art/a.png".into(), true));
-        assert_eq!(target("file:///home/a.png", None), ("/home/a.png".into(), true));
-        assert_eq!(target("https://example.com/a.png", Some("/art")), ("https://example.com/a.png".into(), false));
+        let art = std::env::temp_dir().join("art");
+        let art = art.to_str().unwrap();
+        assert_eq!(target("photo%20one.png", Some(art)), (format!("{art}{sep}photo one.png"), true));
+        assert!(!target("photo.png", None).1);
+        assert_eq!(target("file:///C:/art/a.png", None), (r"C:\art\a.png".into(), cfg!(windows)));
+        assert_eq!(target("https://example.com/a.png", Some(art)), ("https://example.com/a.png".into(), false));
+        #[cfg(unix)]
+        {
+            assert_eq!(target("/abs/photo.png", Some("/art")), ("/abs/photo.png".into(), true));
+            assert_eq!(target("file:///home/a.png", None), ("/home/a.png".into(), true));
+        }
+    }
+
+    #[test]
+    fn hrefs_to_other_computers_are_not_read() {
+        let art = std::env::temp_dir().join("art");
+        for h in [
+            r"\\192.0.2.1\share\x.png",
+            "//192.0.2.1/share/x.png",
+            "file:////192.0.2.1/share/x.png",
+            "file://192.0.2.1/share/x.png",
+            "%5C%5C192.0.2.1%5Cshare%5Cx.png",
+        ] {
+            assert!(!target(h, art.to_str()).1, "{h}");
+            assert!(!target(h, None).1, "{h}");
+        }
     }
 
     #[test]

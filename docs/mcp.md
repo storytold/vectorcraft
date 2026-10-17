@@ -499,7 +499,8 @@ symbol with strokes) stays art. `feGaussianBlur`, `feDropShadow` and the usual s
 colour matrix, composite, merge) become Gaussian Blur, Drop Shadow, Outer Glow, Inner Glow and Feather effects; other
 filters are listed in `warnings`. Undisplayed objects (`display:none`) come back hidden, nested clip paths intersect,
 and reflected or repeated gradients (`spreadMethod`) are expanded into stops. `<image>` files (relative links are
-found in the SVG's folder) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
+found in the SVG's folder; only files on this computer or the SVG's network share are read, and pasted SVG reads only
+absolute paths) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
 can't be read becomes a placeholder in its box, named in `warnings` and `missingLinks`.
 
 Native files: `run_command document.save {compress: true}` writes a gzip-compressed `.vectorcraft` (the
@@ -2616,9 +2617,11 @@ A placed image linked to its file (`file.place {path}`, Link on) records the fil
 modification time and hash, and keeps a low-resolution preview (at most 256 px a side): a `.vectorcraft` save writes
 the preview instead of the pixels, plus the path relative to the saved file. `document.open` reads
 the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
-(so a folder moved with its links still opens): the result lists `missingLinks` (their images show the preview),
-`modifiedLinks` (left as they were; read again only with the preference `updateLinks: "automatically"`, then they are
-in `updatedLinks`), each as `{name, path, ids}`. The desktop app also checks the active document's links when its window
+(so a folder moved with its links still opens). Only files on this computer, or on the network share the document is
+on, are looked at: a path to another computer, a device or a URL counts as missing. The result lists `missingLinks`
+(their images show the preview), `modifiedLinks` (left as they were; read again only with the preference
+`updateLinks: "automatically"`, then they are in `updatedLinks`), each as `{name, path, ids}`, with `refused` (why the
+path isn't followed) when it isn't. The desktop app also checks the active document's links when its window
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
@@ -2799,7 +2802,8 @@ file is missing stays linked: relink it first); `links.unembed {id, path}` write
 `links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeftÃ¢â‚¬Â¦bottomRight,
 clip?}` decides how a relinked or updated file takes an image's place (default `bounds`: stretched into the old
 bounds; `clip` puts it in a clip group of the old bounds when it is larger). The UI commands `links.editOriginal` and
-`links.reveal` open the linked file in its app or show it in its folder (desktop).
+`links.reveal` open the linked file in its app or show it in its folder (desktop). Edit Original runs only from the app's window,
+except for a placed document, which opens in a tab.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}

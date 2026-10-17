@@ -5131,6 +5131,11 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	az Eredeti szerkesztése csak kép- és dokumentumfájlokat nyit meg; ez nem ilyen: „{name}”
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	a böngészőben csak a http-, https- és mailto-URL-ek nyílnak meg; ez nem ilyen: „{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id}: másik alkalmazást nyit meg, ezért csak a billentyűzetnél ülő felhasználó futtathatja
+@msg	“{name}” is not a file	nem fájl: „{name}”
 	Enable Guides for 9-Slice Scaling	Segédvonalak engedélyezése a 9-slice méretezéshez
 @msg	a mask has more than one art block	egy maszk egynél több grafikai blokkot tartalmaz
 @msg	mask art ends outside a mask dictionary	a maszk grafikája a maszk szótárán kívül ér véget

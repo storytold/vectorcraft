@@ -4720,6 +4720,11 @@ effect	Regular	Regelmäßig
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Original bearbeiten öffnet nur Bild- und Dokumentdateien; „{name}“ gehört nicht dazu
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	nur http-, https- und mailto-URLs werden im Browser geöffnet, nicht „{url}“
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} öffnet eine andere Anwendung: Nur die Person an der Tastatur kann den Befehl ausführen
+@msg	“{name}” is not a file	„{name}“ ist keine Datei
 	Enable Guides for 9-Slice Scaling	Hilfslinien für 9-Slice-Skalierung aktivieren
 @msg	a mask has more than one art block	eine Maske enthält mehr als einen Grafikblock
 @msg	mask art ends outside a mask dictionary	die Maskengrafik endet außerhalb eines Maskenwörterbuchs
