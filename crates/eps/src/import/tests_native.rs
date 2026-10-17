@@ -907,6 +907,34 @@ fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("differs from the page's")), "{:?}", r.warnings);
 }
 
+/// The page sets "Hi there" in pieces, and the layers lay the line out again as one: the page and
+/// the layers differ only where the type is.
+fn page_in_pieces_and_layers(art: &str) -> Vec<u8> {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi) show 70 61.5 moveto (there) show";
+    eps(page, &native_with_text(&layer("Art", true, &format!("{art}{}", text_object(0))), &doc))
+}
+
+#[test]
+fn type_laid_out_again_is_noted_as_type_and_not_as_art_the_layers_dont_describe() {
+    let r = import(&page_in_pieces_and_layers("")).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("the type on the layers differs from the file's own page")), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("brush strokes")), "{:?}", r.warnings);
+}
+
+#[test]
+fn art_the_page_doesnt_draw_is_noted_with_its_own_share_and_not_the_types() {
+    // A bar of 0.5 × 80 points that the page doesn't draw, too thin to be refused as an object: 0.4% of
+    // the page, away from the type.
+    let bar = "0 0 0 1 k\n20 10 m\n20.5 10 L\n20.5 90 L\n20 90 L\nf\n";
+    let r = import(&page_in_pieces_and_layers(bar)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let notes: Vec<&String> = r.warnings.iter().filter(|w| w.contains("differs from the file's own page")).collect();
+    assert_eq!(notes.len(), 1, "{:?}", r.warnings);
+    assert!(notes[0].starts_with("the art on the layers differs from the file's own page in about 0.4% of it (brush strokes"), "{notes:?}");
+}
+
 /// An EPS whose page is its art's box `[x0 y0 x1 y1]` (not its artboard, 0 0 100 100), drawing
 /// `page`, with the editing copy of `layers`.
 fn eps_of_art(art_box: [u32; 4], page: &str, layers: &str) -> Vec<u8> {
