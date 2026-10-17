@@ -5154,3 +5154,7 @@ swatch	Bright Violet	Violet cerah
 	Typing	Mengetik
 	Persistent	Persisten
 	Library Panel Options	Opsi panel pustaka
+	Snapping	Snap
+	Snap to Tangent	Snap ke garis singgung
+	Snap to Perpendicular	Snap tegak lurus
+@msg	unknown snap option `{key}` (use {options})	opsi snap `{key}` tidak dikenal (gunakan {options})
