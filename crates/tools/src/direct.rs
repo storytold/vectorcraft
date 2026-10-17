@@ -197,14 +197,24 @@ fn in_scope(doc: &vectorcraft_doc::Document, scope: Option<NodeId>, id: NodeId) 
 }
 
 /// Visit the nodes Direct Selection may pick. In isolation mode that is the isolated object and
-/// its contents; art around it is locked and the walk does not reach it.
+/// its contents; art around it is locked and the walk does not reach it. A Shaper Group's original
+/// shapes, its first child, are left out unless they are the isolated object (Construction mode),
+/// as clicks leave them out.
 fn walk_pickable<'a>(doc: &'a vectorcraft_doc::Document, scope: Option<NodeId>, mut f: impl FnMut(&'a Node)) {
+    fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+        f(n);
+        for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
+            walk(c, f);
+        }
+    }
     if let Some(id) = scope
         && let Some(n) = doc.node(id)
     {
-        n.walk(&mut f);
+        walk(n, &mut f);
     } else if scope.is_none() {
-        doc.walk(f);
+        for l in &doc.layers {
+            walk(l, &mut f);
+        }
     }
 }
 
