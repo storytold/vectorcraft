@@ -633,12 +633,18 @@ pub(crate) fn outlined_stroke(
 
 /// Path `l` with every stroke outlined, in appearance order: runs of fills stay on copies of
 /// the path, each stroke becomes its outline (or brush art), grouped when there are several.
-/// `None` when `l` has no stroke to outline.
+/// As on the canvas, the path's geometry effects ([`reshaped`]) shape the path first, and each
+/// stroke's own geometry effects then shape the path that stroke outlines; [`outlined_stroke`]
+/// gets the stroke without them. `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
+    let reshaped = reshaped(l);
+    let l = reshaped.as_ref().unwrap_or(l);
     let (path, rule) = node_path(l)?;
+    let ctx = GeomContext::of(l);
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
     for item in &l.appearance.items {
@@ -648,7 +654,13 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                 if !fills.is_empty() {
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
-                parts.extend(outlined_stroke(d, brushes, &path, rule, st));
+                let mut plain = st.clone();
+                plain.effects.retain(|e| !is_geometry(&e.id));
+                let stroked = match path.bounds() {
+                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    _ => path.clone(),
+                };
+                parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
         }
@@ -657,6 +669,32 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
         parts.push(styled_copy(d, l, fills));
     }
     assemble(d, l, parts)
+}
+
+/// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
+/// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
+/// visible geometry effect.
+pub(crate) fn reshaped(l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
+    if !has_geometry(&l.appearance.effects) {
+        return None;
+    }
+    let (path, _) = node_path(l)?;
+    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
+    let mut m = with_path(l, g);
+    m.appearance.effects.retain(|e| !is_geometry(&e.id));
+    Some(m)
+}
+
+/// Path or compound path `l` with `path` as its path, a plain path.
+pub(crate) fn with_path(l: &Node, path: PathData) -> Node {
+    let mut m = l.clone();
+    m.kind = match &l.kind {
+        NodeKind::Path { rule, clipping, guide, .. } => NodeKind::Path { path, rule: *rule, live: None, clipping: *clipping, guide: *guide },
+        NodeKind::Compound { rule, .. } => NodeKind::Path { path, rule: *rule, live: None, clipping: false, guide: false },
+        k => k.clone(),
+    };
+    m
 }
 
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
