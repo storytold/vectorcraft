@@ -4531,6 +4531,7 @@ dependencies = [
  "vectorcraft-engine",
  "vectorcraft-text",
  "vectorcraft-ui-egui",
+ "wayland-backend",
  "wayland-client",
  "wayland-protocols",
  "webbrowser",
@@ -4538,6 +4539,7 @@ dependencies = [
  "winit",
  "winresource",
  "winsafe",
+ "zbus",
 ]
 
 [[package]]
