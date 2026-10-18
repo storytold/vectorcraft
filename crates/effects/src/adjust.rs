@@ -48,13 +48,27 @@ enum Channel {
 
 impl Channel {
     fn of(p: &Value) -> Self {
-        match text(p, "channel", "rgb").to_ascii_lowercase().as_str() {
-            "red" | "r" => Channel::One(0),
-            "green" | "g" => Channel::One(1),
-            "blue" | "b" => Channel::One(2),
-            _ => Channel::All,
+        Self::parse(text(p, "channel", "rgb")).unwrap_or(Channel::All)
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "rgb" => Some(Channel::All),
+            "red" | "r" => Some(Channel::One(0)),
+            "green" | "g" => Some(Channel::One(1)),
+            "blue" | "b" => Some(Channel::One(2)),
+            _ => None,
         }
     }
+}
+
+/// The channels Curves and Levels apply to (`channel`), as their parameters list them.
+pub const CHANNELS: [&str; 4] = ["rgb", "red", "green", "blue"];
+
+/// Do Curves and Levels read `s` as their `channel`: one of [`CHANNELS`], or r, g or b, in any
+/// case? They draw any other value on all three channels, as RGB.
+pub fn is_channel(s: &str) -> bool {
+    Channel::parse(s).is_some()
 }
 
 /// Entries of a sampled tone curve.

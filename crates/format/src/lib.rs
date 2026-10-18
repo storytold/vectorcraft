@@ -557,8 +557,15 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     doc.raster_effects.add_around = doc.raster_effects.add_around.clamp(0.0, vectorcraft_doc::rastersettings::MAX_ADD_AROUND);
     let mut depth_notes = vec![];
     doc.limit_depth_noting(&mut depth_notes);
+    // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
+    // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
+    doc.keep_type_values_in_range();
     // Untrusted: the raster effects resolution, within 1 to 2400 ppi (72 when it isn't finite).
     doc.raster_effects_ppi = Some(doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
+    // Untrusted: the superscript, subscript and small caps proportions of the type, the graph
+    // labels and the character styles, within the ranges `document.setup` takes (after the depth
+    // limit: the walk recurses).
+    doc.keep_scripts_in_range();
     let profiles = f.profiles.into_iter().filter_map(|(name, icc)| Some((name, bytes_of(&icc)?))).collect();
     Ok(NativeFile { doc, depth_notes, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
 }

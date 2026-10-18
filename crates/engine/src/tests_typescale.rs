@@ -227,3 +227,76 @@ fn tiny_finite_transform_rejects_unsafe_compensation_without_history_changes() {
     assert_eq!(text(&s, id), before);
     assert_eq!(s.doc().unwrap().history.undo.len(), history);
 }
+
+/// A file whose type holds a size or scale of 0 or less or a negative leading opens with the
+/// default size and scale and Auto leading, and a size, leading, baseline shift or scale past
+/// `MAX_COORD` opens with `MAX_COORD`, in the layers, in symbols and in character styles. A
+/// leading of 0, a size below 0.1 pt and scales below 1% stay as saved.
+#[test]
+fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
+    let mut s = session();
+    let p = json!({"x": 40, "y": 60, "size": 20, "text": "Line one\nLine two\nLine three"});
+    let id = NodeId(s.execute("text.create", &p).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 9, "end": 18, "size": 30})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 18, "end": 28, "size": 40})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("not text") };
+    let [zero, huge, kept] = t.runs.as_mut_slice() else { panic!("not three runs") };
+    let (z, h, k) = (&mut zero.style, &mut huge.style, &mut kept.style);
+    (z.size, z.h_scale, z.v_scale, z.baseline_shift, z.leading) = (0.0, -100.0, 0.0, -f64::MAX, Some(-50.0));
+    (h.size, h.h_scale, h.v_scale, h.baseline_shift, h.leading) = (f64::MAX, f64::MAX, f64::MAX, f64::MAX, Some(f64::MAX));
+    (k.size, k.h_scale, k.v_scale, k.baseline_shift, k.leading) = (0.001, 0.5, 0.5, 5000.0, Some(0.0));
+    let art = d.node(id).unwrap().clone();
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Lines".into(), art: Arc::new(art) });
+    let attrs = json!({"size": 0, "h_scale": 1e9, "v_scale": -1, "baseline_shift": -1e9, "leading": -1});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Broken".into(), attrs: attrs.as_object().unwrap().clone() });
+    let attrs = json!({"size": 40, "leading": null});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Auto".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "sizes.vectorcraft", "dataBase64": data})).unwrap();
+    let dims = |t: &TextObject| {
+        t.runs.iter().map(|r| (r.style.size, r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.leading)).collect::<Vec<_>>()
+    };
+    let max = vectorcraft_doc::MAX_COORD;
+    let want = vec![(12.0, 100.0, 100.0, -max, None), (max, max, max, max, Some(max)), (0.001, 0.5, 0.5, 5000.0, Some(0.0))];
+    assert_eq!(dims(&text(&s, id)), want);
+    let doc = &s.doc().unwrap().doc;
+    let NodeKind::Text(art) = &doc.symbols[0].art.kind else { panic!("not text") };
+    assert_eq!(dims(art), want);
+    let fixed = json!({"size": 12.0, "h_scale": max, "v_scale": 100.0, "baseline_shift": -max, "leading": null});
+    assert_eq!(doc.char_styles[0].attrs, *fixed.as_object().unwrap());
+    assert_eq!(doc.char_styles[1].attrs, *json!({"size": 40, "leading": null}).as_object().unwrap());
+    // With the sizes kept as saved, the type's bounds were infinite.
+    let b = doc.bounds_of(&[id], false).unwrap();
+    assert!(b.width().is_finite() && b.height().is_finite(), "{b:?}");
+}
+
+/// SVG import keeps type sizes outside the Character panel's 0.1 to 1296 pt, and it gives a line
+/// aligned differently from the one before it an indent, here past the Paragraph panel's 1296 pt.
+/// A native file of the result opens with the same type.
+#[test]
+fn imported_type_with_sizes_outside_the_panels_range_opens_unchanged() {
+    const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="3000">
+        <text x="10" y="2000" font-size="2000">Big</text>
+        <text x="10" y="2400" font-size="0.05">tiny</text>
+        <text x="200" y="2600" font-size="12" text-anchor="middle"><tspan x="200" y="2600">One</tspan><tspan x="2900" y="2614.4" text-anchor="start">Two</tspan></text>
+    </svg>"#;
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "sizes.svg", "dataBase64": vectorcraft_format::base64_encode(SVG.as_bytes())})).unwrap();
+    let texts = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                out.push((**t).clone());
+            }
+        });
+        out
+    };
+    let imported = texts(&s);
+    let sizes: Vec<f64> = imported.iter().flat_map(|t| t.runs.iter().map(|r| r.style.size)).collect();
+    assert!(sizes.iter().any(|v| *v > 1296.0) && sizes.iter().any(|v| *v < 0.1), "{sizes:?}");
+    assert!(imported.iter().flat_map(|t| t.para_styles()).any(|p| p.left_indent > 1296.0), "an indent past the panel's");
+    let saved = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    s.execute("document.open", &json!({"name": "sizes.vectorcraft", "dataBase64": saved})).unwrap();
+    assert_eq!(texts(&s), imported);
+}

@@ -630,6 +630,7 @@
 	Created:	Skapad:
 	Crop	Beskär
 	Crop Image	Beskär bild
+	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
 	Crop To	Beskär till
@@ -1322,6 +1323,10 @@
 	Highlight Substituted Glyphs	Framhäv ersatta glyfer
 	History	Historik
 	History Options…	Historikalternativ…
+	Step Backward	Stega bakåt
+	Step Forward	Stega framåt
+	Clear History	Rensa historik
+	Set History Limit…	Ange historikgräns…
 	History States	Historiktillstånd
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Använd datauppsättning
@@ -2394,6 +2399,8 @@
 	Redefine Character Style	Definiera om teckenstil
 	Redefine Graphic Style	Definiera om grafikstil
 	Redefine Graphic Style “{name}”	Definiera om grafikstilen ”{name}”
+	Apply {name}	Använd stilen ”{name}”
+	Redefine {name}	Definiera om stilen ”{name}”
 	Redefine Paragraph Style	Definiera om styckestil
 	Redefine Symbol	Definiera om symbol
 	Redefine {kind} Style	Definiera om {kind}stil
@@ -3619,6 +3626,11 @@ axis	Both	Båda
 @msg	its editing data doesn't say where its artboard is	dess redigeringsdata anger inte var dess rityta finns
 @msg	its editing data has no layers	dess redigeringsdata har inga lager
 @msg	its editing data is damaged	dess redigeringsdata är skadade
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	dess redigeringsdata gäller en sida på {w} × {h} pt, inte filens sida på {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	dess redigeringsdata gäller en sida på {w} × {h} pt, alltså filens sida på {pw} × {ph} pt i skala {scale}
+@msg	its zlib compression is damaged	dess zlib-komprimering är skadad
+@msg	its Zstandard compression is damaged	dess Zstandard-komprimering är skadad
+@msg	it decompresses to more than {_1} MB	de packas upp till mer än {_1} MB
 @msg	its editing data is for a different page	dess redigeringsdata gäller en annan sida
 @msg	its layers use {_1}, which aren't read yet	dess lager använder {_1}, som inte kan läsas än
 @msg	its page has text, and its layers have no text objects to put it in	dess sida har text, och dess lager saknar textobjekt att placera den i
@@ -3686,6 +3698,7 @@ axis	Both	Båda
 @msg	Save for Web: the image is empty	Spara för webb: bilden är tom
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Spara skriver {_1}, inte {_2}: använd document.export för andra format
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Spara skriver {_1}, inte {_2}: använd file.saveAsTemplate för att skriva det
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 skriver äldre .ai-filer; en .ait-mall är alltid PDF-kompatibel
 @msg	Saved recovery data for {title}	Sparade återställningsdata för {title}
 @msg	Saved to User Defined: {_1}	Sparat i Användardefinierat: {_1}
 @msg	Saved {path}	Sparade {path}
@@ -3718,6 +3731,8 @@ axis	Both	Båda
 @msg	`{key}` must be a #rrggbb color	`{key}` måste vara en färg i formatet #rrggbb
 @msg	`{key}` must be a #rrggbb colour	`{key}` måste vara en färg i formatet #rrggbb
 @msg	`{key}` must be a number	`{key}` måste vara ett tal
+@msg	`{key}` must be a number, not {v}	`{key}` måste vara ett tal, inte {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} måste vara Unix-tid i sekunder (ett heltal) eller null
 @msg	`{key}` must be a string	`{key}` måste vara en sträng
 @msg	`{key}` must be a whole number	`{key}` måste vara ett heltal
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` måste vara ett heltal mellan {min} och {max} (fick {x})
@@ -3756,6 +3771,7 @@ axis	Both	Båda
 @msg	a page tree node has no kids	en nod i sidträdet har inga barn
 @msg	a page's placement is not finite	en sidas placering är inte ändlig
 @msg	a preset named `{_1}` exists	det finns redan en förinställning med namnet `{_1}`
+@msg	a swatch or color group named `{n}` exists	det finns redan en färgruta eller färggrupp med namnet `{n}`
 @msg	a slice size must be a positive number of points	en skivstorlek måste vara ett positivt antal punkter
 @msg	a spine keeps at least two points	en ryggrad behåller minst två punkter
 @msg	a stream runs past the end	en ström fortsätter förbi slutet
@@ -3843,6 +3859,7 @@ axis	Both	Båda
 @msg	missing `tool`	`tool` saknas
 @msg	missing index	index saknas
 @msg	missing number `{key}`	talet `{key}` saknas
+@msg	missing integer `{key}`	heltalet `{key}` saknas
 @msg	multiple windows land with M11.5	flera fönster kommer med M11.5
 @msg	name the file	namnge filen
 @msg	no CSS to copy: select objects with CSS of their own	ingen CSS att kopiera: markera objekt som har egen CSS
@@ -3958,6 +3975,7 @@ axis	Both	Båda
 @msg	nothing to redo	inget att göra om
 @msg	nothing to save: the document has no visible art	inget att spara: dokumentet har ingen synlig grafik
 @msg	nothing to undo	inget att ångra
+@msg	no history to clear	ingen historik att rensa
 @msg	nothing to warp	inget att böja
 @msg	nothing to wrap	inget att radbryta
 @msg	object {0} cannot have children	objekt {0} kan inte ha underordnade objekt
@@ -3965,6 +3983,7 @@ axis	Both	Båda
 @msg	object {id} is not a selected top-level object	objekt {id} är inte ett markerat objekt på toppnivå
 @msg	page size {w} × {h}	sidstorlek {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	sidan {0} finns inte (PDF-filen har {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: sidan {n} finns inte (filen har 1)
 @msg	paste unavailable	inklistring är inte tillgänglig
 @msg	path is already closed	banan är redan sluten
 @msg	paths contain invalid coordinates	banorna innehåller ogiltiga koordinater
@@ -4128,6 +4147,7 @@ axis	Both	Båda
 @msg	{C}: no effect at index {from}	{C}: ingen effekt vid index {from}
 @msg	{_1} failed: {e}	{_1} misslyckades: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	{_1}-filer kan öppnas men inte skrivas (se document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	{_1}-filer skrivs av file.saveAsTemplate
 @msg	{_1} font families available	{_1} teckensnittsfamiljer tillgängliga
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} är en live-effekt (Effekt › Insticksprogram)
 @msg	{_1} is already used by {_2}	{_1} används redan av {_2}
@@ -4271,6 +4291,9 @@ axis	Both	Båda
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet från steg {i} har inget sådant värde (skriv $$ för ett bokstavligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: det finns inget steg {i} före det här (stegen räknas från 0; skriv $$ för ett bokstavligt $)
 @msg	object ids are non-negative integers, not {v}	objekt-id:n är icke-negativa heltal, inte {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} måste vara en array med objekt-id:n som är icke-negativa heltal
+@msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
+@msg	no such object id {value}	det finns inget objekt med id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringen har inte fått åtkomst till filsystemet: läsbehörighet saknas: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringen har inte fått åtkomst till filsystemet: skrivbehörighet saknas: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringssökvägen avvisades: utanför läsroten {root}: {path}
@@ -4457,6 +4480,8 @@ lighting	Light	Ljus
 @msg	missing panel layout	panellayout saknas
 @msg	unsupported native docking operation	inbyggd dockningsåtgärd som inte stöds
 	Linux Display Server	Linux-skärmserver
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) när en penna är ansluten
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Om ritplattans penna inte ritar väljer du ett X11 (XWayland)-alternativ.
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Linjalens origo
 	Reset Ruler Origin	Återställ linjalens origo
@@ -4975,6 +5000,11 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+# 3D light management.
+	Lights	Ljuskällor
+	Add Light	Lägg till ljus
+	Delete Light	Ta bort ljus
+3d	Light	Ljus
 	 cancels  |  Double-click the tool for options	 avbryter  |  Dubbelklicka på verktyget för alternativ
 	 out from a highlighted edge to place its dimension  |  	 utåt från en framhävd kant för att placera dess mått  |  
 	A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.	En äldre .ai-fil rymmer en rityta: varje rityta du markerar sparas som en separat fil.
@@ -5101,6 +5131,11 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Redigera original öppnar bara bild- och dokumentfiler; ”{name}” är ingen sådan
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	bara http-, https- och mailto-URL:er öppnas i webbläsaren, inte ”{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} öppnar en annan app: bara personen vid tangentbordet kan köra kommandot
+@msg	“{name}” is not a file	”{name}” är inte en fil
 	Enable Guides for 9-Slice Scaling	Aktivera hjälplinjer för 9-slice-skalning
 @msg	a mask has more than one art block	en mask innehåller mer än ett grafikblock
 @msg	mask art ends outside a mask dictionary	maskens grafik slutar utanför en maskordlista
@@ -5128,3 +5163,22 @@ theme	Appearance	Utseende
 	Clear Artboard Color	Rensa ritytans färg
 @msg	artboard {_1} is locked	ritytan {_1} är låst
 	Include Artboard Fill	Ta med ritytans färg
+	Artboard {n} of {total}	Rityta {n} av {total}
+	Encoding and writing the file…	Kodar och skriver filen…
+@plural	{n} more export waiting|{n} more exports waiting	{n} export till väntar|{n} exporter till väntar
+	Continue in Background	Fortsätt i bakgrunden
+	Cancel Export	Avbryt export
+@msg	Export cancelled	Exporten avbröts
+# Paragraph panel menu › Justification…
+	Desired	Önskat
+	Word Spacing:	Ordavstånd:
+	Letter Spacing:	Teckenavstånd:
+	Glyph Scaling:	Glyfskalning:
+	Auto Leading:	Automatiskt radavstånd:
+	Single Word Justification:	Justering av enstaka ord:
+	Full Justify	Fullständig marginaljustering
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum får inte överstiga Önskat, och Önskat inte Maximum.
+	Justification	Justering
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+# Select by Color (select.color)
+	Select by Color	Markera efter färg

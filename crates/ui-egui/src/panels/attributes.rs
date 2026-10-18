@@ -161,11 +161,12 @@ pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// `attributes.openUrl {url?}`: open `url`, else the selection's URL, in the web browser.
 pub(crate) fn open_url(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    app.refuse_automation("attributes.openUrl")?;
     let url = match p.get("url").and_then(Value::as_str) {
         Some(u) => u.to_string(),
         None => app.session.attributes_info().url.filter(|u| !u.is_empty()).ok_or("the selection has no URL (or they differ)")?,
     };
-    app.open_url(&url);
+    app.open_document_url(&url)?;
     Ok(json!({ "url": url }))
 }
 
@@ -222,5 +223,38 @@ mod tests {
         let texts = frame(&mut app);
         assert!(!texts.iter().any(|t| t == "https://example.com/a" || t == "first note"), "{texts:?}");
         assert!(open_url(&mut app, &json!({})).is_err());
+    }
+
+    /// Only web and mail URLs reach the browser.
+    #[test]
+    fn the_browser_opens_web_and_mail_urls_only() {
+        for ok in ["https://example.com/a", "HTTP://example.com", "mailto:someone@example.com"] {
+            assert!(crate::browsable_url(ok).is_ok(), "{ok}");
+        }
+        for refused in [
+            "file:///tmp/a.html",
+            "javascript:void(0)",
+            "ms-settings:",
+            "smb://host/share",
+            "x-app://run",
+            "example.com",
+            " https://example.com",
+            "https://a\nb",
+            "",
+        ] {
+            assert!(crate::browsable_url(refused).is_err(), "{refused}");
+        }
+        let opened = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let o = opened.clone();
+        let services = crate::Services { open_url: Some(Box::new(move |u: &str| o.borrow_mut().push(u.to_string()))), ..Default::default() };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        run(&mut app, "attributes.set", json!({"url": "file:///tmp/run.desktop"}));
+        assert!(open_url(&mut app, &json!({})).is_err());
+        assert!(open_url(&mut app, &json!({"url": "vscode://file/x"})).is_err());
+        assert!(opened.borrow().is_empty());
+        open_url(&mut app, &json!({"url": "https://example.com/b"})).unwrap();
+        assert_eq!(*opened.borrow(), ["https://example.com/b"]);
     }
 }

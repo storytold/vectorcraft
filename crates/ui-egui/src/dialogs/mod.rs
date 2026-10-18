@@ -46,6 +46,7 @@ pub mod halftone;
 pub mod hyphenation;
 pub mod import_pdf;
 pub mod javascript_files;
+pub mod justification;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
@@ -269,6 +270,7 @@ registry! {
     WidthPoint: [width_point::KIND] => width_point::SPEC,
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
+    Justification: [justification::KIND] => justification::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,

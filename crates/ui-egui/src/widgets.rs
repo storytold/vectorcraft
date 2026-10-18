@@ -260,15 +260,31 @@ pub(crate) fn round_to(v: f64, decimals: i32) -> f64 {
 }
 
 /// One step of a numeric field with each modifier, most specific first (a plain pattern would also
-/// match Shift): ten with Shift, a tenth with Ctrl/Cmd, else one.
+/// match Shift): ten with Shift, a tenth with Ctrl/Cmd, else one. A Ctrl/Cmd or plain step goes to
+/// the next multiple of its size ([`step_to_multiple`]); a Shift step adds or takes ten.
 const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
 
+/// `v` moved `n` steps of `size` (down when `n` is negative): the first step goes to the next
+/// multiple of `size` in its direction and each further step adds or takes one `size`. By 1, 5.1
+/// goes up to 6 and down to 5, and 5 goes up to 6 and down to 4. A value within a millionth of a
+/// step of a multiple counts as that multiple.
+fn step_to_multiple(v: f64, size: f64, n: f64) -> f64 {
+    if n == 0.0 {
+        return v;
+    }
+    let q = v / size;
+    let from = if n > 0.0 { (q + 1e-6).floor() } else { (q - 1e-6).ceil() };
+    (from + n) * size
+}
+
 /// ↑/↓ in focused numeric field `resp`, or the mouse wheel turned over it, step the number `buf`
-/// shows (`read` parses it, `show` formats it) by one per press or wheel notch ([`STEPS`]: Shift
-/// ten, Ctrl/Cmd a tenth), applied at once as in Illustrator's panels and dialogs. The new text
-/// replaces `buf`, all selected so typing replaces it. Returns the new number when a step was
-/// taken. While the pointer is over the focused field the wheel is the field's (the panel under it
-/// doesn't scroll); an unfocused field leaves the wheel to the panel and the canvas.
+/// shows (`read` parses it, `show` formats it) per press or wheel notch ([`STEPS`]): a plain step
+/// goes to the next whole number in its direction (5.1 up to 6, down to 5), a Ctrl/Cmd step goes to
+/// the next tenth, and a Shift step adds or takes ten. The new value is applied at once, as in
+/// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
+/// replaces it. Returns the new number when a step was taken. While the pointer is over the focused
+/// field the wheel is the field's (the panel under it doesn't scroll); an unfocused field leaves the
+/// wheel to the panel and the canvas.
 fn step_value(ui: &Ui, resp: &Response, buf: &mut String, read: impl Fn(&str) -> Option<f64>, show: impl Fn(f64) -> String) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
@@ -281,41 +297,51 @@ fn step_value(ui: &Ui, resp: &Response, buf: &mut String, read: impl Fn(&str) ->
     // left of a notch carries over to the next turn.
     let (line, notch_id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
     let mut notches: f32 = if wheel { ui.data(|d| d.get_temp(notch_id)).unwrap_or(0.0) } else { 0.0 };
-    let mut steps = 0.0;
+    // Each press and each turn of whole notches in the order they came: its modifiers and size from
+    // [`STEPS`], and how many steps up (down when negative).
+    let mut steps: Vec<(egui::Modifiers, f64, f64)> = Vec::new();
     ui.input_mut(|i| {
-        for (mods, size) in STEPS {
-            let up = i.count_and_consume_key(mods, Key::ArrowUp) as f64;
-            let down = i.count_and_consume_key(mods, Key::ArrowDown) as f64;
-            steps += size * (up - down);
-        }
-        if !wheel {
-            return;
-        }
         i.events.retain(|e| {
-            let Event::MouseWheel { unit, delta, modifiers, .. } = e else { return true };
-            let Some((_, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
-            // Shift may turn the wheel sideways (the Mac does).
-            let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
-            notches += match unit {
-                MouseWheelUnit::Point => d / line.max(1.0),
-                MouseWheelUnit::Line | MouseWheelUnit::Page => d,
+            let (Event::Key { modifiers, .. } | Event::MouseWheel { modifiers, .. }) = e else { return true };
+            let Some(&(mods, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
+            let n = match e {
+                Event::Key { key: Key::ArrowUp, pressed: true, .. } => 1.0,
+                Event::Key { key: Key::ArrowDown, pressed: true, .. } => -1.0,
+                Event::MouseWheel { unit, delta, .. } if wheel => {
+                    // Shift may turn the wheel sideways (the Mac does).
+                    let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
+                    notches += match unit {
+                        MouseWheelUnit::Point => d / line.max(1.0),
+                        MouseWheelUnit::Line | MouseWheelUnit::Page => d,
+                    };
+                    let whole = notches.trunc();
+                    notches -= whole;
+                    f64::from(whole)
+                }
+                _ => return true,
             };
-            let whole = notches.trunc();
-            notches -= whole;
-            steps += size * f64::from(whole);
+            if n != 0.0 {
+                steps.push((mods, size, n));
+            }
             false
         });
-        // The rest of a turn egui spreads over the next frames scrolls nothing either.
-        i.smooth_scroll_delta = egui::Vec2::ZERO;
+        if wheel {
+            // The rest of a turn egui spreads over the next frames scrolls nothing either.
+            i.smooth_scroll_delta = egui::Vec2::ZERO;
+        }
     });
     if wheel {
         ui.data_mut(|d| d.insert_temp(notch_id, notches));
     }
-    if steps == 0.0 {
+    if steps.is_empty() {
         return None;
     }
+    let mut v = read(buf)?;
+    for (mods, size, n) in steps {
+        v = if mods == egui::Modifiers::SHIFT { v + size * n } else { step_to_multiple(v, size, n) };
+    }
     // Rounded as fields show it.
-    let v = round_to(read(buf)? + steps, STEP_DECIMALS);
+    let v = round_to(v, STEP_DECIMALS);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
     select_all(ui, resp.id, buf);
@@ -421,6 +447,20 @@ fn shift_enter_keeps_focus(ui: &Ui, id: egui::Id) -> bool {
 /// ([`shift_enter_keeps_focus`]). Clears that record.
 fn after_shift_enter(ui: &Ui, id: egui::Id) -> bool {
     ui.data_mut(|d| d.remove_temp::<bool>(id.with("shift-enter"))).unwrap_or(false) && ui.memory(|m| m.has_focus(id))
+}
+
+/// Handles Shift+Enter in a single-line panel field that draws its own text box `id` (Pattern
+/// Options' Name, the inline renames in the Layers, Artboards and Asset Export panels). Call it
+/// before the box is drawn, with `buf` the text the box will show and `shown` the value as it is
+/// now. When the field took Shift+Enter in the last frame, `buf` becomes `shown`, all of it
+/// selected. Returns whether Shift+Enter was pressed in this frame ([`shift_enter_keeps_focus`]):
+/// the field then applies `buf` as Enter does and keeps the focus.
+pub(crate) fn own_field_shift_enter(ui: &Ui, id: egui::Id, buf: &mut String, shown: &str) -> bool {
+    if after_shift_enter(ui, id) {
+        *buf = shown.to_string();
+        select_all(ui, id, buf);
+    }
+    shift_enter_keeps_focus(ui, id)
 }
 
 /// Numeric fields select the whole text on keyboard focus, a completed focus click or a
@@ -606,11 +646,7 @@ pub fn mixed_field(
     width: f32,
 ) -> Option<f64> {
     let id = ui.id().with(id);
-    let show = |value: f64| {
-        let s = format!("{:.*}", decimals, value);
-        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-        format!("{s}{suffix}")
-    };
+    let show = |value: f64| field_text(value, suffix, decimals);
     // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
     let read = |buf: &str| {
         let suffix = suffix.trim();
@@ -627,6 +663,14 @@ pub fn mixed_field(
     let stepped = step_value(ui, &resp, &mut buf, read, show).map(|v| round_to(v, decimals));
     let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals);
     if commit && buf != shown { read(&buf) } else { stepped.or(scrubbed).filter(|&v| Some(v) != value) }
+}
+
+/// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,
+/// then `suffix`.
+fn field_text(value: f64, suffix: &str, decimals: usize) -> String {
+    let s = format!("{:.*}", decimals, value);
+    let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+    format!("{s}{suffix}")
 }
 
 /// Draw a paint preview (swatch chip) into `rect`.
@@ -916,7 +960,15 @@ pub(crate) fn combo<R>(
             if enter_for_combo {
                 ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
             }
-            response.inner.flatten()
+            let chosen = response.inner.flatten();
+            // egui closes the list on a click of the pointer only: an option picked with Space or
+            // Enter closes it here, and the combo gives the keyboard back, so that Enter reaches the
+            // dialog's OK (#2789).
+            if chosen.is_some() {
+                egui::Popup::close_all(ui.ctx());
+                ui.memory_mut(|m| m.surrender_focus(button_id));
+            }
+            chosen
         })
         .inner
 }
@@ -1580,6 +1632,69 @@ pub fn color_slider_named(
     width: f32,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live) {
+    color_slider_valued(ui, id, name, None, value, width, track)
+}
+
+/// The value a slider gives screen readers: the number the field beside it shows, the range of the
+/// slider's rail and the field's text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SliderValue {
+    pub value: f64,
+    pub range: std::ops::RangeInclusive<f64>,
+    /// The field's text, such as "50%"; `None` gives the number alone.
+    pub text: Option<String>,
+}
+
+impl SliderValue {
+    /// `value` on a rail over `range`, without a text.
+    pub fn number(value: f64, range: std::ops::RangeInclusive<f64>) -> Self {
+        Self { value, range, text: None }
+    }
+
+    /// `value` on a rail over `range` as [`plain_field`] shows it with `suffix` and at most
+    /// `decimals` places: the number it shows (`value` rounded) and its text.
+    pub fn field(value: f64, range: std::ops::RangeInclusive<f64>, suffix: &str, decimals: usize) -> Self {
+        let number = field_text(value, "", decimals);
+        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")) }
+    }
+
+    /// `value` on a rail over `range`, with `text`, for a field that writes its own text (a length
+    /// in the document's unit, an egui `DragValue`).
+    pub fn text(value: f64, range: std::ops::RangeInclusive<f64>, text: String) -> Self {
+        Self { value, range, text: Some(text) }
+    }
+}
+
+/// Give `resp` a slider's screen-reader node named `name` (nothing when `name` is empty), with
+/// `shown`'s number, text and range: the rail's range, extended to the number when the field holds
+/// a number past the rail's end.
+fn slider_info(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderValue>) {
+    if name.is_empty() {
+        return;
+    }
+    let enabled = ui.is_enabled();
+    let Some(s) = shown else {
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, enabled, name));
+        return;
+    };
+    resp.widget_info(|| egui::WidgetInfo { current_text_value: s.text.clone(), ..egui::WidgetInfo::slider(enabled, s.value, name) });
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(s.range.start().min(s.value));
+        node.set_max_numeric_value(s.range.end().max(s.value));
+    });
+}
+
+/// [`color_slider_named`] that screen readers also get `shown` from (see [`SliderValue`]). With
+/// `None`, as for a field left blank for a mixed value, it reports no value.
+pub fn color_slider_valued(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    width: f32,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
     let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
@@ -1592,9 +1707,7 @@ pub fn color_slider_named(
     let thumb = vec![tip, pos2(x + 5.5, tip.y + 6.0), pos2(x + 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 6.0)];
     let fill = if resp.dragged() || resp.hovered() { Color32::WHITE } else { t.icon };
     ui.painter().add(egui::Shape::convex_polygon(thumb, fill, Stroke::new(1.0, t.border)));
-    if !name.is_empty() {
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, ui.is_enabled(), name));
-    }
+    slider_info(ui, &resp, name, shown);
     match pointer_phase(&resp) {
         Some((p, phase)) => (Some(((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0)), phase),
         None => (None, Live::Idle),
@@ -1697,6 +1810,20 @@ pub fn channel_slider_named(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live) {
+    channel_slider_valued(ui, id, name, None, value, size, track)
+}
+
+/// [`channel_slider_named`] that screen readers also get `shown` from, as for
+/// [`color_slider_valued`].
+pub fn channel_slider_valued(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
@@ -1709,9 +1836,7 @@ pub fn channel_slider_named(
         let tip = pos2(x + d * 5.0, y);
         ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
     }
-    if !name.is_empty() {
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, ui.is_enabled(), name));
-    }
+    slider_info(ui, &resp, name, shown);
     match pointer_phase(&resp) {
         Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
         None => (None, Live::Idle),
@@ -2088,9 +2213,12 @@ pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: O
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size - 76.0) / 2.0).max(0.0));
         ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(tl!("Brightness")).color(t.text_dim)));
+        // Screen readers get the brightness in percent, as the Color panel's HSB B field shows it.
+        let shown = SliderValue::field((f64::from(v) * 100.0).round(), 0.0..=100.0, "%", 0);
         if let (Some(b), Some([h, s, _])) = (base, base_hsb)
-            && let (Some(nv), _) =
-                color_slider_named(ui, (id, "brightness"), tl!("Brightness"), v, size, &|x| crate::panels::c32(&Color::from_hsb(h, s, x)))
+            && let (Some(nv), _) = color_slider_valued(ui, (id, "brightness"), tl!("Brightness"), Some(shown), v, size, &|x| {
+                crate::panels::c32(&Color::from_hsb(h, s, x))
+            })
         {
             out.moved = Some((b, [None, None, Some(nv)]));
         }
@@ -2399,8 +2527,38 @@ pub(crate) mod accessibility_tests {
         assert_eq!(slider("Angle"), (Role::Slider, Some(45.0)));
         assert_eq!(slider("H"), (Role::Slider, None));
         assert_eq!(slider("Color wheel"), (Role::Slider, None));
-        assert_eq!(slider("Brightness"), (Role::Slider, None));
         assert!(tree.iter().any(|n| n.role() == Role::ComboBox && n.value() == Some("Regular")), "the searchable combo box shows its text");
+    }
+
+    /// The number, range and text of the slider of `tree` that screen readers name `label`.
+    pub(crate) fn slider_value(tree: &[Node], label: &str) -> (Option<f64>, Option<f64>, Option<f64>, Option<String>) {
+        let n = tree.iter().find(|n| n.role() == Role::Slider && n.label() == Some(label)).unwrap_or_else(|| panic!("no slider is named {label:?}"));
+        (n.numeric_value(), n.min_numeric_value(), n.max_numeric_value(), n.value().map(str::to_string))
+    }
+
+    /// The `_valued` sliders give screen readers the number and text of their field, with the rail's
+    /// range extended to a number past it; the harmony wheel's Brightness gives its percent.
+    #[test]
+    fn sliders_report_the_value_their_field_shows() {
+        let dark_red = Color::from_hsb(0.0, 1.0, 0.5);
+        let gray = |_: f32| Color32::GRAY;
+        let tree = tree(|ui| {
+            color_slider_valued(ui, "opacity", "Opacity:", Some(SliderValue::field(49.6, 0.0..=100.0, "%", 0)), 0.5, 120.0, &gray);
+            color_slider_valued(ui, "scale", "Horizontal:", Some(SliderValue::field(312.5, 0.0..=200.0, "%", 2)), 1.0, 120.0, &gray);
+            color_slider_valued(ui, "move", "Vertical:", Some(SliderValue::text(-1.5, -14.0..=14.0, "-1.5 in".into())), 0.4, 120.0, &gray);
+            color_slider_valued(ui, "count", "Ridges per segment:", Some(SliderValue::number(4.0, 0.0..=100.0)), 0.04, 120.0, &gray);
+            color_slider_valued(ui, "axis", "Weight", None, 0.5, 120.0, &gray);
+            channel_slider_valued(ui, "channel", "H", Some(SliderValue::field(210.0, 0.0..=360.0, "°", 0)), 210.0 / 360.0, vec2(22.0, 80.0), &gray);
+            harmony_wheel(ui, "wheel", 120.0, &[dark_red], Some(0));
+        });
+        let s = |label| slider_value(&tree, label);
+        assert_eq!(s("Opacity:"), (Some(50.0), Some(0.0), Some(100.0), Some("50%".into())));
+        assert_eq!(s("Horizontal:"), (Some(312.5), Some(0.0), Some(312.5), Some("312.5%".into())));
+        assert_eq!(s("Vertical:"), (Some(-1.5), Some(-14.0), Some(14.0), Some("-1.5 in".into())));
+        assert_eq!(s("Ridges per segment:"), (Some(4.0), Some(0.0), Some(100.0), None));
+        assert_eq!(s("Weight"), (None, None, None, None), "a mixed value");
+        assert_eq!(s("H"), (Some(210.0), Some(0.0), Some(360.0), Some("210°".into())));
+        assert_eq!(s("Brightness"), (Some(50.0), Some(0.0), Some(100.0), Some("50%".into())));
     }
 }
 
@@ -2419,6 +2577,41 @@ mod spinner_modifier_tests {
         assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
         assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
         assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod step_to_multiple_tests {
+    use super::*;
+
+    /// #2881: the first step goes to the next multiple of its size in its direction, and each further
+    /// step adds or takes one size.
+    #[test]
+    fn a_step_goes_to_the_next_multiple_of_its_size() {
+        for (v, size, n, want) in [
+            (5.1, 1.0, 1.0, 6.0),
+            (5.1, 1.0, -1.0, 5.0),
+            (5.0, 1.0, 1.0, 6.0),
+            (5.0, 1.0, -1.0, 4.0),
+            (-2.5, 1.0, 1.0, -2.0),
+            (-2.5, 1.0, -1.0, -3.0),
+            (24.8, 1.0, 2.0, 26.0),
+            (24.8, 1.0, -2.0, 23.0),
+            (5.13, 0.1, 1.0, 5.2),
+            (5.13, 0.1, -1.0, 5.1),
+            (5.1, 1.0, 0.0, 5.1),
+        ] {
+            assert!((step_to_multiple(v, size, n) - want).abs() < 1e-9, "{v} by {size} × {n}: {}", step_to_multiple(v, size, n));
+        }
+    }
+
+    /// A value a float error away from a multiple moves a whole step from it: 0.7 is 6.999… tenths.
+    #[test]
+    fn a_value_next_to_a_multiple_moves_a_whole_step() {
+        assert!((step_to_multiple(0.7, 0.1, 1.0) - 0.8).abs() < 1e-9);
+        assert!((step_to_multiple(0.3, 0.1, -1.0) - 0.2).abs() < 1e-9);
+        assert!((step_to_multiple(5.000_000_1, 1.0, 1.0) - 6.0).abs() < 1e-9);
+        assert!((step_to_multiple(4.999_999_9, 1.0, -1.0) - 4.0).abs() < 1e-9);
     }
 }
 
@@ -2469,5 +2662,53 @@ mod gradient_chip_tests {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+}
+
+#[cfg(test)]
+mod combo_keyboard_tests {
+    use super::*;
+
+    fn key(key: egui::Key, pressed: bool) -> egui::Event {
+        egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE }
+    }
+
+    fn frame(ctx: &egui::Context, events: Vec<egui::Event>, picked: &mut Option<usize>) {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            if let Some(i) = dropdown(ui, "combo-test", "One", &["One", "Two", "Three"], 200.0) {
+                *picked = Some(i);
+            }
+        });
+        // No renderer takes the font atlas updates in a test; dropping them unapplied panics.
+        out.textures_delta.clear();
+    }
+
+    /// An option picked with the keyboard closes the list (it used to stay open and keep the keys).
+    #[test]
+    fn option_picked_with_space_closes_the_list() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut picked = None;
+        frame(&ctx, vec![], &mut picked);
+        frame(&ctx, vec![], &mut picked);
+        // Tab to the combo, open it with Space.
+        for k in [egui::Key::Tab, egui::Key::Space] {
+            frame(&ctx, vec![key(k, true)], &mut picked);
+            frame(&ctx, vec![key(k, false)], &mut picked);
+        }
+        assert!(egui::Popup::is_any_open(&ctx), "Space opens the list");
+        // Tab into the list, then Space picks the option under the focus.
+        for _ in 0..8 {
+            frame(&ctx, vec![key(egui::Key::Tab, true)], &mut picked);
+            frame(&ctx, vec![key(egui::Key::Tab, false)], &mut picked);
+            frame(&ctx, vec![key(egui::Key::Space, true)], &mut picked);
+            frame(&ctx, vec![key(egui::Key::Space, false)], &mut picked);
+            if picked.is_some() {
+                break;
+            }
+        }
+        assert!(picked.is_some(), "an option was picked");
+        frame(&ctx, vec![], &mut picked);
+        assert!(!egui::Popup::is_any_open(&ctx), "the list closes after a keyboard pick");
     }
 }

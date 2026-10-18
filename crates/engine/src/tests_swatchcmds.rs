@@ -228,6 +228,45 @@ fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
     assert_eq!(serde_json::from_str::<vectorcraft_doc::Document>(&json).unwrap(), *doc(&s));
 }
 
+/// The other swatch commands store RGB colors in a CMYK document as `swatch.new {color}` does:
+/// `swatch.new {colors}`, `swatch.newGroup {colors}`, `swatch.editGroup {colors}` and
+/// `swatch.edit {color}`. A color a swatch already has, and a color given with `mode`, keep their
+/// model.
+#[test]
+fn a_cmyk_document_stores_rgb_colors_given_to_the_swatch_commands_as_cmyk() {
+    use vectorcraft_color::Color;
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": "cmyk"}));
+    let cms = vectorcraft_color::cms::active();
+    let managed = |c: Color| cms.convert(&c, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent);
+    let (red, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 1.0, 0.0));
+    let color = |s: &Session, n: &Value| doc(s).swatch(n.as_str().unwrap()).and_then(|w| w.paint.color());
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", {"c": 0, "m": 0, "y": 100, "k": 0}]}));
+    assert_eq!((color(&s, &r["names"][0]), color(&s, &r["names"][1])), (Some(managed(red)), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0))));
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "G", "colors": ["#00ff00"]}));
+    assert_eq!(color(&s, &r["swatches"][0]), Some(managed(green)));
+    let kept = run(&mut s, "swatch.newGroup", json!({"name": "K", "colors": ["#00ff00"], "keepModel": true}));
+    assert_eq!(color(&s, &kept["swatches"][0]), Some(green), "keepModel keeps RGB");
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "G", "colors": ["#ff0000", "#00ff00"]}));
+    assert_eq!((color(&s, &r["swatches"][0]), color(&s, &r["swatches"][1])), (Some(managed(red)), Some(managed(green))));
+    let name = run(&mut s, "swatch.new", json!({"color": "#000000", "keepModel": true}))["name"].clone();
+    assert_eq!(color(&s, &name), Some(Color::BLACK));
+    run(&mut s, "swatch.edit", json!({"name": name, "color": "#ff0000"}));
+    assert_eq!(color(&s, &name), Some(managed(red)));
+    // An RGB swatch sent back unchanged stays RGB.
+    let rgb = run(&mut s, "swatch.new", json!({"color": "#00ff00", "keepModel": true}))["name"].clone();
+    run(&mut s, "swatch.edit", json!({"name": rgb, "color": "#00ff00", "global": true}));
+    assert_eq!(color(&s, &rgb), Some(green));
+    run(&mut s, "swatch.newGroup", json!({"name": "H", "swatches": [rgb]}));
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "H", "colors": ["#00ff00", "#ff0000"]}));
+    assert_eq!((color(&s, &r["swatches"][0]), color(&s, &r["swatches"][1])), (Some(green), Some(managed(red))));
+    // With `mode`, the color is converted once, into that mode.
+    let r = run(&mut s, "swatch.new", json!({"color": "#00ff00", "mode": "rgb"}));
+    assert_eq!(color(&s, &r["name"]), Some(green));
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#00ff00"], "mode": "rgb"}));
+    assert_eq!(color(&s, &r["names"][0]), Some(green));
+}
+
 #[test]
 fn rgb_documents_keep_colours_as_given_and_edits_keep_the_source_model() {
     use vectorcraft_color::Color;

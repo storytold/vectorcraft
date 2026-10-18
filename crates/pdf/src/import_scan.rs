@@ -211,7 +211,7 @@ fn usage(d: &Dict<'_>, category: &[u8], key: &[u8]) -> Option<bool> {
 }
 
 /// A PDF text string: UTF-16 (with its byte order mark), UTF-8 (with one) or PDFDocEncoding
-/// (read as Latin-1, which it matches for letters).
+/// (ISO 32000-1 Annex D, Table D.2).
 pub(crate) fn text_string(b: &[u8]) -> String {
     if let Some(rest) = b.strip_prefix(&[0xFE, 0xFF]) {
         let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect();
@@ -220,7 +220,25 @@ pub(crate) fn text_string(b: &[u8]) -> String {
     if let Some(rest) = b.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
         return String::from_utf8_lossy(rest).into_owned();
     }
-    b.iter().map(|&c| c as char).collect()
+    b.iter().map(|&c| pdf_doc_char(c)).collect()
+}
+
+/// Byte `c` of a PDFDocEncoding string. It matches Latin-1 except at 0x18 to 0x1F (accents) and
+/// 0x80 to 0xA0 (punctuation, ligatures, letters and the euro sign); 0x9F has no character and
+/// stays as it is.
+fn pdf_doc_char(c: u8) -> char {
+    const ACCENTS: [char; 8] = ['\u{2D8}', '\u{2C7}', '\u{2C6}', '\u{2D9}', '\u{2DD}', '\u{2DB}', '\u{2DA}', '\u{2DC}'];
+    const HIGH: [char; 33] = [
+        '\u{2022}', '\u{2020}', '\u{2021}', '\u{2026}', '\u{2014}', '\u{2013}', '\u{192}', '\u{2044}', '\u{2039}', '\u{203A}', '\u{2212}',
+        '\u{2030}', '\u{201E}', '\u{201C}', '\u{201D}', '\u{2018}', '\u{2019}', '\u{201A}', '\u{2122}', '\u{FB01}', '\u{FB02}', '\u{141}', '\u{152}',
+        '\u{160}', '\u{178}', '\u{17D}', '\u{131}', '\u{142}', '\u{153}', '\u{161}', '\u{17E}', '\u{9F}', '\u{20AC}',
+    ];
+    let mapped = match c {
+        0x18..=0x1F => ACCENTS.get(usize::from(c - 0x18)),
+        0x80..=0xA0 => HIGH.get(usize::from(c - 0x80)),
+        _ => None,
+    };
+    mapped.copied().unwrap_or(char::from(c))
 }
 
 /// One page as the interpreter walks it.

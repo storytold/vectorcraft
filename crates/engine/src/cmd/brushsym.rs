@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Brush…",
             [],
             None,
-            "{type: calligraphic|scatter|art|pattern|bristle, name?, params?: {…definition fields}, ids?|id?} new brush; art/scatter/pattern brushes take the selected art (pattern: side tile) unless params give it → {name}",
+            "{type: calligraphic|scatter|art|pattern|bristle, name? (trimmed; blank: New <Type> Brush), params?: {…definition fields}, ids?|id?} new brush; art/scatter/pattern brushes take the selected art (pattern: side tile) unless params give it → {name}",
             has_doc,
             brush_new
         ),
@@ -75,13 +75,21 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             brush_delete
         ),
-        cmd!("brush.duplicate", "Duplicate Brush", [], None, "{name, newName?} | {names: [name…]} → {name} | {names}", has_doc, brush_duplicate),
+        cmd!(
+            "brush.duplicate",
+            "Duplicate Brush",
+            [],
+            None,
+            "{name, newName? (trimmed; blank: <name> copy)} | {names: [name…]} → {name} | {names}",
+            has_doc,
+            brush_duplicate
+        ),
         cmd!(
             "brush.options",
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180°, modes: [fixed|random|pressure for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest), rotation_relative_to_path. art: width 1..1000%, scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour)}}, newName?} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180°, modes: [fixed|random|pressure for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest), rotation_relative_to_path. art: width 1..1000%, scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour)}}, newName? (trimmed; blank: the name is kept)} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
         ),
@@ -202,7 +210,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbolism Tool",
             [],
             None,
-            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color?, style?: name} adjust instances near the points (selection, else all) → {count}",
+            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color?, keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
             has_doc,
             symbol_adjust
         ),
@@ -393,7 +401,8 @@ fn brush_new(s: &mut Session, p: &Value) -> Result<Value> {
         o => return Err(bad(C, format!("unknown brush type `{o}`"))),
     };
     let mut lib = brush::library(&s.doc()?.doc);
-    let base_name = str_param(p, "name").map(str::to_string).unwrap_or_else(|| format!("New {} Brush", ty[..1].to_uppercase() + &ty[1..]));
+    let given = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty());
+    let base_name = given.map_or_else(|| format!("New {} Brush", ty[..1].to_uppercase() + &ty[1..]), str::to_string);
     let name = brush::unique_name(&lib, &base_name);
     let mut v = json!({"name": name, "type": ty});
     if let Some(params) = p.get("params") {
@@ -445,7 +454,8 @@ fn brush_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = vec![];
     for name in &names {
         let mut b = before.iter().find(|b| &b.name == name).cloned().ok_or_else(|| bad(C, format!("no brush named `{name}`")))?;
-        let new_name = str_param(p, "newName").filter(|_| p.get("names").is_none()).map_or_else(|| format!("{name} copy"), str::to_string);
+        let given = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && p.get("names").is_none());
+        let new_name = given.map_or_else(|| format!("{} copy", name.trim()), str::to_string);
         b.name = brush::unique_name(&lib, &new_name);
         out.push(b.name.clone());
         lib.push(b);
@@ -463,7 +473,7 @@ fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(params) = p.get("params") {
         merge(&mut v, params);
     }
-    let new_name = str_param(p, "newName").filter(|n| !n.trim().is_empty() && *n != name).map(str::to_string);
+    let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
     if let Some(nn) = &new_name {
         if lib.iter().any(|b| &b.name == nn) {
             return Err(bad(C, format!("a brush named `{nn}` exists")));
@@ -669,7 +679,7 @@ fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = roots(s, p)?;
     let art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
     let (art, size, c) = normalize(art)?;
-    let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").filter(|n| !n.trim().is_empty()).unwrap_or("New Symbol"));
+    let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("New Symbol"));
     let reg = registration_param(p, C)?.unwrap_or(SymbolRegistration::CENTER);
     let export = export_type_param(p, C)?.unwrap_or_default();
     let nine = nine_slice_param(p, C, None)?.flatten();
@@ -918,7 +928,8 @@ fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let name = name_param(p, C)?.to_string();
     let d = &s.doc()?.doc;
     let sym = d.symbols.iter().find(|x| x.name == name).cloned().ok_or_else(|| bad(C, format!("no symbol named `{name}`")))?;
-    let new = d.unique_symbol_name(str_param(p, "newName").unwrap_or(&format!("{name} copy")));
+    let given = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty());
+    let new = d.unique_symbol_name(&given.map_or_else(|| format!("{} copy", name.trim()), str::to_string));
     let size = natural_size(d, &name);
     let reg = d.symbol_registration(&name);
     let export = d.symbol_export_type(&name);
@@ -1099,7 +1110,7 @@ fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let alt = bool_or(p, "alt", false);
     let st = s.doc()?;
     let color = match p.get("color").and_then(color_value) {
-        Some(c) => c,
+        Some(c) => super::paint::new_color(s, p, c),
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };
     let style_paint = match str_param(p, "style") {

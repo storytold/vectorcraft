@@ -263,7 +263,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         let sw = (ui.available_width() - 30.0).max(40.0);
         let track = |_: f32| t.input_border;
-        if let (Some(v), phase) = widgets::color_slider_named(ui, "nav-slider", tl!("Zoom"), zoom_to_slider(zoom) as f32, sw, &track)
+        let shown = widgets::SliderValue::field(zoom, 3.13..=64000.0, "%", 2);
+        if let (Some(v), phase) = widgets::color_slider_valued(ui, "nav-slider", tl!("Zoom"), Some(shown), zoom_to_slider(zoom) as f32, sw, &track)
             && phase != widgets::Live::Idle
         {
             z = Some(slider_to_zoom(v as f64));
@@ -288,6 +289,18 @@ pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Screen readers get the Zoom slider's percent as the zoom field beside it shows it, on the
+    /// slider's 3.13% to 64000% range.
+    #[test]
+    fn screen_readers_get_the_zoom_the_field_shows() {
+        use crate::widgets::accessibility_tests::{slider_value, tree};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("view.setZoom", json!({"zoom": 250})).unwrap();
+        let shown = tree(|ui| show(&mut app, ui));
+        assert_eq!(slider_value(&shown, "Zoom"), (Some(250.0), Some(3.13), Some(64000.0), Some("250%".to_string())));
+    }
 
     #[test]
     fn thumb_mapping_roundtrip() {

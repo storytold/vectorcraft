@@ -73,7 +73,7 @@ pub(super) fn body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     let orientation = d.str("orientation");
     widgets::label_row(ui, "", LABEL_W, |ui| {
-        for (value, label) in [("horizontal", tl!("Horizontal")), ("vertical", tl!("Vertical"))] {
+        for (label, value) in super::effect::own_choices(&id, "orientation", false).unwrap_or_default() {
             if widgets::radio(ui, label, orientation == value, true) {
                 d.fields.insert("orientation".into(), json!(value));
             }

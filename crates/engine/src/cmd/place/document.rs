@@ -68,8 +68,9 @@ pub(crate) fn document_art(name: &str, bytes: &[u8], path: Option<&str>, page: u
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
     let board = board.ok_or_else(|| bad(cmd, format!("page {page}: `{file}` has {n} artboard(s)")))?;
     let layers = std::mem::take(&mut l.doc.layers);
-    let nodes = super::on_artboard(&layers, board);
-    let frame = if bounding { nodes.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds())) } else { Some(board) };
+    let symbols = l.doc.symbol_boxes();
+    let nodes = super::on_artboard(&symbols, &layers, board);
+    let frame = if bounding { super::shown_bounds(&symbols, &nodes) } else { Some(board) };
     let frame = frame.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{file}` has no art to place")))?;
     Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings })
 }

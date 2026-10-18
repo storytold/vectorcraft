@@ -18,10 +18,16 @@ fn style(size: f64) -> CharStyle {
 
 /// Area type `w` wide at (20, 20) in a 300 × 200 document.
 fn area_doc(runs: Vec<TextRun>, w: f64, justify: Justify) -> Document {
+    area_doc_justified(runs, w, justify, vectorcraft_doc::JustificationOptions::default())
+}
+
+/// [`area_doc`] with the paragraph's Justification options `j`.
+fn area_doc_justified(runs: Vec<TextRun>, w: f64, justify: Justify, j: vectorcraft_doc::JustificationOptions) -> Document {
     let mut t = TextObject::point(Point::new(20.0, 20.0), "", style(12.0));
     t.runs = runs;
     t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, 160.0)) };
     t.para.justify = justify;
+    t.para.justification = j;
     let mut d = Document::new(300.0, 200.0);
     let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
     let l = d.layers[0].id;
@@ -249,6 +255,32 @@ fn justify_all_lines_keep_their_letter_gaps() {
     for runs in [vec![run("abcdefgh", style(12.0))], vec![run("abc", style(12.0)), run("def", tracked), run("ghi", kerned)]] {
         let d = area_doc(runs, 200.0, Justify::JustifyAll);
         assert_drawn_in_place(&d);
+    }
+}
+
+/// Justification…: Desired word and letter spacing and glyph scaling, and the ranges a justified
+/// line uses, are written so a viewer draws each character where and as wide as the canvas does.
+#[test]
+fn justification_spacing_and_glyph_scaling_are_drawn_in_place() {
+    use vectorcraft_doc::JustificationOptions;
+    let text = "Typography arranges type to make written language legible and readable";
+    for (justify, j) in [
+        (
+            Justify::Left,
+            JustificationOptions { word_spacing: [0.0, 180.0, 200.0], letter_spacing: [0.0, 10.0, 10.0], ..JustificationOptions::default() },
+        ),
+        (Justify::Left, JustificationOptions { glyph_scaling: [50.0, 120.0, 200.0], ..JustificationOptions::default() }),
+        (
+            Justify::JustifyLeft,
+            JustificationOptions {
+                word_spacing: [100.0, 100.0, 100.0],
+                letter_spacing: [0.0, 0.0, 5.0],
+                glyph_scaling: [95.0, 100.0, 110.0],
+                ..JustificationOptions::default()
+            },
+        ),
+    ] {
+        assert_drawn_in_place(&area_doc_justified(vec![run(text, style(12.0))], 160.0, justify, j));
     }
 }
 

@@ -324,6 +324,14 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     // The window's graphics device and display server are chosen once, when the app starts.
                     ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
                 }
+                if sp.key == "linuxDisplayServer" {
+                    // Many Wayland desktops give a drawing tablet's pen to the window only through XWayland (#2028).
+                    ui.label(
+                        egui::RichText::new(tl!("If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option."))
+                            .color(t.text_dim)
+                            .size(11.0),
+                    );
+                }
             }
             PrefKind::Color => {
                 labeled(ui, sp.label, |ui| {
@@ -612,6 +620,40 @@ mod tests {
         assert!(a.session.prefs.system_title_bar);
         let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
         assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
+    }
+
+    /// Performance › Linux Display Server (#2028): on Linux it shows the drawing-tablet note, and
+    /// X11 (XWayland) When a Pen Is Attached is applied by OK and saved under the key the desktop
+    /// app reads before the window opens.
+    #[test]
+    fn linux_display_server_offers_the_pen_choice() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut a = app();
+        open(&mut a, Some("Performance"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // The window sizes itself on the first frame and draws on the second.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let linux = cfg!(target_os = "linux");
+        assert_eq!(shown.iter().any(|t| t.starts_with("Linux Display Server")), linux, "{shown:?}");
+        let note = "If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.";
+        assert_eq!(shown.iter().any(|t| t == note), linux, "{shown:?}");
+        a.ui.dialog.as_mut().unwrap().fields.insert("linuxDisplayServer".into(), json!("x11WithPen"));
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.linux_display_server, "x11WithPen");
+        let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+        assert_eq!(saved["engine_prefs"]["linuxDisplayServer"], json!("x11WithPen"));
     }
 
     /// #1866: the category shown is highlighted in the list while the pointer is elsewhere.

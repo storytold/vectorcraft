@@ -126,15 +126,22 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             match &renaming {
                 Some((id, buf)) if *id == a.id => {
                     let mut buf = buf.clone();
+                    let field = rename_id.with("field");
+                    let kept = widgets::own_field_shift_enter(ui, field, &mut buf, &a.name);
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-                    let te = child.add(egui::TextEdit::singleline(&mut buf).desired_width(name_rect.width()).font(egui::FontId::proportional(11.5)));
-                    // Enter or a click elsewhere commits, Escape cancels.
+                    let te = child
+                        .add(egui::TextEdit::singleline(&mut buf).id(field).desired_width(name_rect.width()).font(egui::FontId::proportional(11.5)));
+                    // Enter or a click elsewhere commits, Escape cancels; Shift+Enter commits and
+                    // keeps the field open.
                     if te.lost_focus() {
                         ui.data_mut(|d| d.remove::<(u64, String)>(rename_id));
                         if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf.trim() != a.name && !buf.trim().is_empty() {
                             ev.rename = Some((a.id, buf.trim().to_string()));
                         }
                     } else {
+                        if kept && buf.trim() != a.name && !buf.trim().is_empty() {
+                            ev.rename = Some((a.id, buf.trim().to_string()));
+                        }
                         te.request_focus();
                         ui.data_mut(|d| d.insert_temp(rename_id, (a.id, buf)));
                     }

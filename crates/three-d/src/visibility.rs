@@ -23,6 +23,9 @@ pub struct VisibleFace {
     pub brightness: f64,
     pub depth: f64,
     pub gradient: Option<ShadeGradient>,
+    pub illumination: [f64; 3],
+    pub light_gradient: Option<crate::LightGradient>,
+    pub rgb_gradient: Option<crate::RgbGradient>,
 }
 
 struct Polygon {
@@ -178,6 +181,9 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
     if faces.iter().any(|f| {
         f.points.len() > 1026
             || !f.brightness.is_finite()
+            || f.illumination.iter().any(|v| !v.is_finite())
+            || f.light_gradient.is_some_and(|g| !g.is_finite())
+            || f.rgb_gradient.is_some_and(|g| !g.is_finite())
             || !f.depth.is_finite()
             || f.gradient.is_some_and(|g| [g.start.x, g.start.y, g.end.x, g.end.y, g.brightness[0], g.brightness[1]].iter().any(|v| !v.is_finite()))
             || f.points.iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs().max(p.y.abs()) > 1e8)
@@ -256,7 +262,15 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
             return Err("Revolve visibility creates too many vector anchors".into());
         }
         let path = if !clipped { face.path() } else { PathData::new(fragments.into_iter().map(|p| SubPath::polyline(&p, true)).collect()) };
-        out.push(VisibleFace { path, brightness: face.brightness, depth: face.depth, gradient: face.gradient });
+        out.push(VisibleFace {
+            path,
+            brightness: face.brightness,
+            depth: face.depth,
+            gradient: face.gradient,
+            illumination: face.illumination,
+            light_gradient: face.light_gradient,
+            rgb_gradient: face.rgb_gradient,
+        });
         // A completely covered face need not occupy the grid. Its coverage already belongs
         // to nearer faces; this keeps repeated overlapping surfaces bounded in practice.
         for candidate in source_covers {
@@ -281,6 +295,9 @@ mod tests {
             depth: brightness,
             brightness,
             gradient: None,
+            illumination: [brightness; 3],
+            light_gradient: None,
+            rgb_gradient: None,
             outline: None,
             cap: false,
             visibility_pieces: None,

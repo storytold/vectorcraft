@@ -84,6 +84,57 @@ fn new_stops_recolour_the_points() {
     assert_eq!((f.points[0].color.to_hex(), f.points.last().unwrap().color.to_hex()), ("#ff0000".into(), "#0000ff".into()));
 }
 
+/// A CMYK color's inks.
+fn inks(c: Color) -> [f32; 4] {
+    match c {
+        Color::Cmyk { c, m, y, k } => [c, m, y, k],
+        c => panic!("a CMYK color expected: {c:?}"),
+    }
+}
+
+/// Cyan and black inks only, adding up to one.
+fn cyan_and_black(c: Color) -> bool {
+    let [c, m, y, k] = inks(c);
+    m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5
+}
+
+#[test]
+fn cmyk_stops_recolor_the_points_with_inks() {
+    let cyan_to_black = json!([{"offset": 0, "color": {"c": 1, "m": 0, "y": 0, "k": 0}}, {"offset": 1, "color": {"c": 0, "m": 0, "y": 0, "k": 1}}]);
+    let (mut s, id) = freeform_rect();
+    run(&mut s, "paint.editGradient", json!({"stops": cyan_to_black}));
+    let f = points(&s, id);
+    let n = f.points.len();
+    for (i, p) in f.points.iter().enumerate() {
+        let k = i as f32 / (n - 1) as f32;
+        let [c, m, y, kk] = inks(p.color);
+        assert!((c - (1.0 - k)).abs() < 1e-5 && m.abs() < 1e-5 && y.abs() < 1e-5 && (kk - k).abs() < 1e-5, "point {i}: {:?}", p.color);
+    }
+    // A CMYK gradient switched to freeform places points with inks.
+    let mut s = session();
+    let id = shape(&mut s, "shape.rectangle", 100.0, 100.0, 100.0, 100.0);
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": cyan_to_black}}));
+    run(&mut s, "paint.editGradient", json!({"kind": "freeform"}));
+    assert!(points(&s, id).points.iter().all(|p| cyan_and_black(p.color)), "{:?}", points(&s, id).points);
+}
+
+#[test]
+fn points_added_between_cmyk_points_take_inks() {
+    let (mut s, id) = freeform_rect();
+    let n = points(&s, id).points.len();
+    for i in 0..n {
+        let c = if i % 2 == 0 { json!({"c": 1, "m": 0, "y": 0, "k": 0}) } else { json!({"c": 0, "m": 0, "y": 0, "k": 1}) };
+        run(&mut s, "paint.freeform.setPoint", json!({"index": i, "color": c}));
+    }
+    run(&mut s, "paint.freeform.addLine", json!({"points": [0, 1]}));
+    let i = run(&mut s, "paint.freeform.splitLine", json!({"line": 0, "segment": 0}))["index"].as_u64().unwrap() as usize;
+    let split = points(&s, id).points[i].color;
+    assert!(cyan_and_black(split), "the split point: {split:?}");
+    let i = run(&mut s, "paint.freeform.addPoint", json!({"at": [150, 150]}))["index"].as_u64().unwrap() as usize;
+    let added = points(&s, id).points[i].color;
+    assert!(cyan_and_black(added), "the added point: {added:?}");
+}
+
 #[test]
 fn transforms_and_warps_move_the_points() {
     let (mut s, id) = freeform_rect();

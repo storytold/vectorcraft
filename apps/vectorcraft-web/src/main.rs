@@ -17,11 +17,15 @@
 //! language code) stands in for the browser's languages when the interface language is Automatic.
 
 #[cfg(target_arch = "wasm32")]
+mod api;
+#[cfg(target_arch = "wasm32")]
 mod fonts;
 #[cfg(target_arch = "wasm32")]
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;
+#[cfg(any(target_arch = "wasm32", test))]
+mod saved_files;
 #[cfg(target_arch = "wasm32")]
 mod web;
 

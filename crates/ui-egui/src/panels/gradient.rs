@@ -84,18 +84,19 @@ pub(crate) fn dropped_link(app: &VectorcraftApp, params: &Value) -> Option<(Stri
 
 /// Recolor the selected stop of the gradient behind the active proxy with `c`, as dropping the
 /// paint of `params` on the stop does (fully opaque, linked by [`dropped_link`]), or the selected
-/// point of a freeform gradient; the stop or point stays selected. Returns false, and changes
-/// nothing, when the active paint is not a gradient or no stop or point is selected.
+/// point of a freeform gradient; the stop or point stays selected and keeps the color's model.
+/// Returns false, and changes nothing, when the active paint is not a gradient or no stop or point
+/// is selected.
 pub(crate) fn recolor_selected(app: &mut VectorcraftApp, c: Color, params: &Value) -> bool {
     let Paint::Gradient(g) = active_paint(app) else { return false };
     if g.gradient.kind == GradientKind::Freeform {
         let Some(i) = app.session.selected_freeform_point().filter(|i| *i < shown_points(&g).points.len()) else { return false };
-        edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": super::color_json(&c) }));
+        edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": super::color_json(&c), "keepModel": true }));
         return true;
     }
     let Some(i) = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len()) else { return false };
     let (v, i) = drop_color(&g.gradient, Some(i), 0.0, c, dropped_link(app, params));
-    set_stops(app, &v, Some(i), Live::Released);
+    set_stops_keeping_models(app, &v, Some(i), Live::Released);
     true
 }
 
@@ -167,7 +168,19 @@ fn edit(app: &mut VectorcraftApp, params: Value, phase: Live) {
 /// Write `stops` to the gradient behind the active proxy (live while dragging) and, once
 /// released, select stop `select` (the panel, the stop popover and the Color panel share this).
 pub(crate) fn set_stops(app: &mut VectorcraftApp, stops: &[GradientStop], select: Option<usize>, phase: Live) {
-    edit(app, json!({ "stops": stops_json(stops) }), phase);
+    write_stops(app, json!({ "stops": stops_json(stops) }), select, phase);
+}
+
+/// [`set_stops`] with `keepModel`, for colors copied from existing paint (a swatch, a dropped
+/// color, a sample of the gradient) and for the Color panel's sliders, which work in the model
+/// picked there: the stops keep the color models given, in a CMYK document too.
+pub(crate) fn set_stops_keeping_models(app: &mut VectorcraftApp, stops: &[GradientStop], select: Option<usize>, phase: Live) {
+    write_stops(app, json!({ "stops": stops_json(stops), "keepModel": true }), select, phase);
+}
+
+/// Edit the stops with `params` (live while dragging) and, once released, select stop `select`.
+fn write_stops(app: &mut VectorcraftApp, params: Value, select: Option<usize>, phase: Live) {
+    edit(app, params, phase);
     if phase == Live::Released
         && let Some(i) = select
         && app.session.selected_stop() != Some(i)
@@ -696,7 +709,9 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         set_pstate(ui.ctx(), MID_SELECTED, None::<(usize, Option<NodeId>)>);
     }
     match changed {
-        Some((v, phase)) => set_stops(app, &v, select, phase),
+        // Stops added, moved or dropped on the ramp carry colors the gradient or a swatch has, or
+        // sample the gradient: they keep their models.
+        Some((v, phase)) => set_stops_keeping_models(app, &v, select, phase),
         None => {
             if let Some(i) = select.filter(|i| sel != Some(*i)) {
                 select_stop(app, Some(i));
@@ -754,6 +769,26 @@ mod tests {
         assert_eq!((v.len(), i, v[1].color, v[1].opacity), (2, 1, red, 1.0));
         let (v, i) = drop_color(&g, None, 0.3, red, None);
         assert_eq!((v.len(), i, v[1].color, v[1].offset, v[1].opacity), (3, 1, red, 0.3, 1.0));
+    }
+
+    /// In a CMYK document an RGB swatch's color applied to the selected stop or freeform point
+    /// keeps its model, as the swatch applied to a fill does.
+    #[test]
+    fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
+        let stops = json!([{"offset": 0, "color": {"c": 0, "m": 0, "y": 0, "k": 0}}, {"offset": 1, "color": {"c": 0, "m": 0, "y": 0, "k": 1}}]);
+        let mut app = app(json!({"gradient": {"stops": stops}}));
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let orange = Color::rgb8(255, 128, 0);
+        app.run("swatch.new", json!({"name": "Screen", "color": "#ff8000", "keepModel": true})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        assert!(recolor_selected(&mut app, orange, &json!({"swatch": "Screen"})));
+        let Paint::Gradient(g) = active_paint(&app) else { panic!("a gradient fill") };
+        assert_eq!(g.gradient.stops[1].color, orange);
+        app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
+        app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
+        assert!(recolor_selected(&mut app, orange, &json!({"swatch": "Screen"})));
+        let Paint::Gradient(g) = active_paint(&app) else { panic!("a gradient fill") };
+        assert_eq!(g.freeform.map(|f| f.points[1].color), Some(orange));
     }
 
     #[test]
@@ -1020,6 +1055,27 @@ mod tests {
         assert_eq!((st.swatch.as_deref(), st.tint, st.color.to_hex()), (Some("Ink"), 1.0, "#cc0066".to_string()));
         app.run("swatch.edit", json!({"name": "Ink", "color": "#0066cc"})).unwrap();
         assert_eq!(hexes(&app)[0], "#0066cc");
+    }
+
+    /// In a CMYK document a color dropped on the ramp of an RGB gradient keeps its model, as the
+    /// gradient's other stops do.
+    #[test]
+    fn a_color_dropped_on_the_ramp_keeps_its_model_in_a_cmyk_document() {
+        let mut app = app(json!({"gradient": {}}));
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let rgb = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": rgb}, "keepModel": true})).unwrap();
+        let mut p = Panel::new();
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+        let at = pos2((a.x + b.x) / 2.0, a.y - 20.0);
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(red)));
+        p.frame(&mut app, vec![Event::PointerMoved(at)], Modifiers::NONE);
+        let up = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+        p.frame(&mut app, vec![up], Modifiers::NONE);
+        let stops: Vec<Color> = fill(&app).gradient.stops.iter().map(|s| s.color).collect();
+        assert_eq!(stops, [Color::WHITE, red, Color::BLACK]);
     }
 
     #[test]

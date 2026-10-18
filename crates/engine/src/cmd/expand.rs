@@ -318,7 +318,7 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
 /// fill's opacity, blend mode and effects other than geometry effects ([`fill_effects`]).
 fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &FillLayer, g: &GradientPaint, to: GradientTo) -> Option<Node> {
     let content = if g.gradient.kind == GradientKind::Freeform {
-        let m = GradientMesh::for_path_with(path, FREEFORM_MESH, FREEFORM_MESH, &*gradient_sampler(g, bounds))?;
+        let m = GradientMesh::for_path_with(path, FREEFORM_MESH, FREEFORM_MESH, &*gradient_sampler(g, bounds, d.color_mode.model()))?;
         vec![Node::new(d.alloc_id(), NodeKind::Mesh(m))]
     } else {
         let frame = Frame::new(g, bounds);
@@ -720,27 +720,22 @@ fn tile_art(d: &mut Document, l: &Node, f: &FillLayer, tiles: &[Node]) -> Option
 
 /// The colour and opacity gradient fill `g` paints at a document point of an object whose box is
 /// `bounds`, as the canvas draws it (the end colours continue past the ends). Colours stay in the
-/// colour model their stops (or freeform points) share; display RGB where models differ.
-pub(crate) fn gradient_sampler(g: &GradientPaint, bounds: Rect) -> Box<dyn Fn(Point) -> (Color, f32) + '_> {
+/// color model their stops share; display RGB where models differ. Freeform points mix in the
+/// model they share ([`vectorcraft_color::Freeform::model_field`]); where their models differ, the
+/// RGB color they mix to is stored in `doc_model` (the document's model) the way `paint.setFill`
+/// stores an RGB color ([`super::paint::stored_color`]).
+pub(crate) fn gradient_sampler(g: &GradientPaint, bounds: Rect, doc_model: Model) -> Box<dyn Fn(Point) -> (Color, f32) + '_> {
     if g.gradient.kind == GradientKind::Freeform {
         let b = bounds.abs();
-        let f = g.freeform_on(b);
-        let model = shared_model(f.points.iter().map(|p| p.color));
-        let field = f.field(spread_scale(b));
+        let field = g.freeform_on(b).model_field(spread_scale(b));
+        let store_in = (field.model().is_none() && doc_model != Model::Rgb).then_some(doc_model);
         return Box::new(move |p| {
-            let ([r, g, b], a) = field.sample(p);
-            let c = Color::rgb(r, g, b);
-            (model.map_or(c, |m| c.in_model(m)), a)
+            let (c, a) = field.sample(p);
+            (super::paint::stored_color(store_in, c), a)
         });
     }
     let geom = g.resolve(bounds);
     Box::new(move |p| g.gradient.sample_with(geom.param_at(g.gradient.kind, p) as f32, lerp_color))
-}
-
-/// The colour model all of `colors` share.
-fn shared_model(mut colors: impl Iterator<Item = Color>) -> Option<Model> {
-    let m = colors.next()?.model();
-    colors.all(|c| c.model() == m).then_some(m)
 }
 
 /// Where the colour changes along a gradient between parameters `t0` and `t1`: both ends, every

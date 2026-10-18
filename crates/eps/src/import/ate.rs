@@ -14,9 +14,11 @@
 //!
 //! Where type sits: a story lays its lines out round a point `F` (the anchor: the start of a line of
 //! left-aligned type, the middle of a centred one, the end of a right-aligned one), each line with an
-//! offset from it. The frame of the story gives a matrix that carries that layout onto the canvas of
-//! the app, which is 16383 points a side; the canvas's centre, 8191.5, is the centre of the file's
-//! `%AI3_TemplateBox`. See [`Story::place`].
+//! offset from it. A right-to-left paragraph (key `33` of its attributes) swaps the two: its
+//! "left"-aligned lines end at the anchor and its "right"-aligned ones start there. The frame of the
+//! story gives a matrix that carries that layout onto the canvas of the app, which is 16383 points a
+//! side; the canvas's centre, 8191.5, is the centre of the file's `%AI3_TemplateBox`. See
+//! [`Story::place`].
 
 use std::collections::BTreeMap;
 
@@ -253,6 +255,9 @@ enum FrameKind {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Para {
     justify: u8,
+    /// A right-to-left paragraph: its left and right alignments are each other's (the line of
+    /// "left"-aligned type ends at its anchor).
+    rtl: bool,
     first_indent: f64,
     left_indent: f64,
     right_indent: f64,
@@ -429,6 +434,7 @@ impl Texts {
         let num = |k: &str| pick(k).and_then(Val::num).filter(|v| v.abs() < 1e5).unwrap_or(0.0);
         Para {
             justify: pick("0").and_then(Val::num).map_or(0, |v| v.clamp(0.0, 6.0) as u8),
+            rtl: pick("33").and_then(Val::num) == Some(1.0),
             first_indent: num("1"),
             left_indent: num("2"),
             right_indent: num("3"),
@@ -548,6 +554,11 @@ impl Story {
     /// How many bytes of text the story has.
     pub(super) fn len(&self) -> usize {
         self.text.len()
+    }
+
+    /// The story's characters, with `\r` ending paragraphs and `\x03` ending lines.
+    pub(super) fn text(&self) -> &str {
+        &self.text
     }
 
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
@@ -742,6 +753,8 @@ impl Story {
 fn para_style(p: &Para, scale: f64) -> ParaStyle {
     ParaStyle {
         justify: match p.justify {
+            0 if p.rtl => Justify::Right,
+            1 if p.rtl => Justify::Left,
             1 => Justify::Right,
             2 => Justify::Center,
             3 => Justify::JustifyLeft,
@@ -789,6 +802,20 @@ fn art_scale(to_doc: Affine) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn right_to_left_paragraphs_swap_left_and_right_alignment() {
+        let texts =
+            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: read(b"/33 1").unwrap(), frames: vec![] };
+        let justify = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).justify;
+        // Right to left from the document's defaults, or the paragraph's own.
+        assert_eq!(justify(b"/0 0"), Justify::Right);
+        assert_eq!(justify(b"/0 1 /33 1"), Justify::Left);
+        assert_eq!(justify(b"/0 2"), Justify::Center);
+        // Left to right keeps them.
+        assert_eq!(justify(b"/0 0 /33 0"), Justify::Left);
+        assert_eq!(justify(b"/0 1 /33 0"), Justify::Right);
+    }
 
     #[test]
     fn values_read_nested_dictionaries_lists_and_utf16_strings() {

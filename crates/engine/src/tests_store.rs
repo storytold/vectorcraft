@@ -41,6 +41,82 @@ fn saved_presets_come_back_in_the_next_session_and_renames_and_deletes_follow() 
 }
 
 #[test]
+fn a_rename_that_cannot_be_written_keeps_the_preset_under_its_old_name() {
+    let dir = fresh_dir("rename-fails").join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
+    // The test puts a folder where the new name's file goes, so the write fails as it would on a full disk.
+    std::fs::create_dir(dir.join(format!("{}.vcpdfpresets", file_stem("Screen")))).unwrap();
+    a.execute("pdf.preset.save", &json!({"name": "Web", "newName": "Screen"})).unwrap();
+
+    let mut b = Session::new();
+    b.attach_pdf_preset_store(dir.clone());
+    assert_eq!(saved_names(&mut b), ["Web"]);
+    assert_eq!(b.prefs.pdf_presets[0].description, "for screens");
+    assert!(dir.join(format!("{}.vcpdfpresets", file_stem("Web"))).is_file());
+}
+
+#[test]
+fn a_rename_that_only_changes_case_keeps_one_file() {
+    let dir = fresh_dir("rename-case").join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
+    a.execute("pdf.preset.save", &json!({"name": "Web", "newName": "WEB", "description": "renamed"})).unwrap();
+
+    let mut b = Session::new();
+    b.attach_pdf_preset_store(dir.clone());
+    assert_eq!(saved_names(&mut b), ["WEB"]);
+    assert_eq!(b.prefs.pdf_presets[0].description, "renamed");
+    assert_eq!(file_names(&dir), [format!("{}.vcpdfpresets", file_stem("WEB"))]);
+}
+
+fn file_names(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect()
+}
+
+/// Windows does not allow replacing a read-only file or writing into it, so the write fails.
+#[cfg(windows)]
+#[test]
+fn a_rename_that_only_changes_case_and_cannot_be_written_keeps_the_old_file() {
+    let dir = fresh_dir("rename-case-fails").join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
+    let old = dir.join(format!("{}.vcpdfpresets", file_stem("Web")));
+    let writable = std::fs::metadata(&old).unwrap().permissions();
+    let mut read_only = writable.clone();
+    read_only.set_readonly(true);
+    std::fs::set_permissions(&old, read_only).unwrap();
+    a.execute("pdf.preset.save", &json!({"name": "Web", "newName": "WEB"})).unwrap();
+    std::fs::set_permissions(&old, writable).unwrap();
+
+    let mut b = Session::new();
+    b.attach_pdf_preset_store(dir.clone());
+    assert_eq!(saved_names(&mut b), ["Web"]);
+    assert_eq!(b.prefs.pdf_presets[0].description, "for screens");
+    assert_eq!(file_names(&dir), [format!("{}.vcpdfpresets", file_stem("Web"))]);
+}
+
+/// Where file names keep case apart, a folder named like the new file makes the rename fail.
+#[cfg(not(any(windows, target_vendor = "apple")))]
+#[test]
+fn a_rename_that_only_changes_case_and_cannot_be_moved_keeps_the_old_preset() {
+    let dir = fresh_dir("rename-case-blocked").join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
+    std::fs::create_dir(dir.join(format!("{}.vcpdfpresets", file_stem("WEB")))).unwrap();
+    a.execute("pdf.preset.save", &json!({"name": "Web", "newName": "WEB", "description": "renamed"})).unwrap();
+
+    let mut b = Session::new();
+    b.attach_pdf_preset_store(dir.clone());
+    assert_eq!(saved_names(&mut b), ["Web"]);
+    assert_eq!(b.prefs.pdf_presets[0].description, "for screens");
+}
+
+#[test]
 fn a_folder_that_does_not_exist_yet_takes_the_presets_the_preferences_held() {
     let dir = fresh_dir("seed").join("PDF Presets");
     let mut a = Session::new();

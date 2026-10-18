@@ -103,4 +103,9 @@ fn add_to_swatches_makes_a_colour_group_in_one_step() {
     // Again: a second group with a free name.
     assert_eq!(run(&mut s, "colorTheme.addToSwatches", json!({"name": "Tide"}))["name"], "Tide 2");
     assert!(s.execute("colorTheme.addToSwatches", &json!({"name": "Nope"})).is_err());
+    // In a CMYK document the theme's colors keep their model.
+    run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": "cmyk"}));
+    run(&mut s, "colorTheme.addToSwatches", json!({"name": "Tide"}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Tide").expect("the group");
+    assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), s.prefs.color_themes[0].colors);
 }

@@ -634,7 +634,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "attributes.openUrl",
         "Browser",
         "",
-        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button) → {url}",
+        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button; http, https and mailto URLs only; not over the control channel or MCP) → {url}",
     ),
     (
         "ui.javascriptFilesDialog",
@@ -665,6 +665,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Corners…",
         "",
         "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget opens it too): OK runs object.setLiveShape",
+    ),
+    (
+        "ui.justification",
+        "Justification…",
+        "",
+        "{} open Justification (the Paragraph panel menu's Justification…) on the paragraphs the Paragraph panel acts on, filled in with the values it shows, with Preview (dialog `justification`: wordMin, wordDesired, wordMax 0..1000, letterMin, letterDesired, letterMax -100..500, glyphMin, glyphDesired, glyphMax 50..200 (percent), autoLeading 0..500 (percent), singleWord (fullJustify|alignLeft|alignCenter|alignRight), preview): OK runs text.setFormat with the values that changed, as one undo step, and is disabled while a row's Minimum exceeds its Desired or Desired its Maximum; an error with no type selected",
     ),
     (
         "ui.hyphenation",
@@ -742,6 +748,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.openRecent30", "Open Recent File 30", "", "{}"),
     ("file.reveal", "Show in Folder", "", "{} show the document's file in the system file manager (desktop) → {path}"),
     (
+        "file.cancelExport",
+        "Cancel Export",
+        "",
+        "{} stop every export running in the background (Background Export): an export stops between artboards and writes no file once cancelled → {cancelled: n}",
+    ),
+    (
+        "file.exportInBackground",
+        "Continue in Background",
+        "",
+        "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
@@ -751,7 +769,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "links.editOriginal",
         "Edit Original",
         "",
-        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
+        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original; only a regular file with the extension of a format document.open reads, and not over the control channel or MCP); a placed document's file opens here in a new tab, and saving it updates the documents placing it → {path}; edits saved elsewhere show after links.update",
     ),
     (
         "links.reveal",
@@ -824,7 +842,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "css.exportFile",
         "Export CSS…",
         "",
-        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…]}",
+        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first)}",
     ),
     (
         "file.print",
@@ -1095,6 +1113,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         "file.reveal" => io::reveal(app),
+        "file.cancelExport" => Ok(io::cancel_exports(app)),
+        "file.exportInBackground" => Ok(io::hide_exports(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -1229,6 +1249,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
+            let print = app.session.prefs.display_print_size;
             // Selection & Anchor Display › Zoom to Selection: the selection comes to the middle.
             let focus = if app.session.prefs.zoom_to_selection { app.selection_box().map(|b| b.center()) } else { None };
             match app.view_mut() {
@@ -1237,13 +1258,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                     if let Some(c) = focus {
                         v.center = c;
                     }
-                    Ok(json!({"zoom": v.zoom * 100.0}))
+                    Ok(json!({"zoom": crate::state::zoom_display_percent(v.zoom, print)}))
                 }
                 None => Err("no document".into()),
             }
         }
         "view.setZoom" => {
-            let z = p.get("zoom").and_then(Value::as_f64).unwrap_or(100.0) / 100.0;
+            let print = app.session.prefs.display_print_size;
+            let z = crate::state::zoom_from_display_percent(p.get("zoom").and_then(Value::as_f64).unwrap_or(100.0), print);
             let center =
                 p.get("center").and_then(Value::as_array).and_then(|a| Some(vectorcraft_geom::Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
             match app.view_mut() {
@@ -1577,6 +1599,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.corners" => crate::dialogs::corners::open(app, p),
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),
+        "ui.justification" => crate::dialogs::justification::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
@@ -1896,6 +1919,13 @@ fn shows_a_name(id: &str, label: &str) -> bool {
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
+/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
+/// an Effect › Plug-ins effect), by the plug-in's own name? Told by the item itself, so it holds
+/// while another thread installs or removes plug-ins.
+pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
+    id == "plugin.dialog" || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
+}
+
 /// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
 /// around a name (Undo *Move*, Reset *Essentials*, Last Effect: *Drop Shadow*) are translated as
 /// templates so the name can move; names that are user data (files, views, fonts, custom
@@ -1906,9 +1936,11 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     match id {
         "edit.undo" | "edit.redo" => {
             let last = app.session.active().and_then(|d| if id == "edit.undo" { d.history.undo.last() } else { d.history.redo.last() });
+            // The step's name as the History panel lists it.
+            let name = crate::panels::history::shown;
             match last {
-                Some(h) if id == "edit.undo" => fmt(tl!("Undo {name}"), &[("name", tl!(&h.label))]),
-                Some(h) => fmt(tl!("Redo {name}"), &[("name", tl!(&h.label))]),
+                Some(h) if id == "edit.undo" => fmt(tl!("Undo {name}"), &[("name", &name(h))]),
+                Some(h) => fmt(tl!("Redo {name}"), &[("name", &name(h))]),
                 None => tl!(if id == "edit.undo" { "Undo" } else { "Redo" }).to_string(),
             }
         }
@@ -2192,12 +2224,14 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 /// Commands that would act on the text being typed, held back while an IME composes in the Type
 /// tool (its marked text isn't committed yet): Undo/Redo — the native menu takes ⌘Z ahead of the
 /// IME —, the clipboard and the selection.
+/// Clear History also waits: it ends the typing session as Undo does.
 pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
     app.session.tool_composing()
         && (matches!(
             id,
             "edit.undo" | "edit.redo" | "edit.cut" | "edit.copy" | "edit.clear" | "edit.duplicate" | "select.all" | "select.none" | "select.inverse"
-        ) || id.starts_with("edit.paste"))
+        ) || id == "edit.clearHistory"
+            || id.starts_with("edit.paste"))
 }
 
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
@@ -2214,6 +2248,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -2247,7 +2282,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
-        "ui.hyphenation" => crate::panels::character::text_style(app).is_some(),
+        "ui.hyphenation" | "ui.justification" => crate::panels::character::text_style(app).is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
@@ -3381,11 +3416,13 @@ fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
 
 /// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
 /// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
-/// Copy and Paste act on the field's text, as their keys do; everything else (and those commands
-/// with no field focused) goes to [`invoke`].
+/// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
+/// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
+/// commands with no field focused) goes to [`invoke`].
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
+        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
 }
@@ -3952,17 +3989,17 @@ pub const DYNAMIC_LABELS: &[&str] = &[
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
-/// data (fonts, recent files, saved views, libraries), the point sizes and the view angles are
-/// left out.
+/// data (fonts, recent files, saved views, libraries, installed plug-ins), the point sizes and the
+/// view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
-    fn user_data(id: &str) -> bool {
-        hidden_when_disabled(id) || id.starts_with("type.recentFont")
+    fn user_data(id: &str, params: &Value) -> bool {
+        hidden_when_disabled(id) || id.starts_with("type.recentFont") || lists_plugin(id, params)
     }
     fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
         for it in items {
             match it {
-                Item::Cmd(l, id, _) => {
+                Item::Cmd(l, id, params) => {
                     let size = l.strip_suffix(" pt").is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()));
                     // View › Rotate View lists angles: an optional minus sign, digits and a degree sign.
                     let angle = l
@@ -3971,7 +4008,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
                         .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
                     // VectorCraft › Language lists each language by its own name.
                     let language_name = *id == "app.language" && crate::i18n::Lang::all().any(|lang| lang.name() == *l);
-                    if !user_data(id) && !size && !angle && !language_name && *l != "—" {
+                    if !user_data(id, params) && !size && !angle && !language_name && *l != "—" {
                         out.insert(l.to_string());
                     }
                 }
@@ -4202,6 +4239,31 @@ mod tests {
         }
     }
 
+    /// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it
+    /// (`panels::history::step_name`), including a step named after an effect whose catalog holds
+    /// only the effect's menu row with an ellipsis, as Japanese does for Feather.
+    #[test]
+    fn undo_and_redo_name_the_step_as_the_history_panel_does() {
+        let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
+        crate::i18n::set_current(ja);
+        let mut app = app_with_a_rectangle();
+        app.run("effect.apply", json!({"effect": "stylize.feather"})).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|h| h.label.as_str()), Some("Feather"));
+        let shown = |app: &VectorcraftApp, id: &'static str| {
+            let item = c(if id == "edit.undo" { "Undo" } else { "Redo" }, id);
+            match entry(app, &item) {
+                Some(Entry::Item(row)) => row.label.to_string(),
+                _ => panic!("{id} is not a menu item"),
+            }
+        };
+        assert_eq!(shown(&app, "edit.undo"), "ぼかしを取り消す");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shown(&app, "edit.redo"), "ぼかしをやり直す");
+        assert_eq!(shown(&app, "edit.undo"), "長方形を取り消す", "a step with a plain row");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(shown(&app, "edit.redo"), "Redo Feather");
+    }
+
     /// Type › Optical Margin Alignment runs `type.opticalMarginAlignment`, needs a selection, and
     /// is checked while the selected type has it on. Its check, and Type Orientation's, read the
     /// type inside a selected group too.
@@ -4292,6 +4354,22 @@ mod tests {
         app.run("file.new", json!({})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
         app
+    }
+
+    /// Edit › Undo and Edit › Redo name a step named after a style as the History panel lists it:
+    /// the template's translation with the style's name in it.
+    #[test]
+    fn undo_and_redo_name_a_style_step_around_the_style_name() {
+        let mut app = app_with_a_rectangle();
+        let text = app.run("text.create", json!({"x": 0, "y": 40, "text": "Hello"})).unwrap()["id"].clone();
+        app.run("charStyle.new", json!({"name": "Brush"})).unwrap();
+        app.run("charStyle.apply", json!({"name": "Brush", "id": text})).unwrap();
+        crate::i18n::set_current(crate::i18n::Lang::from_code("ja").expect("ja registered"));
+        assert_eq!(display_label(&app, "edit.undo", "Undo"), "スタイル「Brush」を適用を取り消す");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(display_label(&app, "edit.redo", "Redo"), "スタイル「Brush」を適用をやり直す");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(display_label(&app, "edit.redo", "Redo"), "Redo Apply Brush");
     }
 
     #[test]

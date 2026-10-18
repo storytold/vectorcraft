@@ -538,6 +538,36 @@ fn artboards() {
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
 }
 
+/// A variable library in the document data isn't read: a note gives how many variables and data
+/// sets it has, counting the elements of the library alone (a data set's element for a variable named
+/// `variable` isn't a variable).
+#[test]
+fn a_variable_library_is_noted_with_its_counts() {
+    use vectorcraft_testkit::ai::variable_library;
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let notes = |library: &str| read_ok(&format!("{library}{square}")).warnings.into_iter().filter(|w| w.contains("variables")).collect::<Vec<_>>();
+    assert_eq!(
+        notes(&variable_library(&["variable", "Team"], &["Home", "Away", "Third"])),
+        ["the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them"]
+    );
+    assert_eq!(
+        notes(&variable_library(&["Team"], &["Home"])),
+        ["the file's variables and data sets weren't read (variables: 1, data sets: 1): the Variables panel doesn't list them"]
+    );
+    assert!(notes(&variable_library(&[], &[])).is_empty(), "an empty library gives no warning");
+    assert!(notes("").is_empty());
+    // When the reader can't read the layers, `variables` still counts the library, for the warning
+    // of the file read from its PDF part.
+    let unread = stream(&format!("{}{}", variable_library(&["Team"], &["Home", "Away"]), layer("1 Zz\n")));
+    assert!(read(unread.as_bytes()).is_err());
+    assert_eq!(variables(unread.as_bytes()), read::VariableLibrary { variables: 1, data_sets: 2 });
+    // The same when the reading stops before it reaches the library (at an `LB` without its layer).
+    let early = stream(&format!("LB\n{}{square}", variable_library(&["Team"], &["Home", "Away"])));
+    assert!(read(early.as_bytes()).is_err());
+    assert_eq!(variables(early.as_bytes()), read::VariableLibrary { variables: 1, data_sets: 2 });
+    assert_eq!(variables(stream(&square).as_bytes()), read::VariableLibrary::default());
+}
+
 #[test]
 fn a_drawn_look_stands_for_its_object() {
     // The look (a group, with a part on `%_` lines for newer readers), then the object on `%_`
@@ -645,6 +675,40 @@ fn images_with_alpha_channels() {
     // Data cut short: the image goes, with a warning.
     let r = read(&image("[ 1 0 0 1 0 100 ]", (4, 4), ("DeviceRGB", 3, 0), &[1, 2, 3], 6)).unwrap();
     assert!(art(&r.doc).is_empty() && r.warnings.iter().any(|w| w.contains("cut short")));
+}
+
+/// Editing data `data` opens without its one image and with the warning "an image VectorCraft can't read was left out" once.
+fn image_left_out_with_a_warning(data: &[u8]) {
+    let r = read(data).unwrap();
+    assert!(art(&r.doc).is_empty(), "{:#?}", art(&r.doc));
+    let left_out = r.warnings.iter().filter(|w| *w == "an image VectorCraft can't read was left out").count();
+    assert_eq!(left_out, 1, "{:?}", r.warnings);
+}
+
+#[test]
+fn an_image_without_a_matrix_is_left_out_with_a_warning() {
+    image_left_out_with_a_warning(&image("", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3));
+}
+
+#[test]
+fn an_image_with_too_few_operands_is_left_out_with_a_warning() {
+    // The operands hold 10 numbers after the matrix, one short of the binary flag.
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (1, 1), ("DeviceRGB", 3, 0), b"abc", 3)).unwrap();
+    let data = text.replacen("] 0 0 1 1 1 1 8 3 0 0 1 0 4 4 0 0\n", "] 0 0 1 1 1 1 8 3 0 0\n", 1);
+    assert_ne!(data, text);
+    image_left_out_with_a_warning(data.as_bytes());
+}
+
+#[test]
+fn an_image_whose_matrix_isnt_six_numbers_is_left_out_with_a_warning() {
+    image_left_out_with_a_warning(&image("[ 1 0 0 1 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3));
+}
+
+#[test]
+fn an_image_whose_matrix_has_no_area_is_left_out_with_a_warning() {
+    image_left_out_with_a_warning(&image("[ 0 0 0 0 0 0 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3));
+    // This matrix maps the image onto a line.
+    image_left_out_with_a_warning(&image("[ 1 2 2 4 0 100 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3));
 }
 
 /// The raster matrix `[a b c d tx ty]` is an art-space matrix (y up) applied to the image's pixels

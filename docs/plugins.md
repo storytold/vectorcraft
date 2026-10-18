@@ -33,7 +33,8 @@ Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>"
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns) with a live
-preview; without parameters it runs at once. **File › Open** of a `.wasm` file installs it too (on the web this is
+preview; without parameters it runs at once. Parameters too many for the window's height scroll inside the dialog,
+which keeps its heading and buttons in view. **File › Open** of a `.wasm` file installs it too (on the web this is
 how plug-ins get in).
 
 **Preference folder.** Edit › Preferences › Performance & Storage › *Additional Plug-ins Folder*: when set, every

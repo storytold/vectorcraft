@@ -371,7 +371,7 @@ impl<W: std::io::Write> std::io::Write for Counted<W> {
 /// `separateArtboards`, those `range` names (default all).
 fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<usize>> {
     // A legacy .ai file is a file per artboard already.
-    if !is_native(f) || !bool_or(p, "separateArtboards", false) || super::legacy_ai::wanted(cmd, p)? {
+    if !is_native(f) || !bool_or(p, "separateArtboards", false) || super::legacy_ai::wanted(cmd, f, p)? {
         return Ok(vec![]);
     }
     let range = str_param(p, "range").filter(|r| !r.trim().is_empty()).map(str::to_string);
@@ -424,7 +424,7 @@ const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens i
 /// The shared Save and Export encoder for PDF-compatible `.ai` files (and `.ait` templates, the
 /// same file).
 pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Encoded> {
-    if super::legacy_ai::wanted(cmd, p)? {
+    if super::legacy_ai::wanted(cmd, f, p)? {
         return super::legacy_ai::encode(cmd, f, doc, p);
     }
     let mut params = if p.is_object() { p.clone() } else { json!({}) };
@@ -508,7 +508,7 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     }
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
-    let legacy = super::legacy_ai::wanted(cmd, &params)?;
+    let legacy = super::legacy_ai::wanted(cmd, plan.format, &params)?;
     if let (Some(o), "ai" | "ait") = (params.as_object_mut(), plan.format.id) {
         // Save keeps every artboard; exports may choose a subset instead. A legacy .ai file per
         // artboard keeps a range given: the artboards to save.
@@ -558,7 +558,7 @@ impl SaveJob {
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
         let enc = if matches!(f.id, "ai" | "ait") { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
         // A legacy .ai file per artboard.
-        let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, &self.params)?;
+        let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, f, &self.params)?;
         if enc.files.len() != 1 && !per_artboard {
             return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
@@ -797,7 +797,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai; aiVersion 7 is an error); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),

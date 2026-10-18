@@ -175,6 +175,10 @@ fn redefine_updates_every_linked_object() {
     let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
     assert_eq!((fill(&s, b), fill(&s, c)), (blue.clone(), blue));
     assert_eq!(linked(&mut s, "S"), vec![a.0, b.0, c.0]);
+    // The step is named from a template with the style's name in it.
+    let step = s.doc().unwrap().history.undo.last().unwrap().clone();
+    let named = step.named().map(|n| (n.template, n.name.as_str(), n.built_in));
+    assert_eq!((step.label.as_str(), named), ("Redefine Graphic Style “S”", Some(("Redefine Graphic Style “{name}”", "S", false))));
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(fill(&s, b), Paint::solid(Color::WHITE));
 }

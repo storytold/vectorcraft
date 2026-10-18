@@ -194,6 +194,12 @@ fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(D
     )
 }
 
+/// Do `opts` read every page of the PDF `bytes`: no `pages`, or a range that names each one?
+fn every_page(bytes: &[u8], opts: &LoadOptions) -> bool {
+    let Some(range) = &opts.pages else { return true };
+    vectorcraft_pdf::info(bytes, opts.password.as_deref()).is_ok_and(|i| parse_range(range, i.pages.len()).is_ok_and(|p| p.len() == i.pages.len()))
+}
+
 /// [`load`] with `document.open` options (the PDF pages, box and password; the DXF options).
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
@@ -239,9 +245,11 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
                     Ok(alone.unwrap_or_else(|| through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit)))
                 }
-                // Saved without its PDF part: the editing copy is all the file has.
+                // Saved without its PDF part: the editing copy is all the file has (`pages` that
+                // name every page read it as the whole file).
                 Err(e) if e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string() => {
-                    from_editing_data_alone(bytes, opts).unwrap_or(Err(e))
+                    let whole = LoadOptions { pages: None, ..opts.clone() };
+                    from_editing_data_alone(bytes, if every_page(bytes, opts) { &whole } else { opts }).unwrap_or(Err(e))
                 }
                 Err(e) => Err(e),
             })?
@@ -270,9 +278,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     {
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }
-    // Threaded type read from a file flows through its frames.
+    // Threaded type read from a file flows through its frames (the threaded type of a restored
+    // document keeps its text as saved), and every frame of a thread takes its first frame's
+    // Optical Margin Alignment setting.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
+    } else if !doc.text_threads.is_empty() {
+        crate::cmd::threads::share_optical_margin(&mut doc);
     }
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
@@ -293,8 +305,11 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
     // The importer reads on a thread of its own (for its stack): what may be read is what may be
     // read here.
     let scope = crate::file_access::ScopeHandle::capture();
+    // Paths are checked as stored in a document inside `folder` (only the folder is used).
+    let document = folder.map(|f| std::path::Path::new(f).join("-").to_string_lossy().into_owned());
     let read = |path: &str| {
         scope.clone().run(|| {
+            let path = &super::document_path(path, document.as_deref()).ok()?;
             // Only files (not folders or devices) are read.
             file_stamp(path)?;
             let bytes = read_file(path).ok()?;
@@ -470,8 +485,14 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
 /// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
+/// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
+/// A Targa file, which starts with no signature, is recognized by its header
+/// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
+/// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
+/// as RGBA, need more than [`MAX_RASTER_ALLOC`] is refused as too large to draw.
 /// A TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
@@ -484,6 +505,9 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    if reader.format().is_none() && super::tgaread::is_targa(bytes) {
+        reader.set_format(image::ImageFormat::Tga);
+    }
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
     reader.limits(limits);
@@ -502,10 +526,25 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         let cms = vectorcraft_color::cms::active();
         vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
-    let img = match (f.id == "tiff").then(extra_samples).flatten() {
+    let mut img = match (f.id == "tiff").then(extra_samples).flatten() {
         Some(img) => img,
-        None => reader.decode().map_err(err)?.to_rgba8(),
+        None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
+            Some(read) => read.map_err(err)?,
+            None => {
+                use image::ImageDecoder as _;
+                let decoder = reader.into_decoder().map_err(err)?;
+                // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
+                let (w, h) = decoder.dimensions();
+                if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
+                    return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
+                }
+                image::DynamicImage::from_decoder(decoder).map_err(err)?.to_rgba8()
+            }
+        },
     };
+    if f.id == "tga" {
+        super::tgaread::fix_alpha(bytes, &mut img);
+    }
     as_png(img, ppi)
 }
 

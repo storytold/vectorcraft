@@ -131,7 +131,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them.
+/// output, else the image); the web downloads them. The status bar shows the export's first
+/// warning.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -145,8 +146,11 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
             io::write_to(&mut app.services, name, &bytes)?;
             names.push(json!(name));
         }
-        app.status(format!("Downloaded {} file(s)", names.len()));
-        return Ok(json!({ "files": names, "bytes": r["bytes"] }));
+        match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
+            Some(first) => io::report_saved(app, first, &r),
+            None => app.status(format!("Downloaded {} file(s)", names.len())),
+        }
+        return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
     let ext = if s.output == WebOutput::Html { "html" } else { s.format.ext() };
     let path = io::target_path(app, path, ext)?;
@@ -155,12 +159,23 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
     }
     let r = app.run("document.exportForWeb", p)?;
     let n = r["files"].as_array().map_or(0, Vec::len);
-    app.status(if n > 1 { format!("Saved {n} files beside {path}") } else { format!("Saved {path}") });
+    if n > 1 && !has_warnings(&r) {
+        app.status(format!("Saved {n} files beside {path}"));
+    } else {
+        io::report_saved(app, &path, &r);
+    }
     Ok(r)
 }
 
-/// `file.saveForWeb.browser`: the HTML page and its images in a temporary folder, opened in the
-/// default browser (desktop).
+/// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
+/// [`io::report_saved`] puts the first in the status bar as a save's note.
+fn has_warnings(r: &Value) -> bool {
+    r["warnings"].as_array().is_some_and(|w| !w.is_empty())
+}
+
+/// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
+/// default browser (desktop). When the export has warnings, the status bar shows the first in
+/// place of "Opened …".
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
@@ -173,17 +188,47 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         o.insert("path".into(), json!(path));
         o.insert("output".into(), json!("html"));
     }
-    app.run("document.exportForWeb", q)?;
+    let r = app.run("document.exportForWeb", q)?;
     app.open_url(&io::file_url(&path));
-    Ok(json!({ "path": path }))
+    if has_warnings(&r) {
+        io::report_saved(app, &path, &r);
+    }
+    Ok(json!({ "path": path, "warnings": r["warnings"] }))
 }
 
-/// The folder browser previews go to.
+/// The age at which a later browser preview removes an earlier preview's folder.
+#[cfg(not(target_arch = "wasm32"))]
+const PREVIEW_KEEP: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// The folder a browser preview goes to: a new one for each preview, in the temporary folder's
+/// `VectorCraft Save for Web`.
 #[cfg(not(target_arch = "wasm32"))]
 fn temp_folder() -> Result<String, String> {
-    let dir = std::env::temp_dir().join("VectorCraft Save for Web");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    Ok(dir.to_string_lossy().replace('\\', "/"))
+    preview_folder(&std::env::temp_dir().join("VectorCraft Save for Web"), PREVIEW_KEEP)
+}
+
+/// A new folder in `root`, named after the process id and a count of the process's previews. A
+/// name that is already taken, by an earlier process with the same id, is skipped for the next
+/// count. Entries of `root` last changed `keep` or longer ago are removed first.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn preview_folder(root: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= keep);
+        if old {
+            // Best effort: one that can't be removed now is tried again by the next preview.
+            let _ = if e.file_type().is_ok_and(|t| t.is_dir()) { std::fs::remove_dir_all(e.path()) } else { std::fs::remove_file(e.path()) };
+        }
+    }
+    std::fs::create_dir_all(root).map_err(|e| format!("{}: {e}", root.display()))?;
+    loop {
+        let dir = root.join(format!("{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok(dir.to_string_lossy().replace('\\', "/")),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

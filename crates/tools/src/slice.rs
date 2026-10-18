@@ -5,14 +5,16 @@
 //! commits it as one undo step. The Slice Selection tool clicks a slice to select it (Shift adds or
 //! drops it), drags the selected slices to move them (`object.slice.move`: an object slice moves
 //! its object), drags a selected user slice's edge or corner handle to resize it
-//! (`object.slice.setRect`), opens Slice Options on a double click and deletes the selected slices
-//! with Delete. Hidden or locked slices (View menu) can't be picked.
+//! (`object.slice.setRect`: what the handle moves snaps as the Slice tool's drag does, Shift keeps
+//! the proportions and Alt resizes about the center), opens Slice Options on a double click and
+//! deletes the selected slices with Delete. Hidden or locked slices (View menu) can't be picked.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, SliceSource};
-use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_doc::{NodeId, OrientedBox, SliceSource};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag};
+use crate::guides::{PointSnap, Targets};
 use crate::shape::drag_rect;
 use crate::xform::{BLUE, polygon, rect_corners};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
@@ -150,10 +152,40 @@ impl Drag {
     }
 }
 
+/// What a user slice's handle snaps to, gathered when it is pressed: what the Slice tool's drag
+/// snaps to ([`snap`]), the art through [`PointSnap`] and the ruler guides on their own.
+struct ResizeSnap {
+    art: PointSnap,
+    rulers: Targets,
+}
+
+impl ResizeSnap {
+    fn new(cx: &ToolContext) -> Self {
+        Self { art: PointSnap::new(cx, || Targets::collect(cx.doc, &[], None)), rulers: Targets::rulers(cx) }
+    }
+
+    /// Snap the resize `a` ([`scale_for_drag`]) of the slice `rect` by `handle` as [`snap`] snaps
+    /// a drawn slice's corner: the handle snaps as a bounding-box handle does
+    /// ([`PointSnap::snap_scale`]), then a ruler guide within 5 px of where that leaves it takes
+    /// what the handle moves on its axis. Returns the scale and the guides showing why.
+    fn scale(&self, cx: &ToolContext, rect: Rect, handle: Handle, a: Affine, m: Mods) -> (Affine, Vec<Overlay>) {
+        let bx = OrientedBox::aligned(rect);
+        let (a, ov) = self.art.snap_scale(cx, &bx, handle, a, m.shift, m.alt);
+        let (b, guide) = self.rulers.snap_scale(&bx, handle, a, m.shift, m.alt, cx.tol(5.0));
+        let (r, s) = (a.transform_rect_bbox(rect), b.transform_rect_bbox(rect));
+        let moved = [r.x0 - s.x0, r.y0 - s.y0, r.x1 - s.x1, r.y1 - s.y1].iter().any(|d| d.abs() > 1e-9);
+        if moved || !guide.is_empty() { (b, guide) } else { (a, ov) }
+    }
+}
+
 /// The Slice Selection tool: select, move, resize and delete slices.
 #[derive(Default)]
 pub struct SliceSelectionTool {
     drag: Option<Drag>,
+    /// What the user slice handle being dragged snaps to.
+    snap: Option<ResizeSnap>,
+    /// The guides showing what the resize snapped to.
+    guides: Vec<Overlay>,
 }
 
 /// Can the slices be picked (not hidden or locked)?
@@ -194,11 +226,14 @@ impl Tool for SliceSelectionTool {
         match (ev.kind, self.drag.clone()) {
             (PointerKind::Down, _) => {
                 self.drag = None;
+                self.snap = None;
+                self.guides.clear();
                 if !pickable(cx) {
                     return vec![];
                 }
                 if let Some((id, handle, rect)) = handle_at(cx, p) {
                     self.drag = Some(Drag::Resize { id, handle, rect, began: false });
+                    self.snap = Some(ResizeSnap::new(cx));
                     return vec![];
                 }
                 let selected = &cx.selection.slices;
@@ -235,7 +270,11 @@ impl Tool for SliceSelectionTool {
                     out.push(Action::Begin("Resize Slice".into()));
                 }
                 self.drag = Some(Drag::Resize { id, handle, rect, began: true });
-                let r = scale_for_drag(rect, handle, p, m.shift, m.alt).transform_rect_bbox(rect);
+                let mut a = scale_for_drag(rect, handle, p, m.shift, m.alt);
+                if let Some(s) = &self.snap {
+                    (a, self.guides) = s.scale(cx, rect, handle, a, m);
+                }
+                let r = a.transform_rect_bbox(rect);
                 if has_area(r) {
                     let mut v = rect_json(r);
                     v["id"] = json!(id.0);
@@ -245,10 +284,14 @@ impl Tool for SliceSelectionTool {
             }
             (PointerKind::Up, Some(d)) => {
                 self.drag = None;
+                self.snap = None;
+                self.guides.clear();
                 if d.began() { vec![Action::Commit] } else { vec![] }
             }
             (PointerKind::DoubleClick, _) => {
                 self.drag = None;
+                self.snap = None;
+                self.guides.clear();
                 match slice_at(cx, p).filter(|_| pickable(cx)) {
                     Some(id) if cx.selection.slices == [id] => vec![Action::Dialog("sliceOptions".into(), json!({}))],
                     Some(id) => vec![Self::select(&[id]), Action::Dialog("sliceOptions".into(), json!({}))],
@@ -282,6 +325,7 @@ impl Tool for SliceSelectionTool {
                 o.extend(Handle::ALL.iter().map(|h| Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 }));
             }
         }
+        o.extend(self.guides.iter().cloned());
         // Smart Guides › Measurement Labels: the size readouts while resizing or moving slices.
         match self.drag.as_ref().filter(|_| cx.measurement_labels) {
             Some(Drag::Resize { id, began: true, .. }) => {
@@ -317,6 +361,8 @@ impl Tool for SliceSelectionTool {
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.snap = None;
+        self.guides.clear();
         if self.drag.take().is_some_and(|d| d.began()) { vec![Action::Cancel] } else { vec![] }
     }
 }
@@ -436,5 +482,88 @@ mod tests {
         assert!(t.pointer(&locked, &ev(PointerKind::Down, 20.0, 20.0)).is_empty());
         assert!(!t.claims_key(&locked, ToolKey::Delete));
         assert_eq!(t.cursor(&locked, Point::new(60.0, 40.0), Mods::default()), Cursor::SliceSelect);
+    }
+
+    /// The rectangle the last `object.slice.setRect` preview in `a` gives the slice.
+    fn set_rect(a: &[Action]) -> Rect {
+        let Some(Action::Preview(c, v)) = a.last() else { panic!("{a:?}") };
+        assert_eq!(c, "object.slice.setRect");
+        let n = |k: &str| v[k].as_f64().unwrap();
+        Rect::new(n("x"), n("y"), n("x") + n("width"), n("y") + n("height"))
+    }
+
+    fn near(a: Rect, b: Rect) -> bool {
+        [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() < 1e-9)
+    }
+
+    /// Drag a handle of slice `a` (10–60 × 10–40, selected) from `from` to `to` with `mods`: the
+    /// rectangle the drag previews.
+    fn resize(c: &ToolContext, from: (f64, f64), to: (f64, f64), mods: Mods) -> Rect {
+        let mut t = SliceSelectionTool::default();
+        assert!(t.pointer(c, &with(PointerKind::Down, from.0, from.1, mods)).is_empty());
+        set_rect(&t.pointer(c, &with(PointerKind::Drag, to.0, to.1, mods)))
+    }
+
+    /// With View › Snap to Grid on, a slice's handle lands what it moves on the nearest gridline
+    /// (every 9 pt by default), as the Slice tool's drag and the Selection tool's handles do;
+    /// with Snap to Pixel on, on whole pixels.
+    #[test]
+    fn slice_handles_snap_to_the_grid_and_to_pixels() {
+        let (d, a, _) = doc_with_slices();
+        let p = paint();
+        let mut sel = Selection::default();
+        sel.set_slices([a]);
+        let grid = ToolContext { snap_to_grid: true, ..cx(&d, &sel, &p) };
+        let none = Mods::default();
+        // The right side, dragged to x = 64, lands on the gridline at 63.
+        assert!(near(resize(&grid, (60.0, 25.0), (64.0, 25.0), none), Rect::new(10.0, 10.0, 63.0, 40.0)));
+        // The bottom-right corner, dragged to (64, 46), lands on (63, 45).
+        assert!(near(resize(&grid, (60.0, 40.0), (64.0, 46.0), none), Rect::new(10.0, 10.0, 63.0, 45.0)));
+        // Shift keeps the proportions, with a moved side on a gridline.
+        let r = resize(&grid, (60.0, 40.0), (64.0, 46.0), Mods { shift: true, ..none });
+        assert!((r.width() / r.height() - 50.0 / 30.0).abs() < 1e-9 && (r.x0, r.y0) == (10.0, 10.0), "{r:?}");
+        assert!([r.x1, r.y1].iter().any(|v| (v / 9.0 - (v / 9.0).round()).abs() < 1e-9), "{r:?}");
+        // Alt: the right side lands on 63 and the left side mirrors it about the center (35).
+        assert!(near(resize(&grid, (60.0, 25.0), (64.0, 25.0), Mods { alt: true, ..none }), Rect::new(7.0, 10.0, 63.0, 40.0)));
+        let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &sel, &p) };
+        assert!(near(resize(&pixel, (60.0, 40.0), (72.4, 50.7), none), Rect::new(10.0, 10.0, 72.0, 51.0)));
+    }
+
+    /// A slice's handle snaps to the art as the Slice tool's drag does: with Smart Guides on it
+    /// lines up with the other objects' edges, and with them off View › Snap to Point lands it on
+    /// an anchor within 2 px. Then a ruler guide within 5 px moves the side or the corner onto
+    /// it, with Smart Guides on or off.
+    #[test]
+    fn slice_handles_snap_to_the_art_and_the_ruler_guides() {
+        let (mut d, a, _) = doc_with_slices();
+        let p = paint();
+        let mut sel = Selection::default();
+        sel.set_slices([a]);
+        let none = Mods::default();
+        let on = cx(&d, &sel, &p);
+        // The right side, 3 px from the rectangle's left edge (x = 100), lands on it, and the
+        // guide shows until the button goes up.
+        let mut t = SliceSelectionTool::default();
+        t.pointer(&on, &ev(PointerKind::Down, 60.0, 25.0));
+        let r = set_rect(&t.pointer(&on, &ev(PointerKind::Drag, 97.0, 25.0)));
+        assert!(near(r, Rect::new(10.0, 10.0, 100.0, 40.0)), "{r:?}");
+        assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Line { .. })));
+        t.pointer(&on, &ev(PointerKind::Up, 97.0, 25.0));
+        assert!(!t.overlays(&on).iter().any(|o| matches!(o, Overlay::Line { .. })));
+        // Smart Guides off: Snap to Point lands the corner, 1.4 px from the rectangle's corner, on it.
+        let off = ToolContext { smart_guides: false, ..cx(&d, &sel, &p) };
+        assert!(near(resize(&off, (60.0, 40.0), (99.0, 101.0), none), Rect::new(10.0, 10.0, 100.0, 100.0)));
+        // Snap to Point off too: the side follows the pointer.
+        let neither = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &sel, &p) };
+        assert!(near(resize(&neither, (60.0, 25.0), (97.0, 25.0), none), Rect::new(10.0, 10.0, 97.0, 40.0)));
+        // A ruler guide at x = 98 takes the side dragged 1 px from it, over the rectangle's edge
+        // 1 px the other way, with Smart Guides on or off.
+        d.guides.push(Guide::new(true, 98.0));
+        for c in [cx(&d, &sel, &p), ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &sel, &p) }] {
+            assert!(near(resize(&c, (60.0, 25.0), (99.0, 25.0), none), Rect::new(10.0, 10.0, 98.0, 40.0)));
+        }
+        // With Snap to Grid on, the guide takes the corner's x and the grid still takes its y.
+        let grid = ToolContext { snap_to_grid: true, ..cx(&d, &sel, &p) };
+        assert!(near(resize(&grid, (60.0, 40.0), (99.0, 46.0), none), Rect::new(10.0, 10.0, 98.0, 45.0)));
     }
 }

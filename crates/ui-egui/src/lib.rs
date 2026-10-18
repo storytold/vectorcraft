@@ -25,6 +25,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 mod edit_toolbar;
+pub mod export_progress;
 pub mod find_font;
 pub mod floating;
 pub mod font_menu;
@@ -155,6 +156,8 @@ mod tests_sysclip_emf;
 #[cfg(test)]
 mod tests_sysclip_probe;
 #[cfg(test)]
+mod tests_taskbar;
+#[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthtool;
@@ -200,6 +203,18 @@ pub type DownloadFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
+
+/// Whether a URL from a document may open in the browser: an `http:`, `https:` or `mailto:` URL
+/// without control characters. The system hands other schemes (`file:`, application schemes) to
+/// other programs.
+pub(crate) fn browsable_url(url: &str) -> Result<(), String> {
+    let scheme = url.split_once(':').map_or("", |(s, _)| s);
+    if ["http", "https", "mailto"].iter().any(|k| scheme.eq_ignore_ascii_case(k)) && !url.chars().any(char::is_control) {
+        Ok(())
+    } else {
+        Err(format!("only http, https and mailto URLs open in the browser, not “{url}”"))
+    }
+}
 
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
@@ -292,9 +307,9 @@ pub struct CanvasCache {
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     pub last_ms: f64,
-    /// The frame shown drew raster effects from rasters made before their objects moved
-    /// ([`vectorcraft_render::FrameStats::moved`]): the next frame outside an interaction runs
-    /// them again, on the worker when there is one.
+    /// The frame shown drew raster effects from rasters made before their objects moved, or at a
+    /// drag's lower resolution ([`vectorcraft_render::FrameStats::moved`]): the next frame outside
+    /// an interaction runs them again, on the worker when there is one.
     pub moved: bool,
     pub worker: Option<render_worker::Worker>,
     pub worker_started: bool,
@@ -327,6 +342,8 @@ pub struct CacheKey {
     pub revision: u64,
     /// An interaction is in progress ([`vectorcraft_render::RenderOptions::interacting`]).
     pub interacting: bool,
+    /// A tool's drag on the canvas is in progress ([`vectorcraft_render::RenderOptions::dragging`]).
+    pub dragging: bool,
     pub zoom: f64,
     pub cx: f64,
     pub cy: f64,
@@ -435,9 +452,12 @@ pub struct VectorcraftApp {
     pub(crate) picks: picks::Picks,
     /// The screen color sampler shown and not answered yet, and where its color goes.
     pub(crate) screen_sampler: Option<screen_color::Waiting>,
-    /// The look for fonts installed or removed while the app was in the background, running
-    /// ([`Self::refresh_installed_fonts`]): whether they were.
-    font_check: Option<std::sync::mpsc::Receiver<bool>>,
+    /// The look for fonts installed or removed meanwhile, running
+    /// ([`Self::refresh_installed_fonts`]): whether they were, and whether to wake the app for
+    /// the answer.
+    font_check: Option<(std::sync::mpsc::Receiver<bool>, bool)>,
+    /// When installed fonts were last checked in line (app time, s).
+    font_install_check_at: f64,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -483,6 +503,8 @@ struct PendingScreenshot {
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
 const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
+/// Seconds between looks for fonts a font manager activated while the app stays in front (#2576).
+const FONT_INSTALL_POLL: f64 = 2.0;
 
 impl VectorcraftApp {
     pub fn new(mut session: Session, services: Services) -> Self {
@@ -545,6 +567,7 @@ impl VectorcraftApp {
             picks: picks::Picks::default(),
             screen_sampler: None,
             font_check: None,
+            font_install_check_at: f64::NEG_INFINITY,
             paste_chord: Default::default(),
             background: Default::default(),
             opening: Default::default(),
@@ -685,6 +708,7 @@ impl VectorcraftApp {
 
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         self.run_count = self.run_count.wrapping_add(1);
         // In debug builds the app's own calls are held to the params descriptions too (#1442): a
         // panel passing a key its command doesn't read shows up in the tests.
@@ -789,6 +813,24 @@ impl VectorcraftApp {
             None => self.pending_url = Some(url.to_string()),
         }
         self.ui.status = format!("Opened {url}");
+    }
+
+    /// Open `url`, which came from a document (an object's URL attribute), in the browser:
+    /// [`browsable_url`]s only.
+    pub(crate) fn open_document_url(&mut self, url: &str) -> Result<(), String> {
+        browsable_url(url)?;
+        self.open_url(url);
+        Ok(())
+    }
+
+    /// Refuse UI command `id`, which hands something to another app, when automation sent it (a
+    /// control or MCP request, or a frame of synthetic input): the automation roots don't confine
+    /// what that app does.
+    pub(crate) fn refuse_automation(&self, id: &str) -> Result<(), String> {
+        if self.ui.answering_control || self.synthetic_frame {
+            return Err(format!("{id} opens another app: only the person at the keyboard can run it"));
+        }
+        Ok(())
     }
 
     /// Run a Help link command and open the URL it returns.
@@ -1163,6 +1205,12 @@ impl VectorcraftApp {
             self.system_paste_at = now;
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if !(0.0..FONT_INSTALL_POLL).contains(&(now - self.font_install_check_at)) {
+            self.font_install_check_at = now;
+            // Read on the next frame the app draws anyway: an idle app isn't woken for it.
+            self.refresh_installed_fonts(false);
+        }
         self.poll_font_check(ctx);
         picks::poll(self, ctx);
         self.write_formats_before_text_input(ctx);
@@ -1257,12 +1305,15 @@ impl VectorcraftApp {
         place::drop_files(self, files);
     }
 
-    /// Fonts installed or removed while the app was in the background are listed when it comes
-    /// back (Refresh Font List by itself): a look at the font folders, a scan only when they changed.
+    /// Fonts installed or removed while the app runs are listed without Refresh Font List: a look
+    /// at the font folders and the platform's font list on a timer and when the window comes back,
+    /// a scan only when they changed.
     /// The look runs on another thread (asking DirectWrite for the fonts font services loaded
-    /// meanwhile takes tens of milliseconds on Windows, #579), [`Self::poll_font_check`] scans.
-    fn refresh_installed_fonts(&mut self) {
-        if self.font_check.is_some() {
+    /// meanwhile takes tens of milliseconds on Windows, #579), [`Self::poll_font_check`] scans;
+    /// `wake` wakes the app for the answer.
+    fn refresh_installed_fonts(&mut self, wake: bool) {
+        if let Some((_, w)) = &mut self.font_check {
+            *w |= wake;
             return;
         }
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1275,12 +1326,12 @@ impl VectorcraftApp {
         if spawned.is_none() {
             look();
         }
-        self.font_check = Some(rx);
+        self.font_check = Some((rx, wake));
     }
 
     /// Rescan the fonts once [`Self::refresh_installed_fonts`]'s look says they changed.
     fn poll_font_check(&mut self, ctx: &egui::Context) {
-        let Some(check) = &self.font_check else { return };
+        let Some((check, wake)) = &self.font_check else { return };
         match check.try_recv() {
             Ok(changed) => {
                 self.font_check = None;
@@ -1289,7 +1340,11 @@ impl VectorcraftApp {
                     let _ = self.run("text.rescanFonts", json!({}));
                 }
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(50)),
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                if *wake {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(50));
+                }
+            }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => self.font_check = None,
         }
     }
@@ -1311,7 +1366,7 @@ impl VectorcraftApp {
             match e {
                 egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
                 egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
-                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(),
+                egui::Event::WindowFocused(true) => self.refresh_installed_fonts(true),
                 _ => {}
             }
         }
@@ -1366,6 +1421,7 @@ impl VectorcraftApp {
     }
 
     fn ui_frame(&mut self, ui: &mut egui::Ui) {
+        crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         let ctx = ui.ctx().clone();
         if !self.fonts_ready {
             ctx.request_repaint();
@@ -1406,6 +1462,7 @@ impl VectorcraftApp {
         dock::floating_panel(self, &ctx);
         floating::show(self, &ctx);
         dialogs::show(self, &ctx);
+        export_progress::show(self, &ctx);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
@@ -1414,6 +1471,9 @@ impl VectorcraftApp {
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
         self.drop_formats_after_egui_copy(&ctx);
+        if opening::long_operation_busy(self) {
+            ctx.set_cursor_icon(egui::CursorIcon::Progress);
+        }
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

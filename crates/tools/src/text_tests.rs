@@ -401,6 +401,108 @@ fn escape_returns_to_previous_tool_when_set() {
     assert_eq!(acts2.last(), Some(&Action::SwitchTool("selection".into())));
 }
 
+/// A click from `tool` at (x, y) → the actions of the press and the release.
+fn click(tool: &mut TypeTool, c: &ToolContext, x: f64, y: f64) -> Vec<Action> {
+    let mut acts = tool.pointer(c, &PointerEvent::new(PointerKind::Down, x, y));
+    acts.extend(tool.pointer(c, &PointerEvent::new(PointerKind::Up, x, y)));
+    acts
+}
+
+fn creates(acts: &[Action]) -> bool {
+    acts.iter().any(|a| matches!(a, Action::Exec(cmd, _) if cmd == "text.create" || cmd == "text.createInPath"))
+}
+
+/// While type is being edited, a click on blank canvas ends the editing and makes no new type;
+/// the Type tool stays, and the next click makes point type (#2871, #2854). The same holds when
+/// the editing began with a double-click from a selection tool.
+#[test]
+fn a_click_away_from_the_type_being_edited_only_ends_editing() {
+    for prev in [None, Some("selection")] {
+        let (d, _, mut tool) = editing("Hello");
+        if let Some(prev) = prev {
+            tool.set_option("prevTool", &json!(prev));
+        }
+        let (sel, p) = (Selection::default(), paint());
+        let c = cx(&d, &sel, &p);
+        let acts = click(&mut tool, &c, 400.0, 400.0);
+        assert!(!creates(&acts), "{prev:?}: {acts:?}");
+        assert!(!acts.iter().any(|a| matches!(a, Action::SwitchTool(_))), "{prev:?}: {acts:?}");
+        assert_eq!((tool.id(), tool.editing), ("type", None));
+        assert_eq!(tool.prev_tool.as_deref(), prev);
+        let acts = click(&mut tool, &c, 400.0, 400.0);
+        assert!(
+            acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.create" && v["x"] == 400.0 && v.get("area").is_none())),
+            "{acts:?}"
+        );
+    }
+}
+
+/// Point type a click placed and left empty is still discarded by the click away, and that click
+/// places no other type.
+#[test]
+fn a_click_away_from_empty_new_type_discards_it_and_makes_none() {
+    let (d, id, mut tool) = editing("");
+    tool.fresh = Some(id);
+    let (sel, p) = (Selection::default(), paint());
+    let acts = click(&mut tool, &cx(&d, &sel, &p), 400.0, 400.0);
+    assert_eq!(acts, vec![Action::Exec("text.discardEmpty".into(), json!({"id": id.0}))]);
+}
+
+/// Area Type and Type on a Path: a click on a path while other type is being edited ends the
+/// editing only; the next click turns the path into a frame or a baseline.
+#[test]
+fn a_click_on_a_path_while_editing_only_ends_editing() {
+    let (mut d, rect) = crate::testutil::doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let t = TextObject::point(Point::new(300.0, 400.0), "Hello", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(l), 1, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    for (tool_id, at) in [("areaType", (100.0, 150.0)), ("typeOnPath", (150.0, 100.0))] {
+        let mut tool = TypeTool::new(tool_id);
+        tool.start_editing(id, 0);
+        let acts = click(&mut tool, &c, at.0, at.1);
+        assert!(!creates(&acts), "{tool_id}: {acts:?}");
+        assert_eq!(tool.editing, None);
+        let acts = click(&mut tool, &c, at.0, at.1);
+        assert!(
+            acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.createInPath" && v["path"] == json!(rect.0))),
+            "{tool_id}: {acts:?}"
+        );
+    }
+}
+
+/// While type is being edited, a drag that draws an area-type frame still makes it, and a click
+/// on other type edits that type at once.
+#[test]
+fn a_drag_or_a_click_on_other_type_while_editing_acts_at_once() {
+    let (mut d, id, mut tool) = editing("Hello");
+    let (sel, p) = (Selection::default(), paint());
+    let acts = {
+        let c = cx(&d, &sel, &p);
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 400.0, 400.0));
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 400.0, 400.0))
+    };
+    let area = json!({"width": 100.0, "height": 100.0});
+    assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.create" && v["area"] == area)), "{acts:?}");
+    let l = d.layers[0].id;
+    let other = d.alloc_id();
+    let t = TextObject::point(Point::new(100.0, 300.0), "Other", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(l), 1, Node::new(other, NodeKind::Text(Box::new(t)))).unwrap();
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, other).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let (top, bot) = vectorcraft_text::caret_position(&lay, 2);
+    let at = t.xf * top.midpoint(bot);
+    tool.start_editing(id, 0);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(!creates(&acts), "{acts:?}");
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [other.0]}))), "{acts:?}");
+    assert_eq!(tool.editing, Some(other));
+}
+
 /// Selected area type whose text doesn't fit its frame shows the red out port with any tool, not
 /// only the Type tools (#2323); text that fits shows none.
 #[test]

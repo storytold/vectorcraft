@@ -92,6 +92,7 @@ fn export_tool_lists_engine_formats_and_options() {
     let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
     assert!(open["description"].as_str().unwrap().contains(".ait"));
     assert!(open["description"].as_str().unwrap().contains(".eps, .epsf, .ps, "), "{open}");
+    assert!(open["description"].as_str().unwrap().contains(".bmp, .tga, .vda, .icb, .vst, "), "{open}");
 }
 
 /// A fake app that records `engine.execute` calls and answers each with an empty object.
@@ -130,6 +131,17 @@ fn export_is_the_same_call_in_the_app_and_headless() {
     assert_eq!(&png[16..20], 80u32.to_be_bytes(), "IHDR width");
     let direct = h.call("engine.execute", seen[0]["params"].clone()).unwrap();
     assert_eq!(direct["dataBase64"], r["dataBase64"]);
+}
+
+#[test]
+fn the_raster_scale_leaves_other_formats_alone() {
+    // DXF's own `scale` (drawing units per mm) comes through `options`; the raster one would resize
+    // the drawing and leave its units unset.
+    let mut h = two_boards();
+    let dxf = |h: &mut Headless, args: Value| text(&call_tool(h, "export", &args))["dataBase64"].clone();
+    let plain = dxf(&mut h, json!({"format": "dxf"}));
+    assert!(dxf(&mut h, json!({"format": "dxf", "scale": 2})) == plain, "the raster scale changed the DXF");
+    assert!(dxf(&mut h, json!({"format": "dxf", "options": {"scale": 2}})) != plain, "the DXF scale was dropped");
 }
 
 #[test]

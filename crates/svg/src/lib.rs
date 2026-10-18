@@ -524,7 +524,8 @@ pub type ReadFile<'a> = &'a (dyn Fn(&str) -> Option<(Vec<u8>, vectorcraft_doc::L
 /// warning), so it can be relinked.
 #[derive(Clone, Copy, Default)]
 pub struct ImportOptions<'a> {
-    /// The folder relative links are found in: the SVG file's own. Without it they can't be read.
+    /// The folder relative links are found in: the SVG file's own (taken from the working
+    /// directory when it isn't absolute). Without it they can't be read.
     pub folder: Option<&'a str>,
     /// Reads a linked file. Without it no file is read.
     pub read: Option<ReadFile<'a>>,

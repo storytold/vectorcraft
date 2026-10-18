@@ -14,6 +14,8 @@
 //!   superscript and subscript, baseline shift (`\up`, `\dn`) and the color table's color (`\cf`).
 //! - Paragraph formatting, reset by `\pard`: alignment (`\ql`, `\qc`, `\qr`, `\qj`, `\qd`), left,
 //!   right and first-line indents, space before and after, and direction (`\rtlpar`, `\ltrpar`).
+//!   `\ql` and `\qr` are the left and right edges in either direction, and a justified (`\qj`)
+//!   paragraph marked right to left (`\rtlpar`) ends its last line on the right.
 //!
 //! Other control words are skipped, and so are hidden text (`\v`) and the groups of destinations
 //! that are not the document's text: every `\*` destination, the style sheet, document
@@ -608,7 +610,11 @@ impl Reader {
             .paras
             .iter()
             .map(|p| ParaStyle {
-                justify: p.justify,
+                // `\qj` in an `\rtlpar` paragraph justifies it with its last line on the right.
+                justify: match p.justify {
+                    Justify::JustifyLeft if p.rtl == Some(true) => Justify::JustifyRight,
+                    j => j,
+                },
                 left_indent: twips(p.left),
                 right_indent: twips(p.right),
                 first_line_indent: twips(p.first),
@@ -680,6 +686,18 @@ mod tests {
         let justify: Vec<Justify> = s.paras.iter().map(|p| p.justify).collect();
         assert_eq!(justify, [Justify::Left, Justify::Center]);
         assert_eq!(s.paras.last().map(|p| p.left_indent), Some(20.0));
+    }
+
+    #[test]
+    fn justified_right_to_left_paragraphs_end_their_last_line_on_the_right() {
+        let s = read(concat!(
+            r"{\rtf1\pard\rtlpar\qj a\par\pard\qj\rtlpar b\par\pard\qj c\par\pard\rtlpar\ltrpar\qj d\par",
+            r"\pard\rtlpar\ql e\par\pard\rtlpar\qr f\par\pard\rtlpar\qc g\par\pard\rtlpar\qd h}"
+        ));
+        let justify: Vec<Justify> = s.paras.iter().map(|p| p.justify).collect();
+        use Justify::*;
+        assert_eq!(justify, [JustifyRight, JustifyRight, JustifyLeft, JustifyLeft, Left, Right, Center, JustifyAll]);
+        assert_eq!(s.paras.first().and_then(|p| p.direction), Some(ParaDirection::RightToLeft));
     }
 
     #[test]

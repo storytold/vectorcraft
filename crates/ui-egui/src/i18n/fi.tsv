@@ -195,6 +195,7 @@
 	Expand…	Laajenna…
 	Expand Appearance	Laajenna ulkoasu
 	Crop Image	Rajaa kuva
+	Edit Path	Muokkaa polkua
 	Mask	Maski
 	Rasterize…	Rasteroi…
 	Create Gradient Mesh…	Luo liukuväriverkko…
@@ -1301,6 +1302,8 @@ lighting	Light	Valo
 	Opacity: {value}	Peittävyys: {value}
 	Rectangle: Sunshine	Suorakulmio: Auringonpaiste
 	Redefine Graphic Style “{name}”	Määritä grafiikkatyyli ”{name}” uudelleen
+	Apply {name}	Käytä tyyliä ”{name}”
+	Redefine {name}	Määritä tyyli ”{name}” uudelleen
 	Show Thumbnail	Näytä pikkukuva
 	Artboard Options: edit with the Artboard tool	Piirtoalustan asetukset: muokkaa piirtoalustatyökalulla
 	Delete Artboards	Poista piirtoalustat
@@ -1487,6 +1490,10 @@ lighting	Light	Valo
 	Use Text for Previews	Käytä tekstiä esikatseluissa
 	{percent}% opacity	{percent}% peittävyys
 	History Options…	Historian asetukset…
+	Step Backward	Askel taaksepäin
+	Step Forward	Askel eteenpäin
+	Clear History	Tyhjennä historia
+	Set History Limit…	Aseta historian raja…
 	Open a document to see its history.	Avaa asiakirja, niin näet sen historian.
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Käytä tietojoukkoa
@@ -3538,6 +3545,8 @@ axis	Both	Molemmat
 	Star	Tähti
 	Power Saving (integrated)	Virransäästö (integroitu)
 	Target	Kohde
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), kun kynä on liitetty
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Jos piirtopöydän kynä ei piirrä, valitse jokin X11 (XWayland) -vaihtoehto.
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Tulosta bittikarttana
 	Draft	Vedos
@@ -3918,6 +3927,11 @@ imageTrace	Outline	Ääriviiva
 @msg	its editing data doesn't say where its artboard is	sen muokkaustiedoista ei selviä piirtoalustan sijainti
 @msg	its editing data has no layers	sen muokkaustiedoissa ei ole tasoja
 @msg	its editing data is damaged	sen muokkaustiedot ovat vaurioituneet
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	sen muokkaustiedot koskevat sivua {w} × {h} pt, eivät tiedoston sivua {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	sen muokkaustiedot koskevat sivua {w} × {h} pt, eli tiedoston sivua {pw} × {ph} pt mittakaavassa {scale}
+@msg	its zlib compression is damaged	niiden zlib-pakkaus on vaurioitunut
+@msg	its Zstandard compression is damaged	niiden Zstandard-pakkaus on vaurioitunut
+@msg	it decompresses to more than {_1} MB	ne purkautuvat yli {_1} megatavuksi
 @msg	its editing data is for a different page	sen muokkaustiedot koskevat eri sivua
 @msg	its layers use {_1}, which aren't read yet	sen tasot käyttävät kohteita {_1}, joita ei vielä lueta
 @msg	its page has text, and its layers have no text objects to put it in	sen sivulla on tekstiä, mutta sen tasoilla ei ole tekstiobjekteja, joihin sen voisi sijoittaa
@@ -3985,6 +3999,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Save for Web: the image is empty	Tallenna verkkoon: kuva on tyhjä
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Tallenna kirjoittaa muotoa {_1}, ei {_2}: käytä muille muodoille komentoa document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Tallenna kirjoittaa muotoa {_1}, ei {_2}: kirjoita se komennolla file.saveAsTemplate
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja; .ait-malli on aina PDF-yhteensopiva
 @msg	Saved recovery data for {title}	Tallennettiin palautustiedot: {title}
 @msg	Saved to User Defined: {_1}	Tallennettiin kohteeseen Käyttäjän määrittämä: {_1}
 @msg	Saved {path}	Tallennettiin {path}
@@ -4016,6 +4031,8 @@ imageTrace	Outline	Ääriviiva
 @msg	`{key}` must be a #rrggbb color	`{key}` on oltava #rrggbb-väri
 @msg	`{key}` must be a #rrggbb colour	`{key}` on oltava #rrggbb-väri
 @msg	`{key}` must be a number	`{key}` on oltava luku
+@msg	`{key}` must be a number, not {v}	`{key}` on oltava luku, ei {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} on oltava Unix-aika sekunteina (kokonaisluku) tai null
 @msg	`{key}` must be a string	`{key}` on oltava merkkijono
 @msg	`{key}` must be a whole number	`{key}` on oltava kokonaisluku
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` on oltava kokonaisluku väliltä {min}–{max} (saatiin {x})
@@ -4054,6 +4071,7 @@ imageTrace	Outline	Ääriviiva
 @msg	a page tree node has no kids	sivupuun solmulla ei ole lapsia
 @msg	a page's placement is not finite	sivun sijainti ei ole äärellinen
 @msg	a preset named `{_1}` exists	esiasetus nimeltä `{_1}` on olemassa
+@msg	a swatch or color group named `{n}` exists	värimalli tai väriryhmä nimeltä `{n}` on jo olemassa
 @msg	a slice size must be a positive number of points	viipaleen koon on oltava positiivinen määrä pisteitä
 @msg	a spine keeps at least two points	selkärangassa on oltava vähintään kaksi pistettä
 @msg	a stream runs past the end	virta jatkuu loppumerkin yli
@@ -4141,6 +4159,7 @@ imageTrace	Outline	Ääriviiva
 @msg	missing `tool`	`tool` puuttuu
 @msg	missing index	indeksi puuttuu
 @msg	missing number `{key}`	luku `{key}` puuttuu
+@msg	missing integer `{key}`	kokonaisluku `{key}` puuttuu
 @msg	multiple windows land with M11.5	useat ikkunat tulevat versiossa M11.5
 @msg	name the file	anna tiedostolle nimi
 @msg	no CSS to copy: select objects with CSS of their own	ei kopioitavaa CSS:ää: valitse objekteja, joilla on oma CSS
@@ -4255,6 +4274,7 @@ imageTrace	Outline	Ääriviiva
 @msg	nothing to redo	ei tehtävää uudelleen
 @msg	nothing to save: the document has no visible art	ei tallennettavaa: asiakirjassa ei ole näkyvää kuvitusta
 @msg	nothing to undo	ei kumottavaa
+@msg	no history to clear	ei tyhjennettävää historiaa
 @msg	nothing to warp	ei taivutettavaa
 @msg	nothing to wrap	ei rivitettävää
 @msg	object {0} cannot have children	objektilla {0} ei voi olla alikohteita
@@ -4262,6 +4282,7 @@ imageTrace	Outline	Ääriviiva
 @msg	object {id} is not a selected top-level object	objekti {id} ei ole valittu ylimmän tason objekti
 @msg	page size {w} × {h}	sivun koko {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	sivua {0} ei ole olemassa (PDF-tiedostossa on {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: sivua {n} ei ole olemassa (tiedostossa on 1)
 @msg	paste unavailable	liittäminen ei ole käytettävissä
 @msg	path is already closed	polku on jo suljettu
 @msg	paths contain invalid coordinates	polut sisältävät virheellisiä koordinaatteja
@@ -4425,6 +4446,7 @@ imageTrace	Outline	Ääriviiva
 @msg	{C}: no effect at index {from}	{C}: ei tehostetta indeksissä {from}
 @msg	{_1} failed: {e}	{_1} epäonnistui: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	{_1}-tiedostoja voi avata mutta ei kirjoittaa (ks. document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	{_1}-tiedostot kirjoitetaan komennolla file.saveAsTemplate
 @msg	{_1} font families available	{_1} fonttiperhettä käytettävissä
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} on live-tehoste (Tehoste › Laajennukset)
 @msg	{_1} is already used by {_2}	{_1} on jo käytössä kohteella {_2}
@@ -4533,6 +4555,9 @@ imageTrace	Outline	Ääriviiva
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: vaiheen {i} tuloksessa ei ole tällaista arvoa (kirjoita $$, jos tarkoitat merkkiä $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: ennen tätä ei ole vaihetta {i} (vaiheet numeroidaan 0:sta; kirjoita $$, jos tarkoitat merkkiä $)
 @msg	object ids are non-negative integers, not {v}	objektitunnukset ovat ei-negatiivisia kokonaislukuja, ei {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} on oltava taulukko objektitunnuksia, jotka ovat ei-negatiivisia kokonaislukuja
+@msg	invalid object id {value}: expected a non-negative integer	virheellinen objektitunnus {value}: odotettiin ei-negatiivista kokonaislukua
+@msg	no such object id {value}	objektia tunnuksella {value} ei ole
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: lukuoikeus puuttuu: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: kirjoitusoikeus puuttuu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
@@ -4959,6 +4984,11 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+# 3D light management.
+	Lights	Valot
+	Add Light	Lisää valo
+	Delete Light	Poista valo
+3d	Light	Valo
 	2up	2 sivua
 	4up	4 sivua
 	A6	A6
@@ -5109,6 +5139,11 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Muokkaa alkuperäistä avaa vain kuva- ja asiakirjatiedostoja; “{name}” ei ole sellainen
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	selaimessa avataan vain http-, https- ja mailto-URL-osoitteet, ei “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} avaa toisen sovelluksen: vain näppäimistön ääressä oleva henkilö voi suorittaa sen
+@msg	“{name}” is not a file	“{name}” ei ole tiedosto
 	Enable Guides for 9-Slice Scaling	Ota käyttöön 9-slice-skaalauksen apuviivat
 @msg	a mask has more than one art block	maskissa on useampi kuin yksi grafiikkalohko
 @msg	mask art ends outside a mask dictionary	maskin grafiikka päättyy maskin sanakirjan ulkopuolelle
@@ -5136,3 +5171,22 @@ mark-style	Japanese	Japanilainen
 	Clear Artboard Color	Tyhjennä piirtoalustan väri
 @msg	artboard {_1} is locked	piirtoalusta {_1} on lukittu
 	Include Artboard Fill	Sisällytä piirtoalustan väri
+	Artboard {n} of {total}	Piirtoalusta {n}/{total}
+	Encoding and writing the file…	Tiedostoa koodataan ja kirjoitetaan…
+@plural	{n} more export waiting|{n} more exports waiting	{n} vienti odottaa|{n} vientiä odottaa
+	Continue in Background	Jatka taustalla
+	Cancel Export	Peruuta vienti
+@msg	Export cancelled	Vienti peruutettiin
+# Paragraph panel menu › Justification…
+	Desired	Haluttu
+	Word Spacing:	Sanaväli:
+	Letter Spacing:	Kirjainväli:
+	Glyph Scaling:	Merkkien skaalaus:
+	Auto Leading:	Automaattinen riviväli:
+	Single Word Justification:	Yksittäisen sanan tasaus:
+	Full Justify	Täysi tasaus
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia.
+	Justification	Tasaus
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	tiedoston muuttujia ja tietojoukkoja ei luettu (muuttujia: {variables}, tietojoukkoja: {data_sets}): Muuttujat-paneeli ei näytä niitä
+# Select by Color (select.color)
+	Select by Color	Valitse värin mukaan

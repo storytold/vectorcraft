@@ -50,6 +50,17 @@ fn the_native_document_comes_back_intact() {
 }
 
 #[test]
+fn the_native_documents_modification_date_is_the_time_of_writing() {
+    // Created in 1970: the information dictionary's dates say so, the embedded file's doesn't.
+    let year = |t: Option<i64>| vectorcraft_doc::metadata::civil(t.unwrap())[0];
+    let before = year(vectorcraft_doc::metadata::output_time());
+    let text = String::from_utf8_lossy(&pdf_with(Some(b"native"), false).bytes).into_owned();
+    let after = year(vectorcraft_doc::metadata::output_time());
+    assert!(text.contains("/CreationDate(D:1970"), "the file's creation date");
+    assert!([before, after].iter().any(|y| text.contains(&format!("/ModDate(D:{y:04}"))), "the embedded file is dated when it is written");
+}
+
+#[test]
 fn changed_pages_are_noticed() {
     let r = pdf_with(Some(b"native"), false);
     let resized = patched(&r.bytes, b"/MediaBox[0 0 100 100]", b"/MediaBox[0 0 100 101]");
@@ -59,6 +70,35 @@ fn changed_pages_are_noticed() {
     assert!(!editing(&moved).unwrap().intact, "other page content");
     // The description (not part of the hash) can change: re-saving keeps the data usable.
     assert!(editing(&r.bytes).unwrap().intact);
+}
+
+/// `pdf` with its editing file's description rewritten by another app as "hash " and the hash it
+/// held, in the text string encoding `bom` starts (UTF-16BE or UTF-8), padded with spaces to its
+/// length.
+fn described(pdf: &[u8], bom: &[u8]) -> Vec<u8> {
+    let from = b"(VectorCraft editing data; page hash ";
+    let at = pdf.windows(from.len()).position(|w| w == from).unwrap_or_else(|| panic!("no description"));
+    let (hash, len) = (&pdf[at + from.len()..at + from.len() + 16], from.len() + 17);
+    let mut desc = [b"(", bom].concat();
+    for &c in b"hash ".iter().chain(hash) {
+        if bom.len() == 2 {
+            desc.push(0);
+        }
+        desc.push(c);
+    }
+    desc.push(b')');
+    desc.resize(len, b' ');
+    patched(pdf, &pdf[at..at + len], &desc)
+}
+
+#[test]
+fn the_hash_is_read_from_a_description_in_any_encoding() {
+    let r = pdf_with(Some(b"native"), false);
+    let resized = patched(&r.bytes, b"/MediaBox[0 0 100 100]", b"/MediaBox[0 0 100 101]");
+    for bom in [&[0xFE, 0xFF][..], &[0xEF, 0xBB, 0xBF]] {
+        assert!(editing(&described(&r.bytes, bom)).unwrap().intact, "{bom:?}: the same pages");
+        assert!(!editing(&described(&resized, bom)).unwrap().intact, "{bom:?}: another page size");
+    }
 }
 
 #[test]
@@ -141,4 +181,21 @@ fn direct_name_tree_kids_are_all_searched() {
     ];
     let e = editing(&raw_pdf(&objects)).unwrap();
     assert_eq!(e.data, b"hello");
+}
+
+#[test]
+fn a_file_name_written_as_utf16_is_found() {
+    let utf16: String = EDITING_FILE.bytes().map(|c| format!("00{c:02X}")).collect();
+    for key in ["UF", "F"] {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+            "<< /Type /Pages /Kids [6 0 R] /Count 1 >>".to_string(),
+            "<< /Names [(a) 4 0 R] >>".to_string(),
+            format!("<< /Type /Filespec /{key} <FEFF{utf16}> /EF << /F 5 0 R >> >>"),
+            "<< /Length 5 >>\nstream\nhello\nendstream".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+        ];
+        let e = editing(&raw_pdf(&objects)).unwrap_or_else(|| panic!("/{key}: not found"));
+        assert_eq!(e.data, b"hello", "/{key}");
+    }
 }

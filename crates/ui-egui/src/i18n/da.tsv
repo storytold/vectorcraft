@@ -173,6 +173,7 @@
 	Expand…	Udvid…
 	Expand Appearance	Udvid udseende
 	Crop Image	Beskær billede
+	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
 	Create Gradient Mesh…	Opret gradientnet…
@@ -1248,6 +1249,8 @@ lighting	Light	Lys
 	Opacity: {value}	Opacitet: {value}
 	Rectangle: Sunshine	Rektangel: Sunshine
 	Redefine Graphic Style “{name}”	Omdefinér grafisk typografi »{name}«
+	Apply {name}	Anvend stilen »{name}«
+	Redefine {name}	Omdefinér stilen »{name}«
 	Show Thumbnail	Vis miniatur
 	Artboard Options: edit with the Artboard tool	Tegnebrætindstillinger: redigér med tegnebrætværktøjet
 	Delete Artboards	Slet tegnebrætter
@@ -1434,6 +1437,10 @@ lighting	Light	Lys
 	Use Text for Previews	Brug tekst til forhåndsvisninger
 	{percent}% opacity	{percent}% opacitet
 	History Options…	Indstillinger for historik…
+	Step Backward	Et trin tilbage
+	Step Forward	Et trin frem
+	Clear History	Ryd historik
+	Set History Limit…	Angiv historikgrænse…
 	Open a document to see its history.	Åbn et dokument for at se dets historik.
 	Abutting	Stødende
 	Black and White	Sort-hvid
@@ -3373,6 +3380,8 @@ axis	Both	Begge
 	Star	Stjerne
 	Power Saving (integrated)	Strømbesparende (integreret)
 	Target	Mål
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), når en pen er tilsluttet
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Hvis pennen til en tegneplade ikke tegner, skal du vælge en X11 (XWayland)-indstilling.
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Udskriv som bitmap
 	Draft	Udkast
@@ -3749,7 +3758,8 @@ imageTrace	Outline	Kontur
 @msg	its editing data doesn't say where its artboard is	dens redigeringsdata siger ikke, hvor dens tegneflade er
 @msg	its editing data has no layers	dens redigeringsdata har ingen lag
 @msg	its editing data is damaged	dens redigeringsdata er beskadiget
-@msg	its editing data is for a different page	dens redigeringsdata er til en anden side
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	dens redigeringsdata er til en side på {w} × {h} pt, ikke til filens side på {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	dens redigeringsdata er til en side på {w} × {h} pt, altså filens side på {pw} × {ph} pt i skala {scale}
 @msg	its layers use {_1}, which aren't read yet	dens lag bruger {_1}, som ikke kan læses endnu
 @msg	its page has text, and its layers have no text objects to put it in	dens side har tekst, og dens lag har ingen tekstobjekter at lægge den i
 @msg	its type is to come in as outlines, which only its page has	dens tekst kommer ind som konturer, hvilket kun dens side har
@@ -3845,6 +3855,8 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` skal være `auto` eller en sprogkode som `en` eller `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` skal være en #rrggbb-farve
 @msg	`{key}` must be a number	`{key}` skal være et tal
+@msg	`{key}` must be a number, not {v}	`{key}` skal være et tal, ikke {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} skal være Unix-tid i sekunder (et heltal) eller null
 @msg	`{key}` must be a string	`{key}` skal være en streng
 @msg	`{key}` must be a whole number	`{key}` skal være et heltal
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` skal være et heltal mellem {min} og {max} (fik {x})
@@ -3882,6 +3894,7 @@ imageTrace	Outline	Kontur
 @msg	a page tree node has no kids	en node i sidetræet har ingen børn
 @msg	a page's placement is not finite	en sides placering er ikke endelig
 @msg	a preset named `{_1}` exists	der findes en forudindstilling med navnet `{_1}`
+@msg	a swatch or color group named `{n}` exists	der findes en farveprøve eller farvegruppe med navnet `{n}`
 @msg	a slice size must be a positive number of points	en udsnitsstørrelse skal være et positivt antal punkter
 @msg	a stream runs past the end	en strøm løber forbi slutningen
 @msg	a stream's length is wrong	længden på en strøm er forkert
@@ -3963,6 +3976,8 @@ imageTrace	Outline	Kontur
 @msg	missing `name`	`name` mangler
 @msg	missing `tool`	`tool` mangler
 @msg	missing index	indeks mangler
+@msg	missing number `{key}`	tallet `{key}` mangler
+@msg	missing integer `{key}`	heltallet `{key}` mangler
 @msg	multiple windows land with M11.5	flere vinduer lander med M11.5
 @msg	name the file	giv filen et navn
 @msg	no CSS to copy: select objects with CSS of their own	ingen CSS at kopiere: markér objekter med deres egen CSS
@@ -4073,6 +4088,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to redo	intet at gendanne
 @msg	nothing to save: the document has no visible art	intet at gemme: dokumentet har ingen synlig grafik
 @msg	nothing to undo	intet at fortryde
+@msg	no history to clear	ingen historik at rydde
 @msg	nothing to warp	intet at forvride
 @msg	nothing to wrap	intet at ombryde
 @msg	object {0} cannot have children	objektet {0} kan ikke have underobjekter
@@ -4237,6 +4253,7 @@ imageTrace	Outline	Kontur
 @msg	{C}: no effect at index {from}	{C}: ingen effekt ved indeks {from}
 @msg	{_1} failed: {e}	{_1} mislykkedes: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	{_1}-filer kan åbnes, men ikke skrives (se document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	{_1}-filer skrives af file.saveAsTemplate
 @msg	{_1} font families available	{_1} skrifttypefamilier tilgængelige
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} er en live-effekt (Effekt › Plug-ins)
 @msg	{_1} is already used by {_2}	{_1} bruges allerede af {_2}
@@ -4343,6 +4360,9 @@ imageTrace	Outline	Kontur
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet af trin {i} har ingen sådan værdi (skriv $$ for at få et bogstaveligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: der findes intet trin {i} før dette (trin nummereres fra 0; skriv $$ for at få et bogstaveligt $)
 @msg	object ids are non-negative integers, not {v}	objekt-id'er er ikke-negative heltal, ikke {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} skal være et array af objekt-id'er, der er ikke-negative heltal
+@msg	invalid object id {value}: expected a non-negative integer	ugyldigt objekt-id {value}: et ikke-negativt heltal var forventet
+@msg	no such object id {value}	der findes intet objekt med id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: læserettighed mangler: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: skriverettighed mangler: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringssti afvist: uden for læseroden {root}: {path}
@@ -4755,6 +4775,11 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+# 3D light management.
+	Lights	Lyskilder
+	Add Light	Tilføj lyskilde
+	Delete Light	Slet lyskilde
+3d	Light	Lyskilde
 	2up	2 pr. ark
 	4up	4 pr. ark
 	A6	A6
@@ -5166,3 +5191,21 @@ swatch	Bright Violet	Kraftig violet
 	Clear Artboard Color	Fjern tegnefladefarve
 @msg	artboard {_1} is locked	tegneflade {_1} er låst
 	Include Artboard Fill	Medtag tegnefladefarve
+	Artboard {n} of {total}	Tegneflade {n} af {total}
+	Encoding and writing the file…	Koder og skriver filen…
+@plural	{n} more export waiting|{n} more exports waiting	{n} eksport mere venter|{n} eksporter mere venter
+	Continue in Background	Fortsæt i baggrunden
+	Cancel Export	Annullér eksport
+@msg	Export cancelled	Eksport annulleret
+# Paragraph panel menu › Justification…
+	Desired	Ønsket
+	Word Spacing:	Ordafstand:
+	Letter Spacing:	Bogstavafstand:
+	Glyph Scaling:	Skalering af glyffer:
+	Auto Leading:	Automatisk linjeafstand:
+	Single Word Justification:	Justering af enkeltord:
+	Full Justify	Lige margener
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+	Justification	Justering
+# Select by Color (select.color)
+	Select by Color	Markér efter farve

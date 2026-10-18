@@ -33,13 +33,7 @@ use crate::text::TextObject;
 
 /// Interpolate two colours in their shared model (display RGB when the models differ).
 pub fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
-    let l = |x: f32, y: f32| x + (y - x) * t;
-    match (*a, *b) {
-        (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => Color::cmyk(l(c, c2), l(m, m2), l(y, y2), l(k, k2)),
-        (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(k, k2)),
-        (Color::Lab { l: l1, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => Color::lab(l(l1, l2), l(a, a2), l(b, b2)),
-        _ => a.lerp(b, t),
-    }
+    a.lerp_keep_model(b, t)
 }
 
 fn lerp_f32(x: f32, y: f32, t: f32) -> f32 {

@@ -14,8 +14,9 @@
 //! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
 //! default, with a parameter error ([`check_effect_params`]). [`Session::execute`] itself takes
 //! what it is given, so the journal of an older version still replays, except for an effect's
-//! `color` that the effect can't read, which `effect.apply` and `effect.setParams` refuse
-//! themselves ([`check_effect_color`]).
+//! `color` that the effect can't read and a Levels or Curves `channel` that the effect doesn't
+//! have, which `effect.apply` and `effect.setParams` refuse themselves ([`check_effect_color`],
+//! [`check_effect_channel`]).
 
 use serde_json::Value;
 
@@ -214,9 +215,10 @@ fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
 
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
 /// effect takes (those of its dialog defaults and of its params description), each of its
-/// default's type, and a `color` the effect can draw ([`check_effect_color`]). Numbers out of
-/// range pass: the effect clamps them when it draws. An effect plug-in resolves its own against
-/// its manifest, and an unknown effect is the command's to report.
+/// default's type, a `color` the effect can draw ([`check_effect_color`]) and a Levels or Curves
+/// `channel` the effect has ([`check_effect_channel`]). Numbers out of range pass: the effect
+/// clamps them when it draws. An effect plug-in resolves its own against its manifest, and an
+/// unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
     let Value::Object(given) = params else { return Ok(()) };
     if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
@@ -243,7 +245,8 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             _ => {}
         }
     }
-    check_effect_color(id, effect, params)
+    check_effect_color(id, effect, params)?;
+    check_effect_channel(id, effect, params)
 }
 
 /// Can an effect read `v` as its `color`: a string [`Color::from_hex`] reads (`#rrggbb`, `#rgb`,
@@ -278,6 +281,20 @@ pub(crate) fn check_effect_color(id: &str, effect: &str, params: &Value) -> Resu
         return Err(bad(id, format!("`{key}` must be a #rrggbb color")));
     }
     Ok(())
+}
+
+/// The `channel` in `params` of Levels or Curves (`effect`), as command `id` was given it: a
+/// parameter error naming the channels unless the effect reads it
+/// ([`vectorcraft_render::effects::is_channel`]); the effect draws any other value as RGB.
+/// `effect.apply` and `effect.setParams` run this themselves before they edit, as they run
+/// [`check_effect_color`].
+pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Result<()> {
+    let key = "channel";
+    let Some(v) = params.get(key) else { return Ok(()) };
+    if !matches!(effect, "adjust.levels" | "adjust.curves") || v.as_str().is_some_and(vectorcraft_render::effects::is_channel) {
+        return Ok(());
+    }
+    Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
 }
 
 /// Commands whose params aren't checked yet (#1442): they read keys in ways the audit of the

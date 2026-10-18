@@ -3,6 +3,8 @@
 //! report mixed values, and saves and exports never carry the editing layer.
 
 use serde_json::{Value, json};
+use vectorcraft_geom::Affine;
+use vectorcraft_render::{RenderOptions, Renderer};
 
 use super::*;
 use crate::cmd::maskedit::MASK_EDIT_LAYER;
@@ -44,6 +46,21 @@ fn has_edit_layer(d: &Document) -> bool {
 
 fn data(v: &Value) -> Vec<u8> {
     vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()
+}
+
+/// #2727: the canvas passes `isolation` while mask art is edited; the editing layer is not drawn on
+/// the page, so isolation dimming must not run or the artwork washes out.
+#[test]
+fn mask_editing_does_not_dim_the_canvas() {
+    let mut s = session();
+    editing_mask(&mut s);
+    let st = s.doc().unwrap();
+    let layer = st.isolation.expect("mask editing isolates the temporary layer");
+    let render = |opts: &RenderOptions| Renderer::new().render(&st.doc, 300, 300, Affine::IDENTITY, opts);
+    let plain = render(&RenderOptions::default());
+    let canvas = render(&RenderOptions { isolated: Some(layer), ..Default::default() });
+    assert_eq!(plain.pixel(50, 100), canvas.pixel(50, 100), "inside the mask");
+    assert_eq!(plain.pixel(250, 100), canvas.pixel(250, 100), "outside the mask");
 }
 
 #[test]

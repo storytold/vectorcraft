@@ -75,7 +75,17 @@ pollster = "1"
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one. Both are already in the build through winit.
 wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = ["client"] }
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+# The save dialog's parent window on Wayland (src/portal_save.rs): an xdg-foreign handle (in
+# wayland-protocols' `unstable` set) made on the window's own connection. MIT, already in the build
+# through winit and rfd.
+wayland-backend = { version = "0.3", features = ["client_system"] }
+
+# The save dialog's file type (src/portal_save.rs, #2679): the desktop portal over D-Bus, on the
+# systems where rfd shows the portal's dialog. MIT, already in the build through accesskit. Pinned
+# exactly: review the diff before bumping.
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+zbus = "=5.19.0"
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
@@ -84,3 +94,5 @@ winresource = "0.1"
 [dev-dependencies]
 # Bound socket buffers in real loopback transport deadline regressions.
 socket2 = { workspace = true }
+# src/portal_save.rs's tests build and read the portal's D-Bus values on every system.
+zbus = "=5.19.0"

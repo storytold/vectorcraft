@@ -301,7 +301,7 @@ fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Mod
 /// `c` in `model` ([`new_color_model`]) when it is an RGB color, converted through the color
 /// settings (the working spaces and their intent) as Document Color Mode converts it. Other colors
 /// are returned as given.
-fn stored_color(model: Option<vectorcraft_color::cms::Model>, c: Color) -> Color {
+pub(crate) fn stored_color(model: Option<vectorcraft_color::cms::Model>, c: Color) -> Color {
     match (c, model) {
         (Color::Rgb { .. }, Some(m)) => {
             let cms = vectorcraft_color::cms::active();
@@ -318,8 +318,8 @@ pub(crate) fn new_color(s: &Session, p: &Value, c: Color) -> Color {
 }
 
 /// Parse a paint from params (color / none / swatch / gradient). None = no paint keys given. A
-/// colour or gradient given in RGB takes the document's colour model ([`new_color_model`]),
-/// converted through the color settings.
+/// color or gradient (its stops and freeform points) given in RGB takes the document's color
+/// model ([`new_color_model`]), converted through the color settings.
 pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
     let model = new_color_model(s, p);
     let new_color = |c: Color| stored_color(model, c);
@@ -342,9 +342,17 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         };
     }
     if let Some(g) = p.get("gradient") {
+        // A stop naming a process swatch keeps the swatch's model.
+        let stored = super::gradient::stop_colors(s, p, g);
         let g = super::gradient::link_stops(&s.doc()?.doc, g).map_err(|e| bad("paint", e))?;
-        let mut gp = super::gradient::parse_gradient(&g).map_err(|e| bad("paint", e))?;
-        gp.gradient.stops.iter_mut().filter(|st| st.swatch.is_none()).for_each(|st| st.color = new_color(st.color));
+        let mut gp = super::gradient::parse_gradient(&super::gradient::with_stored_stops(&g, &Paint::None, &stored)).map_err(|e| bad("paint", e))?;
+        if g.get("stops").is_none() {
+            // The default stops, white to black.
+            gp.gradient.stops.iter_mut().for_each(|st| st.color = new_color(st.color));
+        }
+        if let Some(f) = &mut gp.freeform {
+            f.points.iter_mut().for_each(|pt| pt.color = new_color(pt.color));
+        }
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {

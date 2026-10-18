@@ -602,6 +602,7 @@
 	Created:	Δημιουργήθηκε:
 	Crop	Περικοπή
 	Crop Image	Περικοπή εικόνας
+	Edit Path	Επεξεργασία διαδρομής
 	Mask	Μάσκα
 	Crop Marks	Σημάδια ξακρίσματος
 	Crop To	Περικοπή ως προς
@@ -1283,6 +1284,10 @@
 	Highlight Substituted Glyphs	Επισήμανση υποκατεστημένων γλύφων
 	History	Ιστορικό
 	History Options…	Επιλογές ιστορικού…
+	Step Backward	Ένα βήμα πίσω
+	Step Forward	Ένα βήμα εμπρός
+	Clear History	Εκκαθάριση ιστορικού
+	Set History Limit…	Ορισμός ορίου ιστορικού…
 	History States	Καταστάσεις ιστορικού
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Εφαρμογή συνόλου δεδομένων
@@ -1987,6 +1992,11 @@ axis	Both	Και τα δύο
 @msg	its editing data doesn't say where its artboard is	Τα δεδομένα επεξεργασίας δεν προσδιορίζουν τη θέση του πίνακα σχεδίασης
 @msg	its editing data has no layers	Τα δεδομένα επεξεργασίας δεν περιλαμβάνουν επίπεδα
 @msg	its editing data is damaged	Τα δεδομένα επεξεργασίας είναι κατεστραμμένα
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	Τα δεδομένα επεξεργασίας αφορούν σελίδα {w} × {h} pt, όχι τη σελίδα του αρχείου {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	Τα δεδομένα επεξεργασίας αφορούν σελίδα {w} × {h} pt, δηλαδή τη σελίδα του αρχείου {pw} × {ph} pt σε κλίμακα {scale}
+@msg	its zlib compression is damaged	η συμπίεση zlib τους είναι κατεστραμμένη
+@msg	its Zstandard compression is damaged	η συμπίεση Zstandard τους είναι κατεστραμμένη
+@msg	it decompresses to more than {_1} MB	αποσυμπιεσμένα υπερβαίνουν τα {_1} MB
 @msg	its editing data is for a different page	Τα δεδομένα επεξεργασίας αφορούν άλλη σελίδα
 @msg	its layers use {_1}, which aren't read yet	Τα επίπεδά του χρησιμοποιούν {_1}, που δεν υποστηρίζονται ακόμη στην ανάγνωση
 @msg	its page has text, and its layers have no text objects to put it in	Η σελίδα περιέχει κείμενο, αλλά τα επίπεδα δεν διαθέτουν αντικείμενα κειμένου για την τοποθέτησή του
@@ -2054,6 +2064,7 @@ axis	Both	Και τα δύο
 @msg	Save for Web: the image is empty	Αποθήκευση για ιστό: η εικόνα είναι κενή
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το document.export για άλλες μορφές
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το file.saveAsTemplate για να το γράψετε
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	Το aiVersion 7 γράφει αρχεία .ai παλαιού τύπου· ένα πρότυπο .ait είναι πάντα συμβατό με PDF
 @msg	Saved recovery data for {title}	Αποθηκεύτηκαν δεδομένα ανάκτησης για το {title}
 @msg	Saved to User Defined: {_1}	Αποθηκεύτηκε στις προσαρμοσμένες ρυθμίσεις: {_1}
 @msg	Saved {path}	Αποθηκεύτηκε το {path}
@@ -2086,6 +2097,8 @@ axis	Both	Και τα δύο
 @msg	`{key}` must be a #rrggbb color	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
+@msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key}: πρέπει να είναι χρόνος Unix σε δευτερόλεπτα (ακέραιος) ή null
 @msg	`{key}` must be a string	Το `{key}` πρέπει να είναι συμβολοσειρά
 @msg	`{key}` must be a whole number	Το `{key}` πρέπει να είναι ακέραιος αριθμός
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	Το `{key}` πρέπει να είναι ακέραιος από {min} έως {max} (δόθηκε {x})
@@ -2959,6 +2972,8 @@ theme	Appearance	Εμφάνιση
 	Redefine Character Style	Επαναπροσδιορισμός στυλ χαρακτήρων
 	Redefine Graphic Style	Επαναπροσδιορισμός στυλ γραφικών
 	Redefine Graphic Style “{name}”	Επαναπροσδιορισμός στυλ γραφικών «{name}»
+	Apply {name}	Εφαρμογή στυλ «{name}»
+	Redefine {name}	Επαναπροσδιορισμός στυλ «{name}»
 	Redefine Paragraph Style	Επαναπροσδιορισμός στυλ παραγράφου
 	Redefine Symbol	Επαναπροσδιορισμός συμβόλου
 	Redefine {kind} Style	Επαναπροσδιορισμός στυλ {kind}
@@ -3808,6 +3823,7 @@ theme	Appearance	Εμφάνιση
 @msg	a page tree node has no kids	ο κόμβος δέντρου σελίδων δεν έχει θυγατρικά στοιχεία
 @msg	a page's placement is not finite	η τοποθέτηση της σελίδας δεν έχει πεπερασμένες τιμές
 @msg	a preset named `{_1}` exists	υπάρχει ήδη προεπιλογή με όνομα `{_1}`
+@msg	a swatch or color group named `{n}` exists	υπάρχει ήδη δείγμα χρώματος ή ομάδα χρωμάτων με όνομα `{n}`
 @msg	a slice size must be a positive number of points	το μέγεθος τομής πρέπει να είναι θετικός αριθμός στιγμών
 @msg	a spine keeps at least two points	απαιτούνται τουλάχιστον δύο σημεία κεντρικής καμπύλης
 @msg	a stream runs past the end	η ροή υπερβαίνει το τέλος
@@ -3895,6 +3911,7 @@ theme	Appearance	Εμφάνιση
 @msg	missing `tool`	λείπει το `tool`
 @msg	missing index	λείπει ο δείκτης
 @msg	missing number `{key}`	λείπει ο αριθμός `{key}`
+@msg	missing integer `{key}`	λείπει ο ακέραιος `{key}`
 @msg	multiple windows land with M11.5	τα πολλαπλά παράθυρα θα προστεθούν στην έκδοση M11.5
 @msg	name the file	δώστε όνομα στο αρχείο
 @msg	no CSS to copy: select objects with CSS of their own	δεν υπάρχει CSS για αντιγραφή: επιλέξτε αντικείμενα με δικό τους CSS
@@ -4010,6 +4027,7 @@ theme	Appearance	Εμφάνιση
 @msg	nothing to redo	δεν υπάρχει τίποτα για επανάληψη
 @msg	nothing to save: the document has no visible art	δεν υπάρχει τίποτα για αποθήκευση: το έγγραφο δεν έχει ορατό σχέδιο
 @msg	nothing to undo	δεν υπάρχει τίποτα για αναίρεση
+@msg	no history to clear	δεν υπάρχει ιστορικό για εκκαθάριση
 @msg	nothing to warp	δεν υπάρχει τίποτα για στρέβλωση
 @msg	nothing to wrap	δεν υπάρχει τίποτα για αναδίπλωση
 @msg	object {0} cannot have children	το αντικείμενο {0} δεν μπορεί να έχει θυγατρικά στοιχεία
@@ -4017,6 +4035,7 @@ theme	Appearance	Εμφάνιση
 @msg	object {id} is not a selected top-level object	το αντικείμενο {id} δεν είναι επιλεγμένο αντικείμενο ανώτατης βαθμίδας
 @msg	page size {w} × {h}	μέγεθος σελίδας {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	η σελίδα {0} δεν υπάρχει (το PDF έχει {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: η σελίδα {n} δεν υπάρχει (το αρχείο έχει 1)
 @msg	paste unavailable	η επικόλληση δεν είναι διαθέσιμη
 @msg	path is already closed	η διαδρομή είναι ήδη κλειστή
 @msg	paths contain invalid coordinates	οι διαδρομές περιέχουν μη έγκυρες συντεταγμένες
@@ -4180,6 +4199,7 @@ theme	Appearance	Εμφάνιση
 @msg	{C}: no effect at index {from}	{C}: δεν υπάρχει εφέ στον δείκτη {from}
 @msg	{_1} failed: {e}	η ενέργεια {_1} απέτυχε: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	τα αρχεία {_1} μπορούν να ανοιχτούν αλλά όχι να αποθηκευτούν (δείτε document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	τα αρχεία {_1} αποθηκεύονται με το file.saveAsTemplate
 @msg	{_1} font families available	{_1} διαθέσιμες οικογένειες γραμματοσειρών
 @msg	{_1} is a live effect (Effect › Plug-ins)	το {_1} είναι δυναμικό εφέ (Εφέ › Πρόσθετα)
 @msg	{_1} is already used by {_2}	το {_1} χρησιμοποιείται ήδη από το {_2}
@@ -4317,6 +4337,9 @@ theme	Appearance	Εμφάνιση
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: το αποτέλεσμα του βήματος {i} δεν έχει τέτοια τιμή (γράψτε $$ για κυριολεκτικό $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: δεν υπάρχει βήμα {i} πριν από αυτό (η αρίθμηση αρχίζει από 0· γράψτε $$ για κυριολεκτικό $)
 @msg	object ids are non-negative integers, not {v}	τα αναγνωριστικά αντικειμένων πρέπει να είναι μη αρνητικοί ακέραιοι, όχι {v}
+@msg	{key} must be an array of non-negative integer object ids	{key}: πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων που είναι μη αρνητικοί ακέραιοι
+@msg	invalid object id {value}: expected a non-negative integer	μη έγκυρο αναγνωριστικό αντικειμένου {value}: αναμένεται μη αρνητικός ακέραιος
+@msg	no such object id {value}	δεν υπάρχει αντικείμενο με αναγνωριστικό {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα ανάγνωσης: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα εγγραφής: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας ανάγνωσης {root}: {path}
@@ -4779,6 +4802,11 @@ theme	Appearance	Εμφάνιση
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+# 3D light management.
+	Lights	Φώτα
+	Add Light	Προσθήκη φωτός
+	Delete Light	Διαγραφή φωτός
+3d	Light	Φως
 @msg	give the path `id`	Δώστε το `id` της διαδρομής
 	Fill and Stroke Controls	Στοιχεία ελέγχου γεμίσματος και περιγράμματος
 @msg	give a fraction `t` from 0 to 1	Δώστε μια κλασματική τιμή `t` από 0 έως 1
@@ -4942,6 +4970,8 @@ effect	Points	Σημεία
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) όταν είναι συνδεδεμένη πένα
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Αν η πένα μιας ταμπλέτας σχεδίασης δεν σχεδιάζει, επιλέξτε μία από τις ρυθμίσεις X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Mac	Mac
 	Phone 360×800	Phone 360×800
@@ -5097,6 +5127,11 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	η Επεξεργασία πρωτοτύπου ανοίγει μόνο αρχεία εικόνων και εγγράφων· το «{name}» δεν είναι τέτοιο αρχείο
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	στο πρόγραμμα περιήγησης ανοίγουν μόνο URL http, https και mailto, όχι το «{url}»
+@msg	{id} opens another app: only the person at the keyboard can run it	η εντολή {id} ανοίγει άλλη εφαρμογή: μόνο όποιος βρίσκεται στο πληκτρολόγιο μπορεί να την εκτελέσει
+@msg	“{name}” is not a file	το «{name}» δεν είναι αρχείο
 	Enable Guides for 9-Slice Scaling	Ενεργοποίηση οδηγών για κλιμάκωση 9-slice
 @msg	a mask has more than one art block	η μάσκα έχει περισσότερα από ένα μπλοκ γραφικών
 @msg	mask art ends outside a mask dictionary	τα γραφικά της μάσκας τελειώνουν έξω από το λεξικό της μάσκας
@@ -5124,3 +5159,22 @@ effect	Points	Σημεία
 	Clear Artboard Color	Εκκαθάριση χρώματος πίνακα σχεδίασης
 @msg	artboard {_1} is locked	ο πίνακας σχεδίασης {_1} είναι κλειδωμένος
 	Include Artboard Fill	Συμπερίληψη χρώματος πίνακα σχεδίασης
+	Artboard {n} of {total}	Πίνακας σχεδίασης {n} από {total}
+	Encoding and writing the file…	Κωδικοποίηση και εγγραφή του αρχείου…
+@plural	{n} more export waiting|{n} more exports waiting	{n} ακόμη εξαγωγή σε αναμονή|{n} ακόμη εξαγωγές σε αναμονή
+	Continue in Background	Συνέχεια στο παρασκήνιο
+	Cancel Export	Ακύρωση εξαγωγής
+@msg	Export cancelled	Η εξαγωγή ακυρώθηκε
+# Paragraph panel menu › Justification…
+	Desired	Επιθυμητό
+	Word Spacing:	Απόσταση λέξεων:
+	Letter Spacing:	Απόσταση γραμμάτων:
+	Glyph Scaling:	Κλιμάκωση γλυφών:
+	Auto Leading:	Αυτόματο διάστιχο:
+	Single Word Justification:	Στοίχιση μεμονωμένης λέξης:
+	Full Justify	Στοίχιση και στα δύο άκρα
+	Minimum must not exceed Desired, nor Desired Maximum.	Το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο.
+	Justification	Πλήρης στοίχιση
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
+# Select by Color (select.color)
+	Select by Color	Επιλογή βάσει χρώματος

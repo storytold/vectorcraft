@@ -123,7 +123,7 @@ fn edit(ctx: &egui::Context, t: &ColorTheme) {
 fn add_draft_to_swatches(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let d = draft(app, ctx);
     let name = if d.name.trim().is_empty() { "Color Theme" } else { d.name.trim() };
-    app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors) })).ok();
+    app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors), "keepModel": true })).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -452,5 +452,23 @@ mod tests {
         assert_eq!(draft(&app, &ctx).editing, None);
         assert_eq!(picked(&app, &ctx), None);
         frame(&mut app, &ctx);
+    }
+
+    /// In a CMYK document the theme being made goes to Swatches with its colors in their own model.
+    #[test]
+    fn the_theme_being_made_keeps_its_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx);
+        app.run("colorTheme.save", json!({"color": "#2266aa", "rule": "complementary", "name": "Harbor"})).unwrap();
+        frame(&mut app, &ctx);
+        edit_saved(&app, &ctx, "Harbor");
+        let colors = draft(&app, &ctx).colors;
+        assert!(colors.iter().all(|c| matches!(c, Color::Rgb { .. })), "{colors:?}");
+        add_draft_to_swatches(&mut app, &ctx);
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
+        assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
     }
 }

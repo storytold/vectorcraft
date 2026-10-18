@@ -43,6 +43,8 @@ mod mac_screen_color;
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
+mod portal_save;
 mod prefs_dir;
 mod printing;
 #[cfg(all(windows, not(target_vendor = "win7")))]
@@ -359,10 +361,20 @@ fn make_folder(request: &PickRequest) {
     }
 }
 
-/// Show `dialog` for `request` (on the calling thread, until it closes) → the paths picked.
+/// Show `dialog` for `request` (on the calling thread, until it closes) → the paths picked. On
+/// Linux and the BSDs a save dialog with two or more file types is the desktop portal's, over
+/// `parent`, and its answer also names the file type picked ([`portal_save`]); `dialog` shows when
+/// the portal can't.
 #[cfg(not(target_os = "macos"))]
-fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest) -> Vec<String> {
+#[cfg_attr(windows, allow(unused_variables))]
+fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) -> Vec<String> {
     make_folder(request);
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    if let PickRequest::Save(pick) = request
+        && let Some(answer) = portal_save::pick(pick, parent.as_deref())
+    {
+        return answer;
+    }
     let paths = match request {
         PickRequest::Open(_) => dialog.pick_file().into_iter().collect(),
         PickRequest::OpenMany => dialog.pick_files().unwrap_or_default(),
@@ -375,7 +387,7 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest) -> Vec<String> {
 /// Show the dialog for `request` over `parent` now → the paths picked.
 #[cfg(not(target_os = "macos"))]
 fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
-    show_dialog(file_dialog(&request, parent), &request)
+    show_dialog(file_dialog(&request, parent), &request, parent)
 }
 
 /// macOS shows no dialog in line: its modal loop would run inside winit's event handler, and an
@@ -389,6 +401,7 @@ fn pick_now(request: PickRequest, _parent: &Parent) -> Vec<String> {
 
 /// File → Show in Folder: select `path` in Finder / Explorer, or open its folder elsewhere.
 fn reveal(path: &str) -> Result<(), String> {
+    explorer_safe(path)?;
     reveal_command(path).spawn().map(|_| ()).map_err(|e| format!("can't show {path}: {e}"))
 }
 
@@ -430,11 +443,12 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
     let dialog = file_dialog(&request, parent);
     let (tx, rx) = std::sync::mpsc::channel();
     let ui = ui.clone();
+    let parent = parent.clone();
     std::thread::Builder::new()
         .name("file-dialog".into())
         .spawn(move || {
             // The app gone meanwhile has no use for the answer.
-            let _ = tx.send(show_dialog(dialog, &request));
+            let _ = tx.send(show_dialog(dialog, &request, &parent));
             ui.request_repaint();
         })
         .ok()?;
@@ -559,8 +573,15 @@ fn services(parent: Parent, ui: egui::Context) -> Services {
     }
 }
 
+/// Windows passes `path` to Explorer inside quotes it adds itself, so a path holding a quote (which
+/// no Windows file name has) is refused rather than split into other arguments.
+fn explorer_safe(path: &str) -> Result<(), String> {
+    if cfg!(windows) && path.contains('"') { Err(format!("can't open {path}: the path contains a quotation mark")) } else { Ok(()) }
+}
+
 /// Edit Original, Show Package: open `path` (a file or a folder) in the system's default app for it.
 fn open_file(path: &str) -> Result<(), String> {
+    explorer_safe(path)?;
     #[cfg(windows)]
     let mut c = {
         use std::os::windows::process::CommandExt as _;
@@ -788,14 +809,19 @@ fn main() -> std::process::ExitCode {
     let custom_titlebar = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
-    // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151).
+    // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
+    // and X11 (XWayland) When a Pen Is Attached does so when a pen is attached, where the pen draws (#2028).
     #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
-        if xwayland::wanted(pref, |name| std::env::var_os(name)) {
+        if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
-                log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                if pref == Some("x11WithPen") {
+                    log::info!("pen found: opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                } else {
+                    log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                }
                 use winit::platform::x11::EventLoopBuilderExtX11 as _;
                 options.event_loop_builder = Some(Box::new(|builder| {
                     builder.with_x11();

@@ -34,6 +34,8 @@ pub fn revolve_options(p: &Value) -> Revolve {
         light_rotation: num(p, "lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0),
         light_height: num(p, "lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1),
         light_behind: flag(p, "lightBehind", false),
+        light_color: crate::lighting::light_color(p),
+        lights: crate::lighting::lights(p),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,
         light_softness: num(p, "lightSoftness", 0.0) / 100.0,
         ambient: num(p, "ambient", 25.0) / 100.0,
@@ -46,6 +48,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
 /// Validate before a command mutates the document. Loading external files is still bounded
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
+    crate::lighting::validate(p)?;
     let path = profile(n).ok_or("Revolve currently requires a path or compound path. Select a profile drawn with the Pen tool.")?;
     let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
     if !path.subpaths.iter().any(|sp| sp.anchors.len() >= 2) {
@@ -87,7 +90,9 @@ fn surface(
     let b = path.bounds()?;
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
-    let faces = vectorcraft_three_d::revolve(path, b, revolve_options(&merged_params(REVOLVE, &fx.params))).ok()?;
+    let options = revolve_options(&merged_params(REVOLVE, &fx.params));
+    let colored = options.light_color != [1.0; 3] || options.lights.is_some();
+    let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
     // failure also retains the complete surface rather than losing any of the user's art.
@@ -102,19 +107,42 @@ fn surface(
     let faces = visible.unwrap_or_else(|| {
         faces
             .into_iter()
-            .map(|f| vectorcraft_three_d::VisibleFace { path: f.path(), brightness: f.brightness, depth: f.depth, gradient: f.gradient })
+            .map(|f| vectorcraft_three_d::VisibleFace {
+                path: f.path(),
+                brightness: f.brightness,
+                depth: f.depth,
+                gradient: f.gradient,
+                illumination: f.illumination,
+                light_gradient: f.light_gradient,
+                rgb_gradient: f.rgb_gradient,
+            })
             .collect()
     });
     let children = faces
         .into_iter()
         .map(|face| {
+            if let Some(g) = face.rgb_gradient
+                && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
+            {
+                return Arc::new(crate::lighting::rgb_gradient_art(n.id, &face.path, &paint, g));
+            }
+            if let (true, Paint::Gradient(_), Some(g)) = (colored, &paint, face.light_gradient) {
+                return Arc::new(crate::lighting::gradient_art(n.id, &face.path, &paint, g));
+            }
             let mut fill = FillLayer::new(paint.clone());
             let mut items = vec![];
             if let Some(c) = paint.color() {
                 let [r, g, b] = c.to_rgb();
                 let color = |s: f64| Color::rgb(r * s as f32, g * s as f32, b * s as f32);
-                fill.paint = face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0));
+                fill.paint = if colored {
+                    face.light_gradient
+                        .map_or_else(|| Paint::solid(crate::lighting::shade(c, face.illumination)), |g| crate::lighting::smooth_paint(g, c))
+                } else {
+                    face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0))
+                };
                 items.push(AppearanceItem::Fill(fill));
+            } else if colored && matches!(paint, Paint::Gradient(_)) {
+                items = crate::lighting::fills(&paint, face.illumination, face.brightness, true);
             } else {
                 items.push(AppearanceItem::Fill(fill));
                 let mut shadow = FillLayer::new(Paint::solid(Color::BLACK));

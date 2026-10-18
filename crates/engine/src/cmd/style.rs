@@ -456,7 +456,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     let look = GraphicStyle::of(String::new(), captured(n), n);
     let name = d.graphic_styles[i].name.clone();
     let chars = s.prefs.override_char_color;
-    s.edit(&format!("Redefine Graphic Style \u{201c}{name}\u{201d}"), |d, _| {
+    s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
         let id = d.graphic_style_id(i);
         let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
         // Objects still linked follow the new definition; edited ones are unlinked (they keep

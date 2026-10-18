@@ -953,8 +953,10 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let name_end;
     match renaming {
         Some((rid, mut buf)) if rid == n.id.0 => {
+            let field = rename_id().with("field");
+            let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-            let te = child.add(egui::TextEdit::singleline(&mut buf).desired_width(name_rect.width()).font(font.clone()));
+            let te = child.add(egui::TextEdit::singleline(&mut buf).id(field).desired_width(name_rect.width()).font(font.clone()));
             // Focus the field as it opens. Asking every frame took the focus back from Enter,
             // Escape or a click elsewhere, so the rename never ended.
             if !te.has_focus() && !te.lost_focus() {
@@ -966,6 +968,10 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
                     out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
                 }
             } else {
+                // Shift+Enter renames it and keeps the field open.
+                if kept && buf != name {
+                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf.clone()})));
+                }
                 ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, buf)));
             }
             name_end = name_rect.right();
@@ -2016,6 +2022,35 @@ mod tests {
         frame(&mut app, &ctx, vec![key(egui::Key::Escape)], false);
         frame(&mut app, &ctx, vec![], false);
         assert_eq!(name(&app), "Sky", "Escape cancels");
+    }
+
+    /// Shift+Enter in the name field renames the layer and keeps the field open, the new name
+    /// selected; Enter then renames it again and closes the field.
+    #[test]
+    fn shift_enter_renames_a_layer_and_keeps_the_field_open() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let layer = app.session.doc().unwrap().doc.layers[0].id;
+        let name = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].display_name();
+        let ctx = egui::Context::default();
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let field = rename_id().with("field");
+        ctx.data_mut(|d| d.insert_temp(rename_id(), (layer.0, name(&app))));
+        frame(&mut app, &ctx, vec![], false);
+        frame(&mut app, &ctx, vec![], false);
+        frame(&mut app, &ctx, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Sky".into())], false);
+        frame(&mut app, &ctx, vec![key(egui::Key::Enter, egui::Modifiers::SHIFT)], false);
+        assert_eq!(name(&app), "Sky", "Shift+Enter applies the name");
+        assert!(ctx.memory(|m| m.has_focus(field)), "the field keeps the focus");
+        assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).is_some(), "and stays open");
+        frame(&mut app, &ctx, vec![], false);
+        let selected = egui::TextEdit::load_state(&ctx, field).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+        assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 3)), "the name shown is selected");
+        frame(&mut app, &ctx, vec![egui::Event::Text("Sea".into())], false);
+        frame(&mut app, &ctx, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], false);
+        frame(&mut app, &ctx, vec![], false);
+        assert_eq!(name(&app), "Sea", "typing replaced it, and Enter applies that");
+        assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).is_none(), "and closes the field");
     }
 
     #[test]

@@ -75,7 +75,8 @@ fn separates(f: &Format) -> bool {
 }
 
 /// The options the dialog shows: arrays and objects are for agents, and a page range replaces the
-/// single artboard choice; none for a format with its own dialog.
+/// single artboard choice; none for a format with its own dialog. A `.ait` template has no
+/// Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
     let separate = separates(f);
@@ -84,7 +85,8 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
         !(matches!(o.ty, "array" | "object")
             || (range && o.name == "artboard")
             || (separate && o.name == "range")
-            || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards"))
+            || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
+            || (f.id == "ait" && o.name == "aiVersion"))
     })
 }
 
@@ -724,6 +726,15 @@ mod tests {
         let (name, bytes) = written.borrow()[0].clone();
         assert_eq!(name, "Untitled-1 template.ait");
         assert!(bytes.starts_with(b"%PDF"));
+    }
+
+    /// The `.ait` template's options have no Version row: Save as Template writes it
+    /// PDF-compatible only. A `.ai` file's options keep it.
+    #[test]
+    fn the_ait_template_options_have_no_version_row() {
+        let names = |id: &str| shown(fileio::format(id).unwrap()).map(|o| o.name).collect::<Vec<_>>();
+        assert!(names("ai").contains(&"aiVersion"), "{:?}", names("ai"));
+        assert!(!names("ait").contains(&"aiVersion"), "{:?}", names("ait"));
     }
 
     /// A name typed in the Save as Template panel with a Save As format's extension gets the

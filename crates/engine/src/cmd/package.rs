@@ -400,7 +400,7 @@ fn check_no_overwrite(root: &Path, entries: &[Entry], sources: &[&str]) -> Resul
 
 /// The MS-DOS time and date a zip entry records: now (UTC), else 1980-01-01.
 fn dos_time() -> (u16, u16) {
-    let Some(t) = vectorcraft_doc::metadata::now_unix() else { return (0, 0x21) };
+    let Some(t) = vectorcraft_doc::metadata::output_time() else { return (0, 0x21) };
     let [y, mo, d, h, mi, s] = vectorcraft_doc::metadata::civil(t);
     let date = (((y - 1980).clamp(0, 127) << 9) | (mo << 5) | d) as u16;
     (((h << 11) | (mi << 5) | (s / 2)) as u16, date)

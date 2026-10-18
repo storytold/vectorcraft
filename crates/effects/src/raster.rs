@@ -29,6 +29,8 @@ pub enum RasterFx {
         /// instead of `color`; `None` when it is `color`.
         darkness: Option<f32>,
     },
+    /// Blurs the art's solid silhouette grown by a quarter of a pixel of the document's raster grid,
+    /// as the glows AI files export measure.
     OuterGlow {
         mode: BlendMode,
         opacity: f32,
@@ -93,6 +95,10 @@ impl RasterFx {
     pub fn spread(&self, bounds: Rect, line: f64) -> Rect {
         match self {
             RasterFx::Rasterize(r) => r.image(bounds, line),
+            RasterFx::OuterGlow { .. } => {
+                let o = self.outset(bounds) + 0.25 * line;
+                bounds.inflate(o, o)
+            }
             fx => {
                 let o = fx.outset(bounds);
                 bounds.inflate(o, o)
@@ -197,7 +203,7 @@ impl Rasterize {
         let (px, rest) = data.as_chunks_mut::<4>();
         let (src, src_rest) = image.as_chunks::<4>();
         let fits = |n: usize, w: usize, h: usize, rest: usize| w > 0 && h > 0 && rest == 0 && w.checked_mul(h) == Some(n);
-        if !fits(px.len(), w, h, rest.len()) || !fits(src.len(), cols, rows, src_rest.len()) || !(rect.width() > 0.0 && rect.height() > 0.0) {
+        if !(fits(px.len(), w, h, rest.len()) && fits(src.len(), cols, rows, src_rest.len()) && rect.width() > 0.0 && rect.height() > 0.0) {
             return;
         }
         let (sx, sy) = (cols as f64 / rect.width(), rows as f64 / rect.height());

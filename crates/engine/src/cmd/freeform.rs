@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
             has_doc,
             add_point
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), at?: [x,y] (document coordinates), color?, opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
+            "{index? (default: the selected point), at?: [x,y] (document coordinates), color?, keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
             has_doc,
             set_point
         ),
@@ -132,6 +132,12 @@ fn point_fields(v: &Value, pt: &mut FreeformPoint, to_paint: Affine) -> std::res
         pt.spread = fraction(s, "spread")?;
     }
     Ok(())
+}
+
+/// The `color` of `p` as the document stores it: an RGB color in a CMYK document becomes CMYK
+/// through the color settings ([`super::paint::new_color`]). `None` without a valid one.
+fn given_color(s: &Session, p: &Value) -> Option<vectorcraft_color::Color> {
+    p.get("color").and_then(color_value).map(|c| super::paint::new_color(s, p, c))
 }
 
 /// Parse the `freeform` param of a gradient paint (`{points: [{at, color, opacity?, spread?}],
@@ -238,11 +244,15 @@ fn add_point(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Value::Bool(true)) => s.selected_freeform_point(),
         Some(_) => return Err(bad(C, "`line` must be true or false")),
     };
+    let given = given_color(s, p);
     let index = edit(s, p, C, |f, sp| {
         let q = sp.to_paint * at;
         let (color, opacity) = f.sample(q, sp.scale);
         let mut pt = FreeformPoint { opacity, ..FreeformPoint::new(q, color) };
         point_fields(p, &mut pt, sp.to_paint)?;
+        if let Some(c) = given {
+            pt.color = c;
+        }
         let i = f.add_point(pt);
         if let Some(from) = join {
             f.connect(from, i);
@@ -256,9 +266,14 @@ fn add_point(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.freeform.setPoint";
     let i = point_index(s, p, C)?;
+    let given = given_color(s, p);
     edit(s, p, C, |f, sp| {
         check_index(f, i)?;
-        point_fields(p, &mut f.points[i], sp.to_paint)
+        point_fields(p, &mut f.points[i], sp.to_paint)?;
+        if let Some(c) = given {
+            f.points[i].color = c;
+        }
+        Ok(())
     })?;
     Ok(json!({ "index": i }))
 }

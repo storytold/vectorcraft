@@ -232,7 +232,7 @@ fn fill_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Paint>> {
         Some(v @ Value::Object(o)) if o.contains_key("color") || o.contains_key("swatch") || o.contains_key("gradient") || o.contains_key("none") => {
             paint_from(s, v)
         }
-        Some(v) => color_value(v).map(|c| Some(Paint::solid(c))).ok_or_else(|| bad(cmd, format!("bad fill {v}"))),
+        Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad fill {v}"))),
     }
 }
 

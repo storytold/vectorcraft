@@ -18,6 +18,7 @@ mod features;
 mod fontconfig;
 mod fontdb;
 pub mod hyphen;
+mod justify;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -112,6 +113,10 @@ pub struct PositionedGlyph {
     pub xf: Affine,
     /// True when the logical leading edge is the glyph’s right edge.
     pub rtl: bool,
+    /// How much wider than its font draws it the glyph is drawn by its paragraph's Glyph Scaling
+    /// (Justification…), Desired and justification together: 1 at 100%. Horizontal Scale isn't
+    /// included.
+    pub scale: f64,
 }
 
 /// One line of laid-out text.
@@ -474,23 +479,36 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
     out
 }
 
-/// Move horizontally through visual caret stops; source offsets stay in logical order.
+/// Move horizontally through visual caret stops; source offsets stay in logical order. Stops at
+/// one x (both ends of a cluster drawn with no advance) are visited one at a time in byte order.
+/// Going right, the caret takes them in increasing order on left-to-right glyphs and in
+/// decreasing order on right-to-left glyphs; going left, it takes them in the reverse order.
 pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize {
     let li = layout.line_of(byte);
     let Some(line) = layout.lines.get(li) else { return byte };
-    let x = layout.logical_point(caret_position(layout, byte).0).x;
-    let mut stops: Vec<_> =
-        layout.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default().iter().flat_map(|g| [g.byte, g.byte + g.len]).collect();
+    let glyphs = layout.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default();
+    // Returns a stop's x and its place among the stops at that x (larger is further right),
+    // taken from the glyph that `caret_position` puts it on.
+    let stop = |b: usize| {
+        let rtl =
+            glyphs.iter().find(|g| g.byte <= b && g.byte + g.len > b).or_else(|| glyphs.iter().max_by_key(|g| g.byte + g.len)).is_some_and(|g| g.rtl);
+        (layout.logical_point(caret_position(layout, b).0).x, if rtl { -(b as f64) } else { b as f64 })
+    };
+    let (x, order) = stop(byte);
+    let mut stops: Vec<_> = glyphs.iter().flat_map(|g| [g.byte, g.byte + g.len]).collect();
     stops.sort_unstable();
     stops.dedup();
     stops
         .into_iter()
         .filter_map(|b| {
-            let bx = layout.logical_point(caret_position(layout, b).0).x;
-            let d = if right { bx - x } else { x - bx };
-            (d > 1e-6).then_some((d, b))
+            // Both the distance and the place among stops at one x are counted in the step's direction.
+            let (bx, bo) = stop(b);
+            let (d, o) = if right { (bx - x, bo - order) } else { (x - bx, order - bo) };
+            // The end of a soft-wrapped line is measured on the next line: it never wins a tie.
+            let o = if layout.line_of(b) == li { o } else { f64::INFINITY };
+            if d.abs() <= 1e-6 { (o > 0.0 && o.is_finite()).then_some((0.0, o, b)) } else { (d > 1e-6).then_some((d, o, b)) }
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .min_by(|a, b| if (a.0 - b.0).abs() <= 1e-6 { a.1.total_cmp(&b.1) } else { a.0.total_cmp(&b.0) })
         .map_or_else(
             || {
                 if right != line.rtl {
@@ -499,7 +517,7 @@ pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize 
                     li.checked_sub(1).and_then(|previous| layout.lines.get(previous)).map_or(byte, |previous| previous.end)
                 }
             },
-            |(_, b)| b,
+            |(_, _, b)| b,
         )
 }
 
@@ -538,6 +556,10 @@ mod tests_embed;
 mod tests_fit;
 #[cfg(test)]
 mod tests_inline;
+#[cfg(test)]
+mod tests_joiners;
+#[cfg(test)]
+mod tests_justify;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

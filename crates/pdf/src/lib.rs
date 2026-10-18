@@ -95,6 +95,8 @@ pub struct PdfOptions {
     pub title: Option<String>,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
+    /// Modification date as Unix seconds (UTC); `None` = the creation date.
+    pub modified: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
     /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer

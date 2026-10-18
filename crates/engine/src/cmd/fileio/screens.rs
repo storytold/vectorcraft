@@ -18,10 +18,11 @@ use vectorcraft_geom::Rect;
 
 use super::super::*;
 use super::encode::single_artboard;
-use super::export::{isolated, selected_artwork, without_artboards};
+use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode_with_warnings, unique_file_names,
+    with_black_output, writable, write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -148,10 +149,29 @@ fn safe_name(s: &str) -> Option<String> {
     (!n.trim_matches('.').is_empty()).then_some(n)
 }
 
-/// Text that goes into a file name (prefix, suffix, a data set's name in Batch): path separators and
-/// `:` become `-`, so the name cannot make a subfolder or point outside the folder the file is written to.
+/// Text that goes into a file name (prefix, suffix, a data set's name in Batch, a name pattern's text
+/// and the names it puts in): the characters Windows does not allow in a file name (`/`, `\`, `:`,
+/// `<`, `>`, `"`, `|`, `?`, `*` and the control characters U+0000 to U+001F,
+/// <https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file>) become `-` on every
+/// platform, so the name cannot make a subfolder or point outside the folder the file is written to.
 pub(super) fn file_part(s: &str) -> String {
-    s.chars().map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c }).collect()
+    s.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*') || c < ' ' { '-' } else { c }).collect()
+}
+
+/// A whole file or folder name (`Logo@2x.png`, a sub-folder) through [`file_part`], without
+/// trailing periods and spaces, and with `-` after a Windows device name that is the whole name or
+/// comes before its first period: `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9` and `LPT1` to `LPT9`,
+/// also with `¹`, `²` or `³` for the digit, in any case (`CON.png` becomes `CON-.png`). The same on
+/// every platform.
+pub(crate) fn safe_file_name(s: &str) -> String {
+    let name = file_part(s);
+    let name = name.trim_end_matches(['.', ' ']);
+    let (base, rest) = name.split_at(name.find('.').unwrap_or(name.len()));
+    let upper = base.to_ascii_uppercase();
+    let numbered = |n: &str| n.chars().count() == 1 && n.chars().all(|c| matches!(c, '1'..='9' | '¹' | '²' | '³'));
+    let device = matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper.strip_prefix("COM").or_else(|| upper.strip_prefix("LPT")).is_some_and(numbered);
+    if device { format!("{base}-{rest}") } else { name.to_string() }
 }
 
 /// Keys of a format row that aren't encoder options.
@@ -321,6 +341,97 @@ struct Item {
 impl ScreenParams {
     fn of(p: &Value) -> Result<Self> {
         if p.is_object() { Self::deserialize(p).map_err(|e| bad(C, e.to_string())) } else { Ok(Self::default()) }
+    }
+
+    /// An error when more than one of `assets`, `layers`, `selection` and `fullDocument` is given.
+    fn one_source(&self) -> Result<()> {
+        let sources = [self.full_document, self.assets.is_some(), self.layers.is_some(), self.selection.is_some()].iter().filter(|b| **b).count();
+        if sources > 1 {
+            return Err(bad(C, "give one of assets, layers, selection or fullDocument"));
+        }
+        Ok(())
+    }
+
+    /// `selection`: `None` without it, `Some(false)` for `one` file, `Some(true)` for `each` object.
+    fn selection_mode(&self) -> Result<Option<bool>> {
+        match self.selection.as_deref() {
+            None => Ok(None),
+            Some("one") => Ok(Some(false)),
+            Some("each") => Ok(Some(true)),
+            Some(m) => Err(bad(C, format!("selection `{m}`: one or each"))),
+        }
+    }
+}
+
+/// How a batch export names its files and sorts them into folders.
+struct Naming<'a> {
+    /// The `name` pattern, when it holds more than spaces.
+    pattern: Option<&'a str>,
+    /// The `prefix`, through [`file_part`].
+    prefix: String,
+    /// The document's name, safe as a file name (`<filename>`, the Full Document's item).
+    filename: String,
+    /// The date and time the pattern's tokens use.
+    when: [i64; 6],
+    counter_start: u64,
+    /// The counter counts files rather than items.
+    per_file: bool,
+    folders: Folders,
+}
+
+impl<'a> Naming<'a> {
+    /// The naming of params `o` for a document titled `title`.
+    fn of(o: &'a ScreenParams, title: &str) -> Result<Self> {
+        let folders = Folders::of(o)?;
+        // A prefix names files, not folders.
+        let prefix = file_part(o.prefix.as_deref().unwrap_or(""));
+        let when = match o.date.as_deref() {
+            Some(d) => naming::parse_date(d).ok_or_else(|| bad(C, format!("date `{d}`: YYYY-MM-DD")))?,
+            None => vectorcraft_doc::metadata::output_time().map_or([1970, 1, 1, 0, 0, 0], vectorcraft_doc::metadata::civil),
+        };
+        let per_file = match o.counter_per.as_deref() {
+            None | Some("item") => false,
+            Some("file") => true,
+            Some(c) => return Err(bad(C, format!("counterPer `{c}`: item or file"))),
+        };
+        let filename = safe_name(&super::file_stem(title)).unwrap_or_else(|| "Untitled".into());
+        let pattern = o.name.as_deref().filter(|n| !n.trim().is_empty());
+        Ok(Self { pattern, prefix, filename, when, counter_start: o.counter_start.unwrap_or(1), per_file, folders })
+    }
+
+    /// The sub-folder (`None` for the export folder itself) and the file name of the file row `r`
+    /// writes of `item`, the `index`th item (from 0), when `files` files came before it.
+    fn file(&self, item: &Item, index: usize, files: u64, r: &Row) -> (Option<String>, String) {
+        let counter = self.counter_start.saturating_add(if self.per_file { files } else { index as u64 });
+        let ext = r.format.extensions.first().copied().unwrap_or(r.format.id);
+        let prefix = &self.prefix;
+        let stem = match self.pattern {
+            Some(pattern) => {
+                let parts = NameParts {
+                    filename: &self.filename,
+                    name: &item.name,
+                    index: index + 1,
+                    counter,
+                    format: ext,
+                    scale: &if r.format.raster { r.size.label() } else { String::new() },
+                    suffix: &r.suffix,
+                    when: self.when,
+                };
+                let named = naming::render(pattern, &parts);
+                let named = if named.is_empty() { item.stem.clone() } else { named };
+                if naming::has_suffix_token(pattern) { format!("{prefix}{named}") } else { format!("{prefix}{named}{}", r.suffix) }
+            }
+            None => format!("{prefix}{}{}", item.stem, r.suffix),
+        };
+        let file = safe_file_name(&format!("{stem}.{ext}"));
+        let sub = match self.folders {
+            Folders::None => None,
+            Folders::Rows => Some(safe_file_name(&r.folder)),
+            Folders::Format => Some(ext.to_string()),
+            Folders::Item => Some(item.stem.clone()),
+            Folders::ItemFormat => Some(format!("{}/{ext}", item.stem)),
+        };
+        (sub, file)
     }
 }
 
@@ -541,40 +652,20 @@ pub(super) fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
-/// so do different files the `name` pattern gives one name.
+/// so do different files the `name` pattern gives one name. The reply's `warnings` lists every
+/// warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
-    let sources = [o.full_document, o.assets.is_some(), o.layers.is_some(), o.selection.is_some()].iter().filter(|b| **b).count();
-    if sources > 1 {
-        return Err(bad(C, "give one of assets, layers, selection or fullDocument"));
-    }
-    let folders = Folders::of(&o)?;
-    // A prefix names files, not folders.
-    let prefix = file_part(o.prefix.as_deref().unwrap_or(""));
+    o.one_source()?;
+    let naming = Naming::of(&o, &s.doc()?.doc.title)?;
     let folder = o.folder.as_deref().filter(|f| !f.is_empty());
-    let when = match o.date.as_deref() {
-        Some(d) => naming::parse_date(d).ok_or_else(|| bad(C, format!("date `{d}`: YYYY-MM-DD")))?,
-        None => vectorcraft_doc::metadata::now_unix().map_or([1970, 1, 1, 0, 0, 0], vectorcraft_doc::metadata::civil),
-    };
-    let per_file = match o.counter_per.as_deref() {
-        None | Some("item") => false,
-        Some("file") => true,
-        Some(c) => return Err(bad(C, format!("counterPer `{c}`: item or file"))),
-    };
-    let counter_start = o.counter_start.unwrap_or(1);
-    let selection = match o.selection.as_deref() {
-        None => None,
-        Some("one") => Some(false),
-        Some("each") => Some(true),
-        Some(m) => return Err(bad(C, format!("selection `{m}`: one or each"))),
-    };
+    let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
     if let Some(dir) = folder {
         create_dir(dir)?;
     }
     let doc = s.doc()?.doc.clone();
-    let filename = safe_name(&super::file_stem(&doc.title)).unwrap_or_else(|| "Untitled".into());
     // Include Bleed: each artboard grown by the document's bleed.
     let doc = if o.include_bleed && doc.setup.has_bleed() {
         let mut d = (*doc).clone();
@@ -586,43 +677,26 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         doc
     };
     let crop = rows.iter().any(|r| r.format.id != "pdf");
-    let items = items(&doc, &o, selection, &selected, &filename, crop)?;
+    let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
     let mut out = Output::default();
+    // The encoders' warnings for every file, each once.
+    let mut warnings: Vec<String> = Vec::new();
     // Appearance of Black › Printing / Exporting for RGB raster rows.
-    let write = |doc: &Document, format: &str, options: &Value| encode(doc, format, &with_black_output(s, options));
+    let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
+        let (bytes, notes) = encode_with_warnings(doc, format, &with_black_output(s, options))?;
+        for w in notes {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        Ok(bytes)
+    };
     // A whole-document copy of an artboard, for the formats that write documents to edit.
     let mut board_docs: std::collections::HashMap<usize, Arc<Document>> = std::collections::HashMap::new();
     let mut files = 0u64;
     for (index, item) in items.iter().enumerate() {
         for r in &rows {
-            let counter = counter_start.saturating_add(if per_file { files } else { index as u64 });
-            let ext = r.format.extensions.first().copied().unwrap_or(r.format.id);
-            let stem = match o.name.as_deref().filter(|n| !n.trim().is_empty()) {
-                Some(pattern) => {
-                    let parts = NameParts {
-                        filename: &filename,
-                        name: &item.name,
-                        index: index + 1,
-                        counter,
-                        format: ext,
-                        scale: &if r.format.raster { r.size.label() } else { String::new() },
-                        suffix: &r.suffix,
-                        when,
-                    };
-                    let named = naming::render(pattern, &parts);
-                    let named = if named.is_empty() { item.stem.clone() } else { named };
-                    if naming::has_suffix_token(pattern) { format!("{prefix}{named}") } else { format!("{prefix}{named}{}", r.suffix) }
-                }
-                None => format!("{prefix}{}{}", item.stem, r.suffix),
-            };
-            let file = format!("{stem}.{ext}");
-            let sub = match folders {
-                Folders::None => None,
-                Folders::Rows => Some(r.folder.clone()),
-                Folders::Format => Some(ext.to_string()),
-                Folders::Item => Some(item.stem.clone()),
-                Folders::ItemFormat => Some(format!("{}/{ext}", item.stem)),
-            };
+            let (sub, file) = naming.file(item, index, files, r);
             let name = sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}"));
             let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key), o.name.is_some()) else { continue };
             let bytes = if let (Some(all), "pdf") = (&item.every_artboard, r.format.id) {
@@ -644,34 +718,80 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let names: Vec<&str> = out.kept.iter().map(|(n, _)| n.as_str()).collect();
     if o.zip {
         let zip = super::zip::store(&out.kept).map_err(|e| bad(C, e))?;
-        let zip_name = format!("{prefix}{filename}.zip");
+        let zip_name = safe_file_name(&format!("{}{}.zip", naming.prefix, naming.filename));
         return match folder {
             Some(dir) => {
                 let path = format!("{dir}/{zip_name}");
                 write_file(&path, &zip)?;
-                Ok(json!({ "path": path, "bytes": zip.len(), "files": names }))
+                Ok(json!({ "path": path, "bytes": zip.len(), "files": names, "warnings": warnings }))
             }
-            None => Ok(json!({ "name": zip_name, "dataBase64": vectorcraft_format::base64_encode(&zip), "bytes": zip.len(), "files": names })),
+            None => Ok(
+                json!({ "name": zip_name, "dataBase64": vectorcraft_format::base64_encode(&zip), "bytes": zip.len(), "files": names, "warnings": warnings }),
+            ),
         };
     }
     Ok(match folder {
-        Some(_) => json!({ "files": out.written }),
+        Some(_) => json!({ "files": out.written, "warnings": warnings }),
         None => {
-            json!({ "files": out.kept.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect::<Vec<_>>() })
+            let files: Vec<Value> =
+                out.kept.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect();
+            json!({ "files": files, "warnings": warnings })
         }
     })
 }
 
+/// The path, relative to the export folder, of the first file `document.exportForScreens` with
+/// params `p` writes (sub-folders included: `2x/Logo@2x.png`): the first format row's file of the
+/// first artboard, asset, layer or selected object, or of the whole document, named as [`export`]
+/// names it. It encodes and writes nothing and cuts no art out of the document: of the objects
+/// selected for a file each, it measures only the first ones, up to the first that draws something.
+/// It does not refuse what the export refuses for drawing nothing: a checked asset or layer, the
+/// selection as one file, or the Full Document with no visible art.
+/// The Export for Screens dialog shows it on its Example line.
+pub fn first_file(s: &Session, p: &Value) -> Result<String> {
+    let p = with_preset(s, p)?;
+    let o = ScreenParams::of(&p)?;
+    let rows = rows_of(s, &p, o.preset.as_deref())?;
+    o.one_source()?;
+    let selection = o.selection_mode()?;
+    let doc = &s.doc()?.doc;
+    let mut selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
+    // A file per object: objects that draw nothing write no file.
+    if selection == Some(true) {
+        selected = selected.into_iter().find(|id| export_crop(doc, &[*id]).is_some()).into_iter().collect();
+    }
+    let naming = Naming::of(&o, &doc.title)?;
+    let items = items(doc, &o, selection, &selected, &naming.filename, false, false)?;
+    let (Some(item), Some(r)) = (items.first(), rows.first()) else { return Err(bad(C, "nothing to export")) };
+    let (sub, file) = naming.file(item, 0, 0, r);
+    Ok(sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}")))
+}
+
 /// What `o` exports a file of per row ([`Item`]): the whole document, the assets, the layers, the
 /// selection (one item, or one per object), else the chosen artboards.
-/// `crop`: some row needs the Full Document's art bounds (a format other than PDF).
-fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selected: &[NodeId], filename: &str, crop: bool) -> Result<Vec<Item>> {
+/// `crop`: some row needs the Full Document's art bounds (a format other than PDF). `art`: each
+/// asset, layer and selected object is cut out of the document; without it, only the items' names
+/// are made, every item holds the whole document, and none is left out for drawing nothing.
+fn items(
+    doc: &Arc<Document>,
+    o: &ScreenParams,
+    selection: Option<bool>,
+    selected: &[NodeId],
+    filename: &str,
+    crop: bool,
+    art: bool,
+) -> Result<Vec<Item>> {
     // The art of `ids` alone, as an item named `name`.
     let alone = |ids: &[NodeId], name: &str| -> Option<(Arc<Document>, Rect)> {
+        if !art {
+            return Some((doc.clone(), Rect::ZERO));
+        }
         isolated(doc, &doc.paint_order(ids.iter().copied()), name).map(|(d, r)| (Arc::new(d), r))
     };
+    // Each item's stem follows Windows' file-naming rules, and no two items share one.
+    let safe = |stems: Vec<String>| distinct_names(stems.iter().map(|s| safe_file_name(s)));
     let named = |pieces: Vec<(String, Arc<Document>, Option<usize>, Rect)>, fallback: &str| -> Vec<Item> {
-        let stems = unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string())));
+        let stems = safe(unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
         pieces
             .into_iter()
             .zip(stems)
@@ -688,7 +808,8 @@ fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selecte
             (doc.clone(), Rect::ZERO)
         };
         let name = filename.to_string();
-        return Ok(vec![Item { name: name.clone(), stem: name, doc: whole, artboard: Some(0), region, every_artboard: Some(doc.clone()) }]);
+        let stem = safe_file_name(&name);
+        return Ok(vec![Item { name, stem, doc: whole, artboard: Some(0), region, every_artboard: Some(doc.clone()) }]);
     }
     if let Some(ids) = &o.assets {
         let mut pieces = vec![];
@@ -742,7 +863,7 @@ fn items(doc: &Arc<Document>, o: &ScreenParams, selection: Option<bool>, selecte
     if boards.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
-    let stems = artboard_file_names(doc, &boards);
+    let stems = safe(artboard_file_names(doc, &boards));
     Ok(boards
         .into_iter()
         .zip(stems)

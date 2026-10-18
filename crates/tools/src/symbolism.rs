@@ -94,6 +94,7 @@ impl SymbolismTool {
             && let Some(c) = cx.paint.fill.color()
         {
             v["color"] = serde_json::to_value(c).unwrap_or(Value::Null);
+            v["keepModel"] = json!(true);
         }
         if let Some(s) = &self.style {
             v["style"] = json!(s);
@@ -301,6 +302,10 @@ mod tests {
             let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0).with_mods(Mods { alt: true, ..Default::default() }));
             assert!(matches!(&a[1], Action::Preview(c, v) if c == "symbol.adjust" && v["tool"] == tool && v["alt"] == true), "{a:?}");
         }
+        // The Symbol Stainer sends the fill color in its own model.
+        let fill = serde_json::to_value(p.fill.color().unwrap()).unwrap();
+        let a = create("symbolStainer").unwrap().pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0));
+        assert!(matches!(&a[1], Action::Preview(_, v) if v["color"] == fill && v["keepModel"] == true), "{a:?}");
     }
 
     #[test]

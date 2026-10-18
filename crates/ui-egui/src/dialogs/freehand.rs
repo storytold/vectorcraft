@@ -71,7 +71,10 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     let mut new = None;
     widgets::label_row(ui, tl!("Fidelity:"), label_w, |ui| {
         let at = ((v.clamp(min, max) - min) / (max - min)) as f32;
-        if let (Some(x), _) = widgets::color_slider_named(ui, "freehand-fidelity", tl!("Fidelity:"), at, form::SLIDER_WIDTH, &|_| t.input_border) {
+        let shown = widgets::SliderValue::field(v, min..=max, "pt", 1);
+        if let (Some(x), _) =
+            widgets::color_slider_valued(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), at, form::SLIDER_WIDTH, &|_| t.input_border)
+        {
             new = Some(((min + x as f64 * (max - min)) * 10.0).round() / 10.0);
         }
         if let Some(x) = widgets::plain_field(ui, "freehand-fidelity-field", v, "pt", 1, 64.0) {

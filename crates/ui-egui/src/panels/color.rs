@@ -416,10 +416,10 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
             if let Some(s) = stops.get_mut(*index) {
                 s.set_color(c, None);
             }
-            super::gradient::set_stops(app, &stops, None, phase);
+            super::gradient::set_stops_keeping_models(app, &stops, None, phase);
         }
         Target::Point { index, .. } if !behind => {
-            let p = json!({"index": index, "color": color_json(&c), "stroke": !app.session.fill_active});
+            let p = json!({"index": index, "color": color_json(&c), "stroke": !app.session.fill_active, "keepModel": true});
             live_run(app, "Color", "paint.freeform.setPoint", p, phase);
         }
         _ => {
@@ -498,8 +498,10 @@ fn tint_rows(ui: &mut Ui, tint: &Tint, slider_w: f32, field_w: f32) -> Option<(f
     ui.horizontal(|ui| {
         ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new("T").size(12.5).color(t.text)));
         let track = |x: f32| to32(&tint.base.tinted(x));
-        let (nv, phase) = widgets::color_slider_named(ui, ("color-slider", "tint"), "T", tint.tint, slider_w, &track);
-        let field = widgets::plain_field(ui, ("color-field", "tint"), (tint.tint * 100.0).round() as f64, "%", 0, field_w);
+        let percent = (tint.tint * 100.0).round() as f64;
+        let shown = widgets::SliderValue::field(percent, 0.0..=100.0, "%", 0);
+        let (nv, phase) = widgets::color_slider_valued(ui, ("color-slider", "tint"), "T", Some(shown), tint.tint, slider_w, &track);
+        let field = widgets::plain_field(ui, ("color-field", "tint"), percent, "%", 0, field_w);
         match (nv, field) {
             (Some(v), _) => Some(((v * 100.0).round() / 100.0, phase)),
             (None, Some(v)) => Some(((v as f32 / 100.0).clamp(0.0, 1.0), Live::Released)),
@@ -612,10 +614,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| to32(&track_color(mode, &comps, i, x));
                     let grey = |_x: f32| t.input;
+                    let shown = widgets::SliderValue::field(v as f64, mode.min(i) as f64..=mode.max(i) as f64, mode.suffix(i), 0);
                     let (nv, phase) = if enabled {
-                        widgets::color_slider_named(ui, ("color-slider", i), lbl, mode.unit(i, v), slider_w, &track)
+                        widgets::color_slider_valued(ui, ("color-slider", i), lbl, Some(shown), mode.unit(i, v), slider_w, &track)
                     } else {
-                        widgets::color_slider_named(ui, ("color-slider", i), lbl, 0.0, slider_w, &grey)
+                        widgets::color_slider_valued(ui, ("color-slider", i), lbl, Some(shown), 0.0, slider_w, &grey)
                     };
                     if let Some(nv) = nv
                         && enabled
@@ -811,6 +814,29 @@ mod tests {
         let Paint::Gradient(g) = crate::panels::current_paints(&app).0 else { panic!("still a gradient") };
         let hex: Vec<String> = g.gradient.stops.iter().map(|s| s.color.to_hex()).collect();
         assert_eq!(hex, ["#ffffff", "#ff0000"]);
+    }
+
+    /// In a CMYK document the sliders keep the model picked in the panel for a gradient stop and a
+    /// freeform point, as they do for a solid fill.
+    #[test]
+    fn a_gradient_stop_and_a_freeform_point_keep_the_panels_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let stops = json!([{"offset": 0, "color": {"c": 0, "m": 0, "y": 0, "k": 0}}, {"offset": 1, "color": {"c": 0, "m": 100, "y": 100, "k": 0}}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+        app.select_tool("gradient");
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let orange = Color::rgb8(255, 128, 0);
+        let tgt = target_with(&app, false);
+        apply(&mut app, &tgt, orange, Live::Released, false);
+        let Paint::Gradient(g) = crate::panels::current_paints(&app).0 else { panic!("still a gradient") };
+        assert_eq!(g.gradient.stops[1].color, orange);
+        app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
+        let tgt = target_with(&app, false);
+        assert!(matches!(tgt, Target::Point { index: 0, .. }), "a freeform point is the target");
+        apply(&mut app, &tgt, orange, Live::Released, false);
+        let Paint::Gradient(g) = crate::panels::current_paints(&app).0 else { panic!("still a gradient") };
+        assert_eq!(g.freeform.map(|f| f.points[0].color), Some(orange));
     }
 
     fn paints_hex(app: &VectorcraftApp) -> (String, String) {
@@ -1085,6 +1111,33 @@ mod tests {
             set_mode(&mut app, &tgt, Mode::Cmyk);
         });
         assert!(matches!(crate::panels::current_paints(&app).0, Paint::Solid { swatch: None, .. }));
+    }
+
+    /// Screen readers get each slider's number and the text of the field beside it, with the
+    /// component's range: R, G and B from 0 to 255, H in degrees, S, B, the inks and T in percent.
+    #[test]
+    fn screen_readers_get_the_numbers_the_fields_show() {
+        use crate::widgets::accessibility_tests::{slider_value, tree};
+        let mut app = app();
+        let v = |n: f64, max: f64, text: &str| (Some(n), Some(0.0), Some(max), Some(text.to_string()));
+        app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
+        let rgb = tree(|ui| show(&mut app, ui));
+        assert_eq!(slider_value(&rgb, "R"), v(255.0, 255.0, "255"));
+        assert_eq!(slider_value(&rgb, "G"), v(128.0, 255.0, "128"));
+        assert_eq!(slider_value(&rgb, "B"), v(0.0, 255.0, "0"));
+        app.run("ui.colorPanel", json!({"mode": "hsb"})).unwrap();
+        let hsb = tree(|ui| show(&mut app, ui));
+        assert_eq!(slider_value(&hsb, "H"), v(30.0, 360.0, "30°"));
+        assert_eq!(slider_value(&hsb, "S"), v(100.0, 100.0, "100%"));
+        assert_eq!(slider_value(&hsb, "B"), v(100.0, 100.0, "100%"));
+        app.run("paint.setFill", json!({"color": {"c": 10, "m": 20, "y": 30, "k": 40}})).unwrap();
+        let cmyk = tree(|ui| show(&mut app, ui));
+        assert_eq!(slider_value(&cmyk, "C"), v(10.0, 100.0, "10%"));
+        assert_eq!(slider_value(&cmyk, "K"), v(40.0, 100.0, "40%"));
+        app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 35})).unwrap();
+        let tint = tree(|ui| show(&mut app, ui));
+        assert_eq!(slider_value(&tint, "T"), v(35.0, 100.0, "35%"));
     }
 
     #[test]

@@ -131,6 +131,56 @@ fn options_not_applied_yet_and_document_features_warn() {
     assert!(warnings(&s.execute("document.export", &json!({"format": "png"})).unwrap()).is_empty());
 }
 
+/// A placed image whose pixel data can't be decoded is left out of every PDF the engine writes,
+/// and the rest of the page is written. Each reply that carries the PDF's warnings has the note
+/// raster exports give, once.
+#[test]
+fn every_pdf_leaves_out_an_image_that_cant_be_decoded() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut s = session(1);
+    let cut = crate::tests_menucmds::place_undecodable_png(&mut s);
+    // Whether each object on the PDF's pages is an image. The pages should hold the rectangle and
+    // no image.
+    let drawn = |bytes: &[u8]| {
+        let mut images = vec![];
+        vectorcraft_pdf::import(bytes).unwrap().walk(|n| {
+            if !n.is_container() && !matches!(n.kind, vectorcraft_doc::NodeKind::Path { clipping: true, .. }) {
+                images.push(matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)));
+            }
+        });
+        images
+    };
+    for (cmd, p) in [
+        ("document.exportPdf", json!({})),
+        ("document.exportPdf", json!({"preset": "High Quality Print"})),
+        ("document.exportPdf", json!({"standard": "pdfX1a"})),
+        ("document.export", json!({"format": "pdf"})),
+        ("file.saveCopy", json!({"format": "pdf"})),
+        ("file.saveCopy", json!({"format": "ai"})),
+        ("file.print", json!({})),
+    ] {
+        let v = s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        assert_eq!(warnings(&v).iter().filter(|w| *w == NOTE).count(), 1, "{cmd} {p}: {}", v["warnings"]);
+        assert_eq!(drawn(&b64(&v)), [false], "{cmd} {p}");
+    }
+    // The .ai file reopens with the image as it was placed, from the image bytes in its editing data.
+    let ai = b64(&s.execute("file.saveCopy", &json!({"format": "ai"})).unwrap());
+    let placed = s.doc().unwrap().doc.images.clone();
+    s.execute("document.open", &json!({"name": "cut.ai", "dataBase64": vectorcraft_format::base64_encode(&ai)})).unwrap();
+    let reopened = &s.doc().unwrap().doc;
+    assert!(reopened.node(cut).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_))));
+    assert_eq!(reopened.images, placed);
+    // Export for Screens, a native file carrying a PDF, and the PDF that Copy offers are written.
+    let r = s.execute("document.exportForScreens", &json!({"formats": [{"format": "pdf"}]})).unwrap();
+    assert_eq!(drawn(&b64(&r["files"][0])), [false]);
+    assert!(s.execute("file.saveCopy", &json!({"format": "vectorcraft", "pdfCompatible": true})).is_ok());
+    s.execute("select.set", &json!({"ids": [cut.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert!(b64(&s.execute("clipboard.exportPdf", &json!({})).unwrap()).starts_with(b"%PDF"));
+    s.execute("prefs.set", &json!({"key": "copyAsPdf", "value": true})).unwrap();
+    assert!(s.clipboard_flavours().iter().any(|f| f.mime == crate::cmd::clipboard::PDF));
+}
+
 #[test]
 fn export_pdf_writes_a_path() {
     let mut s = session(2);

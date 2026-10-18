@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveNearest, PathEl, Point, Rect, Shape};
+use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveExtrema, ParamCurveNearest, PathEl, PathSeg, Point, Rect, Shape};
 use serde::{Deserialize, Serialize};
 
 use crate::EPS;
@@ -220,6 +220,19 @@ impl SubPath {
         let a = &self.anchors[i % n];
         let b = &self.anchors[(i + 1) % n];
         !a.has_out() && !b.has_in()
+    }
+    /// Arc-length at each anchor from the start of this subpath (one entry per anchor).
+    pub fn anchor_arc_positions(&self) -> Vec<f64> {
+        let n = self.anchors.len();
+        if n == 0 {
+            return vec![];
+        }
+        let mut pos = vec![0.0];
+        for i in 0..self.segment_count() {
+            let len = kurbo::ParamCurveArclen::arclen(&self.segment(i), 1e-3);
+            pos.push(pos.last().copied().unwrap_or(0.0) + len);
+        }
+        pos
     }
     pub fn to_bezpath_into(&self, out: &mut BezPath) {
         let Some(first) = self.anchors.first() else { return };
@@ -482,7 +495,9 @@ impl PathData {
         }
         Self { subpaths }
     }
-    /// Tight geometric bounds (curve extrema, not control points).
+    /// Tight geometric bounds (curve extrema, not control points), measured by [`curve_bounds`]: a
+    /// segment with a control point that is not finite or past `f64::MAX / 16` in x or y is measured
+    /// by its control points.
     pub fn bounds(&self) -> Option<Rect> {
         if self.is_empty() {
             return None;
@@ -493,7 +508,7 @@ impl PathData {
         {
             return Some(Rect::from_points(a.p, a.p));
         }
-        Some(bp.bounding_box())
+        Some(curve_bounds(&bp))
     }
     /// Bounds including control handles (used for quick culling).
     pub fn control_bounds(&self) -> Option<Rect> {
@@ -547,6 +562,36 @@ impl PathData {
     /// Total length of all segments.
     pub fn length(&self) -> f64 {
         self.to_bezpath().segments().map(|s| kurbo::ParamCurveArclen::arclen(&s, 1e-6)).sum()
+    }
+}
+
+/// The largest x or y, in size, of a segment's control points for which [`segment_bounds`]
+/// measures the segment by its extrema. kurbo adds up to eight coordinates together when it finds a
+/// segment's extrema and evaluates the segment there, and a sum of eight coordinates of this size or
+/// smaller is finite.
+const EXTREMA_LIMIT: f64 = f64::MAX / 16.0;
+
+/// The box of `path`'s segments, each measured by [`segment_bounds`] and joined in order as kurbo's
+/// `bounding_box` joins them. A path with no segments gives the empty rect at the origin, as kurbo
+/// does.
+pub fn curve_bounds(path: &BezPath) -> Rect {
+    path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb)).unwrap_or_default()
+}
+
+/// The box of `seg` as kurbo's `bounding_box` measures it (its start, end and extrema), except
+/// that a segment with a control point whose x or y is not finite or is larger in size than
+/// `f64::MAX / 16` is measured by its control points. The box then holds every point the segment
+/// draws, and it reaches infinity when a control point is infinite.
+pub fn segment_bounds(seg: PathSeg) -> Rect {
+    let pts = match seg {
+        PathSeg::Line(l) => [l.p0, l.p1, l.p1, l.p1],
+        PathSeg::Quad(q) => [q.p0, q.p1, q.p2, q.p2],
+        PathSeg::Cubic(c) => [c.p0, c.p1, c.p2, c.p3],
+    };
+    if pts.iter().all(|p| p.x.abs() <= EXTREMA_LIMIT && p.y.abs() <= EXTREMA_LIMIT) {
+        ParamCurveExtrema::bounding_box(&seg)
+    } else {
+        pts.iter().fold(Rect::from_points(pts[0], pts[0]), |r, &p| r.union_pt(p))
     }
 }
 
@@ -652,6 +697,71 @@ mod tests {
     fn transform_moves_bounds() {
         let p = square().transformed(Affine::translate((5.0, 5.0)));
         assert_eq!(p.bounds(), Some(Rect::new(5.0, 5.0, 15.0, 15.0)));
+    }
+
+    /// A curve from (100, 100) to (300, 100) with the given out and in handles.
+    fn curve(h_out: Point, h_in: Point) -> PathData {
+        let a = Anchor::with_handles(Point::new(100.0, 100.0), Point::new(100.0, 100.0), h_out);
+        let b = Anchor::with_handles(Point::new(300.0, 100.0), h_in, Point::new(300.0, 100.0));
+        PathData::single(SubPath::new(vec![a, b], false))
+    }
+
+    /// A curve whose handles are at ±1e308 or infinite is measured by its control points: its box
+    /// holds every finite point of the curve, and an infinite handle makes the box infinite. Handles
+    /// at ±`f64::MAX / 16` are measured by the curve's extrema, and that box holds the curve too.
+    #[test]
+    fn bounds_hold_a_curve_whose_handles_are_huge() {
+        // `eval` rounds: a point may sit a few ulps outside the box.
+        let within = |v: f64, lo: f64, hi: f64| {
+            let e = 1e-12 * v.abs().max(1.0);
+            lo - e <= v && v <= hi + e
+        };
+        let holds_curve = |h_out: Point, h_in: Point, b: Rect| {
+            let c = CubicBez::new(Point::new(100.0, 100.0), h_out, h_in, Point::new(300.0, 100.0));
+            for i in 0..=20 {
+                let q = c.eval(f64::from(i) / 20.0);
+                if q.is_finite() {
+                    assert!(within(q.x, b.x0, b.x1) && within(q.y, b.y0, b.y1), "{h_out:?} {h_in:?}: {q:?} is outside {b:?}");
+                }
+            }
+        };
+        let cases = [
+            (Point::new(100.0, 1e308), Point::new(300.0, 1e308)),
+            (Point::new(100.0, -1e308), Point::new(300.0, 1e308)),
+            (Point::new(-1.7e308, 100.0), Point::new(1.7e308, 100.0)),
+            (Point::new(f64::INFINITY, 100.0), Point::new(250.0, 100.0)),
+        ];
+        for (h_out, h_in) in cases {
+            let p = curve(h_out, h_in);
+            let b = p.bounds().unwrap();
+            assert_eq!(Some(b), p.control_bounds(), "{h_out:?} {h_in:?}");
+            holds_curve(h_out, h_in, b);
+        }
+        assert!(!curve(Point::new(f64::INFINITY, 100.0), Point::new(250.0, 100.0)).bounds().unwrap().x1.is_finite());
+        let m = f64::MAX / 16.0;
+        for (h_out, h_in) in [(Point::new(100.0, m), Point::new(300.0, m)), (Point::new(100.0, -m), Point::new(300.0, m))] {
+            let b = curve(h_out, h_in).bounds().unwrap();
+            assert!(b.y0.is_finite() && b.y1.is_finite() && b.y1 < m, "{h_out:?} {h_in:?}: {b:?}");
+            holds_curve(h_out, h_in, b);
+        }
+    }
+
+    /// Ordinary paths, and curves whose handles are large but below `f64::MAX / 16`, measure as
+    /// kurbo's `bounding_box` measures them, bit for bit.
+    #[test]
+    fn bounds_of_ordinary_paths_match_kurbo_bit_for_bit() {
+        let circle = PathData::from_bezpath(&kurbo::Circle::new((50.0, 50.0), 20.0).to_path(1e-3));
+        let s_curve = curve(Point::new(180.0, -40.0), Point::new(220.0, 240.0));
+        let mut two = square();
+        two.subpaths.extend(circle.transformed(Affine::translate((-75.5, 30.25))).subpaths);
+        let lone = PathData::new(vec![SubPath::new(vec![Anchor::corner(Point::new(1.0, 2.0))], false), square().subpaths[0].clone()]);
+        let quad = PathData::from_bezpath(&BezPath::from_svg("M0 0 Q 50 -80 100 0 Q 150 80 200 0").unwrap());
+        for p in [square(), circle, s_curve, two, lone, quad, curve(Point::new(100.0, 1e300), Point::new(300.0, -1e300))] {
+            let ours = p.bounds().unwrap();
+            let kurbo = p.to_bezpath().bounding_box();
+            let bits = |r: Rect| [r.x0, r.y0, r.x1, r.y1].map(f64::to_bits);
+            assert_eq!(bits(ours), bits(kurbo), "{ours:?} {kurbo:?}");
+        }
     }
 
     #[test]

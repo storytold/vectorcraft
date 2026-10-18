@@ -324,16 +324,46 @@ impl Predictor {
         // Bytes per pixel (at least one) is how far back the left neighbour is.
         let bpp = (self.colors * self.bpc).div_ceil(8).max(1);
         if self.kind == 2 {
+            // Horizontal differencing (ISO 32000-1, §7.4.4.4): each component is stored as its
+            // difference from the same component of the pixel to its left, wrapping within its bit
+            // width. Each row starts again, and the padding bits at a row's end stay as they are.
             let mut out = data.to_vec();
-            // Horizontal differencing, for 8-bit components (the common case).
-            if self.bpc == 8 {
-                for line in out.chunks_mut(row.max(1)) {
-                    for i in bpp..line.len() {
-                        let left = line.get(i - bpp).copied().unwrap_or(0);
-                        if let Some(b) = line.get_mut(i) {
-                            *b = b.wrapping_add(left);
+            for line in out.chunks_mut(row.max(1)) {
+                match self.bpc {
+                    8 => {
+                        for i in bpp..line.len() {
+                            let left = line.get(i - bpp).copied().unwrap_or(0);
+                            if let Some(b) = line.get_mut(i) {
+                                *b = b.wrapping_add(left);
+                            }
                         }
                     }
+                    // 16-bit components are big-endian and add as 16-bit numbers.
+                    16 => {
+                        let byte = |line: &[u8], i: usize| line.get(i).copied().unwrap_or(0);
+                        for i in (bpp..line.len().saturating_sub(1)).step_by(2) {
+                            let left = u16::from_be_bytes([byte(line, i - bpp), byte(line, i - bpp + 1)]);
+                            let sum = u16::from_be_bytes([byte(line, i), byte(line, i + 1)]).wrapping_add(left);
+                            if let Some(w) = line.get_mut(i..i + 2) {
+                                w.copy_from_slice(&sum.to_be_bytes());
+                            }
+                        }
+                    }
+                    // 1, 2 or 4 bits: components are packed from each byte's high bit.
+                    bits @ (1 | 2 | 4) => {
+                        let mask = (1u8 << bits) - 1;
+                        let shift = |k: usize| 8 - bits - k * bits % 8;
+                        let sample = |line: &[u8], k: usize| line.get(k * bits / 8).map_or(0, |b| (b >> shift(k)) & mask);
+                        let samples = (line.len() * 8 / bits).min(self.colors * self.columns);
+                        for k in self.colors..samples {
+                            let sum = sample(line, k).wrapping_add(sample(line, k - self.colors)) & mask;
+                            if let Some(b) = line.get_mut(k * bits / 8) {
+                                *b = (*b & !(mask << shift(k))) | (sum << shift(k));
+                            }
+                        }
+                    }
+                    // `Predictor::of` accepts no other depth.
+                    _ => {}
                 }
             }
             return out;

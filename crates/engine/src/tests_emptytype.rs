@@ -62,9 +62,13 @@ fn clicking_without_typing_leaves_no_text_and_no_history() {
     click(&mut s, 150.0, 100.0);
     s.select_tool("rectangle", v).unwrap();
     assert!(texts(&s).is_empty());
-    // Click in two places: the first is gone when the second is placed.
+    // Click in two places: the second click discards the first type and places none (#2871); a
+    // third places new type.
     s.select_tool("type", v).unwrap();
     click(&mut s, 100.0, 300.0);
+    click(&mut s, 400.0, 300.0);
+    assert!(texts(&s).is_empty());
+    assert!(!s.tool_wants_text());
     click(&mut s, 400.0, 300.0);
     assert_eq!(texts(&s).len(), 1);
     s.select_tool("selection", v).unwrap();
@@ -93,6 +97,25 @@ fn typed_text_stays_and_typing_it_away_leaves_nothing() {
     key(&mut s, ToolKey::Escape);
     assert_eq!(texts(&s).len(), 1);
     assert_eq!(undo_labels(&s), kept);
+}
+
+/// A click on blank canvas while type is being edited ends the editing and makes no new type; the
+/// Type tool stays, and the next click places point type (#2871, #2854).
+#[test]
+fn a_click_away_from_typed_text_ends_editing_without_new_type() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 100.0, 100.0);
+    s.tool_text("Hi", v).unwrap();
+    click(&mut s, 400.0, 300.0);
+    assert_eq!(texts(&s).iter().map(|t| t.2.as_str()).collect::<Vec<_>>(), ["Hi"]);
+    assert_eq!(s.tool_id(), "type");
+    assert!(!s.tool_wants_text());
+    assert_eq!(undo_labels(&s), ["Type", "Typing"]);
+    click(&mut s, 400.0, 300.0);
+    assert_eq!(texts(&s).len(), 2);
+    assert!(s.tool_wants_text());
 }
 
 #[test]

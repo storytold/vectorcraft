@@ -741,6 +741,7 @@
 	Created:	Ngày tạo:
 	Crop	Cắt xén
 	Crop Image	Cắt xén ảnh
+	Edit Path	Sửa đường dẫn
 	Crop Marks	Dấu cắt xén
 	Crop To	Cắt xén đến
 	Crosshatch	Lưới đan
@@ -1548,6 +1549,10 @@ file-filter	Templates	Mẫu
 	Hindi	Hindi
 	History	Lịch sử
 	History Options…	Tùy chọn lịch sử…
+	Step Backward	Lùi một bước
+	Step Forward	Tiến một bước
+	Clear History	Xóa lịch sử
+	Set History Limit…	Đặt giới hạn lịch sử…
 	History States	Trạng thái lịch sử
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Áp dụng tập dữ liệu
@@ -2752,6 +2757,8 @@ mark-style	Japanese	Kiểu Nhật
 	Redefine Character Style	Xác định lại kiểu ký tự
 	Redefine Graphic Style	Xác định lại kiểu đồ họa
 	Redefine Graphic Style “{name}”	Xác định lại kiểu đồ họa “{name}”
+	Apply {name}	Áp dụng kiểu “{name}”
+	Redefine {name}	Xác định lại kiểu “{name}”
 	Redefine Paragraph Style	Xác định lại kiểu đoạn văn
 	Redefine Symbol	Xác định lại ký hiệu
 	Redefine {kind} Style	Xác định lại kiểu {kind}
@@ -3869,6 +3876,8 @@ mark-style	Japanese	Kiểu Nhật
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
 	Write Layers	Ghi các lớp
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) khi có bút được kết nối
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Nếu bút của bảng vẽ không vẽ được, hãy chọn một tùy chọn X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	XML ID	XML ID
 	Yards	Yard
@@ -3962,6 +3971,8 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be a #rrggbb color	`{key}` phải là màu #rrggbb
 @msg	`{key}` must be a #rrggbb colour	`{key}` phải là màu #rrggbb
 @msg	`{key}` must be a number	`{key}` phải là một số
+@msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} phải là thời gian Unix tính bằng giây (số nguyên) hoặc null
 @msg	`{key}` must be a string	`{key}` phải là một chuỗi
 @msg	`{key}` must be a whole number	`{key}` phải là số nguyên
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` phải là số nguyên từ {min} đến {max} (nhận được {x})
@@ -4008,6 +4019,7 @@ theme	Appearance	Giao diện
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	lỗi PostScript ({name} trong `{op}`: {at}), trong {procs}
 @msg	a PostScript error ({name})	lỗi PostScript ({name})
 @msg	a preset named `{_1}` exists	đã có thiết lập sẵn tên `{_1}`
+@msg	a swatch or color group named `{n}` exists	đã có mẫu màu hoặc nhóm màu tên `{n}`
 @msg	a slice size must be a positive number of points	kích thước lát cắt phải là số điểm dương
 @msg	a spine keeps at least two points	trục phải giữ ít nhất hai điểm
 @msg	a stream runs past the end	luồng dữ liệu vượt qua cuối
@@ -4176,6 +4188,11 @@ theme	Appearance	Giao diện
 @msg	its editing data doesn't say where its artboard is	dữ liệu chỉnh sửa không cho biết vị trí bảng vẽ
 @msg	its editing data has no layers	dữ liệu chỉnh sửa không có lớp
 @msg	its editing data is damaged	dữ liệu chỉnh sửa bị hỏng
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	dữ liệu chỉnh sửa dành cho trang {w} × {h} pt, không phải trang {pw} × {ph} pt của tệp
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	dữ liệu chỉnh sửa dành cho trang {w} × {h} pt, tức trang {pw} × {ph} pt của tệp ở tỷ lệ {scale}
+@msg	its zlib compression is damaged	phần nén zlib của chúng bị hỏng
+@msg	its Zstandard compression is damaged	phần nén Zstandard của chúng bị hỏng
+@msg	it decompresses to more than {_1} MB	giải nén ra hơn {_1} MB
 @msg	its editing data is for a different page	dữ liệu chỉnh sửa dành cho trang khác
 @msg	its layers use {_1}, which aren't read yet	các lớp của nó dùng {_1}, chưa đọc được
 @msg	its objects are nested too deeply	các đối tượng của nó lồng nhau quá sâu
@@ -4200,6 +4217,7 @@ theme	Appearance	Giao diện
 @msg	missing `tool`	thiếu `tool`
 @msg	missing index	thiếu chỉ mục
 @msg	missing number `{key}`	thiếu số `{key}`
+@msg	missing integer `{key}`	thiếu số nguyên `{key}`
 @msg	missing panel layout	thiếu bố cục bảng
 @msg	move requires a destination panel	move cần bảng đích
 @msg	move requires an existing destination panel	move cần bảng đích tồn tại
@@ -4328,9 +4346,13 @@ theme	Appearance	Giao diện
 @msg	nothing to redo	không có gì để làm lại
 @msg	nothing to save: the document has no visible art	không có gì để lưu: tài liệu không có tác phẩm hiển thị
 @msg	nothing to undo	không có gì để hoàn tác
+@msg	no history to clear	không có lịch sử để xóa
 @msg	nothing to warp	không có gì để biến dạng
 @msg	nothing to wrap	không có gì để bọc
 @msg	object ids are non-negative integers, not {v}	id đối tượng là số nguyên không âm, không phải {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} phải là một mảng id đối tượng là số nguyên không âm
+@msg	invalid object id {value}: expected a non-negative integer	id đối tượng {value} không hợp lệ: cần một số nguyên không âm
+@msg	no such object id {value}	không có đối tượng nào có id {value}
 @msg	object {0} cannot have children	đối tượng {0} không thể có phần tử con
 @msg	object {id} is not a path	đối tượng {id} không phải là đường dẫn
 @msg	object {id} is not a selected top-level object	đối tượng {id} không phải là đối tượng cấp cao nhất đã chọn
@@ -4346,6 +4368,7 @@ theme	Appearance	Giao diện
 @msg	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 @msg	page size {w} × {h}	kích thước trang {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	trang {0} không tồn tại (PDF có {1} trang)
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: trang {n} không tồn tại (tệp có 1 trang)
 @msg	panel group is empty	nhóm bảng trống
 @msg	panel must name a registered panel	panel phải đặt tên bảng đã đăng ký
 @msg	paste unavailable	dán không khả dụng
@@ -4391,6 +4414,7 @@ theme	Appearance	Giao diện
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Lưu ghi {_1}, không phải {_2}: dùng file.saveAsTemplate để ghi định dạng này
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 ghi tệp .ai cũ; mẫu .ait luôn tương thích PDF
 @msg	saved panel layout is invalid; reset the workspace first	bố cục bảng đã lưu không hợp lệ; hãy đặt lại không gian làm việc trước
 @msg	Saved recovery data for {title}	Đã lưu dữ liệu phục hồi cho {title}
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
@@ -4592,6 +4616,7 @@ theme	Appearance	Giao diện
 @msg	{_1} failed: {e}	{_1} thất bại: {e}
 @msg	{_1} files	{_1} tệp
 @msg	{_1} files can be opened but not written (see document.formats)	tệp {_1} có thể mở nhưng không thể ghi (xem document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	tệp {_1} được ghi bằng file.saveAsTemplate
 @msg	{_1} font families available	{_1} họ phông chữ khả dụng
 @msg	{_1} has no {_2} style	{_1} không có kiểu {_2}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} là hiệu ứng trực tiếp (Hiệu ứng › Plug-ins)
@@ -4648,6 +4673,11 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+# 3D light management.
+	Lights	Danh sách đèn
+	Add Light	Thêm đèn
+	Delete Light	Xóa đèn
+3d	Light	Đèn
 	Registration:	Điểm đăng ký:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Kích thước
@@ -4738,6 +4768,11 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Chỉnh sửa bản gốc chỉ mở tệp hình ảnh và tài liệu; “{name}” không thuộc loại đó
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	chỉ URL http, https và mailto mới được mở trong trình duyệt, không mở “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} mở một ứng dụng khác: chỉ người đang ở bàn phím mới chạy được lệnh này
+@msg	“{name}” is not a file	“{name}” không phải là tệp
 	Enable Guides for 9-Slice Scaling	Bật đường dẫn cho co giãn 9-slice
 @msg	a mask has more than one art block	mặt nạ có nhiều hơn một khối đồ họa
 @msg	mask art ends outside a mask dictionary	đồ họa mặt nạ kết thúc bên ngoài từ điển mặt nạ
@@ -4765,3 +4800,23 @@ theme	Appearance	Giao diện
 	Clear Artboard Color	Xóa màu bảng vẽ
 @msg	artboard {_1} is locked	bảng vẽ {_1} đã bị khóa
 	Include Artboard Fill	Bao gồm màu bảng vẽ
+	Artboard {n} of {total}	Bảng vẽ {n} / {total}
+	Encoding and writing the file…	Đang mã hóa và ghi tệp…
+@plural	{n} more export waiting|{n} more exports waiting	Còn {n} lượt xuất đang chờ
+	Continue in Background	Tiếp tục trong nền
+	Cancel Export	Hủy xuất
+@msg	Export cancelled	Đã hủy xuất
+# Paragraph panel menu › Justification…
+	Desired	Mong muốn
+	Word Spacing:	Khoảng cách từ:
+	Letter Spacing:	Khoảng cách chữ:
+	Glyph Scaling:	Tỷ lệ glyph:
+	Auto Leading:	Khoảng cách dòng tự động:
+	Single Word Justification:	Căn đều một từ:
+	Full Justify	Căn đều hoàn toàn
+	Minimum must not exceed Desired, nor Desired Maximum.	Giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa.
+	Minimum	Tối thiểu
+	Justification	Căn đều
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
+# Select by Color (select.color)
+	Select by Color	Chọn theo màu

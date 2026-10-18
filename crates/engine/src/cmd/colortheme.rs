@@ -142,7 +142,8 @@ fn add_to_swatches(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "colorTheme.addToSwatches";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
     let t = &s.prefs.color_themes[find(s, name, C)?];
-    let params = json!({ "name": t.name, "colors": t.colors.iter().map(color_json).collect::<Vec<_>>() });
+    // The theme's colors keep their model, in a CMYK document too.
+    let params = json!({ "name": t.name, "colors": t.colors.iter().map(color_json).collect::<Vec<_>>(), "keepModel": true });
     let r = s.execute("swatch.newGroup", &params)?;
     Ok(json!({ "name": r["name"], "swatches": r["swatches"] }))
 }

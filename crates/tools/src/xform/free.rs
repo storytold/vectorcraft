@@ -2,7 +2,7 @@
 //!
 //! Shows the bounding box with handles. In the default mode handles scale (Shift proportional,
 //! Alt from centre), outside the corners rotates, inside moves, and Cmd-dragging a side handle
-//! shears along that side. The Perspective Distort and Free Distort modes (tool option `mode`, or
+//! shears along that side. A scale snaps as the Selection tool's does. The Perspective Distort and Free Distort modes (tool option `mode`, or
 //! Cmd / Cmd+Alt+Shift while dragging a corner like classic Illustrator) move the corners of the
 //! box and preview `object.distort`.
 
@@ -11,6 +11,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::guides::{PointSnap, Targets};
 use crate::select::{matrix_json, selection_bounds};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -82,8 +83,10 @@ pub struct FreeTransformTool {
     /// The current (distorted) quad while dragging corners.
     quad: Option<[Point; 4]>,
     measure: Option<(Point, String)>,
-    /// Smart Guides for a scale: the other objects' edges, and the lines of the current snap.
-    targets: Option<crate::guides::Targets>,
+    /// What a scale snaps to ([`PointSnap::snap_scale`]): pixels, the grid, the other objects with
+    /// Smart Guides, or their anchors with Snap to Point.
+    targets: Option<PointSnap>,
+    /// The lines of the current snap.
     guides: Vec<Overlay>,
 }
 
@@ -198,7 +201,7 @@ impl FreeTransformTool {
             Op::Scale(h) => {
                 let mut a = scale_for_drag(d.rect, h, p, shift, m.alt);
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.snap_tol());
+                    (a, self.guides) = t.snap_scale(cx, &vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt);
                 }
                 let nr = a.transform_rect_bbox(d.rect);
                 self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
@@ -232,8 +235,7 @@ impl Tool for FreeTransformTool {
                 self.drag = None;
                 let Some(r) = selection_bounds(cx) else { return vec![] };
                 if let Some(op) = self.classify(cx, r, p, ev.mods) {
-                    self.targets = (cx.smart_guides && op.handle().is_some())
-                        .then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None).styled(cx));
+                    self.targets = op.handle().is_some().then(|| PointSnap::new(cx, || Targets::collect(cx.doc, &cx.selection.objects, None)));
                     self.drag = Some(Drag { op, rect: r, start: p, began: false });
                 }
                 vec![]
@@ -382,6 +384,27 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 170.0));
         assert_eq!(a[0], Action::Begin("Move".into()));
         assert!(matches!(&a[1], Action::Preview(_, v) if v["matrix"][4] == 10.0 && v["matrix"][5] == 20.0));
+    }
+
+    /// #2054: with Snap to Grid on, a handle drag lands the side it moves on the nearest gridline
+    /// (every 9 pt by default) while the opposite side stays put.
+    #[test]
+    fn handle_drag_snaps_to_the_grid() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        let matrix = |a: &[Action]| {
+            let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+            let m: Vec<f64> = v["matrix"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+            Affine::new([m[0], m[1], m[2], m[3], m[4], m[5]])
+        };
+        let mut t = FreeTransformTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 150.0));
+        let r = matrix(&t.pointer(&cx, &ev(PointerKind::Drag, 213.0, 150.0))).transform_rect_bbox(Rect::new(100.0, 100.0, 200.0, 200.0));
+        assert!((r.x1 - 216.0).abs() < 1e-9 && (r.x0 - 100.0).abs() < 1e-9, "{r:?}");
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 213.0, 150.0)), vec![Action::Commit]);
     }
 
     /// In a view turned 90° the handles' cursors turn with the view.

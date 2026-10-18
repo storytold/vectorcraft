@@ -41,6 +41,26 @@ fn fx(id: &str, p: serde_json::Value) -> PixelFx {
     }
 }
 
+#[test]
+fn dilate_plane_grows_by_its_radius_and_blends_a_fraction() {
+    // GUARDS: an Outer Glow grows its silhouette by a quarter raster pixel before the blur; a step in
+    // that growth as the raster scales would show as the glow's width jumping with the zoom.
+    let mut dot = vec![0.0f32; 7 * 7];
+    dot[3 * 7 + 3] = 255.0;
+    let mut grown = dot.clone();
+    dilate_plane(&mut grown, 7, 7, 1.0);
+    assert_eq!(grown[2 * 7 + 2], 255.0);
+    assert_eq!(grown[7 + 3], 0.0);
+    let mut half = dot.clone();
+    dilate_plane(&mut half, 7, 7, 1.5);
+    assert_eq!(half[3 * 7 + 4], 255.0);
+    assert_eq!(half[3 * 7 + 5], 127.5);
+    assert_eq!(half[3 * 7 + 6], 0.0);
+    let mut same = dot.clone();
+    dilate_plane(&mut same, 7, 7, 0.0);
+    assert_eq!(same, dot);
+}
+
 fn grey(v: u8) -> [u8; 4] {
     [v, v, v, 255]
 }
@@ -2131,6 +2151,49 @@ fn artistic_params_take_defaults_and_stay_in_range() {
     for id in ["artistic.cutout", "artistic.neonGlow", "artistic.posterEdges"] {
         assert_eq!(fx(id, json!({})).outset(Rect::new(0.0, 0.0, 40.0, 30.0)), 0.0, "{id} keeps the object's shape");
     }
+}
+
+#[test]
+fn artistic_filters_leave_invalid_coordinate_spaces_alone() {
+    let (w, h) = (16, 12);
+    let src = ramp(w, h);
+    let run = |f: &PixelFx, s: &PixelSpace| {
+        let mut out = src.clone();
+        f.apply(&mut out, w, h, s);
+        out
+    };
+    let colour = [0.3, 0.65, 1.0];
+    let filters = [
+        PixelFx::Cutout { levels: 4.0, simplicity: 4.0, fidelity: 2.0 },
+        PixelFx::NeonGlow { size: 5.0, brightness: 15.0, colour },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: 1.0, posterization: 2.0 },
+    ];
+    for f in &filters {
+        assert_ne!(run(f, &space(w, h)), src, "{f:?} changes the art in a valid space");
+    }
+    let mut changed = Vec::new();
+    for f in &filters {
+        for px in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            if run(f, &PixelSpace { px, ..space(w, h) }) != src {
+                changed.push(format!("{f:?} at px {px}"));
+            }
+        }
+    }
+    for f in [
+        PixelFx::Cutout { levels: f64::NAN, simplicity: 4.0, fidelity: 2.0 },
+        PixelFx::Cutout { levels: 4.0, simplicity: f64::INFINITY, fidelity: 2.0 },
+        PixelFx::Cutout { levels: 4.0, simplicity: 4.0, fidelity: f64::NEG_INFINITY },
+        PixelFx::NeonGlow { size: f64::NAN, brightness: 15.0, colour },
+        PixelFx::NeonGlow { size: 5.0, brightness: f64::INFINITY, colour },
+        PixelFx::PosterEdges { thickness: f64::NAN, intensity: 1.0, posterization: 2.0 },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: f64::INFINITY, posterization: 2.0 },
+        PixelFx::PosterEdges { thickness: 2.0, intensity: 1.0, posterization: f64::NEG_INFINITY },
+    ] {
+        if run(&f, &space(w, h)) != src {
+            changed.push(format!("{f:?}"));
+        }
+    }
+    assert!(changed.is_empty(), "directly constructed non-finite parameters and invalid spaces are harmless: {changed:?}");
 }
 
 #[test]

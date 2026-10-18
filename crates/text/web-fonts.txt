@@ -5,6 +5,7 @@
 # Read by build.rs (the WEB_FONTS table) and `cargo xtask web-fonts` (copies the files, a Trunk hook).
 startup | Noto Sans Arabic | Regular
 startup | Noto Sans Thai | Regular
+startup | Noto Sans Georgian | Regular
 background | Cairo | Regular
 background | Tajawal | ExtraLight
 background | Tajawal | Light

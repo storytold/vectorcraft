@@ -19,7 +19,7 @@ use wasm_bindgen::JsCast as _;
 use crate::locks::WebLocks;
 use crate::pencil::SharedPointers;
 
-type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+pub(crate) type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
 /// Where the pointer was over the canvas during the last file drag (CSS px from its top-left) and
 /// whether Shift was held: where dropped files land.
@@ -122,9 +122,18 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         // The old services asked the old context for frames.
                         app.services = services;
                         app.status("The graphics were lost and have been restarted");
+                        crate::api::connect(None, host.inbox.clone(), ctx.clone());
                         app
                     }
-                    None => VectorcraftApp::new(Session::new(), services),
+                    None => {
+                        // `window.vectorcraft`: the page's control channel (crate::api).
+                        let (control_tx, control_rx) = std::sync::mpsc::channel();
+                        crate::api::connect(Some(control_tx), host.inbox.clone(), ctx.clone());
+                        if let Err(e) = crate::api::install() {
+                            log::error!("vectorcraft-web: couldn't install window.vectorcraft: {}", js_err(e));
+                        }
+                        VectorcraftApp::new(Session::new(), services).with_control(control_rx)
+                    }
                 };
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
@@ -386,6 +395,7 @@ impl eframe::App for WebShell {
             }
         }
         app.logic(ctx);
+        crate::api::poll_replies();
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
@@ -399,6 +409,7 @@ impl eframe::App for WebShell {
         if let Some(app) = &mut self.app {
             app.ui(ui);
         }
+        crate::api::poll_replies();
     }
 }
 
@@ -544,6 +555,9 @@ impl RecoveryStore for BrowserStore {
 
 /// Trigger a browser download of `bytes` named after the last component of `path`.
 fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
+    if crate::api::capture(path, bytes) {
+        return Ok(());
+    }
     let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "vectorcraft".into());
     let window = web_sys::window().ok_or("no window")?;

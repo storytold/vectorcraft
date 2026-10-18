@@ -735,6 +735,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     let mut edit = false;
     let built_in = built_in_effect(&e.id);
     let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
+    let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
         if params.is_empty() {
@@ -753,7 +754,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                     }
                     return;
                 }
-                if let Some(options) = crate::dialogs::shown_choices(&e.id, key, &params) {
+                if let Some(options) = crate::dialogs::shown_choices(&e.id, key, &params, cmyk) {
                     let cur = v.as_str().unwrap_or_default();
                     let shown = options.iter().find(|(_, value)| value == cur).map_or(cur, |(label, _)| label.as_str());
                     let labels: Vec<&str> = options.iter().map(|(label, _)| label.as_str()).collect();
@@ -1174,6 +1175,58 @@ mod tests {
         click_text(&mut app, &ctx, "Frosted");
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.node(id).unwrap().appearance.effects[0].params["texture"], json!("frosted"));
+    }
+
+    /// The choices that their dialogs list in their own bodies are dropdowns with those dialogs'
+    /// labels too: Revolve's edge, Extrude & Bevel's bevel, Warp's orientation, Rasterize's
+    /// options and the channel of Levels and Curves. A pick sends the dialog's value as one undo
+    /// step.
+    #[test]
+    fn the_effect_editor_picks_choices_their_own_dialogs_list() {
+        for (effect, key, shown, pick, value) in [
+            ("threeD.revolve", "edge", "Left", "Right", "right"),
+            ("threeD.extrude", "bevel", "None", "Rounded", "rounded"),
+            ("warp.arc", "orientation", "Horizontal", "Vertical", "vertical"),
+            ("rasterize", "colorModel", "RGB", "Grayscale", "grayscale"),
+            ("rasterize", "background", "Transparent", "White", "white"),
+            ("rasterize", "antiAlias", "Art Optimized", "Type Optimized", "type"),
+            ("adjust.levels", "channel", "RGB", "Red", "red"),
+            ("adjust.curves", "channel", "RGB", "Blue", "blue"),
+        ] {
+            let (mut app, ctx, id) = editing(effect);
+            let texts = shown_texts(&mut app, &ctx);
+            assert!(texts.iter().any(|s| s == shown), "{effect} {key}: {texts:?}");
+            let undo = app.session.doc().unwrap().history.undo.len();
+            click_text(&mut app, &ctx, shown);
+            click_text(&mut app, &ctx, pick);
+            let st = app.session.doc().unwrap();
+            assert_eq!(st.doc.node(id).unwrap().appearance.effects[0].params[key], json!(value), "{effect} {key}");
+            assert_eq!(st.history.undo.len(), undo + 1, "{effect} {key}");
+            assert!(shown_texts(&mut app, &ctx).iter().any(|s| s == pick), "{effect} {key}");
+        }
+    }
+
+    /// Those choices read as their dialogs show them in the UI language: in French, the channel's
+    /// RGB is RVB, and in Spanish, Extrude & Bevel's Rounded is the "3d" row's Redondeado, not the
+    /// plain row's Redondeada. Rasterize names the document's color mode.
+    #[test]
+    fn the_effect_editor_shows_those_choices_as_their_dialogs_do() {
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let (mut app, ctx, _) = editing("adjust.levels");
+        let texts = shown_texts(&mut app, &ctx);
+        assert!(texts.iter().any(|s| s == "RVB"), "{texts:?}");
+        let es = crate::i18n::Lang::from_code("es").unwrap();
+        crate::i18n::set_current(es);
+        let (mut app, ctx, _) = editing("threeD.extrude");
+        app.run("effect.setParams", json!({"item": null, "index": 0, "params": {"bevel": "rounded"}})).unwrap();
+        let rounded = crate::i18n::tr_ctx(es, "3d", "Rounded");
+        assert_ne!(rounded, crate::i18n::tr(es, "Rounded"));
+        assert!(shown_texts(&mut app, &ctx).iter().any(|s| s == rounded), "{rounded}");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let (mut app, ctx, _) = editing("rasterize");
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let texts = shown_texts(&mut app, &ctx);
+        assert!(texts.iter().any(|s| s == "CMYK") && !texts.iter().any(|s| s == "document"), "{texts:?}");
     }
 
     #[test]

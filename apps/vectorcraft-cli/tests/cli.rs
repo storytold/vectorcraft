@@ -59,6 +59,28 @@ fn run_batch_exports() {
 }
 
 #[test]
+fn scale_sizes_raster_exports_only() {
+    // --scale is pixels per point. DXF has a `scale` of its own (drawing units per mm) that would
+    // resize the drawing and leave its units unset.
+    let svg = tmp("scale.svg");
+    std::fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><rect x="10" y="10" width="30" height="20"/></svg>"#)
+        .unwrap();
+    let svg = svg.to_str().unwrap();
+    let (plain, scaled, png) = (tmp("plain.dxf"), tmp("scaled.dxf"), tmp("scaled.png"));
+    let ok = |args: &[&str]| {
+        let out = Command::new(BIN).args(args).output().unwrap();
+        assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    };
+    ok(&["convert", svg, plain.to_str().unwrap()]);
+    ok(&["convert", svg, scaled.to_str().unwrap(), "--scale", "2"]);
+    assert!(std::fs::read(&scaled).unwrap() == std::fs::read(&plain).unwrap(), "convert --scale 2 changed the DXF");
+    ok(&["run", "--in", svg, "--export", scaled.to_str().unwrap(), "--export", png.to_str().unwrap(), "--scale", "2"]);
+    assert!(std::fs::read(&scaled).unwrap() == std::fs::read(&plain).unwrap(), "run --scale 2 changed the DXF");
+    // 100 pt at scale 2 → 200 px (IHDR width).
+    assert_eq!(std::fs::read(&png).unwrap()[16..20], 200u32.to_be_bytes());
+}
+
+#[test]
 fn run_reports_errors() {
     let out = Command::new(BIN).args(["run", "--cmd", "nope.nothing"]).output().unwrap();
     assert!(!out.status.success());

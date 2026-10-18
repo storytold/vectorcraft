@@ -160,3 +160,20 @@ fn newer_keys_and_legacy_profiles_survive_open_and_save() {
     let v2 = json_of(&saved(&mut s, json!({"version": 2})));
     assert_eq!(v2["document"]["unknown"]["colorProfiles"]["rgb"], "sRGB IEC61966-2.1");
 }
+
+/// A save records the date the document was made in, so the same commands twice gave different
+/// bytes (#2880). A pinned date makes them identical — `file.new {created}` here, and
+/// `SOURCE_DATE_EPOCH` for an export that takes no date param.
+#[test]
+fn a_pinned_date_makes_saves_byte_identical() {
+    let once = |t: i64| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200, "created": t})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        saved(&mut s, json!({}))
+    };
+    let at = 1_791_208_980;
+    assert_eq!(once(at), once(at), "the same document and date give the same bytes");
+    // The date really is in the bytes, so the comparison above is not vacuous.
+    assert_ne!(once(at), once(at + 1), "another date shows in the bytes");
+}

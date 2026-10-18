@@ -262,6 +262,36 @@ fn slices_give_one_image_each_and_a_page() {
     assert_eq!((one_slice["width"].as_f64(), one_slice["height"].as_f64()), (layout[0]["width"].as_f64(), layout[0]["height"].as_f64()));
 }
 
+/// Save for Web writes the image of a slice named after a Windows device (`aux`, `NUL`, `COM1`…)
+/// with a `-` after the device name, on every platform.
+#[test]
+fn a_slice_named_after_a_windows_device_gets_a_dash() {
+    let mut s = session(300.0, 200.0);
+    let a = rect(&mut s, [20.0, 20.0, 100.0, 60.0], "#ff8800");
+    run(&mut s, "object.slice.make", json!({"ids": [a]}));
+    run(&mut s, "object.slice.options", json!({"name": "aux"}));
+    let b = run(&mut s, "object.slice.create", json!({"x": 150, "y": 100, "width": 100, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut s, "object.slice.select", json!({"slices": [b]}));
+    run(&mut s, "object.slice.options", json!({"name": "aux-"}));
+    run(&mut s, "object.slice.select", json!({"slices": [a, b]}));
+    let mut names: Vec<String> = files(&run(&mut s, "document.exportForWeb", json!({"slices": "selected"}))).into_iter().map(|(n, _)| n).collect();
+    names.sort();
+    assert_eq!(names, ["images/aux- 2.gif", "images/aux-.gif"]);
+}
+
+/// Without a path the files are named after the document's title, with the characters Windows does
+/// not allow in a file name as `-` and a `-` after a Windows device name, on every platform.
+#[test]
+fn files_named_after_the_title_follow_windows_naming_rules() {
+    for (title, page, image) in [("a|b?c*\"<d>", "a-b-c---d-.html", "images/a-b-c---d-.gif"), ("nul", "nul-.html", "images/nul-.gif")] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 40, "height": 30, "name": title}));
+        rect(&mut s, [0.0, 0.0, 20.0, 30.0], "#ff0000");
+        let names: Vec<String> = files(&run(&mut s, "document.exportForWeb", json!({"output": "html"}))).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, [page, image], "{title}");
+    }
+}
+
 #[test]
 fn files_are_written_beside_the_path() {
     let dir = vectorcraft_testkit::temp_dir("webexport");
@@ -276,6 +306,40 @@ fn files_are_written_beside_the_path() {
     assert!(std::fs::read_to_string(&page).unwrap().contains("src=\"images/page.png\""));
     assert!(dir.join("images").join("page.png").exists());
     assert_eq!(r["bytes"].as_u64().unwrap(), std::fs::metadata(&page).unwrap().len() + std::fs::metadata(dir.join("images/page.png")).unwrap().len());
+}
+
+/// A 64×32 PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+fn cut_png() -> Vec<u8> {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
+    png.truncate(idat + 8);
+    png
+}
+
+#[test]
+fn an_export_says_when_an_image_could_not_be_decoded() {
+    let undecoded =
+        |r: &Value| r["warnings"].as_array().is_some_and(|w| w.iter().any(|w| w.as_str().is_some_and(|w| w.contains("couldn't be decoded"))));
+    let mut s = two_colours();
+    let r = run(&mut s, "document.exportForWeb", json!({}));
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    assert_eq!(run(&mut s, "document.exportForWeb.preview", json!({}))["warnings"], json!([]));
+    // The renderer can't decode the placed image and draws nothing in its place.
+    run(&mut s, "file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut_png())}));
+    for format in ["gif", "jpg", "png8", "png24"] {
+        let r = run(&mut s, "document.exportForWeb", json!({"format": format}));
+        assert!(undecoded(&r), "{format}: {}", r["warnings"]);
+        let r = run(&mut s, "document.exportForWeb.preview", json!({"format": format}));
+        assert!(undecoded(&r), "{format} preview: {}", r["warnings"]);
+    }
+    let dir = vectorcraft_testkit::temp_dir("webexport-undecoded");
+    let page = dir.join("page.html").to_string_lossy().to_string();
+    let r = run(&mut s, "document.exportForWeb", json!({"path": page, "output": "html"}));
+    assert!(undecoded(&r), "{r}");
+    assert!(dir.join("images").join("page.gif").exists(), "the files are still written");
 }
 
 #[test]

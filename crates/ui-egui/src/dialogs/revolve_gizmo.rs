@@ -3,7 +3,7 @@
 //! the existing effect preview applies commands and owns OK, Cancel and undo.
 use egui::{Align2, FontId, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
 use serde_json::json;
-use vectorcraft_effects::{REVOLVE, revolve_options};
+use vectorcraft_effects::REVOLVE;
 use vectorcraft_geom::Point;
 use vectorcraft_three_d::Revolve;
 
@@ -85,7 +85,7 @@ impl Geometry {
         let node = state.doc.node(*state.selection.objects.first()?)?;
         let bounds = node.geometric_bounds()?;
         let xf = Xf::new(app.canvas_rect?, app.view()?);
-        let options = revolve_options(&super::form::params(d));
+        let options = super::revolve::light_options(d);
         // Revolve turns about its axis; the others about the centre of the art's bounds.
         let origin = if d.str("__effect") == REVOLVE { options.rotation_origin(bounds) } else { bounds.center() };
         let center = xf.to_screen(origin);
@@ -204,7 +204,7 @@ pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
     egui::Area::new(Id::new("revolve-gizmo-area")).order(egui::Order::Foreground).fixed_pos(rect.min).movable(false).show(ctx, |ui| {
         ui.set_clip_rect(geometry.xf.rect);
         let response = ui.allocate_rect(rect.intersect(geometry.xf.rect), Sense::drag());
-        let options = revolve_options(&super::form::params(d));
+        let options = super::revolve::light_options(d);
         let light = light_position(geometry, options);
         let hovered = response
             .hovered()
@@ -267,21 +267,21 @@ pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
                         }
                     }
                     Mode::Light => {
-                        let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
+                        let start = super::revolve::light_options(&Dialog::new("effect", serde_json::Value::Object(current.fields.clone())));
                         let projected = light_position(geometry, start) + (p - current.origin);
                         let point = geometry.xf.delta_to_doc(projected - geometry.center) * (geometry.xf.zoom / f64::from(geometry.radius * 1.4));
                         let [rotation, height] = start.light_at_on_side(Point::new(point.x, point.y));
-                        d.fields.insert("lightRotation".into(), json!(wrap(rotation, snap)));
-                        d.fields.insert("lightHeight".into(), json!(snap_height(height, snap)));
+                        super::revolve::set_light_value(d, "lightRotation", json!(wrap(rotation, snap)));
+                        super::revolve::set_light_value(d, "lightHeight", json!(snap_height(height, snap)));
                     }
                     Mode::LightRing { axis } => {
                         let delta = geometry.xf.delta_to_doc(p - current.origin) * geometry.xf.zoom;
-                        let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
+                        let start = super::revolve::light_options(&Dialog::new("effect", serde_json::Value::Object(current.fields.clone())));
                         if *axis == 0 {
                             // Right turns the light counterclockwise, as along the ring's foot.
-                            d.fields.insert("lightRotation".into(), json!(wrap(start.light_rotation + delta.x * 0.6, snap)));
+                            super::revolve::set_light_value(d, "lightRotation", json!(wrap(start.light_rotation + delta.x * 0.6, snap)));
                         } else {
-                            d.fields.insert("lightHeight".into(), json!(snap_height(start.light_height - delta.y * 0.6, snap)));
+                            super::revolve::set_light_value(d, "lightHeight", json!(snap_height(start.light_height - delta.y * 0.6, snap)));
                         }
                     }
                 }
@@ -347,7 +347,7 @@ fn paint(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Op
     painter.circle(g.center, 8.0, t.panel.gamma_multiply(0.8), Stroke::new(1.5, t.text_dim));
     painter.line_segment([g.center - vec2(4.0, 0.0), g.center + vec2(4.0, 0.0)], Stroke::new(1.0, t.text_dim));
     painter.line_segment([g.center - vec2(0.0, 4.0), g.center + vec2(0.0, 4.0)], Stroke::new(1.0, t.text_dim));
-    let options = revolve_options(&super::form::params(d));
+    let options = super::revolve::light_options(d);
     if d.bool("__showAxis") {
         painter.line_segment(options.projected_axis(g.bounds).map(|p| g.xf.to_screen(p)), Stroke::new(1.0, t.warning));
     }
@@ -365,7 +365,7 @@ fn paint(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Op
 fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Option<&Drag>) {
     let t = Tokens::get(ui.ctx());
     let painter = ui.painter();
-    let options = revolve_options(&super::form::params(d));
+    let options = super::revolve::light_options(d);
     let radius = g.radius * 1.4;
     painter.circle_stroke(g.center, radius, Stroke::new(1.0, t.text_dim.gamma_multiply(0.3)));
     let labels = g.light_labels();
@@ -402,7 +402,13 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     painter.circle(g.center, 4.0, t.panel, Stroke::new(1.0, t.text_dim));
     // An original sun handle. A back light is hollow; the guide's back half is dashed.
     let front = options.light_direction()[2] >= 0.0;
-    painter.circle(p, 9.0, if front { t.warning } else { t.panel }, Stroke::new(2.0, t.warning));
+    let [r, green, b] = options.light_color.map(|c| (c * 255.0).round() as u8);
+    let color = egui::Color32::from_rgb(r, green, b);
+    // Keep the themed outline and rays readable even with a dark light color.
+    painter.circle(p, 9.0, if front { color } else { t.panel }, Stroke::new(2.0, t.warning));
+    if !front {
+        painter.circle_stroke(p, 5.0, Stroke::new(2.0, color));
+    }
     for i in 0..8 {
         let angle = i as f32 * std::f32::consts::TAU / 8.0;
         let direction = vec2(angle.cos(), angle.sin());

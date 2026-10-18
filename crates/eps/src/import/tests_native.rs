@@ -270,7 +270,7 @@ fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
     assert_eq!((stroke.width, dash.pattern, dash.offset), (20.0, vec![40.0, 20.0], 10.0));
     // Read as if its page had no `UserUnit`, the editing data is for another page.
     let (_, w, read) = crate::layered_ai(&private(&art), page.clone(), vec![], false, false, 1.0);
-    assert!(!read && w.iter().any(|w| w.contains("different page")), "{w:?}");
+    assert!(!read && w.iter().any(|w| w.contains("for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10")), "{w:?}");
     // Editing data with the page in points.
     let points = native(&layer("Jig", true, "0 0 1 0 k\n100 100 m\n140 100 L\n140 140 L\n100 140 L\nf")).replace(" 0 0 100 100", " 0 0 1000 1000");
     let (d, w, read) = crate::layered_ai(&private(&points), page, vec![], false, false, 10.0);
@@ -290,7 +290,66 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let other = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
     let (d, w, _) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false, false, 1.0);
     assert_eq!(names(&d), names(&pdf));
-    assert!(w.iter().any(|w| w.contains("different page")), "{w:?}");
+    assert!(w.iter().any(|w| w.contains("for a 50 × 50 pt page, the file's 100 × 100 pt page at 1:2")), "{w:?}");
+}
+
+/// #2034: editing data for a page of another size gives both sizes in points, in an EPS's note and
+/// in a `.ai`'s.
+#[test]
+fn editing_data_for_a_page_of_another_size_names_both_sizes() {
+    let art = native(&layer("Jig", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 600 400");
+    let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap().replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 612 792");
+    let r = import(file.as_bytes()).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 612 × 792 pt page): it comes in as its page, in one layer";
+    assert!(r.warnings.iter().any(|w| w == note), "{:?}", r.warnings);
+    // A `.ai` whose PDF part has an A4 page.
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(595.2756, 841.8898), vec![], false, false, 1.0);
+    let note = "the file's layers weren't read from its editing data (its editing data is for a 600 × 400 pt page, not the file's 595.276 × 841.89 pt page): they come from its PDF part";
+    assert!(!read && w.iter().any(|w| w == note), "{w:?}");
+}
+
+/// #2034: editing data whose page is the file's at another scale (a Large Canvas file without its
+/// scale, for one) gives that scale, the editing data's page to the file's.
+#[test]
+fn editing_data_for_the_page_at_another_scale_names_the_scale() {
+    let art = native(&layer("Jig", true, &square(10, 10)));
+    let note = |file: &str| {
+        let r = import(file.as_bytes()).unwrap();
+        assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+        r.warnings.into_iter().find(|w| w.contains("its editing data is for")).unwrap_or_default()
+    };
+    let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap();
+    let ten = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 1000 1000");
+    assert_eq!(
+        note(&ten),
+        "the file's layers weren't read (its editing data is for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10): it comes in as its page, in one layer"
+    );
+    let wide = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 250 250");
+    assert!(note(&wide).contains("for a 100 × 100 pt page, the file's 250 × 250 pt page at 1:2.5)"));
+    let half = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 50 50");
+    assert!(note(&half).contains("for a 100 × 100 pt page, the file's 50 × 50 pt page at 2:1)"));
+    // A scale that rounds to 1:1 isn't given.
+    let large = art.replace(" 0 0 100 100", " 0 0 2000 2000");
+    let (_, w, _) = crate::layered_ai(&private(&large), Document::new(2000.8, 2000.8), vec![], false, false, 1.0);
+    assert!(w.iter().any(|w| w.contains("for a 2000 × 2000 pt page, not the file's 2000.8 × 2000.8 pt page)")), "{w:?}");
+}
+
+/// Editing data that can't be decompressed leaves the `.ai` as its PDF part, after its notes, with a
+/// note saying why its layers weren't read, which counts as a loss.
+#[test]
+fn an_ai_file_whose_editing_data_cant_be_decompressed_says_so() {
+    let pdf = pdf_part(10.0, 86.0);
+    for (private, why) in [
+        (&b"%AI12_CompressedDataxx"[..], "its zlib compression is damaged"),
+        (b"%AI24_ZStandard_Data nothing", "its Zstandard compression is damaged"),
+    ] {
+        let (d, w, read) = crate::layered_ai(private, pdf.clone(), vec!["a note".into()], false, false, 1.0);
+        assert!(!read);
+        assert_eq!(names(&d), names(&pdf));
+        assert_eq!(w, ["a note".to_string(), format!("the file's layers weren't read from its editing data ({why}): they come from its PDF part")]);
+        assert!(crate::is_loss(&w[1]), "{w:?}");
+    }
 }
 
 /// #2031: a Large Canvas editing copy (`%AI24_LargeCanvasScale: 10`) writes its art and boxes at
@@ -313,7 +372,7 @@ fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
     let art = native_large_canvas(20.0, 10.0, &layer("Art", true, &square(10, 10)));
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
-    assert!(r.warnings.iter().any(|w| w.contains("different page")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("for a 200 × 200 pt page, the file's 100 × 100 pt page at 2:1")), "{:?}", r.warnings);
     // A `.ai` keeps its art space: its PDF part is read at the size it declares.
     let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
     let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
@@ -582,6 +641,86 @@ fn type_of_the_page_that_no_story_places_stays_with_the_nearest_text_object() {
         }
     });
     assert!(all.contains(&"Extra".to_string()), "{all:?} {:?}", r.warnings);
+}
+
+/// Page type of no text object that lies where made type is, but has other letters, is not that type:
+/// it stays, with the nearest text object.
+#[test]
+fn type_of_the_page_near_made_type_with_other_letters_stays() {
+    // "Extra" is 11.5 below the line of "Hi there", well inside the box round that line.
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show 58.5 50 moveto (Extra) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there", "Extra"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// Page type of no text object that lies where made type is and has its letters, in any case, is that
+/// type as the page draws it: the made type stays, and the page's is left out.
+#[test]
+fn type_of_the_page_with_the_letters_of_made_type_where_it_lies_is_that_type() {
+    // The page draws the line 3 points below where the story starts it, so no line of the story
+    // owns it.
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    for drawn in ["Hi there", "HI THERE", "there"] {
+        let page = format!("0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto ({drawn}) show");
+        let r = import(&eps(&page, &art)).unwrap();
+        let mut all = vec![];
+        r.document.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                all.push((t.plain_text(), t.xf.as_coeffs()[5]));
+            }
+        });
+        assert_eq!(all, [("Hi there".to_string(), 38.5)], "{drawn}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("doesn't draw") || w.contains("with another's")), "{drawn}: {:?}", r.warnings);
+    }
+}
+
+/// Page type of no text object that lies where the made type of two text objects is, with the
+/// letters of one of them in each of its pieces, is the type of both as the page draws it.
+#[test]
+fn type_of_the_page_with_the_letters_of_two_made_types_where_it_lies_is_their_type() {
+    // The two stories start 16.5 apart on one line, and the page draws both 3 points below it: its
+    // two pieces are one object, which no line of either story owns.
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("there\r", 0, (8216.5, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto (Hi) show 75 58.5 moveto (there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push((t.plain_text(), t.xf.as_coeffs()[5]));
+        }
+    });
+    assert_eq!(all, [("Hi".to_string(), 38.5), ("there".to_string(), 38.5)], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't draw") || w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// The file's text document is trusted where the page has type where it lays type out, whatever
+/// letters that type has: its type is weighed against the page.
+#[test]
+fn page_type_where_made_type_is_trusts_the_text_document_whatever_its_letters() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 50 moveto (Extra) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Extra"], "{:?}", r.warnings);
+    // "Hi there" was made from the text document and left out because the page doesn't draw it.
+    assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -907,6 +1046,34 @@ fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("differs from the page's")), "{:?}", r.warnings);
 }
 
+/// The page sets "Hi there" in pieces, and the layers lay the line out again as one: the page and
+/// the layers differ only where the type is.
+fn page_in_pieces_and_layers(art: &str) -> Vec<u8> {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi) show 70 61.5 moveto (there) show";
+    eps(page, &native_with_text(&layer("Art", true, &format!("{art}{}", text_object(0))), &doc))
+}
+
+#[test]
+fn type_laid_out_again_is_noted_as_type_and_not_as_art_the_layers_dont_describe() {
+    let r = import(&page_in_pieces_and_layers("")).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("the type on the layers differs from the file's own page")), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("brush strokes")), "{:?}", r.warnings);
+}
+
+#[test]
+fn art_the_page_doesnt_draw_is_noted_with_its_own_share_and_not_the_types() {
+    // A bar of 0.5 × 80 points that the page doesn't draw, too thin to be refused as an object: 0.4% of
+    // the page, away from the type.
+    let bar = "0 0 0 1 k\n20 10 m\n20.5 10 L\n20.5 90 L\n20 90 L\nf\n";
+    let r = import(&page_in_pieces_and_layers(bar)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let notes: Vec<&String> = r.warnings.iter().filter(|w| w.contains("differs from the file's own page")).collect();
+    assert_eq!(notes.len(), 1, "{:?}", r.warnings);
+    assert!(notes[0].starts_with("the art on the layers differs from the file's own page in about 0.4% of it (brush strokes"), "{notes:?}");
+}
+
 /// An EPS whose page is its art's box `[x0 y0 x1 y1]` (not its artboard, 0 0 100 100), drawing
 /// `page`, with the editing copy of `layers`.
 fn eps_of_art(art_box: [u32; 4], page: &str, layers: &str) -> Vec<u8> {
@@ -1153,5 +1320,5 @@ fn raster_print_page_recovers_legacy_mesh_vector_mask_and_editable_curve() {
     // A wrong editing copy must still fail the page comparison.
     let wrong = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 120 100");
     let r = import(wrong.as_bytes()).unwrap();
-    assert!(r.warnings.iter().any(|w| w.contains("different page")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("for a 100 × 100 pt page, not the file's 120 × 100 pt page")), "{:?}", r.warnings);
 }

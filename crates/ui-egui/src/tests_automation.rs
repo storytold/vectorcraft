@@ -118,3 +118,39 @@ fn frames_with_injected_input_are_confined() {
     assert!(!app.synthetic_frame, "the frames after it are the person's");
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// Edit Original and the Attributes panel's Browser button hand a file or URL to another app: a
+/// control request (or MCP, which comes through it) can't run them, roots or not.
+#[test]
+fn automation_cannot_hand_files_or_urls_to_other_apps() {
+    let base = std::env::temp_dir().join(format!("vc-ui-handoff-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let png = base.join("linked.png");
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 255])).save(&png).unwrap();
+    let opened = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    let (u, f) = (opened.clone(), opened.clone());
+    let services = Services {
+        open_url: Some(Box::new(move |p: &str| u.borrow_mut().push(p.to_string()))),
+        open_file: Some(Box::new(move |p: &str| {
+            f.borrow_mut().push(p.to_string());
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let image = app.run("file.place", json!({"path": s(png.clone())})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    app.run("attributes.set", json!({"url": "https://example.com/a"})).unwrap();
+    for (command, params) in [("attributes.openUrl", json!({})), ("links.editOriginal", json!({"id": image}))] {
+        let r = request(&mut app, &tx, "engine.execute", json!({"command": command, "params": params}));
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("only the person at the keyboard")), "{command}: {r}");
+    }
+    assert!(opened.borrow().is_empty());
+    // The person at the keyboard can.
+    app.run("attributes.openUrl", json!({})).unwrap();
+    app.run("links.editOriginal", json!({"id": image})).unwrap();
+    assert_eq!(opened.borrow().len(), 2);
+    let _ = std::fs::remove_dir_all(base);
+}

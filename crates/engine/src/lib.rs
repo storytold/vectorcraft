@@ -91,6 +91,27 @@ pub struct HistoryEntry {
     next_bytes: usize,
     /// Which document the figures were taken against (its address): the next state.
     next: usize,
+    /// The template and name `label` was made from ([`Session::edit_named`]).
+    named: Option<NamedStep>,
+}
+
+/// A step name made by filling the `{name}` placeholder of a template with a name
+/// ([`Session::edit_named`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedStep {
+    /// The English template, with one `{name}` placeholder (`Apply {name}`).
+    pub template: &'static str,
+    /// The name in the placeholder, as the document holds it (a style's name).
+    pub name: String,
+    /// The name is one VectorCraft gives (`[Normal Character Style]`), not one the user typed.
+    pub built_in: bool,
+}
+
+impl NamedStep {
+    /// The step name: the template with the name in its placeholder.
+    pub fn label(&self) -> String {
+        self.template.replace("{name}", &self.name)
+    }
 }
 
 impl HistoryEntry {
@@ -98,7 +119,14 @@ impl HistoryEntry {
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
         let (bytes, next_bytes) = doc.retained_bytes_each(next);
-        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize }
+        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+    }
+
+    /// The template and name the step's label was made from, while the label is still the one
+    /// they make: `None` for a step named any other way, and for one whose label was changed
+    /// since it was recorded.
+    pub fn named(&self) -> Option<&NamedStep> {
+        self.named.as_ref().filter(|n| n.label() == self.label)
     }
 
     /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
@@ -112,7 +140,7 @@ impl HistoryEntry {
             return Self::kept(label, doc, selection, now);
         }
         doc.drop_lookup_cache();
-        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize }
+        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize, named: None }
     }
 
     /// The figures [`HistoryEntry::turned`] reuses.
@@ -918,7 +946,8 @@ pub struct Prefs {
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
     /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151). Read when the app starts.
+    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
+    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
@@ -1738,6 +1767,33 @@ impl Session {
         }
     }
 
+    /// [`Session::edit`] with the step named `template`, its `{name}` placeholder filled with `name`
+    /// (a style's name). The undo step it records keeps the template and the name
+    /// ([`HistoryEntry::named`]), and a frontend shows the template's translation with the name in
+    /// it. An edit that records no step of its own (inside an interaction, or a later edit of an
+    /// undo group) keeps neither, and neither does a step an undo group names.
+    pub fn edit_named<T>(
+        &mut self,
+        template: &'static str,
+        name: &str,
+        built_in: bool,
+        f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>,
+    ) -> Result<T> {
+        let named = NamedStep { template, name: name.to_string(), built_in };
+        let step = named.label();
+        // The step this edit records keeps the document as it is now.
+        let now = Arc::as_ptr(&self.doc()?.doc);
+        let v = self.edit(&step, f)?;
+        if let Ok(st) = self.doc_mut()
+            && let Some(e) = st.history.undo.last_mut()
+            && Arc::as_ptr(&e.doc) == now
+            && e.label == step
+        {
+            e.named = Some(named);
+        }
+        Ok(v)
+    }
+
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
@@ -2102,6 +2158,8 @@ mod tests_layers;
 mod tests_legacy_ai;
 #[cfg(test)]
 mod tests_library;
+#[cfg(test)]
+mod tests_link_paths;
 #[cfg(test)]
 mod tests_linked_stops;
 #[cfg(test)]

@@ -278,7 +278,7 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     if transparent && flat.is_some() {
         enc.warnings.push("transparency is flattened into opaque art and images (EPS has none): see the flattener preset".into());
     }
-    let created = vectorcraft_doc::metadata::now_unix();
+    let created = vectorcraft_doc::metadata::output_time();
     let mut renderer = vectorcraft_render::Renderer::new();
     for (board, region, origin) in pages {
         let rect = vectorcraft_eps::preview_rect(region, origin);

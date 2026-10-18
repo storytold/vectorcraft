@@ -58,6 +58,12 @@ fn plugins_are_listed_in_the_object_and_effect_menus() {
     assert_eq!((fx.command.as_deref(), &fx.params), (Some("effect.dialog"), &json!({"effect": "plugin.test.ui.echo"})));
     // Menu clicks on items with params don't turn into the generic parameter dialog.
     assert_eq!(menus::click_target("Desaturate…", "plugin.dialog", &filter.params).0, "plugin.dialog");
+    // Their names are the plug-ins' own, not interface text a language catalog has to cover (they
+    // are installed for the whole test run, while the catalog tests run).
+    let strings = menus::menu_strings();
+    for name in ["Desaturate…", "Test test.ui.echo…"] {
+        assert!(!strings.contains(name), "{name} is a menu string to translate");
+    }
 }
 
 #[test]

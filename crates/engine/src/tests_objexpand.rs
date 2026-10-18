@@ -37,6 +37,27 @@ fn gradient_rect(s: &mut Session, r: Rect, gradient: Value, stroke: bool) -> Nod
     NodeId(id)
 }
 
+/// A selected square `r` with a freeform fill whose four automatic points take `colors` in turn.
+fn freeform_rect(s: &mut Session, r: Rect, colors: [Value; 4]) -> NodeId {
+    let id = gradient_rect(s, r, json!({"kind": "freeform"}), false);
+    for (i, c) in colors.into_iter().enumerate() {
+        run(s, "paint.freeform.setPoint", json!({"index": i, "color": c, "stroke": false}));
+    }
+    id
+}
+
+/// A CMYK color's inks.
+fn inks(c: Color) -> [f32; 4] {
+    match c {
+        Color::Cmyk { c, m, y, k } => [c, m, y, k],
+        c => panic!("a CMYK color expected: {c:?}"),
+    }
+}
+
+fn close_inks(a: [f32; 4], b: [f32; 4]) -> bool {
+    a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-5)
+}
+
 /// The one selected object after a command.
 fn selected(s: &Session) -> Node {
     let sel = &s.doc().unwrap().selection.objects;
@@ -793,6 +814,18 @@ fn create_gradient_mesh_takes_its_colours_from_the_gradient() {
 }
 
 #[test]
+fn create_gradient_mesh_keeps_the_inks_of_freeform_points() {
+    let mut s = session();
+    let one = json!({"c": 0.5, "m": 0.2, "y": 0.0, "k": 0.1});
+    let id = freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [one.clone(), one.clone(), one.clone(), one]);
+    run(&mut s, "object.mesh.create", json!({"rows": 2, "cols": 2}));
+    let NodeKind::Mesh(m) = &node(&s, id).kind else { panic!() };
+    for p in &m.points {
+        assert!(close_inks(inks(p.color), [0.5, 0.2, 0.0, 0.1]), "{:?}", p.color);
+    }
+}
+
+#[test]
 fn expanded_colours_keep_the_stops_colour_model() {
     let mut s = session();
     let gr = json!({"kind": "linear", "stops": [{"offset": 0, "color": {"c": 1, "m": 0, "y": 0, "k": 0}}, {"offset": 1, "color": {"c": 0, "m": 1, "y": 0, "k": 0}}]});
@@ -802,6 +835,44 @@ fn expanded_colours_keep_the_stops_colour_model() {
     let (_, strips) = clip_parts(&g);
     let Color::Cmyk { c, m, .. } = fill_color(strips[1]) else { panic!("CMYK strip expected: {:?}", fill_color(strips[1])) };
     assert!((c - 0.625).abs() < 1e-5 && (m - 0.375).abs() < 1e-5, "interpolated in CMYK: {c} {m}");
+}
+
+#[test]
+fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
+    let ink = |c: f32, m: f32, y: f32, k: f32| json!({"c": c, "m": m, "y": y, "k": k});
+    // The mesh's colors, after checking that it draws within `most` (mean channel difference) of
+    // the gradient.
+    let expanded = |s: &mut Session, most: f64| {
+        let before = render(s);
+        run(s, "object.expand", json!({}));
+        let diff = mean_diff(&before, &render(s));
+        assert!(diff < most, "looks the same: {diff}");
+        let NodeKind::Mesh(m) = selected(s).kind else { panic!("a mesh: {:?}", selected(s).kind) };
+        m.points.into_iter().map(|p| p.color).collect::<Vec<_>>()
+    };
+    // Points of one ink set give every mesh point that ink set.
+    let mut s = session();
+    let one = ink(0.5, 0.2, 0.0, 0.1);
+    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [one.clone(), one.clone(), one.clone(), one]);
+    for c in expanded(&mut s, 1.0) {
+        assert!(close_inks(inks(c), [0.5, 0.2, 0.0, 0.1]), "{c:?}");
+    }
+    // Cyan and black points mix as inks: cyan and black only, adding up to one.
+    let mut s = session();
+    let (cyan, black) = (ink(1.0, 0.0, 0.0, 0.0), ink(0.0, 0.0, 0.0, 1.0));
+    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan.clone(), black.clone(), black]);
+    for c in expanded(&mut s, 5.0) {
+        let [c, m, y, k] = inks(c);
+        assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
+    }
+    // Points in different models mix in display RGB, stored in a CMYK document as CMYK.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
+    let gray = json!({"gray": 0.5});
+    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan, gray.clone(), gray]);
+    for c in expanded(&mut s, 2.5) {
+        inks(c);
+    }
 }
 
 #[test]

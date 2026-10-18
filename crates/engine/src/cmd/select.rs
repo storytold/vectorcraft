@@ -90,6 +90,15 @@ pub fn specs() -> Vec<CommandSpec> {
             anchors_many
         ),
         cmd!(
+            "select.color",
+            "Select by Color",
+            [],
+            None,
+            "{fill?: colour, stroke?: colour (as paint.setFill's color; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
+            has_doc,
+            select_color
+        ),
+        cmd!(
             "select.same.fillColor",
             "Fill Color",
             ["Select", "Same"],
@@ -526,6 +535,29 @@ fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
 fn stroke_weight(n: &Node) -> f64 {
     let (paint, width) = stroke_of(n);
     if paint.is_none() { 0.0 } else { width }
+}
+
+/// Select by Color: the objects whose fill and stroke read as the colours given, compared as the
+/// `#rrggbb` `document.inspect` reports, so a script can pick art by colour without an object id.
+fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.color";
+    let hex = |key: &str| match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => color_value(v).map(|c| Some(c.to_hex())).ok_or_else(|| bad(C, format!("`{key}`: not a colour: {v}"))),
+    };
+    let (fill, stroke) = (hex("fill")?, hex("stroke")?);
+    if fill.is_none() && stroke.is_none() {
+        return Err(bad(C, "give `fill`, `stroke` or both"));
+    }
+    let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
+    select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+}
+
+/// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though
+/// it holds its members, and its members report none.
+fn paint_reported(d: &Document, n: &Node) -> bool {
+    let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
+    compound(n) || (!n.is_container() && !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
 }
 
 fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {

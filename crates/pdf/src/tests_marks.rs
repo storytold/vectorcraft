@@ -211,3 +211,34 @@ fn page_information_names_the_file_artboard_and_date() {
     let band_end = top + 100.0 + 6.0 + PrinterMarks::LENGTH;
     assert!(glyphs.iter().all(|g| g.y0 > band_end && g.x0 >= top - 0.5), "{glyphs:?}");
 }
+
+#[test]
+fn page_information_prints_the_time_of_the_export_not_the_creation_date() {
+    let d = doc();
+    // The outlines of the page information of a PDF of `d` created at `created`.
+    let info = |created: i64| {
+        let opts = PdfOptions { settings: settings(json!({"marks": {"pageInfo": true}})), created: Some(created), ..PdfOptions::uncompressed() };
+        let back = import(&export_with_report(&d, &opts).unwrap().bytes).unwrap();
+        let mut out = vec![];
+        back.walk(|n| {
+            if n.appearance.fill().is_some_and(|f| f.paint.is_registration())
+                && let Some(p) = n.path_data()
+            {
+                out.push(p.clone());
+            }
+        });
+        out
+    };
+    let now = || vectorcraft_doc::metadata::output_time().unwrap();
+    // Both print the minute they are written in: try again when the minute turns between them.
+    for _ in 0..3 {
+        let minute = now() / 60;
+        let (old, new) = (info(1_577_836_800), info(now()));
+        if now() / 60 == minute {
+            assert!(!old.is_empty());
+            assert!(old == new, "a file created in 2020 prints the same date as one created now");
+            return;
+        }
+    }
+    panic!("the minute turned during each of three tries");
+}

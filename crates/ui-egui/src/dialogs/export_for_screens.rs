@@ -296,6 +296,28 @@ fn checked_layers(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
 /// The `document.exportForScreens` params the dialog describes (the web: no folder, one ZIP for
 /// several files).
 fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let (mut p, files) = settings_params(app, d)?;
+    if io::is_web(app) {
+        p.insert("zip".into(), json!(files > 1));
+    } else {
+        let folder = d.str("folder");
+        if folder.trim().is_empty() {
+            return Err("choose a folder to export to".into());
+        }
+        p.insert("folder".into(), json!(folder.trim()));
+        p.insert("openLocation".into(), json!(d.bool("openLocation")));
+    }
+    Ok(Value::Object(p))
+}
+
+/// The counter's first value: the Start at field (a number, or text typed through `ui.dialog.set`).
+fn counter_start(d: &Dialog) -> u64 {
+    d.fields.get("counterStart").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|t| t.trim().parse().ok()))).unwrap_or(1)
+}
+
+/// The params of [`params`] without the destination (what is exported, at which sizes, and how the
+/// files are named and sorted), and how many files that is.
+fn settings_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Value>, usize), String> {
     let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let rows = d.fields.get("formats").and_then(Value::as_array).cloned().unwrap_or_default();
     if rows.is_empty() {
@@ -363,21 +385,10 @@ fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if !name.trim().is_empty() {
         p.insert("name".into(), json!(name.trim()));
     }
-    let start = d.fields.get("counterStart").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|t| t.trim().parse().ok()))).unwrap_or(1);
-    p.insert("counterStart".into(), json!(start));
+    p.insert("counterStart".into(), json!(counter_start(d)));
     p.insert("formats".into(), Value::Array(rows));
     p.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
-    if io::is_web(app) {
-        p.insert("zip".into(), json!(files > 1));
-    } else {
-        let folder = d.str("folder");
-        if folder.trim().is_empty() {
-            return Err("choose a folder to export to".into());
-        }
-        p.insert("folder".into(), json!(folder.trim()));
-        p.insert("openLocation".into(), json!(d.bool("openLocation")));
-    }
-    Ok(Value::Object(p))
+    Ok((p, files))
 }
 
 /// Export; the dialog stays open when the export fails.
@@ -684,51 +695,21 @@ fn naming(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         widgets::dim_label(ui, tl!("Prefix:"));
         form::text(ui, d, "prefix", 110.0);
         widgets::dim_label(ui, tl!("Start at:"));
-        let start = d.fields.get("counterStart").and_then(Value::as_u64).unwrap_or(1) as f64;
-        if let Some(v) = widgets::range_field(ui, "efs-counter-start", start, 0.0..=999_999.0, "", 0, 64.0) {
+        if let Some(v) = widgets::range_field(ui, "efs-counter-start", counter_start(d) as f64, 0.0..=999_999.0, "", 0, 64.0) {
             d.fields.insert("counterStart".into(), json!(v.round().max(0.0) as u64));
         }
     });
     let example = example_name(app, d);
-    widgets::dim_label(ui, &crate::i18n::fmt(tl!("Example: {name}"), &[("name", &example)]));
+    if !example.is_empty() {
+        widgets::dim_label(ui, &crate::i18n::fmt(tl!("Example: {name}"), &[("name", &example)]));
+    }
 }
 
-/// The first file the export would write, as the folders and pattern name it.
+/// The first file the export writes, relative to the export folder, as `document.exportForScreens`
+/// names it ([`fileio::screen_first_file`]); empty while the dialog's settings choose nothing to
+/// export (no format, nothing checked or selected, a bad range).
 pub(super) fn example_name(app: &VectorcraftApp, d: &Dialog) -> String {
-    let Some(st) = app.session.active() else { return String::new() };
-    let row = d.fields.get("formats").and_then(Value::as_array).and_then(|r| r.first()).cloned().unwrap_or(json!({}));
-    let format = row["format"].as_str().and_then(fileio::format);
-    let ext = format.and_then(|f| f.extensions.first().copied()).unwrap_or("png");
-    let raster = format.is_none_or(|f| f.raster);
-    let scale = if raster { row["scale"].as_str().unwrap_or("1x").to_string() } else { String::new() };
-    let suffix = row["suffix"].as_str().unwrap_or_default().to_string();
-    let item = match d.str("tab").as_str() {
-        "assets" => checked_assets(app, d).first().and_then(|id| st.doc.asset(*id)).map(|a| a.name.clone()),
-        "layers" => checked_layers(app, d).first().and_then(|id| st.doc.node(NodeId(*id))).map(|n| n.display_name()),
-        "selection" => Some("Selection".to_string()),
-        _ => st.doc.artboards.first().map(|a| a.name.clone()),
-    }
-    .unwrap_or_else(|| "Artboard 1".into());
-    let filename = fileio::file_stem(&st.doc.title);
-    let when = vectorcraft_doc::metadata::now_unix().map_or([1970, 1, 1, 0, 0, 0], vectorcraft_doc::metadata::civil);
-    let start = d.fields.get("counterStart").and_then(Value::as_u64).unwrap_or(1);
-    let pattern = d.str("name");
-    let stem = if pattern.trim().is_empty() {
-        format!("{item}{suffix}")
-    } else {
-        let parts =
-            fileio::FileNameParts { filename: &filename, name: &item, index: 1, counter: start, format: ext, scale: &scale, suffix: &suffix, when };
-        let named = fileio::render_file_name(&pattern, &parts);
-        if pattern.contains("<suffix>") { named } else { format!("{named}{suffix}") }
-    };
-    let file = format!("{}{stem}.{ext}", d.str("prefix"));
-    match d.str("folders").as_str() {
-        "rows" => format!("{}/{file}", if raster { scale } else { ext.to_uppercase() }),
-        "format" => format!("{ext}/{file}"),
-        "item" => format!("{item}/{file}"),
-        "itemFormat" => format!("{item}/{ext}/{file}"),
-        _ => file,
-    }
+    settings_params(app, d).ok().and_then(|(p, _)| fileio::screen_first_file(&app.session, &Value::Object(p)).ok()).unwrap_or_default()
 }
 
 /// The Layers tab: each top-level layer's thumbnail and checkbox (a file of its art alone),

@@ -384,7 +384,7 @@ pub(crate) fn shape_range(
             } else if let Some((_, f)) = cache.iter().find(|(k, _)| *k == c) {
                 f.clone()
             } else {
-                let f = db.fallback_for(c, primary.id()).unwrap_or_else(|| primary.clone());
+                let f = db.fallback_for_style(c, primary.id(), primary.weight, primary.italic).unwrap_or_else(|| primary.clone());
                 cache.push((c, f.clone()));
                 f
             };
@@ -392,7 +392,8 @@ pub(crate) fn shape_range(
             let next_script = shaping_script(c);
             let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
             let script_change = strong_script && script != Script::Common && script != next_script;
-            // Combining marks stay with their base.
+            // Combining marks, zero width joiners and non-joiners, and variation selectors stay
+            // with the character before them.
             if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
                 if i > seg.range.start {
                     seg.range.end = i;
@@ -580,7 +581,7 @@ struct Shaped {
 fn is_mark(c: char) -> bool {
     use unicode_general_category::{GeneralCategory, get_general_category};
     matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
-        || matches!(c, '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
+        || matches!(c, '\u{200C}' | '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
 }
 
 /// Shape `seg` and append its glyphs to `out`. Each glyph takes the tracking, kerning, baseline

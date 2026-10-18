@@ -89,8 +89,8 @@ fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
 /// don't print, its type as its glyphs' outlines where the writer writes them (all type with
 /// [`LegacyAiOptions::outline_text`], else the type 8-bit text can't hold) and left out where it
 /// writes text objects, its
-/// hidden objects shown when `o` writes them visible, and its gradients filled with their first
-/// stop's colour.
+/// hidden objects shown when `o` writes them visible, and its gradient fills and strokes painted
+/// in their first stop's color.
 fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
     // A run's glyphs, laid out, as one path with the run's fill (the renderer draws no type).
     fn outlined(t: &vectorcraft_doc::TextObject) -> Node {
@@ -120,10 +120,12 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
                 n.visible = true;
             }
             for item in &mut n.appearance.items {
-                if let AppearanceItem::Fill(f) = item
-                    && let Paint::Gradient(g) = &f.paint
-                {
-                    f.paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
+                let paint = match item {
+                    AppearanceItem::Fill(f) => &mut f.paint,
+                    AppearanceItem::Stroke(s) => &mut s.paint,
+                };
+                if let Paint::Gradient(g) = paint {
+                    *paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
                 }
             }
             if let Some(c) = n.children_mut() {
@@ -267,6 +269,119 @@ fn a_rotated_image_keeps_its_place() {
     assert!(back.as_coeffs().iter().zip(xf.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{back:?}");
 }
 
+/// A 16 × 16 RGB image of `doc` filling `r`.
+fn picture(doc: &mut Document, r: Rect) -> Node {
+    let mut png = vec![];
+    image::RgbaImage::from_fn(16, 16, |u, v| image::Rgba([(u * 16) as u8, (v * 16) as u8, 128, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let xf = Affine::new([r.width() / 16.0, 0.0, 0.0, r.height() / 16.0, r.x0, r.y0]);
+    Node::new(doc.alloc_id(), NodeKind::Image(Box::new(ImageObject { key, width: 16, height: 16, xf, link: None, placement: Default::default() })))
+}
+
+/// A layer `Below` holding a clipping group (a circle clipping an image, as in #2692), a group
+/// holding an image and an image; a layer `Above` holding an orange square. Without `images`,
+/// `Below` is empty.
+fn images_below_a_square(images: bool) -> Document {
+    let mut doc = Document::new(400.0, 200.0);
+    doc.layers.clear();
+    let below = doc.add_layer(Some("Below"));
+    let above = doc.add_layer(Some("Above"));
+    if images {
+        let clip = Node::new(
+            doc.alloc_id(),
+            NodeKind::Path {
+                path: shapes::ellipse(Rect::new(30.0, 30.0, 170.0, 170.0)),
+                rule: FillRule::NonZero,
+                live: None,
+                clipping: true,
+                guide: false,
+            },
+        );
+        let clipped = picture(&mut doc, Rect::new(20.0, 20.0, 180.0, 180.0));
+        let window = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(clipped)], clip: true });
+        doc.insert(Some(below), usize::MAX, window).unwrap();
+        let grouped = picture(&mut doc, Rect::new(200.0, 20.0, 240.0, 60.0));
+        let group = Node::group(doc.alloc_id(), vec![Arc::new(grouped)]);
+        doc.insert(Some(below), usize::MAX, group).unwrap();
+        let loose = picture(&mut doc, Rect::new(250.0, 20.0, 290.0, 60.0));
+        doc.insert(Some(below), usize::MAX, loose).unwrap();
+    }
+    let orange = Paint::solid(Color::rgb(247.0 / 255.0, 148.0 / 255.0, 29.0 / 255.0));
+    let square = shape(&mut doc, shapes::rectangle(Rect::new(220.0, 100.0, 380.0, 180.0)), orange, Paint::None);
+    doc.insert(Some(above), usize::MAX, square).unwrap();
+    doc
+}
+
+/// Each image the file holds (§8.4): the lines from `%AI5_File:` to the line after
+/// `%AI5_EndRaster`.
+fn rasters(text: &str) -> Vec<Vec<&str>> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = vec![];
+    for (i, l) in lines.iter().enumerate() {
+        if *l == "%AI5_File:" {
+            let end = lines[i..].iter().position(|l| *l == "%AI5_EndRaster").map(|n| i + n).unwrap();
+            out.push(lines[i..=(end + 1).min(lines.len() - 1)].to_vec());
+        }
+    }
+    out
+}
+
+/// Every image, in a clipping group, a group or neither, is written as §8.1's syntax and §8.4's
+/// examples write one: `%AI5_File:`, `%AI5_BeginRaster`, the matrix with a space inside each
+/// bracket and the operands on the `XI` line, the samples in hex on comment lines of 60 digits,
+/// `%AI5_EndRaster`. A line `F`, which the examples do not show, follows each image. The art
+/// after the images is written as it is without them, and the file reads back with its layers,
+/// clipping group, images and square (#2692, #2830).
+#[test]
+fn images_are_written_in_the_form_the_specification_shows() {
+    let out = write(&images_below_a_square(true));
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 3, "{text}");
+    for lines in &images {
+        let [file, begin, xi, data @ .., end, paint] = lines.as_slice() else { panic!("{lines:?}") };
+        assert_eq!((*file, *begin, *end, *paint), ("%AI5_File:", "%AI5_BeginRaster", "%AI5_EndRaster", "F"));
+        let matrix = xi.strip_prefix("[ ").and_then(|l| l.strip_suffix(" ] 0 0 16 16 16 16 8 3 0 0 0 0 XI")).unwrap_or_else(|| panic!("{xi}"));
+        assert_eq!(matrix.split(' ').filter(|v| v.parse::<f64>().is_ok()).count(), 6, "{xi}");
+        let digits: Vec<&str> = data.iter().map(|l| l.strip_prefix('%').unwrap_or_else(|| panic!("{l}"))).collect();
+        let (last, full) = digits.split_last().unwrap();
+        assert!(full.iter().all(|d| d.len() == 60) && (1..=60).contains(&last.len()), "{digits:?}");
+        assert!(digits.iter().all(|d| d.bytes().all(|b| b.is_ascii_hexdigit())), "{digits:?}");
+        assert_eq!(digits.concat().len(), 16 * 16 * 3 * 2);
+    }
+    // The clipping group: `q`, the clipping path painted `h W n` (§5.6.2), the image, `Q`; the
+    // group: `u`, the image, `U`; the loose image, then the layer's end.
+    assert!(text.contains("\nh\nW\nn\n%AI5_File:\n") && text.contains("\n%AI5_EndRaster\nF\nQ\n"), "{text}");
+    assert!(text.contains("\nu\n%AI5_File:\n") && text.contains("\n%AI5_EndRaster\nF\nU\n"), "{text}");
+    assert!(text.contains("\n%AI5_EndRaster\nF\nLB\n"), "{text}");
+    let layer = |t: &str| -> String {
+        let at = t.find("(Above) Ln\n").unwrap();
+        t[at..].split("%AI5_EndLayer--").next().unwrap().to_string()
+    };
+    let alone = String::from_utf8(write(&images_below_a_square(false)).bytes).unwrap();
+    assert_eq!(layer(&text), layer(&alone));
+    let doc = crate::import(&out.bytes).unwrap().document;
+    let names: Vec<_> = doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Below", "Above"]);
+    let below = children(&doc.layers[0]);
+    assert_eq!(below.len(), 3, "{below:#?}");
+    let NodeKind::Group { children: window, clip: true } = &below[0].kind else { panic!("{:?}", below[0].kind) };
+    assert_eq!(window.len(), 2, "{window:#?}");
+    assert!(matches!(window[0].kind, NodeKind::Path { clipping: true, .. }) && matches!(window[1].kind, NodeKind::Image(_)), "{window:#?}");
+    assert!(
+        matches!(&below[1].kind, NodeKind::Group { children, clip: false } if children.len() == 1 && matches!(children[0].kind, NodeKind::Image(_)))
+    );
+    assert!(matches!(below[2].kind, NodeKind::Image(_)));
+    let above = children(&doc.layers[1]);
+    assert_eq!(above.len(), 1);
+    let rgb = above[0].appearance.fill_paint().color().map(|c| c.to_rgb()).unwrap();
+    assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
+}
+
 #[test]
 fn a_gradient_fill_and_its_stroke_are_one_object() {
     let mut doc = Document::new(100.0, 100.0);
@@ -292,6 +407,137 @@ fn a_gradient_fill_and_its_stroke_are_one_object() {
     let Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("{:?}", n.appearance) };
     assert_eq!(g.gradient.kind, GradientKind::Radial);
     assert_eq!(n.appearance.stroke_paint().color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+/// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
+/// to the object).
+fn white_to_navy(kind: GradientKind, geom: Option<vectorcraft_color::GradientGeom>) -> Paint {
+    let navy = Color::rgb(27.0 / 255.0, 42.0 / 255.0, 107.0 / 255.0);
+    let g = Gradient { kind, stops: vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, navy)] };
+    Paint::Gradient(Box::new(GradientPaint { geom, ..GradientPaint::new(g) }))
+}
+
+/// A 400 × 400 document: #2687's radial circle (center 100, 100, radius 80) and linear square;
+/// below them a radial square in a group, a radial compound ring, a clipping group whose clipping
+/// path and member are radial, a square stroked radial, and a radial square whose elliptical
+/// gradient has its focal point 30 pt above the center, past its 20 pt radius.
+fn radials() -> Document {
+    let mut doc = Document::new(400.0, 400.0);
+    let layer = doc.layers[0].id;
+    let radial = || white_to_navy(GradientKind::Radial, None);
+    let circle = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 20.0, 180.0, 180.0)), radial(), Paint::None);
+    let square = shape(&mut doc, shapes::rectangle(Rect::new(220.0, 20.0, 380.0, 180.0)), white_to_navy(GradientKind::Linear, None), Paint::None);
+    let member = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 220.0, 60.0, 260.0)), radial(), Paint::None);
+    let group = Node::group(doc.alloc_id(), vec![Arc::new(member)]);
+    let outer = shape(&mut doc, shapes::rectangle(Rect::new(80.0, 220.0, 120.0, 260.0)), Paint::None, Paint::None);
+    let inner = shape(&mut doc, shapes::rectangle(Rect::new(90.0, 230.0, 110.0, 250.0)), Paint::None, Paint::None);
+    let mut ring = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+    ring.appearance = Appearance::basic(radial(), Paint::None, 0.0).into();
+    let mut clip = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(140.0, 220.0, 180.0, 260.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: true,
+            guide: false,
+        },
+    );
+    clip.appearance = Appearance::basic(radial(), Paint::None, 0.0).into();
+    let clipped = shape(&mut doc, shapes::rectangle(Rect::new(130.0, 210.0, 190.0, 270.0)), radial(), Paint::None);
+    let window = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(clipped)], clip: true });
+    let stroked = shape(&mut doc, shapes::rectangle(Rect::new(200.0, 220.0, 240.0, 260.0)), Paint::None, radial());
+    let geom = vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(300.0, 240.0),
+        end: vectorcraft_geom::Point::new(320.0, 240.0),
+        aspect: 2.0,
+        focal: Some(vectorcraft_geom::Point::new(300.0, 210.0)),
+    };
+    let off_center =
+        shape(&mut doc, shapes::rectangle(Rect::new(260.0, 220.0, 340.0, 260.0)), white_to_navy(GradientKind::Radial, Some(geom)), Paint::None);
+    for n in [circle, square, group, ring, window, stroked, off_center] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// Every radial gradient instance has its highlight `Bh` (§3.5.5): `0 0 0 0 Bh` when it is at the
+/// center (#2687: without it the reference app drew the circle in its outer color), on fills,
+/// strokes, in groups, compound paths and clipping groups, and an off-center one within the
+/// gradient's circle. Linear instances have none. VectorCraft reads back one linear and at least
+/// seven radial gradients, each with its stops, and the circle, the square and the off-center
+/// square in their place.
+#[test]
+fn radial_gradients_have_their_highlight() {
+    let out = write(&radials());
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    // One definition for the radial gradient, one for the linear one (§3.5.2).
+    assert!(text.contains("2 Bn\n%AI5_BeginGradient: (Gradient)\n(Gradient) 1 2 Bd\n[\n"), "{text}");
+    assert!(text.contains("%AI5_BeginGradient: (Gradient 2)\n(Gradient 2) 0 2 Bd\n[\n"), "{text}");
+    // Each instance, `Bb` to `BB`.
+    let instances: Vec<&str> = text.split("Bb\n").skip(1).filter_map(|t| t.split_inclusive("BB\n").next()).collect();
+    let radial: Vec<&str> = instances.iter().copied().filter(|i| i.contains(" (Gradient) ")).collect();
+    let linear: Vec<&str> = instances.iter().copied().filter(|i| i.contains(" (Gradient 2) ")).collect();
+    assert_eq!((radial.len() + linear.len(), linear.len()), (instances.len(), 1), "{instances:#?}");
+    assert!(radial.len() >= 8, "{radial:#?}");
+    for i in &radial {
+        let bh = i.lines().next().unwrap_or_default();
+        assert!(bh.ends_with(" Bh") && bh.split_whitespace().count() == 5, "{i}");
+    }
+    assert!(!linear[0].contains("Bh"), "{}", linear[0]);
+    for needle in [
+        // #2687's circle and square.
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 100 300 0 80 1 0 0 1 0 0 Bg\nf\n0 BB\n",
+        "\nBb\n1 (Gradient 2) 220 300 0 160 1 0 0 1 0 0 Bg\nf\n0 BB\n",
+        // In a group.
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 40 160 0 20 1 0 0 1 0 0 Bg\nf\n0 BB\nU\n",
+        // Both subpaths of the compound ring (§5.3.5).
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 100 160 0 20 1 0 0 1 0 0 Bg\nf\n0 BB\n90 170 m\n",
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 100 160 0 20 1 0 0 1 0 0 Bg\nf\n0 BB\n*U\n",
+        // The clipping path's fill and the clipped square (§5.6.2).
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 160 160 0 20 1 0 0 1 0 0 Bg\nf\n0 BB\n",
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 160 160 0 30 1 0 0 1 0 0 Bg\nf\n0 BB\nQ\n",
+        // The stroke, written as its outline filled.
+        "\nBb\n0 0 0 0 Bh\n1 (Gradient) 220 160 0 21 1 0 0 1 0 0 Bg\nf\n0 BB\n",
+        // The focal point 30 pt up, 1.5 radii out: written on the circle, straight up.
+        "\nBb\n0 20 90 1 Bh\n1 (Gradient) 300 160 0 20 1 0 0 1 0 0 Bg\nf\n0 BB\n",
+    ] {
+        assert!(text.contains(needle), "missing {needle:?} in\n{text}");
+    }
+    for expected in [STROKES, ELLIPTICAL] {
+        assert!(out.warnings.iter().any(|w| w == expected), "{expected} not in {:?}", out.warnings);
+    }
+    // Read back: every gradient keeps its stops, the document holds the linear square and at
+    // least seven radial gradients, and the circle, the square and the off-center square keep
+    // their place.
+    let doc = crate::import(&out.bytes).unwrap().document;
+    let mut found = vec![];
+    doc.walk(|n| {
+        for i in &n.appearance.items {
+            if let AppearanceItem::Fill(f) = i
+                && let Paint::Gradient(g) = &f.paint
+            {
+                found.push((**g).clone());
+            }
+        }
+    });
+    let kinds = |k: GradientKind| found.iter().filter(|g| g.gradient.kind == k).count();
+    // Seven radial objects (a compound path's members carry its fill too) and the linear square.
+    assert!(kinds(GradientKind::Radial) >= 7 && kinds(GradientKind::Linear) == 1, "{found:#?}");
+    let near = |a: vectorcraft_geom::Point, x: f64, y: f64| (a.x - x).abs() < 1e-3 && (a.y - y).abs() < 1e-3;
+    for g in &found {
+        let [white, navy] = g.gradient.stops.as_slice() else { panic!("{g:?}") };
+        assert_eq!((white.offset, navy.offset, white.color), (0.0, 1.0, Color::rgb(1.0, 1.0, 1.0)), "{g:?}");
+        let rgb = navy.color.to_rgb();
+        assert!([27.0, 42.0, 107.0].iter().zip(rgb).all(|(want, got)| (want / 255.0 - got).abs() < 1e-3), "{rgb:?}");
+    }
+    let placed = |x: f64, y: f64| found.iter().filter_map(|g| g.geom.map(|m| (g.gradient.kind, m))).find(|(_, m)| near(m.start, x, y));
+    let Some((GradientKind::Radial, circle)) = placed(100.0, 100.0) else { panic!("{found:#?}") };
+    assert!(near(circle.end, 180.0, 100.0) && circle.focal.is_none(), "{circle:?}");
+    let Some((GradientKind::Linear, square)) = placed(220.0, 100.0) else { panic!("{found:#?}") };
+    assert!(near(square.end, 380.0, 100.0), "{square:?}");
+    let Some((GradientKind::Radial, off)) = placed(300.0, 240.0) else { panic!("{found:#?}") };
+    assert!(near(off.end, 320.0, 240.0) && off.focal.is_some_and(|f| near(f, 300.0, 220.0)), "{off:?}");
 }
 
 #[test]
@@ -364,6 +610,127 @@ fn spot_colours_are_custom_colours() {
     let Paint::Solid { swatch, tint, .. } = n.appearance.fill_paint() else { panic!() };
     assert_eq!(swatch.as_deref(), Some("Spot Test"));
     assert!((tint - 0.5).abs() < 1e-6);
+}
+
+/// A document with a spot color swatch for each of `spots`, a square filled with each at half
+/// tint, and a square whose linear gradient fill (the first spot color to white) names the
+/// gradient swatch `gradient` (the document holds no such swatch; the writer reads only the
+/// fill's name).
+fn spots_and_gradient(spots: &[&str], gradient: &str) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for (i, name) in spots.iter().enumerate() {
+        let c = i as f32 * 0.5;
+        doc.swatches.push(vectorcraft_color::Swatch {
+            name: (*name).into(),
+            paint: Paint::solid(Color::cmyk(c, 0.5, 1.0, 0.0)),
+            global: true,
+            spot: true,
+        });
+        let fill = Paint::Solid { color: Color::cmyk(c / 2.0, 0.25, 0.5, 0.0), swatch: Some((*name).into()), tint: 0.5 };
+        let x = 10.0 + 40.0 * i as f64;
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, 10.0, x + 30.0, 40.0)), fill, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let mut first = GradientStop::new(0.0, Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    first.swatch = Some(spots[0].into());
+    let g = Gradient { kind: GradientKind::Linear, stops: vec![first, GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))] };
+    let mut paint = GradientPaint::new(g);
+    paint.swatch = Some(gradient.into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 50.0, 50.0, 90.0)), Paint::Gradient(Box::new(paint)), Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// `doc` written with the title `title`, and run as a PostScript program ([`prints_as`]).
+fn write_titled(doc: &Document, title: &str) -> LegacyAiOutput {
+    let o = LegacyAiOptions { title: title.into(), created: Some(0), ..LegacyAiOptions::default() };
+    let out = export_legacy_ai(doc, &o).unwrap();
+    prints_as(&out.bytes, doc, &o);
+    out
+}
+
+/// The spot colors and gradients of the objects of `doc`'s first layer, in paint order: each
+/// solid fill's swatch, and each gradient fill's swatch with its first stop's.
+fn inks(doc: &Document) -> Vec<Option<String>> {
+    let mut out = vec![];
+    for n in children(&doc.layers[0]) {
+        match n.appearance.fill_paint() {
+            Paint::Solid { swatch, .. } => out.push(swatch.clone()),
+            Paint::Gradient(g) => {
+                out.push(g.swatch.clone());
+                out.push(g.gradient.stops.first().and_then(|s| s.swatch.clone()));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The title, spot color names and gradient names are written in Windows-1252, as layer names
+/// are: é is 351 (octal) in the header's custom colors, each `x`, the gradient's definition, its
+/// stops and `Bg`. The spot color and gradient names read back as they were.
+#[test]
+fn spot_gradient_and_title_names_are_written_in_windows_1252() {
+    let doc = spots_and_gradient(&["Caf\u{e9}"], "D\u{e9}grad\u{e9}");
+    let out = write_titled(&doc, "R\u{e9}sum\u{e9}");
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    for needle in [
+        "%%Title: (R\\351sum\\351)\n",
+        "%%DocumentCustomColors: (Caf\\351)\n",
+        "%%CMYKCustomColor: 0 0.5 1 0 (Caf\\351)\n",
+        "0 0.5 1 0 (Caf\\351) 0.5 x\n",
+        "%AI5_BeginGradient: (D\\351grad\\351)\n(D\\351grad\\351) 0 2 Bd\n",
+        "0 0.5 1 0 (Caf\\351) 0 3 50 0 %_Bs\n",
+        "1 (D\\351grad\\351) ",
+    ] {
+        assert!(text.contains(needle), "missing {needle:?} in\n{text}");
+    }
+    assert!(!text.contains("\\303"), "{text}");
+    assert!(!out.warnings.iter().any(|w| w == TITLE_AND_COLOR_NAMES), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap().document;
+    let names = inks(&read);
+    let want = ["Caf\u{e9}", "D\u{e9}grad\u{e9}", "Caf\u{e9}"].map(|n| Some(n.to_string()));
+    assert_eq!(names, want);
+}
+
+/// A character Windows-1252 can't hold is written as `?`, with one warning for all of these
+/// names. Names that become the same are numbered, so the header, each `x` and each `Bg` still
+/// tell the colors and gradients apart.
+#[test]
+fn names_outside_windows_1252_are_replaced_and_kept_apart() {
+    // 赤 and 青 (spot colors), 渐变 and グラ (gradients), 日本 (the title).
+    let mut doc = spots_and_gradient(&["\u{8d64}", "\u{9752}"], "\u{6e10}\u{53d8}");
+    let g = Gradient {
+        kind: GradientKind::Linear,
+        stops: vec![GradientStop::new(0.0, Color::cmyk(1.0, 0.0, 0.0, 0.0)), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))],
+    };
+    let mut paint = GradientPaint::new(g);
+    paint.swatch = Some("\u{30b0}\u{30e9}".into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(60.0, 50.0, 100.0, 90.0)), Paint::Gradient(Box::new(paint)), Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write_titled(&doc, "\u{65e5}\u{672c}");
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    for needle in [
+        "%%Title: (??)\n",
+        "%%DocumentCustomColors: (?)\n%%+ (? 2)\n",
+        "%%CMYKCustomColor: 0 0.5 1 0 (?)\n%%+ 0.5 0.5 1 0 (? 2)\n",
+        "0 0.5 1 0 (?) 0.5 x\n",
+        "0.5 0.5 1 0 (? 2) 0.5 x\n",
+        "(??) 0 2 Bd\n",
+        "(?? 2) 0 2 Bd\n",
+        "0 0.5 1 0 (?) 0 3 50 0 %_Bs\n",
+        "1 (??) ",
+        "1 (?? 2) ",
+    ] {
+        assert!(text.contains(needle), "missing {needle:?} in\n{text}");
+    }
+    assert_eq!(out.warnings.iter().filter(|w| *w == TITLE_AND_COLOR_NAMES).count(), 1, "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == LAYER_NAME), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap().document;
+    let want = [Some("?"), Some("? 2"), Some("??"), Some("?"), Some("?? 2"), None].map(|n| n.map(String::from));
+    assert_eq!(inks(&read), want);
 }
 
 #[test]
@@ -641,4 +1008,27 @@ fn hidden_objects_can_be_left_out_or_shown() {
     let pair = children(&children(&doc.layers[0])[0]);
     assert_eq!(pair.len(), 2);
     assert!(pair.iter().all(|n| n.visible));
+}
+
+#[test]
+fn layer_names_outside_latin_1_are_replaced_and_warned() {
+    let layered = |name: &str| {
+        let mut doc = Document::new(100.0, 100.0);
+        doc.layers.clear();
+        let layer = doc.add_layer(Some(name));
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), red(), Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        // A hidden object, so the layer also gets a hidden layer named after it.
+        let mut hidden = shape(&mut doc, shapes::rectangle(Rect::new(50.0, 10.0, 80.0, 40.0)), red(), Paint::None);
+        hidden.visible = false;
+        doc.insert(Some(layer), usize::MAX, hidden).unwrap();
+        write(&doc)
+    };
+    let out = layered("\u{b808}\u{c774}\u{c5b4} 1 Caf\u{e9}");
+    let text = String::from_utf8_lossy(&out.bytes);
+    assert!(text.contains("(??? 1 Caf\\351) Ln"), "{text}");
+    assert!(text.contains("(??? 1 Caf\\351 \\(hidden\\)) Ln"), "{text}");
+    assert!(out.warnings.iter().any(|w| w == LAYER_NAME), "{:?}", out.warnings);
+    // A name Latin-1 can hold is written as it is, with no warning.
+    assert!(!layered("Caf\u{e9}").warnings.iter().any(|w| w == LAYER_NAME));
 }

@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: it is not, and the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}} fit a freehand stroke → {id}",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: it is not, and the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end; redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
             has_doc,
             freehand
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Point",
             [],
             None,
-            "{id, subpath, anchor} remove one anchor, re-fitting the curve",
+            "{id, subpath?, anchor} remove one anchor, re-fitting the curve",
             has_doc,
             remove_anchor
         ),
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Point",
             [],
             None,
-            "{id, subpath, anchor, to: \"corner\"|\"smooth\", x?, y?} (smooth with x/y: out handle there, in handle mirrored; without: as the Curvature tool curves a point, along the circle through it and its neighbours, or at an open end one handle into the curve)",
+            "{id, subpath?, anchor, to: \"corner\"|\"smooth\", x?, y?} (smooth with x/y: out handle there, in handle mirrored; without: as the Curvature tool curves a point, along the circle through it and its neighbours, or at an open end one handle into the curve)",
             has_doc,
             convert_anchor
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Segment",
             [],
             None,
-            "{id, subpath, segment, t, dx, dy, perpendicular?: bool} bend a segment so the point at t moves by (dx, dy); with perpendicular (Shift), both handles stand at right angles to the line between its anchors at one length, and the point at t lies as far from that line as the moved point does",
+            "{id, subpath?, segment, t, dx, dy, perpendicular?: bool} bend a segment so the point at t moves by (dx, dy); with perpendicular (Shift), both handles stand at right angles to the line between its anchors at one length, and the point at t lies as far from that line as the moved point does",
             has_doc,
             reshape_segment
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Path",
             [],
             None,
-            "{id, subpath, segment, t} or {id, subpath, anchor}: closed paths open there, open paths become two → {ids}",
+            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two → {ids}",
             has_doc,
             split
         ),
@@ -213,6 +213,15 @@ fn within_input_bound(q: Point) -> bool {
 
 fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
     p.get(key).and_then(Value::as_u64).map(|v| v as usize).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+}
+
+/// The whole number of 0 or more that `key` holds, or `None` when `key` is absent or null. Any other
+/// value is [`usize_req`]'s error.
+pub(super) fn usize_opt(p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(_) => usize_req(p, key, cmd).map(Some),
+    }
 }
 
 fn path_mut(d: &mut Document, id: NodeId) -> Result<&mut PathData> {
@@ -548,6 +557,87 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
 }
 
+/// Pencil's Edit Selected Paths in the middle of a path: a stroke from one point of a subpath of
+/// `pd` to another, each within `within` of it, replaces the section between them (the shorter
+/// way round a closed subpath) with the stroke fitted at `tol`. The subpath's index and its new
+/// shape; None when the stroke doesn't start and end on the same subpath, or meets it once.
+fn redraw_section(pd: &PathData, pts: &[Point], tol: f64, within: f64) -> Option<(usize, SubPath)> {
+    use kurbo::ParamCurveArclen;
+    let (first, last) = (*pts.first()?, *pts.last()?);
+    let (si, _, _, _, d_a) = pd.nearest(first)?;
+    let (sj, _, _, _, d_b) = pd.nearest(last)?;
+    if si != sj || d_a > within || d_b > within || pts.len() < 2 {
+        return None;
+    }
+    let mut sp = pd.subpaths.get(si)?.clone();
+    if sp.anchors.len() < 2 {
+        return None;
+    }
+    // The anchor nearest to `q`: the one there, else a new one, and whether it was added. Each
+    // point is looked up on the subpath as it is by then: splitting a straight segment makes two
+    // new ones, which a `t` along the old one doesn't measure.
+    let place = |sp: &mut SubPath, q: Point| {
+        let (_, seg, t, _, _) = PathData::single(sp.clone()).nearest(q)?;
+        let n = sp.anchors.len();
+        Some(if t <= 1e-6 {
+            (seg % n, false)
+        } else if t >= 1.0 - 1e-6 {
+            ((seg + 1) % n, false)
+        } else {
+            (sp.insert_anchor(seg, t), true)
+        })
+    };
+    let (mut from, _) = place(&mut sp, first)?;
+    let (to, added) = place(&mut sp, last)?;
+    if added && to <= from {
+        from += 1;
+    }
+    if from == to {
+        return None;
+    }
+    let n = sp.anchors.len();
+    // The length of the run of segments from anchor i forward to anchor j.
+    let run = |i: usize, j: usize| (0..(j + n - i) % n).map(|k| sp.segment((i + k) % n).arclen(0.01)).sum::<f64>();
+    // The stroke goes from `start` to `end` and replaces the run between them; `kept` runs from
+    // `end` round to `start`, then the stroke's inner anchors follow.
+    let (start, end, reversed) = if sp.closed {
+        if run(from, to) <= run(to, from) { (from, to, false) } else { (to, from, true) }
+    } else if from < to {
+        (from, to, false)
+    } else {
+        (to, from, true)
+    };
+    let mut stroke = pts.to_vec();
+    if reversed {
+        stroke.reverse();
+    }
+    let (Some(s0), Some(s1)) = (stroke.first_mut(), sp.anchors.get(start)) else { return None };
+    *s0 = s1.p;
+    let (Some(e0), Some(e1)) = (stroke.last_mut(), sp.anchors.get(end)) else { return None };
+    *e0 = e1.p;
+    let fit = fit_freehand(&stroke, tol, false).anchors;
+    let (Some(f0), Some(f1)) = (fit.first().copied(), fit.last().copied()) else { return None };
+    let inner = fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default();
+    let (before, after): (Vec<Anchor>, Vec<Anchor>) = if sp.closed {
+        ((0..=(start + n - end) % n).filter_map(|k| sp.anchors.get((end + k) % n).copied()).collect(), vec![])
+    } else {
+        (sp.anchors.get(..=start)?.to_vec(), sp.anchors.get(end..)?.to_vec())
+    };
+    let mut anchors = before;
+    if let Some(a) = anchors.last_mut() {
+        *a = Anchor::with_handles(a.p, a.h_in, f0.h_out);
+    }
+    anchors.extend_from_slice(inner);
+    let at_end = anchors.len();
+    anchors.extend(after);
+    // The anchor the stroke ends on: the first after it, or round to the first of a closed one.
+    let end_at = if sp.closed { 0 } else { at_end };
+    if let Some(a) = anchors.get_mut(end_at) {
+        *a = Anchor::with_handles(a.p, f1.h_in, a.h_out);
+    }
+    Some((si, SubPath::new(anchors, sp.closed)))
+}
+
 fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.freehand";
     let samples = samples_param(p, "points", C)?;
@@ -630,6 +720,28 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
         return Ok(json!({ "id": id.0 }));
     }
+    if let Some(rd) = p.get("redraw").filter(|v| !v.is_null()) {
+        let id = id_param(rd, "id").ok_or_else(|| bad(C, "redraw needs id"))?;
+        let within = f64_or(rd, "within", 12.0);
+        if !within.is_finite() || within < 0.0 {
+            return Err(bad(C, "redraw within must be a finite distance of 0 or more"));
+        }
+        let (pd, _) = path_of(&s.doc()?.doc, id)?;
+        // shortcut: a stroke pressure profile is left as it was, measured along the old path; fit
+        // it to the new length if Calligraphic pressure strokes get redrawn.
+        if let Some((si, sp)) = redraw_section(&pd, &pts, tol, within) {
+            s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
+                *path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| bad(C, "no such subpath"))? = sp;
+                if keep_selected {
+                    sel.set([id]);
+                } else {
+                    sel.remove(id);
+                }
+                Ok(())
+            })?;
+            return Ok(json!({ "id": id.0 }));
+        }
+    }
     if pts.len() < 2 {
         return Err(bad(C, "need at least two points"));
     }
@@ -692,7 +804,7 @@ fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
     use vectorcraft_tools::draw2::{EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move};
     const C: &str = "path.curvatureEdit";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let at = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
         (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Some(Point::new(x, y)),
         (None, None) => None,
@@ -756,7 +868,7 @@ fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
 fn remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.removeAnchor";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
     let removed = s.edit("Delete Anchor Point", |d, sel| {
         let sp = path_mut(d, id)?.subpaths.get(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -863,7 +975,7 @@ fn remove_anchors_of(
 fn convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.convertAnchor";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
     let smooth = str_param(p, "to") == Some("smooth");
     let target = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
@@ -898,7 +1010,7 @@ fn convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
 fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.reshapeSegment";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let seg = usize_req(p, "segment", C)?;
     let t = f64_or(p, "t", 0.5).clamp(0.05, 0.95);
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
@@ -923,9 +1035,9 @@ fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
 fn split(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.split";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let si = p.get("subpath").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let anchor = p.get("anchor").and_then(Value::as_u64).map(|v| v as usize);
-    let seg = p.get("segment").and_then(Value::as_u64).map(|v| v as usize);
+    let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
+    let anchor = usize_opt(p, "anchor", C)?;
+    let seg = usize_opt(p, "segment", C)?;
     if anchor.is_none() && seg.is_none() {
         return Err(bad(C, "need `anchor` or `segment` + `t`"));
     }

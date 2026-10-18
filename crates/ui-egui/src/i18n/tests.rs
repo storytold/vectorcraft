@@ -23,6 +23,9 @@ fn tags_map_to_languages() {
     for tag in ["fr", "fr_FR.UTF-8", "fr-BE", "fr_CA", "fr-CH", "fr-LU"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("fr"), "{tag}");
     }
+    for tag in ["ka", "ka-GE", "ka_GE.UTF-8", "KA-ge"] {
+        assert_eq!(lang_from_tag(tag), Some(ka()), "{tag}");
+    }
     for tag in ["uk", "uk-UA", "uk_UA.UTF-8", "UK-ua", "uk_UA.UTF-8@euro"] {
         assert_eq!(lang_from_tag(tag), Some(uk()), "{tag}");
     }
@@ -271,14 +274,21 @@ fn is_cjk(c: char) -> bool {
     matches!(c as u32, 0x1100..=0x11FF | 0x3000..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
 }
 
+/// Georgian letters (Mkhedruli, Mtavruli, Asomtavruli): only craft-fonts' Noto Sans Georgian has them.
+fn is_georgian(c: char) -> bool {
+    matches!(c as u32, 0x10A0..=0x10FF | 0x1C90..=0x1CBF | 0x2D00..=0x2D2F)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
 /// fonts, and with it the Japanese catalog is checked against BIZ UDPGothic (the Traditional
-/// Chinese one waits for a Traditional Chinese UI font in craft-fonts).
+/// Chinese one waits for a Traditional Chinese UI font in craft-fonts). Georgian letters are the
+/// same: checked against Noto Sans Georgian when craft-fonts has it.
 #[test]
 fn bundled_fonts_cover_the_catalogs() {
     let japanese_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese());
+    let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -294,8 +304,11 @@ fn bundled_fonts_cover_the_catalogs() {
         for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
             let (entries, _) = parse_entries(l.source);
             let cjk_checked = japanese_ui_font && l.code == "ja";
-            let chars: std::collections::BTreeSet<char> =
-                entries.iter().flat_map(|(_, _, tr)| tr.chars()).filter(|c| !c.is_whitespace() && (cjk_checked || !is_cjk(*c))).collect();
+            let chars: std::collections::BTreeSet<char> = entries
+                .iter()
+                .flat_map(|(_, _, tr)| tr.chars())
+                .filter(|c| !c.is_whitespace() && (cjk_checked || !is_cjk(*c)) && (georgian_ui_font || !is_georgian(*c)))
+                .collect();
             for family in &families {
                 let font = egui::FontId::new(13.0, family.clone());
                 let gone: String = chars.iter().filter(|c| !fonts.has_glyph(&font, **c)).collect();
@@ -440,18 +453,28 @@ fn every_tl_literal_is_translated() {
     }
 }
 
-/// Every undo step name the engine, the tools and the shell record ([`undo_labels`]), and every
-/// effect's name without its ellipsis, has a row in each language marked `complete_menus`: its plain
-/// row, or the row of the same name with an ellipsis (`panels::history::step_name`).
+/// Every undo step name the engine, the tools and the shell record ([`undo_labels`]), every
+/// effect's name without its ellipsis, and the Liquify tools' step names (`{} Tool`), has a row in
+/// each language marked `complete_menus`: its plain row, or the row of the same name with an
+/// ellipsis (`panels::history::step_name`). Every template a step name is made from with
+/// `Session::edit_named` has a plain row in each, which `panels::history::entry_name` fills with the
+/// name. No other step name is built with `format!`.
 #[test]
 fn every_undo_label_is_translated() {
-    let mut labels = undo_labels();
+    let scan = undo_scan();
+    let mut labels = scan.labels;
     assert!(labels.len() > 300, "scan found only {} undo labels", labels.len());
     labels.extend(vectorcraft_effects::effect_catalog().iter().map(|e| e.label.trim_end_matches('…').to_string()));
+    let liquify = ["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
+    labels.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
+    assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
+    assert!(scan.templates.len() >= 3, "scan found only the templates {:?}", scan.templates);
     for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
         let lang = Lang::from_code(l.code).expect("registered");
         let missing: Vec<_> = labels.iter().filter(|s| crate::panels::history::step_name(lang, s).is_none()).collect();
         assert!(missing.is_empty(), "{}: {} untranslated undo labels: {missing:#?}", l.code, missing.len());
+        let missing: Vec<_> = scan.templates.iter().filter(|t| l.catalog().plain(t).is_none()).collect();
+        assert!(missing.is_empty(), "{}: {} untranslated undo label templates: {missing:#?}", l.code, missing.len());
     }
 }
 
@@ -494,6 +517,9 @@ const UNDO_CRATES: &[&str] = &["engine", "tools", "ui-egui"];
 /// Calls whose first argument names an undo step.
 const UNDO_MARKERS: &[&str] = &[".edit(", "begin_interaction(", "Action::Begin(", "begin_named_undo_group(Some("];
 
+/// The call whose first argument is the template of an undo step's name (`Session::edit_named`).
+const NAMED_MARKER: &str = ".edit_named(";
+
 /// A function in a source file, as [`undo_labels`] reads it.
 struct SourceFn<'a> {
     file: usize,
@@ -513,8 +539,26 @@ struct SourceFn<'a> {
 /// `…label` (`pf_label(op)`, `kind.label()`) gives the literals that function returns in the same
 /// file. A name built with `format!` or taken from data (an effect's, a plug-in's) is not read.
 pub fn undo_labels() -> std::collections::BTreeSet<String> {
+    undo_scan().labels
+}
+
+/// What [`undo_scan`] finds in [`UNDO_CRATES`].
+struct UndoScan {
+    /// The step names written as literals ([`undo_labels`]).
+    labels: std::collections::BTreeSet<String>,
+    /// The templates step names are made from with `Session::edit_named` (its first argument).
+    templates: std::collections::BTreeSet<String>,
+    /// The format strings of the step names built with `format!` where [`undo_labels`] reads a
+    /// name.
+    formatted: std::collections::BTreeSet<String>,
+}
+
+/// The undo step names and templates in [`UNDO_CRATES`] (see [`undo_labels`]).
+fn undo_scan() -> UndoScan {
     let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut out = std::collections::BTreeSet::new();
+    let mut templates = std::collections::BTreeSet::new();
+    let mut formatted = std::collections::BTreeSet::new();
     for krate in UNDO_CRATES {
         let files = undo_sources(&crates.join(krate).join("src"));
         let fns: Vec<SourceFn> = files.iter().enumerate().flat_map(|(i, t)| source_fns(i, t)).collect();
@@ -551,10 +595,14 @@ pub fn undo_labels() -> std::collections::BTreeSet<String> {
             }
         }
         for (file, e) in exprs {
-            label_literals(e, file, &fns, &mut out);
+            label_literals(e, file, &fns, &mut out, &mut formatted);
+        }
+        for t in &files {
+            let named = t.match_indices(NAMED_MARKER).filter_map(|(at, _)| arguments(&t[at + NAMED_MARKER.len()..]).first().copied());
+            templates.extend(named.filter_map(|a| a.strip_prefix('"').and_then(string_literal)));
         }
     }
-    out
+    UndoScan { labels: out, templates, formatted }
 }
 
 /// The sources of a crate's `src` directory, test modules and files and `//` comments aside.
@@ -740,10 +788,18 @@ fn bare(e: &str) -> &str {
     e
 }
 
-/// Add the step names expression `e` in source file `file` gives (see [`undo_labels`]).
-fn label_literals(e: &str, file: usize, fns: &[SourceFn], out: &mut std::collections::BTreeSet<String>) {
+/// Add the step names expression `e` in source file `file` gives (see [`undo_labels`]) to `out`,
+/// and the format string of a name it builds with `format!` to `formatted`.
+fn label_literals(
+    e: &str,
+    file: usize,
+    fns: &[SourceFn],
+    out: &mut std::collections::BTreeSet<String>,
+    formatted: &mut std::collections::BTreeSet<String>,
+) {
     let mut e = bare(e);
-    if e.starts_with("format!(") {
+    if let Some(args) = e.strip_prefix("format!(") {
+        formatted.extend(args.trim_start().strip_prefix('"').and_then(string_literal));
         return;
     }
     if let Some(body) = e.strip_prefix('|').and_then(|r| r.find('|').map(|n| &r[n + 1..])) {
@@ -798,6 +854,7 @@ fn dump_source_strings() {
     let mut all = crate::menus::menu_strings();
     all.extend(tl_literals());
     all.extend(undo_labels());
+    all.extend(undo_scan().templates);
     let text: String = all.iter().map(|s| format!("{}\n", s.replace('\\', "\\\\").replace('\n', "\\n").replace('\t', "\\t"))).collect();
     std::fs::write(path, text).expect("write dump");
 }
@@ -807,7 +864,7 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 16] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
+const KEEPS_MENU_NAMES: [&str; 17] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -910,8 +967,11 @@ fn menu_catalogs_translate_every_menu_label() {
     let language_name = |l: &str| Lang::all().any(|lang| lang.name() == l);
     // Font names and sizes, and installed plug-ins' own names, are not interface text.
     let interface = |(label, id, p): &(&str, &str, serde_json::Value)| {
-        let plugin = *id == "plugin.dialog" || p.get("effect").and_then(serde_json::Value::as_str).is_some_and(|e| e.starts_with("plugin."));
-        *id != "text.setStyle" && !plugin && shown.contains(*label) && !MENU_KEEP_AS_IS.contains(label) && !language_name(label)
+        *id != "text.setStyle"
+            && !crate::menus::lists_plugin(id, p)
+            && shown.contains(*label)
+            && !MENU_KEEP_AS_IS.contains(label)
+            && !language_name(label)
     };
     let mut all: Vec<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
     all.extend(toggled_labels());
@@ -960,6 +1020,40 @@ fn it() -> Lang {
 
 fn ru() -> Lang {
     Lang::from_code("ru").expect("ru registered")
+}
+
+fn ka() -> Lang {
+    Lang::from_code("ka").expect("ka registered")
+}
+
+/// Georgian uses verbal nouns for commands, genitive + "ხელსაწყო" for tools, one count-neutral
+/// plural form (nouns stay singular after a number), and translates the reason inside a message.
+#[test]
+fn georgian_reads_as_georgian() {
+    for (en, want) in [
+        ("Artboard Tool", "სამუშაო დაფის ხელსაწყო"),
+        ("Swatches", "ფერის ნიმუშები"),
+        ("Pathfinder", "ტრაექტორიების ოპერაციები"),
+        ("Stroke", "კონტური"),
+        ("Fill", "შევსება"),
+        ("Direct Selection Tool", "პირდაპირი მონიშვნის ხელსაწყო"),
+        ("Save As…", "შენახვა როგორც…"),
+        ("Undo", "დაბრუნება"),
+        ("File", "ფაილი"),
+    ] {
+        assert_eq!(tr(ka(), en), want);
+    }
+    for n in [0, 1, 2, 5, 21] {
+        assert_eq!(trn(ka(), n, "{n} Layer", "{n} Layers"), format!("შრე: {n}"));
+    }
+    assert_eq!(tr_ctx(ka(), "axis", "Both"), "ორივე");
+    assert_eq!(tr_id(ka(), "pathfinder.add", "Add"), "გაერთიანება");
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(ka(), nested), "ბრძანება `object.group` ახლა ხელმისაწვდომი არ არის: არაფერია მონიშნული");
+    // No Mtavruli: Georgian UI text has no capitals.
+    let (entries, _) = parse_entries(ka().0.source);
+    let caps: Vec<_> = entries.iter().filter(|(_, _, tr)| tr.chars().any(|c| matches!(c, '\u{1C90}'..='\u{1CBF}'))).collect();
+    assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
 }
 
 fn hu() -> Lang {
@@ -1621,6 +1715,21 @@ fn blend_spine_param_errors_are_translated() {
     assert!(untranslated.is_empty(), "untranslated spine errors:\n{}", untranslated.join("\n"));
 }
 
+/// The parameter error of Save as Template for a `.ait` with `aiVersion` 7 is translated whole in
+/// each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn legacy_ait_param_error_is_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let e = s.execute("file.saveAsTemplate", &json!({"format": "ait", "aiVersion": "7"})).unwrap_err();
+    let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{e}") };
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+        assert!(!shown.contains(msg.as_str()), "{code}: {shown}");
+    }
+}
+
 /// The errors for a parameter key a command doesn't take (#1442), whose text the scan above
 /// doesn't read, are translated whole in each language of [`COMPLETE_MESSAGES`].
 #[test]
@@ -1650,19 +1759,45 @@ fn effect_color_param_error_is_translated() {
     }
 }
 
+/// The error for a Levels or Curves `channel` the effect doesn't have, whose text the scan above
+/// doesn't read, is translated whole in each language of [`COMPLETE_MESSAGES`] and in Bulgarian.
+#[test]
+fn effect_channel_param_error_is_translated() {
+    use serde_json::json;
+    let p = json!({"effect": "adjust.levels", "params": {"channel": "alpha"}});
+    let e = vectorcraft_engine::check_params("effect.apply", &p).unwrap_err();
+    let vectorcraft_engine::EngineError::BadParams { msg, .. } = &e else { panic!("{e}") };
+    for code in COMPLETE_MESSAGES.iter().chain(&["bg"]) {
+        let shown = message(Lang::from_code(code).unwrap(), &e.to_string());
+        assert!(!shown.contains(msg.as_str()) && shown.contains("`channel`") && shown.contains("effect.apply"), "{code}: {shown}");
+    }
+}
+
 /// The notes of an EPS or `.ai` whose layers weren't read, which the importer pushes as warnings
 /// (the scan above doesn't read them), are translated whole, reason included, as the status bar
 /// shows them after opening (#2035).
 #[test]
 fn unread_layers_notes_are_translated() {
     for note in [
-        "the file's layers weren't read (its editing data is for a different page): it comes in as its page, in one layer",
+        "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 612 × 792 pt page): it comes in as its page, in one layer",
+        "the file's layers weren't read from its editing data (its editing data is for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10): they come from its PDF part",
         "the file's layers weren't read from its editing data (its editing data is damaged): they come from its PDF part",
+        "the file's layers weren't read from its editing data (its zlib compression is damaged): they come from its PDF part",
+        "the file's layers weren't read from its editing data (its Zstandard compression is damaged): they come from its PDF part",
+        "the file's layers weren't read from its editing data (it decompresses to more than 256 MB): they come from its PDF part",
+        "the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them",
     ] {
         let status = format!("Opened with 1 note(s): {note}");
         for code in COMPLETE_MESSAGES.iter().chain(&["pt-br"]) {
             let shown = message(Lang::from_code(code).unwrap(), &status);
-            assert!(!shown.contains("weren't read") && !shown.contains("its editing data") && !shown.contains("Opened with"), "{code}: {shown}");
+            assert!(
+                !shown.contains("weren't read")
+                    && !shown.contains("its editing data")
+                    && !shown.contains("is damaged")
+                    && !shown.contains("decompresses")
+                    && !shown.contains("Opened with"),
+                "{code}: {shown}"
+            );
         }
     }
 }
@@ -1688,8 +1823,53 @@ fn select_key_param_error_is_translated() {
     }
 }
 
+/// The errors of the parameter checks that many commands share (a number given as text, a missing
+/// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
+/// object id that is negative or names no object, a date that isn't Unix seconds) are translated
+/// whole by their own rows in each language of [`COMPLETE_MESSAGES`], in Bulgarian, and in Danish,
+/// Indonesian and Dutch. The value in the message, such as a quoted `"60 mm"`, is shown as given.
+#[test]
+fn shared_param_check_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::EngineError;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    // A command, its params, the English template of its error and the template's values.
+    type Case = (&'static str, serde_json::Value, &'static str, &'static [(&'static str, &'static str)]);
+    let cases: [Case; 10] = [
+        ("object.move", json!({"dx": "60 mm"}), "`{key}` must be a number, not {v}", &[("key", "dx"), ("v", r#""60 mm""#)]),
+        ("object.rotate", json!({"angle": true}), "`{key}` must be a number, not {v}", &[("key", "angle"), ("v", "true")]),
+        ("object.setBounds", json!({"width": [1, 2]}), "`{key}` must be a number, not {v}", &[("key", "width"), ("v", "[1,2]")]),
+        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10}), "missing number `{key}`", &[("key", "height")]),
+        ("appearance.setItem", json!({}), "missing integer `{key}`", &[("key", "index")]),
+        ("object.transformEach", json!({"reference": 2.5}), "`{key}` must be a whole number", &[("key", "reference")]),
+        ("edit.clear", json!({"ids": "all"}), "{key} must be an array of non-negative integer object ids", &[("key", "ids")]),
+        ("edit.clear", json!({"ids": [-1]}), "invalid object id {value}: expected a non-negative integer", &[("value", "-1")]),
+        ("edit.clear", json!({"ids": [99999]}), "no such object id {value}", &[("value", "99999")]),
+        ("file.new", json!({"created": "yesterday"}), "{key} must be Unix seconds (an integer) or null", &[("key", "created")]),
+    ];
+    let mut untranslated = Vec::new();
+    for (cmd, p, template, values) in cases {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if *msg == fmt(template, values)), "{cmd} {p}: {e}");
+        for code in COMPLETE_MESSAGES.iter().chain(&["bg", "da", "id", "nl"]) {
+            let lang = Lang::from_code(code).unwrap();
+            let (entries, _) = parse_entries(lang.0.source);
+            let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == template);
+            let shown = message(lang, &e.to_string());
+            if shown.contains("invalid parameters") || !row.is_some_and(|(_, _, tr)| shown.contains(&fmt(tr, values))) {
+                untranslated.push(format!("{code}: {shown}"));
+            }
+        }
+    }
+    assert!(untranslated.is_empty(), "untranslated parameter check errors:\n{}", untranslated.join("\n"));
+}
+
 /// Languages whose catalogs cover every status and error message.
-const COMPLETE_MESSAGES: &[&str] = &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "fi"];
+const COMPLETE_MESSAGES: &[&str] =
+    &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi"];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];

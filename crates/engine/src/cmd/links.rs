@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: every linked image and placed document)} where each linked file is and whether it changed since it was read → {links: [{name, path, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file)}], missing, modified}",
+            "{ids?: [image or placed document ids] (default: every linked image and placed document)} where each linked file is and whether it changed since it was read → {links: [{name, path, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file), refused?: why the path is not followed (another computer, a device or a URL: it counts as missing)}], missing, modified}",
             has_doc,
             check
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Link Info",
             [],
             None,
-            "{id?} an image's or placed document's Link Info (default: the one selected) → image.info's fields (id, name, linked, link, colorMode, pixelWidth, pixelHeight, width, height) and status: ok|modified|missing|embedded, format, ppi: [x, y] (the file's), effectivePpi: [x, y] (at its placed size), scale: [x%, y%] (of its 100% size), rotation (degrees, counter-clockwise), placement: {preserve, align, clip}; linked images also fileName, location (its folder), page?, fileSize? (bytes), modified?, created? (ms since the Unix epoch); a placed document has document: true, pageWidth and pageHeight (pt) instead of pixels, ppi and colorMode, and its scale is of its artboard's 100% size",
+            "{id?} an image's or placed document's Link Info (default: the one selected) → image.info's fields (id, name, linked, link, colorMode, pixelWidth, pixelHeight, width, height) and status: ok|modified|missing|embedded, format, ppi: [x, y] (the file's), effectivePpi: [x, y] (at its placed size), scale: [x%, y%] (of its 100% size), rotation (degrees, counter-clockwise), placement: {preserve, align, clip}; linked images also fileName, location (its folder), page?, fileSize? (bytes), modified?, created? (ms since the Unix epoch), refused? (why the path is not followed); a placed document has document: true, pageWidth and pageHeight (pt) instead of pixels, ppi and colorMode, and its scale is of its artboard's 100% size",
             has_doc,
             info
         ),
@@ -245,21 +245,24 @@ fn found_at(path: String) -> Option<Found> {
     Some(Found { path, size, modified, bytes: None })
 }
 
-/// Where the file of `link` is: at its path, else at its relative path or by name in the
-/// document's folder `dir`.
-fn locate(link: &LinkInfo, dir: Option<&Path>) -> Option<Found> {
-    let mut paths = vec![link.path.clone()];
-    if let Some(dir) = dir {
-        let near = link.relative.iter().map(|r| dir.join(r)).chain([dir.join(link.name())]);
-        paths.extend(near.map(|p| p.to_string_lossy().into_owned()));
-    }
-    paths.into_iter().find_map(found_at)
+/// Where the file of `link` (stored in the document saved at `doc_path`) is: at its path, else at
+/// its relative path or by name in the document's folder. Only paths
+/// [`fileio::document_path`] follows are looked at.
+fn locate(link: &LinkInfo, doc_path: Option<&str>) -> Option<Found> {
+    let stored = [Some(link.path.as_str()), link.relative.as_deref(), Some(link.name())];
+    stored.into_iter().flatten().filter_map(|p| fileio::document_path(p, doc_path).ok()).find_map(found_at)
 }
 
-/// Where the file of group `g` is and whether it still has the content shown. Its bytes are read
-/// only when its size or modification time changed.
-fn probe(g: &Group, dir: Option<&Path>) -> (Status, Option<Found>) {
-    let Some(mut f) = locate(&g.link, dir) else { return (Status::Missing, None) };
+/// Why the path of `link` (stored in the document saved at `doc_path`) isn't followed, when it
+/// names another computer, a device or a URL.
+fn refused(link: &LinkInfo, doc_path: Option<&str>) -> Option<craft_docpath::Refused> {
+    fileio::document_path(&link.path, doc_path).err().filter(|r| *r != craft_docpath::Refused::Invalid)
+}
+
+/// Where the file of group `g` (of the document saved at `doc_path`) is and whether it still has
+/// the content shown. Its bytes are read only when its size or modification time changed.
+fn probe(g: &Group, doc_path: Option<&str>) -> (Status, Option<Found>) {
+    let Some(mut f) = locate(&g.link, doc_path) else { return (Status::Missing, None) };
     let l = &g.link;
     if l.size == Some(f.size) && l.modified.is_some() && l.modified == f.modified {
         return (Status::Ok, Some(f));
@@ -272,11 +275,6 @@ fn probe(g: &Group, dir: Option<&Path>) -> (Status, Option<Found>) {
     };
     f.bytes = Some(bytes);
     (if same { Status::Ok } else { Status::Modified }, Some(f))
-}
-
-/// The folder of the document saved at `doc_path`.
-fn folder(doc_path: Option<&str>) -> Option<&Path> {
-    doc_path.and_then(|p| Path::new(p).parent())
 }
 
 /// Is image `key` of `d` showing its preview (its file not read)?
@@ -314,7 +312,7 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
         .filter(|g| seen.insert(g.link.path.clone()))
         .map(|g| {
             let own = |b: &&ImageBlob| !b.is_proxy() && fileio::format_for_name(g.link.name()).is_some_and(|f| f.mime == b.mime);
-            let found = locate(&g.link, folder(doc_path));
+            let found = locate(&g.link, doc_path);
             let found_path = found.as_ref().map(|f| f.path.clone());
             let bytes = found.and_then(|mut f| f.read().ok()).or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
             LinkedFile { path: g.link.path.clone(), name: g.link.name().to_string(), found_path, bytes }
@@ -328,7 +326,7 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
 pub(crate) fn files_to_find(st: &crate::DocState, ids: Option<&[NodeId]>) -> Vec<(LinkInfo, Vec<NodeId>)> {
     groups(&st.doc, ids)
         .into_iter()
-        .filter(|g| !g.ids.is_empty() && (ids.is_some() || probe(g, folder(st.path.as_deref())).0 == Status::Missing))
+        .filter(|g| !g.ids.is_empty() && (ids.is_some() || probe(g, st.path.as_deref()).0 == Status::Missing))
         .map(|g| (g.link, g.ids))
         .collect()
 }
@@ -510,9 +508,23 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
     clips.into_iter().try_for_each(|(id, clip)| clip_image(d, id, clip))
 }
 
-/// Groups as `{name, path, ids}` rows (those with objects in the layers).
-fn rows<'a>(gs: impl Iterator<Item = &'a Group>) -> Vec<Value> {
-    gs.filter(|g| !g.ids.is_empty()).map(|g| json!({ "name": g.link.name(), "path": g.link.path, "ids": ids_json(&g.ids) })).collect()
+/// Groups (of the document saved at `doc_path`) as `{name, path, ids}` rows (those with objects in
+/// the layers), with `refused`: why the path isn't followed, when it isn't.
+fn rows<'a>(gs: impl Iterator<Item = &'a Group>, doc_path: Option<&str>) -> Vec<Value> {
+    gs.filter(|g| !g.ids.is_empty())
+        .map(|g| {
+            let mut row = json!({ "name": g.link.name(), "path": g.link.path, "ids": ids_json(&g.ids) });
+            note_refused(&mut row, &g.link, doc_path);
+            row
+        })
+        .collect()
+}
+
+/// `row["refused"]`: why the path of `link` isn't followed, when it isn't ([`refused`]).
+fn note_refused(row: &mut Value, link: &LinkInfo, doc_path: Option<&str>) {
+    if let Some(r) = refused(link, doc_path) {
+        row["refused"] = json!(r.to_string());
+    }
 }
 
 fn ids_json(ids: &[NodeId]) -> Vec<u64> {
@@ -545,9 +557,9 @@ impl Resolved {
 pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool) -> Resolved {
     let mut out = Resolved::default();
     for g in groups(d, None) {
-        let row = rows(std::iter::once(&g));
+        let row = rows(std::iter::once(&g), doc_path);
         let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
-        match probe(&g, folder(doc_path)) {
+        match probe(&g, doc_path) {
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
                 match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread.then_some(Preserve::Bounds))) {
@@ -714,10 +726,11 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
     let (mut missing, mut modified) = (0, 0);
     let mut links = vec![];
     for g in groups(&st.doc, ids.as_deref()).iter().filter(|g| !g.ids.is_empty()) {
-        let (status, found) = probe(g, folder(st.path.as_deref()));
+        let (status, found) = probe(g, st.path.as_deref());
         missing += usize::from(status == Status::Missing);
         modified += usize::from(status == Status::Modified);
         let mut row = json!({ "name": g.link.name(), "path": g.link.path, "status": status.as_str(), "ids": ids_json(&g.ids) });
+        note_refused(&mut row, &g.link, st.path.as_deref());
         if let Some(f) = found.filter(|f| f.path != g.link.path) {
             row["found"] = json!(f.path);
         }
@@ -734,7 +747,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = ids_param(p, "ids");
     let (mut reads, mut missing) = (vec![], vec![]);
     for g in groups(&st.doc, ids.as_deref()).into_iter().filter(|g| !g.ids.is_empty()) {
-        match probe(&g, folder(st.path.as_deref())) {
+        match probe(&g, st.path.as_deref()) {
             (Status::Missing, _) | (_, None) => missing.extend(ids_json(&g.ids)),
             // Unchanged and showing the file: nothing to read unless asked for by id.
             (Status::Ok, Some(_)) if ids.is_none() && !stale(&st.doc, &g) => {}
@@ -783,11 +796,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         None => {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
-                Some(_) if selected.is_empty() => groups(&st.doc, None)
-                    .into_iter()
-                    .filter(|g| probe(g, folder(st.path.as_deref())).0 == Status::Missing)
-                    .flat_map(|g| g.ids)
-                    .collect(),
+                Some(_) if selected.is_empty() => {
+                    groups(&st.doc, None).into_iter().filter(|g| probe(g, st.path.as_deref()).0 == Status::Missing).flat_map(|g| g.ids).collect()
+                }
                 _ => selected,
             }
         }
@@ -969,7 +980,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
-        let (status, found) = probe(g, folder(st.path.as_deref()));
+        let (status, found) = probe(g, st.path.as_deref());
         let found = found.map(|f| f.path).filter(|p| *p != g.link.path);
         let preview = stale(&st.doc, g);
         out.extend(g.ids.iter().map(|id| (*id, (status, found.clone(), preview))));
@@ -1110,7 +1121,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
             done.extend(g.ids);
             continue;
         }
-        match probe(&g, folder(st.path.as_deref())) {
+        match probe(&g, st.path.as_deref()) {
             (Status::Ok | Status::Modified, Some(mut f)) => match read_image(&mut f, &g.link) {
                 Ok(read) => {
                     done.extend(&g.ids);
@@ -1190,10 +1201,13 @@ fn placement_json(o: PlacementOptions) -> Value {
 
 /// Link Info's fields of the linked file `l` (of object `id` of `st`) into `out`.
 fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
-    let status = groups(&st.doc, Some(&[id])).first().map_or(Status::Missing, |g| probe(g, folder(st.path.as_deref())).0);
-    let stamp = file_stamp(&l.path);
+    let status = groups(&st.doc, Some(&[id])).first().map_or(Status::Missing, |g| probe(g, st.path.as_deref()).0);
+    let doc_path = st.path.as_deref();
+    let path = fileio::document_path(&l.path, doc_path).ok();
+    let stamp = path.as_deref().and_then(file_stamp);
     let folder_len = l.path.len().saturating_sub(l.name().len());
     out["status"] = json!(status.as_str());
+    note_refused(out, l, doc_path);
     out["path"] = json!(l.path);
     out["fileName"] = json!(l.name());
     out["location"] = json!(l.path.get(..folder_len).unwrap_or_default().trim_end_matches(['/', '\\']));
@@ -1201,7 +1215,7 @@ fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) 
         ("page", l.page.map(u64::from)),
         ("fileSize", stamp.map(|s| s.0).or(l.size)),
         ("modified", stamp.and_then(|s| s.1).or(l.modified)),
-        ("created", file_created(&l.path)),
+        ("created", path.as_deref().and_then(file_created)),
     ] {
         if let Some(v) = v {
             out[k] = json!(v);

@@ -214,7 +214,8 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(*lbl).size(12.5).color(t.text)));
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| crate::panels::c32(&track_color(mode, &comps, i, x));
-                    if let (Some(nv), _) = widgets::color_slider_named(ui, ("swatch-slider", i), lbl, mode.unit(i, v), 200.0, &track) {
+                    let shown = widgets::SliderValue::field(v as f64, mode.min(i) as f64..=mode.max(i) as f64, mode.suffix(i), 0);
+                    if let (Some(nv), _) = widgets::color_slider_valued(ui, ("swatch-slider", i), lbl, Some(shown), mode.unit(i, v), 200.0, &track) {
                         let mut c2 = comps.clone();
                         c2[i] = mode.value_at(i, nv);
                         new = Some((from_components(mode, &c2), c2));

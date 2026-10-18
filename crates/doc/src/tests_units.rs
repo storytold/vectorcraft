@@ -99,6 +99,13 @@ fn units_are_named_by_label_key_or_suffix() {
 }
 
 #[test]
+fn a_shared_suffix_names_the_plain_unit() {
+    assert_eq!(Unit::named(Unit::Feet.suffix()), Some(Unit::Feet));
+    assert_eq!(Unit::named("FT"), Some(Unit::Feet));
+    assert_eq!(Unit::named(Unit::FeetInches.label()), Some(Unit::FeetInches));
+}
+
+#[test]
 fn readouts_show_two_decimals() {
     assert_eq!(Unit::Points.readout(15.0), "15.00 pt");
     assert_eq!(Unit::Millimeters.readout(72.0), "25.40 mm");

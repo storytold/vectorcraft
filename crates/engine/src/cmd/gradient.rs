@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -135,6 +135,47 @@ pub(crate) fn link_stops(d: &Document, v: &Value) -> Parsed<Value> {
         }
     }
     Ok(v)
+}
+
+/// Stop colors to store, one per stop of `g` (params holding `stops`, before [`link_stops`]): the
+/// color a stop gives and the color the document stores it as when it is new to the gradient, an
+/// RGB color in a CMYK document becoming CMYK through the color settings
+/// ([`super::paint::new_color`], with `p`'s `keepModel`). `None` for a stop that names a swatch,
+/// which gives its color in the swatch's model, and for a color stored as given.
+pub(crate) type StopColors = Vec<Option<(vectorcraft_color::Color, vectorcraft_color::Color)>>;
+
+/// The [`StopColors`] of `g`'s stops.
+pub(crate) fn stop_colors(s: &Session, p: &Value, g: &Value) -> StopColors {
+    let stops = g.get("stops").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    let stored = |st: &Value| {
+        let c = st.get("color").and_then(color_value).filter(|_| str_param(st, "swatch").is_none())?;
+        let to = super::paint::new_color(s, p, c);
+        (to != c).then_some((c, to))
+    };
+    stops.iter().map(stored).collect()
+}
+
+/// `g` (params holding `stops`, resolved by [`link_stops`] in their order) for an edit of paint
+/// `old`, with each stop's color replaced by the one `stored` ([`stop_colors`]) gives for it,
+/// unless `old`'s stops already have that color. A freeform gradient's points are colored from the
+/// stored colors, and a stop list sent back with only its positions changed keeps its colors.
+pub(crate) fn with_stored_stops<'a>(g: &'a Value, old: &Paint, stored: &StopColors) -> std::borrow::Cow<'a, Value> {
+    use std::borrow::Cow;
+    if stored.iter().all(Option::is_none) {
+        return Cow::Borrowed(g);
+    }
+    let had = |c: &vectorcraft_color::Color| matches!(old, Paint::Gradient(o) if o.gradient.stops.iter().any(|st| st.color == *c));
+    let mut v = g.clone();
+    let Some(stops) = v.get_mut("stops").and_then(Value::as_array_mut) else { return Cow::Borrowed(g) };
+    for (st, sc) in stops.iter_mut().zip(stored) {
+        let Some((from, to)) = sc.filter(|(from, _)| !had(from)) else { continue };
+        if st.get("color").and_then(color_value) == Some(from)
+            && let Some(o) = st.as_object_mut()
+        {
+            o.insert("color".into(), color_json(&to));
+        }
+    }
+    Cow::Owned(v)
 }
 
 /// Parse `stops` params: at least two, each with a numeric `offset` (clamped to 0..1) and a valid
@@ -340,11 +381,13 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) if !stroke => return Err(bad(C, "`strokeMode` applies to strokes (stroke: true)")),
         Some(m) => Some(StrokeGradientMode::parse(m).ok_or_else(|| bad(C, format!("strokeMode must be within|along|across, got {m}")))?),
     };
+    // New RGB stop colors take the document's model; those of the swatches the stops name don't.
+    let stored = stop_colors(s, p, p);
     // Stops naming swatches take their colours from them.
     let p = &link_stops(&s.doc()?.doc, p).map_err(|e| bad(C, e))?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
-    let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
+    let new_default = apply_gradient_edit(&default_paint, &with_stored_stops(p, &default_paint, &stored), None).map_err(|e| bad(C, e))?;
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
@@ -353,7 +396,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             let lb = t.local_bounds();
             for r in &mut t.runs {
                 let (cur, b) = run_paint_mut(r, stroke, lb);
-                *cur = apply_gradient_edit(cur, p, Some(b)).map_err(|e| bad(C, e))?;
+                *cur = apply_gradient_edit(cur, &with_stored_stops(p, cur, &stored), Some(b)).map_err(|e| bad(C, e))?;
             }
             return Ok(());
         }
@@ -364,7 +407,8 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             Some(f) => f,
             None => &|_| true,
         };
-        let np = apply_gradient_edit_in(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b, inside).map_err(|e| bad(C, e))?;
+        let old = n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None);
+        let np = apply_gradient_edit_in(old, &with_stored_stops(p, old, &stored), b, inside).map_err(|e| bad(C, e))?;
         n.appearance.set_paint_at(index, !stroke, np);
         if let Some(m) = mode
             && let Some(st) = n.appearance.stroke_at_mut(index)

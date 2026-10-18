@@ -12,7 +12,8 @@
 //! - [`pdf`]: hand-written PDF files (page boxes, colour spaces, encryption) for import tests.
 //! - [`ai`]: hand-written Illustrator editing data, and the EPS and `.ai` files that carry it.
 //! - [`ase`]: hand-written swatch exchange (`.ase`) files for swatch library tests.
-//! - [`tiff`]: hand-written TIFF files, chunky or planar, for image import tests.
+//! - [`tiff`]: hand-written TIFF files, chunky or planar, or compressed with CCITT Group 3, for
+//!   image import tests.
 //! - [`fonts`]: font files made from the bundled fonts (a renamed family) for font tests.
 //!
 //! This crate may only be used as a dev-dependency (enforced by `cargo xtask layers`).

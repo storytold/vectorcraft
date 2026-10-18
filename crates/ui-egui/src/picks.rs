@@ -37,7 +37,9 @@ pub enum PickRequest {
     Folder,
 }
 
-/// The paths a dialog shown off the UI thread picked (none: cancelled).
+/// The paths a dialog shown off the UI thread picked (none: cancelled). A save dialog that reports
+/// which of its file types was picked (the XDG portal's on Linux and the BSDs) answers that type's
+/// first extension after the path.
 pub type PickAnswer = Vec<String>;
 
 /// Shows a dialog off the UI thread; its answer arrives on the receiver. `None` when it can't, and
@@ -232,6 +234,13 @@ pub(crate) fn save(app: &mut VectorcraftApp, pick: &FilePick) -> Option<String> 
     ask(app, PickRequest::Save(pick.clone()))?.into_iter().next()
 }
 
+/// A path from a save dialog for `pick`, and the extension of the file type picked in it when the
+/// dialog reports one ([`PickAnswer`]).
+pub(crate) fn save_with_type(app: &mut VectorcraftApp, pick: &FilePick) -> Option<(String, Option<String>)> {
+    let mut answer = ask(app, PickRequest::Save(pick.clone()))?.into_iter();
+    Some((answer.next()?, answer.next()))
+}
+
 /// A folder from the folder picker.
 pub(crate) fn folder(app: &mut VectorcraftApp) -> Option<String> {
     ask(app, PickRequest::Folder)?.into_iter().next()
@@ -355,19 +364,21 @@ fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
     true
 }
 
-/// `picked`, a save dialog's answer to `request`, names `path`, another file, once the app gave it
+/// `picked`, a save dialog's answer to `request` (with `file_type`, the extension of the file type
+/// picked in it when the dialog reports one), names `path`, another file, once the app gave it
 /// an extension: the dialog checked only `picked` for an existing file, not `path`. When a file is
 /// at `path`, ask before replacing it, over the dialog open now → true while the question is open
 /// (nothing is written meanwhile). OK runs what asked again with the same answer, and `path` is
 /// written then ([`replace`]); Cancel writes nothing. Nothing is asked while that OK runs what
 /// asked, or outside an entry, which nothing could run again.
-pub(crate) fn ask_to_replace(app: &mut VectorcraftApp, request: PickRequest, picked: &str, path: &str) -> bool {
+pub(crate) fn ask_to_replace(app: &mut VectorcraftApp, request: PickRequest, picked: &str, file_type: Option<&str>, path: &str) -> bool {
     if app.picks.replace_ok.as_deref() == Some(path) || !app.services.exists.as_ref().is_some_and(|exists| exists(path)) {
         return false;
     }
     let Some(entry) = app.picks.entry.clone() else { return false };
     let doc = entry.document(app);
-    app.picks.replacing = Some(Replacing { request, answer: vec![picked.to_string()], path: path.to_string(), entry, doc });
+    let answer = std::iter::once(picked).chain(file_type).map(str::to_string).collect();
+    app.picks.replacing = Some(Replacing { request, answer, path: path.to_string(), entry, doc });
     crate::dialogs::confirm::ask_replace(app, path, picked);
     true
 }

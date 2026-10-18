@@ -640,6 +640,7 @@
 	Created:	Создано:
 	Crop	Обрезать
 	Crop Image	Обрезать изображение
+	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
 	Crop To	Обрезать до
@@ -1353,6 +1354,10 @@ file-filter	Templates	Шаблоны
 	Highlight Substituted Glyphs	Выделять заменённые глифы
 	History	История
 	History Options…	Параметры истории…
+	Step Backward	Шаг назад
+	Step Forward	Шаг вперёд
+	Clear History	Очистить историю
+	Set History Limit…	Задать предел истории…
 	History States	Состояния истории
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Применить набор данных
@@ -2466,6 +2471,8 @@ mark-style	Japanese	Японский
 	Redefine Character Style	Переопределить стиль символа
 	Redefine Graphic Style	Переопределить графический стиль
 	Redefine Graphic Style “{name}”	Переопределить графический стиль «{name}»
+	Apply {name}	Применить стиль «{name}»
+	Redefine {name}	Переопределить стиль «{name}»
 	Redefine Paragraph Style	Переопределить стиль абзаца
 	Redefine Symbol	Переопределить символ
 	Redefine {kind} Style	Переопределить стиль {kind}
@@ -3723,6 +3730,11 @@ axis	Both	Оба
 @msg	its editing data doesn't say where its artboard is	его данные для редактирования не указывают, где находится монтажная область
 @msg	its editing data has no layers	в его данных для редактирования нет слоёв
 @msg	its editing data is damaged	его данные для редактирования повреждены
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	его данные для редактирования относятся к странице {w} × {h} пт, а не к странице файла {pw} × {ph} пт
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	его данные для редактирования относятся к странице {w} × {h} пт, то есть к странице файла {pw} × {ph} пт в масштабе {scale}
+@msg	its zlib compression is damaged	их сжатие zlib повреждено
+@msg	its Zstandard compression is damaged	их сжатие Zstandard повреждено
+@msg	it decompresses to more than {_1} MB	после распаковки они занимают более {_1} МБ
 @msg	its editing data is for a different page	его данные для редактирования относятся к другой странице
 @msg	its layers use {_1}, which aren't read yet	его слои используют {_1}, что пока не читается
 @msg	its page has text, and its layers have no text objects to put it in	на его странице есть текст, а на слоях нет текстовых объектов, куда его поместить
@@ -3792,6 +3804,7 @@ axis	Both	Оба
 @msg	Save for Web: the image is empty	Сохранить для web: изображение пусто
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Сохранение записывает {_1}, а не {_2}: используйте document.export для других форматов
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Сохранение записывает {_1}, а не {_2}: чтобы записать его, используйте file.saveAsTemplate
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записывает устаревшие файлы .ai; шаблон .ait всегда совместим с PDF
 @msg	Saved recovery data for {title}	Сохранены данные восстановления для {title}
 @msg	Saved to User Defined: {_1}	Сохранено в «Пользовательский»: {_1}
 @msg	Saved {path}	Сохранено: {path}
@@ -3824,6 +3837,8 @@ axis	Both	Оба
 @msg	`{key}` must be a #rrggbb color	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
+@msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} должно быть временем Unix в секундах (целым числом) или null
 @msg	`{key}` must be a string	`{key}` должно быть строкой
 @msg	`{key}` must be a whole number	`{key}` должно быть целым числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` должно быть целым числом от {min} до {max} (получено {x})
@@ -3863,6 +3878,7 @@ axis	Both	Оба
 @msg	a page tree node has no kids	узел дерева страниц не имеет потомков
 @msg	a page's placement is not finite	размещение страницы не конечно
 @msg	a preset named `{_1}` exists	набор с именем `{_1}` уже существует
+@msg	a swatch or color group named `{n}` exists	образец или цветовая группа с именем `{n}` уже существует
 @msg	a slice size must be a positive number of points	размер фрагмента должен быть положительным числом пунктов
 @msg	a spine keeps at least two points	остов сохраняет как минимум две точки
 @msg	a stream runs past the end	поток выходит за конец
@@ -3953,6 +3969,7 @@ axis	Both	Оба
 @msg	missing `tool`	отсутствует `tool`
 @msg	missing index	отсутствует index
 @msg	missing number `{key}`	отсутствует число `{key}`
+@msg	missing integer `{key}`	отсутствует целое число `{key}`
 @msg	multiple windows land with M11.5	несколько окон появятся в M11.5
 @msg	name the file	дайте файлу имя
 @msg	no CSS to copy: select objects with CSS of their own	нет CSS для копирования: выделите объекты с собственным CSS
@@ -4068,6 +4085,7 @@ axis	Both	Оба
 @msg	nothing to redo	нечего повторять
 @msg	nothing to save: the document has no visible art	нечего сохранять: в документе нет видимого рисунка
 @msg	nothing to undo	нечего отменять
+@msg	no history to clear	нет истории для очистки
 @msg	nothing to warp	нечего деформировать
 @msg	nothing to wrap	нечего обтекать
 @msg	object {0} cannot have children	объект {0} не может иметь потомков
@@ -4075,6 +4093,7 @@ axis	Both	Оба
 @msg	object {id} is not a selected top-level object	объект {id} не является выделенным объектом верхнего уровня
 @msg	page size {w} × {h}	размер страницы {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	страница {0} не существует (в PDF {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: страница {n} не существует (в файле 1)
 @msg	paste unavailable	вставка недоступна
 @msg	path is already closed	контур уже замкнут
 @msg	paths contain invalid coordinates	контуры содержат недопустимые координаты
@@ -4239,6 +4258,7 @@ axis	Both	Оба
 @msg	{C}: no effect at index {from}	{C}: нет эффекта с индексом {from}
 @msg	{_1} failed: {e}	{_1} завершился с ошибкой: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	файлы {_1} можно открыть, но не записать (см. document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	файлы {_1} записывает file.saveAsTemplate
 @msg	{_1} font families available	доступно семейств шрифтов: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} — динамический эффект (Эффект › Модули)
 @msg	{_1} is already used by {_2}	{_1} уже используется {_2}
@@ -4372,6 +4392,9 @@ axis	Both	Оба
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед этим шагом нет шага {i} (шаги считаются с 0; чтобы написать сам $, введите $$)
 @msg	object ids are non-negative integers, not {v}	идентификаторы объектов — неотрицательные целые числа, а не {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} должно быть массивом идентификаторов объектов, которые являются неотрицательными целыми числами
+@msg	invalid object id {value}: expected a non-negative integer	недопустимый идентификатор объекта {value}: ожидается неотрицательное целое число
+@msg	no such object id {value}	объект с идентификатором {value} не существует
 @msg	automation filesystem access is not granted: read authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на чтение: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на запись: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	путь автоматизации отклонён: вне корневой папки для чтения {root}: {path}
@@ -4562,6 +4585,8 @@ lighting	Light	Свет
 @msg	missing panel layout	Отсутствует расположение панелей
 @msg	unsupported native docking operation	Неподдерживаемая собственная операция прикрепления
 	Linux Display Server	Дисплейный сервер Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) при подключенном пере
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Если перо графического планшета не рисует, выберите вариант X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Начало координат линеек
 	Reset Ruler Origin	Сбросить начало координат линеек
@@ -4662,6 +4687,11 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+# 3D light management.
+	Lights	Источники света
+	Add Light	Добавить свет
+	Delete Light	Удалить свет
+3d	Light	Свет
 	Registration:	Регистрация:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	Размер
@@ -4754,6 +4784,11 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	«Редактировать оригинал» открывает только файлы изображений и документов; «{name}» к ним не относится
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузере открываются только URL с http, https и mailto, а не «{url}»
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} открывает другое приложение: выполнить эту команду может только человек за клавиатурой
+@msg	“{name}” is not a file	«{name}» не является файлом
 	Enable Guides for 9-Slice Scaling	Включить направляющие для 9-slice масштабирования
 @msg	a mask has more than one art block	маска содержит более одного блока графики
 @msg	mask art ends outside a mask dictionary	графика маски заканчивается за пределами словаря маски
@@ -4781,3 +4816,23 @@ lighting	Light	Свет
 	Clear Artboard Color	Очистить цвет монтажной области
 @msg	artboard {_1} is locked	монтажная область {_1} заблокирована
 	Include Artboard Fill	Включить цвет монтажной области
+	Artboard {n} of {total}	Монтажная область {n} из {total}
+	Encoding and writing the file…	Кодирование и запись файла…
+@plural	{n} more export waiting|{n} more exports waiting	Ещё {n} экспорт в очереди|Ещё {n} экспорта в очереди|Ещё {n} экспортов в очереди
+	Continue in Background	Продолжить в фоне
+	Cancel Export	Отменить экспорт
+@msg	Export cancelled	Экспорт отменён
+# Paragraph panel menu › Justification…
+	Desired	Желательно
+	Word Spacing:	Интервал между словами:
+	Letter Spacing:	Интервал между буквами:
+	Glyph Scaling:	Масштаб глифов:
+	Auto Leading:	Автоматический интерлиньяж:
+	Single Word Justification:	Выключка одного слова:
+	Full Justify	Полная выключка
+	Minimum must not exceed Desired, nor Desired Maximum.	Минимум не может превышать желательное значение, а желательное — максимум.
+	Minimum	Минимум
+	Justification	Выключка
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
+# Select by Color (select.color)
+	Select by Color	Выделить по цвету

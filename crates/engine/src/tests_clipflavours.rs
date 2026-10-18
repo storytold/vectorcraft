@@ -98,6 +98,38 @@ fn exported_pdf_pastes_back_as_vectors() {
 }
 
 #[test]
+fn the_png_and_pdf_say_when_an_image_or_a_font_is_missing() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let warnings = |r: &Value| -> Vec<String> { r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect() };
+    let mut s = session();
+    copy_red_square(&mut s);
+    assert_eq!(run(&mut s, "clipboard.exportPng", json!({}))["warnings"], json!([]));
+    assert_eq!(run(&mut s, "clipboard.exportPdf", json!({}))["warnings"], json!([]));
+    // Type in a family that isn't installed: the PNG and the PDF each name it.
+    let text = run(&mut s, "text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [text]}));
+    run(&mut s, "edit.copy", json!({}));
+    let png = warnings(&run(&mut s, "clipboard.exportPng", json!({})));
+    assert!(png.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{png:?}");
+    let pdf = warnings(&run(&mut s, "clipboard.exportPdf", json!({})));
+    assert!(pdf.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{pdf:?}");
+    // Copy's formats carry the notes of both, each once.
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, true);
+    assert_eq!(flavours.iter().map(|f| f.mime).collect::<Vec<_>>(), [TEXT, PDF, PNG]);
+    for w in png.iter().chain(&pdf) {
+        assert_eq!(notes.iter().filter(|n| *n == w).count(), 1, "{w} in {notes:?}");
+    }
+    // An image the renderer can't decode: the PNG leaves it out and says so.
+    let image = crate::tests_menucmds::place_undecodable_png(&mut s);
+    run(&mut s, "select.set", json!({"ids": [image.0]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(warnings(&run(&mut s, "clipboard.exportPng", json!({}))), [NOTE]);
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, false);
+    assert_eq!(flavours.iter().map(|f| f.mime).collect::<Vec<_>>(), [PNG]);
+    assert_eq!(notes, [NOTE]);
+}
+
+#[test]
 fn import_image_then_paste_gives_an_image() {
     let mut s = session();
     copy_red_square(&mut s);

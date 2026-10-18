@@ -58,7 +58,7 @@ macro_rules! style_cmds {
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name?, attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
+                "{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -164,12 +164,13 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
 }
 
 /// Every paragraph attribute of `v` as a JSON map, without the style name: those the paragraph's
-/// JSON leaves out at their defaults (the Hyphenation options, the Every-line Composer, no tab
+/// JSON leaves out at their defaults (the Hyphenation and Justification options, the Every-line Composer, no tab
 /// stops, Auto direction…) are written out, as [`char_attrs`] does for characters.
 pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
     for (k, x) in [
         ("hyphenation", json!(v.hyphenation)),
+        ("justification", json!(v.justification)),
         ("composer", json!(v.composer)),
         ("tabs", json!(v.tabs)),
         ("mojikumi", json!(v.mojikumi)),
@@ -177,6 +178,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("leading_model", json!(v.leading_model)),
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
+        ("roman_hanging", json!(v.roman_hanging)),
     ] {
         m.insert(k.into(), x);
     }
@@ -431,14 +433,17 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };
     let name = match str_param(p, "name") {
-        Some(n) => n.to_string(),
+        Some(n) => n.trim().to_string(),
         None => (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string()),
     };
-    if name.trim().is_empty() || kind.attrs(d, &name).is_some() {
+    if name.is_empty() {
+        return Err(bad(&c, "give the style a name"));
+    }
+    if kind.attrs(d, &name).is_some() {
         return Err(bad(&c, format!("a style named `{name}` already exists")));
     }
     let n2 = name.clone();
-    s.edit(&format!("New {base}"), |d, _| {
+    s.edit(if kind == Kind::Char { "New Character Style" } else { "New Paragraph Style" }, |d, _| {
         kind.defs_mut(d).push(TextStyleDef { name: n2, attrs });
         Ok(())
     })?;
@@ -474,7 +479,7 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         Ok(st)
     };
     let count = ids.len();
-    s.edit(&format!("Apply {name}"), |d, _| {
+    s.edit_named("Apply {name}", &name, name == kind.normal(), |d, _| {
         for id in &ids {
             let Some(t) = text_mut(d, *id) else { continue };
             match kind {
@@ -524,7 +529,7 @@ fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, V
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, name).ok_or_else(|| bad(&kind.cmd(verb), format!("no style `{name}`")))?;
     let name = name.to_string();
-    s.edit(&format!("Redefine {name}"), |d, _| {
+    s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| {
         match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
             Some(def) => def.attrs = new_attrs.clone(),
             None => kind.defs_mut(d).push(TextStyleDef { name: name.clone(), attrs: new_attrs.clone() }),
@@ -551,10 +556,12 @@ fn duplicate(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "duplicate")?.to_string();
     let d = &s.doc()?.doc;
     let attrs = kind.attrs(d, &name).ok_or_else(|| bad(&kind.cmd("duplicate"), format!("no style `{name}`")))?;
+    // `new` trims the name, so the copy is named from the trimmed one.
+    let stem = name.trim();
     let copy = (1..)
-        .map(|i| if i == 1 { format!("{name} copy") } else { format!("{name} copy {i}") })
+        .map(|i| if i == 1 { format!("{stem} copy") } else { format!("{stem} copy {i}") })
         .find(|n| kind.attrs(d, n).is_none())
-        .unwrap_or_else(|| format!("{name} copy"));
+        .unwrap_or_else(|| format!("{stem} copy"));
     new(s, &json!({ "name": copy, "attrs": attrs }), kind)
 }
 
@@ -658,6 +665,37 @@ mod tests {
         assert_eq!(list["styles"][1]["uses"], 1);
     }
 
+    /// Applying and redefining a style record a step named from a template with the style's name
+    /// in it (`HistoryEntry::named`), and undo and redo keep it. The Normal styles' names are
+    /// marked as names VectorCraft gives. A new style's step has a name of its own.
+    #[test]
+    fn style_steps_are_named_from_a_template() {
+        let (mut s, id) = session_with_text("Hello");
+        let last = |s: &Session| {
+            let e = s.doc().unwrap().history.undo.last().unwrap();
+            (e.label.clone(), e.named().map(|n| (n.template, n.name.clone(), n.built_in)))
+        };
+        let named = |template, name: &str, built_in| Some((template, name.to_string(), built_in));
+        s.execute("charStyle.new", &json!({"name": "Body"})).unwrap();
+        assert_eq!(last(&s), ("New Character Style".into(), None));
+        s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+        assert_eq!(last(&s), ("Apply Body".into(), named("Apply {name}", "Body", false)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        let redo = s.doc().unwrap().history.redo.last().unwrap().named().cloned();
+        assert_eq!(redo.map(|n| n.label()).as_deref(), Some("Apply Body"));
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(last(&s), ("Apply Body".into(), named("Apply {name}", "Body", false)));
+        s.execute("charStyle.apply", &json!({"name": NORMAL_CHAR, "id": id})).unwrap();
+        assert_eq!(last(&s), (format!("Apply {NORMAL_CHAR}"), named("Apply {name}", NORMAL_CHAR, true)));
+        s.execute("paraStyle.new", &json!({"name": "Lead"})).unwrap();
+        assert_eq!(last(&s), ("New Paragraph Style".into(), None));
+        s.execute("paraStyle.setAttrs", &json!({"name": "Lead", "attrs": {"direction": "rightToLeft"}})).unwrap();
+        assert_eq!(last(&s), ("Redefine Lead".into(), named("Redefine {name}", "Lead", false)));
+        // A step renamed since it was recorded is no longer named from the template.
+        s.doc_mut().unwrap().history.undo.last_mut().unwrap().label = "Typing".into();
+        assert_eq!(last(&s), ("Typing".into(), None));
+    }
+
     #[test]
     fn new_from_selection_rename_delete_and_undo() {
         let (mut s, id) = session_with_text("Title");
@@ -685,6 +723,29 @@ mod tests {
         s.execute("charStyle.apply", &json!({"name": "Pink"})).unwrap();
         let fill = serde_json::to_value(&runs(&s, id)[0].style.fill).unwrap();
         assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Pink").unwrap().attrs["fill"], fill);
+    }
+
+    /// New Character Style and New Paragraph Style trim the name they are given, as a rename
+    /// trims `to`; the trimmed name is the one compared with the styles there are.
+    #[test]
+    fn new_styles_trim_their_names_as_a_rename_does() {
+        let (mut s, _) = session_with_text("Body text");
+        for p in ["charStyle", "paraStyle"] {
+            assert_eq!(s.execute(&format!("{p}.new"), &json!({"name": "  Body \t"})).unwrap()["name"], "Body", "{p}");
+            let list = s.execute(&format!("{p}.list"), &json!({})).unwrap();
+            let names: Vec<&str> = list["styles"].as_array().unwrap().iter().filter_map(|x| x["name"].as_str()).collect();
+            assert_eq!(names[1..], ["Body"], "{p}");
+            let e = s.execute(&format!("{p}.new"), &json!({"name": " Body"})).unwrap_err().to_string();
+            assert!(e.contains("a style named `Body` already exists"), "{p}: {e}");
+            let e = s.execute(&format!("{p}.new"), &json!({"name": " \t "})).unwrap_err().to_string();
+            assert!(e.contains("give the style a name"), "{p}: {e}");
+            assert_eq!(s.execute(&format!("{p}.duplicate"), &json!({"name": "Body"})).unwrap()["name"], "Body copy", "{p}");
+        }
+        // A style whose name has spaces around it, as a saved file can hold, is copied under the
+        // trimmed name, numbered past the copies there are.
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.push(TextStyleDef { name: " Old ".into(), attrs: Map::new() });
+        s.execute("charStyle.new", &json!({"name": "Old copy"})).unwrap();
+        assert_eq!(s.execute("charStyle.duplicate", &json!({"name": " Old "})).unwrap()["name"], "Old copy 2");
     }
 
     /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no

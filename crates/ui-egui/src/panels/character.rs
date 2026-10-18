@@ -575,7 +575,10 @@ pub(crate) fn axis_sliders(app: &mut VectorcraftApp, ui: &mut Ui, face: &vectorc
             });
         });
         let at = value.map_or(0.0, |v| if max > min { ((v - min) / (max - min)) as f32 } else { 0.0 });
-        let (picked, phase) = widgets::color_slider_named(ui, ("ch-axis", axis.tag), &axis.name, at, ui.available_width(), &|_| t.button_border);
+        // A mixed value leaves the field blank and the slider without a value.
+        let shown = value.map(|v| widgets::SliderValue::field(v, min..=max, "", 1));
+        let (picked, phase) =
+            widgets::color_slider_valued(ui, ("ch-axis", axis.tag), &axis.name, shown, at, ui.available_width(), &|_| t.button_border);
         if let Some(p) = picked {
             let v = ((min + f64::from(p) * (max - min)) * 10.0).round() / 10.0;
             axes_cmd(app, json!({ &tag: v }), phase);
@@ -956,6 +959,11 @@ mod tests {
         for name in ["Weight", "Width"] {
             assert!(tree.iter().any(|n| n.role() == egui::accesskit::Role::Slider && n.label() == Some(name)), "{name}");
         }
+        // ...with the number its field shows, on the axis's range.
+        use crate::widgets::accessibility_tests::slider_value;
+        let wght = face.axes().into_iter().find(|a| &a.tag == b"wght").unwrap();
+        let range = (Some(f64::from(wght.min)), Some(f64::from(wght.max)));
+        assert_eq!(slider_value(&tree, "Weight"), (Some(400.0), range.0, range.1, Some("400".into())));
         // Drag the Weight slider from its start to past its end.
         let ctx = egui::Context::default();
         let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
@@ -989,6 +997,9 @@ mod tests {
         app.run("select.set", json!({"ids": [id, bold]})).unwrap();
         let text = crate::tests_labels::painted_text(&mut app, |app, ui| axis_sliders(app, ui, &face));
         assert!(!text.contains("400") && !text.contains("700") && text.contains("100"), "{text}");
+        let tree = crate::widgets::accessibility_tests::tree(|ui| axis_sliders(&mut app, ui, &face));
+        assert_eq!(slider_value(&tree, "Weight"), (None, None, None, None), "a blank field: no value");
+        assert_eq!(slider_value(&tree, "Width").0, Some(100.0));
         // Reset Panel leaves the settings, as it leaves the font and style.
         app.run("select.set", json!({"ids": [id]})).unwrap();
         app.run("text.setFormat", json!({"fontAxes": {"wght": 650}})).unwrap();

@@ -1,13 +1,77 @@
 //! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
-//! panel's options icon or menu): the artboard's fields, sizes parsed with units.
+//! panel's options icon or menu): the artboard's fields, sizes parsed with units, and its position
+//! from a reference point.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::Unit;
+use vectorcraft_geom::{Point, Rect};
 
-use super::{DialogSpec, run_and_close};
+use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
+use crate::panels::transform::{artboard_rect, reference_index, reference_locator};
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Artboard Options").into(), confirm, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Artboard Options").into(), body, confirm, ..DialogSpec::FORM };
+
+/// Where the fields put the artboard: `x` and `y` are its top-left corner in document points, as
+/// `artboard.setProps` and `artboard.new` take them.
+fn placed(d: &Dialog) -> Rect {
+    let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
+    Rect::new(x, y, x + d.f64("width", 0.0), y + d.f64("height", 0.0))
+}
+
+/// The form's Name, Width and Height, then X and Y in the same grid, the reference point locator
+/// before X (#1876). The locator is the one the Transform panel, the Control bar and Properties
+/// share, and X and Y are where its point lies on the rulers, counted from the ruler origin (#1212),
+/// as the Transform panel and the Control bar show an artboard's. A new Width or Height keeps the
+/// reference point where it was, as their sizes do.
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let (unit, origin, refi) = (app.session.general_unit(), app.ruler_origin(), reference_index(ui));
+    let (was, w0, h0) = (placed(d), d.f64("width", 0.0), d.f64("height", 0.0));
+    form::grid_then(ui, d, unit, |ui, d| {
+        let (w, h) = (d.f64("width", 0.0), d.f64("height", 0.0));
+        let n = artboard_rect(was, refi, None, None, Some(w), Some(h), false);
+        // Only the side that changed moves, so an untouched coordinate stays exactly as it was.
+        for (key, changed, at) in [("x", w != w0, n.x0), ("y", h != h0, n.y0)] {
+            if changed {
+                d.fields.insert(key.into(), json!(at));
+            }
+        }
+        position_rows(ui, d, refi, unit, origin);
+    });
+    false
+}
+
+/// The X and Y rows: where reference point `refi` lies, counted from the ruler origin `origin`,
+/// with the locator before X's label. A typed X or Y moves the artboard so that its reference point
+/// lands there.
+fn position_rows(ui: &mut egui::Ui, d: &mut Dialog, refi: usize, unit: Unit, origin: Point) {
+    let r = placed(d);
+    let rp = vectorcraft_geom::reference_point(r, refi);
+    let mut indent = 0.0;
+    for (key, label, at, zero) in [("x", "X:", rp.x, origin.x), ("y", "Y:", rp.y, origin.y)] {
+        ui.horizontal(|ui| {
+            // Y's label lines up with X's, after the locator.
+            if key == "x" {
+                let left = ui.cursor().min.x;
+                reference_locator(ui, refi);
+                indent = ui.min_rect().right() - left;
+            } else {
+                ui.add_space(indent);
+            }
+            form::row_label(ui, label);
+        });
+        if let Some(v) = crate::widgets::num_field(ui, ("dlg-ab-xy", key), Some(at - zero), unit, form::FIELD_W) {
+            let n = if key == "x" {
+                artboard_rect(r, refi, Some(v + zero), None, None, None, false).x0
+            } else {
+                artboard_rect(r, refi, None, Some(v + zero), None, None, false).y0
+            };
+            d.fields.insert(key.into(), json!(n));
+        }
+        ui.end_row();
+    }
+}
 
 /// The dialog kind of Artboard Options.
 pub const KIND: &str = "artboardOptions";

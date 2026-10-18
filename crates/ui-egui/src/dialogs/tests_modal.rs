@@ -1,5 +1,6 @@
 //! #423: modal dialogs move by their heading (and stay on screen and where they were moved), and
-//! the form dialogs' choice fields are dropdowns (Offset Path's Joins).
+//! the form dialogs' choice fields are dropdowns (Offset Path's Joins). A plug-in's dialog of more
+//! settings than the window has room for fits it, its settings scrolling.
 
 use egui::{Event, Pos2, Rect, Vec2, vec2};
 use serde_json::json;
@@ -115,6 +116,70 @@ fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
         settle(&ctx, &mut app);
         assert!(close_to(rect_of(&ctx, id).min - edge.min, Vec2::ZERO), "{name}: reopened at {:?}, left at {edge:?}", rect_of(&ctx, id));
     }
+}
+
+/// Open the dialog of a plug-in of `kind` (`effect` or `filter`) with `count` number settings over a
+/// selection, settle it and `check` it, given its window and heading. The other tests share the
+/// plug-in registry, and the plug-in is removed after.
+fn check_plugin_dialog(kind: &str, count: usize, check: impl FnOnce(&egui::Context, &mut VectorcraftApp, egui::Id, &str)) {
+    use vectorcraft_plugins::wat as tpl;
+    let params: Vec<String> = (0..count).map(|i| format!(r#""setting{i}":{{"type":"number","min":0,"max":10,"default":1}}"#)).collect();
+    let id = format!("test.ui.{kind}{count}");
+    let src = tpl::module(&tpl::manifest(&id, kind, &format!("{{{}}}", params.join(","))), tpl::ECHO, "", 1);
+    let (ctx, mut app) = (ctx(), app_with_selection());
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    let (command, params, dialog) = match kind {
+        "effect" => ("effect.dialog", json!({"effect": vectorcraft_plugins::effect::effect_id(&id)}), "effect"),
+        _ => ("plugin.dialog", json!({"id": id}), plugin::KIND),
+    };
+    app.run(command, params).unwrap();
+    settle(&ctx, &mut app);
+    check(&ctx, &mut app, egui::Id::new(("dialog", dialog)), &format!("Test {id}"));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A plug-in can declare more settings than the window has room for, a row each. Its dialog, an
+/// effect's or a filter's, fits the window all the same, heading and buttons included. The
+/// settings take the height there is, and the wheel scrolls them to the last one. A dialog of a few
+/// settings is as tall as they are.
+#[test]
+fn a_plug_in_dialog_of_many_settings_fits_the_window() {
+    use vectorcraft_plugins::manifest::MAX_PARAMS;
+    let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
+    let shown = |texts: &[(String, Rect)], text: &str| texts.iter().find(|(t, r)| t == text && screen.contains_rect(*r)).map(|(_, r)| *r);
+    for kind in ["effect", "filter"] {
+        check_plugin_dialog(kind, MAX_PARAMS, |ctx, app, window, heading| {
+            let last = format!("Setting{}:", MAX_PARAMS - 1);
+            let texts = frame(ctx, app, vec![]);
+            let rect = rect_of(ctx, window);
+            assert!(screen.contains_rect(rect) && rect.height() > 0.75 * SCREEN.y, "{kind}: the dialog is at {rect:?} in the {SCREEN:?} window");
+            for text in [heading, "Setting0:", "OK", "Cancel"] {
+                assert!(shown(&texts, text).is_some(), "{kind}: {text} isn't on screen: {texts:?}");
+            }
+            assert!(shown(&texts, &last).is_none(), "{kind}: {last} is out of view at first");
+            let over = shown(&texts, "Setting0:").unwrap().center();
+            let wheel = Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: vec2(0.0, -200.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Default::default(),
+            };
+            frame(ctx, app, vec![Event::PointerMoved(over), wheel]);
+            for _ in 0..30 {
+                frame(ctx, app, vec![]);
+            }
+            let texts = frame(ctx, app, vec![]);
+            for text in [heading, last.as_str(), "OK", "Cancel"] {
+                assert!(shown(&texts, text).is_some(), "{kind}, scrolled to the end: {text} isn't on screen: {texts:?}");
+            }
+            assert_eq!(rect_of(ctx, window), rect, "{kind}: scrolling leaves the window as it was");
+        });
+    }
+    check_plugin_dialog("effect", 4, |ctx, app, window, _| {
+        let texts = frame(ctx, app, vec![]);
+        let rect = rect_of(ctx, window);
+        assert!(rect.height() < SCREEN.y / 2.0 && shown(&texts, "Setting3:").is_some(), "4 settings: {rect:?} {texts:?}");
+    });
 }
 
 /// Offset Path's Joins is a dropdown of Miter, Round and Bevel (it was a text field), listed after

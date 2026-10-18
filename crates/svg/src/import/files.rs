@@ -79,33 +79,34 @@ fn percent_decoded(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Is `p` an absolute path here or on another system (`/…`, `C:/…`, `C:\…`)?
-fn is_absolute(p: &str) -> bool {
-    Path::new(p).is_absolute() || p.starts_with('/') || matches!(p.as_bytes(), [d, b':', b'/' | b'\\', ..] if d.is_ascii_alphabetic())
-}
-
-/// Where href `h` points (a path, made absolute from `folder`, or a URL) and whether it is a
-/// file that can be read.
-fn target(h: &str, folder: Option<&str>) -> (String, bool) {
-    let h = percent_decoded(h.trim());
-    let path = match h.strip_prefix("file://") {
-        Some(rest) => {
-            let rest = rest.strip_prefix("localhost").unwrap_or(rest);
-            // `file:///C:/art.png` → `C:/art.png`.
-            match rest.as_bytes() {
-                [b'/', d, b':', ..] if d.is_ascii_alphabetic() => rest.get(1..).unwrap_or(rest).to_string(),
-                _ => rest.to_string(),
-            }
-        }
-        None if h.contains("://") => return (h, false),
-        None => h,
-    };
-    if is_absolute(&path) {
-        return (path, true);
+/// Where href `h` points: the path its link keeps, and the file to read when it may be read (a
+/// local file, or one on the network share the SVG is on). A relative path is taken from
+/// `folder`, the SVG's own, made absolute against the working directory when it isn't; without
+/// a folder, only absolute paths are read (see `craft_docpath`). The link keeps the path as
+/// written (decoded) when the folder does not change the path it resolves to, and the path found
+/// when it does (a relative path, or on Windows a path rooted without a drive); the link of a
+/// `file:` URL keeps the path it names.
+fn target(h: &str, folder: Option<&str>) -> (String, Option<String>) {
+    let h = h.trim();
+    // `craft_docpath` decodes a `file:` URL itself; any other href is decoded here, once.
+    let file_url = h.get(..5).is_some_and(|s| s.eq_ignore_ascii_case("file:"));
+    let stored = if file_url { h.to_string() } else { percent_decoded(h) };
+    if !file_url && stored.contains("://") {
+        return (stored, None);
     }
-    match folder {
-        Some(f) => (Path::new(f).join(&path).to_string_lossy().into_owned(), true),
-        None => (path, false),
+    // Resolved as a document inside `folder`: only the folder is used.
+    let document = folder.map(|f| {
+        let f = Path::new(f);
+        if f.is_absolute() { f.to_path_buf() } else { std::path::absolute(f).unwrap_or_else(|_| f.to_path_buf()) }.join("-")
+    });
+    match craft_docpath::resolve(&stored, document.as_deref()) {
+        Ok(path) => {
+            let file = path.is_absolute().then(|| path.to_string_lossy().into_owned());
+            let as_written = !file_url && craft_docpath::resolve(&stored, None).as_ref() == Ok(&path);
+            let link = if as_written { stored } else { path.to_string_lossy().into_owned() };
+            (link, file)
+        }
+        Err(_) => (stored, None),
     }
 }
 
@@ -124,8 +125,8 @@ impl Files {
         for n in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "image") {
             let Some(h) = href(n).filter(|h| !h.trim_start().starts_with("data:")) else { continue };
             if !files.sources.contains_key(h) {
-                let (path, local) = target(h, opts.folder);
-                let read = if local { opts.read.and_then(|read| read(&path)) } else { None };
+                let (path, file) = target(h, opts.folder);
+                let read = file.and_then(|file| opts.read.and_then(|read| read(&file)));
                 let source = match read {
                     Some((bytes, link)) => files.source(bytes, link).ok_or("is not an image VectorCraft reads"),
                     None => Err("not found"),
@@ -235,12 +236,67 @@ mod tests {
     #[test]
     fn hrefs_resolve_against_the_folder() {
         let sep = std::path::MAIN_SEPARATOR;
-        assert_eq!(target("photo%20one.png", Some("/art")), (format!("/art{sep}photo one.png"), true));
-        assert_eq!(target("photo.png", None), ("photo.png".into(), false));
-        assert_eq!(target("/abs/photo.png", Some("/art")), ("/abs/photo.png".into(), true));
-        assert_eq!(target("file:///C:/art/a.png", None), ("C:/art/a.png".into(), true));
-        assert_eq!(target("file:///home/a.png", None), ("/home/a.png".into(), true));
-        assert_eq!(target("https://example.com/a.png", Some("/art")), ("https://example.com/a.png".into(), false));
+        let art = std::env::temp_dir().join("art");
+        let art = art.to_str().unwrap();
+        let found = format!("{art}{sep}photo one.png");
+        assert_eq!(target("photo%20one.png", Some(art)), (found.clone(), Some(found)));
+        assert!(target("photo.png", None).1.is_none());
+        assert_eq!(target("file:///C:/art/a.png", None), (r"C:\art\a.png".into(), cfg!(windows).then(|| r"C:\art\a.png".into())));
+        assert_eq!(target("https://example.com/a.png", Some(art)), ("https://example.com/a.png".into(), None));
+        #[cfg(unix)]
+        {
+            assert_eq!(target("/abs/photo.png", Some("/art")), ("/abs/photo.png".into(), Some("/abs/photo.png".into())));
+            assert_eq!(target("file:///home/a.png", None), ("/home/a.png".into(), Some("/home/a.png".into())));
+        }
+    }
+
+    /// Without a folder, a link keeps its path as the href spells it, on every system; with one, a
+    /// drive path keeps it too. The file to read is the absolute path that `craft_docpath`
+    /// resolves on the running system.
+    #[test]
+    fn links_keep_hrefs_as_written() {
+        let art = std::env::temp_dir().join("art");
+        let art = art.to_str();
+        for h in ["/abs/photo.png", r"\abs\photo.png", "C:/art/a.png", r"C:\art\a.png", "img/a.png"] {
+            assert_eq!(target(h, None).0, h);
+        }
+        for h in ["C:/art/a.png", r"C:\art\a.png"] {
+            assert_eq!(target(h, art).0, h);
+        }
+        assert_eq!(target("/abs/photo%20one.png", None).0, "/abs/photo one.png", "decoded");
+        // The SVG's folder gives a rooted path its drive on Windows, and the link keeps that.
+        let (link, file) = target("/abs/photo.png", art);
+        let file = file.unwrap();
+        assert!(Path::new(&file).is_absolute() && Path::new(&file).ends_with("abs/photo.png"), "{file}");
+        assert_eq!(link, if cfg!(windows) { file } else { "/abs/photo.png".into() });
+    }
+
+    /// A folder that isn't absolute (`/tmp` on Windows, `art`) is taken from the working
+    /// directory, so the files its SVG links to are read.
+    #[test]
+    fn a_folder_that_is_not_absolute_is_made_absolute() {
+        let here = std::env::current_dir().unwrap();
+        let (link, file) = target("photo.png", Some("art"));
+        assert_eq!(file.as_deref().map(Path::new), Some(here.join("art").join("photo.png").as_path()));
+        assert_eq!(link, file.unwrap());
+        let (_, file) = target("photo.png", Some("/tmp"));
+        let file = file.unwrap();
+        assert!(Path::new(&file).is_absolute() && file.ends_with("photo.png"), "{file}");
+    }
+
+    #[test]
+    fn hrefs_to_other_computers_are_not_read() {
+        let art = std::env::temp_dir().join("art");
+        for h in [
+            r"\\192.0.2.1\share\x.png",
+            "//192.0.2.1/share/x.png",
+            "file:////192.0.2.1/share/x.png",
+            "file://192.0.2.1/share/x.png",
+            "%5C%5C192.0.2.1%5Cshare%5Cx.png",
+        ] {
+            assert!(target(h, art.to_str()).1.is_none(), "{h}");
+            assert!(target(h, None).1.is_none(), "{h}");
+        }
     }
 
     #[test]

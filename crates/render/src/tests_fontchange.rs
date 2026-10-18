@@ -93,10 +93,11 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
     let font_axes = [("wght".to_string(), 650.0)].into_iter().collect();
     let style = CharStyle { size: 40.0, font_family: TWO_AXIS_FAMILY.into(), font_axes, ..Default::default() };
-    let g = text_geom(&TextObject::point(Point::new(10.0, 60.0), "lIn", style));
+    let t = TextObject::point(Point::new(10.0, 60.0), "lIn", style);
+    let g = text_geom(&t);
     assert!(!g.all.elements().is_empty());
     assert!(g.substituted_glyphs.elements().is_empty() && g.substituted_fonts.elements().is_empty());
-    assert!(g.alternate_glyphs.elements().is_empty());
+    assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes

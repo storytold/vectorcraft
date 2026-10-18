@@ -59,6 +59,23 @@ fn layers_option_keeps_or_flattens_optional_content() {
     assert!(open(&mut s, &bytes, json!({"layers": "no"})).unwrap_err().to_string().contains("layers must be true or false"));
 }
 
+/// A PDF-compatible `.ai` without the editor's private data opens its layers from its optional
+/// content groups, whose names without a byte order mark are PDFDocEncoding.
+#[test]
+fn ai_layer_names_are_read_as_pdf_doc_encoding() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R] /D << >> >> ");
+    let page = PdfPage {
+        resources: format!("/Properties << /A {a} 0 R /B {b} 0 R >>"),
+        ..PdfPage::new(100.0, 100.0, "/OC /A BDC 0 g 0 0 10 10 re f EMC /OC /B BDC 0 g 20 20 10 10 re f EMC")
+    };
+    let bytes = pdf_with_catalog(&[page], &[r"<< /Type /OCG /Name (Art\205final) >>", "<< /Type /OCG /Name (Notes) >>"], &catalog, None);
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "art.ai", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    let names: Vec<String> = s.active().unwrap().doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Art\u{2013}final", "Notes"]);
+}
+
 #[test]
 fn load_options_read_text_and_layers() {
     let o = LoadOptions::from_params("x", &json!({"textAs": "Outlines", "layers": false})).unwrap();

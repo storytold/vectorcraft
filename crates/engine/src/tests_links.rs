@@ -157,6 +157,42 @@ fn a_linked_photoshop_document_places_and_updates() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
 }
 
+/// An uncompressed 24-bit `w`×`h` Targa file of one color.
+fn targa(w: u16, h: u16, rgb: [u8; 3]) -> Vec<u8> {
+    let mut f = vec![0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    f.extend(w.to_le_bytes());
+    f.extend(h.to_le_bytes());
+    f.extend([24, 0]);
+    let [r, g, b] = rgb;
+    f.extend(std::iter::repeat_n([b, g, r], usize::from(w) * usize::from(h)).flatten());
+    f
+}
+
+/// A Targa file placed linked shows its pixels and updates when it changes, and a link can be
+/// relinked to one.
+#[test]
+fn a_linked_targa_file_places_updates_and_relinks() {
+    let dir = Folder::new("tga");
+    let pic = dir.file("art/photo.tga");
+    write(&pic, &targa(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    assert_eq!(image(&s, id).link.unwrap().path, pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    write(&pic, &targa(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (400, 400));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let other = dir.file("other/red.vst");
+    write(&other, &targa(300, 100, RED));
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap();
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.unwrap().path), (300, 100, other));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");

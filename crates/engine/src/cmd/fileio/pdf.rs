@@ -235,11 +235,15 @@ pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a,
     super::eps::with_flattener(s, cmd, expanded)
 }
 
-/// The full export options for `doc`: settings plus the artboards `p` picks (default all).
+/// The full export options for `doc`: settings plus the artboards `p` picks (default all), created
+/// at `doc`'s File Info creation date (the time of writing when it has none) and modified at the
+/// time of writing. On the web, which has no clock, the creation date is the modification date too,
+/// and a document without one gets neither.
 pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(cmd, format!("PDF options: {e}")))? } else { ArtboardPick::default() };
     let artboards = pick.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
-    Ok(PdfOptions { settings: settings(cmd, p)?, artboards, ..Default::default() })
+    let now = vectorcraft_doc::metadata::output_time();
+    Ok(PdfOptions { settings: settings(cmd, p)?, artboards, created: doc.metadata.created.or(now), modified: now, ..Default::default() })
 }
 
 /// Why a PDF of some artboards carries no editing data.

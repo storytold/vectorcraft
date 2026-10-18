@@ -188,6 +188,7 @@
 	Expand…	Rozložit…
 	Expand Appearance	Rozložit vzhled
 	Crop Image	Oříznout obraz
+	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
 	Create Gradient Mesh…	Vytvořit přechodovou síť…
@@ -1327,6 +1328,8 @@ lighting	Light	Světlo
 	Opacity: {value}	Krytí: {value}
 	Rectangle: Sunshine	Obdélník: Sluneční svit
 	Redefine Graphic Style “{name}”	Předefinovat grafický styl „{name}“
+	Apply {name}	Použít styl „{name}“
+	Redefine {name}	Předefinovat styl „{name}“
 	Show Thumbnail	Zobrazit miniaturu
 	Delete Artboards	Odstranit pracovní plochy
 	Delete Empty Artboards	Odstranit prázdné pracovní plochy
@@ -1513,6 +1516,10 @@ lighting	Light	Světlo
 	Use Text for Previews	Náhledy na textu
 	{percent}% opacity	krytí {percent} %
 	History Options…	Možnosti historie…
+	Step Backward	Krok zpět
+	Step Forward	Krok vpřed
+	Clear History	Vymazat historii
+	Set History Limit…	Nastavit limit historie…
 	Open a document to see its history.	Otevřete dokument, abyste viděli jeho historii.
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Použít sadu dat
@@ -3603,6 +3610,8 @@ axis	Both	Obě
 	Star	Hvězda
 	Power Saving (integrated)	Úsporný režim (integrovaná)
 	Target	Cíl
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) při připojeném peru
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Pokud pero grafického tabletu nekreslí, zvolte možnost X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Tisknout jako bitmapu
 	Draft	Koncept
@@ -3989,6 +3998,11 @@ imageTrace	Outline	Obrys
 @msg	its editing data doesn't say where its artboard is	z jeho dat pro úpravy není zřejmé, kde je pracovní plocha
 @msg	its editing data has no layers	jeho data pro úpravy nemají žádné vrstvy
 @msg	its editing data is damaged	jeho data pro úpravy jsou poškozená
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	jeho data pro úpravy patří ke stránce {w} × {h} pt, ne ke stránce souboru {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	jeho data pro úpravy patří ke stránce {w} × {h} pt, tedy ke stránce souboru {pw} × {ph} pt v měřítku {scale}
+@msg	its zlib compression is damaged	jejich komprese zlib je poškozená
+@msg	its Zstandard compression is damaged	jejich komprese Zstandard je poškozená
+@msg	it decompresses to more than {_1} MB	po rozbalení mají více než {_1} MB
 @msg	its editing data is for a different page	jeho data pro úpravy patří k jiné stránce
 @msg	its layers use {_1}, which aren't read yet	jeho vrstvy používají {_1}, což zatím nelze načíst
 @msg	its page has text, and its layers have no text objects to put it in	jeho stránka obsahuje text, ale vrstvy nemají žádné textové objekty, kam by ho bylo možné umístit
@@ -4058,6 +4072,7 @@ imageTrace	Outline	Obrys
 @msg	Save for Web: the image is empty	Uložit pro web: obraz je prázdný
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Uložení zapisuje {_1}, ne {_2}: pro jiné formáty použijte document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Uložení zapisuje {_1}, ne {_2}: k jeho zápisu použijte file.saveAsTemplate
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starší soubory .ai; šablona .ait je vždy kompatibilní s PDF
 @msg	Saved recovery data for {title}	Data pro obnovení uložena pro {title}
 @msg	Saved to User Defined: {_1}	Uloženo do uživatelských knihoven: {_1}
 @msg	Saved {path}	Uloženo: {path}
@@ -4089,6 +4104,8 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be a #rrggbb color	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a #rrggbb colour	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a number	`{key}` musí být číslo
+@msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} musí být unixový čas v sekundách (celé číslo) nebo null
 @msg	`{key}` must be a string	`{key}` musí být řetězec
 @msg	`{key}` must be a whole number	`{key}` musí být celé číslo
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musí být celé číslo mezi {min} a {max} (zadáno {x})
@@ -4128,6 +4145,7 @@ imageTrace	Outline	Obrys
 @msg	a page tree node has no kids	uzel stromu stránek nemá potomky
 @msg	a page's placement is not finite	umístění stránky není konečné
 @msg	a preset named `{_1}` exists	přednastavení s názvem `{_1}` existuje
+@msg	a swatch or color group named `{n}` exists	položka vzorníku nebo skupina barev s názvem `{n}` existuje
 @msg	a slice size must be a positive number of points	velikost řezu musí být kladný počet bodů
 @msg	a spine keeps at least two points	páteř si ponechává alespoň dva body
 @msg	a stream runs past the end	datový proud přesahuje konec souboru
@@ -4218,6 +4236,7 @@ imageTrace	Outline	Obrys
 @msg	missing `tool`	chybí `tool`
 @msg	missing index	chybí index
 @msg	missing number `{key}`	chybí číslo `{key}`
+@msg	missing integer `{key}`	chybí celé číslo `{key}`
 @msg	multiple windows land with M11.5	více oken přijde s M11.5
 @msg	name the file	pojmenujte soubor
 @msg	no CSS to copy: select objects with CSS of their own	žádné CSS ke kopírování: vyberte objekty s vlastním CSS
@@ -4332,6 +4351,7 @@ imageTrace	Outline	Obrys
 @msg	nothing to redo	není co opakovat
 @msg	nothing to save: the document has no visible art	není co uložit: dokument nemá žádnou viditelnou kresbu
 @msg	nothing to undo	není co vrátit
+@msg	no history to clear	není žádná historie k vymazání
 @msg	nothing to warp	není co pokřivit
 @msg	nothing to wrap	není co obtékat
 @msg	object {0} cannot have children	objekt {0} nemůže mít potomky
@@ -4339,6 +4359,7 @@ imageTrace	Outline	Obrys
 @msg	object {id} is not a selected top-level object	objekt {id} není vybraný objekt nejvyšší úrovně
 @msg	page size {w} × {h}	velikost stránky {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	stránka {0} neexistuje (PDF jich má {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: stránka {n} neexistuje (soubor má 1)
 @msg	paste unavailable	vložení není k dispozici
 @msg	path is already closed	cesta už je uzavřená
 @msg	paths contain invalid coordinates	cesty obsahují neplatné souřadnice
@@ -4503,6 +4524,7 @@ imageTrace	Outline	Obrys
 @msg	{C}: no effect at index {from}	{C}: na indexu {from} není žádný efekt
 @msg	{_1} failed: {e}	{_1} selhalo: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	soubory {_1} lze otevřít, ale ne zapisovat (viz document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	soubory {_1} zapisuje file.saveAsTemplate
 @msg	{_1} font families available	Dostupné rodiny písem: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} je živý efekt (Efekt › Zásuvné moduly)
 @msg	{_1} is already used by {_2}	{_1} už používá {_2}
@@ -4611,6 +4633,9 @@ imageTrace	Outline	Obrys
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: výsledek kroku {i} takovou hodnotu nemá (pro samotný znak $ napište $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: před tímto krokem není krok {i} (kroky se číslují od 0; pro samotný znak $ napište $$)
 @msg	object ids are non-negative integers, not {v}	ID objektů jsou nezáporná celá čísla, ne {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} musí být pole ID objektů, která jsou nezáporná celá čísla
+@msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
+@msg	no such object id {value}	objekt s ID {value} neexistuje
 @msg	automation filesystem access is not granted: read authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění ke čtení: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění k zápisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro čtení {root}: {path}
@@ -5057,6 +5082,11 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+# 3D light management.
+	Lights	Světla
+	Add Light	Přidat světlo
+	Delete Light	Odstranit světlo
+3d	Light	Světlo
 	Registration:	Registrace:
 # Dimension tool (linked dimension annotations)
 	Display	Zobrazení
@@ -5145,6 +5175,11 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	Upravit originál otevírá pouze soubory obrázků a dokumentů; „{name}“ mezi ně nepatří
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	v prohlížeči se otevírají pouze adresy URL http, https a mailto, ne „{url}“
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} otevírá jinou aplikaci: spustit ho může pouze člověk u klávesnice
+@msg	“{name}” is not a file	„{name}“ není soubor
 	Enable Guides for 9-Slice Scaling	Povolit vodítka pro 9-slice škálování
 @msg	a mask has more than one art block	maska má více než jeden blok kresby
 @msg	mask art ends outside a mask dictionary	kresba masky končí mimo slovník masky
@@ -5172,3 +5207,22 @@ mark-style	Japanese	Japonské
 	Clear Artboard Color	Smazat barvu pracovní plochy
 @msg	artboard {_1} is locked	pracovní plocha {_1} je zamknutá
 	Include Artboard Fill	Zahrnout barvu pracovní plochy
+	Artboard {n} of {total}	Pracovní plocha {n} z {total}
+	Encoding and writing the file…	Kódování a zápis souboru…
+@plural	{n} more export waiting|{n} more exports waiting	Čeká ještě {n} export|Čekají ještě {n} exporty|Čeká ještě {n} exportů
+	Continue in Background	Pokračovat na pozadí
+	Cancel Export	Zrušit export
+@msg	Export cancelled	Export byl zrušen
+# Paragraph panel menu › Justification…
+	Desired	Požadované
+	Word Spacing:	Mezery mezi slovy:
+	Letter Spacing:	Mezery mezi písmeny:
+	Glyph Scaling:	Změna velikosti glyfů:
+	Auto Leading:	Automatické proklady:
+	Single Word Justification:	Zarovnání jednoho slova:
+	Full Justify	Zarovnat do bloku
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
+	Justification	Zarovnání do bloku
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	proměnné a sady dat souboru nebyly načteny (proměnné: {variables}, sady dat: {data_sets}): panel Proměnné je nezobrazuje
+# Select by Color (select.color)
+	Select by Color	Vybrat podle barvy

@@ -520,7 +520,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     if let Some((id, p)) = fire {
-        crate::menus::invoke(app, id, p);
+        // With the Artboard tool, Select All's keys after a click on an Artboards panel row select
+        // every artboard instead of the art.
+        if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) {
+            crate::panels::artboards::select_all(app);
+        } else {
+            crate::menus::invoke(app, id, p);
+        }
         return;
     }
     // Arrow nudges (Shift = ×10, Alt = copy).

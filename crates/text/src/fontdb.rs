@@ -892,11 +892,22 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
     let native_family = native_family_name(f, &family);
     let mut keys = FaceKeys::of(f, &family, &style);
     let traits = FontTraits::of(f, &keys);
-    let mut instances = named_instances(f, &family, &style, &mut keys, native_family.clone());
+    let (mut instances, renamed) = named_instances(f, &family, &style, &mut keys, native_family.clone());
     for i in &mut instances {
         i.traits = traits;
     }
-    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight: None, italic: false, traits };
+    // A variable font's default face renders at its `wght` default, whatever its name table and
+    // OS/2 table say (Noto Sans Hebrew: named `Light`, weight class 300, default instance Regular
+    // at 400): weigh it so, and name it by its default instance when that is another weight.
+    let weight = f
+        .axes()
+        .iter()
+        .find(|a| a.tag().to_be_bytes() == *b"wght")
+        .map(|a| a.default_value())
+        .filter(|w| w.is_finite())
+        .map(|w| w.clamp(1.0, 1000.0));
+    let style = renamed.unwrap_or(style);
+    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight, italic: false, traits };
     std::iter::once(face).chain(instances).collect()
 }
 
@@ -905,17 +916,40 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
 /// names already taken. The default instance's name, when it isn't the face's style name (a face
 /// `Regular` whose default instance is `Book`), names the face too (`keys`). Damaged tables give
 /// fewer instances or none; the counts read are capped.
-fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mut FaceKeys, native_family: Option<String>) -> Vec<FaceStyle> {
+fn named_instances(
+    f: &skrifa::FontRef<'_>,
+    family: &str,
+    style: &str,
+    keys: &mut FaceKeys,
+    native_family: Option<String>,
+) -> (Vec<FaceStyle>, Option<String>) {
     let axes = f.axes();
     if axes.is_empty() || axes.len() > MAX_AXES {
-        return vec![];
+        return (vec![], None);
     }
     let tags: Vec<Tag> = axes.iter().map(|a| a.tag()).collect();
     let defaults: Vec<f32> = axes.iter().map(|a| a.default_value()).collect();
+    let is_default = |coords: &[f32]| coords.len() == defaults.len() && coords.iter().zip(&defaults).all(|(c, d)| (c - d).abs() < 1e-3);
+    // The face renders as its default instance. When that instance is another weight than the
+    // name table says (`Light` face, Regular default instance), the instance names the face.
+    let renamed = tags.iter().any(|t| t.to_be_bytes() == *b"wght").then(|| {
+        f.named_instances()
+            .iter()
+            .take(MAX_INSTANCES)
+            .filter(|inst| is_default(&inst.user_coords().take(MAX_AXES).collect::<Vec<f32>>()))
+            .find_map(|inst| name(f, &[inst.subfamily_name_id()]))
+            .filter(|d| style_weight(d) != style_weight(style))
+    });
+    let renamed = renamed.flatten();
     // Instances without a PostScript name of their own are named `<prefix>-<style>` (Adobe
     // Technical Note #5902), as PDF and `.ai` files name them.
     let prefix = name(f, &[StringId::VARIATIONS_POSTSCRIPT_NAME_PREFIX]).unwrap_or_else(|| family.to_string());
-    let mut taken = vec![norm(style)];
+    if let Some(new) = &renamed {
+        let old = norm(style);
+        keys.styles.retain(|k| *k != old);
+        keys.styles.push(norm(new));
+    }
+    let mut taken = vec![norm(renamed.as_deref().unwrap_or(style))];
     let mut out = Vec::new();
     for inst in f.named_instances().iter().take(MAX_INSTANCES) {
         let coords: Vec<f32> = inst.user_coords().take(MAX_AXES).collect();
@@ -960,7 +994,7 @@ fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mu
             traits: FontTraits::default(),
         });
     }
-    out
+    (out, renamed)
 }
 
 /// Parse every face in `data` (a font file or collection) and the named instances of its variable
@@ -1534,8 +1568,16 @@ fn norm(s: &str) -> String {
     norm_chars(s).collect()
 }
 
-/// Weight implied by a style name (400 = regular).
+/// Weight implied by a style name (400 = regular). Japanese faces number their weights W0–W9
+/// (Hiragino, Morisawa…), W6 weighing 600 as its weight class does (#2873).
 pub fn style_weight(style: &str) -> f32 {
+    let numbered = style.split(|c: char| !c.is_ascii_alphanumeric()).find_map(|part| match part.as_bytes() {
+        [b'W' | b'w', d @ b'0'..=b'9'] => Some(f32::from(d - b'0') * 100.0),
+        _ => None,
+    });
+    if let Some(w) = numbered {
+        return w.max(100.0);
+    }
     let s = norm(style);
     const TABLE: &[(&str, f32)] = &[
         ("extralight", 200.0),
@@ -1560,6 +1602,13 @@ fn style_italic(style: &str) -> bool {
     s.contains("italic") || s.contains("oblique") || s == "it"
 }
 
+/// How far `face` is from the style asked for: its weight difference, and a penalty for the wrong
+/// slant. The penalty is less than the weight gap between Regular and Bold (and Bold and Black),
+/// so Bold Italic asked of a family with Bold and Italic faces only gets the Bold (#2491).
+fn style_distance(face: &FontFace, weight: f32, italic: bool) -> f32 {
+    (face.weight - weight).abs() + if face.italic != italic { 250.0 } else { 0.0 }
+}
+
 /// [`FontDb::menu_family_list`], with the [`FontDb::family_list`] it was built from.
 type MenuFamilies = (Arc<[String]>, Arc<[String]>);
 
@@ -1568,6 +1617,12 @@ impl FontDb {
     /// read with their subfolders, and font files).
     pub fn with_font_dirs(font_dirs: Vec<PathBuf>) -> Self {
         Self::new(FontPaths::Fixed(font_dirs))
+    }
+
+    /// Same scan paths as [`FontDb::global`] (platform lister and font folders), for tests.
+    #[cfg(test)]
+    pub(crate) fn for_system_scan_test() -> Self {
+        Self::new(FontPaths::System)
     }
 
     fn new(font_paths: FontPaths) -> Self {
@@ -2207,37 +2262,36 @@ impl FontDb {
             return Some((*f).clone());
         }
         let (tw, ti) = (style_weight(style), style_italic(style));
-        cands
-            .iter()
-            .min_by(|a, b| {
-                let sa = (a.weight - tw).abs() + if a.italic != ti { 1000.0 } else { 0.0 };
-                let sb = (b.weight - tw).abs() + if b.italic != ti { 1000.0 } else { 0.0 };
-                sa.total_cmp(&sb)
-            })
-            .map(|f| (*f).clone())
+        cands.iter().min_by(|a, b| style_distance(a, tw, ti).total_cmp(&style_distance(b, tw, ti))).map(|f| (*f).clone())
     }
 
-    /// First face (fallback family first, then load order) that covers `c`; on native, system
-    /// fonts are loaded lazily the first time no loaded face covers a character.
+    /// [`fallback_for_style`](Self::fallback_for_style) for upright Regular text.
     pub(crate) fn fallback_for(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+        self.fallback_for_style(c, exclude, 400.0, false)
+    }
+
+    /// First family (fallback family first, then load order) with a face that covers `c`, in that
+    /// family's face nearest `weight` and `italic`; on native, system fonts are loaded lazily the
+    /// first time no loaded face covers a character (#2491).
+    pub(crate) fn fallback_for_style(&self, c: char, exclude: u32, weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         // Thai (Lao, Khmer, Myanmar) takes a font made for it, when one is installed, rather than
         // whichever face covering it happened to load first (a display face, say).
         let prefer = script_families(c);
-        if let Some(f) = self.family_fallback(c, exclude, prefer) {
+        if let Some(f) = self.family_fallback(c, exclude, prefer, weight, italic) {
             return Some(f);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if self.load_families(c, prefer)
-            && let Some(f) = self.family_fallback(c, exclude, prefer)
+            && let Some(f) = self.family_fallback(c, exclude, prefer, weight, italic)
         {
             return Some(f);
         }
-        if let Some(f) = self.loaded_fallback(c, exclude) {
+        if let Some(f) = self.loaded_fallback(c, exclude, weight, italic) {
             return Some(f);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if self.system_fallback(c) {
-            return self.loaded_fallback(c, exclude);
+            return self.loaded_fallback(c, exclude, weight, italic);
         }
         None
     }
@@ -2249,14 +2303,14 @@ impl FontDb {
         self.fallback_for(c, 0)
     }
 
-    /// The loaded face of the first of `families` that covers `c` (upright, nearest Regular).
-    fn family_fallback(&self, c: char, exclude: u32, families: &[&str]) -> Option<Arc<FontFace>> {
+    /// The loaded face of the first of `families` that covers `c`, nearest `weight` and `italic`.
+    fn family_fallback(&self, c: char, exclude: u32, families: &[&str], weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         let faces = self.read_faces();
         families.iter().find_map(|fam| {
             faces
                 .iter()
                 .filter(|f| f.id != exclude && f.family.eq_ignore_ascii_case(fam) && f.covers(c))
-                .min_by_key(|f| (f.italic, (f.weight - 400.0).abs() as i32))
+                .min_by(|a, b| style_distance(a, weight, italic).total_cmp(&style_distance(b, weight, italic)))
                 .cloned()
         })
     }
@@ -2268,14 +2322,27 @@ impl FontDb {
         if families.is_empty() || !self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled {
             return false;
         }
-        families.iter().any(|fam| !self.is_loaded(fam) && self.load_cataloged(fam) && self.family_fallback(c, 0, &[fam]).is_some())
+        families.iter().any(|fam| !self.is_loaded(fam) && self.load_cataloged(fam) && self.family_fallback(c, 0, &[fam], 400.0, false).is_some())
     }
 
-    fn loaded_fallback(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+    /// The first loaded family (the fallback family, then load order) with a face covering `c`,
+    /// and in it the face nearest `weight` and `italic`.
+    fn loaded_fallback(&self, c: char, exclude: u32, weight: f32, italic: bool) -> Option<Arc<FontFace>> {
         let faces = self.read_faces();
-        let mut order: Vec<&Arc<FontFace>> = faces.iter().filter(|f| f.id != exclude).collect();
-        order.sort_by_key(|f| (!f.family.eq_ignore_ascii_case(FALLBACK_FAMILY), f.italic, (f.weight - 400.0).abs() as i32));
-        order.into_iter().find(|f| f.covers(c)).cloned()
+        let mut families: Vec<&str> = Vec::new();
+        for f in faces.iter().filter(|f| f.id != exclude && f.covers(c)) {
+            if !families.iter().any(|fam| fam.eq_ignore_ascii_case(&f.family)) {
+                families.push(&f.family);
+            }
+        }
+        // Stable: the fallback family first, the others in load order.
+        families.sort_by_key(|fam| !fam.eq_ignore_ascii_case(FALLBACK_FAMILY));
+        let fam = families.first()?;
+        faces
+            .iter()
+            .filter(|f| f.id != exclude && f.family.eq_ignore_ascii_case(fam) && f.covers(c))
+            .min_by(|a, b| style_distance(a, weight, italic).total_cmp(&style_distance(b, weight, italic)))
+            .cloned()
     }
 
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged

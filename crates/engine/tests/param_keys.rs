@@ -96,6 +96,48 @@ fn an_effect_color_it_cannot_draw_is_refused() {
     assert_eq!(back.layers[0].children().unwrap()[0].appearance.effects[0].params["color"], json!("not-a-color"));
 }
 
+/// A `channel` that Levels or Curves doesn't have (which they drew as RGB) is refused by
+/// `effect.apply`, `appearance.addEffect` and `effect.setParams` themselves, not only by the check,
+/// and the document and its undo history stay as they were. The channels they read pass. A
+/// document saved with another channel still opens with it.
+#[test]
+fn a_tone_curve_channel_it_does_not_have_is_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "adjust.levels", "params": {"channel": "red"}})).unwrap();
+    let state = |s: &Session| {
+        let st = s.active().unwrap();
+        (st.doc.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let why = "`channel` must be one of rgb, red, green, blue";
+    for bad in [json!("alpha"), json!("cyan"), json!(""), json!("reds"), json!(null)] {
+        for (cmd, params) in [
+            ("effect.setParams", json!({"index": 0, "params": {"channel": bad}})),
+            ("effect.apply", json!({"effect": "adjust.curves", "params": {"channel": bad}})),
+            ("appearance.addEffect", json!({"effect": "adjust.levels", "params": {"channel": bad}})),
+        ] {
+            let e = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(e.contains(why), "{cmd} {params}: {e}");
+            let checked = s.check_params(cmd, &params).unwrap_err().to_string();
+            assert!(checked.contains(why), "{cmd} {params}: {checked}");
+            assert!(state(&s) == before, "{cmd} {params} changed the document or its undo history");
+        }
+    }
+    let stored = |s: &Session| s.active().unwrap().doc.layers[0].children().unwrap()[0].appearance.effects[0].params["channel"].clone();
+    for good in [json!("rgb"), json!("green"), json!("blue"), json!("Red"), json!("RGB"), json!("r"), json!("G"), json!("b")] {
+        let params = json!({"index": 0, "params": {"channel": good}});
+        s.check_params("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        s.execute("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        assert_eq!(stored(&s), good);
+    }
+    let mut doc = (*s.active().unwrap().doc).clone();
+    doc.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["channel"] = json!("alpha");
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.layers[0].children().unwrap()[0].appearance.effects[0].params["channel"], json!("alpha"));
+}
+
 /// What a command adds to its own journal entry passes the check, so a recorded journal can be
 /// sent back through the control channel or MCP.
 #[test]

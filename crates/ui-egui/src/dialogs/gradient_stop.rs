@@ -206,12 +206,13 @@ fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, target: &Target) {
     });
     let Some((name, c)) = pick else { return };
     match target {
-        // A global or spot colour (or a tint of one) stays linked.
+        // A global or spot color (or a tint of one) stays linked, and the swatch's color keeps
+        // its model.
         Target::Stop(stops, i) => {
             let link = crate::panels::gradient::dropped_link(app, &json!({ "swatch": name }));
-            set_stops(app, &recolor(stops.clone(), *i, c, link), Some(*i), Live::Released);
+            crate::panels::gradient::set_stops_keeping_models(app, &recolor(stops.clone(), *i, c, link), Some(*i), Live::Released);
         }
-        Target::Point(_, i) => edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": color_json(&c) })),
+        Target::Point(_, i) => edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": color_json(&c), "keepModel": true })),
     }
 }
 

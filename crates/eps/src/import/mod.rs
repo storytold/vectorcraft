@@ -186,13 +186,27 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     import_with(bytes, true)
 }
 
-/// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
-/// (else what its page prints, as any EPS).
-pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {
+/// The PostScript of an EPS or PostScript file (behind its binary header, if it has one).
+fn program(bytes: &[u8]) -> Result<&[u8], String> {
     let (ps, _) = crate::sections(bytes).ok_or("the file's preview header points outside the file")?;
     if !ps.starts_with(b"%!") {
         return Err("this is not a PostScript file".into());
     }
+    Ok(ps)
+}
+
+/// An EPS or PostScript file's page at the origin, read from its comments without running its
+/// program: its bounding box (`%%HiResBoundingBox` when it has one), a US Letter page without
+/// one. [`import_with`] runs the program on the same page when it reads what the page prints.
+pub fn page(bytes: &[u8]) -> Result<Rect, String> {
+    let [llx, lly, urx, ury] = Dsc::read(program(bytes)?).bbox.unwrap_or(LETTER);
+    Ok(Rect::new(0.0, 0.0, urx - llx, ury - lly))
+}
+
+/// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
+/// (else what its page prints, as any EPS).
+pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {
+    let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
     // type), and its program has all of it, which is read as the format (as before the file

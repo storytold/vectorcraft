@@ -6,9 +6,11 @@
 //! Effect › Rasterize… with the same widgets.
 
 use serde_json::{Value, json};
+use vectorcraft_effects::RASTERIZE;
 
 use super::DialogSpec;
 use super::document_setup::{LABEL, check, choice};
+use super::effect::own_choices;
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -99,8 +101,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// Model, Resolution (a preset, Use Document Raster Effects Resolution or Other) and Background,
 /// then an Anti-aliasing menu, Create Clipping Mask and Add … Around Object.
 pub(super) fn effect_fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let own = if app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk) { "CMYK" } else { "RGB" };
-    choice(ui, d, "colorModel", tl!("Color Model:"), &[("document", own), ("grayscale", tl!("Grayscale")), ("bitmap", tl!("Bitmap"))]);
+    let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+    let models: Vec<(&str, &str)> =
+        own_choices(RASTERIZE, "colorModel", cmyk).unwrap_or_default().into_iter().map(|(label, value)| (value, label)).collect();
+    choice(ui, d, "colorModel", tl!("Color Model:"), &models);
     ui.add_space(4.0);
     let (ppi, document) = (d.f64("resolution", 72.0), d.bool("useDocumentResolution"));
     let preset = RESOLUTIONS.iter().position(|(p, _)| (*p - ppi).abs() < 1e-9);
@@ -128,7 +132,7 @@ pub(super) fn effect_fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dia
     ui.add_space(6.0);
     widgets::label_row(ui, tl!("Background:"), LABEL, |ui| {
         let cur = d.str("background");
-        for (id, label) in [("white", tl!("White")), ("transparent", tl!("Transparent"))] {
+        for (label, id) in own_choices(RASTERIZE, "background", false).unwrap_or_default() {
             if widgets::radio(ui, label, cur == id, true) {
                 d.fields.insert("background".into(), json!(id));
             }

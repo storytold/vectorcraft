@@ -290,6 +290,25 @@ fn hand_built_wmf_plays_like_gdi() {
 }
 
 #[test]
+fn wmf_window_is_mapped_onto_the_placeable_box() {
+    // The box is 1000 × 500 units at 1440 an inch: 50 × 25 pt.
+    let want = Rect::new(12.5, 6.25, 37.5, 18.75);
+    // Window 0,0 – 4000 × 2000: the rectangle 1000,500 – 3000,1500 is the middle half.
+    let ext = vec![(0x020C, le16(&[2000, 4000])), (0x041B, le16(&[1500, 3000, 500, 1000]))];
+    // Window 10000,20000 – 1000 × 500 (the box): the rectangle 10250,20125 – 10750,20375.
+    let org = vec![(0x020B, le16(&[20000, 10000])), (0x020C, le16(&[500, 1000])), (0x041B, le16(&[20375, 10750, 20125, 10250]))];
+    // Window 0,2000 – 4000 × -2000 (y up): the same rectangle, flipped onto the same place.
+    let flip = vec![(0x020B, le16(&[2000, 0])), (0x020C, le16(&[-2000, 4000])), (0x041B, le16(&[1500, 3000, 500, 1000]))];
+    for records in [ext, org, flip] {
+        let back = import(&hand_wmf(1000, 500, &records)).unwrap();
+        assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 50.0, 25.0), 1e-9));
+        let p = paths(&back.document);
+        assert_eq!(p.len(), 1);
+        assert!(near(p[0].geometric_bounds().unwrap(), want, 1e-6), "{:?}", p[0].geometric_bounds());
+    }
+}
+
+#[test]
 fn damaged_files_fail_or_import_partly() {
     let good = emf(&sample()).bytes;
     for cut in [0, 8, 50, 107, 108, 120, good.len() / 2, good.len() - 4] {

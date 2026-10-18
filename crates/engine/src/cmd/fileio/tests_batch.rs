@@ -105,6 +105,17 @@ fn the_counter_counts_items_or_files_from_any_start() {
     assert_eq!(parts, ["1_Artboard 2_2x@2x_png.png"]);
 }
 
+/// Export for Screens writes the characters Windows does not allow in a file name (`<`, `>`, `"`,
+/// `|`, `?`, `*`, control characters) as `-` in a pattern's text and in the names its tokens stand
+/// for, on every platform.
+#[test]
+fn a_pattern_writes_the_characters_windows_does_not_allow_as_dashes() {
+    let mut s = session(1);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "a|b?\"c\u{7}"})).unwrap();
+    let r = export(&mut s, json!({"name": "<name>*<x>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["a-b--c---x-.svg"]);
+}
+
 #[test]
 fn layers_and_the_selection_are_exported_by_name() {
     let mut s = session(1);

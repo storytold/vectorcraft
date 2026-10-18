@@ -197,14 +197,24 @@ fn in_scope(doc: &vectorcraft_doc::Document, scope: Option<NodeId>, id: NodeId) 
 }
 
 /// Visit the nodes Direct Selection may pick. In isolation mode that is the isolated object and
-/// its contents; art around it is locked and the walk does not reach it.
+/// its contents; art around it is locked and the walk does not reach it. A Shaper Group's original
+/// shapes, its first child, are left out unless they are the isolated object (Construction mode),
+/// as clicks leave them out.
 fn walk_pickable<'a>(doc: &'a vectorcraft_doc::Document, scope: Option<NodeId>, mut f: impl FnMut(&'a Node)) {
+    fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+        f(n);
+        for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
+            walk(c, f);
+        }
+    }
     if let Some(id) = scope
         && let Some(n) = doc.node(id)
     {
-        n.walk(&mut f);
+        walk(n, &mut f);
     } else if scope.is_none() {
-        doc.walk(f);
+        for l in &doc.layers {
+            walk(l, &mut f);
+        }
     }
 }
 
@@ -653,7 +663,7 @@ impl Tool for DirectSelectionTool {
                     let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref());
                     (d, self.guides) = (q - grab, guides);
                 } else if let Some(snap) = &self.move_snap {
-                    (d, self.guides) = snap.snap(cx, start, d, ev.mods.alt);
+                    (d, self.guides) = if ev.mods.shift { snap.snap_along(cx, start, d, ev.mods.alt) } else { snap.snap(cx, start, d, ev.mods.alt) };
                 }
                 self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
                 out.push(Action::Preview(
@@ -1440,6 +1450,35 @@ mod tests {
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": rect.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
     }
 
+    /// A marquee across a member of an Intertwine group selects the member's anchors, as in a
+    /// plain group, and not the Intertwine group whole.
+    #[test]
+    fn marquee_selects_the_anchors_of_intertwine_members() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (a, b, g) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let path = |id, x| {
+            std::sync::Arc::new(vectorcraft_doc::Node::path(
+                id,
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 100.0, x + 100.0, 200.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            ))
+        };
+        let intertwine = vectorcraft_doc::Node::new(g, vectorcraft_doc::NodeKind::Intertwine { children: vec![path(a, 100.0), path(b, 300.0)] });
+        d.insert(Some(l), 0, intertwine).unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        for group in [false, true] {
+            let mut t = DirectSelectionTool::new(group);
+            // Around the first member's top-right corner.
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
+            let actions = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
+            let items = json!([{"id": a.0, "anchors": [[0, 1]]}]);
+            assert_eq!(actions, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))], "group: {group}");
+        }
+    }
+
     /// Shift-drag a marquee: the anchors inside toggle (#483), with Group Selection too.
     #[test]
     fn shift_marquee_toggles_anchors() {
@@ -1907,6 +1946,26 @@ mod tests {
             let mut t = DirectSelectionTool::new(group);
             let (v, _) = drag(&mut t, &c, (350.0, 350.0), (253.0, 351.0), Mods::default());
             assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, -100.0, 1.0]), "group: {group}");
+        }
+    }
+
+    /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its
+    /// line when it snaps, as the Selection tool does: level by 13.04 with Snap to Grid on, B's
+    /// right side (413.04) lands on the gridline 414, and its top stays at 300, between 297 and
+    /// 306.
+    #[test]
+    fn a_shift_move_of_objects_snaps_along_its_line() {
+        let (d, _, b) = two_squares();
+        let p = paint();
+        let mut s = Selection::default();
+        s.set([b]);
+        let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        let shift = Mods { shift: true, ..Mods::default() };
+        for group in [true, false] {
+            let mut t = DirectSelectionTool::new(group);
+            let (v, _) = drag(&mut t, &c, (350.0, 350.0), (363.0, 351.0), shift);
+            let (x, y) = (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
+            assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "group: {group}: {v}");
         }
     }
 

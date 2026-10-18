@@ -2,8 +2,9 @@
 //! (General › Embed page thumbnails), the seal of the editing data, fast web view (a linearised
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
 //! through between its two steps so that it stays linearised. Also here: what makes a file say it
-//! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, and the pages'
-//! user units ([`user_units`]), which the export writes before the thumbnails.
+//! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, the file's
+//! modification date ([`modification_date`]) and the pages' user units ([`user_units`]), which the
+//! export writes in that order before the thumbnails.
 
 use std::borrow::Cow;
 
@@ -73,6 +74,49 @@ pub(crate) fn user_units(pdf: Vec<u8>, units: &[f64]) -> Result<Vec<u8>, PdfErro
     for (page, unit) in pages.iter().zip(units).filter(|(_, u)| **u != 1.0) {
         let (dict, _) = xref.dict(&pdf, *page).ok_or_else(|| failed("a page can't be read"))?;
         patch.replace(dict, dict, format!("/UserUnit {unit}").into_bytes());
+    }
+    patch.apply(&pdf, &xref)
+}
+
+/// `pdf` dated as modified at `modified` (Unix seconds, UTC), its creation dates kept: the
+/// document information's `/ModDate` (a PDF date, ISO 32000-1 §7.9.4) and every `xmp:ModifyDate`,
+/// `xmp:MetadataDate` and `stEvt:when` of the catalog's XMP metadata (ISO 8601 dates), in UTC as
+/// the PDF writer writes the creation date. The writer gives `/ModDate`, `xmp:ModifyDate` and
+/// `stEvt:when` the creation date.
+pub(crate) fn modification_date(pdf: Vec<u8>, modified: i64) -> Result<Vec<u8>, PdfError> {
+    let failed = |why: &str| PdfError::Write(format!("can't write the file's modification date: {why}"));
+    let Parsed { xref, objects, trailer, root, .. } = linearize::parse(&pdf).map_err(failed)?;
+    let [y, mo, d, h, mi, s] = vectorcraft_doc::metadata::civil(modified);
+    let mut patch = Patch::new(&xref);
+    if let Some(&Obj::Ref(n, _)) = trailer.get(b"Info")
+        && let Some(Obj::Str { start, end, .. }) = objects.get(&n).and_then(|o| o.value.get(b"ModDate"))
+    {
+        patch.replace(*start, *end, format!("(D:{y:04}{mo:02}{d:02}{h:02}{mi:02}{s:02}Z)").into_bytes());
+    }
+    let metadata = match objects.get(&root).and_then(|c| c.value.get(b"Metadata")) {
+        Some(&Obj::Ref(n, _)) => objects.get(&n),
+        _ => None,
+    };
+    if let Some(o) = metadata
+        && let Some(&Obj::Int { value, start, end }) = o.value.get(b"Length")
+    {
+        let date = format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}+00:00");
+        let xmp = pdf.get(..o.endobj).unwrap_or_default();
+        let mut grown = 0;
+        for tag in ["xmp:ModifyDate", "xmp:MetadataDate", "stEvt:when"] {
+            let (open, close) = (format!("<{tag}>"), format!("</{tag}>"));
+            let mut from = o.value_span.1;
+            while let Some(at) = crate::lab_spot::find(xmp, open.as_bytes(), from).map(|i| i + open.len())
+                && let Some(to) = crate::lab_spot::find(xmp, close.as_bytes(), at)
+            {
+                grown += date.len() as i64 - (to - at) as i64;
+                patch.replace(at, to, date.clone().into_bytes());
+                from = to + close.len();
+            }
+        }
+        if grown != 0 {
+            patch.replace(start, end, (value + grown).to_string().into_bytes());
+        }
     }
     patch.apply(&pdf, &xref)
 }

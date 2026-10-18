@@ -141,6 +141,100 @@ fn preview_in_browser_opens_the_page() {
     assert!(log.last().unwrap().starts_with("open file://") && log.last().unwrap().ends_with("Untitled-1.html"), "{log:?}");
 }
 
+/// Each preview has its own folder: a second one, from another app or the same one, leaves the
+/// first page and its image as they were.
+#[test]
+fn a_later_browser_preview_leaves_an_earlier_one_alone() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-browser-two");
+    let (mut first, _) = app(&dir, false);
+    let (mut second, _) = app(&dir, false);
+    let page = |r: serde_json::Value| r["path"].as_str().unwrap().to_string();
+    let jpg = page(first.run("file.saveForWeb.browser", json!({"format": "jpg"})).unwrap());
+    let gif = page(second.run("file.saveForWeb.browser", json!({"format": "gif"})).unwrap());
+    let png = page(first.run("file.saveForWeb.browser", json!({"format": "png24"})).unwrap());
+    assert!(jpg != gif && jpg != png && gif != png, "{jpg} {gif} {png}");
+    let root = std::env::temp_dir().join("VectorCraft Save for Web").to_string_lossy().replace('\\', "/");
+    for (page, image) in [(&jpg, "images/Untitled-1.jpg"), (&gif, "images/Untitled-1.gif"), (&png, "images/Untitled-1.png")] {
+        assert!(page.starts_with(&root) && page.ends_with("/Untitled-1.html"), "{page}");
+        assert!(std::fs::read_to_string(page).unwrap().contains(image), "{page}");
+        let folder = std::path::Path::new(page).parent().unwrap();
+        assert!(folder.join(image).exists(), "{page}");
+    }
+}
+
+/// Making a preview's folder removes the folders and files in its root that are `keep` old or
+/// older, and keeps younger ones.
+#[test]
+fn a_browser_preview_removes_old_previews() {
+    let root = vectorcraft_testkit::temp_dir("sfw-browser-old").join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let earlier = save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
+    std::fs::create_dir_all(format!("{earlier}/images")).unwrap();
+    std::fs::write(format!("{earlier}/images/Untitled-1.gif"), b"GIF89a").unwrap();
+    std::fs::write(root.join("Untitled-1.html"), b"<html>").unwrap();
+    // The folder and the page are younger than an hour, so both stay.
+    let kept = save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
+    assert!(std::path::Path::new(&earlier).exists() && root.join("Untitled-1.html").exists());
+    // With a `keep` of zero every entry is old enough: all three go, and only the new folder is left.
+    let next = save_for_web::preview_folder(&root, std::time::Duration::ZERO).unwrap();
+    assert!(!std::path::Path::new(&earlier).exists() && !std::path::Path::new(&kept).exists() && !root.join("Untitled-1.html").exists());
+    assert!(std::path::Path::new(&next).is_dir());
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+}
+
+/// A folder that an earlier process with the same id left, younger than `keep`, is not reused:
+/// the preview makes a new, empty one.
+#[test]
+fn a_browser_preview_skips_a_folder_an_earlier_process_left() {
+    let root = vectorcraft_testkit::temp_dir("sfw-browser-reused").join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let keep = std::time::Duration::from_secs(3600);
+    let earlier = save_for_web::preview_folder(&root, keep).unwrap();
+    let count: u64 = earlier.rsplit('-').next().unwrap().parse().unwrap();
+    // The next 200 names, as an earlier process with the same id would have left them.
+    for n in count + 1..=count + 200 {
+        let left = root.join(format!("{}-{n}", std::process::id()));
+        std::fs::create_dir_all(left.join("images")).unwrap();
+        std::fs::write(left.join("Untitled-1.html"), b"<html>").unwrap();
+    }
+    let next = save_for_web::preview_folder(&root, keep).unwrap();
+    assert_ne!(next, earlier);
+    assert_eq!(std::fs::read_dir(&next).unwrap().count(), 0, "{next}");
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 202);
+}
+
+#[test]
+fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
+    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
+    png.truncate(idat + 8);
+    let place = |app: &mut VectorcraftApp| {
+        app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [30, 20]})).unwrap()
+    };
+    let dir = vectorcraft_testkit::temp_dir("sfw-undecoded");
+    let (mut desktop, _) = app(&dir, false);
+    desktop.run("file.saveForWeb", json!({"format": "png24"})).unwrap();
+    assert!(!desktop.ui.status.contains("note"), "{}", desktop.ui.status);
+    place(&mut desktop);
+    for p in [json!({"format": "png24"}), json!({"format": "jpg", "output": "html"})] {
+        desktop.status("");
+        desktop.run("file.saveForWeb", p.clone()).unwrap();
+        assert!(desktop.ui.status.starts_with("Saved ") && desktop.ui.status.ends_with(NOTE), "{p}: {}", desktop.ui.status);
+    }
+    desktop.status("");
+    desktop.run("file.saveForWeb.browser", json!({"format": "gif"})).unwrap();
+    assert!(desktop.ui.status.ends_with(NOTE), "Preview in Browser: {}", desktop.ui.status);
+    let (mut web, _) = app(&dir, true);
+    place(&mut web);
+    web.run("file.saveForWeb", json!({"format": "png8"})).unwrap();
+    assert!(web.ui.status.ends_with(NOTE), "download: {}", web.ui.status);
+}
+
 #[test]
 fn colour_table_buttons_edit_the_lists() {
     let mut d = Dialog::new(save_for_web::KIND, json!({}));

@@ -730,19 +730,35 @@ impl GradientMesh {
             .to_point()
     }
 
-    /// Bilinear colour and opacity of patch (r, c) at local (u, v).
+    /// Bilinear colour and opacity of patch (r, c) at local (u, v). Corners all in CMYK (or all
+    /// grey) mix in that space, as a PDF shading mixes in its own colour space: the inks come out
+    /// exact, and a CMYK document separates no colour to draw them. Other corners mix in RGB.
     pub fn color_at(&self, r: usize, c: usize, u: f64, v: f64) -> (Color, f32) {
         let q =
             [&self.points[self.idx(r, c)], &self.points[self.idx(r, c + 1)], &self.points[self.idx(r + 1, c)], &self.points[self.idx(r + 1, c + 1)]];
         let w = [(1.0 - u) * (1.0 - v), u * (1.0 - v), (1.0 - u) * v, u * v];
-        let mut rgb = [0.0f32; 3];
-        let mut op = 0.0f32;
-        for k in 0..4 {
-            let c = q[k].color.to_rgb();
-            for (ch, x) in rgb.iter_mut().zip(c) {
-                *ch += x * w[k] as f32;
+        let op = q.iter().zip(w).map(|(p, w)| p.opacity * w as f32).sum();
+        let cmyk: Option<Vec<[f32; 4]>> =
+            q.iter().map(|p| if let Color::Cmyk { c, m, y, k } = p.color { Some([c, m, y, k]) } else { None }).collect();
+        if let Some(inks) = cmyk {
+            let mut mix = [0.0f32; 4];
+            for (ink, w) in inks.iter().zip(w) {
+                for (m, x) in mix.iter_mut().zip(ink) {
+                    *m += x * w as f32;
+                }
             }
-            op += q[k].opacity * w[k] as f32;
+            let [c, m, y, k] = mix;
+            return (Color::Cmyk { c, m, y, k }, op);
+        }
+        let grey: Option<Vec<f32>> = q.iter().map(|p| if let Color::Gray { k } = p.color { Some(k) } else { None }).collect();
+        if let Some(ks) = grey {
+            return (Color::Gray { k: ks.iter().zip(w).map(|(k, w)| k * w as f32).sum() }, op);
+        }
+        let mut rgb = [0.0f32; 3];
+        for (p, w) in q.iter().zip(w) {
+            for (ch, x) in rgb.iter_mut().zip(p.color.to_rgb()) {
+                *ch += x * w as f32;
+            }
         }
         (Color::rgb(rgb[0], rgb[1], rgb[2]), op)
     }
@@ -1822,5 +1838,20 @@ mod tests {
         assert!(m.points[i].p.distance(Point::new(30.0, 60.0)) < 0.5, "{:?}", m.points[i].p);
         assert!(m.remove_point_lines(i));
         assert_eq!((m.rows, m.cols), (1, 1));
+    }
+
+    /// Corners all in CMYK mix in CMYK (the inks halfway), not in RGB.
+    #[test]
+    fn a_cmyk_mesh_mixes_its_inks() {
+        let cyan = Color::Cmyk { c: 1.0, m: 0.0, y: 0.0, k: 0.0 };
+        let mut m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), 1, 1, cyan, MeshAppearance::Flat, 0.0).unwrap();
+        m.points[0].color = Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 };
+        let (c, op) = m.color_at(0, 0, 0.0, 0.0);
+        assert_eq!((c, op), (Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 }, 1.0));
+        let Color::Cmyk { c, k, .. } = m.color_at(0, 0, 0.5, 0.5).0 else { panic!("mixed out of CMYK") };
+        assert!((c - 0.75).abs() < 1e-6 && (k - 0.25).abs() < 1e-6, "{c} {k}");
+        // A corner in another space mixes them all in RGB.
+        m.points[1].color = Color::rgb(1.0, 0.0, 0.0);
+        assert!(matches!(m.color_at(0, 0, 0.5, 0.5).0, Color::Rgb { .. }));
     }
 }

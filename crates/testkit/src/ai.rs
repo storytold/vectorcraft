@@ -1,6 +1,6 @@
 //! Hand-written Illustrator editing data (the format `vectorcraft_eps`'s reader documents) and the
 //! EPS, `.ai` and PDF files that carry it, for import tests. Nothing here comes from files another
-//! app wrote, except the key names that [`pdf`] uses.
+//! app wrote, except the key names that [`pdf`] uses and the XML node keys of [`variable_library`].
 
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
 /// marks are the page), `body` (setup and layers), the trailer.
@@ -30,6 +30,43 @@ pub fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> String {
 /// `name` given to the object before it (its XML id).
 pub fn named(name: &str) -> String {
     format!("%_/ArtDictionary :\n%_/XMLUID : ({}) ; (AI10_ArtUID) ,\n%_;\n%_\n", name.replace(' ', "_"))
+}
+
+/// The document data with a variable library: a `/Document` dictionary whose `Recorded` dictionary
+/// holds the library's XML document as XML nodes (`/XMLNode`) under `#document`. The library has
+/// one variable set, the text variables `variables` and the data sets `data_sets`, each with a `p`
+/// element for every variable.
+pub fn variable_library(variables: &[&str], data_sets: &[&str]) -> String {
+    // A node: its name, value and type (1 an element, 2 an attribute, 3 text, 9 the document), its
+    // children and its attributes.
+    fn node(kind: u8, name: &str, value: &str, attributes: &[(&str, &str)], children: &[String]) -> String {
+        let attributes: String = attributes.iter().map(|(k, v)| node(2, k, v, &[], &[node(3, "#text", v, &[], &[])])).collect();
+        format!(
+            "%_/XMLNode :\n%_({name}) /String (xmlnode-nodename) ,\n%_({value}) /String (xmlnode-nodevalue) ,\n%_{kind} /Int (xmlnode-nodetype) ,\n\
+             %_/Array :\n{}%_; (xmlnode-children) ,\n%_/Array :\n{attributes}%_; (xmlnode-attributes) ,\n%_;\n",
+            children.concat()
+        )
+    }
+    let element = |name: &str, attributes: &[(&str, &str)], children: &[String]| node(1, name, "", attributes, children);
+    let declared: Vec<String> = variables.iter().map(|v| element("variable", &[("varName", v), ("trait", "textcontent")], &[])).collect();
+    let sets: Vec<String> = data_sets
+        .iter()
+        .map(|d| {
+            let values: Vec<String> =
+                variables.iter().map(|v| element(v, &[], &[element("p", &[], &[node(3, "#text", &format!("{d} {v}"), &[], &[])])])).collect();
+            element("v:sampleDataSet", &[("dataSetName", d)], &values)
+        })
+        .collect();
+    let set = element(
+        "variableSet",
+        &[("varSetName", "binding1"), ("locked", "none")],
+        &[element("variables", &[], &declared), element("v:sampleDataSets", &[("xmlns", "&ns_custom;"), ("xmlns:v", "&ns_vars;")], &sets)],
+    );
+    let library = element("metadata", &[], &[element("variableSets", &[("xmlns", "&ns_vars;")], &[set])]);
+    format!(
+        "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n{}%_; (#document) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
+        node(9, "#document", "", &[], &[library])
+    )
 }
 
 /// A document of 200 × 100 pt with a bit of everything the reader reads. A layer `Art` that shows:

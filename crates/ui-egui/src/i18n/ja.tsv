@@ -188,6 +188,7 @@
 	Expand…	分割・拡張…
 	Expand Appearance	アピアランスを分割
 	Crop Image	画像の切り抜き
+	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
@@ -1600,6 +1601,10 @@
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
 	History Options…	ヒストリーオプション…
+	Step Backward	一段階戻る
+	Step Forward	一段階進む
+	Clear History	ヒストリーを消去
+	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	データセットを適用
@@ -2452,6 +2457,8 @@ mark-style	Japanese	日本式
 	Redefine Character Style	文字スタイルを再定義
 	Redefine Graphic Style	グラフィックスタイルを再定義
 	Redefine Graphic Style “{name}”	グラフィックスタイル「{name}」を再定義
+	Apply {name}	スタイル「{name}」を適用
+	Redefine {name}	スタイル「{name}」を再定義
 	Redefine Paragraph Style	段落スタイルを再定義
 	Redefine Symbol	シンボルを再定義
 	Redefine {kind} Style	{kind}スタイルを再定義
@@ -3786,6 +3793,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	it has more than one artboard	アートボードが複数あります
 @msg	its editing data has no layers	編集データにレイヤーがありません
 @msg	its editing data is damaged	編集データが破損しています
+@msg	its zlib compression is damaged	zlib 圧縮が破損しています
+@msg	its Zstandard compression is damaged	Zstandard 圧縮が破損しています
+@msg	it decompresses to more than {_1} MB	展開すると {_1} MB を超えます
 @msg	its type is to come in as outlines, which only its page has	文字をアウトラインとして読み込む設定ですが、アウトラインはページにしかありません
 @msg	{_1} files	{_1} 個のファイル
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU または WebGL2 に対応したブラウザーが必要です。
@@ -3876,6 +3886,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	object {id} is not a selected top-level object	オブジェクト {id} は選択されている最上位のオブジェクトではありません
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
+@msg	no history to clear	消去するヒストリーがありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
@@ -3893,9 +3904,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	このファイルは PDF 互換性なしで保存されており、編集データを読み込めません ({why})
 @msg	the export wrote no file	書き出しでファイルが作成されませんでした
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} ファイルは開けますが、保存や書き出しはできません (document.formats を参照してください)
+@msg	{_1} files are written by file.saveAsTemplate	{_1} ファイルは file.saveAsTemplate で保存します
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: この環境にはファイルシステムがありません (開くには dataBase64 を渡し、dataBase64 を受け取るにはパスを省略してください)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	保存できる形式は {_1} のみで、{_2} 形式では保存できません: ほかの形式には document.export を使用してください
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存できる形式は {_1} のみで、{_2} 形式では保存できません: この形式で保存するには file.saveAsTemplate を使用してください
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 は従来の .ai ファイルを書き出します。.ait テンプレートは常に PDF 互換です
 @msg	no changes since the last save	前回の保存以降、変更はありません
 @msg	unknown format `{f}` (Save writes {_1})	`{f}` は不明な形式です (保存できる形式: {_1})
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` には SVG オプションのオブジェクトを指定してください (document.formats を参照)
@@ -3914,6 +3927,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`freeform.points` must be an array	`freeform.points` には配列を指定してください
 @msg	`freeform.lines` must be an array	`freeform.lines` には配列を指定してください
 @msg	`{key}` must be a number	`{key}` には数値を指定してください
+@msg	`{key}` must be a number, not {v}	`{key}` には数値を指定してください ({v} は使えません)
+@msg	{key} must be Unix seconds (an integer) or null	{key} には Unix 時間の秒数 (整数) または null を指定してください
 @msg	a freeform gradient keeps at least one point	フリーフォームグラデーションには少なくとも 1 つのポイントが必要です
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	フリーフォームのポイント {i} には `at` [x, y] と有効な `color` が必要です
 @msg	freeform line {i} must be an array of point indices	フリーフォームのライン {i} にはポイントのインデックスの配列を指定してください
@@ -4108,7 +4123,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	it has too much text	テキストが多すぎます
 @msg	its editing data doesn't say where its art is	編集データにアートの位置が記録されていません
 @msg	its editing data doesn't say where its artboard is	編集データにアートボードの位置が記録されていません
-@msg	its editing data is for a different page	編集データが別のページのものです
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	編集データは {w} × {h} pt のページのもので、ファイルの {pw} × {ph} pt のページのものではありません
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	編集データは {w} × {h} pt のページのもので、ファイルの {pw} × {ph} pt のページを縮尺 {scale} にしたものです
 @msg	its page has text, and its layers have no text objects to put it in	ページにテキストがありますが、レイヤーにはそれを入れるテキストオブジェクトがありません
 @msg	the art on them differs from the page's in {_1}% of it	レイヤー上のアートの {_1}% がページのアートと異なります
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	レイヤー上のアートの {_1}% がページのアートと異なりますが、レイヤーは編集データから読み込まれました
@@ -4152,6 +4168,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	cannot read PDF: {0}	PDF を読み込めません: {0}
 @msg	invalid PDF setting: {0}	PDF の設定が正しくありません: {0}
 @msg	page {0} does not exist (the PDF has {1})	ページ {0} は存在しません (この PDF のページ数は {1} です)
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: ページ {n} は存在しません (このファイルのページ数は 1 です)
 @msg	the PDF has no pages	PDF にページがありません
 @msg	the PDF is password-protected: give its password	この PDF はパスワードで保護されています: パスワードを入力してください
 @msg	the PDF password is wrong	PDF のパスワードが正しくありません
@@ -4239,6 +4256,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no plug-in {id} is installed	プラグイン {id} はインストールされていません
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} はライブ効果です (「効果 › プラグイン」から使用してください)
 @msg	a preset named `{_1}` exists	`{_1}` という名前のプリセットはすでに存在します
+@msg	a swatch or color group named `{n}` exists	`{n}` という名前のスウォッチまたはカラーグループはすでに存在します
 @msg	no print preset named `{base}`	`{base}` という名前のプリントプリセットが見つかりません
 @msg	no print preset named `{name}`	`{name}` という名前のプリントプリセットが見つかりません
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	`{name}` という名前の保存済みプリントプリセットが見つかりません ({DEFAULT_PRESET} は保護されています: これを元に新しいプリセットを作成してください)
@@ -4303,6 +4321,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	missing `tool`	`tool` が指定されていません
 @msg	missing index	index が指定されていません
 @msg	missing number `{key}`	数値 `{key}` が指定されていません
+@msg	missing integer `{key}`	整数 `{key}` が指定されていません
 @msg	multiple windows land with M11.5	複数ウィンドウは M11.5 で対応予定です
 @msg	no PNG encoder	PNG エンコーダーがありません
 @msg	no document open	ドキュメントが開かれていません
@@ -4413,6 +4432,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
+@msg	{key} must be an array of non-negative integer object ids	{key} にはオブジェクト ID (0 以上の整数) の配列を指定してください
+@msg	invalid object id {value}: expected a non-negative integer	オブジェクト ID {value} は正しくありません: 0 以上の整数を指定してください
+@msg	no such object id {value}	ID が {value} のオブジェクトは見つかりません
 @msg	automation filesystem access is not granted: read authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 読み込み権限がありません: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
@@ -4606,6 +4628,8 @@ lighting	Light	ライト
 @msg	missing panel layout	パネル配置がありません
 @msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
 	Linux Display Server	Linux ディスプレイサーバー
+	X11 (XWayland) When a Pen Is Attached	ペン接続時は X11 (XWayland)
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	ペンタブレットのペンで描画できない場合は、X11 (XWayland) のいずれかを選択してください。
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	定規の原点
 	Reset Ruler Origin	定規の原点をリセット
@@ -4706,6 +4730,11 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+# 3D light management.
+	Lights	ライト一覧
+	Add Light	ライトを追加
+	Delete Light	ライトを削除
+3d	Light	ライト
 	Registration:	基準点:
 # Dimension tool (linked dimension annotations)
 	Create Dimension	寸法を作成
@@ -4799,6 +4828,11 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	「オリジナルを編集」で開けるのは画像ファイルとドキュメントファイルだけです: 「{name}」はどちらでもありません
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	ブラウザーで開けるのは http、https、mailto の URL だけです: 「{url}」は開けません
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} は別のアプリを開きます: 実行できるのはキーボードの前にいるユーザーだけです
+@msg	“{name}” is not a file	「{name}」はファイルではありません
 	Enable Guides for 9-Slice Scaling	9スライス拡大・縮小用ガイドを有効にする
 @msg	a mask has more than one art block	マスクに複数のアートブロックがあります
 @msg	mask art ends outside a mask dictionary	マスクのアートがマスク辞書の外で終わっています
@@ -4826,3 +4860,23 @@ lighting	Light	ライト
 	Clear Artboard Color	アートボードカラーを消去
 @msg	artboard {_1} is locked	アートボード {_1} はロックされています
 	Include Artboard Fill	アートボードカラーを含める
+	Artboard {n} of {total}	アートボード {n} / {total}
+	Encoding and writing the file…	ファイルをエンコードして書き込み中…
+@plural	{n} more export waiting|{n} more exports waiting	待機中の書き出し: あと {n} 件
+	Continue in Background	バックグラウンドで続行
+	Cancel Export	書き出しをキャンセル
+@msg	Export cancelled	書き出しをキャンセルしました
+# Paragraph panel menu › Justification…
+	Desired	最適
+	Word Spacing:	単語間隔:
+	Letter Spacing:	文字間隔:
+	Glyph Scaling:	グリフ幅拡大/縮小:
+	Auto Leading:	自動行送り:
+	Single Word Justification:	単語のみの行の揃え:
+	Full Justify	両端揃え
+	Minimum must not exceed Desired, nor Desired Maximum.	最小値は最適値を、最適値は最大値を超えることはできません。
+	Minimum	最小
+	Justification	文字組み
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
+# Select by Color (select.color)
+	Select by Color	カラーで選択

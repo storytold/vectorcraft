@@ -135,3 +135,20 @@ fn written_profiles_align_their_tags() {
         }
     }
 }
+
+/// #2707: the CMYK profiles written here carry every tag ICC.1 requires of an output profile (the
+/// tables of all three intents and the gamut tag): Windows rejects one without them, and Photos
+/// then can't show a CMYK TIFF that embeds it.
+#[test]
+fn cmyk_profiles_have_the_tags_of_an_output_profile() {
+    for name in BUILTIN_CMYK {
+        let icc = icc_bytes(name).unwrap();
+        let be = |at: usize| u32::from_be_bytes([icc[at], icc[at + 1], icc[at + 2], icc[at + 3]]) as usize;
+        let tags: Vec<&[u8]> = (0..be(128)).map(|i| &icc[132 + 12 * i..136 + 12 * i]).collect();
+        for want in [b"desc", b"cprt", b"wtpt", b"A2B0", b"A2B1", b"A2B2", b"B2A0", b"B2A1", b"B2A2", b"gamt"] {
+            assert!(tags.contains(&&want[..]), "{name}: no {}", String::from_utf8_lossy(want));
+        }
+        let p = parse(&icc);
+        assert!(p.lut_a_to_b_saturation.is_some() && p.lut_b_to_a_saturation.is_some() && p.gamut.is_some(), "{name}");
+    }
+}

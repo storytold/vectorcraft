@@ -137,6 +137,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 }
             }
         }
+        let optical = if live.len() >= 2 { optical_margin(before, doc, &live) } else { None };
         let frames: Vec<TextObject> = live.iter().filter_map(|id| text_of(doc, *id).cloned()).collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
@@ -145,10 +146,12 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 let mut next = (**t).clone();
                 next.runs = part.runs;
                 next.set_paragraph_styles(part.paras);
-                if next.runs != t.runs || next.para != t.para || next.paras != t.paras {
+                let optical = optical.unwrap_or(t.optical_margin);
+                if next.runs != t.runs || next.para != t.para || next.paras != t.paras || optical != t.optical_margin {
                     t.runs = next.runs;
                     t.para = next.para;
                     t.paras = next.paras;
+                    t.optical_margin = optical;
                     refresh_bounds(t);
                 }
             }
@@ -158,6 +161,44 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
         }
     }
     doc.text_threads = kept;
+}
+
+/// The Optical Margin Alignment setting that every frame of a thread with the frames `live` takes:
+/// that of the first frame whose setting changed between `before` and `doc`, else the first frame's.
+fn optical_margin(before: &Document, doc: &Document, live: &[NodeId]) -> Option<bool> {
+    let now = |id: &NodeId| text_of(doc, *id).map(|t| t.optical_margin);
+    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(t.optical_margin) != now(id)));
+    changed.or(live.first()).and_then(now)
+}
+
+/// Give every frame of each thread the first frame's Optical Margin Alignment setting, without
+/// re-flowing the story: for a document restored from a file as it was saved.
+pub(crate) fn share_optical_margin(doc: &mut Document) {
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        let Some(on) = optical_margin(doc, doc, &live) else { continue };
+        for id in &live {
+            if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
+                && t.optical_margin != on
+            {
+                t.optical_margin = on;
+                refresh_bounds(t);
+            }
+        }
+    }
+}
+
+/// `ids` followed by the other frames of the threads they are in, each once, in thread order.
+pub(crate) fn with_threads(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let mut out = ids.to_vec();
+    for thread in d.text_threads.iter().filter(|t| t.iter().any(|id| ids.contains(id))) {
+        for id in thread {
+            if !out.contains(id) && text_of(d, *id).is_some() {
+                out.push(*id);
+            }
+        }
+    }
+    out
 }
 
 /// A closed path converted to an empty area-type frame with `style`.
@@ -280,7 +321,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => d.text_threads.push(vec![from, to]),
         }
-        // `to` is new or changed, so [`reflow`] flows the story into it after this edit.
+        // Force a re-flow of the thread on this edit: the edit leaves existing area type `to`
+        // unchanged.
+        touch(d, to);
         sel.set([from, to]);
         Ok(to)
     })?;
@@ -550,6 +593,17 @@ mod tests {
         assert_eq!(threads(&s), [[a, c, d]]);
     }
 
+    /// Area type threaded into from an out port takes the overflow at once, before its own text.
+    #[test]
+    fn add_into_area_type_flows_the_story_into_it() {
+        let (mut s, a, _) = setup();
+        let c = new_id(s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Own text.", "area": {"width": 150, "height": 190}})).unwrap());
+        s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+        assert_eq!(threads(&s), [[a, c]]);
+        assert_eq!(format!("{}{}", text(&s, a), text(&s, c)), format!("{}Own text.", TEXT.repeat(4)));
+        assert!(text(&s, c).len() > "Own text.".len(), "the overflow flowed into the frame: {:?}", text(&s, c));
+    }
+
     #[test]
     fn add_refuses_bad_params_and_leaves_the_document_alone() {
         let (mut s, a, b) = setup();
@@ -594,5 +648,114 @@ mod tests {
         s.execute("text.thread.releaseSelection", &json!({})).unwrap();
         assert_eq!(text(&s, b), "");
         assert_eq!(text(&s, a), TEXT.repeat(4), "the story returns to the remaining frame");
+    }
+
+    /// A story of one-line paragraphs that each start with a quotation mark, threaded from area
+    /// type `a` into the rectangle `b`, which shows the paragraphs that `a` has no room for.
+    fn quoted_thread() -> (Session, u64, u64) {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+        let story = "“Quoted.”\n".repeat(20);
+        let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap());
+        let b = new_id(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap());
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        assert!(text(&s, b).starts_with('“'));
+        (s, a, b)
+    }
+
+    /// Frame `id`'s Optical Margin Alignment setting, and whether its glyphs start left of its frame
+    /// (its lines' opening quotation marks hang).
+    fn optical(s: &Session, id: u64) -> (bool, bool) {
+        let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(id)) else { panic!("not area type") };
+        let TextKind::Area { frame } = &t.kind else { panic!("not area type") };
+        (t.optical_margin, t.cached_bounds.unwrap().x0 < frame.bounds().unwrap().x0 - 1.0)
+    }
+
+    /// Optical Margin Alignment is a setting of the whole thread: Type › Optical Margin Alignment
+    /// in any frame sets it in every frame of the thread, in one undo step, and the lines in every
+    /// frame hang. Typing keeps it, and frames taken out of the thread keep it.
+    #[test]
+    fn optical_margin_alignment_is_set_for_every_frame_of_a_thread() {
+        let (mut s, a, b) = quoted_thread();
+        assert_eq!((optical(&s, a), optical(&s, b)), ((false, false), (false, false)));
+        s.execute("select.set", &json!({"ids": [a]})).unwrap();
+        let r = s.execute("type.opticalMarginAlignment", &json!({})).unwrap();
+        assert_eq!(r, json!({"on": true, "ids": [a, b]}));
+        assert_eq!((optical(&s, a), optical(&s, b)), ((true, true), (true, true)), "the second frame's lines hang too");
+        // Turned off from the second frame, it is off in both, and one undo turns it back on in both.
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], false);
+        assert_eq!((optical(&s, a), optical(&s, b)), ((false, false), (false, false)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((optical(&s, a), optical(&s, b)), ((true, true), (true, true)));
+        // Typing in the first frame re-flows the story and keeps the setting.
+        s.execute("text.editRange", &json!({"id": a, "start": 0, "end": 0, "insert": "“New.”\n"})).unwrap();
+        assert_eq!((optical(&s, a), optical(&s, b)), ((true, true), (true, true)));
+        // Any edit that sets one frame sets the thread.
+        s.edit("Set", |d, _| {
+            let Some(NodeKind::Text(t)) = d.node_mut(NodeId(b)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.optical_margin = false;
+            refresh_bounds(t);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!((optical(&s, a), optical(&s, b)), ((false, false), (false, false)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        // Released or unthreaded, each frame keeps it.
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        s.execute("text.thread.releaseSelection", &json!({})).unwrap();
+        assert_eq!((optical(&s, a).0, optical(&s, b).0), (true, true));
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("text.thread.remove", &json!({})).unwrap();
+        assert!(threads(&s).is_empty());
+        assert_eq!((optical(&s, a), optical(&s, b)), ((true, true), (true, true)));
+    }
+
+    /// Threading type into a thread gives the joined thread the setting of its first frame.
+    #[test]
+    fn a_thread_takes_its_first_frames_optical_margin_alignment() {
+        let (mut s, a, b) = quoted_thread();
+        s.execute("text.thread.remove", &json!({})).unwrap();
+        s.execute("type.opticalMarginAlignment", &json!({"ids": [a], "on": true})).unwrap();
+        assert_eq!((optical(&s, a).0, optical(&s, b).0), (true, false));
+        // Threaded again in stacking order: the second frame takes the first one's setting.
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        assert_eq!((optical(&s, a), optical(&s, b)), ((true, true), (true, true)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((optical(&s, a).0, optical(&s, b).0), (true, false));
+        // From `b`'s out port into `a`: `a` joins `b`'s thread after it and takes its setting.
+        s.execute("text.thread.add", &json!({"from": b, "to": a})).unwrap();
+        assert_eq!(threads(&s), [[b, a]]);
+        assert_eq!((optical(&s, a).0, optical(&s, b).0), (false, false));
+        // A new frame threaded from a frame takes the thread's setting.
+        s.execute("type.opticalMarginAlignment", &json!({"ids": [a], "on": true})).unwrap();
+        let c = new_id(s.execute("text.thread.add", &json!({"from": a, "at": [400, 10]})).unwrap());
+        assert_eq!([a, b, c].map(|id| optical(&s, id).0), [true; 3]);
+    }
+
+    /// A file saved with the frames of one thread set differently opens with the first frame's
+    /// setting in every frame: a native file, and an EPS file restored from the document it carries.
+    #[test]
+    fn a_thread_saved_with_differing_frames_opens_with_the_first_frames_setting() {
+        let (mut s, a, b) = quoted_thread();
+        for (first, name) in [(true, "old.vectorcraft"), (false, "old.vectorcraft"), (true, "old.eps"), (false, "old.eps")] {
+            for (id, on) in [(a, first), (b, !first)] {
+                let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+                t.optical_margin = on;
+            }
+            let bytes = if name.ends_with(".eps") {
+                let r = s.execute("document.exportEps", &json!({})).unwrap();
+                vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+            } else {
+                vectorcraft_format::save(&s.doc().unwrap().doc, false)
+            };
+            let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+            assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+            assert_eq!(threads(&s), [[a, b]], "{name}");
+            assert_eq!((optical(&s, a), optical(&s, b)), ((first, first), (first, first)), "{name}, first frame {first}");
+        }
     }
 }

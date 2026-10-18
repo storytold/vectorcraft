@@ -130,6 +130,23 @@ fn duplicate_artboard_copies_its_art() {
     assert_eq!(ids(&s.execute("artboard.duplicate", &json!({"index": 0, "art": true})).unwrap()["ids"]).len(), 1);
 }
 
+/// New Artboard and Artboard Options trim the name they are given, as the Artboards panel's rename
+/// does, and a blank name gives the artboard its default name, Artboard N for the Nth artboard.
+#[test]
+fn new_and_renamed_artboards_trim_their_names() {
+    let mut s = session();
+    let new = |s: &mut Session, name: &str| s.execute("artboard.new", &json!({"name": name})).unwrap();
+    new(&mut s, "  Cover \t");
+    new(&mut s, " \t ");
+    new(&mut s, "");
+    let names = |s: &Session| boards(s).into_iter().map(|(_, n)| n).collect::<Vec<_>>();
+    assert_eq!(names(&s), ["Artboard 1", "Cover", "Artboard 3", "Artboard 4"]);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": " Back\t"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "  "})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 3, "name": ""})).unwrap();
+    assert_eq!(names(&s), ["Back", "Artboard 2", "Artboard 3", "Artboard 4"]);
+}
+
 /// Duplicate, Copy and Cut Artboard and Move Artboard Up/Down fail with `no such artboard` on an
 /// `index` that names no artboard (past the last, negative, fractional, a string or null), and the
 /// artboards, the art and the clipboard stay as they were.

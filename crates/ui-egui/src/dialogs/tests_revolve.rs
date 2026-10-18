@@ -153,11 +153,11 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     h.settle();
     h.click(h.rect("Lighting").center());
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "light");
-    for label in ["Shading", "Intensity", "Height", "Softness", "Ambient Light", "Light behind the object"] {
+    for label in ["Shading", "Color", "Intensity", "Height", "Softness", "Ambient Light", "Light behind the object"] {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::new(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 460.0, "compact lighting controls: {panel:?}");
+    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact lighting controls with light management: {panel:?}");
     h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
     assert_ne!(h.value("lightHeight"), 30.0);
     h.click(h.response(("revolve-reset", "lightHeight")).center());
@@ -345,4 +345,96 @@ fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
         assert_eq!(h.app.session.doc().unwrap().doc, before);
         assert!(!h.app.session.in_interaction());
     }
+}
+
+#[test]
+fn light_picker_previews_and_reset_dot_and_cancel_restore_white() {
+    let mut h = Harness::new(vec2(1280.0, 900.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    h.click(pos2(h.rect("#FFFFFF").left() - 18.0, h.rect("Color").center().y));
+    let green =
+        h.texts.iter().find(|(s, _)| s.starts_with("G ")).map(|(_, r)| *r).unwrap_or_else(|| panic!("the opaque RGB picker opens: {:?}", h.texts));
+    h.drag(green.center(), vec2(-100.0, 0.0));
+    let color = h.app.ui.dialog.as_ref().unwrap().str("lightColor");
+    assert_ne!(color, "#ffffff");
+    let st = h.app.session.doc().unwrap();
+    assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().appearance.effects[0].params["lightColor"], json!(color));
+    h.click(h.rect("Color").center());
+    h.click(h.response(("revolve-reset", "lightColor")).center());
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
+    dialogs::cancel(&mut h.app);
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+#[test]
+fn every_3d_dialog_has_color_and_reset_all_restores_white() {
+    for id in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", id, vec2(1280.0, 900.0));
+        h.settle();
+        h.click(h.rect("Lighting").center());
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("lightColor".into(), json!("blue"));
+        h.settle();
+        assert!(!h.rect("#FFFFFF").is_negative(), "invalid stored colors show the renderer's white fallback");
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("lightColor".into(), json!("#ff8000"));
+        h.settle();
+        assert!(!h.rect("Color").is_negative());
+        assert!(!h.rect("#FF8000").is_negative());
+        h.click(h.response("revolve-reset-all").center());
+        assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
+        dialogs::confirm(&mut h.app).unwrap();
+    }
+}
+
+#[test]
+fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
+    for effect in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        h.settle();
+        h.click(h.rect("Lighting").center());
+        let one = h.app.session.doc().unwrap().doc.clone();
+        h.click(h.rect("Delete Light").center());
+        assert_eq!(h.app.session.doc().unwrap().doc, one, "retain at least one light");
+        h.click(h.rect("Add Light").center());
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        let first = d.fields["lights"][0].clone();
+        assert_eq!(d.fields["lights"].as_array().unwrap().len(), 2);
+        assert_eq!(d.fields["__light"], 1);
+        assert_eq!(selected_light(d).f64("lightHeight", 0.0), 90.0);
+        h.drag(h.rect("Height").center(), vec2(-35.0, 0.0));
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert_ne!(d.fields["lights"][1]["height"], 90);
+        assert_eq!(d.fields["lights"][0], first);
+        let two = h.app.session.doc().unwrap().doc.clone();
+        h.click(h.rect("Light 2").center());
+        h.click(h.rect("Light 1").center());
+        assert_eq!(h.app.session.doc().unwrap().doc, two, "selection changes no effect params");
+        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["__light"], 0);
+        h.click(h.rect("Delete Light").center());
+        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["lights"].as_array().unwrap().len(), 1);
+        h.click(h.response("revolve-reset-all").center());
+        assert!(h.app.ui.dialog.as_ref().unwrap().fields["lights"].is_null());
+        h.click(h.rect("Add Light").center());
+        dialogs::confirm(&mut h.app).unwrap();
+        h.app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(h.app.session.doc().unwrap().doc, before, "whole dialog is one undo step");
+    }
+}
+
+#[test]
+fn light_list_stops_at_ten_and_cancel_restores_the_source() {
+    let mut h = Harness::new(vec2(1280.0, 900.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    for _ in 0..11 {
+        h.click(h.rect("Add Light").center());
+    }
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["lights"].as_array().unwrap().len(), 10);
+    assert_eq!(d.fields["__light"], 9);
+    dialogs::cancel(&mut h.app);
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
 }

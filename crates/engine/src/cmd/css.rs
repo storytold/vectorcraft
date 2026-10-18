@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
 use vectorcraft_svg::{CssOptions, CssSheet, css_rules};
 
-use super::fileio::{default_name, encode, isolated, write_file};
+use super::fileio::{default_name, encode_with_warnings, isolated, write_file};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export CSS",
             [],
             None,
-            "{path?, scope?: selection|all (default selection; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of the object's visual bounds, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}",
+            "{path?, scope?: selection|all (default selection; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of the object's visual bounds, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}; warnings are css.selection's and the pictures' as document.export gives them (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame), each once",
             has_doc,
             export
         ),
@@ -100,12 +100,19 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let css = format!("{}\n", sheet.text());
     let doc = &s.doc()?.doc;
-    // The pictures of rasterized art.
+    // Encode the pictures of rasterized art, and add each of their warnings once.
     let mut images = Vec::new();
+    let mut warnings = sheet.warnings.clone();
     for r in &sheet.rules {
         let Some(name) = &r.image else { continue };
         let (d, _) = isolated(doc, &[r.id], name).ok_or_else(|| bad(C, format!("{} paints nothing to rasterize", r.selector)))?;
-        images.push((name, encode(&d, "png", &json!({}))?));
+        let (png, notes) = encode_with_warnings(&d, "png", &json!({}))?;
+        images.push((name, png));
+        for w in notes {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
     }
     let n = sheet.rules.len();
     match str_param(p, "path") {
@@ -118,12 +125,12 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 write_file(&at, bytes)?;
                 written.push(at);
             }
-            Ok(json!({ "path": path, "bytes": css.len(), "rules": n, "images": written, "warnings": sheet.warnings }))
+            Ok(json!({ "path": path, "bytes": css.len(), "rules": n, "images": written, "warnings": warnings }))
         }
         None => {
             let images: Vec<Value> =
                 images.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect();
-            Ok(json!({ "data": css, "name": default_name(doc, "css"), "rules": n, "images": images, "warnings": sheet.warnings }))
+            Ok(json!({ "data": css, "name": default_name(doc, "css"), "rules": n, "images": images, "warnings": warnings }))
         }
     }
 }

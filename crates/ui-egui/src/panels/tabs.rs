@@ -3,7 +3,7 @@
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind, TabAlign, TabStop, TextKind};
+use vectorcraft_doc::{Node, NodeKind, ParaStyle, TabAlign, TabStop, TextKind};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -33,6 +33,11 @@ const RULER_LEFT: f32 = 10.0 + 4.0;
 /// first selected text object's first paragraph) and the ruler span in points (the frame width for
 /// area type).
 fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
+    current_para(app).map(|(n, para, span)| (n, para.tabs, span))
+}
+
+/// As [`current`], with all the attributes of the paragraph whose stops the panel shows.
+fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let editing = super::character::text_editing(app);
     let n = match editing {
         Some((id, _, _)) => app.session.active()?.doc.node(id)?.clone(),
@@ -44,8 +49,8 @@ fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
         TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
     };
-    let tabs = t.para_at(para).tabs.clone();
-    Some((n, tabs, span.max(72.0)))
+    let para = t.para_at(para).clone();
+    Some((n, para, span.max(72.0)))
 }
 
 /// Position Panel Above Text: float the panel just above text `n`, as wide as its ruler needs to
@@ -249,22 +254,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((_, mut stops, _)) = current(app) else {
+    let Some((_, para, _)) = current_para(app) else {
         ui.add_enabled(false, egui::Button::new(tl!("Select text")).frame(false));
         return;
     };
-    let sel: usize = pstate(ui.ctx(), "tabs-sel");
-    if menu_item(ui, tl!("Clear All Tabs"), false, !stops.is_empty()) {
-        apply(app, &[]);
+    let mut stops = para.tabs;
+    // Clamp the selection to the last stop, as `show` does for the ruler.
+    let mut sel: usize = pstate(ui.ctx(), "tabs-sel");
+    if sel >= stops.len() {
+        sel = stops.len().saturating_sub(1);
     }
-    if menu_item(ui, tl!("Delete Tab"), false, sel < stops.len()) {
+    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty(), false)
+        && let Err(e) = super::paragraph::run_on_paragraphs(app, "text.tabs.clear", json!({}))
+    {
+        app.status(e);
+    }
+    if menu_item(ui, tl!("Delete Tab"), sel < stops.len(), false) {
         stops.remove(sel);
         apply(app, &stops);
     }
-    // Repeat Tab: copies of the selected stop at its distance from the previous one, across the ruler.
-    if menu_item(ui, tl!("Repeat Tab"), false, sel < stops.len()) {
-        let prev = if sel == 0 { 0.0 } else { stops[sel - 1].position };
-        let step = (stops[sel].position - prev).max(1.0);
+    // Repeat Tab: copies of the selected stop across the ruler, spaced by its distance from the
+    // previous stop, or from the paragraph's left indent when it is the first stop.
+    if menu_item(ui, tl!("Repeat Tab"), sel < stops.len(), false) {
+        let step = match sel {
+            0 => (stops[0].position - para.left_indent).abs(),
+            _ => stops[sel].position - stops[sel - 1].position,
+        }
+        .max(1.0);
         let base = stops[sel].clone();
         stops.truncate(sel + 1);
         let mut pos = base.position + step;
@@ -407,6 +423,113 @@ mod tests {
         assert_eq!(stops.len(), 1);
         let moved_to = to_x(stops[0].position as f32);
         assert!((moved_to - end.x).abs() < 1.0, "stop at {moved_to}, released at {}", end.x);
+    }
+
+    /// One frame of the panel menu with `events` → the rows' texts and where they are painted.
+    fn menu_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 400.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Click the panel menu's row `label`, which shows no check mark.
+    fn choose(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
+        let rows = menu_frame(ctx, app, vec![]);
+        let (text, r) = rows.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{label} in {rows:?}"));
+        assert!(!text.contains('✓'), "{label} shows a check mark");
+        let at = r.center();
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        menu_frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)]);
+        menu_frame(ctx, app, vec![button(false)]);
+    }
+
+    /// The panel menu's Repeat Tab, Delete Tab and Clear All Tabs can be chosen while the text has
+    /// tab stops and show no check mark. Repeat Tab and Delete Tab act on the stop selected on the
+    /// ruler, and Clear All Tabs removes every stop.
+    #[test]
+    fn panel_menu_repeats_deletes_and_clears_tab_stops() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50, "leader": "."}]})).unwrap();
+        let ctx = egui::Context::default();
+        let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+        // Repeat Tab with the second stop selected: 20 copies of it, 20 pt apart (its distance from
+        // the first stop), leader and all.
+        set_pstate(&ctx, "tabs-sel", 1usize);
+        choose(&ctx, &mut app, "Repeat Tab");
+        let repeated = positions(&app);
+        assert_eq!((repeated.len(), &repeated[..4]), (22, &[30.0, 50.0, 70.0, 90.0][..]));
+        assert!(current(&app).unwrap().1[2..].iter().all(|s| s.leader == "."));
+        // Delete Tab removes the selected stop.
+        choose(&ctx, &mut app, "Delete Tab");
+        assert_eq!(positions(&app)[..3], [30.0, 70.0, 90.0]);
+        // Clear All Tabs removes every stop, in one undo step of its own name.
+        choose(&ctx, &mut app, "Clear All Tabs");
+        assert!(positions(&app).is_empty());
+        assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "Clear All Tabs");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(positions(&app).len(), 21);
+    }
+
+    /// Repeat Tab on the first stop spaces the copies by the stop's distance from the paragraph's
+    /// left indent, from the paragraph the caret is in while the Type tool edits text.
+    #[test]
+    fn repeat_tab_measures_the_first_stop_from_the_left_indent() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b\nc	d", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.setFormat", &json!({"leftIndent": 20})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+        let ctx = egui::Context::default();
+        let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+        // 30 pt from the indent at 20: copies at 80, 110, ...
+        set_pstate(&ctx, "tabs-sel", 0usize);
+        choose(&ctx, &mut app, "Repeat Tab");
+        let repeated = positions(&app);
+        assert_eq!((repeated.len(), &repeated[..4]), (21, &[50.0, 80.0, 110.0, 140.0][..]));
+        // A stop left of the indent: 15 pt from the indent at 20.
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 5}]})).unwrap();
+        choose(&ctx, &mut app, "Repeat Tab");
+        assert_eq!(positions(&app)[..4], [5.0, 20.0, 35.0, 50.0]);
+        // The Type tool's caret in the second paragraph, indented 40 pt: its stop at 50 repeats
+        // every 10 pt, and the first paragraph keeps its stop.
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 20, "text": "a	b\nc	d"})).unwrap()["id"].clone();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.run("text.setFormat", json!({"id": id, "leftIndent": 20})).unwrap();
+        app.run("text.setFormat", json!({"id": id, "start": 4, "end": 7, "leftIndent": 40})).unwrap();
+        app.run("text.tabs.set", json!({"id": id, "stops": [{"position": 50}]})).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 5, "end": 5}));
+        choose(&ctx, &mut app, "Repeat Tab");
+        assert_eq!(positions(&app)[..3], [50.0, 60.0, 70.0]);
+        app.session.set_tool_option("select", &json!({"start": 0, "end": 0}));
+        assert_eq!(positions(&app), [50.0]);
+    }
+
+    /// After Delete Tab removes the last stop, the ruler shows the stop before it selected, and
+    /// Delete Tab removes that one next.
+    #[test]
+    fn delete_tab_after_the_last_stop_deletes_the_stop_the_ruler_shows_selected() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "tabs-sel", 1usize);
+        choose(&ctx, &mut app, "Delete Tab");
+        assert_eq!(current(&app).unwrap().1.len(), 1);
+        choose(&ctx, &mut app, "Delete Tab");
+        assert!(current(&app).unwrap().1.is_empty());
     }
 
     /// Position Panel Above Text floats the panel over the text, its ruler's 0 on the frame's left

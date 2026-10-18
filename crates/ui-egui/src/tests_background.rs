@@ -122,6 +122,34 @@ fn exports_run_in_the_background_and_the_preference_turns_both_off() {
 }
 
 #[test]
+fn a_cancelled_export_writes_nothing() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    // The first export holds the worker at the gate, past its last check: it still writes.
+    io::export(&mut app, Some("svg"), Some("/out/first.svg".into()), &json!({})).unwrap();
+    writing.wait();
+    io::export(&mut app, Some("png"), Some("/out/second.png".into()), &json!({})).unwrap();
+    assert_eq!(app.run("file.cancelExport", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.run("file.cancelExport", json!({})).unwrap()["cancelled"], 0, "nothing left to cancel");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/out/first.svg"]);
+    assert_eq!(app.ui.status, io::EXPORT_CANCELLED);
+}
+
+#[test]
 fn quitting_waits_for_background_saves() {
     let gate = Gate::default();
     let (mut app, files) = app(gate.clone());

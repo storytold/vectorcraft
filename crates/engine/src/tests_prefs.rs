@@ -240,6 +240,20 @@ fn linux_display_server_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.linux_display_server, "automatic");
 }
 
+/// Linux Display Server's pen choice (#2028): set by value or by label, saved, and off by default.
+#[test]
+fn linux_display_server_has_a_choice_for_an_attached_pen() {
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "x11WithPen"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11WithPen");
+    assert_eq!(s.prefs.to_json()["linuxDisplayServer"], "x11WithPen");
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "automatic"})).unwrap();
+    s.execute("prefs.set", &json!({"key": "linuxDisplayServer", "value": "X11 (XWayland) When a Pen Is Attached"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "x11WithPen");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert_eq!(s.prefs.linux_display_server, "automatic");
+}
+
 /// Selection & Anchor Display › Tolerance, Object Selection by Path Only and Command Click to
 /// Select Objects Behind, and General › Double Click To Isolate, as the Selection tool sees them
 /// (#394).
@@ -1167,7 +1181,10 @@ fn new_type_starts_with_placeholder_text() {
     gesture(&mut s, v, &[(Down, 100.0, 150.0), (Drag, 300.0, 300.0), (Up, 300.0, 300.0)]);
     assert!(text(&s).len() > placeholder.len());
     set_pref(&mut s, "placeholderText", json!(false));
-    gesture(&mut s, v, &[(Down, 50.0, 350.0), (Up, 50.0, 350.0)]);
+    // The first click ends editing the area type (#2871); the second places point type.
+    for _ in 0..2 {
+        gesture(&mut s, v, &[(Down, 50.0, 350.0), (Up, 50.0, 350.0)]);
+    }
     assert_eq!(text(&s), "");
 }
 

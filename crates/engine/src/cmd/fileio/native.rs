@@ -103,7 +103,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "aiVersion",
         ty: "string",
         default: "\"pdf\"",
-        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque; the other .ai options don't apply)",
+        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque; the other .ai options don't apply; an error for a .ait template)",
     },
     FormatOption {
         name: "transparentImages",

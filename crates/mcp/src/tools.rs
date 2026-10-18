@@ -2,7 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format};
+use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format, writable_format};
 
 use crate::backend::Backend;
 
@@ -1003,9 +1003,9 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
                     params.remove(k);
                 }
             }
-            for k in ["path", "format", "scale", "artboard", "range", "outlineText"] {
-                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
-                    params.insert(k.into(), v.clone());
+            for k in named_export_params(a) {
+                if let Some(v) = a.get(*k).filter(|v| !v.is_null()) {
+                    params.insert((*k).into(), v.clone());
                 }
             }
             let cmd = if a.get("selection").and_then(Value::as_bool) == Some(true) { "document.exportSelection" } else { "document.export" };
@@ -1051,6 +1051,18 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "undo" => j(exec(b, "edit.undo", json!({}))?),
         "redo" => j(exec(b, "edit.redo", json!({}))?),
         other => Err(format!("unknown tool `{other}` (see tools/list)")),
+    }
+}
+
+/// The named `export` arguments passed on to `document.export`. `scale` is raster pixels per
+/// point, so only a raster format gets it: DXF's own (drawing units per unit, given in `options`)
+/// would resize the drawing and leave its units unset.
+fn named_export_params(a: &Args) -> &'static [&'static str] {
+    let format = writable_format(a.get("format").and_then(Value::as_str), a.get("path").and_then(Value::as_str));
+    if format.is_ok_and(|f| f.raster) {
+        &["path", "format", "scale", "artboard", "range", "outlineText"]
+    } else {
+        &["path", "format", "artboard", "range", "outlineText"]
     }
 }
 

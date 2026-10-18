@@ -280,3 +280,43 @@ fn a_variable_full_name_names_its_default_face() {
     let bold = db.resolve("VaritestSans-Bold", "Regular").unwrap().0;
     assert_eq!(bold.variations(), [(*b"wght", 700.0)]);
 }
+
+/// #2491: a variable font whose name table calls the default face `Light` (and whose OS/2 weight
+/// says 300) while its default instance is Regular at `wght` 400 lists, resolves and weighs the
+/// default face as Regular, as it renders.
+#[test]
+fn a_variable_default_face_is_named_and_weighed_by_its_default_instance() {
+    let bytes = font();
+    let source = skrifa::FontRef::new(&bytes).unwrap();
+    let family = "Hebtest Sans";
+    let names = name_table(&[
+        (1, "Hebtest Sans Light"),
+        (2, "Regular"),
+        (4, "Hebtest Sans Light"),
+        (6, "HebtestSans-Light"),
+        (16, family),
+        (17, "Light"),
+        (256, "Weight"),
+        (257, "Regular"),
+        (258, "SemiBold"),
+        (259, "Bold"),
+    ])
+    .unwrap();
+    let mut os2 = source.table_data(skrifa::raw::types::Tag::new(b"OS/2")).unwrap().as_bytes().to_vec();
+    os2[4..6].copy_from_slice(&300_u16.to_be_bytes());
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"name"), names);
+    builder.add_raw(write_fonts::types::Tag::new(b"OS/2"), os2);
+    for record in source.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&record.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, source.table_data(record.tag()).unwrap().as_bytes());
+        }
+    }
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(builder.build()), 3);
+    assert_eq!(db.styles(family), ["Regular", "SemiBold", "Bold"]);
+    let (face, matched) = db.resolve(family, "Regular").unwrap();
+    assert_eq!((face.style.as_str(), face.weight, matched), ("Regular", 400.0, FontMatch::Exact));
+    assert!(face.variations().is_empty());
+}

@@ -743,7 +743,7 @@ mod tests {
         let fr = crate::i18n::Lang::from_code("fr").unwrap();
         let shown = crate::i18n::message(fr, "2 font file(s) are now in /Fonts; 1 couldn't be added: a.otf: larger than 256 MB");
         assert!(shown.contains("se trouvent maintenant dans /Fonts") && shown.contains("a.otf") && shown.contains("plus de 256 Mo"), "{shown}");
-        for code in ["de", "es", "fr", "hu", "it", "pl", "ru", "sv"] {
+        for code in ["de", "es", "fr", "hu", "it", "ka", "pl", "ru", "sv"] {
             let lang = crate::i18n::Lang::from_code(code).unwrap();
             for s in [
                 "every search thread stopped on an internal error (please report this bug)",

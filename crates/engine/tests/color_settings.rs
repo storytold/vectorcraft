@@ -261,3 +261,51 @@ fn the_eyedropper_takes_an_image_pixel_into_the_working_rgb_space() {
     let [r, g, b, _] = shown.unwrap_or_default();
     assert!(r.abs_diff(83) <= 1 && g.abs_diff(170) <= 1 && b.abs_diff(223) <= 1, "{shown:?} for 83/170/223");
 }
+
+/// With a working RGB space other than sRGB, a freeform gradient of RGB points expands to mesh
+/// points with the points' own RGB values, and points in different models expand to mesh points
+/// that show the colors the gradient shows there.
+#[test]
+fn a_freeform_gradient_expands_with_its_rgb_values_in_the_working_rgb_space() {
+    use vectorcraft_color::freeform::spread_scale;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_geom::Rect;
+    let _g = settings();
+    let old = cms::active_settings();
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..old.clone() }).unwrap();
+    // Each mesh point's color, the display color it shows and the display color the gradient
+    // shows at its place.
+    let expand = |colors: [serde_json::Value; 4]| {
+        let mut s = session();
+        let id = rect(&mut s, 20.0, 20.0, 160.0, 160.0);
+        select(&mut s, &[id]);
+        exec(&mut s, "paint.setFill", json!({"gradient": {"kind": "freeform"}}));
+        exec(&mut s, "paint.setStroke", json!({"none": true}));
+        for (i, c) in colors.into_iter().enumerate() {
+            exec(&mut s, "paint.freeform.setPoint", json!({"index": i, "color": c, "stroke": false}));
+        }
+        let b = Rect::new(20.0, 20.0, 180.0, 180.0);
+        let field = match s.doc().unwrap().doc.node(id).map(|n| n.appearance.fill_paint()) {
+            Some(Paint::Gradient(g)) => g.freeform_on(b).field(spread_scale(b)),
+            p => panic!("a gradient fill: {p:?}"),
+        };
+        exec(&mut s, "object.expand", json!({}));
+        let d = &s.doc().unwrap();
+        let mesh = d.selection.objects.first().and_then(|id| d.doc.node(*id)).map(|n| n.kind.clone());
+        let Some(NodeKind::Mesh(m)) = mesh else { panic!("a mesh: {mesh:?}") };
+        m.points.iter().map(|p| (p.color, p.color.to_rgb(), field.sample(p.p).0)).collect::<Vec<_>>()
+    };
+    let rgb = expand([json!("#3399e6"), json!("#3399e6"), json!("#3399e6"), json!("#3399e6")]);
+    let mixed = expand([json!("#3399e6"), json!("#3399e6"), json!({"gray": 0.5}), json!({"gray": 0.5})]);
+    cms::set_active(&old).unwrap();
+    let want = Color::rgb8(0x33, 0x99, 0xe6);
+    for (c, ..) in &rgb {
+        let (Color::Rgb { r, g, b }, Color::Rgb { r: r2, g: g2, b: b2 }) = (*c, want) else { panic!("an RGB point: {c:?}") };
+        assert!((r - r2).abs() < 1e-5 && (g - g2).abs() < 1e-5 && (b - b2).abs() < 1e-5, "{c:?} for {want:?}");
+    }
+    for (c, shown, field) in &mixed {
+        let close = shown.iter().zip(field).all(|(a, b)| (a - b).abs() < 2.0 / 255.0);
+        assert!(matches!(c, Color::Rgb { .. }) && close, "{c:?} shows {shown:?} for {field:?}");
+    }
+}

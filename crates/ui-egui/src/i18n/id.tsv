@@ -173,6 +173,7 @@
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
 	Crop Image	Pangkas gambar
+	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
 	Create Gradient Mesh…	Buat mesh gradien…
@@ -1248,6 +1249,8 @@ lighting	Light	Cahaya
 	Opacity: {value}	Opasitas: {value}
 	Rectangle: Sunshine	Persegi panjang: Sunshine
 	Redefine Graphic Style “{name}”	Definisikan ulang gaya grafis “{name}”
+	Apply {name}	Terapkan gaya “{name}”
+	Redefine {name}	Definisikan ulang gaya “{name}”
 	Show Thumbnail	Tampilkan thumbnail
 	Artboard Options: edit with the Artboard tool	Opsi artboard: edit dengan alat artboard
 	Delete Artboards	Hapus artboard
@@ -1434,6 +1437,10 @@ lighting	Light	Cahaya
 	Use Text for Previews	Gunakan teks untuk pratinjau
 	{percent}% opacity	Opasitas {percent}%
 	History Options…	Opsi riwayat…
+	Step Backward	Mundur satu langkah
+	Step Forward	Maju satu langkah
+	Clear History	Hapus riwayat
+	Set History Limit…	Atur batas riwayat…
 	Open a document to see its history.	Buka dokumen untuk melihat riwayatnya.
 	Abutting	Bersinggungan
 	Black and White	Hitam dan putih
@@ -3373,6 +3380,8 @@ axis	Both	Keduanya
 	Star	Bintang
 	Power Saving (integrated)	Hemat daya (terintegrasi)
 	Target	Target
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) saat pena terpasang
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Jika pena tablet gambar tidak menggambar, pilih opsi X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Print as Bitmap	Cetak sebagai bitmap
 	Draft	Draf
@@ -3749,7 +3758,8 @@ imageTrace	Outline	Kontur
 @msg	its editing data doesn't say where its artboard is	data penyuntingannya tidak menyebut di mana artboard-nya berada
 @msg	its editing data has no layers	data penyuntingannya tidak memiliki lapisan
 @msg	its editing data is damaged	data penyuntingannya rusak
-@msg	its editing data is for a different page	data penyuntingannya untuk halaman yang berbeda
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	data penyuntingannya untuk halaman {w} × {h} pt, bukan halaman file {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	data penyuntingannya untuk halaman {w} × {h} pt, yaitu halaman file {pw} × {ph} pt dengan skala {scale}
 @msg	its layers use {_1}, which aren't read yet	lapisannya menggunakan {_1}, yang belum dapat dibaca
 @msg	its page has text, and its layers have no text objects to put it in	halamannya memiliki teks, tetapi lapisannya tidak memiliki objek teks untuk menampungnya
 @msg	its type is to come in as outlines, which only its page has	teksnya akan masuk sebagai kontur, yang hanya ada di halamannya
@@ -3845,6 +3855,8 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` harus `auto` atau kode bahasa seperti `en` atau `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` harus berupa warna #rrggbb
 @msg	`{key}` must be a number	`{key}` harus berupa angka
+@msg	`{key}` must be a number, not {v}	`{key}` harus berupa angka, bukan {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} harus berupa waktu Unix dalam detik (bilangan bulat) atau null
 @msg	`{key}` must be a string	`{key}` harus berupa string
 @msg	`{key}` must be a whole number	`{key}` harus berupa bilangan bulat
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` harus berupa bilangan bulat antara {min} dan {max} (diperoleh {x})
@@ -3882,6 +3894,7 @@ imageTrace	Outline	Kontur
 @msg	a page tree node has no kids	simpul pohon halaman tidak memiliki anak
 @msg	a page's placement is not finite	penempatan halaman bukan bilangan hingga
 @msg	a preset named `{_1}` exists	preset bernama `{_1}` sudah ada
+@msg	a swatch or color group named `{n}` exists	sampel atau grup warna bernama `{n}` sudah ada
 @msg	a slice size must be a positive number of points	ukuran irisan harus berupa bilangan positif dalam titik
 @msg	a stream runs past the end	aliran melewati akhir
 @msg	a stream's length is wrong	panjang aliran salah
@@ -3963,6 +3976,8 @@ imageTrace	Outline	Kontur
 @msg	missing `name`	`name` tidak ada
 @msg	missing `tool`	`tool` tidak ada
 @msg	missing index	indeks tidak ada
+@msg	missing number `{key}`	angka `{key}` tidak ada
+@msg	missing integer `{key}`	bilangan bulat `{key}` tidak ada
 @msg	multiple windows land with M11.5	beberapa jendela hadir bersama M11.5
 @msg	name the file	beri nama file
 @msg	no CSS to copy: select objects with CSS of their own	tidak ada CSS untuk disalin: pilih objek yang memiliki CSS sendiri
@@ -4073,6 +4088,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to redo	tidak ada yang dapat dipulihkan
 @msg	nothing to save: the document has no visible art	tidak ada yang dapat disimpan: dokumen tidak memiliki karya seni yang terlihat
 @msg	nothing to undo	tidak ada yang dapat diurungkan
+@msg	no history to clear	tidak ada riwayat yang dapat dihapus
 @msg	nothing to warp	tidak ada yang dapat diubah bentuknya
 @msg	nothing to wrap	tidak ada yang dapat dibungkus
 @msg	object {0} cannot have children	objek {0} tidak dapat memiliki anak
@@ -4237,6 +4253,7 @@ imageTrace	Outline	Kontur
 @msg	{C}: no effect at index {from}	{C}: tidak ada efek pada indeks {from}
 @msg	{_1} failed: {e}	{_1} gagal: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	berkas {_1} dapat dibuka tetapi tidak dapat ditulis (lihat document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	berkas {_1} ditulis oleh file.saveAsTemplate
 @msg	{_1} font families available	{_1} keluarga font tersedia
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} adalah efek langsung (Efek › Plug-in)
 @msg	{_1} is already used by {_2}	{_1} sudah digunakan oleh {_2}
@@ -4343,6 +4360,9 @@ imageTrace	Outline	Kontur
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: hasil langkah {i} tidak memiliki nilai seperti itu (tulis $$ untuk $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: tidak ada langkah {i} sebelum langkah ini (langkah dihitung mulai dari 0; tulis $$ untuk $ literal)
 @msg	object ids are non-negative integers, not {v}	id objek adalah bilangan bulat non-negatif, bukan {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} harus berupa larik id objek yang berupa bilangan bulat non-negatif
+@msg	invalid object id {value}: expected a non-negative integer	id objek {value} tidak valid: harus berupa bilangan bulat non-negatif
+@msg	no such object id {value}	tidak ada objek dengan id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	jalur otomatisasi ditolak: di luar akar baca {root}: {path}
@@ -4755,6 +4775,11 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+# 3D light management.
+	Lights	Lampu
+	Add Light	Tambah Lampu
+	Delete Light	Hapus Lampu
+3d	Light	Lampu
 	2up	2up
 	4up	4up
 	A6	A6
@@ -5166,3 +5191,21 @@ swatch	Bright Violet	Violet cerah
 	Clear Artboard Color	Hapus warna artboard
 @msg	artboard {_1} is locked	artboard {_1} terkunci
 	Include Artboard Fill	Sertakan warna artboard
+	Artboard {n} of {total}	Artboard {n} dari {total}
+	Encoding and writing the file…	Mengodekan dan menulis berkas…
+@plural	{n} more export waiting|{n} more exports waiting	{n} ekspor lagi menunggu
+	Continue in Background	Lanjutkan di latar belakang
+	Cancel Export	Batalkan ekspor
+@msg	Export cancelled	Ekspor dibatalkan
+# Paragraph panel menu › Justification…
+	Desired	Diinginkan
+	Word Spacing:	Spasi Kata:
+	Letter Spacing:	Spasi Huruf:
+	Glyph Scaling:	Penskalaan Glif:
+	Auto Leading:	Spasi Baris Otomatis:
+	Single Word Justification:	Perataan Kata Tunggal:
+	Full Justify	Rata Penuh
+	Minimum must not exceed Desired, nor Desired Maximum.	Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum.
+	Justification	Justifikasi
+# Select by Color (select.color)
+	Select by Color	Pilih berdasarkan warna

@@ -219,7 +219,11 @@ pub fn art_bounds_on(doc: &Document, rect: Rect) -> Option<Rect> {
     doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, on(&symbols, l, rect)))
 }
 
-fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+/// Bounds of what an export draws of object `n` ([`art_bounds`]): `None` when `n` is hidden, a
+/// guide or a template layer. The hidden objects, guides and template layers in it are left out,
+/// except in a group or layer with effects of its own that keep all its members (`without_undrawn`
+/// lists them). Symbol instances are measured by their art in `symbols`.
+pub fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if !n.visible {
         return None;
     }

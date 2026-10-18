@@ -250,6 +250,43 @@ fn the_web_downloads_one_zip_or_the_file() {
 }
 
 #[test]
+fn the_status_bar_says_when_an_image_could_not_be_decoded() {
+    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
+    png.truncate(idat + 8);
+    let place = |app: &mut VectorcraftApp| {
+        app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [10, 10]})).unwrap()
+    };
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "jpg", "scale": "2x", "suffix": "@2x"}]);
+    let dir = temp_folder("undecoded");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let (mut desktop, log) = app(1, false);
+    desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Exported 2 file(s) to {folder}"));
+    place(&mut desktop);
+    desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "openLocation": true})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"));
+    assert_eq!(log.borrow().len(), 1, "Open Location still shows the first file");
+    let r = desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "zip": true})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {} {NOTE}", r["path"].as_str().unwrap()));
+    // The Asset Export panel's export goes the same way.
+    desktop.run("select.all", json!({})).unwrap();
+    desktop.run("assets.add", json!({"multiple": false})).unwrap();
+    crate::io::export_files(&mut desktop, "assets.export", json!({"folder": folder, "formats": rows})).unwrap();
+    assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"), "assets.export");
+    let (mut web, _) = app(1, true);
+    place(&mut web);
+    web.run("file.exportForScreens", json!({"zip": true, "formats": rows})).unwrap();
+    assert_eq!(web.ui.status, format!("Saved Untitled-1.zip {NOTE}"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_preset_export_reopens_on_its_rows() {
     let (mut app, _) = app(1, true);
     app.run("file.exportForScreens", json!({"preset": "density", "fullDocument": true})).unwrap();
@@ -528,6 +565,80 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
     assert_eq!(field(&app, "formats")[0]["format"], "svg");
     h.choose(&mut app, "SVG", "PNG");
     assert_eq!(field(&app, "formats")[0]["format"], "png");
+}
+
+/// The Example line names the first file the export writes for the same settings: the item's file
+/// name, a prefix with characters Windows does not allow, a range, a Windows device name as an item
+/// folder, the rows' folders and sizes, Create Sub-folders, a vector row's size suffix, the counter
+/// typed as text, and the Layers and Selection tabs.
+#[test]
+fn the_example_names_the_first_file_the_export_writes() {
+    let (mut app, _) = app(3, false);
+    app.run("artboard.setProps", json!({"index": 2, "name": "CON"})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let dir = temp_folder("example");
+    let folder = dir.to_string_lossy().to_string();
+    let png = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
+    let cases: Vec<Vec<(&str, Value)>> = vec![
+        vec![],
+        vec![("prefix", json!("a?b"))],
+        vec![("select", json!("range")), ("range", json!("2-3"))],
+        vec![("select", json!("range")), ("range", json!("3")), ("folders", json!("item"))],
+        vec![("folders", json!("rows")), ("formats", json!([{"format": "png", "scale": "144ppi", "suffix": ""}]))],
+        vec![("subfolders", json!(true))],
+        vec![("folders", json!("rows")), ("formats", json!([{"format": "png", "scale": "2x", "suffix": "@2x", "folder": "retina"}]))],
+        vec![("formats", json!([{"format": "svg", "scale": "2x", "suffix": "@2x"}]))],
+        vec![("name", json!("<scale>-####")), ("counterStart", json!("7")), ("formats", json!([{"format": "png", "scale": "144ppi", "suffix": ""}]))],
+        vec![("tab", json!("layers"))],
+        vec![("tab", json!("selection")), ("selectionMode", json!("each"))],
+    ];
+    let mut wrong = vec![];
+    for case in cases {
+        let _ = std::fs::remove_dir_all(&dir);
+        open(&mut app);
+        let defaults = [
+            ("folder", json!(folder)),
+            ("tab", json!("artboards")),
+            ("select", json!("all")),
+            ("prefix", json!("")),
+            ("name", json!("")),
+            ("counterStart", json!(1)),
+            ("folders", json!("none")),
+            ("subfolders", json!(false)),
+            ("formats", png.clone()),
+        ];
+        for (k, v) in defaults.into_iter().chain(case.iter().cloned()) {
+            set(&mut app, k, v);
+        }
+        frame(&mut app);
+        let example = export_for_screens::example_name(&app, app.ui.dialog.as_ref().unwrap());
+        let r = confirm(&mut app).unwrap();
+        let first = r["files"][0].as_str().and_then(|f| f.strip_prefix(&format!("{folder}/"))).unwrap_or_default().to_string();
+        if example != first {
+            wrong.push(format!("{case:?}: example {example:?}, written {first:?}"));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// The Example line shows before a folder is chosen and is left out while the settings choose
+/// nothing to export (the Assets tab with no asset checked); Start at shows the counter the export
+/// uses when it was set as text.
+#[test]
+fn the_example_needs_no_folder_and_start_at_shows_the_counter_used() {
+    let (mut app, _) = app(1, false);
+    open(&mut app);
+    for (k, v) in [("folder", json!("")), ("name", json!("####")), ("counterStart", json!("7"))] {
+        set(&mut app, k, v);
+    }
+    let mut h = ScreensFrame::new();
+    let text = crate::tests_labels::shapes_text(&h.settle(&mut app));
+    assert!(text.lines().any(|l| l == "Example: 0007.png"), "{text}");
+    assert!(text.lines().any(|l| l.trim() == "7"), "{text}");
+    set(&mut app, "tab", json!("assets"));
+    let text = crate::tests_labels::shapes_text(&h.settle(&mut app));
+    assert!(!text.contains("Example:"), "{text}");
 }
 
 /// Batch exporting (#1935): a file name pattern and a folder per format, the Layers and Selection

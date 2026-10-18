@@ -230,6 +230,14 @@ fn visibility(layers: &[std::sync::Arc<Node>]) -> Vec<bool> {
     layers.iter().map(|l| l.visible).collect()
 }
 
+/// A group name without a byte order mark is PDFDocEncoding (ISO 32000-1 Annex D, Table D.2),
+/// which differs from Latin-1 at 0x18 to 0x1F and 0x80 to 0xA0.
+#[test]
+fn layer_names_without_a_byte_order_mark_are_pdf_doc_encoding() {
+    let bytes = three_groups([&ocg(r"Art\205final", ""), &ocg(r"\215Caf\351\216 \240", ""), &ocg("Plain", "")], &[], "");
+    assert_eq!(names(&import(&bytes).unwrap()), ["Art\u{2013}final", "\u{201C}Caf\u{E9}\u{201D} \u{20AC}", "Plain"]);
+}
+
 #[test]
 fn a_view_state_that_is_off_hides_the_layer_with_its_art() {
     let off = ocg("Off", "/Usage << /View << /ViewState /OFF >> >>");

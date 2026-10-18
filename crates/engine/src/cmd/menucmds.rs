@@ -341,6 +341,7 @@ pub(crate) fn transform_each_again(s: &mut Session, p: &Value) -> Result<Value> 
 /// repeats; a dialog's preview records it as it commits (`Session::commit_interaction`).
 fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let roots = selected_roots(s)?;
+    check_numbers(p, &["scaleH", "scaleV", "moveH", "moveV", "rotate"], "object.transformEach")?;
     // Bounded so coordinates stay finite (and the document stays serializable).
     let sh = f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0);
     let sv = f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0);
@@ -480,6 +481,7 @@ impl Rasterized {
 /// `cmd`, each defaulting to `doc`'s raster effects settings: over the bounds of what the art draws
 /// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels.
 pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str) -> Result<Rasterized> {
+    check_numbers(p, &["ppi"], cmd)?;
     let ppi = f64_or(p, "ppi", doc.raster_effects_ppi);
     if !(1.0..=2400.0).contains(&ppi) {
         return Err(bad(cmd, "ppi must be between 1 and 2400"));
@@ -600,6 +602,7 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
     let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
     // Tiles in image space, placed by the image transform (scaled to a new size if asked).
     let b = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
+    check_numbers(p, &["width", "height", "spacingX", "spacingY"], C)?;
     let (nw, nh) = (f64_or(p, "width", b.width()).max(0.1), f64_or(p, "height", b.height()).max(0.1));
     let resize = Affine::translate(b.origin().to_vec2())
         * Affine::scale_non_uniform(nw / b.width().max(1e-9), nh / b.height().max(1e-9))
@@ -671,8 +674,8 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
-    let rect = match p.get("rect").and_then(Value::as_array) {
-        Some(a) if a.len() == 4 => {
+    let rect = match p.get("rect").filter(|v| !v.is_null()) {
+        Some(Value::Array(a)) if a.len() == 4 => {
             let v: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
             if v.len() != 4 {
                 return Err(bad(C, "rect must be [x, y, width, height]"));
@@ -832,6 +835,7 @@ impl Session {
 
 fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.createTrimMarks";
+    check_numbers(p, &["offset", "length", "bleed", "weight"], C)?;
     let style = match str_param(p, "style") {
         Some(v) => MarkStyle::parse(v).ok_or_else(|| bad(C, "`style` must be roman or japanese"))?,
         None => s.crop_mark_style(),
@@ -1003,6 +1007,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         L::Row => (1, n_ab),
         L::Column => (n_ab, 1),
     };
+    check_numbers(p, &["spacing"], CMD)?;
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = bool_or(p, "moveArtwork", true);
     let locked_and_hidden = s.prefs.move_locked_with_artboard;

@@ -141,6 +141,78 @@ fn an_exported_pdf_opens_with_its_file_info() {
     assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
 }
 
+/// Unix seconds of 2020-01-01 00:00:00 UTC.
+const CREATED: i64 = 1_577_836_800;
+
+/// A session whose document was created at `created` (Unix seconds, or `null` for none).
+fn created_at(created: Value) -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80, "created": created})).unwrap();
+    s
+}
+
+/// The PDF date the writer gives Unix seconds `t` (UTC).
+fn pdf_date(t: i64) -> String {
+    let [y, mo, d, h, mi, s] = vectorcraft_doc::metadata::civil(t);
+    format!("(D:{y:04}{mo:02}{d:02}{h:02}{mi:02}{s:02}Z)")
+}
+
+/// Check that a PDF or PDF-compatible `.ai` was created at a time in `created` and modified at a
+/// time in `modified`: in the XMP packet (`vectorcraft_pdf::file_info`) and in the document
+/// information dictionary.
+fn assert_dated(bytes: &[u8], created: std::ops::RangeInclusive<i64>, modified: std::ops::RangeInclusive<i64>) {
+    let xmp = vectorcraft_pdf::file_info(bytes, None).expect("a PDF");
+    assert!(xmp.created.is_some_and(|t| created.contains(&t)), "xmp:CreateDate {:?} in {created:?}", xmp.created);
+    assert!(xmp.modified.is_some_and(|t| modified.contains(&t)), "xmp:ModifyDate {:?} in {modified:?}", xmp.modified);
+    let text = String::from_utf8_lossy(bytes);
+    let trailer = &text[text.rfind("trailer").expect("a trailer")..];
+    let n = trailer.split("/Info ").nth(1).and_then(|r| r.split(' ').next()).expect("an /Info entry");
+    let info = &text[text.find(&format!("\n{n} 0 obj")).expect("the document information")..];
+    let info = &info[..info.find("endobj").expect("its end")];
+    assert!(created.clone().any(|t| info.contains(&format!("/CreationDate{}", pdf_date(t)))), "/CreationDate in {created:?}: {info}");
+    assert!(modified.clone().any(|t| info.contains(&format!("/ModDate{}", pdf_date(t)))), "/ModDate in {modified:?}: {info}");
+}
+
+/// Run `f` → (its result, the time of writing: the Unix seconds before and after it).
+fn written<T>(f: impl FnOnce() -> T) -> (T, std::ops::RangeInclusive<i64>) {
+    let before = vectorcraft_doc::metadata::output_time().unwrap();
+    let out = f();
+    (out, before..=vectorcraft_doc::metadata::output_time().unwrap())
+}
+
+#[test]
+fn an_exported_pdf_is_created_with_the_document_and_modified_when_it_is_written() {
+    let mut s = created_at(json!(CREATED));
+    for p in [json!({}), json!({"preset": "PDF/X-4:2010"})] {
+        let (pdf, now) = written(|| b64(&s.execute("document.exportPdf", &p).unwrap()));
+        assert_dated(&pdf, CREATED..=CREATED, now);
+    }
+    let (pdf, now) = written(|| b64(&s.execute("document.export", &json!({"format": "pdf", "preserveEditing": false})).unwrap()));
+    assert_dated(&pdf, CREATED..=CREATED, now);
+}
+
+#[test]
+fn a_pdf_compatible_ai_is_created_with_the_document_and_modified_when_it_is_written() {
+    let mut s = created_at(json!(CREATED));
+    let path = std::env::temp_dir().join(format!("vc-fileinfo-created-{}.ai", std::process::id()));
+    let (saved, now) = written(|| s.execute("document.save", &json!({"path": path.to_string_lossy()})));
+    saved.unwrap();
+    let ai = std::fs::read(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    assert_dated(&ai, CREATED..=CREATED, now);
+    assert_eq!(s.doc().unwrap().doc.metadata.created, Some(CREATED), "the save keeps the creation date");
+}
+
+#[test]
+fn a_pdf_of_a_document_without_a_creation_date_is_dated_when_it_is_written() {
+    let mut s = created_at(Value::Null);
+    assert_eq!(s.doc().unwrap().doc.metadata.created, None);
+    let (pdf, now) = written(|| b64(&s.execute("document.exportPdf", &json!({})).unwrap()));
+    assert_dated(&pdf, now.clone(), now);
+    let xmp = vectorcraft_pdf::file_info(&pdf, None).unwrap();
+    assert_eq!(xmp.created, xmp.modified, "created and modified at the same time of writing");
+}
+
 #[test]
 fn a_pdf_compatible_ai_opens_with_the_file_info_of_its_xmp_packet() {
     use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};

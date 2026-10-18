@@ -207,8 +207,33 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
         crate::dialogs::settle(app);
         return Ok(json!({ "path": path }));
     }
-    if reveal { crate::io::reveal_path(app, &path) } else { crate::io::open_in_app(app, &path) }?;
+    if reveal {
+        crate::io::reveal_path(app, &path)?;
+    } else {
+        app.refuse_automation("links.editOriginal")?;
+        openable_original(&path)?;
+        crate::io::open_in_app(app, &path)?;
+    }
     Ok(json!({ "path": path }))
+}
+
+/// Whether Edit Original may hand `path` to the system's default app: a regular file (after
+/// following links) whose name, and the name it links to, have the extension of a format
+/// VectorCraft reads. Anything else (a folder or app bundle, a script, a shortcut) is refused.
+pub(crate) fn openable_original(path: &str) -> Result<(), String> {
+    let readable = |p: &std::path::Path| {
+        let ext = p.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        !ext.is_empty() && vectorcraft_engine::cmd::fileio::FORMATS.iter().any(|f| f.read && f.extensions.contains(&ext.as_str()))
+    };
+    let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+    let real = std::fs::canonicalize(path).map_err(|e| format!("can't open “{name}”: {e}"))?;
+    if !real.is_file() {
+        return Err(format!("“{name}” is not a file"));
+    }
+    if !readable(std::path::Path::new(path)) || !readable(&real) {
+        return Err(format!("Edit Original opens image and document files only; “{name}” is not one"));
+    }
+    Ok(())
 }
 
 /// A status badge: missing (red, ?), modified (amber, !), embedded (the image icon).

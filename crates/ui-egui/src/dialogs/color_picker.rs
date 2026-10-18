@@ -138,6 +138,20 @@ pub fn slider_color(ch: Channel, z: f32, x: f32, y: f32) -> Color {
     if ch == Channel::Hue { Color::from_hsb(z * 360.0, 1.0, 1.0) } else { field_pick(ch, z, x, y).color }
 }
 
+/// The number and suffix that [`value_fields`] shows in the field of `ch` for `p`, and the field's
+/// largest number: H in degrees (to 360), S and B in percent (to 100), and R, G and B from 0 to 255.
+fn channel_value(ch: Channel, p: &Picked) -> (f32, &'static str, f32) {
+    let [r, g, b] = p.color.to_rgb();
+    match ch {
+        Channel::Hue => (p.hsb[0], "°", 360.0),
+        Channel::Saturation => (p.hsb[1] * 100.0, "%", 100.0),
+        Channel::Brightness => (p.hsb[2] * 100.0, "%", 100.0),
+        Channel::Red => (r * 255.0, "", 255.0),
+        Channel::Green => (g * 255.0, "", 255.0),
+        Channel::Blue => (b * 255.0, "", 255.0),
+    }
+}
+
 /// The colour the dialog holds: an edited `hex` wins over `color` (agents set either one).
 fn picked(d: &Dialog) -> Picked {
     let hex = d.str("hex");
@@ -211,7 +225,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             }
             ui.add_space(6.0);
             let track = |z: f32| c32(&Picked::of(slider_color(channel, z, x, y)).snapped(web).color);
-            if let (Some(z), _) = widgets::channel_slider_named(ui, "cp-slider", tl!(channel.label()), z, vec2(22.0, FIELD), &track) {
+            let (v, suffix, max) = channel_value(channel, &p);
+            let shown = widgets::SliderValue::field(v as f64, 0.0..=max as f64, suffix, 0);
+            if let (Some(z), _) = widgets::channel_slider_valued(ui, "cp-slider", tl!(channel.label()), Some(shown), z, vec2(22.0, FIELD), &track) {
                 pick = Some(field_pick(channel, z, x, y));
             }
         }

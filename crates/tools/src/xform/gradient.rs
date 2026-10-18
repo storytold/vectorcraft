@@ -298,8 +298,10 @@ impl GradientTool {
     fn geom_params(cx: &ToolContext, start: Point, end: Point) -> Value {
         json!({ "start": [start.x, start.y], "end": [end.x, end.y], "stroke": !cx.fill_active })
     }
+    /// The stops the tool sends carry the gradient's own colors or samples of it, so they keep
+    /// their models (`keepModel`), in a CMYK document too.
     fn stops_params(cx: &ToolContext, stops: &[GradientStop]) -> Value {
-        json!({ "stops": crate::params::stops_json(stops), "stroke": !cx.fill_active })
+        json!({ "stops": crate::params::stops_json(stops), "stroke": !cx.fill_active, "keepModel": true })
     }
     fn select_stop(i: usize) -> Action {
         Action::Exec("gradient.selectStop".into(), json!({ "index": i }))
@@ -763,6 +765,7 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Up, Point::new(130.0, 150.0)));
         let (c, v) = exec(&a[0]);
         assert_eq!((c, offsets(v)), ("paint.editGradient", vec![0.0, 30.0, 100.0]));
+        assert_eq!(v["keepModel"], json!(true), "the sampled color keeps its model");
         assert_eq!(a[1], GradientTool::select_stop(1));
     }
 

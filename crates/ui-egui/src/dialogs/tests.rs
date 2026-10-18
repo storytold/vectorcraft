@@ -1,6 +1,7 @@
 //! The dialog registry and the shared frame, drawn headlessly.
 
 use serde_json::json;
+use vectorcraft_doc::Unit;
 use vectorcraft_engine::Session;
 
 use super::*;
@@ -1018,6 +1019,111 @@ fn artboard_options_position_follows_the_tool_option_with_another_tool() {
     }
 }
 
+/// The strings a frame painted, each with its rectangle.
+fn painted(out: &egui::FullOutput) -> Vec<(String, egui::Rect)> {
+    fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+            _ => {}
+        }
+    }
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+    v
+}
+
+/// Where to click in the field after the label `label` among the `shown` strings.
+fn field_after(shown: &[(String, egui::Rect)], label: &str) -> egui::Pos2 {
+    let r = shown.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {shown:?}")).1;
+    egui::pos2(r.right() + 40.0, r.center().y)
+}
+
+/// A 400 × 300 pt artboard at the page's origin with the ruler origin at (120, 50), and its
+/// Artboard Options open.
+fn artboard_options_from_a_ruler_origin() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("document.setRulerOrigin", json!({"x": 120, "y": 50})).unwrap();
+    assert_eq!(app.ruler_origin(), vectorcraft_geom::Point::new(120.0, 50.0));
+    app.run("tool.options", json!({"tool": "artboard"})).unwrap();
+    app
+}
+
+/// #1876: Artboard Options has X and Y beside the reference point locator, counted from the ruler
+/// origin (#1212) as the Transform panel's are. The artboard moves to a typed X and Y, its reference
+/// point landing there, in one undo step. The shape dialogs still show no X and Y (theirs are where
+/// the click was).
+#[test]
+fn artboard_options_x_and_y_count_from_the_ruler_origin_at_the_reference_point() {
+    let mut app = artboard_options_from_a_ruler_origin();
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let mut f = Frames::new();
+    let has = |shown: &[(String, egui::Rect)], s: &str| shown.iter().any(|(t, _)| t == s);
+    // The center by default: (200, 150) on the page, 80 and 100 from the ruler origin.
+    let shown = f.texts(&mut app);
+    for s in ["X:".to_string(), "Y:".to_string(), Unit::Points.format(80.0), Unit::Points.format(100.0)] {
+        assert!(has(&shown, &s), "{s} in {shown:?}");
+    }
+    // The bottom-right corner: (400, 300) on the page, 280 and 250 from the ruler origin.
+    let corner = f.control(&mut app, "Bottom Right", egui::accesskit::Role::RadioButton);
+    f.press(&mut app, corner, true);
+    f.press(&mut app, corner, false);
+    let shown = f.texts(&mut app);
+    for v in [280.0, 250.0] {
+        assert!(has(&shown, &Unit::Points.format(v)), "{v} in {shown:?}");
+    }
+    // Typing X 300 and Y 0 puts that corner at (420, 50) on the page.
+    for (label, typed) in [("X:", "300"), ("Y:", "0")] {
+        let at = field_after(&shown, label);
+        f.press(&mut app, at, true);
+        f.press(&mut app, at, false);
+        f.run(&mut app, vec![egui::Event::Text(typed.into())]);
+    }
+    f.key(&mut app, egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(app.ui.dialog.is_none(), "Enter applies the dialog");
+    assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect, vectorcraft_geom::Rect::new(20.0, -250.0, 420.0, 50.0));
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    open(&mut app, "rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40}));
+    let shown = f.texts(&mut app);
+    assert!(has(&shown, "Width:") && !has(&shown, "X:") && !has(&shown, "Y:"), "{shown:?}");
+}
+
+/// #1876: a new Width or Height in Artboard Options keeps the reference point where it was, as the
+/// Transform panel's does: about the center by default, so X and Y still read the same, and from
+/// the top-left corner with that reference point.
+#[test]
+fn artboard_options_size_keeps_the_reference_point() {
+    for (point, want) in
+        [(None, vectorcraft_geom::Rect::new(-50.0, 0.0, 450.0, 300.0)), (Some("Top Left"), vectorcraft_geom::Rect::new(0.0, 0.0, 500.0, 300.0))]
+    {
+        let mut app = artboard_options_from_a_ruler_origin();
+        let mut f = Frames::new();
+        if let Some(point) = point {
+            let at = f.control(&mut app, point, egui::accesskit::Role::RadioButton);
+            f.press(&mut app, at, true);
+            f.press(&mut app, at, false);
+        }
+        let shown = f.texts(&mut app);
+        let (width, height) = (field_after(&shown, "Width:"), field_after(&shown, "Height:"));
+        f.press(&mut app, width, true);
+        f.press(&mut app, width, false);
+        f.run(&mut app, vec![egui::Event::Text("500".into())]);
+        // A click on Height ends the Width field's editing; X reads as before.
+        f.press(&mut app, height, true);
+        f.press(&mut app, height, false);
+        let shown = f.texts(&mut app);
+        let x = Unit::Points.format(if point.is_some() { -120.0 } else { 80.0 });
+        assert!(shown.iter().any(|(t, _)| *t == x), "{x} in {shown:?}");
+        f.key(&mut app, egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(app.ui.dialog.is_none(), "Enter applies the dialog");
+        assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect, want, "{point:?}");
+    }
+}
+
 /// Zig Zag's dialog has Size and Ridges per segment sliders, and Relative / Absolute and Smooth /
 /// Corner as radio buttons, not dropdowns (#1133).
 #[test]
@@ -1031,6 +1137,97 @@ fn zig_zag_has_sliders_and_radio_buttons() {
         assert!(lines.contains(&want), "no {want:?} in {lines:?}");
     }
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
+}
+
+/// Screen readers get the number and text of the field beside each dialog slider, in the field's
+/// unit, with the rail's range (extended to a number past the rail's end): Transform Each's Scale
+/// and Move, Zig Zag's Size and Ridges, a form slider (Vector Halftone's Frequency), the Pencil's
+/// Fidelity, the Color Picker's channel slider, the Perspective Grid's Opacity, Revolve's angle and
+/// Offset, Extrude & Bevel's Rotation X and Y, Swatch Options' components and the flattener's Raster/Vector Balance.
+#[test]
+fn dialog_sliders_report_the_numbers_their_fields_show() {
+    use crate::widgets::accessibility_tests::{slider_value, tree};
+    use egui::accesskit::Role::Slider;
+    fn set(app: &mut VectorcraftApp, k: &str, v: serde_json::Value) {
+        app.ui.dialog.as_mut().expect("a dialog is open").fields.insert(k.into(), v);
+    }
+    let v = |n: f64, (lo, hi): (f64, f64), text: &str| (Some(n), Some(lo), Some(hi), Some(text.to_string()));
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    set(&mut app, "scaleH", json!(250));
+    set(&mut app, "moveH", json!(-36));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    let horizontal: Vec<_> = shown
+        .iter()
+        .filter(|n| n.role() == Slider && n.label() == Some("Horizontal:"))
+        .map(|n| (n.numeric_value(), n.min_numeric_value(), n.max_numeric_value(), n.value().map(str::to_string)))
+        .collect();
+    assert_eq!(
+        horizontal,
+        [(Some(250.0), Some(0.0), Some(250.0), Some("250%".into())), (Some(-36.0), Some(-1000.0), Some(1000.0), Some("-36 pt".into()))]
+    );
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.zigZag"})).unwrap();
+    set(&mut app, "relative", json!(true));
+    set(&mut app, "size", json!(30));
+    set(&mut app, "ridges", json!(6));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Size:"), v(30.0, (0.0, 100.0), "30%"));
+    assert_eq!(slider_value(&shown, "Ridges per segment:"), (Some(6.0), Some(0.0), Some(100.0), None));
+    set(&mut app, "relative", json!(false));
+    set(&mut app, "size", json!(12));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Size:"), v(12.0, (0.0, 100.0), "12 pt"), "Absolute: a distance");
+    open(&mut app, halftone::KIND, halftone::fields());
+    set(&mut app, "frequency", json!(60));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Frequency"), v(60.0, (1.0, 150.0), "60 lpi"));
+    app.ui.dialog = None;
+    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
+    set(&mut app, "fidelity", json!(2.5));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.5, 20.0), "2.5pt"));
+    app.ui.dialog = None;
+    app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
+    app.run("ui.colorPicker", json!({})).unwrap();
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "H"), v(30.0, (0.0, 360.0), "30°"));
+    set(&mut app, "channel", json!("green"));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "G"), v(128.0, (0.0, 255.0), "128"));
+    app.ui.dialog = None;
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "opacity", json!(40));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Opacity:"), v(40.0, (0.0, 100.0), "40%"));
+    app.ui.dialog = None;
+    app.run("path.create", json!({"d": "M150 40 L180 60 L180 140 L150 160"})).unwrap();
+    app.run("effect.dialog", json!({"effect": vectorcraft_effects::REVOLVE, "item": null})).unwrap();
+    set(&mut app, "angle", json!(270));
+    set(&mut app, "offset", json!(600));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    // The 3D dialogs' fields are DragValues, which keep a trailing zero at one place.
+    assert_eq!(slider_value(&shown, "Revolve angle"), v(270.0, (0.0, 360.0), "270.0°"));
+    assert_eq!(slider_value(&shown, "Offset"), v(600.0, (0.0, 600.0), "600.0 pt"), "past the rail's 500 pt");
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": vectorcraft_effects::EXTRUDE, "item": null})).unwrap();
+    set(&mut app, "__tab", json!("rotation"));
+    set(&mut app, "rotationX", json!(30));
+    set(&mut app, "rotationY", json!(12.25));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Rotation X"), v(30.0, (-180.0, 180.0), "30.0°"), "at most 2 places");
+    assert_eq!(slider_value(&shown, "Rotation Y"), v(12.25, (-180.0, 180.0), "12.25°"));
+    app.ui.dialog = None;
+    app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 80, "y": 60, "k": 0}, "spot": true})).unwrap();
+    app.run("ui.swatchOptions", json!({"name": "Ink"})).unwrap();
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "M"), v(80.0, (0.0, 100.0), "80%"));
+    let mut o = vectorcraft_engine::cmd::FlattenOptions { balance: 30.0, ..Default::default() };
+    let shown = tree(|ui| {
+        flatten::options_editor(ui, "flatten-test", &mut o, true);
+    });
+    assert_eq!(slider_value(&shown, "Raster/Vector Balance:"), v(30.0, (0.0, 100.0), "30"));
 }
 
 /// Frames of the dialog layer on one context (so a drag and the keyboard focus last from frame to
@@ -1058,13 +1255,24 @@ impl Frames {
         out
     }
 
+    /// The strings the dialog layer paints once it has settled, each with its rectangle.
+    fn texts(&mut self, app: &mut VectorcraftApp) -> Vec<(String, egui::Rect)> {
+        self.run(app, vec![]);
+        painted(&self.run(app, vec![]))
+    }
+
     /// The center of the button that screen readers name `label`.
     fn button(&mut self, app: &mut VectorcraftApp, label: &str) -> egui::Pos2 {
+        self.control(app, label, egui::accesskit::Role::Button)
+    }
+
+    /// The center of the control of `role` that screen readers name `label`.
+    fn control(&mut self, app: &mut VectorcraftApp, label: &str, role: egui::accesskit::Role) -> egui::Pos2 {
         self.run(app, vec![]);
         let out = self.run(app, vec![]);
         let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        let node = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == egui::accesskit::Role::Button);
-        let b = node.unwrap_or_else(|| panic!("no button named {label:?}")).1.bounds().expect("bounds");
+        let node = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role);
+        let b = node.unwrap_or_else(|| panic!("no {role:?} named {label:?}")).1.bounds().expect("bounds");
         egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
     }
 

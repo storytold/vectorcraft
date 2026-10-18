@@ -115,3 +115,25 @@ fn export_to_a_path_puts_the_pictures_next_to_the_sheet() {
     assert!(std::fs::read(&png).unwrap().starts_with(b"\x89PNG"));
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_says_once_when_a_rasterized_image_could_not_be_decoded() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let notes = |r: &Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str() == Some(NOTE)).count();
+    let mut s = session();
+    run(&mut s, "shape.star", json!({"cx": 100, "cy": 100, "radius1": 40, "radius2": 20}));
+    assert_eq!(notes(&run(&mut s, "css.export", json!({"scope": "all", "rasterize": true}))), 0);
+    // Two images the renderer can't decode, each rasterized to a picture of its own.
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    let r = run(&mut s, "css.export", json!({"scope": "all", "rasterize": true}));
+    assert_eq!(r["images"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(notes(&r), 1, "{}", r["warnings"]);
+    let dir = std::env::temp_dir().join(format!("vc-css-undecoded-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let r = run(&mut s, "css.export", json!({"path": dir.join("site.css").to_string_lossy(), "scope": "all", "rasterize": true}));
+    assert_eq!(r["images"].as_array().unwrap().len(), 3, "the pictures are still written");
+    assert_eq!(notes(&r), 1, "{}", r["warnings"]);
+    std::fs::remove_dir_all(&dir).ok();
+}

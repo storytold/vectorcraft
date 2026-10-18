@@ -184,6 +184,7 @@
 	Expand…	확장…
 	Expand Appearance	모양새 확장
 	Crop Image	이미지 자르기
+	Edit Path	패스 편집
 	Mask	마스크
 	Rasterize…	래스터화…
 	Create Gradient Mesh…	그레이디언트 메시 만들기…
@@ -1595,6 +1596,10 @@
 	Highlight Substituted Glyphs	대체된 글리프 강조 표시
 	Highlight anchors on mouse over	마우스를 올리면 앵커 강조 표시
 	History Options…	히스토리 옵션…
+	Step Backward	한 단계 뒤로
+	Step Forward	한 단계 앞으로
+	Clear History	히스토리 지우기
+	Set History Limit…	히스토리 한도 설정…
 	History States	히스토리 상태
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	데이터 세트 적용
@@ -2446,6 +2451,8 @@ mark-style	Japanese	일본식
 	Redefine Character Style	문자 스타일 재정의
 	Redefine Graphic Style	그래픽 스타일 재정의
 	Redefine Graphic Style “{name}”	그래픽 스타일 “{name}” 재정의
+	Apply {name}	스타일 “{name}” 적용
+	Redefine {name}	스타일 “{name}” 재정의
 	Redefine Paragraph Style	단락 스타일 재정의
 	Redefine Symbol	심볼 재정의
 	Redefine {kind} Style	{kind} 스타일 재정의
@@ -3718,6 +3725,9 @@ theme	Appearance	외관
 @msg	it has more than one artboard	아트보드가 둘 이상입니다
 @msg	its editing data has no layers	편집 데이터에 레이어가 없습니다
 @msg	its editing data is damaged	편집 데이터가 손상되었습니다
+@msg	its zlib compression is damaged	zlib 압축이 손상되었습니다
+@msg	its Zstandard compression is damaged	Zstandard 압축이 손상되었습니다
+@msg	it decompresses to more than {_1} MB	압축을 풀면 {_1}MB를 넘습니다
 @msg	its type is to come in as outlines, which only its page has	문자를 윤곽선으로 가져오도록 되어 있으나, 이는 해당 페이지에만 있습니다
 @msg	{_1} files	{_1} 파일
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU 또는 WebGL2를 지원하는 브라우저가 필요합니다.
@@ -3808,6 +3818,7 @@ theme	Appearance	외관
 @msg	object {id} is not a selected top-level object	개체 {id}은(는) 선택된 최상위 개체가 아닙니다
 @msg	nothing to redo	다시 실행할 항목이 없습니다
 @msg	nothing to undo	실행 취소할 항목이 없습니다
+@msg	no history to clear	지울 히스토리가 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
@@ -3825,9 +3836,11 @@ theme	Appearance	외관
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	이 파일은 PDF 호환성 없이 저장되어 편집 데이터를 읽을 수 없습니다({why})
 @msg	the export wrote no file	내보내기에서 파일이 만들어지지 않았습니다
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 파일은 열 수 있지만 쓸 수 없습니다(document.formats 참조)
+@msg	{_1} files are written by file.saveAsTemplate	{_1} 파일은 file.saveAsTemplate로 기록합니다
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: 여기에는 파일 시스템이 없습니다(열려면 dataBase64를 전달하고, dataBase64를 얻으려면 경로를 생략하세요)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 다른 형식은 document.export를 사용하세요
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 이 형식으로 기록하려면 file.saveAsTemplate를 사용하세요
+@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7은(는) 레거시 .ai 파일을 기록합니다. .ait 템플릿은 항상 PDF 호환입니다
 @msg	no changes since the last save	마지막 저장 이후 변경 내용이 없습니다
 @msg	unknown format `{f}` (Save writes {_1})	알 수 없는 형식 `{f}`(저장은 {_1}(으)로 기록)
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`는 SVG 옵션 개체여야 합니다(document.formats 참조)
@@ -3846,6 +3859,8 @@ theme	Appearance	외관
 @msg	`freeform.points` must be an array	`freeform.points`는 배열이어야 합니다
 @msg	`freeform.lines` must be an array	`freeform.lines`는 배열이어야 합니다
 @msg	`{key}` must be a number	`{key}`은(는) 숫자여야 합니다
+@msg	`{key}` must be a number, not {v}	`{key}`은(는) 숫자여야 하며 {v}은(는) 안 됩니다
+@msg	{key} must be Unix seconds (an integer) or null	{key}은(는) 초 단위 Unix 시간(정수) 또는 null이어야 합니다
 @msg	a freeform gradient keeps at least one point	자유형 그레이디언트에는 점이 하나 이상 있어야 합니다
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	자유형 점 {i}에는 `at` [x, y]과 올바른 `color`가 필요합니다
 @msg	freeform line {i} must be an array of point indices	자유형 선 {i}은(는) 점 인덱스 배열이어야 합니다
@@ -4040,7 +4055,8 @@ theme	Appearance	외관
 @msg	it has too much text	텍스트가 너무 많습니다
 @msg	its editing data doesn't say where its art is	편집 데이터에 아트웍의 위치가 없습니다
 @msg	its editing data doesn't say where its artboard is	편집 데이터에 아트보드의 위치가 없습니다
-@msg	its editing data is for a different page	편집 데이터가 다른 페이지용입니다
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	편집 데이터가 파일의 {pw} × {ph} pt 페이지가 아닌 {w} × {h} pt 페이지용입니다
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	편집 데이터가 {w} × {h} pt 페이지용입니다. 파일의 {pw} × {ph} pt 페이지를 {scale} 배율로 나타낸 것입니다
 @msg	its page has text, and its layers have no text objects to put it in	페이지에 텍스트가 있지만 레이어에는 이를 넣을 텍스트 개체가 없습니다
 @msg	the art on them differs from the page's in {_1}% of it	이들의 아트웍이 페이지와 {_1}% 다릅니다
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	이들의 아트웍이 페이지와 {_1}% 다릅니다. 그래도 편집 데이터에서 가져왔습니다
@@ -4084,6 +4100,7 @@ theme	Appearance	외관
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
+@msg	thumbnail: no page {n} (the file has 1)	thumbnail: 페이지 {n}이(가) 없습니다(파일의 페이지 수: 1)
 @msg	the PDF has no pages	PDF에 페이지가 없습니다
 @msg	the PDF is password-protected: give its password	PDF가 암호로 보호되어 있습니다: 암호를 입력하세요
 @msg	the PDF password is wrong	PDF 암호가 올바르지 않습니다
@@ -4171,6 +4188,7 @@ theme	Appearance	외관
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1}은(는) 라이브 효과입니다(효과 › 플러그인)
 @msg	a preset named `{_1}` exists	`{_1}`이라는 프리셋이 이미 있습니다
+@msg	a swatch or color group named `{n}` exists	`{n}`이라는 견본 또는 색상 그룹이 이미 있습니다
 @msg	no print preset named `{base}`	`{base}`라는 인쇄 프리셋이 없습니다
 @msg	no print preset named `{name}`	`{name}`이라는 인쇄 프리셋이 없습니다
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	`{name}`이라는 저장된 인쇄 프리셋이 없습니다({DEFAULT_PRESET}은(는) 보호되어 있으니 이를 바탕으로 새로 만드세요)
@@ -4235,6 +4253,7 @@ theme	Appearance	외관
 @msg	missing `tool`	`tool`이 없습니다
 @msg	missing index	index가 없습니다
 @msg	missing number `{key}`	숫자 `{key}`이(가) 없습니다
+@msg	missing integer `{key}`	정수 `{key}`이(가) 없습니다
 @msg	multiple windows land with M11.5	여러 창은 M11.5에서 지원됩니다
 @msg	no PNG encoder	PNG 인코더가 없습니다
 @msg	no document open	열린 문서가 없습니다
@@ -4345,6 +4364,9 @@ theme	Appearance	외관
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: 단계 {i}의 결과에 해당 값이 없습니다(문자 그대로의 $는 $$로 쓰세요)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: 이 단계 앞에 단계 {i}이(가) 없습니다(단계는 0부터 셉니다. 문자 그대로의 $는 $$로 쓰세요)
 @msg	object ids are non-negative integers, not {v}	개체 id는 음이 아닌 정수여야 하며 {v}은(는) 안 됩니다
+@msg	{key} must be an array of non-negative integer object ids	{key}은(는) 음이 아닌 정수인 개체 id의 배열이어야 합니다
+@msg	invalid object id {value}: expected a non-negative integer	개체 id {value}이(가) 올바르지 않습니다: 음이 아닌 정수여야 합니다
+@msg	no such object id {value}	id가 {value}인 개체가 없습니다
 @msg	automation filesystem access is not granted: read authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 읽기 권한이 없습니다: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 쓰기 권한이 없습니다: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {root} 밖입니다: {path}
@@ -4532,6 +4554,8 @@ lighting	Light	광원
 @msg	missing panel layout	패널 레이아웃이 없습니다
 @msg	unsupported native docking operation	지원되지 않는 기본 도킹 작업
 	Linux Display Server	Linux 디스플레이 서버
+	X11 (XWayland) When a Pen Is Attached	펜 연결 시 X11 (XWayland)
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	드로잉 태블릿의 펜으로 그려지지 않으면 X11 (XWayland) 옵션을 선택하세요.
 	X11 (XWayland)	X11 (XWayland)
 	Artistic	예술 효과
 	Film Grain…	필름 그레인…
@@ -4630,6 +4654,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+# 3D light management.
+	Lights	광원 목록
+	Add Light	광원 추가
+	Delete Light	광원 삭제
+3d	Light	광원
 	Registration:	기준점:
 # Dimension tool and Object › Dimensions (dimension groups, their dialog and messages).
 	Dimension	치수
@@ -4722,6 +4751,11 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	원본 편집은 이미지 및 문서 파일만 엽니다. “{name}”은(는) 해당하지 않습니다
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	브라우저에서는 http, https, mailto URL만 열립니다. “{url}”은(는) 열 수 없습니다
+@msg	{id} opens another app: only the person at the keyboard can run it	{id}은(는) 다른 앱을 엽니다. 키보드 앞에 있는 사용자만 실행할 수 있습니다
+@msg	“{name}” is not a file	“{name}”은(는) 파일이 아닙니다
 	Enable Guides for 9-Slice Scaling	9-슬라이스 크기 조절용 안내선 사용
 @msg	a mask has more than one art block	마스크에 아트 블록이 두 개 이상 있습니다
 @msg	mask art ends outside a mask dictionary	마스크 아트가 마스크 사전 밖에서 끝납니다
@@ -4749,3 +4783,23 @@ lighting	Light	광원
 	Clear Artboard Color	아트보드 색상 지우기
 @msg	artboard {_1} is locked	아트보드 {_1}이(가) 잠겨 있습니다
 	Include Artboard Fill	아트보드 색상 포함
+	Artboard {n} of {total}	아트보드 {n} / {total}
+	Encoding and writing the file…	파일을 인코딩하고 쓰는 중…
+@plural	{n} more export waiting|{n} more exports waiting	대기 중인 내보내기 {n}개 더
+	Continue in Background	백그라운드에서 계속
+	Cancel Export	내보내기 취소
+@msg	Export cancelled	내보내기를 취소했습니다
+# Paragraph panel menu › Justification…
+	Desired	희망
+	Word Spacing:	단어 간격:
+	Letter Spacing:	문자 간격:
+	Glyph Scaling:	글리프 비율:
+	Auto Leading:	자동 행간:
+	Single Word Justification:	단일 단어 정렬:
+	Full Justify	강제 양쪽 정렬
+	Minimum must not exceed Desired, nor Desired Maximum.	최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다.
+	Minimum	최소
+	Justification	양끝 맞춤
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
+# Select by Color (select.color)
+	Select by Color	색상별 선택

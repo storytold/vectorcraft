@@ -12,8 +12,7 @@ use crate::DocState;
 use super::super::*;
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
-    write_or_return,
+    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
 };
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
@@ -183,7 +182,7 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 
 /// The selected objects (their top-most selected ancestors) that are artwork: those on template
 /// layers are guides and are left out.
-pub(crate) fn selected_artwork(s: &mut Session) -> Result<Vec<NodeId>> {
+pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
@@ -234,7 +233,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// File → Save for Office Documents: one artboard as a PNG at `ppi`, on white unless
-/// `transparent`.
+/// `transparent`, with the encoder's warnings.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
     if let Some(path) = str_param(p, "path") {
@@ -252,8 +251,8 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
     let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
-    let bytes = encode(doc, "png", &opts)?;
+    let (bytes, warnings) = encode_with_warnings(doc, "png", &opts)?;
     // The pixel size, from the PNG header.
     let side = |at: usize| bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).map_or(0, u32::from_be_bytes);
-    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20) }))
+    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20), "warnings": warnings }))
 }

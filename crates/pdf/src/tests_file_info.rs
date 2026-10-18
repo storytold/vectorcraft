@@ -174,6 +174,27 @@ fn an_unreadable_xmp_packet_leaves_the_information_dictionary() {
 }
 
 #[test]
+fn an_xmp_packet_nested_too_deep_leaves_the_information_dictionary() {
+    // The creator's `rdf:li` is 6 deep (`x:xmpmeta`, `rdf:RDF`, `rdf:Description`, `dc:creator`,
+    // `rdf:Seq`); `n` elements around its text nest the packet 6 + `n` deep.
+    let nested = |n: usize| {
+        let creator = format!("<dc:creator><rdf:Seq><rdf:li>{}Ada Lovelace{}</rdf:li></rdf:Seq></dc:creator>", "<a>".repeat(n), "</a>".repeat(n));
+        packet(&description("", &creator))
+    };
+    let author = |xmp: &str| file_info(&pdf(Some(INFO), Some(xmp)), None).unwrap().author;
+    assert_eq!(author(&nested(250)).as_deref(), Some("Ada Lovelace"));
+    assert_eq!(author(&nested(251)).as_deref(), Some("Grace Hopper"));
+    // A million deep: 7 MB, within the longest packet read.
+    let f = file_info(&pdf(Some(INFO), Some(&nested(1_000_000))), None).unwrap();
+    assert_eq!(f.author.as_deref(), Some("Grace Hopper"));
+    assert_eq!((f.created, f.modified), (Some(CREATED), Some(MODIFIED)));
+    // Tags in comments, CDATA sections and processing instructions don't count.
+    let tags = "<a>".repeat(300);
+    let creator = format!("<!-- {tags} --><dc:creator><![CDATA[{tags}]]><?pi {tags}?><rdf:Seq><rdf:li>Ada Lovelace</rdf:li></rdf:Seq></dc:creator>");
+    assert_eq!(author(&packet(&description("", &creator))).as_deref(), Some("Ada Lovelace"));
+}
+
+#[test]
 fn a_written_pdf_gives_its_file_info_back() {
     let mut d = Document::new(100.0, 100.0);
     d.metadata.author = "Ada Lovelace".into();

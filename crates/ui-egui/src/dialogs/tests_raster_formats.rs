@@ -133,3 +133,25 @@ fn save_for_office_documents_picks_the_resolution() {
     let img = image::load_from_memory(&written.borrow()[1].1).unwrap().to_rgba8();
     assert_eq!((img.dimensions(), img.get_pixel(0, 0).0), ((60, 40), [255, 255, 255, 255]));
 }
+
+#[test]
+fn save_for_office_and_export_selection_say_when_an_image_could_not_be_decoded() {
+    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    let (mut app, written) = app(1);
+    app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
+    assert_eq!(app.ui.status, "Saved /x/o.png");
+    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
+    png.truncate(idat + 8);
+    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [10, 10]})).unwrap();
+    app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
+    assert_eq!(app.ui.status, format!("Saved /x/o.png {NOTE}"));
+    // Export Selection of the placed image, which stays selected.
+    app.run("document.exportSelection", json!({"path": "/x/cut.png"})).unwrap();
+    assert_eq!(app.ui.status, format!("Saved /x/cut.png {NOTE}"));
+    assert_eq!(written.borrow().len(), 3, "the files are still written");
+}

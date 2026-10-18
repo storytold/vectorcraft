@@ -83,6 +83,13 @@ fn close(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-6
 }
 
+/// `cmd` with `p` fails with the error for `key`, which `p` gives as something other than a number.
+fn refuses_non_number(s: &mut Session, cmd: &str, p: &Value, key: &str) {
+    let r = s.execute(cmd, p);
+    let want = format!("`{key}` must be a number, not {}", p[key]);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
 // ---------- Object → Lock / Hide ----------
 
 #[test]
@@ -399,6 +406,29 @@ fn transform_each_refuses_a_reference_or_seed_that_is_not_a_whole_number() {
     assert_eq!(bounds(&s, a), Rect::new(0.0, 0.0, 50.0, 50.0));
 }
 
+/// Transform Each refuses a scale, move or rotation given as text or as another value that is not a
+/// number, and the object stays as it was; numbers for the scales and the horizontal move transform it.
+#[test]
+fn transform_each_refuses_a_number_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let before = (undo_len(&s), bounds(&s, a));
+    for (key, p) in [
+        ("scaleH", json!({"scaleH": "50"})),
+        ("scaleV", json!({"scaleH": 50, "scaleV": "50%"})),
+        ("moveH", json!({"moveH": "10"})),
+        ("moveV", json!({"moveH": 10, "moveV": [5]})),
+        ("rotate", json!({"rotate": "45"})),
+        ("rotate", json!({"moveH": 10, "rotate": true})),
+    ] {
+        refuses_non_number(&mut s, "object.transformEach", &p, key);
+        assert_eq!((undo_len(&s), bounds(&s, a)), before, "{p}");
+    }
+    s.execute("object.transformEach", &json!({"scaleH": 50, "scaleV": 50, "moveH": 10, "moveV": null})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(35.0, 25.0, 85.0, 75.0));
+}
+
 /// #1910: Transform Each's Reflect X flips left-right; Reflect Y flips top-bottom (same as
 /// Effect › Distort › Transform and Illustrator's Transform Each checkboxes).
 #[test]
@@ -571,6 +601,22 @@ fn rasterize_replaces_selection_with_image() {
     assert_eq!(selected(&s), vec![img]);
 }
 
+/// Rasterize refuses a resolution given as text or as another value that is not a number, and the
+/// selected art stays as it was.
+#[test]
+fn rasterize_refuses_a_ppi_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
+    sel(&mut s, &[a]);
+    let before = (undo_len(&s), node(&s, a));
+    for p in [json!({"ppi": "144"}), json!({"ppi": "300 ppi", "padding": 0}), json!({"ppi": [72]})] {
+        refuses_non_number(&mut s, "object.rasterize", &p, "ppi");
+        assert_eq!((undo_len(&s), node(&s, a)), before, "{p}");
+    }
+    let img = id_of(&s.execute("object.rasterize", &json!({"ppi": 144, "padding": 0})).unwrap());
+    assert!(matches!(node(&s, img).kind, NodeKind::Image(_)));
+}
+
 #[test]
 fn rasterize_says_when_an_image_could_not_be_decoded() {
     let mut s = session();
@@ -606,6 +652,25 @@ fn crop_image_to_rect() {
     assert!(close(b.x0, 10.0) && close(b.y0, 10.0) && close(b.width(), 50.0) && close(b.height(), 40.0), "{b:?}");
     // Image fully inside the artboard: default crop has nothing to do.
     assert!(s.execute("object.cropImage", &json!({})).is_err());
+}
+
+/// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
+/// null `rect` crops to the artboard as a missing one does.
+#[test]
+fn crop_image_refuses_a_rect_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, -20.0, -20.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let img = id_of(&s.execute("object.rasterize", &json!({"ppi": 72})).unwrap());
+    let before = (undo_len(&s), node(&s, img));
+    for p in [json!({"rect": "0, 0, 20, 20"}), json!({"rect": {"x": 0, "y": 0, "width": 20, "height": 20}}), json!({"rect": 20})] {
+        let r = s.execute("object.cropImage", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "rect must be [x, y, width, height]"), "{p}: {r:?}");
+        assert_eq!((undo_len(&s), node(&s, img)), before, "{p}");
+    }
+    s.execute("object.cropImage", &json!({"rect": null})).unwrap();
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0), "{b:?}");
 }
 
 #[test]
@@ -654,6 +719,30 @@ fn trim_marks_around_selection() {
     let b = n.geometric_bounds().unwrap();
     let vb = s.doc().unwrap().doc.bounds_of(&[a], true).unwrap();
     assert!(close(b.x0, vb.x0 - 30.0) && close(b.y1, vb.y1 + 30.0), "{b:?} {vb:?}");
+}
+
+/// Create Trim Marks refuses an offset, length, bleed or weight given as text or as another value
+/// that is not a number, around the selection and around the artboards, and makes no marks.
+#[test]
+fn trim_marks_refuse_a_number_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let calls = [
+        ("offset", json!({"offset": "10"})),
+        ("length", json!({"length": "20 pt"})),
+        ("bleed", json!({"style": "japanese", "bleed": "3"})),
+        ("weight", json!({"weight": true})),
+        ("offset", json!({"allArtboards": true, "offset": {"value": 10}})),
+    ];
+    for ids in [vec![a], vec![]] {
+        sel(&mut s, &ids);
+        let before = (undo_len(&s), s.doc().unwrap().doc.layers[0].children().unwrap().len());
+        for (key, p) in &calls {
+            refuses_non_number(&mut s, "object.createTrimMarks", p, key);
+            assert_eq!((undo_len(&s), s.doc().unwrap().doc.layers[0].children().unwrap().len()), before, "{p}");
+        }
+    }
+    s.execute("object.createTrimMarks", &json!({"offset": 10, "length": 20, "bleed": null})).unwrap();
 }
 
 // ---------- Convert to Shape ----------
@@ -789,6 +878,22 @@ fn rearrange_refuses_columns_that_are_not_a_whole_number() {
     }
     let r = s.execute("artboard.rearrange", &json!({"columns": 1.0, "spacing": 50})).unwrap();
     assert_eq!((r["rows"].clone(), r["columns"].clone()), (json!(2), json!(1)));
+}
+
+/// Rearrange All Artboards refuses a spacing given as text or as another value that is not a number,
+/// and the artboards stay where they were.
+#[test]
+fn rearrange_refuses_a_spacing_given_as_text() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 300})).unwrap();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let before = (boards(&s), undo_len(&s));
+    for p in [json!({"spacing": "50"}), json!({"columns": 1, "spacing": "50 pt"}), json!({"layout": "row", "spacing": false})] {
+        refuses_non_number(&mut s, "artboard.rearrange", &p, "spacing");
+        assert_eq!((boards(&s), undo_len(&s)), before, "{p}");
+    }
+    s.execute("artboard.rearrange", &json!({"columns": 1, "spacing": 50})).unwrap();
+    assert_eq!(boards(&s)[1], Rect::new(0.0, 650.0, 400.0, 950.0));
 }
 
 /// Fit to Artwork Bounds fits each artboard it is given to the art on it, in one undo step: an
@@ -1024,6 +1129,55 @@ fn select_same_paint_reads_type_characters() {
     assert_eq!(same(&mut s, t3, "select.same.strokeColor"), vec![t3, q]);
     assert_eq!(same(&mut s, q, "select.same.strokeWeight"), vec![t3, q]);
     assert_eq!(same(&mut s, t1, "select.same.fillAndStroke"), vec![t1, r]);
+}
+
+/// Select by Color needs no object to start from: it matches fills and strokes as
+/// `document.inspect` reports them, `#rrggbb`.
+#[test]
+fn select_color_matches_fill_and_stroke_without_a_selection() {
+    let mut s = session();
+    let [a, b, c] = [0.0, 20.0, 40.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    let t = text(&mut s, "a");
+    fill(&mut s, a, "#000000");
+    fill(&mut s, t, "#000000");
+    // A grey as a PDF stores it reads as #fefefe.
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": [0.996, 0.996, 0.996]})).unwrap();
+    fill(&mut s, c, "#ff0000");
+    s.execute("paint.setStroke", &json!({"ids": [a.0, c.0], "color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let pick = |s: &mut Session, p: Value| {
+        s.execute("select.color", &p).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t]);
+    assert_eq!(pick(&mut s, json!({"fill": "#fefefe"})), vec![b]);
+    assert_eq!(pick(&mut s, json!({"stroke": "#0000ff"})), vec![a, c]);
+    assert_eq!(pick(&mut s, json!({"fill": "#000000", "stroke": "#0000ff"})), vec![a]);
+    // Select > Reselect repeats it.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a]);
+    // A compound path reads as its own paint, never its members'.
+    let outer = rect(&mut s, 100.0, 0.0, 50.0, 50.0);
+    let inner = rect(&mut s, 110.0, 10.0, 20.0, 20.0);
+    fill(&mut s, outer, "#000000");
+    fill(&mut s, inner, "#000000");
+    sel(&mut s, &[outer, inner]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t, compound]);
+    fill(&mut s, compound, "#ff0000");
+    assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t]);
+    assert_eq!(pick(&mut s, json!({"fill": "#ff0000"})), vec![c, compound]);
+    // Type without characters reads as the default character fill, black.
+    let empty = text(&mut s, "x");
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(empty).map(|n| &mut n.kind) {
+        t.runs.clear();
+    }
+    assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t, empty]);
+    assert!(s.execute("select.color", &json!({})).is_err());
+    assert!(s.execute("select.color", &json!({"fill": "not a colour"})).is_err());
 }
 
 #[test]
@@ -1593,6 +1747,23 @@ fn change_case_variants() {
     s.execute("type.changeCase", &json!({"case": "sentence"})).unwrap();
     assert_eq!(plain(&s, t), "Hello world. Again here");
     assert!(s.execute("type.changeCase", &json!({"case": "weird"})).is_err());
+}
+
+/// Georgian has no word capitals: title and sentence case leave Mkhedruli lower case (and bring
+/// Mtavruli back to it) instead of capitalizing it; upper case still gives Mtavruli.
+#[test]
+fn change_case_leaves_georgian_uncapitalized() {
+    let mut s = session();
+    let t = text(&mut s, "ფენის სახელი. ახალი Layer");
+    sel(&mut s, &[t]);
+    s.execute("type.changeCase", &json!({"case": "title"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი Layer");
+    s.execute("type.changeCase", &json!({"case": "sentence"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი layer");
+    s.execute("type.changeCase", &json!({"case": "upper"})).unwrap();
+    assert_eq!(plain(&s, t), "ᲤᲔᲜᲘᲡ ᲡᲐᲮᲔᲚᲘ. ᲐᲮᲐᲚᲘ LAYER");
+    s.execute("type.changeCase", &json!({"case": "title"})).unwrap();
+    assert_eq!(plain(&s, t), "ფენის სახელი. ახალი Layer");
 }
 
 /// Change Case is one undo step, and Change Case to the case the text has already records no undo

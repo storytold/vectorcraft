@@ -15,6 +15,8 @@ default = ["bundled-fonts"]
 bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 
 [dependencies]
+# Which paths stored in documents may be opened.
+craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -35,6 +37,8 @@ vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }
+# The XML parts of Word documents placed as type (place/docx.rs).
+roxmltree = "0.21"
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -27,6 +27,9 @@ pub struct GestureTool {
     began: bool,
     /// Pencil/Paintbrush continuing a selected open path: (path, continue from its start).
     extend: Option<(NodeId, bool)>,
+    /// Pencil/Paintbrush starting on a selected path away from its ends: (path, Edit Selected
+    /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
+    redraw: Option<(NodeId, f64)>,
     /// Fit tolerance in points (Pencil/Paintbrush/Smooth "Fidelity").
     pub fidelity: f64,
     /// Brush / eraser diameter in points.
@@ -66,6 +69,7 @@ impl GestureTool {
             active: false,
             began: false,
             extend: None,
+            redraw: None,
             fidelity,
             size: 10.0,
             fill: false,
@@ -143,6 +147,18 @@ impl GestureTool {
         None
     }
 
+    /// The selected path whose outline is near `p` (Edit Selected Paths, off at 0 pixels).
+    fn find_redraw(&self, cx: &ToolContext, p: Point) -> Option<(NodeId, f64)> {
+        let tol = cx.tol(self.edit_within);
+        if self.edit_within <= 0.0 || !tol.is_finite() {
+            return None;
+        }
+        cx.selection.objects.iter().find_map(|id| {
+            let pd = cx.doc.node(*id).and_then(|n| n.path_data()).filter(|_| cx.doc.is_editable(*id))?;
+            pd.nearest(p).filter(|n| n.4 <= tol).map(|_| (*id, tol))
+        })
+    }
+
     /// Parameters of `path.freehand` for the current stroke.
     pub fn freehand_params(&self, closed: bool) -> Value {
         let mut v = json!({
@@ -155,6 +171,8 @@ impl GestureTool {
         });
         if let Some((id, start)) = self.extend {
             v["extend"] = json!({"id": id.0, "end": if start { "start" } else { "end" }});
+        } else if let Some((id, within)) = self.redraw {
+            v["redraw"] = json!({"id": id.0, "within": within});
         }
         v
     }
@@ -211,8 +229,9 @@ impl Tool for GestureTool {
                 self.active = true;
                 self.began = false;
                 self.extend = if self.draws_path() { self.find_extend(cx, p) } else { None };
-                // A path continued starts at its end; a new one where it snaps.
-                let start = if self.snaps() && self.extend.is_none() { self.snap.press(cx, p, &[], None) } else { p };
+                self.redraw = if self.draws_path() && self.extend.is_none() { self.find_redraw(cx, p) } else { None };
+                // A path continued starts at its end, one redrawn on it; a new one where it snaps.
+                let start = if self.snaps() && self.extend.is_none() && self.redraw.is_none() { self.snap.press(cx, p, &[], None) } else { p };
                 self.clear();
                 self.push(start, ev.pressure);
                 vec![]
@@ -260,6 +279,7 @@ impl Tool for GestureTool {
                 self.began = false;
                 self.clear();
                 self.extend = None;
+                self.redraw = None;
                 out
             }
             _ => vec![],

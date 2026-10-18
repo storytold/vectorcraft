@@ -628,6 +628,7 @@
 	Created:	Създадено:
 	Crop	Изрязване
 	Crop Image	Изрязване на изображение
+	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
 	Crop To	Изрязване до
@@ -1320,6 +1321,10 @@
 	Highlight Substituted Glyphs	Маркиране на заменени глифи
 	History	История
 	History Options…	Опции за историята…
+	Step Backward	Стъпка назад
+	Step Forward	Стъпка напред
+	Clear History	Изчистване на историята
+	Set History Limit…	Задаване на ограничение на историята…
 	History States	Състояния на историята
 # History panel: the names of undo steps (`every_undo_label_is_translated`).
 	Apply Data Set	Прилагане на набор от данни
@@ -2394,6 +2399,8 @@
 	Redefine Character Style	Предефиниране на стил на знаци
 	Redefine Graphic Style	Предефиниране на графичен стил
 	Redefine Graphic Style “{name}”	Предефиниране на графичен стил „{name}“
+	Apply {name}	Прилагане на стил „{name}“
+	Redefine {name}	Предефиниране на стил „{name}“
 	Redefine Paragraph Style	Предефиниране на стил на абзац
 	Redefine Symbol	Предефиниране на символ
 	Redefine {kind} Style	Предефиниране на стил {kind}
@@ -3619,7 +3626,8 @@ axis	Both	И двете
 @msg	its editing data doesn't say where its artboard is	данните за редакция не посочват къде е неговата работна област
 @msg	its editing data has no layers	данните за редакция нямат слоеве
 @msg	its editing data is damaged	данните за редакция са повредени
-@msg	its editing data is for a different page	данните за редакция са за друга страница
+@msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	данните за редакция са за страница {w} × {h} pt, а не за страницата на файла {pw} × {ph} pt
+@msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	данните за редакция са за страница {w} × {h} pt, т.е. страницата на файла {pw} × {ph} pt в мащаб {scale}
 @msg	its layers use {_1}, which aren't read yet	слоевете му използват {_1}, които все още не са прочетени
 @msg	its page has text, and its layers have no text objects to put it in	страницата му има текст, а слоевете му нямат текстови обекти, в които да го поставят
 @msg	its type is to come in as outlines, which only its page has	типът му е да се появи като контури, каквито има само страницата му
@@ -3718,6 +3726,8 @@ axis	Both	И двете
 @msg	`{key}` must be a #rrggbb color	`{key}` трябва да бъде цвят във формат #rrggbb
 @msg	`{key}` must be a #rrggbb colour	`{key}` трябва да бъде цвят във формат #rrggbb
 @msg	`{key}` must be a number	`{key}` трябва да бъде число
+@msg	`{key}` must be a number, not {v}	`{key}` трябва да бъде число, а не {v}
+@msg	{key} must be Unix seconds (an integer) or null	{key} трябва да бъде Unix време в секунди (цяло число) или null
 @msg	`{key}` must be a string	`{key}` трябва да бъде низ
 @msg	`{key}` must be a whole number	`{key}` трябва да бъде цяло число
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` трябва да бъде цяло число между {min} и {max} (получено е {x})
@@ -3756,6 +3766,7 @@ axis	Both	И двете
 @msg	a page tree node has no kids	въззел в дървото на страниците няма деца
 @msg	a page's placement is not finite	разположението на страницата не е крайно
 @msg	a preset named `{_1}` exists	предварителна настройка с име `{_1}` съществува
+@msg	a swatch or color group named `{n}` exists	образец или цветова група с име `{n}` вече съществува
 @msg	a slice size must be a positive number of points	размерът на парчето трябва да бъде положително число в точки
 @msg	a spine keeps at least two points	оста запазва поне две точки
 @msg	a stream runs past the end	потокът преминава отвъд края
@@ -3843,6 +3854,7 @@ axis	Both	И двете
 @msg	missing `tool`	липсва `tool`
 @msg	missing index	липсва индекс
 @msg	missing number `{key}`	липсва число `{key}`
+@msg	missing integer `{key}`	липсва цяло число `{key}`
 @msg	multiple windows land with M11.5	множество прозорци се зареждат с M11.5
 @msg	name the file	именувайте файла
 @msg	no CSS to copy: select objects with CSS of their own	няма CSS за копиране: изберете обекти със собствен CSS
@@ -3958,6 +3970,7 @@ axis	Both	И двете
 @msg	nothing to redo	няма какво да се повтори
 @msg	nothing to save: the document has no visible art	няма нищо за запазване: документът няма видима графика
 @msg	nothing to undo	няма какво да се отмени
+@msg	no history to clear	няма история за изчистване
 @msg	nothing to warp	няма нищо за извиване
 @msg	nothing to wrap	няма нищо за обвиване
 @msg	object {0} cannot have children	обектът {0} не може да има дъщерни елементи
@@ -4129,6 +4142,7 @@ axis	Both	И двете
 @msg	{C}: no effect at index {from}	{C}: няма ефект на индекс {from}
 @msg	{_1} failed: {e}	{_1} неуспешно: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} файловете могат да се отварят, но не и да се записват (вижте document.formats)
+@msg	{_1} files are written by file.saveAsTemplate	{_1} файловете се записват с file.saveAsTemplate
 @msg	{_1} font families available	наличности на шрифтови семейства: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} е динамичен ефект (Ефект › Добавки)
 @msg	{_1} is already used by {_2}	{_1} вече се използва от {_2}
@@ -4272,6 +4286,9 @@ axis	Both	И двете
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: резултатът от стъпка {i} няма такава стойност (напишете $$ за литерален знак $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: няма стъпка {i} преди тази (стъпките се броят от 0; напишете $$ за литерален знак $)
 @msg	object ids are non-negative integers, not {v}	идентификаторите на обектите са неотрицателни цели числа, а не {v}
+@msg	{key} must be an array of non-negative integer object ids	{key} трябва да бъде масив от идентификатори на обекти, които са неотрицателни цели числа
+@msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
+@msg	no such object id {value}	няма обект с идентификатор {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за четене {root}: {path}
@@ -4458,6 +4475,8 @@ lighting	Light	Светлина
 @msg	missing panel layout	липсващо оформление на панели
 @msg	unsupported native docking operation	неподдържана вградена операция за скачване
 	Linux Display Server	Дисплейен сървър за Linux
+	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) при свързана писалка
+	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ако писалката на графичния таблет не рисува, изберете опция X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
 	Ruler Origin	Начало на линийката
 	Reset Ruler Origin	Нулиране началото на линийката
@@ -4977,6 +4996,11 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+# 3D light management.
+	Lights	Светлини
+	Add Light	Добавяне на светлина
+	Delete Light	Изтриване на светлина
+3d	Light	Светлина
 	Automation	Автоматизация
 	Essentials	Основни
 	Essentials Classic	Основни класически
@@ -5127,6 +5151,11 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+# Links and Attributes: files and URLs handed to other apps.
+@msg	Edit Original opens image and document files only; “{name}” is not one	„Редактиране на оригинал“ отваря само файлове с изображения и документи; „{name}“ не е такъв файл
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузъра се отварят само URL адреси с http, https и mailto, не „{url}“
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} отваря друга програма: само човекът пред клавиатурата може да изпълни командата
+@msg	“{name}” is not a file	„{name}“ не е файл
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Library Panel Options	Опции на панела с библиотека
@@ -5142,3 +5171,22 @@ theme	Appearance	Външен вид
 	Clear Artboard Color	Изчистване на цвета на работна област
 @msg	artboard {_1} is locked	работна област {_1} е заключена
 	Include Artboard Fill	Включване на цвета на работната област
+	Artboard {n} of {total}	Работна област {n} от {total}
+	Encoding and writing the file…	Кодиране и записване на файла…
+@plural	{n} more export waiting|{n} more exports waiting	Още {n} експортиране в изчакване|Още {n} експортирания в изчакване
+	Continue in Background	Продължаване във фонов режим
+	Cancel Export	Отказ от експортирането
+@msg	Export cancelled	Експортирането е отказано
+# Paragraph panel menu › Justification…
+	Desired	Желано
+	Word Spacing:	Разстояние между думите:
+	Letter Spacing:	Разстояние между буквите:
+	Glyph Scaling:	Мащабиране на знаците:
+	Auto Leading:	Автоматична междуредова разредка:
+	Single Word Justification:	Подравняване на единична дума:
+	Full Justify	Пълно двустранно
+	Minimum must not exceed Desired, nor Desired Maximum.	Минималната стойност не може да надвишава желаната, нито желаната – максималната.
+	Justification	Подравняване
+@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
+# Select by Color (select.color)
+	Select by Color	Избиране по цвят

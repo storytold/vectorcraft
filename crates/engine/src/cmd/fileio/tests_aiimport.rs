@@ -135,16 +135,42 @@ fn a_pdfs_art_past_the_page_opens_whole_from_its_editing_data() {
     assert!(s.doc().unwrap().doc.art_bounds().is_some_and(|b| b.x1 < 200.5));
 }
 
-/// Editing data that can't be read leaves the file as its PDF part reads, with that part's notes:
-/// a `.ai`'s art outside its artboards is missing, and a PDF's art past the page is clipped.
+/// A `.ai` or a PDF whose editing data can't be decompressed opens from its PDF part with a note
+/// that its layers weren't read, and an export to its own path is refused unless it is given
+/// `acknowledgeLoss`.
+#[test]
+fn a_file_whose_editing_data_cant_be_decompressed_is_not_written_over_unasked() {
+    let d = std::env::temp_dir().join(format!("vc-aiundecoded-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let damaged = b"%AI12_CompressedDataxx";
+    for (name, file) in [("art.ai", ai::ai(damaged, ai::page_pdf())), ("art.pdf", ai::pdf(damaged, ai::page_pdf()))] {
+        let path = d.join(name);
+        std::fs::write(&path, &file).unwrap();
+        let path = path.to_string_lossy().to_string();
+        let mut s = Session::new();
+        let r = s.execute("document.open", &json!({"path": path})).unwrap();
+        assert!(r["warnings"].to_string().contains("layers weren't read from its editing data (its zlib compression is damaged)"), "{name}: {r}");
+        let e = s.execute("document.export", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains("left things out") && e.contains("layers weren't read"), "{name}: {e}");
+        assert_eq!(std::fs::read(&path).unwrap(), file, "{name}");
+        s.execute("document.export", &json!({"path": path, "acknowledgeLoss": true})).unwrap();
+        assert_ne!(std::fs::read(&path).unwrap(), file, "{name}");
+    }
+    std::fs::remove_dir_all(d).ok();
+}
+
+/// Editing data that can't be read leaves the file as its PDF part reads, with that part's notes
+/// and then a note saying why its layers weren't read: a `.ai`'s art outside its artboards is
+/// missing, and a PDF's art past the page is clipped.
 #[test]
 fn editing_data_that_cant_be_read_keeps_the_pdf_parts_notes() {
     let damaged = b"%AI12_CompressedData not zlib";
+    let unread = "the file's layers weren't read from its editing data (its zlib compression is damaged): they come from its PDF part";
     let mut s = Session::new();
     let r = open(&mut s, "damaged.ai", &ai::ai(damaged, ai::page_pdf()), json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([vectorcraft_pdf::OFF_ARTBOARD_NOTE]), "{r}");
+    assert_eq!(r["warnings"], json!([vectorcraft_pdf::OFF_ARTBOARD_NOTE, unread]), "{r}");
     let r = open(&mut s, "damaged.pdf", &ai::pdf(damaged, "0 g 150 20 100 60 re f"), json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE]), "{r}");
+    assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE, unread]), "{r}");
 }
 
 #[test]
@@ -156,6 +182,34 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Layer 1"]);
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("symbols") && r["warnings"].to_string().contains("PDF part"), "{r}");
+}
+
+/// A `.ai` whose document data has a variable library opens with a note that its variables and
+/// data sets weren't read, whether its layers are read or it comes in as its PDF part.
+#[test]
+fn an_ai_file_with_a_variable_library_says_its_variables_werent_read() {
+    const NOTE: &str = "the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them";
+    let library = ai::variable_library(&["Name", "Number"], &["One", "Two", "Three"]);
+    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let notes =
+        |r: &Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("variables")).cloned().collect::<Vec<_>>();
+    let mut s = Session::new();
+    let layered = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", &square)));
+    let file = ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let r = open(&mut s, "variables.ai", &file, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
+    let r = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(r["variables"], json!([]), "{r}");
+    // Its layers can't be read (a symbol): it comes in as its PDF part, with the note.
+    let symbols = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")));
+    let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
+    assert!(r["warnings"].to_string().contains("PDF part"), "{r}");
+    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
+    // Without a library, no note.
+    let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
+    let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    assert!(notes(&r).is_empty(), "{r}");
 }
 
 /// A page showing only a placeholder line, as a `.ai` saved without PDF compatibility has.
@@ -172,6 +226,19 @@ fn an_ai_file_saved_without_its_pdf_part_opens_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     // Without editing data, the placeholder still isn't opened as the art.
     let e = open(&mut s, "plain.ai", &ai::ai(b"", PLACEHOLDER), json!({})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+}
+
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_opens_with_pages_naming_every_page() {
+    let file = ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER);
+    for pages in [json!("1"), json!(1), json!("1-")] {
+        let mut s = Session::new();
+        open(&mut s, "art.ai", &file, json!({"pages": pages})).unwrap();
+        check_sample(&s);
+    }
+    // Without editing data, the placeholder still isn't opened as the art.
+    let e = open(&mut Session::new(), "plain.ai", &ai::ai(b"", PLACEHOLDER), json!({"pages": "1"})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
 }
 

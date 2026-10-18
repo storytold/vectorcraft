@@ -13,6 +13,8 @@
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`, else
 //!   the art size around the template box's centre, else (a file in the legacy format another
 //!   app wrote) the bounding box.
+//! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
+//!   gives how many variables and data sets it has ([`VariableLibrary`]).
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
@@ -184,6 +186,98 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
     r.artboards
 }
 
+/// How many variables and data sets the variable library of the editing data has: XML nodes
+/// (`/XMLNode`) of the `/Document` dictionary, a `variableSets` element holding `variableSet`s, each
+/// with its `variables` (`variable` elements) and `sampleDataSets` (`sampleDataSet` elements).
+/// VectorCraft doesn't read them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VariableLibrary {
+    pub variables: usize,
+    pub data_sets: usize,
+}
+
+impl VariableLibrary {
+    /// The import's note that the library wasn't read, when it has a variable or a data set.
+    pub fn note(self) -> Option<String> {
+        let Self { variables, data_sets } = self;
+        // Counts after a colon need no plural, so every language can translate the note whole.
+        (variables + data_sets > 0).then(|| {
+            format!("the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them")
+        })
+    }
+}
+
+/// The variable library of the editing data `data` ([`VariableLibrary`]), for a file whose layers
+/// [`read`] can't read. Data without a `variableSets` element isn't read.
+pub fn variables(data: &[u8]) -> VariableLibrary {
+    if super::find(data, b"variableSets").is_none() {
+        return VariableLibrary::default();
+    }
+    let mut r = Reader::new(data);
+    let _ = r.run();
+    // A `/Document` still open when reading stopped.
+    let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
+    for o in open.iter().filter(|o| o.ty == "Document") {
+        variable_library(o, 0, &mut r.variables);
+    }
+    if r.variables != VariableLibrary::default() {
+        return r.variables;
+    }
+    // Reading can stop before the library: read its node on its own.
+    variable_sets_node(data).map_or(r.variables, |node| {
+        let mut alone = b"%_/Document :\n%_/Dictionary :\n%_/Array :\n".to_vec();
+        alone.extend_from_slice(node);
+        alone.extend_from_slice(b"\n%_; (xmlnode-children) ,\n%_; /Recorded ,\n%_;\n");
+        let mut r = Reader::new(&alone);
+        let _ = r.run();
+        r.variables
+    })
+}
+
+/// The `variableSets` XML node of the editing data `data`, from its `/XMLNode :` line to the line
+/// that closes it: found from its name back, counting the dictionaries and arrays it holds.
+fn variable_sets_node(data: &[u8]) -> Option<&[u8]> {
+    const NAME: &[u8] = b"variableSets) /String (xmlnode-nodename) ,";
+    let at = data.windows(NAME.len()).position(|w| w == NAME)?;
+    let opens = |text: &[u8]| text.starts_with(b"/") && text.windows(2).any(|w| w == b" :");
+    let closes = |text: &[u8]| text.starts_with(b";") || text.starts_with(b"/Def ;");
+    let mut depth = 0usize;
+    let mut line_end = data.get(..at)?.iter().rposition(|&b| b == b'\n' || b == b'\r')?;
+    let start = loop {
+        let line_start = data.get(..line_end)?.iter().rposition(|&b| b == b'\n' || b == b'\r').map_or(0, |at| at + 1);
+        if let Some(text) = data.get(line_start..line_end)?.strip_prefix(b"%_") {
+            if closes(text) {
+                depth += 1;
+            } else if opens(text) {
+                match depth.checked_sub(1) {
+                    Some(d) => depth = d,
+                    None => break line_start,
+                }
+            }
+        }
+        line_end = line_start.checked_sub(1)?;
+    };
+    let mut line_start = start;
+    loop {
+        let rest = data.get(line_start..)?;
+        let line_end = line_start + rest.iter().position(|&b| b == b'\n' || b == b'\r').unwrap_or(rest.len());
+        if let Some(text) = data.get(line_start..line_end)?.strip_prefix(b"%_") {
+            if closes(text) {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return data.get(start..line_end);
+                }
+            } else if opens(text) {
+                depth += 1;
+            }
+        }
+        if line_end >= data.len() {
+            return None;
+        }
+        line_start = line_end + 1;
+    }
+}
+
 #[derive(Clone, Debug)]
 struct GState {
     fill: Paint,
@@ -347,6 +441,8 @@ struct Reader<'a> {
     to_doc: Option<Affine>,
     cropmarks: Option<Rect>,
     artboards: Vec<(String, Rect)>,
+    /// The variables and data sets of the `/Document` dictionary's variable library.
+    variables: VariableLibrary,
     gradients: HashMap<String, Gradient>,
     gradient_def: Option<GradientDef>,
     instance: Option<Instance>,
@@ -508,6 +604,7 @@ impl<'a> Reader<'a> {
             to_doc: None,
             cropmarks: None,
             artboards: Vec::new(),
+            variables: VariableLibrary::default(),
             gradients: HashMap::new(),
             gradient_def: None,
             instance: None,
@@ -1501,8 +1598,10 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// The `/Document` dictionary: the artboards.
+    /// The `/Document` dictionary: the artboards, and how many variables and data sets its variable
+    /// library has.
     fn document(&mut self, o: &Obj) {
+        variable_library(o, 0, &mut self.variables);
         let Some(list) = find_entry(o, "ArtboardArray", 0) else { return };
         for (i, ab) in list.items().enumerate().take(1000) {
             let (p1, p2) = (ab.nums("PositionPoint1"), ab.nums("PositionPoint2"));
@@ -1913,9 +2012,15 @@ impl<'a> Reader<'a> {
     /// An image of operands `vals` and samples `data`.
     fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
-        let Some(m) = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None }) else { return Ok(()) };
+        let Some(m) = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None }) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
         let n = Self::nums(&vals);
-        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, ..] = n.as_slice() else { return Ok(()) };
+        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, ..] = n.as_slice() else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
         let (w, h) = (*w as u64, *h as u64);
         if w == 0 || h == 0 || w.saturating_mul(h) > MAX_PIXELS || ![1.0, 8.0].contains(bits) {
             self.warn("an image VectorCraft can't read was left out");
@@ -1981,7 +2086,10 @@ impl<'a> Reader<'a> {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
             }
         }
-        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else { return Ok(()) };
+        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
         let mut png = vec![];
         if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
             self.warn("an image VectorCraft can't read was left out");
@@ -1997,10 +2105,14 @@ impl<'a> Reader<'a> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
         // gives the same place only when the image isn't rotated (b = c = 0).
-        let [a, b, c, d, tx, ty] = m else { return Ok(()) };
+        let [a, b, c, d, tx, ty] = m else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
         let to_doc = self.space();
         let xf = to_doc * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         }
         let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
@@ -2192,6 +2304,7 @@ impl<'a> Reader<'a> {
                 self.drawn_looks
             ));
         }
+        warnings.extend(self.variables.note());
         Ok(Structure {
             doc,
             to_doc,
@@ -2325,6 +2438,35 @@ fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
         return None;
     }
     o.obj(key).or_else(|| o.entries.iter().flat_map(|(_, v)| v.iter()).filter_map(V::obj).find_map(|c| find_entry(c, key, depth + 1)))
+}
+
+/// Add the variables and data sets of the variable libraries in `o` or the dictionaries it holds
+/// (see [`VariableLibrary`]) to `found`.
+fn variable_library(o: &Obj, depth: usize, found: &mut VariableLibrary) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    if o.ty == "XMLNode" && element_name(o).as_deref() == Some("variableSets") {
+        for set in elements(o, "variableSet") {
+            found.variables += elements(set, "variables").flat_map(|v| elements(v, "variable")).count();
+            found.data_sets += elements(set, "sampleDataSets").flat_map(|d| elements(d, "sampleDataSet")).count();
+        }
+        return;
+    }
+    for c in o.items() {
+        variable_library(c, depth + 1, found);
+    }
+}
+
+/// The name of the XML node `o` (its `xmlnode-nodename`) without a namespace prefix (`v:`).
+fn element_name(o: &Obj) -> Option<String> {
+    let name = o.text("xmlnode-nodename")?;
+    Some(name.rsplit(':').next().unwrap_or(&name).to_string())
+}
+
+/// The child nodes named `name` (see [`element_name`]) of the XML node `o`.
+fn elements<'o>(o: &'o Obj, name: &'o str) -> impl Iterator<Item = &'o Obj> {
+    o.obj("xmlnode-children").into_iter().flat_map(Obj::items).filter(move |c| c.ty == "XMLNode" && element_name(c).as_deref() == Some(name))
 }
 
 /// A placed file's preview as a PNG, with its size: `w h rowBytes 32 n ` (each number followed by

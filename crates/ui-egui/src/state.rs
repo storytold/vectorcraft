@@ -62,25 +62,53 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
+/// matches the status bar when Display Print Size at 100% Zoom is on.
+static ZOOM_STOPS_PRINT_SIZE: AtomicBool = AtomicBool::new(false);
+
+pub fn sync_zoom_stops_display_print_size(v: bool) {
+    ZOOM_STOPS_PRINT_SIZE.store(v, Ordering::Relaxed);
+}
+
 /// Illustrator's preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,
     4800.0, 6400.0, 12800.0, 25600.0, 64000.0,
 ];
 
+/// Document zoom at 100% in the status bar: one screen point per document point, or with
+/// Preferences › General › Display Print Size at 100% Zoom, one document inch in 96 screen points.
+pub fn zoom_baseline(display_print_size: bool) -> f64 {
+    if display_print_size { 96.0 / 72.0 } else { 1.0 }
+}
+
+pub fn zoom_display_percent(z: f64, display_print_size: bool) -> f64 {
+    z / zoom_baseline(display_print_size) * 100.0
+}
+
+pub fn zoom_from_display_percent(pct: f64, display_print_size: bool) -> f64 {
+    pct / 100.0 * zoom_baseline(display_print_size)
+}
+
 pub fn next_zoom(z: f64, up: bool) -> f64 {
-    let pct = z * 100.0;
+    next_zoom_with_display(z, up, ZOOM_STOPS_PRINT_SIZE.load(Ordering::Relaxed))
+}
+
+pub fn next_zoom_with_display(z: f64, up: bool, display_print_size: bool) -> f64 {
+    let pct = zoom_display_percent(z, display_print_size);
     let stop = if up {
         ZOOM_STOPS.iter().find(|s| **s > pct + 0.01).copied().unwrap_or(64000.0)
     } else {
         ZOOM_STOPS.iter().rev().find(|s| **s < pct - 0.01).copied().unwrap_or(3.13)
     };
-    stop / 100.0
+    zoom_from_display_percent(stop, display_print_size)
 }
 
 /// Format like Illustrator's tab/zoom field: up to 2 decimals, no trailing zeros.
-pub fn zoom_label(z: f64) -> String {
-    let s = format!("{:.2}", z * 100.0);
+pub fn zoom_label(z: f64, display_print_size: bool) -> String {
+    let s = format!("{:.2}", zoom_display_percent(z, display_print_size));
     let s = s.trim_end_matches('0').trim_end_matches('.');
     format!("{s}%")
 }
@@ -326,6 +354,12 @@ pub struct UiState {
     /// Invalidates in-flight gestures when a workspace is replaced.
     #[serde(skip)]
     pub docking_generation: u64,
+    /// The main dock column's outer width in screen points (legacy or shared docking).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dock_width: Option<f32>,
+    /// Next frame should seed egui [`PanelState`] from [`Self::dock_width`] (workspace switch).
+    #[serde(skip)]
+    pub dock_width_pending: bool,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
     /// docked at the window's left edge.
     #[serde(default)]
@@ -744,6 +778,8 @@ impl Default for UiState {
             docking_hidden: Default::default(),
             docking_icons: Default::default(),
             docking_generation: 0,
+            dock_width: None,
+            dock_width_pending: false,
             toolbar_pos: None,
             status_bar: true,
             dock: true,
@@ -821,12 +857,22 @@ mod tests {
 
     #[test]
     fn zoom_steps() {
-        assert_eq!(next_zoom(1.0, true), 1.5);
-        assert!((next_zoom(1.0, false) - 0.6667).abs() < 1e-9);
-        assert_eq!(next_zoom(640.0, true), 640.0);
-        assert_eq!(zoom_label(0.6667), "66.67%");
-        assert_eq!(zoom_label(1.0), "100%");
-        assert_eq!(zoom_label(0.125), "12.5%");
+        assert_eq!(next_zoom_with_display(1.0, true, false), 1.5);
+        assert!((next_zoom_with_display(1.0, false, false) - 0.6667).abs() < 1e-9);
+        assert_eq!(next_zoom_with_display(640.0, true, false), 640.0);
+        assert_eq!(zoom_label(0.6667, false), "66.67%");
+        assert_eq!(zoom_label(1.0, false), "100%");
+        assert_eq!(zoom_label(0.125, false), "12.5%");
+    }
+
+    /// storytold/vectorcraft#2719: 100% in the zoom field matches Actual Size when Display Print Size is on.
+    #[test]
+    fn zoom_percent_honors_display_print_size_baseline() {
+        let b = zoom_baseline(true);
+        assert!((zoom_from_display_percent(100.0, true) - b).abs() < 1e-12);
+        assert_eq!(zoom_from_display_percent(100.0, false), 1.0);
+        assert_eq!(zoom_label(b, true), "100%");
+        assert_eq!(next_zoom_with_display(b, true, true), zoom_from_display_percent(150.0, true));
     }
 
     #[test]

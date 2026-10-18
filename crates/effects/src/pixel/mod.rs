@@ -594,6 +594,45 @@ pub fn blur_plane(a: &mut Vec<f32>, w: usize, h: usize, sigma: f64) {
     }
 }
 
+/// Grow a `w` × `h` plane by `radius` pixels each way, the box of SVG's feMorphology: each value
+/// becomes the largest within the radius. A fractional radius blends the two whole radii around
+/// it, so a silhouette grows smoothly as the raster scales. Does nothing for a radius of zero or
+/// less, or when the sizes don't match.
+pub fn dilate_plane(a: &mut Vec<f32>, w: usize, h: usize, radius: f64) {
+    if radius.is_nan() || radius <= 0.0 || w == 0 || h == 0 || w.checked_mul(h) != Some(a.len()) {
+        return;
+    }
+    let radius = radius.min(MAX_BOX as f64);
+    let whole = radius.floor() as usize;
+    let frac = (radius - whole as f64) as f32;
+    let mut tmp = vec![0.0; a.len()];
+    for (len, other) in [(w, h), (h, w)] {
+        max_plane(a, &mut tmp, len, whole, frac);
+        std::mem::swap(a, &mut tmp);
+        transpose(a, &mut tmp, len, other);
+        std::mem::swap(a, &mut tmp);
+    }
+}
+
+/// One horizontal pass of [`dilate_plane`] over the rows of `w` values of a plane: the largest
+/// value within `whole`, blended by `frac` towards the largest within `whole + 1`.
+fn max_plane(src: &[f32], dst: &mut [f32], w: usize, whole: usize, frac: f32) {
+    for (row, out) in src.chunks_exact(w).zip(dst.chunks_exact_mut(w)) {
+        for (x, o) in out.iter_mut().enumerate() {
+            let lo = x.saturating_sub(whole + 1);
+            let hi = (x + whole + 1).min(w - 1);
+            let (mut inner, mut ring) = (row[x], row[x]);
+            for (j, v) in row[lo..=hi].iter().enumerate() {
+                if (lo + j).abs_diff(x) <= whole {
+                    inner = inner.max(*v);
+                }
+                ring = ring.max(*v);
+            }
+            *o = inner + (ring - inner) * frac;
+        }
+    }
+}
+
 /// Premultiplied RGBA at 16 bits (×257): blurs and averages that keep their tones.
 pub(super) type Px16 = [u16; 4];
 

@@ -55,6 +55,13 @@ fn every_style_is_written_with_its_numeric_weight() {
         ("Extrabold", Some("800")),
         ("Black", Some("900")),
         ("Heavy", Some("900")),
+        // Japanese faces' numbered weights (#2873); W4 is the regular weight.
+        ("W0", Some("100")),
+        ("W3", Some("300")),
+        ("W4", None),
+        ("W6", Some("600")),
+        ("W9", Some("900")),
+        ("Wide", None),
     ] {
         let want = want.map(str::to_string);
         assert_eq!(weights(style), (want.clone(), want), "{style}");

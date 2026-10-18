@@ -56,7 +56,8 @@ pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc
     widgets::subheader(ui, tl!("Scale"));
     for (key, label) in axes("scaleH", "scaleV") {
         widgets::label_row(ui, label, LABEL_W, |ui| {
-            form::slider_rail_named(ui, d, key, label, 0.0..=200.0, &track);
+            let shown = widgets::SliderValue::field(d.f64(key, 100.0).clamp(-MAX_SCALE, MAX_SCALE), 0.0..=200.0, "%", 2);
+            form::slider_rail_valued(ui, d, key, label, 0.0..=200.0, Some(shown), &track);
             if let Some(n) = widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W) {
                 d.fields.insert(key.into(), json!(n));
             }
@@ -65,7 +66,8 @@ pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc
     widgets::subheader(ui, tl!("Move"));
     for (key, label) in axes("moveH", "moveV") {
         widgets::label_row(ui, label, LABEL_W, |ui| {
-            form::slider_rail_named(ui, d, key, label, -1000.0..=1000.0, &track);
+            let shown = form::length_value(d, key, units, -1000.0..=1000.0);
+            form::slider_rail_valued(ui, d, key, label, -1000.0..=1000.0, shown, &track);
             form::length(ui, d, key, units, FIELD_W);
         });
     }

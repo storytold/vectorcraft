@@ -2,9 +2,10 @@
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
 //! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`). Point type placed by a click and left empty is discarded when
-//! editing ends (`text.discardEmpty`); frames keep their shape. Where new type goes (the click, the
-//! frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
+//! baseline (`text.createInPath`). While type is being edited, a click that lands on no type only
+//! ends the editing, and the next click makes new type. Point type placed by a click and left
+//! empty is discarded when editing ends (`text.discardEmpty`); frames keep their shape. Where new
+//! type goes (the click, the frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
 //!
 //! While editing: caret movement by character / word (Cmd or Alt) / line (Up/Down) / line ends
 //! (Home/End; Cmd = whole text), Shift extends the selection, drag selects, double-click selects a
@@ -271,14 +272,21 @@ impl TypeTool {
         Some(out)
     }
 
-    /// The button released after a press at `start` (new type goes at `at`).
+    /// The button released after a press at `start` (new type goes at `at`). While type is being
+    /// edited, a click that lands on no type only ends the editing; the next click makes new type
+    /// (#2871). A drag that draws an area-type frame makes it either way.
     fn on_up(&mut self, cx: &ToolContext, start: Point, at: Point) -> Vec<Action> {
         // Click into existing text: place the caret.
         if let Some(out) = self.edit_at(cx, start) {
             return out;
         }
+        let was_editing = self.editing.is_some_and(|id| Self::text(cx, id).is_some());
         let mut out = self.finish(cx);
         let drag = self.drag.take();
+        let area = drag.map(|d| Rect::from_points(at, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
+        if was_editing && area.is_none() {
+            return out;
+        }
         // Area Type / Type on a Path: click a path.
         if self.mode != Mode::Type && drag.is_none() {
             let on_path = self.mode == Mode::OnPath;
@@ -292,7 +300,6 @@ impl TypeTool {
                 return out;
             }
         }
-        let area = drag.map(|d| Rect::from_points(at, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
         let mut params = match area {
             Some(r) => json!({"x": r.x0, "y": r.y0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
             None => json!({"x": at.x, "y": at.y, "text": ""}),

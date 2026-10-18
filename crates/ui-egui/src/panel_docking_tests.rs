@@ -616,7 +616,7 @@ fn the_window_menu_item_hides_a_shown_panel_and_shows_it_again() {
 }
 
 /// A floating group lies on the canvas, not on the dock's card, so its tab strip and body paint
-/// their own opaque background (#2421).
+/// their own opaque background (#2421, #2646).
 #[test]
 fn floating_group_paints_an_opaque_background() {
     let mut app = app();
@@ -639,6 +639,27 @@ fn floating_group_paints_an_opaque_background() {
     // Tab strip to the right of the tabs, and the body's empty bottom-right corner.
     assert!(opaque_at(pos2(690.0, 210.0)), "tab strip is transparent");
     assert!(opaque_at(pos2(690.0, 610.0)), "body is transparent");
+}
+
+/// Undocking a tabbed dock panel leaves an opaque backdrop even in the empty part of its body (#2646).
+#[test]
+fn undocked_layers_panel_body_is_opaque() {
+    let mut app = app();
+    app.run("window.panel.float", json!({"panel":"layers","x":300,"y":160,"width":300,"height":420})).unwrap();
+    let h = harness(app, vec2(1280.0, 800.0));
+    fn topmost(shape: &egui::Shape, p: Pos2, found: &mut Option<egui::Color32>) {
+        match shape {
+            egui::Shape::Rect(r) if r.rect.contains(p) && r.rect.width() >= 80.0 && r.stroke.is_empty() && r.fill.a() > 0 => *found = Some(r.fill),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| topmost(s, p, found)),
+            _ => {}
+        }
+    }
+    let opaque_at = |p: Pos2| {
+        let mut found = None;
+        h.output().shapes.iter().for_each(|s| topmost(&s.shape, p, &mut found));
+        found.is_some_and(|c| c.a() == 255)
+    };
+    assert!(opaque_at(pos2(580.0, 520.0)), "empty layers body shows the canvas");
 }
 
 /// Library panels (#2603) float in the shared layout titled by their libraries' names, and their

@@ -392,6 +392,16 @@ shown_when = [
 hotspot = "The centre."
 designer = false
 
+[[cursor]]
+id = "Busy"
+group = "Navigation"
+shown_when = [
+    "A file is opening off the UI thread.",
+    "A background save or export is in progress (the status bar shows its name).",
+]
+hotspot = "The centre."
+designer = false
+
 # ── Colour and gradient ───────────────────────────────────────────────────────────────────────────
 
 [[cursor]]
