@@ -27,10 +27,9 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
 /// the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
-    // Replacing a file: its staging copy starts owner-only, so a private document is never readable
-    // beside the target before `keep_permissions` has run (#1712). A new file keeps the default mode.
-    let replacing = path.exists();
-    let create = |tmp: &Path| if replacing { create_private(tmp) } else { create_new(tmp) };
+    // A staging copy starts owner-only, so a private document is never readable beside the target
+    // before `keep_permissions` has run (#1712).
+    let create = |tmp: &Path| create_private(tmp);
     write_atomic_stepping(path, fill, create, |tmp, target| std::fs::rename(tmp, target))
 }
 
@@ -86,7 +85,13 @@ fn write_atomic_stepping(
 /// the copy into `target` fails it is damaged: `tmp` and the copy of the old content stay and the
 /// error says where they are.
 fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
-    let opened = File::open(tmp).and_then(|from| Ok((from, OpenOptions::new().write(true).create(true).truncate(false).open(target)?)));
+    let opened = File::open(tmp).and_then(|from| {
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        Ok((from, options.open(target)?))
+    });
     let Ok((mut from, mut to)) = opened else {
         // Best effort: the temporary file is all there is to clean up.
         let _ = std::fs::remove_file(tmp);

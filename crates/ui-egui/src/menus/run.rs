@@ -170,6 +170,9 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         // Opens something already listed, by handle or by name. The listing is what the user can
         // see, which keeps a scripted open and a clicked one on the same footing.
         "cloud.openFile" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
             let id = p.get("id").and_then(Value::as_str);
             let name = p.get("name").and_then(Value::as_str).unwrap_or("");
             let found = app

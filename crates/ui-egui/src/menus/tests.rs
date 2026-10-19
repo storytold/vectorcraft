@@ -847,7 +847,7 @@ fn cloud_menu_items_stay_hidden_without_a_service() {
 #[test]
 fn cloud_open_file_without_a_handle_or_name_is_refused() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    assert_eq!(app.run("cloud.openFile", json!({})).unwrap_err(), "no such file in the cloud listing");
+    assert_eq!(app.run("cloud.openFile", json!({})).unwrap_err(), crate::cloud::UNAVAILABLE);
 }
 
 #[test]
