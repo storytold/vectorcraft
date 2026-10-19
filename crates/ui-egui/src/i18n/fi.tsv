@@ -6216,3 +6216,5 @@ breakText	Glyphs	Merkit
 @msg	the FreeHand file has a record whose size is not known	tässä FreeHand-tiedostossa on tietue, jonka koko on tuntematon
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	FreeHand-versiota {n} ei tueta: VectorCraft avaa FreeHand-versiot 8–MX (11); avaa tiedosto uudemmassa FreeHandissa ja tallenna, tai vie se EPS-, PDF- tai AI-muotoon
 @msg	the drawing has more objects than can be read; the rest were left out	piirustuksessa on enemmän objekteja kuin voidaan lukea; loput jätettiin pois
+@msg	the FreeHand file claims more path geometry than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän polun geometriaa kuin voidaan lukea
+@msg	the FreeHand file claims more objects than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän objekteja kuin voidaan lukea

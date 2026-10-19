@@ -6172,3 +6172,5 @@ breakText	Glyphs	Glifák
 @msg	the FreeHand file has a record whose size is not known	a FreeHand-fájlban van egy rekord, amelynek a mérete nem ismert
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nem támogatott FreeHand-verzió {n}: a VectorCraft a FreeHand 8-tól MX-ig (11) nyitja meg; nyissa meg egy újabb FreeHandben, és mentse, vagy exportálja EPS, PDF vagy AI formátumba
 @msg	the drawing has more objects than can be read; the rest were left out	a rajz több objektumot tartalmaz, mint amennyit be lehet olvasni; a többit kihagytuk
+@msg	the FreeHand file claims more path geometry than can be read	a FreeHand-fájl több útvonalgeometriát állít, mint amennyit be lehet olvasni
+@msg	the FreeHand file claims more objects than can be read	a FreeHand-fájl több objektumot állít, mint amennyit be lehet olvasni

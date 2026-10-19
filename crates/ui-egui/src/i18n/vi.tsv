@@ -5789,3 +5789,5 @@ breakText	Glyphs	Glyph
 @msg	the FreeHand file has a record whose size is not known	tệp FreeHand có một bản ghi chưa rõ kích thước
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	phiên bản FreeHand {n} không được hỗ trợ: VectorCraft mở FreeHand 8 đến MX (11); hãy mở trong FreeHand mới hơn rồi lưu, hoặc xuất thành EPS, PDF hoặc AI
 @msg	the drawing has more objects than can be read; the rest were left out	bản vẽ có nhiều đối tượng hơn mức có thể đọc; phần còn lại được bỏ qua
+@msg	the FreeHand file claims more path geometry than can be read	tệp FreeHand khai báo nhiều hình học đường dẫn hơn mức có thể đọc
+@msg	the FreeHand file claims more objects than can be read	tệp FreeHand khai báo nhiều đối tượng hơn mức có thể đọc

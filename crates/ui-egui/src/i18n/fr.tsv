@@ -6183,3 +6183,5 @@ breakText	Glyphs	Glyphes
 @msg	the FreeHand file has a record whose size is not known	le fichier FreeHand contient un enregistrement dont la taille est inconnue
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	version FreeHand {n} non prise en charge : VectorCraft ouvre FreeHand 8 à MX (11) ; ouvrez-le dans un FreeHand plus récent et enregistrez, ou exportez-le en EPS, PDF ou AI
 @msg	the drawing has more objects than can be read; the rest were left out	le dessin contient plus d’objets qu’il n’est possible d’en lire ; le reste a été laissé de côté
+@msg	the FreeHand file claims more path geometry than can be read	le fichier FreeHand annonce plus de géométrie de chemin qu’il n’est possible d’en lire
+@msg	the FreeHand file claims more objects than can be read	le fichier FreeHand annonce plus d’objets qu’il n’est possible d’en lire

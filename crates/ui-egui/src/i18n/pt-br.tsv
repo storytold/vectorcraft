@@ -6260,3 +6260,5 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the FreeHand file has a record whose size is not known	o arquivo FreeHand tem um registro cujo tamanho não é conhecido
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	versão FreeHand {n} não suportada: o VectorCraft abre FreeHand 8 até MX (11); abra-o num FreeHand mais recente e salve, ou exporte como EPS, PDF ou AI
 @msg	the drawing has more objects than can be read; the rest were left out	o desenho tem mais objetos do que é possível ler; o restante foi deixado de fora
+@msg	the FreeHand file claims more path geometry than can be read	o arquivo FreeHand declara mais geometria de caminho do que é possível ler
+@msg	the FreeHand file claims more objects than can be read	o arquivo FreeHand declara mais objetos do que é possível ler

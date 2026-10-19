@@ -132,8 +132,11 @@ with it.
 ## Safety limits
 
 Every size is checked before it is allocated (`Limits`): 64 MiB of input, 256 MiB decompressed,
-250_000 records, 8_192 dictionary names, 2_000_000 list entries and path nodes together, strings
-of at most 1_048_576 bytes. The inflated stream is capped before it grows. Record-graph cycles,
+250_000 records, 8_192 dictionary names, 2_000_000 list entries and path nodes together,
+2_000_000 cubic segments of built path geometry, strings of at most 1_048_576 bytes. The
+inflated stream is capped before it grows. A compound path's children spend the same object
+budget and the same geometry budget as any other path, before their points are allocated.
+Record-graph cycles,
 a symbol whose art contains that symbol, style chains and group nesting stop at 64 levels in
 this crate; the engine then merges anything past its own document depth, the same way it does
 for the other importers. A non-finite coordinate or matrix is left out or replaced with the

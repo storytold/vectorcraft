@@ -22,8 +22,12 @@ pub struct Limits {
     pub max_decompressed: usize,
     pub max_records: usize,
     pub max_dict: usize,
-    /// Path nodes, list entries and property entries, each.
+    /// Path nodes, list entries and property entries, each. Also the object-visit budget
+    /// while the drawing is built, including each child of a compound path.
     pub max_items: usize,
+    /// Cubic segments materialized for paths and shapes, across the whole drawing.
+    /// One segment is three points. Charged before those points are allocated.
+    pub max_geometry: usize,
     pub max_depth: usize,
     pub max_string: usize,
 }
@@ -36,6 +40,7 @@ impl Default for Limits {
             max_records: 250_000,
             max_dict: 8_192,
             max_items: 2_000_000,
+            max_geometry: 2_000_000,
             max_depth: 64,
             max_string: 1_048_576,
         }

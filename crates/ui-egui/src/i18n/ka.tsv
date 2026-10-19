@@ -6175,3 +6175,5 @@ breakText	Glyphs	გლიფები
 @msg	the FreeHand file has a record whose size is not known	FreeHand ფაილს აქვს ჩანაწერი, რომლის ზომა უცნობია
 @msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	მხარდაუჭერელი FreeHand ვერსია {n}: VectorCraft ხსნის FreeHand 8-დან MX-მდე (11); გახსენით ის უფრო ახალ FreeHand-ში და შეინახეთ, ან გაიტანეთ EPS, PDF ან AI ფორმატში
 @msg	the drawing has more objects than can be read; the rest were left out	ნახატს იმაზე მეტი ობიექტი აქვს, ვიდრე წაკითხვა შეიძლება; დანარჩენი გამოტოვებულია
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand ფაილი იმაზე მეტ ტრაექტორიის გეომეტრიას აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims more objects than can be read	FreeHand ფაილი იმაზე მეტ ობიექტს აცხადებს, ვიდრე წაკითხვა შეიძლება

@@ -130,6 +130,57 @@ proptest::proptest! {
             }
         }
     }
+
+    // Many modest paths. The large count is weighted so the combined geometry is in the run.
+    // The geometry budget is tightened: each path is small, and the total is what must stop.
+    #[test]
+    fn many_modest_paths_stay_inside_the_geometry_budget(
+        paths in proptest::prop_oneof![4 => proptest::prelude::Just(2_000u32), 1 => 1u32..32],
+        nodes in 2u32..9,
+    ) {
+        let limits = Limits { max_geometry: 128, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::many_paths(paths, nodes), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "{paths} paths of {nodes} nodes took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n = doc.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+                assert!(n <= limits.max_geometry, "{paths} paths built {n} cubics, budget {}", limits.max_geometry);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("path geometry") || msg.contains("more objects"), "{msg}");
+            }
+        }
+    }
+
+    // One compound path. Level-style weighting: thousands of children, or a handful.
+    // Both the object budget and the geometry budget are tightened.
+    #[test]
+    fn compound_children_stay_inside_the_work_and_geometry_budgets(
+        children in proptest::prop_oneof![4 => proptest::prelude::Just(2_000u32), 1 => 1u32..32],
+        nodes in 2u32..9,
+    ) {
+        // The child list has to parse, so the object cap stays above that list. The geometry
+        // cap is what a long child list runs into. A second copy of the compound is what
+        // runs into the object cap; that shape is the unit test below.
+        let limits = Limits { max_geometry: 128, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::compound_children(children, nodes), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "{children} compound children of {nodes} nodes took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n = doc.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+                assert!(n <= limits.max_geometry, "{children} children built {n} cubics, budget {}", limits.max_geometry);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("path geometry") || msg.contains("more objects"), "{msg}");
+            }
+        }
+    }
 }
 
 fn group_depth(items: &[Item]) -> usize {
@@ -161,6 +212,22 @@ fn count_items(items: &[Item]) -> usize {
                 Item::Group(kids) | Item::ClipGroup { children: kids, .. } => count_items(kids),
                 _ => 0,
             }
+        })
+        .sum()
+}
+
+fn path_cubics(path: &Path) -> usize {
+    path.subpaths.iter().map(|sub| sub.cubics.len()).sum()
+}
+
+fn count_cubics(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Group(kids) => count_cubics(kids),
+            Item::ClipGroup { clip, children } => path_cubics(clip) + count_cubics(children),
+            Item::Path(path) | Item::Compound(path) => path_cubics(path),
+            Item::Text(_) => 0,
         })
         .sum()
 }
@@ -392,6 +459,56 @@ fn shared_records_sixty_three_deep_stop_at_the_work_budget() {
     }
 }
 
+/// Four closed 4-node paths are 16 cubics. The same shape with thousands of paths is over the
+/// geometry budget and must fail before those cubics exist. Each path stays a handful of points.
+#[test]
+fn many_modest_paths_stop_at_the_geometry_budget() {
+    let modest = read(&synth::many_paths(4, 4), Limits { max_geometry: 16, ..Limits::default() }).expect("four paths fit");
+    let modest_layer = modest.layers.first().expect("layer");
+    assert_eq!(count_paths(&modest_layer.items), 4);
+    assert_eq!(count_cubics(&modest_layer.items), 16, "built cubics stay on the budget");
+
+    let limits = Limits { max_geometry: 256, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::many_paths(4_000, 8), limits).expect_err("4_000 modest paths over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "many-paths read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+}
+
+/// A compound path builds one cubic list per child. Children have to spend the object budget and
+/// the geometry budget. A short child list still opens; a long one fails on whichever cap is tight.
+#[test]
+fn compound_children_stop_at_the_work_and_geometry_budgets() {
+    let small = read(&synth::compound_children(3, 4), Limits::default()).expect("three children");
+    let Item::Compound(path) = small.layers.first().expect("layer").items.first().expect("compound") else {
+        panic!("compound path");
+    };
+    assert_eq!(path.subpaths.len(), 3);
+    assert_eq!(path_cubics(path), 12);
+
+    // The child list itself fits in `max_items` (the parser counts each id once). Naming the
+    // compound twice walks those children again, and that second walk passes the object budget.
+    let work = Limits { max_items: 4_096, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::repeated_compound(3_000, 8, 2), work).expect_err("compound children over the work budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound work-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more objects than can be read");
+
+    let geometry = Limits { max_geometry: 40, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::compound_children(4_000, 8), geometry).expect_err("compound children over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound geometry-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+
+    // Under the cap, the cubics that were kept are within it.
+    let kept = read(&synth::compound_children(3, 4), geometry).expect("three children fit in 40");
+    let n = kept.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+    assert!(n <= geometry.max_geometry && n == 12, "built {n} cubics");
+}
+
 /// One graphic style whose attribute list names that style twice. The red fill is kept, and the
 /// second edge does not walk the style again.
 #[test]
@@ -404,7 +521,7 @@ fn a_style_referenced_twice_is_applied_once() {
     let layer = doc.layers.first().expect("layer");
     let mut items = Vec::new();
     flat(&layer.items, &mut items);
-    let Item::Path(path) = items.iter().find(|item| matches!(item, Item::Path(_))).expect("path") else { unreachable!() };
+    let Some(Item::Path(path)) = items.iter().find(|item| matches!(item, Item::Path(_))) else { panic!("path") };
     let Fill::Solid(fill) = &path.fill else { panic!("fill {:?}", path.fill) };
     assert!(near(fill.r, 1.0) && near(fill.g, 0.0) && near(fill.b, 0.0));
 }
@@ -425,4 +542,6 @@ fn write_fuzz_seeds() {
     std::fs::write(format!("{dir}/nested.fh"), synth::nested_groups(4)).expect("write");
     // Group A_k -> List[A_{k-1}, A_{k-1}] for k = 1..=63, one path at the bottom.
     std::fs::write(format!("{dir}/shared-63.fh"), synth::shared_groups(63)).expect("write");
+    std::fs::write(format!("{dir}/many-paths.fh"), synth::many_paths(32, 4)).expect("write");
+    std::fs::write(format!("{dir}/compound-children.fh"), synth::compound_children(32, 4)).expect("write");
 }

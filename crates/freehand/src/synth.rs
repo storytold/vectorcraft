@@ -164,6 +164,16 @@ fn xform_at(x: f64, y: f64, version: u8) -> Vec<u8> {
     w.0
 }
 
+fn composite(style: u32, elements: u32) -> Vec<u8> {
+    let mut w = Buf(Vec::new());
+    w.id(style);
+    w.id(0);
+    w.u32(0);
+    w.u32(0);
+    w.id(elements);
+    w.0
+}
+
 fn group(elements: u32, xform: u32) -> Vec<u8> {
     let mut w = Buf(Vec::new());
     w.id(0);
@@ -469,6 +479,66 @@ pub fn nested_groups(levels: u32) -> Vec<u8> {
     pack(&records, block_id, props)
 }
 
+/// `paths` separate closed paths on one layer. Each path has `nodes` corners (2…64). One path
+/// is modest; the cubics add up across the layer, about `paths * nodes`.
+pub fn many_paths(paths: u32, nodes: u32) -> Vec<u8> {
+    let paths = paths.clamp(1, 20_000);
+    let nodes = nodes.clamp(2, 64);
+    let pts: Vec<[f64; 2]> = (0..nodes).map(|i| [f64::from(i), if i % 2 == 0 { 0.0 } else { 4.0 }]).collect();
+    let mut records: Vec<(String, Vec<u8>)> = Vec::new();
+    records.push(("MName".into(), mname("pages")));
+    records.push(("MName".into(), mname("Ink")));
+    let mut ids = Vec::with_capacity(usize::try_from(paths).unwrap_or(0));
+    for i in 0..paths {
+        let dx = f64::from(i % 64) * 8.0;
+        let dy = f64::from(i / 64) * 8.0;
+        let shifted: Vec<[f64; 2]> = pts.iter().map(|p| [p[0] + dx, p[1] + dy]).collect();
+        records.push(("Path".into(), path(0, 1, &shifted)));
+        ids.push(u32::try_from(records.len()).unwrap_or(0));
+    }
+    let layer_list = push(&mut records, "MList", list(&ids));
+    let layer = push(&mut records, "Layer", layer(layer_list, 2));
+    let layers = push(&mut records, "MList", list(&[layer]));
+    let page_id = push(&mut records, "VMpObj", page(0.0, 0.0, 100.0, 100.0));
+    let pages = push(&mut records, "MList", list(&[page_id]));
+    let props = push(&mut records, "PropLst", prop_list(1, pages));
+    let block_id = push(&mut records, "Block", block(layers));
+    pack(&records, block_id, props)
+}
+
+/// One compound path whose child list names the same closed path `children` times.
+/// `nodes` is that path's corner count. The file stores the path once; each child builds it again.
+pub fn compound_children(children: u32, nodes: u32) -> Vec<u8> {
+    repeated_compound(children, nodes, 1)
+}
+
+/// `copies` of one compound path on the layer. The compound's child list names one closed path
+/// `children` times, and `nodes` is that path's corner count. The path record is stored once.
+/// Naming the compound more than once walks those children again.
+pub fn repeated_compound(children: u32, nodes: u32, copies: u32) -> Vec<u8> {
+    let children = children.clamp(1, 20_000);
+    let nodes = nodes.clamp(2, 64);
+    let copies = copies.clamp(1, 64);
+    let pts: Vec<[f64; 2]> = (0..nodes).map(|i| [f64::from(i), 0.0]).collect();
+    let mut records: Vec<(String, Vec<u8>)> = Vec::new();
+    records.push(("MName".into(), mname("pages")));
+    records.push(("MName".into(), mname("Ink")));
+    records.push(("Path".into(), path(0, 1, &pts)));
+    let path_id = 3u32;
+    let ids = vec![path_id; usize::try_from(children).unwrap_or(0)];
+    let list_id = push(&mut records, "MList", list(&ids));
+    let comp = push(&mut records, "CompositePath", composite(0, list_id));
+    let tops = vec![comp; usize::try_from(copies).unwrap_or(0)];
+    let layer_list = push(&mut records, "MList", list(&tops));
+    let layer = push(&mut records, "Layer", layer(layer_list, 2));
+    let layers = push(&mut records, "MList", list(&[layer]));
+    let page_id = push(&mut records, "VMpObj", page(0.0, 0.0, 100.0, 100.0));
+    let pages = push(&mut records, "MList", list(&[page_id]));
+    let props = push(&mut records, "PropLst", prop_list(1, pages));
+    let block_id = push(&mut records, "Block", block(layers));
+    pack(&records, block_id, props)
+}
+
 /// `levels` groups. Group `A_k` names the list `[A_{k-1}, A_{k-1}]`, and the bottom list names
 /// one path twice. The file stays small. Walking the sharing builds about `2^levels` objects.
 pub fn shared_groups(levels: u32) -> Vec<u8> {
@@ -716,10 +786,17 @@ pub fn fuzz_file(input: &[u8]) -> Vec<u8> {
     // `b(6) == 0` is the 63-level shared-record shape: group A_k names List[A_{k-1}, A_{k-1}].
     // Other shared files stay shallow so a mutated read at the default budget stays small.
     let shared_levels = if b(6) == 0 { 63 } else { u32::from(b(1) % 6).max(1) };
-    let mut file = match b(2) % 3 {
+    // `b(7) == 0` is many modest paths (the combined geometry is the large part).
+    // `b(8) == 0` is one compound path whose child list repeats one path thousands of times.
+    // Other files of those shapes stay small so a mutated read at the default budget stays small.
+    let many = if b(7) == 0 { 4_000 } else { u32::from(b(1) % 6).max(1) };
+    let repeated = if b(8) == 0 { 4_000 } else { u32::from(b(1) % 6).max(1) };
+    let mut file = match b(2) % 5 {
         0 => demo_at(version),
         1 => nested_groups(nest),
-        _ => shared_groups(shared_levels),
+        2 => shared_groups(shared_levels),
+        3 => many_paths(many, 8),
+        _ => compound_children(repeated, 8),
     };
     if file.is_empty() {
         return file;
