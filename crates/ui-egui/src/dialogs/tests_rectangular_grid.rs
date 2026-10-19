@@ -160,6 +160,31 @@ fn key_frame(app: &mut VectorcraftApp, key: egui::Key) {
 }
 
 #[test]
+fn rectangular_grid_reference_locator_reanchors_to_the_click() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    set(&mut app, "reference", json!(4));
+    super::shapes::grid_pin_to_anchor(app.ui.dialog.as_mut().unwrap());
+    assert_eq!((field(&app, "x"), field(&app, "y")), (json!(50.0), json!(50.0)));
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 150.0, 150.0), 5, 5);
+}
+
+/// #1377: OK uses the bounding box after a reference-point resize (`artboard_rect` keeps the
+/// center pinned when width doubles).
+#[test]
+fn rectangular_grid_reference_point_pins_center_when_width_changes() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    assert_eq!(field(&app, "reference"), json!(0));
+    for (key, value) in [("reference", json!(4)), ("x", json!(50.0)), ("y", json!(50.0)), ("width", json!(200)), ("height", json!(100))] {
+        set(&mut app, key, value);
+    }
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 250.0, 150.0), 5, 5);
+}
+
+#[test]
 fn rectangular_grid_canvas_click_opens_registered_dialog_with_saved_counts_and_point_defaults() {
     let mut app = app();
     saved_counts(&mut app, 7, 3);

@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: no id)} the key object Align aligns to and Distribute Spacing spaces from; without `id` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members); any other id is an error that leaves the key as it was → {key} (the resulting key object, or null)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection; any other id or guide is an error that leaves the key as it was → {key, guide?} (the resulting key object, or null; guide: the key guide, left out without one)",
             has_doc,
             key
         ),
@@ -368,6 +368,29 @@ fn selection_result(s: &Session) -> Result<Value> {
 
 fn key(s: &mut Session, p: &Value) -> Result<Value> {
     let id = p.get("id").map(|value| checked_id(s, value, "select.key")).transpose()?;
+    let guide = match p.get("guide").filter(|v| !v.is_null()) {
+        Some(v) => {
+            Some(v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad("select.key", "`guide` must be a guide index (guide.list)"))?)
+        }
+        None => None,
+    };
+    if let Some(g) = guide {
+        let sel = &s.doc()?.selection;
+        if id.is_some() {
+            return Err(bad("select.key", "give `id` or `guide`, not both"));
+        }
+        if !sel.guides.contains(&g) {
+            return Err(bad("select.key", format!("guide {g} is not selected")));
+        }
+        if sel.is_empty() {
+            return Err(bad("select.key", "select objects to align to the guide"));
+        }
+        s.select(|_, sel| {
+            sel.key = None;
+            sel.key_guide = Some(g);
+        })?;
+        return key_result(s);
+    }
     if let Some(id) = id {
         let st = s.doc()?;
         // A selected top-level object is the only top-level object among the selected ones of
@@ -377,8 +400,21 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad("select.key", format!("object {id} is not a selected top-level object")));
         }
     }
-    s.select(|_, sel| sel.key = id)?;
-    Ok(json!({ "key": s.doc()?.selection.key }))
+    s.select(|_, sel| {
+        sel.key = id;
+        sel.key_guide = None;
+    })?;
+    key_result(s)
+}
+
+/// `{key}`, with `guide` when a guide is the key.
+fn key_result(s: &Session) -> Result<Value> {
+    let sel = &s.doc()?.selection;
+    let mut out = json!({ "key": sel.key });
+    if let Some(g) = sel.key_guide {
+        out["guide"] = json!(g);
+    }
+    Ok(out)
 }
 
 /// `[[subpath, anchor]…]` anchor references of `cmd`: a malformed entry fails rather than being

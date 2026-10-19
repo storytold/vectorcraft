@@ -48,9 +48,9 @@ enum State {
         /// Shift-pressed on this selected object: released without a drag, it leaves the
         /// selection.
         deselect: Option<NodeId>,
-        /// Pressed (no modifier) on this object of a selection of several: released without a
-        /// drag, it becomes the key object that Align aligns to if `can_be_key` allows it (the key
-        /// again: no key).
+        /// Pressed (no modifier) on this object of a selection of several, or of one with ruler
+        /// guides: released without a drag, it becomes the key object that Align aligns to if
+        /// `can_be_key` allows it (the key again: no key).
         key: Option<NodeId>,
     },
     Scaling {
@@ -582,7 +582,7 @@ impl Tool for SelectionTool {
                             }
                         } else if !cx.selection.contains(top) {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
-                        } else if cx.selection.objects.len() > 1 && !m.cmd && !m.alt {
+                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
                             key = Some(top);
                         }
                         self.state = State::Moving { start: grab, began: false, deselect, key };
@@ -1442,7 +1442,8 @@ mod tests {
     }
 
     /// #541: a click on one object of a selection of several makes it the key object; a click on
-    /// the key again lets it go. A drag moves them all, a lone object has no key.
+    /// the key again lets it go. A drag moves them all, a lone object has no key unless ruler
+    /// guides are selected with it.
     #[test]
     fn a_click_on_a_selected_object_makes_it_the_key() {
         let (d, id) = doc_with_area_type();
@@ -1466,10 +1467,13 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0));
         t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 150.0)), vec![Action::Commit]);
-        // One object selected: a click on it does nothing.
+        // One object selected: a click on it does nothing, unless ruler guides are selected
+        // with it for it to be the key of (#2143).
         let mut one = Selection::default();
         one.add(rect);
         assert!(click(&one, 150.0, 150.0).is_empty());
+        one.guides = vec![0];
+        assert_eq!(click(&one, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
     }
 
     /// In isolation mode a click makes only a selected top-level object the key, as `select.key`

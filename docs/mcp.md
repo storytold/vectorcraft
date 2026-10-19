@@ -1082,10 +1082,17 @@ The id must name a selected top-level object.
 Layers, compound-path members and objects inside another selected object are not top-level objects.
 Any other id is an error naming that value, and the key is left unchanged.
 A null `id` is an error too.
-A click with the Selection tool on a selected top-level object, while two or more objects are selected, runs `select.key {id}`, and a click on the key object again runs `select.key {}`.
-On a single selected object, or on a group selected with only its own members, `select.key` sets no key.
-It returns `{key}`, the key object's id or null.
-`document.inspect` (the `inspect_document` tool) reports the key object as `key`, null without one.
+A click with the Selection tool on a selected top-level object, while two or more objects are selected or ruler guides are selected with it, runs `select.key {id}`, and a click on the key object again runs `select.key {}`.
+On a single selected object with no ruler guide selected, or on a group selected with only its own members, `select.key` sets no key.
+With a key object (or a key guide), `object.align` moves the other selected ruler guides too: a vertical guide goes to the key's left edge, centre or right edge, a horizontal one to its top, centre or bottom (#2143).
+Aligning to the selection or the artboard leaves guides where they are.
+`select.key {guide}` makes a selected ruler guide (its `guide.list` index) the key instead, while one or more objects are selected (#2143).
+`object.align` then lines the objects up on the guide and the guide stays put: a vertical guide sets where their left edges, centres or right edges go and vertical alignment leaves them where they are, a horizontal guide the other way round.
+Selected anchor points align to it the same way. Distribute Spacing doesn't space from a key guide.
+A click with the Selection tool on a guide selected with objects runs `select.key {guide}`, and a click on the key guide again runs `select.key {}`.
+The key guide goes when it leaves the selection or no object is left selected, and an object key replaces it (and the other way round).
+It returns `{key}`, the key object's id or null, with `guide`, the key guide's index, when a guide is the key.
+`document.inspect` (the `inspect_document` tool) reports the key object as `key`, null without one, and the key guide as `keyGuide`.
 The `ui.pointer` and `pointer_gesture` replies list it as `key` beside `selection`.
 The command palette lists `select.key` as Cancel Key Object and runs it without an id.
 

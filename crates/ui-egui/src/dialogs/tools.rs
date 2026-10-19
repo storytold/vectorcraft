@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use super::shapes::grid_pin_to_anchor;
 use crate::VectorcraftApp;
 use crate::state::Dialog;
 
@@ -18,11 +19,17 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         "lineSegment" => Dialog::new(kind, json!({"x": x, "y": y, "length": "100 pt", "angle": 0})),
         // The grids: the tool's stored options (divider counts and skews, switches) at the default size.
         "rectangularGrid" | "polarGrid" => {
-            let mut fields = app.session.tool_options_of(kind);
-            for (key, value) in [("x", json!(x)), ("y", json!(y)), ("width", json!("100 pt")), ("height", json!("100 pt"))] {
-                fields[key] = value;
+            let mut obj = match app.session.tool_options_of(kind) {
+                Value::Object(o) => o,
+                _ => serde_json::Map::new(),
+            };
+            for (key, value) in [("__anchorX", json!(x)), ("__anchorY", json!(y)), ("width", json!("100 pt")), ("height", json!("100 pt"))] {
+                obj.insert(key.into(), value);
             }
-            Dialog::new(kind, fields)
+            obj.insert("reference".into(), json!(0));
+            let mut d = Dialog::new(kind, Value::Object(obj));
+            grid_pin_to_anchor(&mut d);
+            d
         }
         // Graph tool click: the graph's size.
         "graph" => Dialog::new(

@@ -512,6 +512,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Selected guides in the selection colour.
         let picked = LineLook { color: t.selection, ..look };
         let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
+        let key = app.session.active().and_then(|st| st.selection.key_guide);
         let view = view_bounds(&xf);
         // Guides on a hidden layer hide with it.
         for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
@@ -527,6 +528,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             };
             if selected.contains(&i) { picked } else { look }.guide(&painter, a, b);
+            // The key guide (Align to Key Object, #2143): thicker, as a key object's outline is.
+            if key == Some(i) {
+                painter.line_segment([a, b], Stroke::new(KEY_OUTLINE, picked.color));
+            }
         }
     }
 

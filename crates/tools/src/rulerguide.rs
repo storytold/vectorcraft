@@ -1,7 +1,9 @@
 //! Ruler guides on the canvas. Dragged out of a ruler with any tool ([`NewGuide`]), a guide is
 //! made where it is released over the canvas: with the Artboard tool, an artboard guide of the
 //! active artboard. For the selection tools ([`GuideEdit`]), a press on a guide selects it (Shift
-//! adds it to the selected guides or, released without a drag, takes it out); dragging moves the
+//! adds it to the selected guides or, released without a drag, takes it out; a click on a guide
+//! selected with objects makes it the key object Align lines them up on, `select.key`, and a
+//! click on the key guide again cancels it); dragging moves the
 //! selected guides (Alt copies them), and a marquee selects the guides it crosses along with the
 //! art ([`marquee_select`]). A dragged guide snaps ([`GuideSnap`]): with Shift to the
 //! ruler's ticks, else to whole pixels, the grid, with Smart Guides the art's and the artboards'
@@ -92,6 +94,9 @@ struct Drag {
     began: bool,
     /// Shift-pressed on a selected guide: released without a drag, it leaves the selection.
     deselect: bool,
+    /// Pressed (no Shift) on a guide selected with objects: released without a drag, it becomes
+    /// the key object Align lines them up on, or stops being it when it was.
+    key: bool,
 }
 
 /// Snapping for a dragged ruler guide, its targets gathered when the drag begins.
@@ -246,6 +251,7 @@ impl GuideEdit {
             pointer: ev.pos,
             began: false,
             deselect: shift && selected,
+            key: !shift && selected && !cx.selection.is_empty(),
         });
         self.snap = GuideSnap::default();
         Some(match (selected, shift) {
@@ -278,6 +284,11 @@ impl GuideEdit {
                     vec![Action::Commit]
                 } else if d.deselect {
                     vec![Action::Exec("guide.select".into(), json!({ "indexes": [d.index], "toggle": true }))]
+                } else if d.key && cx.selection.key_guide == Some(d.index) {
+                    // A click on the key guide again: no key.
+                    vec![Action::Exec("select.key".into(), json!({}))]
+                } else if d.key {
+                    vec![Action::Exec("select.key".into(), json!({ "guide": d.index }))]
                 } else {
                     vec![]
                 }
@@ -620,6 +631,43 @@ mod tests {
         let a = g.pointer(&c, &ev(PointerKind::Drag, 50.0, 420.0, alt)).unwrap();
         assert_eq!(a[0], Action::Begin("Copy Guide".into()));
         assert_eq!(a[1], Action::Preview("guide.move".into(), json!({"dx": 0.0, "dy": 20.0, "copy": true})));
+    }
+
+    /// #2143: a click on a guide selected with objects makes it the key; on the key guide again,
+    /// no key. Alone (no objects), with Shift, or dragged, it doesn't.
+    #[test]
+    fn a_click_on_a_guide_selected_with_objects_makes_it_the_key() {
+        // The same document as doc_with_rect's, with the guides.
+        let (d, rect) = (guides_doc(), doc_with_rect().1);
+        let p = paint();
+        let click = |s: &Selection, m: Mods| {
+            let c = cx(&d, s, &p);
+            let mut g = GuideEdit::default();
+            let mut out = g.press(&c, &ev(PointerKind::Down, 302.0, 50.0, m)).unwrap();
+            out.extend(g.pointer(&c, &ev(PointerKind::Up, 302.0, 50.0, m)).unwrap());
+            out
+        };
+        let mut s = Selection::default();
+        s.set([rect]);
+        s.toggle_guide(0);
+        let make = Action::Exec("select.key".into(), json!({"guide": 0}));
+        assert_eq!(click(&s, Mods::default()), vec![make]);
+        s.key_guide = Some(0);
+        assert_eq!(click(&s, Mods::default()), vec![Action::Exec("select.key".into(), json!({}))], "the key guide again");
+        let shift = Mods { shift: true, ..Default::default() };
+        assert_eq!(click(&s, shift), vec![Action::Exec("guide.select".into(), json!({"indexes": [0], "toggle": true}))]);
+        s.set_guides([0]);
+        assert_eq!(click(&s, Mods::default()), vec![], "a guide alone has nothing to align");
+        // Not selected yet: the first click selects it.
+        s.set([rect]);
+        assert_eq!(click(&s, Mods::default()), vec![Action::Exec("guide.select".into(), json!({"indexes": [0]}))]);
+        // A drag moves it.
+        s.toggle_guide(0);
+        let c = cx(&d, &s, &p);
+        let mut g = GuideEdit::default();
+        g.press(&c, &ev(PointerKind::Down, 302.0, 50.0, Mods::default()));
+        g.pointer(&c, &ev(PointerKind::Drag, 340.0, 50.0, Mods::default()));
+        assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 340.0, 50.0, Mods::default())), Some(vec![Action::Commit]));
     }
 
     #[test]

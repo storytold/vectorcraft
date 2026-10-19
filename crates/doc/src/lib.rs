@@ -1569,6 +1569,7 @@ impl Document {
             n += usize::from(*k);
         }
         sel.guides = sel.guides.iter().filter_map(|i| to.get(*i).copied().flatten()).collect();
+        sel.key_guide = sel.key_guide.and_then(|i| to.get(i).copied().flatten());
         let before = self.guides.len();
         let mut flags = kept.into_iter();
         self.guides.retain(|_| flags.next().unwrap_or(true));

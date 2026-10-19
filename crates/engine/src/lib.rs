@@ -774,6 +774,11 @@ pub(crate) fn deselect_guides(d: &Document, sel: &mut Selection) -> bool {
         sel.remove(id);
     }
     sel.guides.clear();
+    sel.key_guide = None;
+    // A key object kept only for the guides to line up on goes with them.
+    if sel.key.is_some_and(|k| sel.objects.iter().all(|o| *o == k)) {
+        sel.key = None;
+    }
     any
 }
 
@@ -2150,6 +2155,8 @@ mod tests_interactivity;
 mod tests_intertwine;
 #[cfg(test)]
 mod tests_journal;
+#[cfg(test)]
+mod tests_keyguide;
 #[cfg(test)]
 mod tests_knockout;
 #[cfg(test)]
