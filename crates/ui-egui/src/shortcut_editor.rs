@@ -1014,4 +1014,16 @@ mod tests {
         assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
         assert_eq!(effective_in(&ov, "symbol.breakLink").as_deref(), Some("Cmd+Alt+Shift+F9"));
     }
+
+    /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in
+    /// Edit › Keyboard Shortcuts.
+    #[test]
+    fn enter_isolation_mode_command_is_listed_and_assignable() {
+        let e = entry("object.isolate").expect("listed");
+        assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Enter Isolation Mode", "Object", false));
+        assert_eq!(default_of("object.isolate"), None);
+        let mut ov = BTreeMap::new();
+        assign(&mut ov, "object.isolate", Some("Cmd+Alt+Shift+F11"), false).unwrap();
+        assert_eq!(effective_in(&ov, "object.isolate").as_deref(), Some("Cmd+Alt+Shift+F11"));
+    }
 }

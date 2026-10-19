@@ -410,7 +410,7 @@ fn drag_of(e: &Entry, names: Vec<String>) -> PanelDrag {
         Entry::Folder(_) => Paint::None,
     };
     let rows = SwatchRows { grabbed: e.name().to_string(), names, groups: e.is_folder() };
-    PanelDrag::Paint { paint, params: swatch_params(e).unwrap_or_default(), rows: Some(rows) }
+    PanelDrag::Paint { paint, params: swatch_params(e).unwrap_or_default(), rows: Some(rows), library: None }
 }
 
 /// What the tiles or rows saw this frame.
@@ -614,6 +614,7 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
         },
         PanelDrag::Brush { def, .. } => return pointer_chip(ctx, |ui, r| super::brushes::chip(ui, r, def)),
         PanelDrag::LibraryGraphic { library, item } => return pointer_chip(ctx, |ui, r| super::libraries::chip(app, ui, r, library, item)),
+        PanelDrag::LibraryItem { .. } | PanelDrag::LibraryGroup { .. } => return,
     };
     pointer_chip(ctx, |ui, r| {
         if registration {

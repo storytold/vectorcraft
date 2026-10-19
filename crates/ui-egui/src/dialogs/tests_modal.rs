@@ -292,13 +292,181 @@ fn app_with_dense_path() -> VectorcraftApp {
     app
 }
 
+/// Object › Path › Simplify, then the slider's More Options: the Simplify dialog.
+fn open_simplify_dialog(app: &mut VectorcraftApp) {
+    crate::menus::invoke(app, "object.path.simplify", json!({}));
+    app.run("ui.simplifyMoreOptions", json!({})).unwrap();
+}
+
+/// The anchors of the paths in `app`'s document.
+fn anchor_count(app: &VectorcraftApp) -> usize {
+    let mut n = 0;
+    app.session.doc().unwrap().doc.walk(|node| {
+        if let vectorcraft_doc::NodeKind::Path { path, .. } = &node.kind {
+            n += path.anchor_count();
+        }
+    });
+    n
+}
+
+/// The parameters of the Simplify preview on the canvas.
+fn simplify_preview(app: &VectorcraftApp) -> serde_json::Value {
+    app.session.doc().unwrap().interaction.as_ref().and_then(|it| it.preview.clone()).expect("a preview").1
+}
+
+/// The Simplify slider's strip, and the centers of its Auto-Simplify button, its rail and its More
+/// Options button.
+fn slider_strip(ctx: &egui::Context) -> (Rect, Pos2, Pos2, Pos2) {
+    let r = rect_of(ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    let y = r.center().y;
+    (r, Pos2::new(r.left() + 8.0 + 14.0, y), Pos2::new(r.left() + 8.0 + 28.0 + 6.0 + 90.0, y), Pos2::new(r.right() - 8.0 - 14.0, y))
+}
+
+/// Object › Path › Simplify opens a slider under the selection that previews the 1 pt result.
+/// Dragging it to the right previews more anchor points and to the left fewer, and Enter keeps the
+/// result as one undo step.
+#[test]
+fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
+    let (ctx, mut app) = (ctx(), app_with_dense_path());
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(simplify_slider::KIND));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 50.0}));
+    assert_eq!(anchor_count(&app), 2, "the 1 pt result");
+    let (_, _, rail, _) = slider_strip(&ctx);
+    drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
+    let most = anchor_count(&app);
+    assert!(most > 2, "{most}");
+    let (_, _, rail, _) = slider_strip(&ctx);
+    drag(&ctx, &mut app, rail + vec2(90.0, 0.0), vec2(-190.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
+    assert_eq!(anchor_count(&app), 2);
+    frame(
+        &ctx,
+        &mut app,
+        vec![Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    assert_eq!(anchor_count(&app), 2);
+}
+
+/// Escape, taken by the app's key handling before the dialog layer draws, closes the Simplify
+/// slider and puts the paths back as they were, with no undo step.
+#[test]
+fn simplify_slider_escape_puts_the_paths_back() {
+    let (ctx, mut app) = (ctx(), app_with_dense_path());
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    settle(&ctx, &mut app);
+    let (_, _, rail, _) = slider_strip(&ctx);
+    drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
+    assert_ne!(app.session.doc().unwrap().doc, before, "the preview changes the path");
+    let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        show(&mut app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len);
+    assert_eq!(anchor_count(&app), 20);
+}
+
+/// The Simplify slider stays where it opened, under the paths as they were, while the preview
+/// changes their bounds, so a drag doesn't move the rail under the pointer.
+#[test]
+fn simplify_slider_stays_where_it_opened_while_the_preview_changes_the_bounds() {
+    let ctx = ctx();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.canvas_rect = Some(Rect::from_min_size(Pos2::ZERO, SCREEN));
+    // A hump 20 pt high, which level 0 (32 pt) fits with a lower curve, seen at 400%.
+    let anchors: Vec<_> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": 100.0 + 20.0 * (std::f64::consts::PI * i as f64 / 19.0).sin()})).collect();
+    app.run("path.create", json!({"anchors": anchors})).unwrap();
+    app.run("view.setZoom", json!({"zoom": 400})).unwrap();
+    app.view_mut().unwrap().center = vectorcraft_geom::Point::new(172.5, 60.0);
+    let before = app.selection_bounds().unwrap();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    settle(&ctx, &mut app);
+    let opened = rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(0));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
+    let after = app.selection_bounds().unwrap();
+    assert!(after.height() < before.height() - 0.5, "the preview changes the bounds: {before:?} → {after:?}");
+    assert_eq!(rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND))), opened);
+}
+
+/// Auto-Simplify moves the slider to the level that keeps the path within 1/400 of its size, and a
+/// click outside the strip keeps the result as one undo step.
+#[test]
+fn simplify_slider_auto_simplify_and_a_click_outside_keep_the_result() {
+    let (ctx, mut app) = (ctx(), app_with_dense_path());
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    settle(&ctx, &mut app);
+    let (_, auto, ..) = slider_strip(&ctx);
+    click(&ctx, &mut app, auto);
+    // The path is 285 pt wide: 0.7125 pt at most, level 55.
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("level", 0.0), 55.0);
+    assert_eq!(app.session.doc().unwrap().interaction.as_ref().and_then(|it| it.preview.clone()).unwrap().1, json!({"auto": true}));
+    frame(&ctx, &mut app, vec![]);
+    assert_eq!(anchor_count(&app), 2);
+    assert!(app.session.in_interaction(), "the result waits for a click outside");
+    click(&ctx, &mut app, Pos2::new(20.0, 20.0));
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    assert_ne!(app.session.doc().unwrap().doc, before);
+}
+
+/// More Options opens the Simplify dialog at the slider's tolerance. With "Open this dialog with
+/// these settings next time" ticked, OK makes the menu item open the dialog on its settings; with
+/// it unticked, the slider again.
+#[test]
+fn simplify_slider_more_options_and_the_dialog_that_opens_directly() {
+    let (ctx, mut app) = (ctx(), app_with_dense_path());
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(60));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 60.0}));
+    let (_, _, _, more) = slider_strip(&ctx);
+    click(&ctx, &mut app, more);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.kind.as_str(), d.f64("tolerance", 0.0), d.bool("retain")), ("simplify", 0.5, false));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app)["tolerance"], json!(0.5));
+    let texts = frame(&ctx, &mut app, vec![]);
+    let retain = texts.iter().find(|(t, _)| t == "Open this dialog with these settings next time").map(|(_, r)| *r).expect("the checkbox");
+    click(&ctx, &mut app, retain.center());
+    app.ui.dialog.as_mut().unwrap().fields.insert("straightLines".into(), json!(true));
+    confirm(&mut app).unwrap();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    let d = app.ui.dialog.clone().unwrap();
+    assert_eq!((d.kind.as_str(), d.f64("tolerance", 0.0), d.bool("straightLines"), d.bool("retain")), ("simplify", 0.5, true, true));
+    app.ui.dialog.as_mut().unwrap().fields.insert("retain".into(), json!(false));
+    confirm(&mut app).unwrap();
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(simplify_slider::KIND));
+    assert!(app.run("ui.simplifyAuto", json!({})).is_ok());
+    cancel(&mut app);
+    assert!(app.run("ui.simplifyMoreOptions", json!({})).is_err(), "the slider is not open");
+}
+
 #[test]
 fn simplify_dialog_preview_counts_and_cancel_restore_the_original() {
     let (ctx, mut app) = (ctx(), app_with_dense_path());
     let before = app.session.doc().unwrap().doc.clone();
     let selection = app.session.doc().unwrap().selection.clone();
     let undo_len = app.session.doc().unwrap().history.undo.len();
-    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    open_simplify_dialog(&mut app);
     settle(&ctx, &mut app);
     let texts = frame(&ctx, &mut app, vec![]);
     let preview = texts.iter().find(|(t, _)| t == "Preview").map(|(_, r)| *r).expect("a Preview checkbox");
@@ -337,7 +505,7 @@ fn simplify_dialog_ok_keeps_exactly_one_undo_with_or_without_preview() {
         let before = app.session.doc().unwrap().doc.clone();
         let selection = app.session.doc().unwrap().selection.clone();
         let undo_len = app.session.doc().unwrap().history.undo.len();
-        crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+        open_simplify_dialog(&mut app);
         app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(on));
         settle(&ctx, &mut app);
         if on {
@@ -381,7 +549,7 @@ fn only_straight_segments(app: &VectorcraftApp) -> bool {
 fn simplify_dialog_sends_corner_angle_and_straight_lines() {
     let (ctx, mut app) = (ctx(), app_with_selection());
     app.run("shape.ellipse", json!({"x": 100, "y": 200, "width": 160, "height": 90})).unwrap();
-    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    open_simplify_dialog(&mut app);
     settle(&ctx, &mut app);
     let texts = frame(&ctx, &mut app, vec![]);
     assert!(texts.iter().any(|(t, _)| t == "Corner Point Angle Threshold:"), "{texts:?}");
@@ -407,7 +575,7 @@ fn simplify_dialog_corner_point_angle_threshold_keeps_or_smooths_corners() {
     let (ctx, mut app) = (ctx(), app_with_selection());
     app.run("edit.clear", json!({})).unwrap();
     app.run("shape.polygon", json!({"cx": 200, "cy": 200, "radius": 100, "sides": 8})).unwrap();
-    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    open_simplify_dialog(&mut app);
     app.ui.dialog.as_mut().unwrap().fields.insert("tolerance".into(), json!("10 pt"));
     settle(&ctx, &mut app);
     assert!(only_straight_segments(&app), "the corners stay and the sides stay straight");
@@ -426,7 +594,7 @@ fn simplify_dialog_show_original_path_outlines_the_paths_before_the_preview() {
         Some((id, vectorcraft_doc::NodeKind::Path { path, .. })) => (id, path.clone()),
         _ => panic!("a path is selected"),
     };
-    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    open_simplify_dialog(&mut app);
     settle(&ctx, &mut app);
     let texts = frame(&ctx, &mut app, vec![]);
     assert!(super::path_ops::original_paths(&app).is_empty(), "Show Original Path is off as the dialog opens");

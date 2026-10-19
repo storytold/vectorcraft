@@ -503,7 +503,7 @@ impl Tool for DirectSelectionTool {
                 self.snapped = false;
                 if let Some(g) = self.mesh.hit(cx, &cx.selection.objects, p) {
                     self.state = State::Mesh;
-                    return self.mesh.press(g);
+                    return self.mesh.press(cx, g);
                 }
                 self.mesh.unfocus();
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {

@@ -21,6 +21,8 @@ pub struct ViewInfo {
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
     pub snap_to_point: bool,
+    /// View → Snap to Glyph: drawing snaps to live-text baselines and glyph bounds (needs Smart Guides).
+    pub snap_to_glyph: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
@@ -40,6 +42,7 @@ impl Default for ViewInfo {
             show_bbox: true,
             snap_to_pixel: false,
             snap_to_point: true,
+            snap_to_glyph: false,
             corner_widgets: true,
             screen: None,
             artboard: 0,
@@ -202,11 +205,13 @@ impl Session {
             // wins instead of pixels quietly rounding every drag to whole points (#1816).
             snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
             snap_to_point: view.snap_to_point,
+            snap_to_glyph: view.snap_to_glyph && view.smart_guides && !view.snap_to_grid,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
             appearance_item: self.appearance_item(),
             constrain_angle: self.prefs.constrain_angle,
+            keyboard_increment: self.prefs.keyboard_increment,
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,

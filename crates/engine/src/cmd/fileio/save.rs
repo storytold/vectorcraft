@@ -549,7 +549,10 @@ impl SaveJob {
             let one = self.encode_one(&artboard_doc(&self.doc, b))?;
             enc.files.extend(one.files.into_iter().map(|(_, bytes)| (Some(b), bytes)));
         }
-        enc.warnings.splice(0..0, fidelity_warning(self.plan.format));
+        // Lost artboards first: the status bar shows only the first warning.
+        let f = self.plan.format;
+        let lost = if is_svg(f) { super::svg::lost_artboards_warning(&self.doc, &self.params, f.label) } else { None };
+        enc.warnings.splice(0..0, lost.into_iter().chain(fidelity_warning(f)));
         Ok(enc)
     }
 

@@ -1090,4 +1090,116 @@ mod tests {
         assert!(types > 1 && plist.matches("<key>LSHandlerRank</key>").count() == types, "every document type has a rank");
         assert_eq!(plist.matches("<string>Owner</string>").count(), 2, "only VectorCraft documents and templates are owned");
     }
+
+    /// The MIME types a Linux desktop gives each extension in `OPEN_EXTS` but `UNASSOCIATED_EXTS`
+    /// (one row per type): shared-mime-info's, or one that `ai.storyteller.vectorcraft.mime.xml`
+    /// declares.
+    const LINUX_TYPES: &[(&str, &str)] = &[
+        ("vectorcraft", "application/x-vectorcraft"),
+        ("drawcraft", "application/x-vectorcraft"),
+        ("svg", "image/svg+xml"),
+        ("svgz", "image/svg+xml-compressed"),
+        ("pdf", "application/pdf"),
+        ("ai", "application/illustrator"), // brand-ok: shared-mime-info's type
+        ("ait", "application/x-ai-template"),
+        ("png", "image/png"),
+        ("jpg", "image/jpeg"),
+        ("jpeg", "image/jpeg"),
+        ("gif", "image/gif"),
+        ("webp", "image/webp"),
+        ("tif", "image/tiff"),
+        ("tiff", "image/tiff"),
+        ("bmp", "image/bmp"),
+        ("vctemplate", "application/x-vectorcraft-template"),
+        ("dxf", "image/vnd.dxf"),
+        ("emf", "image/emf"),
+        ("wmf", "image/wmf"),
+        ("eps", "image/x-eps"),
+        ("af", "application/x-affinity"),
+        ("afdesign", "application/x-affinity"),
+        ("afpub", "application/x-affinity"),
+    ];
+
+    /// The types in `LINUX_TYPES` that shared-mime-info defines. The MIME package declares every
+    /// other one.
+    const LINUX_SHARED_TYPES: &[&str] = &[
+        "image/svg+xml",
+        "image/svg+xml-compressed",
+        "application/pdf",
+        "application/illustrator", // brand-ok: shared-mime-info's type
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/bmp",
+        "image/vnd.dxf",
+        "image/emf",
+        "image/wmf",
+        "image/x-eps",
+    ];
+
+    /// Extensions in `LINUX_TYPES` whose type the MIME package matches by file content and not by a
+    /// glob, with the package's `<magic>` rule for that type (its lines joined, indentation removed).
+    const LINUX_BY_CONTENT: &[(&str, &str)] = &[(
+        "af",
+        // `MAGIC` at offset 0 and `DOCUMENT_KIND` at offset 8 (crates/affinity/src/container.rs).
+        r#"<magic><match type="string" offset="0" value="\x00\xff\x4b\x41"><match type="string" offset="8" value="nsrP"/></match></magic>"#,
+    )];
+
+    /// The desktop entry lists a MIME type for every extension in `OPEN_EXTS` but
+    /// `UNASSOCIATED_EXTS`, and the app's MIME package declares the types shared-mime-info doesn't
+    /// have.
+    #[test]
+    fn the_linux_desktop_entry_opens_every_readable_format() {
+        let desktop = include_str!("../../../packaging/linux/ai.storyteller.vectorcraft.desktop");
+        let mime = include_str!("../../../packaging/linux/ai.storyteller.vectorcraft.mime.xml");
+        let listed: Vec<&str> =
+            desktop.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or_default().split(';').filter(|t| !t.is_empty()).collect();
+        // Each type the MIME package declares, with the extensions of its globs and its `<magic>`
+        // rule (empty when it has none) in the form `LINUX_BY_CONTENT` gives.
+        let declared: Vec<(&str, Vec<&str>, String)> = mime
+            .split("<mime-type type=\"")
+            .skip(1)
+            .map(|block| {
+                let body = block.split("</mime-type>").next().unwrap_or_default();
+                let globs = body.split("<glob pattern=\"*.").skip(1).filter_map(|g| g.split('"').next()).collect();
+                let magic = match (body.find("<magic"), body.find("</magic>")) {
+                    (Some(start), Some(end)) => body[start..end + "</magic>".len()].lines().map(str::trim).collect(),
+                    _ => String::new(),
+                };
+                (block.split('"').next().unwrap_or_default(), globs, magic)
+            })
+            .collect();
+        let mut associated: Vec<&str> = fileio::OPEN_EXTS.iter().copied().filter(|e| !fileio::UNASSOCIATED_EXTS.contains(e)).collect();
+        let mut typed: Vec<&str> = LINUX_TYPES.iter().map(|(e, _)| *e).collect();
+        associated.sort_unstable();
+        typed.sort_unstable();
+        typed.dedup();
+        assert_eq!(typed, associated, "a MIME type for each extension the packaging associates with the app");
+        for (e, t) in LINUX_TYPES {
+            assert!(listed.contains(t), "the desktop entry doesn't list {t} (.{e})");
+            let package = declared.iter().find(|(name, ..)| name == t);
+            if LINUX_SHARED_TYPES.contains(t) {
+                assert!(package.is_none(), "{t} is shared-mime-info's, and the MIME package declares it again");
+                continue;
+            }
+            let Some((_, globs, magic)) = package else { panic!("the MIME package doesn't declare {t} (.{e})") };
+            if let Some((_, rule)) = LINUX_BY_CONTENT.iter().find(|(content, _)| content == e) {
+                assert!(!globs.contains(e), "{t} matches .{e} files by content only");
+                assert_eq!(magic, rule, "{t}'s magic rule for .{e} files");
+            } else {
+                assert!(globs.contains(e), "{t} has no *.{e} glob");
+            }
+        }
+        for t in &listed {
+            assert!(LINUX_TYPES.iter().any(|(_, known)| known == t), "the desktop entry lists {t}, which the app doesn't open");
+        }
+        for (t, globs, _) in &declared {
+            assert!(listed.contains(t), "the desktop entry doesn't list the declared {t}");
+            for g in globs {
+                assert!(LINUX_TYPES.contains(&(*g, *t)), "{t}'s *.{g} isn't a file the app opens as {t}");
+            }
+        }
+    }
 }

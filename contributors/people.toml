@@ -127,5 +127,13 @@ sync_github_name = true
 [people.dennismutuku2005]
 sync_github_name = true
 
+[people.krinry]
+display_name = "krinry"
+sync_github_name = true
+
 [people.makesomethingshit]
 sync_github_name = true
+
+[people.MiQ71]
+real_name = "Mirko Kerezovic"
+sync_github_name = false

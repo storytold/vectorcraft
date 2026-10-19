@@ -1262,7 +1262,9 @@ impl Tool for PerspectiveSelectionTool {
                 }
             }
         }
-        if let Some((p, t)) = &self.measure {
+        if cx.measurement_labels
+            && let Some((p, t)) = &self.measure
+        {
             out.push(Overlay::Measure { p: *p, text: t.clone() });
         }
         out

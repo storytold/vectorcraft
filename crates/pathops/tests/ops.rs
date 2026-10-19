@@ -242,6 +242,26 @@ fn regions_and_region_at() {
 }
 
 #[test]
+fn regions_split_an_island_inside_a_hole_from_the_frame_around_it() {
+    // A frame (0..200 minus 50..150) with an island (80..120) in its hole, as Minus Front leaves
+    // a rectangle behind a ring (#3132): the frame and the island are separate faces.
+    let mut p = rect(0.0, 0.0, 200.0, 200.0);
+    p.subpaths.extend(rect(50.0, 50.0, 100.0, 100.0).subpaths);
+    p.subpaths.extend(rect(80.0, 80.0, 40.0, 40.0).subpaths);
+    let s = vec![Shape::new(p, FillRule::EvenOdd, 1)];
+    let rs = regions(&s);
+    let mut filled: Vec<(f64, Rect)> = rs.iter().filter(|r| r.sources == vec![0]).map(|r| (ar(&r.path).abs(), r.path.bounds().unwrap())).collect();
+    filled.sort_by(|a, b| b.0.total_cmp(&a.0));
+    assert_eq!(filled.len(), 2, "{filled:?}");
+    assert!(close(filled[0].0, 30000.0, 1e-9), "{filled:?}");
+    assert_eq!(filled[0].1, Rect::new(0.0, 0.0, 200.0, 200.0));
+    assert!(close(filled[1].0, 1600.0, 1e-9), "{filled:?}");
+    assert_eq!(filled[1].1, Rect::new(80.0, 80.0, 120.0, 120.0));
+    let frame = region_at(&s, Point::new(10.0, 10.0)).unwrap();
+    assert!(!frame.contains(Point::new(100.0, 100.0)));
+}
+
+#[test]
 fn offset_circle_grows() {
     let o = offset_path(&circle(0.0, 0.0, 10.0), 3.0, Join::Round, 4.0);
     assert!(close(ar(&o), PI * 169.0, 2e-3), "{}", ar(&o));
@@ -341,6 +361,20 @@ fn simplify_straight_lines_option() {
     assert!(!has_curves(&s));
     assert!(s.anchor_count() < 40);
     assert!(max_deviation(&c, &s) <= 1.0 + 1e-6);
+}
+
+/// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every
+/// 10 up; Auto-Simplify takes the lowest level whose tolerance is at most 1/400 of the size, and
+/// level 100 for a size under 12.5 pt.
+#[test]
+fn simplify_levels_and_auto_simplify() {
+    assert_eq!(simplify_level_tolerance(SIMPLIFY_LEVEL), 1.0);
+    assert_eq!((simplify_level_tolerance(0.0), simplify_level_tolerance(100.0)), (32.0, 1.0 / 32.0));
+    assert_eq!((simplify_level_tolerance(-5.0), simplify_level_tolerance(500.0), simplify_level_tolerance(f64::NAN)), (32.0, 1.0 / 32.0, 1.0));
+    assert_eq!((auto_simplify_level(400.0), auto_simplify_level(100.0), auto_simplify_level(300.0)), (50.0, 70.0, 55.0));
+    assert!(simplify_level_tolerance(auto_simplify_level(300.0)) <= 300.0 / 400.0);
+    assert_eq!((auto_simplify_level(12.5), auto_simplify_level(10.0)), (100.0, 100.0));
+    assert_eq!((auto_simplify_level(0.0), auto_simplify_level(f64::INFINITY), auto_simplify_level(1e9)), (100.0, 100.0, 0.0));
 }
 
 #[test]

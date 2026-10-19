@@ -154,35 +154,65 @@ fn bend(t: &Track, art: &Node, b: Rect, along: AlongMap, cross: f64) -> Option<N
     warp_node(art, &f, flat_tol, MAX_SEG / along.max_scale(), cross.abs())
 }
 
+/// Arc-length spans to place art on when [`ArtBrush::overlap`] is on: one run between each sharp
+/// corner (the whole path when it has none).
+fn art_runs(t: &Track) -> Vec<(f64, f64)> {
+    let l = t.len();
+    let corners = t.corner_positions();
+    if corners.is_empty() {
+        return vec![(0.0, l)];
+    }
+    if t.closed {
+        let first = corners[0].1;
+        let mut bounds = corners.iter().map(|c| c.1).collect::<Vec<_>>();
+        bounds.push(first + l);
+        return bounds.windows(2).map(|w| (w[0], w[1])).collect();
+    }
+    let mut bounds = vec![0.0];
+    bounds.extend(corners.iter().map(|c| c.1));
+    bounds.push(l);
+    bounds.windows(2).map(|w| (w[0], w[1])).collect()
+}
+
+fn art_on_run(a: &ArtBrush, t: &Track, s0: f64, s1: f64, art: &Node, b: Rect, cross: f64) -> Option<Node> {
+    let l = s1 - s0;
+    if l <= 1e-9 {
+        return None;
+    }
+    let w = b.width();
+    let (along, cross) = match a.scale {
+        ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
+        ArtScale::Proportional => {
+            let k = l / w;
+            (AlongMap::linear(w, s0, s1), k * a.width / 100.0)
+        }
+        ArtScale::BetweenGuides { start, end } => {
+            let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
+            let (g0, g1) = (g0.min(g1), g0.max(g1));
+            let fixed = (g0 + (w - g1)) * cross;
+            if fixed >= l || g1 - g0 < 1e-9 {
+                (AlongMap::linear(w, s0, s1), cross)
+            } else {
+                (AlongMap { xs: [0.0, g0, g1, w], ss: [s0, s0 + g0 * cross, s1 - (w - g1) * cross, s1] }, cross)
+            }
+        }
+    };
+    bend(t, art, b, along, cross)
+}
+
 pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
     let cross = weight * a.width / 100.0;
     let mut out = vec![];
     for t in tracks(bp, 0.05) {
-        let l = t.len();
-        if l <= 1e-9 {
+        if t.len() <= 1e-9 {
             continue;
         }
-        let w = b.width();
-        let (along, cross) = match a.scale {
-            ArtScale::Stretch => (AlongMap::linear(w, 0.0, l), cross),
-            ArtScale::Proportional => {
-                let k = l / w;
-                (AlongMap::linear(w, 0.0, l), k * a.width / 100.0)
+        let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, t.len())] };
+        for (s0, s1) in runs {
+            if let Some(n) = art_on_run(a, &t, s0, s1, &art, b, cross) {
+                out.push(n);
             }
-            ArtScale::BetweenGuides { start, end } => {
-                let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
-                let (g0, g1) = (g0.min(g1), g0.max(g1));
-                let fixed = (g0 + (w - g1)) * cross;
-                if fixed >= l || g1 - g0 < 1e-9 {
-                    (AlongMap::linear(w, 0.0, l), cross)
-                } else {
-                    (AlongMap { xs: [0.0, g0, g1, w], ss: [0.0, g0 * cross, l - (w - g1) * cross, l] }, cross)
-                }
-            }
-        };
-        if let Some(n) = bend(&t, &art, b, along, cross) {
-            out.push(n);
         }
     }
     out

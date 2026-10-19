@@ -10,8 +10,9 @@
 //! * every text file under `packaging/`, and under `docs/` except Markdown pages: Markdown docs
 //!   (like `README.md` and `ROADMAP.md`) may name the reference app and compare against it.
 //!
-//! A line that has to keep an old name (an alias that old files or preferences still use) says
-//! `brand-ok` in a comment on that line.
+//! A line that has to keep an old name (an alias that old files or preferences still use) or a
+//! name another project defines (a shared MIME type) says `brand-ok` in a comment on that line or,
+//! in a file listed in `MARK_ABOVE`, on a `#` comment line just above it.
 
 use std::path::Path;
 
@@ -41,6 +42,10 @@ const SELF: &str = "xtask/src/brands.rs";
 
 /// The cursor manifest, which designers read.
 const CURSOR_MANIFEST: &str = "crates/tools/src/cursors.toml";
+
+/// Packaging files whose comments take whole lines (a desktop entry has no end-of-line comments):
+/// in these, a `#` line marked `brand-ok` also covers the line just below it.
+const MARK_ABOVE: &[&str] = &["packaging/linux/ai.storyteller.vectorcraft.desktop"];
 
 /// A denied name found in a file.
 #[derive(Debug, PartialEq)]
@@ -77,8 +82,8 @@ pub fn scan(root: &Path, files: &[String]) -> Vec<Hit> {
         let Ok(text) = std::fs::read_to_string(root.join(path)) else { continue };
         let found = match kind {
             Kind::Rust => scan_rust(&text),
-            Kind::Manifest => scan_lines(&text, |l| l.trim_start().starts_with("description")),
-            Kind::Text => scan_lines(&text, |_| true),
+            Kind::Manifest => scan_lines(&text, |l| l.trim_start().starts_with("description"), false),
+            Kind::Text => scan_lines(&text, |_| true, MARK_ABOVE.contains(&path.as_str())),
         };
         hits.extend(found.into_iter().map(|(line, term, context)| Hit { path: path.clone(), line, term, context }));
     }
@@ -110,11 +115,16 @@ fn is_test_path(path: &str) -> bool {
     file == "tests.rs" || file.starts_with("tests_") || file.ends_with("_tests.rs") || parts.any(|d| d == "tests" || d == "benches")
 }
 
-/// (line, term, line text) for each denied name on the lines `keep` selects.
-fn scan_lines(text: &str, keep: impl Fn(&str) -> bool) -> Vec<(usize, &'static str, String)> {
-    text.lines()
+/// (line, term, line text) for each denied name on the lines `keep` selects, but those marked
+/// `brand-ok` on the line or, with `mark_above`, on a `#` comment line just above.
+fn scan_lines(text: &str, keep: impl Fn(&str) -> bool, mark_above: bool) -> Vec<(usize, &'static str, String)> {
+    let lines: Vec<&str> = text.lines().collect();
+    let marked_above =
+        |i: usize| mark_above && i.checked_sub(1).and_then(|j| lines.get(j)).is_some_and(|l| l.trim_start().starts_with('#') && l.contains(ALLOW));
+    lines
+        .iter()
         .enumerate()
-        .filter(|(_, l)| keep(l) && !l.contains(ALLOW))
+        .filter(|&(i, l)| keep(l) && !l.contains(ALLOW) && !marked_above(i))
         .flat_map(|(i, l)| terms_in(l, DENY).into_iter().map(move |t| (i + 1, t, l.trim().to_string())))
         .collect()
 }
@@ -335,11 +345,16 @@ line Pantone"; }
 
     #[test]
     fn docs_packaging_and_manifests() {
-        let lines = |text: &str, keep: fn(&str) -> bool| -> Vec<(usize, &'static str)> {
-            scan_lines(text, keep).into_iter().map(|(l, t, _)| (l, t)).collect()
+        let scan = |text: &str, keep: fn(&str) -> bool, mark_above: bool| -> Vec<(usize, &'static str)> {
+            scan_lines(text, keep, mark_above).into_iter().map(|(l, t, _)| (l, t)).collect()
         };
+        let lines = |text: &str, keep: fn(&str) -> bool| scan(text, keep, false);
         assert_eq!(lines("Keywords=vector;illustrator;\n", |_| true), [(1, "illustrator")]);
         assert_eq!(lines("Like Adobe apps\nnot here: Adobe # brand-ok\n", |_| true), [(1, "adobe")]);
+        let desktop = "# shared type (brand-ok)\nMimeType=application/illustrator;\n# a comment\nMimeType=application/illustrator;\n";
+        assert_eq!(scan(desktop, |_| true, true), [(4, "illustrator")], "a `#` line marks the line below it only");
+        assert_eq!(lines(desktop, |_| true), [(2, "illustrator"), (4, "illustrator")], "only `MARK_ABOVE` files take a mark from the line above");
+        assert_eq!(scan("x = 1 # brand-ok\nIllustrator\n", |_| true, true), [(2, "illustrator")], "a code line's comment marks that line only");
         let manifest = "name = \"adobe-thing\"\ndescription = \"Illustrator-style UI\"\n";
         assert_eq!(lines(manifest, |l| l.trim_start().starts_with("description")), [(2, "illustrator")]);
     }
@@ -373,12 +388,26 @@ line Pantone"; }
         file("docs/x.md", "Works like Photoshop.\n");
         file("docs/x.txt", "Works like Photoshop.\n");
         file("packaging/x.desktop", "Keywords=vector;illustrator;\n");
+        let marked = "# shared type (brand-ok)\nMimeType=application/illustrator;\n";
+        file(MARK_ABOVE[0], marked);
+        file("packaging/x.yaml", marked);
         file("README.md", "Adobe trademark notice\n");
-        let files: Vec<String> = ["crates/x/src/lib.rs", "docs/x.md", "docs/x.txt", "packaging/x.desktop", "README.md"].map(String::from).to_vec();
+        let files: Vec<String> =
+            ["crates/x/src/lib.rs", "docs/x.md", "docs/x.txt", "packaging/x.desktop", MARK_ABOVE[0], "packaging/x.yaml", "README.md"]
+                .map(String::from)
+                .to_vec();
         let hits = scan(&dir, &files);
         let _ = std::fs::remove_dir_all(&dir);
         let found: Vec<(&str, usize, &str)> = hits.iter().map(|h| (h.path.as_str(), h.line, h.term)).collect();
-        assert_eq!(found, [("crates/x/src/lib.rs", 1, "illustrator"), ("docs/x.txt", 1, "photoshop"), ("packaging/x.desktop", 1, "illustrator")]);
+        assert_eq!(
+            found,
+            [
+                ("crates/x/src/lib.rs", 1, "illustrator"),
+                ("docs/x.txt", 1, "photoshop"),
+                ("packaging/x.desktop", 1, "illustrator"),
+                ("packaging/x.yaml", 2, "illustrator")
+            ]
+        );
     }
 
     #[test]

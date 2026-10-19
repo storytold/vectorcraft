@@ -22,7 +22,7 @@ pub use artboard::ArtboardTool;
 pub use eyedropper::EyedropperTool;
 pub use free::{DistortMode, FreeTransformTool};
 pub use gradient::GradientTool;
-pub use measure::MeasureTool;
+pub use measure::{MeasureTool, measure};
 pub use transform::{TransformKind, TransformTool};
 pub use wand::{LassoTool, MagicWandTool};
 

@@ -836,9 +836,12 @@ SOURCE_DATE_EPOCH=1791208980 vectorcraft-cli run --cmd file.new --params '{}' --
 
 A command that takes its own date (`file.new {created}`, a save's `modified`) still wins over the
 variable. A blank, negative or non-numeric value is ignored and the clock decides, so an export is
-never refused over the environment. The variable does not reach the recovery heartbeat or the
-random seed PDF encryption draws on, which must follow the real clock. SVG output carries no time
-and was already reproducible.
+never refused over the environment. SVG output carries no time and was already reproducible.
+
+Two things stay on the real clock and are not pinned by the variable: the recovery heartbeat, and
+the random seed PDF encryption draws on. **A PDF exported with a password therefore still differs
+between runs** whatever `SOURCE_DATE_EPOCH` says, because that seed supplies its AES
+initialisation vectors and its file `/ID`. Reproducible output means an unencrypted export.
 
 ### Parameter keys
 
@@ -1233,6 +1236,12 @@ already walks Image Trace. Short agent entry points:
   and `livePaint.info` list the gaps up to `size` wide that no path closes, as `[x0, y0, x1, y1]`. `livePaint.merge`
   keeps the bottom group's options when its Gap Detection is on, and otherwise turns Gap Detection on with `small`
   when another merged group has it on. When Gap Detection is off in every merged group, it stays off.
+  The Live Paint Selection tool's options (`tool.setOption {tool: "livePaintSelection", values}`; double-clicking the
+  tool opens them, dialog `livePaintSelectionOptions`) are `selectFills` and `selectStrokes` (both on), `color` (the
+  highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the highlight's width, 1 to 20 screen
+  pixels; 4). With `selectStrokes` off, Alt-click selects the face under the pointer as a click does; with
+  `selectFills` off, a click selects the edge nearest the pointer as Alt-click does; with both off, a click selects
+  no face or edge.
 
 `dataset.select`, `dataset.next` and `dataset.prev` reply `{name, applied, skipped}`. They add `overflow: [id…]`
 when area type or type on a path whose text they rewrote doesn't fit, as `text.setText` does (see
@@ -1253,6 +1262,12 @@ defined. Of two variables of the same kind on one object, the one defined last w
 {"name":"run_command","arguments":{"command":"imageTrace.presets","params":{}}}
 {"name":"run_command","arguments":{"command":"command.batch","params":{"label":"Offset","commands":[{"command":"object.move","params":{"dx":10,"dy":10,"copy":true}}]}}}
 ```
+
+When no object is bound to a variable that the data set has a value for, for example after `dataset.import` defines
+new variables without binding them, `dataset.select`, `dataset.next` and `dataset.prev` apply nothing and add
+`warning`, which the app's status bar shows: "nothing in data set A was applied: no object is bound to a variable it
+has a value for". A data set with a value for a bound variable gives no warning even when every object bound to it is
+locked; `skipped` counts those objects.
 
 `dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
 data set holds. A variable whose objects report no value, because they are locked, inside a locked layer or group,
@@ -1408,7 +1423,8 @@ group together.
 Groups and layers carry fills, strokes and effects of their own, as in the reference app: their fills and strokes
 paint every member's geometry, and their effects apply to the members as one piece (one combined drop shadow; a
 Transform or Warp moves or bends the whole group). Their Contents row (type: Characters) is a slot in the stack:
-fills and strokes above it paint over the members (characters), those below under them; new items go above it.
+fills and strokes above it paint over the members (characters), those below under them; new items go above it
+(on an image, below it).
 `appearance.moveItem {"from": "contents", "to": n}` puts the row above the bottom `n` items, and an item move takes
 `contents` to say where the row ends up in the same undo step; `document.node` shows the slot as
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
@@ -1420,6 +1436,13 @@ A geometry effect on one of type's own fills or strokes (`effect.apply` with `it
 the fill or stroke paints, and SVG, PDF, EPS and the other vector exports write such type as paths. On type that
 holds inline graphics, those effects are drawn and exported only when the type has a geometry effect or perspective
 of its own.
+An image's own fills and strokes draw only when they carry a visible Convert to Shape or Outline Object effect: Convert
+to Shape sizes its shape from the image's box, Outline Object gives the image's frame, the effects after it reshape
+that shape, and the effects before it are left out. Its Contents row stands for the image; `appearance.addFill` and
+`appearance.addStroke` put a new item right below that row, so it paints under the image. SVG, PDF, EPS and the other
+vector exports write those items as paths, and `effect.expandAppearance` turns them into objects in a group with the
+image.
+Use Preview Bounds measures an image by its frame.
 
 ```json
 {"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}
@@ -1541,9 +1564,13 @@ Items can be put in user-named groups, which the panel shows as collapsible sect
 search field filters every item by name; `library.get` lists them all to filter). `library.createGroup {library?,
 name?, items?: [{kind, item}]}` makes one (a name another group has, ignoring case, gets a number) with those items
 moved into it; `library.renameGroup {library?, group, name}` renames one; `library.deleteGroup {library?, group}`
-deletes one, its items staying in the library ungrouped; and `library.moveItem {library?, kind, item, group?}` moves
-an item into a group (without `group`, out of its group). An item is in one group at most; `library.get` lists the
-groups as `groups: [{name, items: [{kind: "color"|"charStyle"|"paraStyle"|"graphic", item}]}]` (a graphic by its id).
+deletes one, its items staying in the library ungrouped; and `library.moveItem {library?, kind, item, group?, before?
+| after?}` moves an item into a group (without `group`, out of its group) and, with `before` or `after` (another item
+of its kind), just before or after that item in the order its kind is listed and shown in. `library.moveGroup
+{library?, group, to}` moves a group to place `to` of the list (0: first; past the end: last). Dragging items and
+group headers in the panel runs these. An item is in one group at most; `library.get` lists the groups as `groups:
+[{name, items: [{kind: "color"|"charStyle"|"paraStyle"|"graphic", item}]}]` (a graphic by its id), and each kind's
+items in the order the panel shows them.
 
 `library.export {library?, path?}` writes a library (its colours, styles, graphics with their art and thumbnails, and
 its groups) as a `.vclibrary` file, the JSON the library folder keeps (without `path`: `{data}`, the file's text).
@@ -1690,8 +1717,13 @@ and `layerRows`, the rows highlighted in the panel.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
-  layersOnly, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
+  layersOnly, locateSelected, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
+  With `locateSelected` on (Locate Selected Objects, off by default), when the last selected object changes on the canvas
+  or by a command, the panel opens the layers and groups around it and scrolls to its row, as after `layer.locate`, but
+  does not highlight the row. When Show Layers Only, a search or the filter leaves the object without a row, the panel
+  opens no rows for it and scrolls as with the option off. A change made with the panel's own rows, buttons or menu is
+  not located, and a change made during a drag is located when the drag ends.
   A document opens with only its top-level layers open; the open rows are saved in the native file and reopen that way.
 - **Search and filter** (control channel and the app's MCP): the Search All field keeps the rows whose names hold the
   text typed, and `ui.layersFilter {objects?, layers?}` sets the choices of the Filter button beside it. `objects` (By
@@ -1983,7 +2015,7 @@ path by its control points when one of them has an x or y that is infinite or la
 (about 1.1e307), so an edit that leaves such a path selected, `path.create` included, fails with "result would exceed
 the canvas (coordinates out of range)".
 `path.curvatureEdit`, `path.removeAnchor`, `path.convertAnchor`, `path.reshapeSegment`, `path.split`,
-`path.setHandle` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
+`path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 
@@ -2003,6 +2035,23 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 {"name":"run_command","arguments":{"command":"path.cutAtAnchors","params":{}}}
 {"name":"run_command","arguments":{"command":"path.moveAnchors","params":{"dx":0,"dy":40}}}
 ```
+
+## Simplify
+
+`object.path.simplify` takes the amount as `tolerance` (points, 1 by default) or as the Simplify slider's `level`, a whole
+number from 0 (the fewest anchor points) to 100 (the closest fit). Level 50 is a tolerance of 1 pt, and every 10 levels
+halve or double it, so level 0 is 32 pt and level 100 is 1/32 pt. `auto: true` (Auto-Simplify) uses the lowest level
+whose tolerance is at most 1/400 of the selection's longer side, or level 100 when that side is under 12.5 pt. With
+`level` or `auto`, the reply also has the `level` used:
+
+```json
+{"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}
+```
+
+In the desktop app, Object › Path › Simplify opens the slider (`ui.menuDialog {command: "object.path.simplify"}`,
+dialog `simplifySlider` with field `level`) and previews the result until `ui.dialog.confirm`. `ui.simplifyAuto` moves
+the open slider to the Auto-Simplify level, and `ui.simplifyMoreOptions` opens the Simplify dialog at the slider's
+tolerance. When OK confirms the dialog with `retain` ticked, the menu item opens the dialog on those settings next time.
 
 ## Editing a path with the Curvature tool
 
@@ -3163,8 +3212,8 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
   (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
 - `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
 
-File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel; Save, Save a Copy
-and Save as Template reuse the options as last saved (or Use Compression).
+File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
+does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).
 
 ```json
 {"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.vectorcraft","separateArtboards":true,"range":"2-3","includeLinked":true}}}
@@ -4256,6 +4305,35 @@ symbol switch halfway). New blends are knockout groups (`object.setProps {knocko
 canvas as they export. `object.blend.expand` and `object.blend.release` keep the blend's name, transparency,
 opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
 `object.expand` with `object: true` expands the blends in the selection.
+
+## Objects on Path
+
+`object.objectsOnPath.attach {path?, ids?, pivot?, rotate?}` attaches the selected objects (or `ids`) to the path
+`path`: the objects and the path go into an Objects on Path group, with the path at its bottom. The objects go along
+the path in their order on the canvas, column by column from left to right and top to bottom in each column. The first
+one sits on the path's first anchor, the last one sits on the end of an open path, and the others are spread evenly
+between them by length; on a closed path the gaps run all the way round. The attachment point of each object (`pivot`,
+0 to 8 row by row from the top left of its bounds without strokes; default 4, the center) sits on the path, and the
+object is turned to the path's direction there. An object rotated by other than a multiple of 90° is first turned to
+the nearest multiple. `rotate` tilts every object by that many degrees counter-clockwise. Without `path`, the command
+chooses the Objects on Path tool (`objectsOnPath`), whose click on a path sends `{path}`. As the path, the command
+refuses a guide, a compound path, type, a path without length and a path already in an Objects on Path group. As
+objects, it refuses graphs, layers and objects already in an Objects on Path group.
+
+The group stays live: after every edit its objects go back on its path. Editing the path moves them, an object moved
+on its own goes back to its place, an object moved into the group (`layer.move` with `place: "inside"`) joins the end
+of the path, an object moved out of it leaves, and art that replaces an object (`symbol.breakLink`) keeps its place.
+`object.objectsOnPath.options {ids?, pivot?, rotate?}` changes Pivot and Rotate, and
+`object.objectsOnPath.expand {ids?}` makes the groups plain groups. Both act on the groups that `ids` names (Objects
+on Path groups or objects in them), or on the groups of the selection when `ids` is not given. The native file keeps
+the group with an `objects_on_path` record; SVG, PDF and the other exports write the path and the objects as plain
+art.
+
+```json
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"pivot":7,"rotate":15}}}
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.expand","params":{}}}
+```
 
 ## Paragraph composer
 

@@ -361,6 +361,26 @@ fn the_touch_type_tool_drags_a_character() {
     assert!(near(moved_by(&before, &after, 2), (0.0, 0.0)), "{:?}", moved_by(&before, &after, 2));
 }
 
+/// Arrow keys with the Touch Type tool nudge the selected character by the keyboard increment.
+#[test]
+fn touch_type_arrow_keys_nudge_the_selected_character() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("touchType", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let at = t.xf * (y.origin + vectorcraft_geom::Vec2::new(y.advance / 2.0, -10.0));
+    click(&mut s, at.x, at.y);
+    let before = glyph_pens(&s, id);
+    s.tool_key(vectorcraft_tools::ToolKey::Right, Mods::default(), v).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (1.0, 0.0)), "{:?}", moved_by(&before, &after, 1));
+    assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Touch Type").count(), 1);
+}
+
 #[test]
 fn type_tool_typing_is_one_undo_step() {
     let mut s = session();

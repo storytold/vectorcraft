@@ -1044,7 +1044,7 @@ mod tests {
         // A spot swatch tile dropped on a stop links it: editing the swatch recolours the stop.
         app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
         let ink = app.session.doc().unwrap().doc.swatch("Ink").unwrap().paint.clone();
-        egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::Paint { paint: ink, params: json!({"swatch": "Ink"}), rows: None });
+        egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::Paint { paint: ink, params: json!({"swatch": "Ink"}), rows: None, library: None });
         p.frame(&mut app, vec![Event::PointerMoved(a)], Modifiers::NONE);
         p.frame(
             &mut app,

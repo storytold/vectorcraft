@@ -81,6 +81,8 @@ pub struct CropImageTool {
     /// None until it's dragged or set.
     rect: Option<(Option<NodeId>, Rect)>,
     drag: Option<Drag>,
+    /// Where the pointer last was on the canvas (measurement label during a drag).
+    last: Point,
 }
 
 impl CropImageTool {
@@ -108,6 +110,7 @@ impl CropImageTool {
     fn reset(&mut self) {
         self.rect = None;
         self.drag = None;
+        self.last = Point::ZERO;
     }
 }
 
@@ -145,12 +148,14 @@ impl Tool for CropImageTool {
         let Some((id, image, r)) = self.current(cx) else { return vec![] };
         match ev.kind {
             PointerKind::Down => {
+                self.last = ev.pos;
                 self.drag = match hit_handle(r, ev.pos, cx.tol(5.0)) {
                     Some(h) => Some(Drag::Handle(h, r)),
                     None => r.contains(ev.pos).then_some(Drag::Move(ev.pos, r)),
                 };
             }
             PointerKind::Drag => {
+                self.last = ev.pos;
                 let next = match self.drag {
                     Some(Drag::Handle(h, from)) => within(resized(from, h, ev.pos), image),
                     Some(Drag::Move(start, from)) => {
@@ -163,7 +168,7 @@ impl Tool for CropImageTool {
             }
             PointerKind::Up => self.drag = None,
             PointerKind::DoubleClick => return self.apply(cx),
-            PointerKind::Move => {}
+            PointerKind::Move => self.last = ev.pos,
         }
         vec![]
     }
@@ -201,7 +206,14 @@ impl Tool for CropImageTool {
         let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
         out.extend(corners.iter().zip(corners.iter().cycle().skip(1)).map(|(a, b)| Overlay::Line { a: *a, b: *b, color: CYAN, dashed: false }));
         out.extend(Handle::ALL.iter().map(|h| Overlay::Handle { p: h.pos(r), color: CYAN }));
-        out.push(Overlay::Label { p: Point::new(r.x0, r.y1), text: cx.size_label(r.width(), r.height()), color: CYAN });
+        if cx.measurement_labels {
+            let text = cx.size_label(r.width(), r.height());
+            if self.drag.is_some() {
+                out.push(Overlay::Measure { p: self.last, text });
+            } else {
+                out.push(Overlay::Label { p: Point::new(r.x0, r.y1), text, color: CYAN });
+            }
+        }
         out
     }
 
@@ -369,5 +381,37 @@ mod tests {
     #[test]
     fn the_tool_is_made_by_its_id() {
         assert_eq!(crate::create(ID).id(), ID);
+    }
+
+    /// Smart Guides › Measurement Labels: the crop size readout follows the preference and the
+    /// pointer while the box is dragged.
+    #[test]
+    fn measurement_labels_gate_the_crop_size_readout() {
+        let (d, s) = doc_with_image((50.0, 60.0));
+        let p = paint();
+        let mut t = CropImageTool::default();
+        let count = |on: bool| {
+            let mut tool = CropImageTool::default();
+            let c = ToolContext { measurement_labels: on, ..cx(&d, &s, &p) };
+            tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 50.0, 60.0));
+            tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 80.0, 70.0));
+            tool.overlays(&c).iter().filter(|o| matches!(o, Overlay::Measure { .. } | Overlay::Label { .. })).count()
+        };
+        assert_eq!(count(true), 1);
+        assert_eq!(count(false), 0);
+        let c = cx(&d, &s, &p);
+        drag(&mut t, &c, (50.0, 60.0), (80.0, 70.0));
+        assert!(
+            t.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == &c.size_label(170.0, 90.0))),
+            "idle: label at the box"
+        );
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 110.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+        assert!(
+            t.overlays(&c)
+                .iter()
+                .any(|o| matches!(o, Overlay::Measure { p, text, .. } if *p == Point::new(120.0, 100.0) && text == &c.size_label(170.0, 90.0))),
+            "drag: measure at the pointer"
+        );
     }
 }

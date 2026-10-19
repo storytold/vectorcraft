@@ -131,6 +131,44 @@ fn mismatched_and_missing_bindings_are_skipped_and_counted() {
     assert_eq!(plain(&s, t), "y");
 }
 
+/// A row with no value for any bound variable, such as one from Import Data Sets… before anything
+/// is bound, applies nothing, and the reply's `warning` names it. A bound variable with a value in
+/// the row gives no warning, even when its object is locked and skipped.
+#[test]
+fn a_row_with_no_value_for_a_bound_variable_warns_that_nothing_was_applied() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    s.execute("dataset.import", &json!({"csv": "name,Name,Title\nA,Ann,Boss\nB,Bob,Chief\n"})).unwrap();
+    let warning = |row: &str| format!("nothing in data set {row} was applied: no object is bound to a variable it has a value for");
+    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(0), &json!(warning("A"))), "{v}");
+    let v = s.execute("dataset.next", &json!({})).unwrap();
+    assert_eq!(v["warning"], json!(warning("B")), "{v}");
+    let v = s.execute("dataset.prev", &json!({})).unwrap();
+    assert_eq!(v["warning"], json!(warning("A")), "{v}");
+    assert_eq!(plain(&s, t), "x");
+
+    // A bound variable that the row has no value for still applies nothing.
+    s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Other", "ids": [t.0]})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(1), &json!(warning("B"))), "{v}");
+
+    // Bound to a variable with a value, the row applies it and gives no warning.
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!(v["applied"].as_u64(), Some(1), "{v}");
+    assert!(v.get("warning").is_none(), "{v}");
+    assert_eq!(plain(&s, t), "Boss");
+
+    // Locked art is skipped, and its binding still counts as bound.
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!(v["applied"].as_u64(), Some(0), "{v}");
+    assert!(v.get("warning").is_none(), "{v}");
+}
+
 #[test]
 fn deleting_a_variable_cleans_bindings_values_and_leaves_datasets_alone() {
     let mut s = session();

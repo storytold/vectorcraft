@@ -1,4 +1,4 @@
-//! Effect › Artistic (Cutout, Film Grain, Neon Glow, Poster Edges). Original filters built from
+//! Effect › Artistic (Cutout, Film Grain, Neon Glow, Plastic Wrap, Poster Edges). Original filters built from
 //! public behaviour documentation:
 //! <https://helpx.adobe.com/illustrator/using/summary-effects.html> and
 //! <https://helpx.adobe.com/photoshop-elements/using/artistic-filters.html>.
@@ -6,6 +6,8 @@
 
 use super::edges::sobel;
 use super::pixelate::{Place, cell, rand};
+
+const SALT_PLASTIC: u64 = 512;
 use super::texture::{luma, premultiply, straight};
 use super::{PixelSpace, blur_plane};
 use vectorcraft_geom::Point;
@@ -237,6 +239,79 @@ pub(super) fn poster_edges(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
         let c = straight(*p).map(|v| (v * steps).round() / steps * (1.0 - ink));
         *p = premultiply(c, f32::from(p[3]) / 255.0);
     }
+}
+
+/// How far (document units) Plastic Wrap's softened relief is sampled at `smoothness` (1..15).
+pub(super) fn plastic_reach(smoothness: f64) -> f64 {
+    3.0 * (0.15 + 0.35 * smoothness.clamp(1.0, 15.0))
+}
+
+/// Plastic Wrap: the object under shiny plastic. Its tones form a relief; `detail` (0..15) adds
+/// finer wrinkles in document space; `smoothness` (1..15) softens the relief; specular highlights
+/// as strong as `highlight` (0..20) are screened over it. Coverage is kept.
+pub(super) fn plastic_wrap(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, highlight: f64, detail: f64, smoothness: f64) {
+    if ![highlight, detail, smoothness].iter().all(|v| v.is_finite()) || !space.px.is_finite() || space.px <= 0.0 {
+        return;
+    }
+    let strength = (highlight / 20.0).clamp(0.0, 1.0) as f32;
+    if strength == 0.0 {
+        return;
+    }
+    let detail_amt = (detail / 15.0).clamp(0.0, 1.0) as f32;
+    let sigma = (0.15 + 0.35 * smoothness.clamp(1.0, 15.0)) / space.px;
+    let Some(place) = Place::new(space, w, h) else { return };
+    let len = px.len();
+    let mut height = vec![0.0f32; len];
+    let alpha: Vec<f32> = px.iter().map(|p| f32::from(p[3]) / 255.0).collect();
+    let cell_scale = 8.0 + 24.0 * (1.0 - detail_amt as f64);
+    let mut noise = CellNoise::default();
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let i = y * w + x;
+        let l = luma(straight(*p));
+        let q = place.at(x, y);
+        let nq = Point::new(q.x / cell_scale, q.y / cell_scale);
+        height[i] = l + detail_amt * 0.35 * noise.at(SALT_PLASTIC, nq) as f32;
+    });
+    for (h, a) in height.iter_mut().zip(&alpha) {
+        *h *= *a;
+    }
+    blur_plane(&mut height, w, h, sigma);
+    let mut cov = alpha.clone();
+    blur_plane(&mut cov, w, h, sigma);
+    for (h, c) in height.iter_mut().zip(&cov) {
+        *h = if *c > 1e-4 { *h / *c } else { 0.0 };
+    }
+    const LIGHT: [f32; 3] = [0.35, -0.25, 0.9];
+    let inv = (LIGHT[0] * LIGHT[0] + LIGHT[1] * LIGHT[1] + LIGHT[2] * LIGHT[2]).sqrt().max(1e-6);
+    let light = LIGHT.map(|v| v / inv);
+    let scale = (8.0 * space.px).max(1e-6) as f32;
+    let sample = |x: isize, y: isize| -> f32 {
+        if x < 0 || y < 0 || x >= w as isize || y >= h as isize {
+            return 0.0;
+        }
+        height[y as usize * w + x as usize]
+    };
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let gx = sample(x as isize + 1, y as isize) - sample(x as isize - 1, y as isize);
+        let gy = sample(x as isize, y as isize + 1) - sample(x as isize, y as isize - 1);
+        let nx = -gx / scale;
+        let ny = -gy / scale;
+        let nz = 1.0;
+        let nlen = (nx * nx + ny * ny + nz * nz).sqrt().max(1e-6);
+        let ndotl = (nx / nlen * light[0] + ny / nlen * light[1] + nz / nlen * light[2]).max(0.0);
+        let spec = ndotl.powi(12) * strength;
+        if spec <= 1e-5 {
+            return;
+        }
+        let c = straight(*p).map(|v| 1.0 - (1.0 - v) * (1.0 - spec));
+        *p = premultiply(c, f32::from(p[3]) / 255.0);
+    });
 }
 
 /// How far (document units) Neon Glow's glow spreads at `size` (-24..24).

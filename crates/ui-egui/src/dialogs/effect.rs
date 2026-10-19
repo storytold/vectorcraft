@@ -90,6 +90,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                 return Ok(json!({ "pending": EXISTS }));
             }
             fields.extend(info.defaults.as_object().cloned().unwrap_or_default());
+            if super::warp_effect::is_warp(id) {
+                super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
+            }
         }
     }
     fields.insert("preview".into(), json!(true));
@@ -119,8 +122,12 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     let target = fields.remove("__target").unwrap_or(Value::Null);
     if d.bool("discard") {
         fields.remove("__index");
-        let defaults = vectorcraft_effects::default_params(&d.str("__effect"));
+        let id = d.str("__effect");
+        let defaults = vectorcraft_effects::default_params(&id);
         fields.extend(defaults.and_then(|v| v.as_object().cloned()).unwrap_or_default());
+        if super::warp_effect::is_warp(id.as_str()) {
+            super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
+        }
     } else {
         let k = fields.get("__index").and_then(Value::as_u64).unwrap_or(0) as usize;
         fields.extend(target_effects(app, &target).get(k).map(params_of).unwrap_or_default());
@@ -276,7 +283,9 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("brushStrokes.sprayedStrokes", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("distort.glass", "texture") => Some(&vectorcraft_effects::pixel::GLASS_TEXTURES),
         ("pixelate.mezzotint", "type") => Some(&vectorcraft_effects::pixel::MEZZOTINT_TYPES),
+        ("sketch.graphicPen", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("sketch.halftonePattern", "patternType") => Some(&vectorcraft_effects::pixel::HALFTONE_TYPES),
+        ("sketch.plaster", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
         ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
         ("texture.texturizer", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
         ("texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
@@ -673,7 +682,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let r = form::commit_preview(app, cmd, p.clone())?;
     // Last Effect repeats applied effects, not edits.
     if cmd == "effect.apply" {
-        app.last_effect = Some((d.str("__effect"), p["params"].clone()));
+        let id = d.str("__effect");
+        app.last_effect = Some((id.clone(), p["params"].clone()));
+        if super::warp_effect::is_warp(id.as_str()) {
+            app.last_warp = Some(super::warp_effect::remembered_params(d));
+        }
     }
     Ok(r)
 }

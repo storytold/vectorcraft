@@ -1,11 +1,12 @@
 //! Hit testing over the document tree.
 
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use vectorcraft_geom::hit::{fill_contains, stroke_contains};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{BezPath, FillRule, Point, Rect};
 
-use crate::{Document, Node, NodeId, NodeKind, SymbolBoxes};
+use crate::{AppearanceItem, Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HitKind {
@@ -62,12 +63,35 @@ pub struct HitOptions {
     /// (point type's baseline, area type's frame, type on a path's path), not anywhere in its
     /// bounds.
     pub type_path_only: bool,
+    /// Guide objects (paths made into guides) are not hittable: View › Guides › Lock Guides is
+    /// on or the guides are hidden.
+    pub skip_guides: bool,
 }
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, scope: None }
+        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, scope: None }
     }
+}
+
+/// The shapes that an image's own fills and strokes paint, each with its fill rule and the fill or
+/// stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
+/// above this crate, so the engine registers one with [`set_image_paint`].
+pub type ImagePaint = fn(&Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
+
+static IMAGE_PAINT: OnceLock<ImagePaint> = OnceLock::new();
+
+/// Register how the shapes of an image's own fills and strokes are found (the first registration
+/// stays).
+pub fn set_image_paint(f: ImagePaint) {
+    // Already set: the same engine, registered by another session.
+    let _ = IMAGE_PAINT.set(f);
+}
+
+/// The shapes that the image `n`'s own fills and strokes paint ([`set_image_paint`]), none while
+/// nothing is registered.
+pub(crate) fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(n))
 }
 
 /// Topmost editable object under `p`.
@@ -318,6 +342,9 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     if !c.visible || editable_only && (c.locked || c.is_template()) {
         return false;
     }
+    if opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+        return false;
+    }
     // (An envelope's content sits where it was, not where the envelope draws it.)
     edits_contents(c)
         || c.extras().shaper.is_some() && source_of(c, opt.scope)
@@ -433,12 +460,23 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
-        NodeKind::Text(_)
-        | NodeKind::Image(_)
-        | NodeKind::PlacedDocument(_)
-        | NodeKind::SymbolInstance { .. }
-        | NodeKind::Blend { .. }
-        | NodeKind::Envelope { .. } => n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds),
+        // An image is hit within its frame, and where its own fills and strokes paint
+        // ([`image_paint`]) except in outline mode.
+        NodeKind::Image(_) => {
+            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+                return Some(HitKind::Bounds);
+            }
+            if opt.outline {
+                return None;
+            }
+            image_paint(n).iter().rev().find_map(|(bp, rule, item)| match item {
+                AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
+                AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
+            })
+        }
+        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
+            n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+        }
         NodeKind::Repeat(r) => r.expand().iter().find_map(|g| hit_any(g, p, opt, symbols)),
         NodeKind::Mesh(m) => {
             let bp = m.outline().to_bezpath();

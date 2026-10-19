@@ -351,7 +351,12 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         PanelDrag::GraphicStyle(n) => (Some(n), None),
         PanelDrag::Art(ids) => (None, ids.first().copied()),
         PanelDrag::Appearance(id) => (None, Some(*id)),
-        PanelDrag::Paint { .. } | PanelDrag::Symbol(_) | PanelDrag::Brush { .. } | PanelDrag::LibraryGraphic { .. } => (None, None),
+        PanelDrag::Paint { .. }
+        | PanelDrag::Symbol(_)
+        | PanelDrag::Brush { .. }
+        | PanelDrag::LibraryGraphic { .. }
+        | PanelDrag::LibraryItem { .. }
+        | PanelDrag::LibraryGroup { .. } => (None, None),
     };
     if style.is_none() && source.is_none() {
         return;

@@ -48,7 +48,7 @@ fn type_gives_font_properties_and_gradients_css_gradients() {
     let mut s = session();
     let t = run(&mut s, "text.create", json!({"x": 20, "y": 50, "text": "Title", "size": 24}))["id"].as_u64().unwrap();
     let text = css(&run(&mut s, "css.selection", json!({"ids": [t]}))).to_string();
-    for decl in ["font-family: 'Source Sans 3';", "font-size: 24px;", "color: #"] {
+    for decl in ["font-family: 'Source Sans 3', sans-serif;", "font-size: 24px;", "color: #"] {
         assert!(text.contains(decl), "{decl} in {text}");
     }
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 100, "width": 100, "height": 50}));

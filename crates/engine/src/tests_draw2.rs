@@ -984,6 +984,24 @@ fn set_handle_refuses_a_subpath_that_is_not_a_whole_number() {
 }
 
 #[test]
+fn move_anchor_takes_its_handles_along_and_refuses_a_subpath_that_is_not_a_whole_number() {
+    let mut s = session();
+    let id = two_subpaths(&mut s);
+    let p = json!({"id": id.0, "anchor": 0, "x": 140, "y": 250});
+    refuses_an_index_that_is_not_whole(&mut s, "path.moveAnchor", &p, "subpath");
+    edits_the_subpath_given(&mut s, "path.moveAnchor", &p, id);
+    // The anchor lands on (x, y) and its handles keep their offsets from it.
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 0, "which": "out", "x": 30, "y": 40})).unwrap();
+    let a = path(&s, id).subpaths[0].anchors[0];
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": a.p.x + 15.0, "y": a.p.y - 5.0})).unwrap();
+    let b = path(&s, id).subpaths[0].anchors[0];
+    assert_eq!(b.p, a.p + vectorcraft_geom::Vec2::new(15.0, -5.0));
+    assert_eq!(b.h_out - b.p, a.h_out - a.p);
+    assert_eq!(b.h_in - b.p, a.h_in - a.p);
+    assert!(s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 99, "x": 0, "y": 0})).is_err());
+}
+
+#[test]
 fn insert_anchor_refuses_a_subpath_that_is_not_a_whole_number() {
     let mut s = session();
     let id = two_subpaths(&mut s);
@@ -1828,9 +1846,34 @@ fn join_takes_the_paths_and_the_ends_to_join() {
         json!({"ids": [a.0, 999]}),
         json!({"ids": [a.0, r.0], "ends": ["first"]}),
         json!({"ids": [a.0, b.0], "ends": ["first", "middle"]}),
+        json!({"to": "round"}),
     ] {
         assert!(s.execute("path.join", &bad).is_err(), "{bad}");
     }
+}
+
+/// `path.join {to}` makes the joined anchor a corner or smooth point.
+#[test]
+fn join_to_corner_or_smooth_sets_the_merged_anchor() {
+    let mut s = session();
+    let r = rect(&mut s, 100.0, 100.0, 100.0, 80.0);
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    s.execute("path.join", &json!({"to": "corner"})).unwrap();
+    let a = &path(&s, r).subpaths[0].anchors[0];
+    assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Corner);
+    assert_eq!((a.h_in, a.h_out), (a.p, a.p));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    s.execute("path.join", &json!({"to": "smooth"})).unwrap();
+    let a = &path(&s, r).subpaths[0].anchors[0];
+    assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth);
+    let a = line(&mut s, 0.0, 0.0, 100.0, 0.0);
+    let b = line(&mut s, 100.0, 0.0, 200.0, 0.0);
+    s.execute("path.join", &json!({"ids": [a.0, b.0], "to": "smooth"})).unwrap();
+    let j = &path(&s, a).subpaths[0].anchors[1];
+    assert_eq!(j.kind, vectorcraft_geom::AnchorKind::Smooth);
 }
 
 #[test]
@@ -1966,6 +2009,26 @@ fn open_anchor_delete_preserves_curves_appearance_and_history() {
     assert!(s.doc().unwrap().doc.node(id).is_none(), "the second Delete removes the remainder");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc, after);
+}
+
+#[test]
+fn closed_anchor_delete_then_join_closes_with_a_line() {
+    let mut s = session();
+    let data = "M100 100C120 60 180 60 200 100C220 140 280 140 300 100C320 60 380 60 400 100C420 140 480 140 500 100C500 200 100 200 100 100Z";
+    let id = NodeId(s.execute("path.create", &json!({"d": data})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2]]})).unwrap();
+    s.execute("path.deleteAnchors", &json!({})).unwrap();
+    let result = path(&s, id);
+    assert_eq!(result.subpaths.len(), 1);
+    let sp = &result.subpaths[0];
+    assert!(!sp.closed);
+    assert!(!sp.anchors.first().unwrap().has_in() && !sp.anchors.last().unwrap().has_out(), "dangling handles are cleared");
+    s.execute("path.join", &json!({"ids": [id.0]})).unwrap();
+    let joined = path(&s, id);
+    let sp = &joined.subpaths[0];
+    assert!(sp.closed);
+    let closing = sp.segment(sp.segment_count() - 1);
+    assert!(closing.p1 == closing.p0 && closing.p2 == closing.p3, "closing segment is a line: {closing:?}");
 }
 
 #[test]

@@ -227,7 +227,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             |s, _| clip_edit(s, true)
         ),
-        cmd!("object.isolate", "Enter Isolation Mode", [], None, "{id}", has_doc, isolate),
+        cmd!("object.isolate", "Enter Isolation Mode", [], None, "{id?} (default: the selection's first object)", has_doc, isolate),
         cmd!("object.exitIsolation", "Exit Isolation Mode", [], None, "{}", has_doc, exit_isolation),
         cmd!(
             "object.setProps",

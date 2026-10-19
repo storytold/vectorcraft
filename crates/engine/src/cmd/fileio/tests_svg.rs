@@ -146,6 +146,23 @@ fn preserve_editing_reopens_the_native_document() {
 }
 
 #[test]
+fn saving_several_artboards_as_plain_svg_warns_they_are_lost() {
+    let artboards = |r: &Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("artboards")).count();
+    let mut s = session(3);
+    let r = s.execute("document.save", &json!({"format": "svg"})).unwrap();
+    assert_eq!(artboards(&r), 1, "{r}");
+    // First: the status bar shows only the first warning.
+    assert!(r["warnings"][0].as_str().unwrap().contains("1 of the document's 3 artboards"), "{r}");
+    assert_eq!(artboards(&s.execute("file.saveAs", &json!({"format": "svgz"})).unwrap()), 1);
+    // Preserve Editing keeps them all (they reopen); a single artboard loses none.
+    for p in [json!({"format": "svg", "preserveEditing": true}), json!({"format": "svg", "svg": {"preserveEditing": true}})] {
+        let r = s.execute("document.save", &p).unwrap();
+        assert_eq!(artboards(&r), 0, "{p}: {r}");
+    }
+    assert_eq!(artboards(&session(1).execute("document.save", &json!({"format": "svg"})).unwrap()), 0);
+}
+
+#[test]
 fn save_writes_svg_and_remembers_its_options() {
     let mut s = session(1);
     let dir = tmp_dir("save");

@@ -366,6 +366,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         _ if vectorcraft_tools::settings::LIQUIFY.contains(&tool) => crate::dialogs::liquify::open(app, tool),
         // The freehand tools: their Tool Options (Fidelity, fill, the tolerances, the brush size).
         _ if crate::dialogs::freehand::TOOLS.contains(&tool) => crate::dialogs::freehand::open(app, tool),
+        // The Live Paint Selection tool: its Tool Options (what a click selects, the highlight).
+        "livePaintSelection" => crate::dialogs::live_paint_selection::open(app),
         // The Symbolism tools: the brush they share.
         _ if vectorcraft_tools::settings::SYMBOLISM.contains(&tool) => Ok(crate::dialogs::symbolism_options::open(app, tool)),
         // The graph tools: Graph Type for the selected graph.

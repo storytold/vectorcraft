@@ -29,6 +29,30 @@ pub fn simplify(path: &PathData, tolerance: f64) -> PathData {
     simplify_with(path, &SimplifyOptions { tolerance, ..Default::default() })
 }
 
+/// The Simplify slider's level for a tolerance of 1 pt, where the slider opens.
+pub const SIMPLIFY_LEVEL: f64 = 50.0;
+
+/// The tolerance (points) of Simplify slider level `level`, from 0 (the fewest anchor points) to
+/// 100 (the closest to the original): 1 pt at [`SIMPLIFY_LEVEL`], doubled for every 10 levels below
+/// it and halved for every 10 above, so level 0 is 32 pt and level 100 is 1/32 pt. A level outside
+/// 0..=100 counts as the nearer end, and one that is not a number counts as [`SIMPLIFY_LEVEL`].
+pub fn simplify_level_tolerance(level: f64) -> f64 {
+    let level = if level.is_finite() { level.clamp(0.0, 100.0) } else { SIMPLIFY_LEVEL };
+    ((SIMPLIFY_LEVEL - level) / 10.0).exp2()
+}
+
+/// Auto-Simplify's level for paths whose bounds are `size` points on their longer side: the lowest
+/// whole level whose tolerance ([`simplify_level_tolerance`]) is at most 1/400 of `size`. It returns
+/// level 100 for a size of 0 or one that is not a number, and for a size under 12.5 pt, where no
+/// level is that close.
+pub fn auto_simplify_level(size: f64) -> f64 {
+    let target = size / 400.0;
+    if !(target.is_finite() && target > 0.0) {
+        return 100.0;
+    }
+    (SIMPLIFY_LEVEL - 10.0 * target.log2()).ceil().clamp(0.0, 100.0)
+}
+
 /// Simplify never adds anchors: keep whichever subpath is smaller.
 fn no_worse(original: &SubPath, fitted: SubPath) -> SubPath {
     if fitted.anchors.len() > original.anchors.len() { original.clone() } else { fitted }

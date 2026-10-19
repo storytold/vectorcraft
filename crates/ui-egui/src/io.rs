@@ -440,8 +440,9 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// per template format for Save as Template) and the web opens the Save As dialog (file name and
 /// format). With `ask_options` and no options in `p`,
 /// a format picked that way that has options asks for them before anything is written (SVG
-/// Options, the Save PDF dialog, or the save options dialog: native and `.ai` files on Save As
-/// only), and so does Save As or Save a Copy to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
+/// Options, the Save PDF dialog, or the save options dialog: native files on Save As only, `.ai`
+/// files on Save As and Save a Copy), and so does Save As or Save a Copy to a given SVG path.
+/// → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
     remember_view(app);
@@ -524,12 +525,14 @@ fn ask_before_losing(app: &mut VectorcraftApp, path: &str, command: &str, params
 }
 
 /// Does a save (`mode`) to a picked file of format `f` ask for its options first? Native and `.ai`
-/// files only on Save As (the options dialog after the save panel); Save, a Copy and templates
-/// reuse the remembered options or Use Compression.
+/// files on Save As (the options dialog after the save panel), and `.ai` files also on Save a Copy,
+/// so the copy is not written in the version last saved whatever the panel's `.ai` type says
+/// (#3141); Save and templates reuse the remembered options or Use Compression.
 fn asks_options(mode: SaveMode, f: &Format) -> bool {
     !f.options.is_empty()
         && match f.id {
-            "vectorcraft" | "ai" => mode == SaveMode::SaveAs,
+            "vectorcraft" => mode == SaveMode::SaveAs,
+            "ai" => matches!(mode, SaveMode::SaveAs | SaveMode::Copy),
             "template" | "ait" => false,
             _ => true,
         }

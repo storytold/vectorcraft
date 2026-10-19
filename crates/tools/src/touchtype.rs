@@ -231,30 +231,65 @@ impl TouchTypeTool {
         in_quad(&b.quad, xf.inverse() * p).then_some(Part::Move)
     }
 
+    /// Document-space move for a character box (`b` of `t`): kerning along the line and baseline
+    /// shift along the character's up axis.
+    fn move_params(id: NodeId, t: &TextObject, b: &CharBox, moved: Vec2) -> Value {
+        let doc_len = |v: Vec2| linear(t.xf, v).hypot();
+        let det = b.along.cross(b.ey);
+        let (along, rise) = if !b.kerned {
+            (0.0, moved.dot(b.ey))
+        } else if det.abs() > 0.1 {
+            (moved.cross(b.ey) / det, b.along.cross(moved) / det)
+        } else {
+            (moved.dot(b.along), 0.0)
+        };
+        let mut out = json!({"id": id.0, "start": b.start});
+        let dx = along * doc_len(b.along);
+        let dy = rise * doc_len(b.ey);
+        if dx != 0.0 {
+            out["dx"] = json!(dx);
+        }
+        if dy != 0.0 {
+            out["dy"] = json!(dy);
+        }
+        out
+    }
+
+    /// Arrow-key nudge in document space.
+    fn nudge_params(id: NodeId, t: &TextObject, b: &CharBox, doc_dx: f64, doc_dy: f64) -> Value {
+        Self::move_params(id, t, b, linear(t.xf.inverse(), Vec2::new(doc_dx, doc_dy)))
+    }
+
+    fn arrow_nudge(key: ToolKey, vertical: bool, step: f64) -> Option<Vec2> {
+        let key = if vertical {
+            match key {
+                ToolKey::Up => ToolKey::Left,
+                ToolKey::Down => ToolKey::Right,
+                ToolKey::Right => ToolKey::Up,
+                ToolKey::Left => ToolKey::Down,
+                other => other,
+            }
+        } else {
+            key
+        };
+        match key {
+            ToolKey::Left => Some(Vec2::new(-step, 0.0)),
+            ToolKey::Right => Some(Vec2::new(step, 0.0)),
+            ToolKey::Up => Some(Vec2::new(0.0, -step)),
+            ToolKey::Down => Some(Vec2::new(0.0, step)),
+            _ => None,
+        }
+    }
+
     /// The `text.touchType` params for the drag `d` with the pointer at `p` (document space).
     fn params(id: NodeId, t: &TextObject, d: &Drag, p: Point) -> Value {
         let b = &d.from;
         let inv = t.xf.inverse();
         let moved = linear(inv, p - d.press);
-        let doc_len = |v: Vec2| linear(t.xf, v).hypot();
         let st = &b.style;
         let mut out = json!({"id": id.0, "start": b.start});
         match d.part {
-            Part::Move => {
-                // Kerning moves the character along its line, and baseline shift moves it along its
-                // own up axis, which turns with its rotation. The drag is split between the two.
-                // Turned nearly onto the line, the character moves only along the line.
-                let det = b.along.cross(b.ey);
-                let (along, rise) = if !b.kerned {
-                    (0.0, moved.dot(b.ey))
-                } else if det.abs() > 0.1 {
-                    (moved.cross(b.ey) / det, b.along.cross(moved) / det)
-                } else {
-                    (moved.dot(b.along), 0.0)
-                };
-                out["dx"] = json!(along * doc_len(b.along));
-                out["dy"] = json!(rise * doc_len(b.ey));
-            }
+            Part::Move => out = Self::move_params(id, t, b, moved),
             Part::HScale => {
                 let w = (b.quad[1] - b.quad[0]).hypot();
                 out["hScale"] = json!(st.h_scale * factor(w + moved.dot(b.ex), w));
@@ -336,23 +371,40 @@ impl Tool for TouchTypeTool {
         }
     }
 
-    /// Escape cancels a drag, and otherwise lets go of the selected character.
-    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        if key != ToolKey::Escape {
+    /// Escape cancels a drag or clears the selection; arrow keys nudge the selected character.
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape {
+            return match self.drag.take() {
+                Some(d) if d.began => vec![Action::Cancel],
+                Some(_) => vec![],
+                None => {
+                    self.target = None;
+                    vec![]
+                }
+            };
+        }
+        if self.drag.is_some() {
             return vec![];
         }
-        match self.drag.take() {
-            Some(d) if d.began => vec![Action::Cancel],
-            Some(_) => vec![],
-            None => {
-                self.target = None;
-                vec![]
-            }
+        let Some((id, t, b)) = self.current(cx) else { return vec![] };
+        let lay = self.layout(t);
+        let step = cx.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+        let Some(d) = Self::arrow_nudge(key, lay.vertical, step) else { return vec![] };
+        let params = Self::nudge_params(id, t, &b, d.x, d.y);
+        if params.get("dx").is_none() && params.get("dy").is_none() {
+            return vec![];
         }
+        vec![Action::Exec("text.touchType".into(), params)]
     }
 
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        key == ToolKey::Escape && (self.drag.is_some() || self.current(cx).is_some())
+        if key == ToolKey::Escape {
+            return self.drag.is_some() || self.current(cx).is_some();
+        }
+        if self.drag.is_some() {
+            return false;
+        }
+        self.current(cx).is_some() && matches!(key, ToolKey::Left | ToolKey::Right | ToolKey::Up | ToolKey::Down)
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -509,7 +561,44 @@ mod tests {
         let acts = drag(&mut t, &cx, first, first + Vec2::new(10.0, -4.0));
         let p3 = preview(&acts[1]);
         assert_eq!(p3["start"], json!(0));
-        assert!(close(p3["dx"].as_f64().unwrap(), 0.0) && close(p3["dy"].as_f64().unwrap(), 4.0), "{p3}");
+        assert!(close(p3.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.0), 0.0) && close(p3["dy"].as_f64().unwrap(), 4.0), "{p3}");
+    }
+
+    #[test]
+    fn arrow_keys_nudge_the_selected_character() {
+        let (d, id, s) = doc_with_type();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TouchTypeTool::default();
+        let lay = vectorcraft_text::layout(FontDb::global(), text_of(&cx, id).unwrap());
+        let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+        let at = Point::new(100.0, 200.0) + (y.origin.to_vec2() + Vec2::new(y.advance / 2.0, -10.0));
+        drag(&mut t, &cx, at, at);
+        assert!(t.claims_key(&cx, ToolKey::Right));
+        let acts = t.key(&cx, ToolKey::Right, Mods::default());
+        let p1 = match &acts[0] {
+            Action::Exec(c, v) if c == "text.touchType" => v,
+            other => panic!("{other:?}"),
+        };
+        assert!(close(p1["dx"].as_f64().unwrap(), 1.0) && p1.get("dy").is_none(), "{p1}");
+        // The first character can't kern: a horizontal nudge does nothing.
+        let first = Point::new(100.0, 200.0) + Vec2::new(lay.glyphs[0].advance / 2.0, -10.0);
+        drag(&mut t, &cx, first, first);
+        assert!(t.key(&cx, ToolKey::Left, Mods::default()).is_empty());
+        let acts = t.key(&cx, ToolKey::Up, Mods::default());
+        let p2 = match &acts[0] {
+            Action::Exec(_, v) => v,
+            other => panic!("{other:?}"),
+        };
+        assert!(close(p2["dy"].as_f64().unwrap(), 1.0), "{p2}");
+        // Shift multiplies the increment (on a character that can kern).
+        drag(&mut t, &cx, at, at);
+        let acts = t.key(&cx, ToolKey::Right, Mods { shift: true, ..Mods::default() });
+        let p3 = match &acts[0] {
+            Action::Exec(_, v) => v,
+            other => panic!("{other:?}"),
+        };
+        assert!(close(p3["dx"].as_f64().unwrap(), 10.0), "{p3}");
     }
 
     #[test]

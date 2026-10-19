@@ -354,6 +354,7 @@ fn heading(id: &str) -> &'static str {
         _ if id.starts_with("perspective") => "Perspective",
         "artboard" => "Artboards",
         "slice" | "sliceSelection" => "Slices",
+        "objectsOnPath" => "Modify",
         _ => "More",
     }
 }
@@ -742,6 +743,8 @@ mod tests {
         assert_eq!(under("pencil"), Some("Draw"));
         assert_eq!(under("shaper"), Some("Draw"), "framed with the Pencil");
         assert_eq!(under("rectangle"), Some("Shapes"));
+        assert_eq!(under("objectsOnPath"), Some("Modify"), "framed with the Blend tool");
+        assert_eq!(heading("objectsOnPath"), "Modify", "though not in the Basic toolbar");
     }
 
     /// The Show section's controls (#1736): each shows (true), hides (false) or toggles, saved with

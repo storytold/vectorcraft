@@ -163,7 +163,7 @@ fn type_gives_font_properties() {
     let id = add(&mut d, n);
     let r = one(&d, id, &CssOptions::default());
     assert_eq!(r.selector, ".type");
-    assert_eq!(prop(&r, "font-family"), Some("'Source Sans 3'"));
+    assert_eq!(prop(&r, "font-family"), Some("'Source Sans 3', sans-serif"));
     assert_eq!(prop(&r, "font-size"), Some("18px"));
     assert_eq!(prop(&r, "font-weight"), Some("bold"));
     assert_eq!(prop(&r, "font-style"), Some("italic"));
@@ -282,8 +282,25 @@ fn groups_stand_for_their_objects_and_hidden_ones_are_left_out() {
 }
 
 #[test]
+fn font_family_ends_with_a_generic_family_for_viewers_without_the_font() {
+    let family = |name: &str| {
+        let mut d = doc();
+        let st = CharStyle { font_family: name.into(), size: 18.0, ..CharStyle::default() };
+        let n = text(&mut d, "Hello", st);
+        let id = add(&mut d, n);
+        prop(&one(&d, id, &CssOptions::default()), "font-family").map(str::to_string)
+    };
+    // Source Sans 3 is a sans face; an unknown family gets the same default; a generic family stands alone.
+    assert_eq!(family("Source Sans 3").as_deref(), Some("'Source Sans 3', sans-serif"));
+    assert_eq!(family("No Such Font").as_deref(), Some("'No Such Font', sans-serif"));
+    assert_eq!(family("serif").as_deref(), Some("serif"));
+}
+
+#[test]
 fn font_family_with_quote_or_backslash_is_escaped() {
-    for (family, want) in [("Bob's Font", r"'Bob\'s Font'"), (r"Back\slash Font", r"'Back\\slash Font'"), ("Bob's", r"'Bob\'s'")] {
+    for (family, want) in
+        [("Bob's Font", r"'Bob\'s Font', sans-serif"), (r"Back\slash Font", r"'Back\\slash Font', sans-serif"), ("Bob's", r"'Bob\'s', sans-serif")]
+    {
         let mut d = doc();
         let st = CharStyle { font_family: family.into(), size: 18.0, ..CharStyle::default() };
         let n = text(&mut d, "Hello", st);

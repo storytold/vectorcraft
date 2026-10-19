@@ -73,7 +73,7 @@ pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RASTERIZE, RasterFx, Rasterize, outset, raster_effects};
-pub use reshape::{expand_outlined, has_gradient_copies, has_item_geometry, needs_outline, outline_art, outline_text, reshape};
+pub use reshape::{expand_outlined, has_gradient_copies, has_item_geometry, image_paint, needs_outline, outline_art, outline_text, reshape};
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
     EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, extrude_options, has_solid, inflate_options, is_three_d, solid_art, validate_solid,
@@ -153,6 +153,7 @@ fn lengths_of(id: &str) -> Lengths {
         "texture.mosaicTiles" => always(&["tileSize"]),
         "texture.patchwork" => always(&["squareSize"]),
         "texture.stainedGlass" => always(&["cellSize"]),
+        "sketch.graphicPen" => always(&["strokeLength"]),
         "sketch.halftonePattern" => always(&["size"]),
         RASTERIZE => always(&["addAround"]),
         _ => Lengths::default(),
@@ -363,6 +364,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"glowSize": 5.0, "glowBrightness": 15.0, "color": "#4da6ff"}),
         ),
         r(
+            "artistic.plasticWrap",
+            "Plastic Wrap…",
+            ARTISTIC,
+            "{highlightStrength: 0..20 (20; brighter specular highlights), detail: 0..15 (12; finer wrinkles in document space), smoothness: 1..15 (15; softer folds)} coats the object in shiny plastic, keeping its coverage. highlightStrength 0 leaves the art unchanged. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"highlightStrength": 20.0, "detail": 12.0, "smoothness": 15.0}),
+        ),
+        r(
             "artistic.posterEdges",
             "Poster Edges…",
             ARTISTIC,
@@ -468,11 +476,46 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
         ),
         r(
+            "sketch.chalkCharcoal",
+            "Chalk & Charcoal…",
+            SKETCH,
+            "{chalkArea: 0..20 (6; chalk in light areas), charcoalArea: 0..20 (6; charcoal in dark areas), strokePressure: 0..5 (2)} redraws the object with chalk highlights and charcoal strokes on white paper, keeping its coverage. Original visual approximation from public documentation; slider ranges and defaults are VectorCraft choices, not verified proprietary values.",
+            json!({"chalkArea": 6.0, "charcoalArea": 6.0, "strokePressure": 2.0}),
+        ),
+        r(
+            "sketch.chrome",
+            "Chrome…",
+            SKETCH,
+            "{detail: 0..10 (4; finer surface texture), smoothness: 0..10 (4; softer relief before the highlights and shadows)} treats the object as polished chrome lit from the top left: bright highlights on high points and dark shadows in low ones, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"detail": 4.0, "smoothness": 4.0}),
+        ),
+        r(
+            "sketch.graphicPen",
+            "Graphic Pen…",
+            SKETCH,
+            "{strokeLength: pt 1..15 (5; the longest ink stroke), lightDarkBalance: 0..100 (50; more black when higher), strokeDirection: \"rightDiagonal\"|\"horizontal\"|\"leftDiagonal\"|\"vertical\" (\"rightDiagonal\")} redraws the object in fine linear black ink on white paper, with strokes denser in darker areas. Control names and ranges follow the public documentation; the defaults are unverified.",
+            json!({"strokeLength": 5.0, "lightDarkBalance": 50.0, "strokeDirection": "rightDiagonal"}),
+        ),
+        r(
             "sketch.halftonePattern",
             "Halftone Pattern…",
             SKETCH,
             "{size: pt 1..12 (1; how far apart the screen's dots, rings or lines are), contrast: 0..50 (5; 50 draws pure black and white), patternType: \"circle\"|\"dot\"|\"line\" (\"dot\"; rings round the object's centre, dots on a square grid, horizontal lines)} redraws the object in black ink on white paper through a halftone screen whose ink covers as much as the colour is dark, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
             json!({"size": 1.0, "contrast": 5.0, "patternType": "dot"}),
+        ),
+        r(
+            "sketch.plaster",
+            "Plaster…",
+            SKETCH,
+            "{imageBalance: 1..50 (20; higher values sink more of the image), smoothness: 1..15 (8; higher values soften the relief), lightDirection: \"bottom\"|\"bottomLeft\"|\"left\"|\"topLeft\"|\"top\"|\"topRight\"|\"right\"|\"bottomRight\" (\"top\")} molds the object in relief plaster and lights it from that direction; dark areas are raised and light areas recessed, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"imageBalance": 20.0, "smoothness": 8.0, "lightDirection": "top"}),
+        ),
+        r(
+            "sketch.reticulation",
+            "Reticulation…",
+            SKETCH,
+            "{density: 0..50 (12; finer grain at higher values), foregroundLevel: 0..50 (6; pulls shadows toward black ink), backgroundLevel: 0..50 (6; pulls highlights toward white paper)} redraws the object in black ink on white paper through a high-contrast film-grain screen, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"density": 12.0, "foregroundLevel": 6.0, "backgroundLevel": 6.0}),
         ),
         r(
             "stylize.glowingEdges",

@@ -988,7 +988,8 @@ fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
 }
 
 /// Libraries panel library file `data` imported, then each kind's first item used on the rich
-/// document and moved into its first group, the group deleted and the library exported (#926).
+/// document, moved into its first group and next to its kind's last item, the group moved and
+/// deleted and the library exported (#926).
 fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "library.import", data, |s, r| {
         let lib = r["id"].clone();
@@ -1001,9 +1002,17 @@ fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
                 let _ = no_panic(s.execute("library.use", &json!({"library": lib, "kind": kind, "item": item[key]})));
                 let to = json!({"library": lib, "kind": kind, "item": item[key], "group": got["groups"][0]["name"]});
                 let _ = no_panic(s.execute("library.moveItem", &to));
+                // Next to the last item of its kind, whatever group that is in.
+                let last = got[list].as_array().and_then(|a| a.last()).map(|v| v[key].clone()).unwrap_or_default();
+                for side in ["before", "after"] {
+                    let _ = no_panic(s.execute("library.moveItem", &json!({"library": lib, "kind": kind, "item": item[key], side: last})));
+                }
             }
         }
         if let Some(g) = got["groups"].get(0) {
+            for to in [0, 1, 1_000_000] {
+                let _ = no_panic(s.execute("library.moveGroup", &json!({"library": lib, "group": g["name"], "to": to})));
+            }
             let _ = no_panic(s.execute("library.deleteGroup", &json!({"library": lib, "group": g["name"]})));
         }
         let _ = no_panic(s.execute("library.export", &json!({"library": lib})));

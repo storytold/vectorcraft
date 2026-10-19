@@ -1078,6 +1078,7 @@
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
 	Fill and Stroke	Relleno y trazo
 	Fill new strokes	Rellenar trazos nuevos
+	Alt key toggles to Smooth Tool	La tecla Alt cambia a la herramienta Suavizar
 	Keep selected	Mantener seleccionado
 	Merge only with selection	Combinar solo con la selección
 	Fill Color	Color de relleno
@@ -1199,6 +1200,8 @@
 	Large Gaps	Huecos grandes
 	Gap Preview Color:	Color de previsualización de huecos:
 	Close Gaps With Paths	Cerrar huecos con trazados
+	Select Fills	Seleccionar rellenos
+	Select Strokes	Seleccionar trazos
 	Gaussian Blur…	Desenfoque gaussiano…
 	General	General
 	General › Placement › X	General › Colocación › X
@@ -1396,6 +1399,12 @@
 	Release Blend	Soltar fusión
 	Release Envelope	Soltar envolvente
 	Release Intertwine	Soltar entrelazado
+	Objects on Path	Objetos en trazado
+	Attach	Adjuntar
+	Objects on Path Options	Opciones de objetos en trazado
+	Objects on Path Tool	Herramienta Objetos en trazado
+	Attach Objects on Path	Adjuntar objetos al trazado
+	Expand Objects on Path	Expandir objetos en trazado
 	Release Live Paint	Soltar pintura interactiva
 	Release Repeat	Soltar repetición
 	Release Slice	Soltar sector
@@ -1713,6 +1722,7 @@
 	Load Text into Clipboard	Cargar texto en el portapapeles
 	Local Libraries	Bibliotecas locales
 	Locate Object	Localizar objeto
+	Locate Selected Objects	Localizar objetos seleccionados
 	Location	Ubicación
 	Location:	Ubicación:
 	Lock	Bloquear
@@ -2145,6 +2155,7 @@
 	Output White	Blanco de salida
 	Output › Mode	Salida › Modo
 	Output:	Salida:
+	Overlap	Superposición
 	Overlap:	Superposición:
 	Overlapping	Superpuesto
 	Overlay	Superponer
@@ -2915,6 +2926,8 @@
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
 	Show Original Path	Mostrar trazado original
+	Open this dialog with these settings next time	Abrir este cuadro de diálogo con estos ajustes la próxima vez
+	Auto-Simplify	Simplificar automáticamente
 	Color Panel Options	Opciones del panel Color
 	Show Package	Mostrar paquete
 	Show Panel	Mostrar panel
@@ -3011,6 +3024,7 @@
 	Snap to Pixel	Ajustar a píxel
 	Precise Cursors	Cursores precisos
 	Snap to Point	Ajustar a punto
+	Snap to Unit	Ajustar a unidad
 	Snapping Tolerance	Tolerancia de ajuste
 	Social Square Post 1080×1080	Publicación cuadrada para redes 1080×1080
 	Soft Light	Luz suave
@@ -3138,7 +3152,7 @@
 	Delete Library Item	Eliminar elemento de la biblioteca
 	No results	Sin resultados
 	No items in this library match “{query}”.	Ningún elemento de esta biblioteca coincide con “{query}”.
-	Right-click an item to move it into this group.	Haz clic con el botón derecho en un elemento para moverlo a este grupo.
+	Drag an item here, or right-click one, to put it in this group.	Arrastra aquí un elemento, o haz clic con el botón derecho en uno, para ponerlo en este grupo.
 	New Group	Nuevo grupo
 	New Group…	Nuevo grupo…
 	Move to Group	Mover al grupo
@@ -3860,6 +3874,7 @@ axis	Both	Ambos
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	fondo {other}: transparent, white, black o un color como "#ff8800"
 @msg	bad color {v}	color no válido {v}
 @msg	the Color Picker is not open	el Selector de color no está abierto
+@msg	the Simplify slider is not open	el regulador de Simplificar no está abierto
 @msg	the screen color sampler is already open	el muestreador de color de la pantalla ya está abierto
 @msg	this system has no screen color sampler	este sistema no tiene muestreador de color de la pantalla
 @msg	bad colour `{hex}` (#rrggbb)	color no válido `{hex}` (#rrggbb)
@@ -4097,6 +4112,7 @@ axis	Both	Ambos
 @msg	select a linked image: an embedded one has no file	selecciona una imagen vinculada: una incrustada no tiene archivo
 @msg	select a repeat	selecciona una repetición
 @msg	select an Intertwine group	selecciona un grupo entrelazado
+@msg	select an Objects on Path group	selecciona un grupo de objetos en trazado
 @msg	select a stroke with a variable width	selecciona un trazo con anchura variable
 @msg	select a symbol instance	selecciona una instancia de símbolo
 @msg	select an Image Trace object	selecciona un objeto de calco de imagen
@@ -5096,6 +5112,7 @@ mark-style	Japanese	Japonesas
 @msg	choose a destination folder	elija una carpeta de destino
 @msg	choose a source folder	elija una carpeta de origen
 @msg	open a document with data sets	abra un documento con conjuntos de datos
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no se aplicó nada del conjunto de datos {name}: ningún objeto está vinculado a una variable para la que tenga un valor
 @msg	the action has no steps	la acción no tiene pasos
 
 # User Interface › Accent Color
@@ -5168,3 +5185,19 @@ mark-style	Japanese	Japonesas
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no se leyeron las variables ni los conjuntos de datos del archivo (variables: {variables}, conjuntos de datos: {data_sets}): el panel Variables no los muestra
 # Select by Color (select.color)
 	Select by Color	Seleccionar por color
+	Move Anchor Point	Mover punto de ancla
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 de las {n} mesas de trabajo del documento: el archivo se vuelve a abrir con una. Active Conservar capacidades de edición para conservarlas todas.
+	Chalk & Charcoal…	Tiza y carboncillo…
+	Chalk & Charcoal	Tiza y carboncillo
+	Graphic Pen…	Pluma gráfica…
+	Graphic Pen	Pluma gráfica
+	Reticulation…	Reticulación…
+	Reticulation	Reticulación
+	Plastic Wrap…	Envoltura plástica…
+	Plastic Wrap	Envoltura plástica
+	Chrome…	Cromo…
+	Chrome	Cromo
+	Drop here to take it out of its group	Suelta aquí para sacarlo de su grupo
+	Move Library Group	Mover grupo de biblioteca
+	Plaster…	Yeso…
+	Plaster	Yeso

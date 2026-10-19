@@ -176,6 +176,15 @@ fn a_plane_turns_about_the_given_centre() {
     assert!(close(extent(&wide).x0, 150.0 - 150.0 * 0.5, 1e-6));
     // Its back shows when turned past 90°: a plane is two-sided.
     assert_eq!(plane(&p, FillRule::EvenOdd, b, View { rotation_y: 150.0, ..front() }).unwrap().len(), 1);
+    // From either side it is drawn last, so the planes of several parts sorted together keep the
+    // order they are given in, and it is lit as the side seen.
+    for (y, seen) in [(30.0, 1.0), (150.0, -1.0)] {
+        let v = View { rotation_x: -20.0, rotation_y: y, ..front() };
+        let f = plane(&p, FillRule::EvenOdd, b, v).unwrap();
+        let camera = Camera::new(v, b, 0.0);
+        let lit = camera.brightness(camera.rotate(V3(0.0, 0.0, seen)));
+        assert!(f.len() == 1 && f[0].depth == f64::MAX && close(f[0].brightness, lit, 1e-12), "{y}: {:?}", f[0]);
+    }
 }
 
 #[test]
@@ -659,6 +668,21 @@ fn inflate_twists_tapers_and_opens_its_back() {
     let at = |i: Inflate| inflate(&p, FillRule::EvenOdd, b, i, View { rotation_x: -20.0, rotation_y: 30.0, ..front() }).unwrap();
     assert_eq!(at(Inflate { twist: -30.0, ..o }), at(o));
     assert_eq!(at(Inflate { taper: 0.0, ..o }), at(Inflate { taper: 0.01, ..o }));
+}
+
+/// A flat front is drawn after every other face only when it is turned toward the viewer: an open
+/// Inflate at 0 % volume seen from behind shows the inside of its front, the far side, and the
+/// walls nearer the eye are drawn over it.
+#[test]
+fn an_open_flat_front_seen_from_behind_is_drawn_under_the_walls() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let o = Inflate { depth: 60.0, volume: 0.0, cap: false, ..Inflate::default() };
+    let ahead = inflate(&p, FillRule::EvenOdd, b, o, View { rotation_x: -20.0, rotation_y: 30.0, ..front() }).unwrap();
+    assert!(ahead.last().is_some_and(|f| f.depth == f64::MAX), "from in front, the front is drawn last");
+    let behind = inflate(&p, FillRule::EvenOdd, b, o, View { rotation_x: -20.0, rotation_y: 150.0, ..front() }).unwrap();
+    assert!(behind.iter().all(|f| f.depth < f64::MAX));
+    let (gap, at) = worst_misorder(&behind, 120);
+    assert!(gap < 1.0, "{gap} pt behind at {at:?}");
 }
 
 /// At 0 % volume an inflated shape is the extruded one: twisted and tapered, their outlines

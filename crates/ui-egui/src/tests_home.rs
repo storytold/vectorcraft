@@ -133,3 +133,111 @@ fn home_lists_recent_files_and_a_click_opens_one() {
     assert!(app.session.documents().is_empty());
     assert!(!app.ui.status.is_empty(), "a file that can't be opened says so");
 }
+
+/// One Home screen frame with `events`: the filled rectangles drawn in `fill`, and the cursor.
+fn home_fills(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, fill: egui::Color32) -> (Vec<egui::Rect>, egui::CursorIcon) {
+    fn walk(s: &egui::Shape, fill: egui::Color32, out: &mut Vec<egui::Rect>) {
+        match s {
+            egui::Shape::Rect(r) if r.fill == fill => out.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, fill, out)),
+            _ => {}
+        }
+    }
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 900.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let mut rects = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, fill, &mut rects));
+    (rects, out.platform_output.cursor_icon)
+}
+
+/// A Recent Files row is one button: the pointer over its folder lights the whole row (icon, name
+/// and folder) with a pointing hand, and a click there opens the file like a click on its name.
+#[test]
+fn a_recent_file_row_lights_up_and_opens_from_anywhere_on_it() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let dir = std::env::temp_dir().join("vectorcraft-home-recent-row");
+    app.ui.recent_files = vec![dir.join("Gone.svg").to_string_lossy().into_owned()];
+    let texts = home_texts(&mut app, &ctx, vec![]);
+    let rect_of = |s: &str| texts.iter().find(|(t, _)| t == s).map(|(_, r)| *r).unwrap();
+    let (name, folder) = (rect_of("Gone.svg"), rect_of(&dir.to_string_lossy()));
+    let hover = crate::theme::Tokens::get(&ctx).hover;
+    let lit = |rects: &[egui::Rect]| rects.iter().any(|r| r.contains(name.center()) && r.contains(folder.center()));
+    let (rects, cursor) = home_fills(&mut app, &ctx, vec![], hover);
+    assert!(!lit(&rects) && cursor != egui::CursorIcon::PointingHand, "no highlight without the pointer");
+    let at = folder.center();
+    home_fills(&mut app, &ctx, vec![egui::Event::PointerMoved(at)], hover);
+    let (rects, cursor) = home_fills(&mut app, &ctx, vec![], hover);
+    assert!(lit(&rects), "the pointer over the folder lights the whole row");
+    assert_eq!(cursor, egui::CursorIcon::PointingHand);
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    home_texts(&mut app, &ctx, vec![press(true)]);
+    home_texts(&mut app, &ctx, vec![press(false)]);
+    assert!(app.session.documents().is_empty());
+    assert!(!app.ui.status.is_empty(), "the click on the folder tried to open the file");
+}
+
+/// One Home screen frame in a `w`×`h` window at `time` with `events`: the texts visible (inside
+/// their clip rect and the window) and where.
+fn visible_home_texts(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    (w, h): (f32, f32),
+    time: f64,
+    events: Vec<egui::Event>,
+) -> Vec<(String, egui::Rect)> {
+    fn walk(s: &egui::Shape, clip: egui::Rect, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) if clip.contains_rect(t.visual_bounding_rect()) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, out)),
+            _ => {}
+        }
+    }
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let raw = egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect.intersect(screen), &mut texts));
+    texts
+}
+
+/// Home scrolls when it is taller than the window: in a short window the Community section and
+/// the last preset card are below the fold, the wheel brings them into view, and a card scrolled
+/// into view still opens its preset.
+#[test]
+fn home_scrolls_in_a_short_window() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let dir = std::env::temp_dir().join("vectorcraft-home-scroll");
+    app.ui.recent_files = (0..6).map(|i| dir.join(format!("Drawing {i}.svg")).to_string_lossy().into_owned()).collect();
+    let size = (800.0, 300.0);
+    let has = |texts: &[(String, egui::Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
+    let texts = visible_home_texts(&mut app, &ctx, size, 0.0, vec![]);
+    assert!(has(&texts, "Welcome to VectorCraft"), "{texts:?}");
+    assert!(!has(&texts, "Community"), "below the fold at first");
+    let at = egui::pos2(400.0, 150.0);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -5000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+    };
+    visible_home_texts(&mut app, &ctx, size, 0.1, vec![egui::Event::PointerMoved(at), wheel]);
+    let mut texts = vec![];
+    for i in 2..40 {
+        texts = visible_home_texts(&mut app, &ctx, size, f64::from(i) * 0.1, vec![]);
+    }
+    assert!(has(&texts, "Community"), "the wheel reaches the bottom: {texts:?}");
+    assert!(!has(&texts, "Welcome to VectorCraft"), "the top scrolled away");
+    // The last preset card, scrolled into view, still takes a click.
+    let card = texts.iter().find(|(t, _)| t.starts_with("Social Square Post")).map(|(_, r)| r.center()).unwrap();
+    let press = |pressed| egui::Event::PointerButton { pos: card, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    visible_home_texts(&mut app, &ctx, size, 4.0, vec![egui::Event::PointerMoved(card), press(true)]);
+    visible_home_texts(&mut app, &ctx, size, 4.1, vec![press(false)]);
+    assert_eq!(app.session.documents().len(), 1, "the card opened its preset");
+}

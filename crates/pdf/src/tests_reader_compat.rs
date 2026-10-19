@@ -177,3 +177,46 @@ pub(crate) fn transfer_contract() {
 fn soft_mask_inversion_uses_quantized_transfer_endpoints() {
     transfer_contract();
 }
+
+/// #2675: text in rendering mode 3 (invisible, as a scanned page's OCR layer) comes in as type
+/// with neither fill nor stroke. Where it can't come in as type (text read as outlines) it is
+/// left out, and the import says so. Visible text beside it still comes in, and a page without
+/// invisible text gets no such warning.
+#[test]
+fn invisible_text_is_reported_when_left_out() {
+    let open = |content: &str, text_as: TextAs| import_with_report(&text_pdf(content), &ImportOptions { text_as, ..Default::default() }).unwrap();
+    let invisible = "BT /F1 20 Tf 3 Tr 1 0 0 1 10 40 Tm (AB) Tj 0 Tr 1 0 0 1 10 10 Tm (CA) Tj ET";
+    for text_as in [TextAs::Text, TextAs::Outlines] {
+        let r = open(invisible, text_as);
+        let warned = r.warnings.iter().any(|w| w == crate::INVISIBLE_TEXT_NOTE);
+        assert_eq!(warned, text_as == TextAs::Outlines, "{text_as:?}: {:?}", r.warnings);
+        // What came in: the type's text and whether it is painted, and where the painted art
+        // lies. On the 60 pt page the visible line (baseline 10 pt up) lies 35–50 pt down, the
+        // invisible one (40 pt up) 5–20 pt down.
+        let (mut painted, mut unpainted, mut tops) = (String::new(), String::new(), vec![]);
+        r.document.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                for run in &t.runs {
+                    let out = if run.style.fill.is_none() && !run.style.has_stroke() { &mut unpainted } else { &mut painted };
+                    out.push_str(&run.text);
+                }
+            }
+            let shows = !matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().all(|r| r.style.fill.is_none() && !r.style.has_stroke()));
+            if shows
+                && matches!(n.kind, NodeKind::Text(_) | NodeKind::Path { .. } | NodeKind::Compound { .. })
+                && let Some(b) = n.visual_bounds()
+            {
+                tops.push(b.y0);
+            }
+        });
+        if text_as == TextAs::Text {
+            assert_eq!((painted.as_str(), unpainted.as_str()), ("CA", "AB"), "{text_as:?}");
+        } else {
+            assert_eq!(unpainted, "", "{text_as:?}");
+        }
+        assert!(!tops.is_empty(), "{text_as:?}: the visible line still comes in");
+        assert!(tops.iter().all(|y| *y > 25.0), "{text_as:?}: only the visible line's art, tops at {tops:?}");
+        let visible = open("BT /F1 20 Tf 1 0 0 1 10 10 Tm (CA) Tj ET", text_as);
+        assert!(!visible.warnings.iter().any(|w| w == crate::INVISIBLE_TEXT_NOTE), "{text_as:?}: {:?}", visible.warnings);
+    }
+}

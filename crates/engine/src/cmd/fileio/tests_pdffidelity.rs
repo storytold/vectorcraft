@@ -38,6 +38,64 @@ fn text_opens_as_type_or_outlines() {
     assert!(e.contains("textAs must be one of text, outlines"), "{e}");
 }
 
+fn live_text_pdf() -> Vec<u8> {
+    let page = |text: &str| PdfPage {
+        resources: "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>".into(),
+        ..PdfPage::new(200.0, 100.0, &format!("BT /F1 12 Tf 10 50 Td ({text}) Tj ET"))
+    };
+    pdf(&[page("First page"), page("Second page")], None)
+}
+
+fn live_texts(s: &Session) -> Vec<String> {
+    let mut texts = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.plain_text());
+        }
+    });
+    texts
+}
+
+#[test]
+fn pdf_place_keeps_live_text_from_bytes_and_unlinked_paths() {
+    let bytes = live_text_pdf();
+    let dir = vectorcraft_testkit::temp_dir("pdf-place-live-text");
+    let path = dir.join("text.pdf");
+    std::fs::write(&path, &bytes).unwrap();
+    for source in [json!({"name": "text.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)}), json!({"path": path, "link": false})] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let mut p = source;
+        p["page"] = json!(2);
+        let r = s.execute("file.place", &p).unwrap();
+        assert_eq!(live_texts(&s), ["Second page"], "{r}");
+        assert!(!r["warnings"].to_string().contains("outlines"), "{r}");
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn pdf_clipboard_paste_keeps_live_text_on_the_selected_page() {
+    let bytes = live_text_pdf();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = s.execute("clipboard.importPdf", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "page": 2})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(live_texts(&s), ["Second page"], "{r}");
+    assert!(!r["warnings"].to_string().contains("outlines"), "{r}");
+}
+
+#[test]
+fn pdf_place_honors_explicit_text_outlines() {
+    let bytes = live_text_pdf();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r =
+        s.execute("file.place", &json!({"name": "text.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes), "textAs": "outlines"})).unwrap();
+    assert!(live_texts(&s).is_empty());
+    assert!(r["warnings"].to_string().contains("outlines"), "{r}");
+}
+
 #[test]
 fn layers_option_keeps_or_flattens_optional_content() {
     let (a, b) = (first_extra(1), first_extra(1) + 1);

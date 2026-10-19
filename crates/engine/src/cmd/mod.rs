@@ -47,6 +47,7 @@ pub(crate) mod menucmds;
 pub(crate) mod newart;
 pub mod newdoc;
 mod object;
+pub(crate) mod objects_on_path;
 mod opacitymask;
 mod overprint;
 mod package;
@@ -257,6 +258,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(brushsym::specs());
         v.extend(patterncmds::specs());
         v.extend(intertwine::specs());
+        v.extend(objects_on_path::specs());
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
         v.extend(paint::proxy_specs());

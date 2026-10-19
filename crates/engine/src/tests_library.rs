@@ -276,6 +276,61 @@ fn items_are_grouped_moved_and_ungrouped() {
     assert_eq!(run(&mut s, "library.list", json!({}))["libraries"][0]["groups"], 1);
 }
 
+/// The names of the current library's `list` ("colors", "graphics"…), in their order.
+fn order(s: &mut Session, list: &str, key: &str) -> Vec<String> {
+    let got = run(s, "library.get", json!({}));
+    got[list].as_array().unwrap().iter().map(|v| v[key].as_str().unwrap().to_string()).collect()
+}
+
+/// Dragging in the Libraries panel: an item moves just before or after another of its kind, into
+/// that one's group or out of every group, and groups move to another place in the list.
+#[test]
+fn items_and_groups_are_reordered() {
+    let mut s = session();
+    run(&mut s, "library.create", json!({"name": "Brand"}));
+    for (name, color) in [("Red", "#ff0000"), ("Green", "#00ff00"), ("Blue", "#0000ff"), ("Gray", "#808080")] {
+        run(&mut s, "library.add", json!({"kind": "fillColor", "color": color, "name": name}));
+    }
+    // Before an item, and after one; on itself it stays.
+    run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": "Blue", "before": "Red"}));
+    assert_eq!(order(&mut s, "colors", "name"), ["Blue", "Red", "Green", "Gray"]);
+    run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": "Blue", "after": "Gray"}));
+    assert_eq!(order(&mut s, "colors", "name"), ["Red", "Green", "Gray", "Blue"]);
+    run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": "Red", "before": "Red"}));
+    assert_eq!(order(&mut s, "colors", "name"), ["Red", "Green", "Gray", "Blue"]);
+    // Into a group next to an item there: the group lists it next to that one too.
+    run(
+        &mut s,
+        "library.createGroup",
+        json!({"name": "Cool", "items": [{"kind": "fillColor", "item": "Green"}, {"kind": "fillColor", "item": "Blue"}]}),
+    );
+    let r = run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": "Gray", "group": "Cool", "before": "Blue"}));
+    assert_eq!(r["group"], "Cool");
+    assert_eq!(order(&mut s, "colors", "name"), ["Red", "Green", "Gray", "Blue"]);
+    assert_eq!(groups(&mut s), [("Cool".into(), refs(&[("color", "Green"), ("color", "Gray"), ("color", "Blue")]))]);
+    // Next to an ungrouped item, without a group: out of its group.
+    run(&mut s, "library.moveItem", json!({"kind": "fillColor", "item": "Blue", "before": "Red"}));
+    assert_eq!(order(&mut s, "colors", "name"), ["Blue", "Red", "Green", "Gray"]);
+    assert_eq!(groups(&mut s), [("Cool".into(), refs(&[("color", "Green"), ("color", "Gray")]))]);
+    // Wrong asks change nothing.
+    assert!(s.execute("library.moveItem", &json!({"kind": "fillColor", "item": "Red", "before": "Nope"})).is_err());
+    assert!(s.execute("library.moveItem", &json!({"kind": "fillColor", "item": "Red", "before": "Blue", "after": "Gray"})).is_err());
+    assert!(s.execute("library.moveItem", &json!({"kind": "charStyle", "item": "Red", "before": "Blue"})).is_err(), "not a style");
+    assert_eq!(order(&mut s, "colors", "name"), ["Blue", "Red", "Green", "Gray"]);
+    // Groups: to an index, past the end to the last place.
+    run(&mut s, "library.createGroup", json!({"name": "Warm"}));
+    run(&mut s, "library.createGroup", json!({"name": "Neutral"}));
+    let names = |s: &mut Session| groups(s).into_iter().map(|(n, _)| n).collect::<Vec<_>>();
+    assert_eq!(run(&mut s, "library.moveGroup", json!({"group": "neutral", "to": 0}))["to"], 0);
+    assert_eq!(names(&mut s), ["Neutral", "Cool", "Warm"]);
+    assert_eq!(run(&mut s, "library.moveGroup", json!({"group": "Neutral", "to": 99}))["to"], 2);
+    assert_eq!(names(&mut s), ["Cool", "Warm", "Neutral"]);
+    assert!(s.execute("library.moveGroup", &json!({"group": "Nope", "to": 0})).is_err());
+    assert!(s.execute("library.moveGroup", &json!({"group": "Cool", "to": -1})).is_err());
+    assert!(s.execute("library.moveGroup", &json!({"group": "Cool"})).is_err());
+    assert_eq!(groups(&mut s)[0].1, refs(&[("color", "Green"), ("color", "Gray")]), "a group keeps its items when it moves");
+}
+
 /// A library goes out to a file with its art and groups and comes back as a new library, numbered
 /// when its name is taken; the graphic it brings places in a document (#926).
 #[test]

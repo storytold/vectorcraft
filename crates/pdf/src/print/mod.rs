@@ -422,11 +422,12 @@ fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<Strin
         w.page(ex, &s.sheet())?;
     }
     let overprinted = exporters.iter().any(|ex| ex.overprinted);
+    let invisible = exporters.iter().any(|ex| ex.invisible);
     for ex in exporters {
         w.absorb(ex);
     }
     let (bytes, more) = w.finish(left_out)?;
-    let bytes = crate::forms::finish(bytes, doc, &pdf, false, overprinted)?;
+    let bytes = crate::forms::finish(bytes, doc, &pdf, false, overprinted, invisible)?;
     let mut warnings = plan.warnings;
     for m in more {
         if !warnings.contains(&m) {

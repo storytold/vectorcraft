@@ -224,6 +224,9 @@ pub struct ViewFlags {
     pub corner_widgets: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
+    /// View → Snap to Glyph.
+    #[serde(default)]
+    pub snap_to_glyph: bool,
     /// View → Show/Hide Text Threads.
     pub text_threads: bool,
     /// View → Show/Hide Gradient Annotator.
@@ -252,6 +255,7 @@ impl Default for ViewFlags {
             trim_view: false,
             corner_widgets: true,
             snap_to_pixel: false,
+            snap_to_glyph: false,
             text_threads: true,
             gradient_annotator: true,
             hidden_chars: false,
@@ -488,6 +492,11 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
+    /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
+    /// of the Simplify slider.
+    #[serde(default)]
+    pub simplify: Value,
     /// The Move dialog's checkboxes as it was last confirmed with (copy, objects, preview; null:
     /// never used): it opens with them.
     #[serde(default)]
@@ -501,7 +510,7 @@ pub struct UiState {
     /// becoming active, leaves it.
     #[serde(skip)]
     pub home: Option<(Option<u64>, usize)>,
-    /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only).
+    /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
@@ -823,6 +832,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            simplify: Value::Null,
             move_options: Value::Null,
             dxf_import: Value::Null,
             home: None,

@@ -660,7 +660,7 @@ pub const FORMATS: &[Format] = &[
     Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: true, write: true, raster: true, options: PSD_OPTIONS },
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
-    reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
+    reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/x-affinity", false),
     // Photoshop's large document format: read like a PSD (its merged image), never written.
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
     // PostScript programs, read as EPS files are; Print to PostScript writes them, exports don't.
@@ -702,10 +702,11 @@ pub const OPEN_EXTS: &[&str] = &[
     "afpub",
 ];
 
-/// Extensions in [`OPEN_EXTS`] the desktop packaging doesn't associate with VectorCraft: Photoshop
-/// documents belong to raster editors, so Finder and file managers don't offer a vector app for
-/// them, and the packaging declares no `.epsf`, `.ps` or Targa type (File › Open and Place still
-/// read them all).
+/// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
+/// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
+/// `.epsf`, `.ps` or Targa type (File › Open and Place still read them all). On Linux the desktop
+/// entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft
+/// for it.
 pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares

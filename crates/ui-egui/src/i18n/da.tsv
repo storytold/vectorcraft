@@ -1489,7 +1489,7 @@ lighting	Light	Lys
 	This library is empty	Dette bibliotek er tomt
 	No results	Ingen resultater
 	No items in this library match “{query}”.	Ingen elementer i dette bibliotek matcher »{query}«.
-	Right-click an item to move it into this group.	Højreklik på et element for at flytte det til denne gruppe.
+	Drag an item here, or right-click one, to put it in this group.	Træk et element hertil, eller højreklik på et, for at lægge det i denne gruppe.
 	New Group	Ny gruppe
 	New Group…	Ny gruppe…
 	Move to Group	Flyt til gruppe
@@ -1607,6 +1607,7 @@ lighting	Light	Lys
 	Left in Front	Venstre forrest
 	No document	Intet dokument
 	Open a document to edit its patterns.	Åbn et dokument for at redigere dets mønstre.
+	Overlap	Overlap
 	Overlap:	Overlap:
 	Pattern options are available in pattern editing mode.	Mønsterindstillinger er tilgængelige i mønsterredigeringstilstand.
 	Right in Front	Højre forrest
@@ -1734,6 +1735,7 @@ lighting	Light	Lys
 	Right-Justified Tab	Højrejusteret tabulator
 	Select a text object to set its tab stops.	Markér et tekstobjekt for at angive dets tabulatorstop.
 	Select text	Markér tekst
+	Snap to Unit	Fastgør til enhed
 	+ Add Scale	+ Tilføj skala
 	Add Selected Artwork as One Asset	Tilføj markeret grafik som ét aktiv
 	Export Settings	Eksportindstillinger
@@ -2063,6 +2065,7 @@ lighting	Light	Lys
 	Edit selected paths within:	Redigér markerede stier inden for:
 	Fidelity:	Præcision:
 	Fill new strokes	Udfyld nye konturer
+	Alt key toggles to Smooth Tool	Alt-tasten skifter til Udglatningsværktøj
 	The document has no colour swatches.	Dokumentet har ingen farveprøver.
 	Style Name:	Typografinavn:
 	Crop To	Beskær til
@@ -2080,6 +2083,7 @@ lighting	Light	Lys
 	Layers Panel Options	Indstillinger for lagpanelet
 	Row Size:	Rækkestørrelse:
 	Show Layers Only	Vis kun lag
+	Locate Selected Objects	Lokalisér markerede objekter
 	Thumbnails:	Miniaturer:
 	Anchor Points	Ankerpunkter
 	Brush Affects:	Penslen påvirker:
@@ -5049,6 +5053,8 @@ swatch	Bright Violet	Kraftig violet
 	Outline Object	Objekt til kontur
 	Update Selection	Opdater markering
 	Show Original Path	Vis oprindelig kurve
+	Open this dialog with these settings next time	Åbn denne dialogboks med disse indstillinger næste gang
+	Auto-Simplify	Forenkl automatisk
 @msg	check a layer to export	markér et lag, der skal eksporteres
 @msg	select the art to export first	markér først grafikken, der skal eksporteres
 @msg	no saved selection recalled	ingen gemt markering hentet
@@ -5074,6 +5080,8 @@ swatch	Bright Violet	Kraftig violet
 	Chop Design	Beskær design
 	Clear Events	Ryd hændelser
 	Close Gaps With Paths	Luk huller med stier
+	Select Fills	Markér udfyldninger
+	Select Strokes	Markér konturer
 	Column Type:	Søjletype:
 	Each Design Represents:	Hvert design repræsenterer:
 	Event:	Hændelse:
@@ -5151,6 +5159,12 @@ swatch	Bright Violet	Kraftig violet
 	Release Blend	Frigør blanding
 	Release Envelope	Frigør konvolut
 	Release Intertwine	Frigør sammenfletning
+	Objects on Path	Objekter på kurve
+	Attach	Tilknyt
+	Objects on Path Options	Indstillinger for objekter på kurve
+	Objects on Path Tool	Objekter på kurve-værktøj
+	Attach Objects on Path	Tilknyt objekter til kurve
+	Expand Objects on Path	Udvid objekter på kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -5209,3 +5223,18 @@ swatch	Bright Violet	Kraftig violet
 	Justification	Justering
 # Select by Color (select.color)
 	Select by Color	Markér efter farve
+	Move Anchor Point	Flyt ankerpunkt
+	Chalk & Charcoal…	Kridt og kul…
+	Chalk & Charcoal	Kridt og kul
+	Graphic Pen…	Grafisk pen…
+	Graphic Pen	Grafisk pen
+	Reticulation…	Retikulering…
+	Reticulation	Retikulering
+	Plastic Wrap…	Plastfolie…
+	Plastic Wrap	Plastfolie
+	Chrome…	Krom…
+	Chrome	Krom
+	Drop here to take it out of its group	Slip her for at tage det ud af gruppen
+	Move Library Group	Flyt biblioteksgruppe
+	Plaster…	Gips…
+	Plaster	Gips

@@ -178,6 +178,7 @@ pub(super) fn status_bar_texts(app: &mut VectorcraftApp) -> Vec<String> {
         }
     }
     let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::chrome::status_bar(app, ui));
     out.textures_delta.clear();
     let mut v = vec![];

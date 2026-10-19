@@ -135,12 +135,12 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     }
     if !doc.title.is_empty() {
         out.push_str(&w.indent(1));
-        out.push_str(&format!("<title>{}</title>{nl}", xml_escape(&doc.title)));
+        out.push_str(&format!("<title>{}</title>{nl}", xml_text(&doc.title)));
     }
     // File Info's description.
     if !doc.metadata.description.trim().is_empty() {
         out.push_str(&w.indent(1));
-        out.push_str(&format!("<desc>{}</desc>{nl}", xml_escape(&doc.metadata.description)));
+        out.push_str(&format!("<desc>{}</desc>{nl}", xml_text(&doc.metadata.description)));
     }
     // Window › SVG Interactivity › Link JavaScript Files.
     for file in &doc.svg_scripts {

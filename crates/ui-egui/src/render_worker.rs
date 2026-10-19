@@ -63,6 +63,14 @@ impl Worker {
         Some(Self { tx, rx, pending: None })
     }
 
+    /// A controlled worker: tests receive jobs and decide when a frame completes.
+    #[cfg(test)]
+    pub(crate) fn test_channel() -> (Self, Receiver<Job>, Sender<Done>) {
+        let (tx, jobs) = channel();
+        let (done_tx, rx) = channel();
+        (Self { tx, rx, pending: None }, jobs, done_tx)
+    }
+
     pub fn submit(&mut self, job: Job) {
         if self.pending.as_ref() == Some(&job.key) {
             return;

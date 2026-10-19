@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_geom::corners::cut_corners;
 use vectorcraft_geom::shapes::{self, CornerKind};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape};
 
 use crate::appearance::Appearance;
 use crate::live::{BlendSpec, EnvelopeKind, GradientMesh, Outliner};
@@ -102,6 +102,8 @@ pub enum LiveShape {
     },
     Polygon {
         radius: f64,
+        /// 3–1000, as [`LiveShape::set_sides`] gives it; a file's count is clamped when read.
+        #[serde(deserialize_with = "de_sides")]
         sides: u32,
         xf: Affine,
         /// Corner radii in document units, by vertex from the first one clockwise (none: sharp).
@@ -324,6 +326,12 @@ impl LiveShape {
 
 fn all_round(kinds: &[CornerKind]) -> bool {
     kinds.iter().all(|k| *k == CornerKind::Round)
+}
+
+/// A polygon's side count read from a file, clamped as the commands clamp it: the outline and its
+/// corner lists hold one entry per side, so a huge count would allocate gigabytes.
+fn de_sides<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    u32::deserialize(d).map(|n| n.clamp(3, 1000))
 }
 
 /// Whether `a` only moves (no rotation, scale, shear or reflection).
@@ -572,6 +580,9 @@ pub struct NodeExtras {
     pub intertwine: Option<Box<PathData>>,
     /// Live Paint group: its Gap Options (Object › Live Paint › Gap Options; `None`: the defaults).
     pub live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
+    /// Object › Objects on Path: the group's path and the objects attached to it (see
+    /// [`crate::objects_on_path`]).
+    pub objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -590,6 +601,7 @@ static NO_EXTRAS: NodeExtras = NodeExtras {
     dimension: None,
     intertwine: None,
     live_paint_gaps: None,
+    objects_on_path: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
@@ -724,6 +736,7 @@ impl Serialize for Node {
             e.dimension.is_none(),
             e.intertwine.is_none(),
             e.live_paint_gaps.is_none(),
+            e.objects_on_path.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -762,6 +775,7 @@ impl Serialize for Node {
         field!("dimension", &e.dimension);
         field!("intertwine", &e.intertwine);
         field!("live_paint_gaps", &e.live_paint_gaps);
+        field!("objects_on_path", &e.objects_on_path);
         st.end()
     }
 }
@@ -821,6 +835,8 @@ struct NodeWire {
     intertwine: Option<Box<PathData>>,
     #[serde(default)]
     live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
+    #[serde(default)]
+    objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
 }
 
 impl From<NodeWire> for Node {
@@ -840,6 +856,7 @@ impl From<NodeWire> for Node {
             dimension: w.dimension,
             intertwine: w.intertwine,
             live_paint_gaps: w.live_paint_gaps,
+            objects_on_path: w.objects_on_path,
         };
         Node {
             id: w.id,
@@ -1025,6 +1042,7 @@ impl Node {
         match &self.kind {
             NodeKind::Layer { .. } => "Layer",
             NodeKind::Group { clip: true, .. } => "Clip Group",
+            NodeKind::Group { .. } if self.extras().objects_on_path.is_some() => "Objects on Path",
             NodeKind::Group { .. } => "Group",
             NodeKind::Path { live: Some(l), .. } => l.label(),
             NodeKind::Path { guide: true, .. } => "Guide",
@@ -1087,8 +1105,10 @@ impl Node {
     }
     /// A quick box round everything the object can paint, for culling clicks: paths and compound
     /// paths grow their geometric bounds by the farthest their strokes can reach from any path
-    /// ([`Appearance::outset`]) instead of measuring along their shape. Symbol instances are
-    /// measured as in [`Node::visual_bounds`].
+    /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
+    /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
+    /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`].
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -1106,6 +1126,22 @@ impl Node {
                 let o = self.appearance.outset();
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
+            // The members' reach, grown by the container's own strokes.
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                let o = self.appearance.outset();
+                children
+                    .iter()
+                    .skip(usize::from(self.extras().shaper.is_some()))
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols)))
+                    .map(|b| b.inflate(o, o))
+            }
+            NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
+            // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
+            // the farthest it can reach from its shape.
+            NodeKind::Image(_) => crate::hit::image_paint(self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
+                let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+                vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+            }),
             _ => self.visual(symbols),
         }
     }
@@ -1155,9 +1191,9 @@ impl Node {
         }
     }
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
-    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). A symbol
-    /// instance is measured as in [`Node::geometric_bounds`], grown by its own strokes' reach
-    /// ([`Node::visual_bounds_with`] measures its art).
+    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). An image is
+    /// measured by its frame. A symbol instance is measured as in [`Node::geometric_bounds`],
+    /// grown by its own strokes' reach ([`Node::visual_bounds_with`] measures its art).
     pub fn visual_bounds(&self) -> Option<Rect> {
         self.visual(None)
     }
@@ -1232,6 +1268,8 @@ impl Node {
                 let o = self.appearance.outset().max(chars);
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
+            // An image is measured by its frame, without its own fills and strokes.
+            NodeKind::Image(_) => self.geometric(symbols),
             _ => {
                 let o = self.appearance.outset();
                 self.geometric(symbols).map(|b| b.inflate(o, o))
@@ -1250,6 +1288,12 @@ impl Node {
             && let Some(dimension) = &mut e.dimension
         {
             dimension.transform(a);
+        }
+        // The frames of the objects attached to a path move with them.
+        if let Some(e) = self.extras_if_any()
+            && let Some(on_path) = &mut e.objects_on_path
+        {
+            on_path.transform(a);
         }
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
@@ -1683,11 +1727,11 @@ impl Node {
 
 impl Node {
     /// The Appearance panel's row for what this object's own fills and strokes paint around:
-    /// "Contents" for a group or layer (its members), "Characters" for type; `None` for objects
-    /// whose fills and strokes paint their own geometry.
+    /// "Contents" for a group or layer (its members) and for an image (its pixels), "Characters"
+    /// for type; `None` for objects whose fills and strokes paint their own geometry.
     pub fn contents_label(&self) -> Option<&'static str> {
         match self.kind {
-            NodeKind::Group { .. } | NodeKind::Layer { .. } => Some("Contents"),
+            NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Image(_) => Some("Contents"),
             NodeKind::Text(_) => Some("Characters"),
             _ => None,
         }
@@ -2152,6 +2196,24 @@ mod tests {
         assert_eq!((json["shape"].as_str(), json.get("kinds")), (Some("path"), None));
         assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), path);
         assert_eq!(path.label(), "Path");
+    }
+
+    /// A polygon read from a file has 3 to 1000 sides, as the commands give it: selecting one
+    /// with four billion made its outline and corner lists allocate tens of gigabytes.
+    #[test]
+    fn a_polygon_from_a_file_has_3_to_1000_sides() {
+        let read = |sides: u32| {
+            let json = serde_json::json!({"shape": "polygon", "radius": 10.0, "sides": sides, "xf": [1, 0, 0, 1, 0, 0]});
+            serde_json::from_value::<LiveShape>(json).unwrap()
+        };
+        let sides_of = |l: &LiveShape| match l {
+            LiveShape::Polygon { sides, .. } => *sides,
+            _ => panic!("not a polygon: {l:?}"),
+        };
+        let huge = read(4_000_000_000);
+        assert_eq!([0, 5, 1000].map(|n| sides_of(&read(n))), [3, 5, 1000]);
+        assert_eq!(sides_of(&huge), 1000);
+        assert_eq!(huge.polygon_outline().anchor_count(), 1000);
     }
 
     #[test]

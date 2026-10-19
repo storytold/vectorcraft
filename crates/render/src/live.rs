@@ -68,8 +68,8 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
     crate::effects::expand_live(None, n)
 }
 
-/// What the evaluation of `n` (a live node, or an object whose effect art can be made from
-/// evaluated live objects, see [`Renderer::live_found`]) reads from the document, placed files,
+/// What the evaluation of `n` (a live node, or an object whose effect art the renderer keeps with
+/// its inputs, see [`Renderer::live_found`]) reads from the document, placed files,
 /// the fonts, the plug-ins and the color settings, hashed: the art of the symbols, the tilings of
 /// the patterns and the reads of the placed files it shows ([`hash_resources`]), the font
 /// generation ([`vectorcraft_text::FontDb::generation`]) when it shows type or a placed file, the
@@ -343,7 +343,7 @@ fn spread_to_edges(px: &mut [vello_cpu::color::PremulRgba8], filled: Vec<bool>, 
 impl Renderer {
     /// The [`resources_key`] of `n` in `doc`, with the frame's [`DocInputs`] ([`Found`]): `n` is a
     /// live node, or an object with effects whose art ([`Renderer::fx_art`]) can be made from
-    /// evaluated live objects.
+    /// evaluated live objects, type, symbol art or colors shaded through the color settings.
     pub(crate) fn live_found(&mut self, doc: &Document, n: &Node) -> Found {
         let inputs = self.doc_inputs(doc);
         let (key, reads) = resources_key(doc, inputs.cms, n);

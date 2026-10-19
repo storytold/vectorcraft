@@ -399,7 +399,9 @@ impl Tool for DimensionTool {
                         for p in [a, b] {
                             out.push(Overlay::Anchor { p, color, filled: true, size: 6.0 });
                         }
-                        if let Ok(text) = self.style.label(a.distance(b), false) {
+                        if cx.measurement_labels
+                            && let Ok(text) = self.style.label(a.distance(b), false)
+                        {
                             out.push(Overlay::Measure { p: self.at + Vec2::new(12.0, 12.0), text });
                         }
                     }

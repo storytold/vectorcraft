@@ -1078,6 +1078,7 @@
 	Fill (X), double-click for the Color Picker	Fond (X), double-cliquez pour ouvrir le Sélecteur de couleurs
 	Fill and Stroke	Fond et contour
 	Fill new strokes	Remplir les nouveaux contours
+	Alt key toggles to Smooth Tool	La touche Alt bascule sur l’outil Arrondi
 	Keep selected	Garder sélectionné
 	Merge only with selection	Fusionner uniquement avec la sélection
 	Fill Color	Couleur de fond
@@ -1198,6 +1199,8 @@
 	Large Gaps	Grands espaces
 	Gap Preview Color:	Couleur d’aperçu des espaces :
 	Close Gaps With Paths	Fermer les espaces avec des tracés
+	Select Fills	Sélectionner les fonds
+	Select Strokes	Sélectionner les contours
 	Gaussian Blur…	Flou gaussien…
 	General	Général
 	General › Placement › X	Général › Placement › X
@@ -1395,6 +1398,12 @@
 	Release Blend	Annuler le dégradé de formes
 	Release Envelope	Annuler l’enveloppe
 	Release Intertwine	Annuler l’entrelacement
+	Objects on Path	Objets sur tracé
+	Attach	Attacher
+	Objects on Path Options	Options d’objets sur tracé
+	Objects on Path Tool	Outil Objets sur tracé
+	Attach Objects on Path	Attacher des objets au tracé
+	Expand Objects on Path	Décomposer les objets sur tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -1712,6 +1721,7 @@
 	Load Text into Clipboard	Charger du texte dans le presse-papiers
 	Local Libraries	Bibliothèques locales
 	Locate Object	Localiser l’objet
+	Locate Selected Objects	Localiser les objets sélectionnés
 	Location	Emplacement
 	Location:	Emplacement :
 	Lock	Verrouiller
@@ -2142,6 +2152,7 @@
 	Output White	Blanc de sortie
 	Output › Mode	Sortie › Mode
 	Output:	Sortie :
+	Overlap	Chevauchement
 	Overlap:	Chevauchement :
 	Overlapping	Superposés
 	Overlay	Incrustation
@@ -2912,6 +2923,8 @@
 	Show Note	Afficher la note
 	Show Options	Afficher les options
 	Show Original Path	Afficher le tracé d’origine
+	Open this dialog with these settings next time	Ouvrir cette boîte de dialogue avec ces réglages la prochaine fois
+	Auto-Simplify	Simplifier automatiquement
 	Color Panel Options	Options du panneau Couleur
 	Show Package	Afficher le dossier d’assemblage
 	Show Panel	Afficher le panneau
@@ -3008,6 +3021,7 @@
 	Snap to Pixel	Magnétisme du pixel
 	Precise Cursors	Pointeurs précis
 	Snap to Point	Magnétisme du point
+	Snap to Unit	Magnétisme de l’unité
 	Snapping Tolerance	Tolérance du magnétisme
 	Social Square Post 1080×1080	Publication carrée pour réseaux sociaux 1080×1080
 	Soft Light	Lumière tamisée
@@ -3135,7 +3149,7 @@
 	Delete Library Item	Supprimer l’élément de la bibliothèque
 	No results	Aucun résultat
 	No items in this library match “{query}”.	Aucun élément de cette bibliothèque ne correspond à « {query} ».
-	Right-click an item to move it into this group.	Cliquez avec le bouton droit sur un élément pour le placer dans ce groupe.
+	Drag an item here, or right-click one, to put it in this group.	Faites glisser un élément ici, ou cliquez dessus avec le bouton droit, pour le placer dans ce groupe.
 	New Group	Nouveau groupe
 	New Group…	Nouveau groupe…
 	Move to Group	Déplacer vers le groupe
@@ -3857,6 +3871,7 @@ axis	Both	Les deux
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	arrière-plan {other} : transparent, white, black ou une couleur comme "#ff8800"
 @msg	bad color {v}	couleur non valide {v}
 @msg	the Color Picker is not open	le Sélecteur de couleurs n’est pas ouvert
+@msg	the Simplify slider is not open	le curseur Simplifier n’est pas ouvert
 @msg	the screen color sampler is already open	l’outil de prélèvement de couleur à l’écran est déjà ouvert
 @msg	this system has no screen color sampler	ce système n’a pas d’outil de prélèvement de couleur à l’écran
 @msg	bad colour `{hex}` (#rrggbb)	couleur non valide `{hex}` (#rrggbb)
@@ -4094,6 +4109,7 @@ axis	Both	Les deux
 @msg	select a linked image: an embedded one has no file	sélectionnez une image liée : une image incorporée n’a pas de fichier
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
+@msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
 @msg	select a stroke with a variable width	sélectionnez un contour de largeur variable
 @msg	select a symbol instance	sélectionnez une instance de symbole
 @msg	select an Image Trace object	sélectionnez un objet de vectorisation de l’image
@@ -5153,6 +5169,7 @@ theme	Appearance	Apparence
 @msg	choose a destination folder	choisissez un dossier de destination
 @msg	choose a source folder	choisissez un dossier source
 @msg	open a document with data sets	ouvrez un document avec des jeux de données
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	rien du jeu de données {name} n’a été appliqué, car aucun objet n’est lié à une variable pour laquelle il a une valeur
 @msg	the action has no steps	l'action n'a aucune étape
 
 # User Interface › Accent Color
@@ -5225,3 +5242,19 @@ theme	Appearance	Apparence
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	les variables et jeux de données du fichier n’ont pas été lus (variables : {variables}, jeux de données : {data_sets}) : le panneau Variables ne les affiche pas
 # Select by Color (select.color)
 	Select by Color	Sélectionner par couleur
+	Move Anchor Point	Déplacer le point d’ancrage
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserve 1 des {n} plans de travail du document : le fichier se rouvre avec un seul. Activez Conserver les fonctions d’édition pour les conserver tous.
+	Chalk & Charcoal…	Craie et fusain…
+	Chalk & Charcoal	Craie et fusain
+	Graphic Pen…	Plume graphique…
+	Graphic Pen	Plume graphique
+	Reticulation…	Réticulation…
+	Reticulation	Réticulation
+	Plastic Wrap…	Emballage plastique…
+	Plastic Wrap	Emballage plastique
+	Chrome…	Chrome…
+	Chrome	Chrome
+	Drop here to take it out of its group	Déposez ici pour le sortir de son groupe
+	Move Library Group	Déplacer le groupe de bibliothèque
+	Plaster…	Plâtre…
+	Plaster	Plâtre

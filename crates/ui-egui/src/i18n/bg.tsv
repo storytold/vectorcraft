@@ -1058,6 +1058,7 @@
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
 	Fill and Stroke	Запълване и щрих
 	Fill new strokes	Запълване на нови щрихове
+	Alt key toggles to Smooth Tool	Клавишът Alt превключва към инструмент „Гладкост“
 	Fill Color	Цвят на запълване
 	Fill New Type Objects With Placeholder Text	Запълване на нови текстови обекти с примесен текст
 	Fill Rule	Правило за запълване
@@ -1174,6 +1175,8 @@
 	Large Gaps	Големи пролуки
 	Gap Preview Color:	Цвят за преглед на пролуките:
 	Close Gaps With Paths	Затваряне на пролуките с пътища
+	Select Fills	Избиране на запълвания
+	Select Strokes	Избиране на щрихове
 	Gaussian Blur…	Гаусово размазване…
 	General	Общи
 	General › Placement › X	Общи › Разположение › X
@@ -1370,6 +1373,12 @@
 	Release Blend	Освобождаване на преливане
 	Release Envelope	Освобождаване на обвивка
 	Release Intertwine	Освобождаване на преплитане
+	Objects on Path	Обекти по пътя
+	Attach	Прикрепяне
+	Objects on Path Options	Опции за обекти по пътя
+	Objects on Path Tool	Инструмент „Обекти по пътя“
+	Attach Objects on Path	Прикрепяне на обекти към пътя
+	Expand Objects on Path	Разширяване на обекти по пътя
 	Release Live Paint	Освобождаване на динамично оцветяване
 	Release Repeat	Освобождаване на повторение
 	Release Slice	Освобождаване на отрязък
@@ -1672,6 +1681,7 @@
 	Load Text into Clipboard	Зареждане на текст в клипборда
 	Local Libraries	Локални библиотеки
 	Locate Object	Намиране на обект
+	Locate Selected Objects	Намиране на избраните обекти
 	Location	Местоположение
 	Location:	Местоположение:
 	Lock	Заключване
@@ -2102,6 +2112,7 @@
 	Output White	Изходно бяло
 	Output › Mode	Изход › Режим
 	Output:	Изход:
+	Overlap	Застъпване
 	Overlap:	Застъпване:
 	Overlapping	Застъпващи се
 	Overlay	Прекриване
@@ -2858,6 +2869,8 @@
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
 	Show Original Path	Показване на оригиналния път
+	Open this dialog with these settings next time	Отваряне на този прозорец с тези настройки следващия път
+	Auto-Simplify	Автоматично опростяване
 	Show Package	Показване на пакет
 	Show Panel	Показване на панел
 	Show Pattern Swatches	Показване на образци за мостра
@@ -2952,6 +2965,7 @@
 	Snap to Pixel	Прилепване към пиксел
 	Precise Cursors	Прецизни курсори
 	Snap to Point	Прилепване към точка
+	Snap to Unit	Прилепване към мерна единица
 	Snapping Tolerance	Толеранс на прилепване
 	Social Square Post 1080×1080	Публикация за квадрат в социални мрежи 1080×1080
 	Soft Light	Мека светлина
@@ -3079,7 +3093,7 @@
 	Delete Library Item	Изтриване на елемент от библиотека
 	No results	Няма резултати
 	No items in this library match “{query}”.	Няма елементи в тази библиотека, съвпадащи с „{query}“.
-	Right-click an item to move it into this group.	Щракнете с десния бутон върху елемент, за да го преместите в тази група.
+	Drag an item here, or right-click one, to put it in this group.	Плъзнете елемент тук или щракнете с десния бутон върху него, за да го поставите в тази група.
 	New Group	Нова група
 	New Group…	Нова група…
 	Move to Group	Преместване в група
@@ -5190,3 +5204,19 @@ theme	Appearance	Външен вид
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
+	Move Anchor Point	Преместване на опорна точка
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} запазва 1 от {n} работни области на документа: файлът се отваря отново с един. Включете „Запазване на възможностите за редактиране“, за да запазите всички.
+	Chalk & Charcoal…	Креда и въглен…
+	Chalk & Charcoal	Креда и въглен
+	Graphic Pen…	Графична писалка…
+	Graphic Pen	Графична писалка
+	Reticulation…	Ретикулация…
+	Reticulation	Ретикулация
+	Plastic Wrap…	Найлоново фолио…
+	Plastic Wrap	Найлоново фолио
+	Chrome…	Хром…
+	Chrome	Хром
+	Drop here to take it out of its group	Пуснете тук, за да го извадите от групата му
+	Move Library Group	Преместване на библиотечна група
+	Plaster…	Гипс…
+	Plaster	Гипс

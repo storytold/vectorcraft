@@ -2,7 +2,7 @@
 //! carries (see `native`). The files here are small ones written by hand for the tests, with the
 //! operators seen in files their users own.
 
-use vectorcraft_doc::{Document, LayerColor, Node, NodeKind};
+use vectorcraft_doc::{Document, LayerColor, Node, NodeKind, Unit};
 
 use crate::import::import;
 
@@ -71,6 +71,16 @@ fn page_square(x: u32, y: u32) -> String {
 
 fn names(d: &Document) -> Vec<String> {
     d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect()
+}
+
+#[test]
+fn native_import_keeps_ruler_units_from_editing_data() {
+    let art = layer("Art", true, &square(10, 10));
+    let native = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI5_RulerUnits: 1\n%AI5_NumLayers: 1\n{art}%%Trailer\n"
+    );
+    let r = import(&eps(&page_square(10, 10), &native)).unwrap();
+    assert_eq!(r.document.units, Unit::Millimeters);
 }
 
 fn kinds(l: &Node) -> Vec<&'static str> {

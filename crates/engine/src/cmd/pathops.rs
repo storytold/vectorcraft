@@ -130,7 +130,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Simplify…",
             ["Object", "Path"],
             None,
-            "{tolerance?: pt (1), cornerAngle?: deg (30), straightLines?: bool} → {ids, before, after} anchor counts",
+            "{tolerance?: pt (1), level?: 0..100 (the Simplify slider, in place of tolerance: 0 fewest anchor points, 50 is 1 pt, every 10 levels halves or doubles it), auto?: bool (Auto-Simplify: the lowest level whose tolerance is at most 1/400 of the selection's longer side, or 100 when that side is under 12.5 pt), cornerAngle?: deg (30), straightLines?: bool} → {ids, before, after} anchor counts, and the level used with level or auto",
             has_selection,
             simplify
         ),
@@ -800,13 +800,29 @@ fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -
 }
 
 fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
+    // With auto, the slider's level is Auto-Simplify's for the selection's size; otherwise it is the level given.
+    let level = if bool_or(p, "auto", false) {
+        let roots = selected_roots(s)?;
+        let size = s.doc()?.doc.bounds_of(&roots, false).map_or(0.0, |b| b.width().max(b.height()));
+        Some(po::auto_simplify_level(size))
+    } else {
+        num_param(p, "level").map(|l| if l.is_finite() { l.round().clamp(0.0, 100.0) } else { po::SIMPLIFY_LEVEL })
+    };
+    let tolerance = match level {
+        Some(l) => po::simplify_level_tolerance(l),
+        None => len_param(p, "tolerance").unwrap_or(1.0),
+    };
     let opts = po::SimplifyOptions {
-        tolerance: len_param(p, "tolerance").unwrap_or(1.0).clamp(1e-4, 1e4),
+        tolerance: tolerance.clamp(1e-4, 1e4),
         corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
         straight_lines: bool_or(p, "straightLines", false),
     };
     let (ids, before, after) = edit_paths(s, "Simplify", |path| po::simplify_with(path, &opts))?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after }))
+    let mut out = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after });
+    if let Some(l) = level {
+        out["level"] = json!(l);
+    }
+    Ok(out)
 }
 
 fn add_anchor_points(s: &mut Session, _: &Value) -> Result<Value> {

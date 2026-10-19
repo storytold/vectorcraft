@@ -89,7 +89,8 @@ const SCRIPTS: usize = 4;
 
 fn script_label(i: usize) -> &'static str {
     match i {
-        1 => tl!("Japanese"),
+        // CJK families use the `japanese` font trait; Chinese UI calls this 汉字 (#2206).
+        1 => crate::i18n::tr_ctx(crate::i18n::current(), "font-script", "Japanese"),
         2 => tl!("Latin"),
         3 => tl!("Thai"),
         _ => tl!("All Scripts"),
@@ -776,6 +777,11 @@ mod tests {
         assert_eq!(passing(japanese), [0, 1]);
         assert_eq!(passing(latin), [0, 2]);
         assert_eq!(super::script_label(3), "Thai");
+        let zh = crate::i18n::Lang::from_code("zh-hans").unwrap();
+        crate::i18n::set_current(zh);
+        assert_eq!(super::script_label(1), "汉字");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(super::script_label(1), "Japanese");
     }
 
     /// #2277: the list's scroll bar has a column of its own, so the stars at the rows' right ends

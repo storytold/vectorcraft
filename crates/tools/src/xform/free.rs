@@ -189,7 +189,7 @@ impl FreeTransformTool {
             Op::Corners(h, mode) => {
                 let q = distort_quad(d.rect, h, delta, mode);
                 self.quad = Some(q);
-                self.measure = None;
+                self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(delta.x, delta.y)));
                 let corners: Vec<Value> = q.iter().map(|c| json!([c.x, c.y])).collect();
                 return Action::Preview("object.distort".into(), json!({ "corners": corners, "from": [d.rect.x0, d.rect.y0, d.rect.x1, d.rect.y1] }));
             }
@@ -235,7 +235,7 @@ impl Tool for FreeTransformTool {
                 self.drag = None;
                 let Some(r) = selection_bounds(cx) else { return vec![] };
                 if let Some(op) = self.classify(cx, r, p, ev.mods) {
-                    self.targets = op.handle().is_some().then(|| PointSnap::new(cx, || Targets::collect(cx.doc, &cx.selection.objects, None)));
+                    self.targets = op.handle().is_some().then(|| PointSnap::new(cx, || Targets::for_scale(cx)));
                     self.drag = Some(Drag { op, rect: r, start: p, began: false });
                 }
                 vec![]
@@ -519,5 +519,24 @@ mod tests {
         assert_eq!(q[0], Point::new(2.0, 0.0));
         assert_eq!(q[1], Point::new(8.0, 0.0));
         assert_eq!(q[2], Point::new(10.0, 10.0));
+    }
+
+    #[test]
+    fn distort_drag_shows_move_measurement_labels() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = |on: bool| ToolContext { measurement_labels: on, ..cx(&d, &s, &p) };
+        let mut t = FreeTransformTool::default();
+        t.set_option("mode", &json!("distort"));
+        t.pointer(&cx(true), &ev(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&cx(true), &ev(PointerKind::Drag, 220.0, 230.0));
+        let want = cx(true).offset_label(20.0, 30.0);
+        assert!(t.overlays(&cx(true)).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
+        t.pointer(&cx(true), &ev(PointerKind::Up, 220.0, 230.0));
+        t.pointer(&cx(false), &ev(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&cx(false), &ev(PointerKind::Drag, 220.0, 230.0));
+        assert!(t.overlays(&cx(false)).iter().all(|o| !matches!(o, Overlay::Measure { .. })));
     }
 }

@@ -5,7 +5,8 @@
 //! one copies the selection as Copy does, and placing it pastes a copy as Paste does (its images,
 //! symbols, patterns and swatches come along; a swatch name the document gives another colour is
 //! merged into the document's). Items can be put in user-named groups, and a library can be
-//! exported to a `.vclibrary` file and imported from one (#926).
+//! exported to a `.vclibrary` file and imported from one (#926). Items and groups are kept in the
+//! order the Libraries panel shows them, which dragging them there changes.
 
 use std::collections::{HashMap, HashSet};
 
@@ -281,6 +282,25 @@ impl Library {
         }
     }
 
+    /// Move item `r` next to `to`, an item of its kind: just before it, or just after it when
+    /// `after`, in their kind's list (the order the panel shows them in).
+    fn place_next_to(&mut self, r: &ItemRef, to: &ItemRef, after: bool) {
+        fn shift<T>(list: &mut Vec<T>, key: impl Fn(&T) -> &str, from: &str, to: &str, after: bool) {
+            let Some(i) = list.iter().position(|x| key(x) == from) else { return };
+            let item = list.remove(i);
+            let j = list.iter().position(|x| key(x) == to).map_or(list.len(), |j| j + usize::from(after));
+            list.insert(j.min(list.len()), item);
+        }
+        let (from, to_key) = (r.item.as_str(), to.item.as_str());
+        match r.kind {
+            ItemKind::Color => shift(&mut self.colors, |c| c.name.as_str(), from, to_key, after),
+            ItemKind::CharStyle => shift(&mut self.char_styles, |c| c.name.as_str(), from, to_key, after),
+            ItemKind::ParaStyle => shift(&mut self.para_styles, |c| c.name.as_str(), from, to_key, after),
+            ItemKind::Graphic => shift(&mut self.graphics, |g| g.id.as_str(), from, to_key, after),
+            ItemKind::Unknown => {}
+        }
+    }
+
     /// Make a library read from a file (hand-edited, imported) safe and consistent: at most
     /// [`MAX_ITEMS`] items of each kind and [`MAX_GROUPS`] groups, names clipped to [`MAX_NAME`]
     /// characters and unique within their kind (a repeated one gets a number), sizes finite, a
@@ -552,9 +572,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Library Item to Group",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), group?: name (null or none: out of its group)} put an item in a group (out of the one it was in) → {library, kind, item, group: name or null}",
+            "{library?, kind, item: name (graphic: id or name), group?: name (null or none: out of its group), before?: item | after?: item (an item of the same kind, named as `item` is)} put an item in a group (out of the one it was in); with `before` or `after`, also move it just before or after that item in the order its kind is shown in, as dragging it in the Libraries panel does → {library, kind, item, group: name or null}",
             always,
             move_item
+        ),
+        cmd!(
+            "library.moveGroup",
+            "Move Library Group",
+            [],
+            None,
+            "{library?, group: name, to: index} move a group to position `to` of the library's groups (0 = first; past the end: last), as dragging its header in the Libraries panel does → {library, group, to: where it went}",
+            always,
+            move_group
         ),
         cmd!(
             query "library.export",
@@ -1023,18 +1052,51 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.moveItem";
     let (id, kind, item) = item_param(s, p, C)?;
     let group = str_param(p, "group");
+    let next_to = match (str_param(p, "before"), str_param(p, "after")) {
+        (Some(_), Some(_)) => return Err(bad(C, "give `before` or `after`, not both")),
+        (Some(b), None) => Some((b, false)),
+        (None, Some(a)) => Some((a, true)),
+        (None, None) => None,
+    };
     let (key, to) = s.libraries.change(&id, |lib| {
-        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
+        let missing = |item: &str| bad(C, format!("the library has no item `{item}`"));
+        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| missing(item))?;
         let at = group.map(|g| group_at(lib, g, C)).transpose()?;
+        let next_to = next_to
+            .map(|(other, after)| Ok::<_, EngineError>((lib.item_ref(kind.item_kind(), other).ok_or_else(|| missing(other))?, after)))
+            .transpose()?;
+        if let Some((other, after)) = &next_to
+            && *other != r
+        {
+            lib.place_next_to(&r, other, *after);
+        }
         lib.ungroup(&r);
         let key = r.item.clone();
         let to = at.and_then(|i| lib.groups.get_mut(i)).map(|g| {
-            g.items.push(r);
+            // Next to the other item when that is in the group too, else last.
+            let near = next_to.as_ref().and_then(|(other, after)| g.items.iter().position(|x| x == other).map(|j| j + usize::from(*after)));
+            g.items.insert(near.unwrap_or(g.items.len()).min(g.items.len()), r);
             g.name.clone()
         });
         Ok((key, to))
     })?;
     Ok(json!({ "library": id, "kind": str_param(p, "kind"), "item": key, "group": to }))
+}
+
+fn move_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.moveGroup";
+    let id = library_id(s, p, C)?;
+    let group = group_param(p, C)?;
+    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(C, "missing `to` (an index)"))?;
+    let (name, at) = s.libraries.change(&id, |lib| {
+        let i = group_at(lib, group, C)?;
+        let g = lib.groups.remove(i);
+        let at = usize::try_from(to).unwrap_or(usize::MAX).min(lib.groups.len());
+        let name = g.name.clone();
+        lib.groups.insert(at, g);
+        Ok((name, at))
+    })?;
+    Ok(json!({ "library": id, "group": name, "to": at }))
 }
 
 fn export(s: &mut Session, p: &Value) -> Result<Value> {

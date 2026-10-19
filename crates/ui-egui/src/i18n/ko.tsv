@@ -258,6 +258,8 @@
 	Large Gaps	큰 간격
 	Gap Preview Color:	간격 미리 보기 색상:
 	Close Gaps With Paths	패스로 간격 닫기
+	Select Fills	칠 선택
+	Select Strokes	선 선택
 	Image Trace	이미지 추적
 	Image Tracing	이미지 추적
 	Tracing Presets	추적 프리셋
@@ -1473,6 +1475,7 @@
 	Fill Rule	칠 규칙
 	Fill and Stroke	칠과 선
 	Fill new strokes	새 선 칠하기
+	Alt key toggles to Smooth Tool	Alt 키로 매끄럽게 도구로 전환
 	Keep selected	선택 유지
 	Merge only with selection	선택 영역과만 병합
 	Fill:	칠:
@@ -1655,6 +1658,12 @@
 	Release Envelope	엔벨로프 해제
 	Release Image Trace	이미지 추적 해제
 	Release Intertwine	교차 해제
+	Objects on Path	패스 위 개체
+	Attach	부착
+	Objects on Path Options	패스 위 개체 옵션
+	Objects on Path Tool	패스 위 개체 도구
+	Attach Objects on Path	패스 위 개체 부착
+	Expand Objects on Path	패스 위 개체 확장
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -1906,6 +1915,7 @@
 	Load Text into Clipboard	텍스트를 클립보드로 불러오기
 	Local Libraries	로컬 라이브러리
 	Locate Object	개체 찾기
+	Locate Selected Objects	선택한 개체 찾기
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
@@ -2230,6 +2240,7 @@
 	Output condition:	출력 조건:
 	Output intent profile:	출력 의도 프로파일:
 	Output:	출력:
+	Overlap	겹침
 	Overlap:	겹침:
 	Overlapping	겹침
 	Overlay	오버레이
@@ -2750,6 +2761,8 @@ mark-style	Japanese	일본식
 	Show Note	메모 표시
 	Show Options	옵션 표시
 	Show Original Path	원래 패스 표시
+	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
+	Auto-Simplify	자동 단순화
 	Color Panel Options	색상 패널 옵션
 	Show Package	패키지 표시
 	Show Panel	패널 표시
@@ -2815,6 +2828,7 @@ mark-style	Japanese	일본식
 	Source Image	원본 이미지
 	Image Trace View	이미지 추적 보기
 	Snap Options	스냅 옵션
+	Snap to Unit	단위에 스냅
 	Snapping Tolerance	스냅 허용 오차
 	Soft Light	소프트 라이트
 	Solid	단색
@@ -2897,7 +2911,7 @@ mark-style	Japanese	일본식
 	Delete Library Item	라이브러리 항목 삭제
 	No results	결과 없음
 	No items in this library match “{query}”.	이 라이브러리에 “{query}”와(과) 일치하는 항목이 없습니다.
-	Right-click an item to move it into this group.	항목을 마우스 오른쪽 버튼으로 클릭해 이 그룹으로 이동하세요.
+	Drag an item here, or right-click one, to put it in this group.	항목을 여기로 끌어 놓거나 마우스 오른쪽 버튼으로 클릭해 이 그룹에 넣으세요.
 	New Group	새 그룹
 	New Group…	새 그룹…
 	Move to Group	그룹으로 이동
@@ -3951,6 +3965,7 @@ theme	Appearance	외관
 @msg	pattern missing	패턴이 없습니다
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
+@msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
 @msg	select the art to repeat	반복할 아트웍을 선택하세요
 @msg	the document has no patterns	문서에 패턴이 없습니다
 @msg	no artboard	아트보드가 없습니다
@@ -4145,6 +4160,7 @@ theme	Appearance	외관
 @msg	no blend options	혼합 옵션이 없습니다
 @msg	bad color {v}	잘못된 색상 {v}
 @msg	the Color Picker is not open	색상 피커가 열려 있지 않습니다
+@msg	the Simplify slider is not open	단순화 슬라이더가 열려 있지 않습니다
 @msg	the screen color sampler is already open	화면 색상 추출기가 이미 열려 있습니다
 @msg	this system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
 @msg	Corners edits the corners of a path	모퉁이는 패스의 모퉁이를 편집합니다
@@ -4729,6 +4745,7 @@ lighting	Light	광원
 @msg	choose a destination folder	대상 폴더를 선택하세요
 @msg	choose a source folder	소스 폴더를 선택하세요
 @msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	데이터 세트 {name}에서 적용된 항목이 없습니다: 값이 있는 변수에 연결된 개체가 없습니다
 @msg	the action has no steps	액션에 단계가 없습니다
 
 # User Interface › Accent Color
@@ -4803,3 +4820,19 @@ lighting	Light	광원
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
 # Select by Color (select.color)
 	Select by Color	색상별 선택
+	Move Anchor Point	앵커 포인트 이동
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label}은(는) 문서의 아트보드 {n}개 중 1개만 유지하며 파일은 아트보드 하나로 다시 열립니다. 모두 유지하려면 편집 기능 보존을 켜십시오.
+	Chalk & Charcoal…	분필과 목탄…
+	Chalk & Charcoal	분필과 목탄
+	Graphic Pen…	그래픽 펜…
+	Graphic Pen	그래픽 펜
+	Reticulation…	망사 효과…
+	Reticulation	망사 효과
+	Plastic Wrap…	비닐 랩…
+	Plastic Wrap	비닐 랩
+	Chrome…	크롬…
+	Chrome	크롬
+	Drop here to take it out of its group	그룹에서 빼려면 여기에 놓으세요
+	Move Library Group	라이브러리 그룹 이동
+	Plaster…	석고…
+	Plaster	석고

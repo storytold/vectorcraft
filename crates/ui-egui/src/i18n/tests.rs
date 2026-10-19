@@ -1648,6 +1648,23 @@ fn align_reflect_and_shear_param_errors_are_translated() {
     }
 }
 
+/// The warning that a data set with no value for a bound variable gives, which the status bar
+/// shows and the scan above doesn't read, is translated in each language of [`COMPLETE_MESSAGES`],
+/// with the data set's name kept.
+#[test]
+fn the_data_set_applied_nothing_warning_is_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "name,Name\nRow 7,Ann\n"})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "Row 7"})).unwrap();
+    let warning = v["warning"].as_str().unwrap();
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).unwrap(), warning);
+        assert!(shown.contains("Row 7") && !shown.contains("was applied"), "{code}: {shown}");
+    }
+}
+
 /// The parameter errors of the blend spine commands (Move Spine Point, Reshape Spine Segment, Add
 /// Spine Point and Delete Spine Point, which Direct Selection, the Pen and the Anchor Point tool
 /// send), whose text the scan above doesn't read, are translated whole in each language of

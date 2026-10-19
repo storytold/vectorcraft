@@ -1024,6 +1024,7 @@
 	Fill (X), double-click for the Color Picker	Γέμισμα (X), διπλό κλικ για τον επιλογέα χρώματος
 	Fill and Stroke	Γέμισμα και περίγραμμα
 	Fill new strokes	Γέμισμα νέων περιγραμμάτων
+	Alt key toggles to Smooth Tool	Το πλήκτρο Alt αλλάζει στο εργαλείο Εξομάλυνση (Smooth Tool)
 	Fill Color	Χρώμα γεμίσματος
 	Fill New Type Objects With Placeholder Text	Συμπλήρωση νέων αντικειμένων κειμένου με κείμενο υπόδειξης
 	Fill Rule	Κανόνας γεμίσματος
@@ -1139,6 +1140,8 @@
 	Large Gaps	Μεγάλα διάκενα
 	Gap Preview Color:	Χρώμα προεπισκόπησης διακένων:
 	Close Gaps With Paths	Κλείσιμο διακένων με διαδρομές
+	Select Fills	Επιλογή γεμισμάτων
+	Select Strokes	Επιλογή περιγραμμάτων
 	Gaussian Blur…	Θόλωση Γκάους…
 	General	Γενικά
 	General › Placement › X	Γενικά › Τοποθέτηση › X
@@ -1333,6 +1336,12 @@
 	Release Blend	Αποδέσμευση ανάμειξης
 	Release Envelope	Αποδέσμευση περιβλήματος
 	Release Intertwine	Αποδέσμευση διαπλοκής
+	Objects on Path	Αντικείμενα σε διαδρομή
+	Attach	Προσάρτηση
+	Objects on Path Options	Επιλογές αντικειμένων σε διαδρομή
+	Objects on Path Tool	Αντικείμενα σε διαδρομή (Objects on Path Tool)
+	Attach Objects on Path	Προσάρτηση αντικειμένων σε διαδρομή
+	Expand Objects on Path	Επέκταση αντικειμένων σε διαδρομή
 	Release Live Paint	Αποδέσμευση δυναμικής βαφής
 	Release Repeat	Αποδέσμευση επανάληψης
 	Release Slice	Αποδέσμευση τομής
@@ -1833,6 +1842,7 @@
 	Snap to Grid	Προσκόλληση στο πλέγμα
 	Snap to Pixel	Προσκόλληση σε εικονοστοιχείο
 	Snap to Point	Προσκόλληση σε σημείο
+	Snap to Unit	Προσκόλληση σε μονάδα
 	Soft Light	Απαλό φως
 	Solid	Συνεχές
 	Spacing:	Απόσταση:
@@ -2457,6 +2467,7 @@ theme	Appearance	Εμφάνιση
 	Load Text into Clipboard	Φόρτωση κειμένου στο πρόχειρο
 	Local Libraries	Τοπικές βιβλιοθήκες
 	Locate Object	Εντοπισμός αντικειμένου
+	Locate Selected Objects	Εντοπισμός επιλεγμένων αντικειμένων
 	Lock (⌘2)	Κλείδωμα (⌘2)
 	Lock Grid	Κλείδωμα πλέγματος
 	Lock Others	Κλείδωμα υπόλοιπων
@@ -2760,6 +2771,7 @@ theme	Appearance	Εμφάνιση
 	Output intent profile:	Προφίλ προορισμού εξόδου:
 	Output White	Λευκό εξόδου
 	Output › Mode	Έξοδος › Λειτουργία
+	Overlap	Επικάλυψη
 	Overlap:	Επικάλυψη:
 	Overlapping	Επικαλυπτόμενα
 	Overprint	Υπερεκτύπωση
@@ -3314,6 +3326,8 @@ theme	Appearance	Εμφάνιση
 	Show Note	Εμφάνιση σημείωσης
 	Show Options	Εμφάνιση επιλογών
 	Show Original Path	Εμφάνιση αρχικής διαδρομής
+	Open this dialog with these settings next time	Άνοιγμα αυτού του παραθύρου με αυτές τις ρυθμίσεις την επόμενη φορά
+	Auto-Simplify	Αυτόματη απλοποίηση
 	Show Package	Εμφάνιση συσκευασίας
 	Show Panel	Εμφάνιση πίνακα
 	Show Pattern Swatches	Εμφάνιση δειγμάτων μοτίβου
@@ -3478,7 +3492,7 @@ theme	Appearance	Εμφάνιση
 	Delete Library Item	Διαγραφή στοιχείου βιβλιοθήκης
 	No results	Δεν βρέθηκαν αποτελέσματα
 	No items in this library match “{query}”.	Κανένα στοιχείο αυτής της βιβλιοθήκης δεν αντιστοιχεί στο «{query}».
-	Right-click an item to move it into this group.	Κάντε δεξί κλικ σε στοιχείο για να το μετακινήσετε σε αυτήν την ομάδα.
+	Drag an item here, or right-click one, to put it in this group.	Σύρετε εδώ ένα στοιχείο ή κάντε δεξί κλικ σε ένα για να το βάλετε σε αυτήν την ομάδα.
 	Move to Group	Μετακίνηση σε ομάδα
 	No Group	Χωρίς ομάδα
 	Import Library…	Εισαγωγή βιβλιοθήκης…
@@ -5093,13 +5107,16 @@ effect	Points	Σημεία
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
 @msg	open a document with data sets	ανοίξτε ένα έγγραφο με σύνολα δεδομένων
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	δεν εφαρμόστηκε τίποτα από το σύνολο δεδομένων {name}: κανένα αντικείμενο δεν είναι συνδεδεμένο με μεταβλητή για την οποία έχει τιμή
 @msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής
+@msg	select an Objects on Path group	επιλέξτε μια ομάδα αντικειμένων σε διαδρομή
 @msg	span must be "object" or "selection", got {v}	το span πρέπει να είναι "object" ή "selection", δόθηκε {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: το "selection" τοποθετεί ένα `gradient`, όχι δείγμα χρώματος
 @msg	span: "selection" places a gradient: give `gradient`	span: το "selection" τοποθετεί ντεγκραντέ: δώστε `gradient`
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό ή ακτινικό ντεγκραντέ, όχι ελεύθερης μορφής
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: το "selection" τοποθετεί το ίδιο το ντεγκραντέ: παραλείψτε τα `start` και `end` (το τοποθετούν ήδη σε συντεταγμένες εγγράφου)
 @msg	the Color Picker is not open	ο επιλογέας χρώματος δεν είναι ανοιχτός
+@msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
 @msg	the action has no steps	η ενέργεια δεν έχει βήματα
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	τα επίπεδα του αρχείου δεν διαβάστηκαν ({_1}): εισάγεται ως η σελίδα του, σε ένα επίπεδο
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	τα επίπεδα του αρχείου δεν διαβάστηκαν από τα δεδομένα επεξεργασίας του ({_1}): προέρχονται από το τμήμα PDF του
@@ -5178,3 +5195,19 @@ effect	Points	Σημεία
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
+	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	Το {label} διατηρεί 1 από τους {n} πίνακες σχεδίασης του εγγράφου: το αρχείο ανοίγει ξανά με μία. Ενεργοποιήστε τη Διατήρηση δυνατοτήτων επεξεργασίας για να τους κρατήσετε όλους.
+	Chalk & Charcoal…	Κιμωλία και κάρβουνο…
+	Chalk & Charcoal	Κιμωλία και κάρβουνο
+	Graphic Pen…	Γραφική πένα…
+	Graphic Pen	Γραφική πένα
+	Reticulation…	Δικτύωση…
+	Reticulation	Δικτύωση
+	Plastic Wrap…	Πλαστική μεμβράνη…
+	Plastic Wrap	Πλαστική μεμβράνη
+	Chrome…	Χρώμιο…
+	Chrome	Χρώμιο
+	Drop here to take it out of its group	Αφήστε εδώ για να το βγάλετε από την ομάδα του
+	Move Library Group	Μετακίνηση ομάδας βιβλιοθήκης
+	Plaster…	Γύψος…
+	Plaster	Γύψος

@@ -1072,6 +1072,7 @@
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
 	Fill and Stroke	Заливка та обведення
 	Fill new strokes	Заповнювати нові обведення
+	Alt key toggles to Smooth Tool	Клавіша Alt перемикає на інструмент «Згладжування»
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
 	Fill Color	Колір заливки
@@ -1202,6 +1203,8 @@ file-filter	Templates	Шаблони
 	Large Gaps	Великі проміжки
 	Gap Preview Color:	Колір перегляду проміжків:
 	Close Gaps With Paths	Закрити проміжки контурами
+	Select Fills	Виділяти заливки
+	Select Strokes	Виділяти обведення
 	Gaussian Blur…	Розмиття за Гауссом…
 	General	Загальні
 	General › Placement › X	Загальні › Розміщення › X
@@ -1409,6 +1412,12 @@ file-filter	Templates	Шаблони
 	Release Envelope	Звільнити оболонку
 	Release Image Trace	Звільнити трасування зображення
 	Release Intertwine	Звільнити переплетення
+	Objects on Path	Об’єкти на контурі
+	Attach	Прикріпити
+	Objects on Path Options	Параметри об’єктів на контурі
+	Objects on Path Tool	Інструмент «Об’єкти на контурі»
+	Attach Objects on Path	Прикріпити об’єкти до контуру
+	Expand Objects on Path	Розібрати об’єкти на контурі
 	Release Live Paint	Звільнити швидку заливку
 	Release Repeat	Звільнити повтор
 	Release Slice	Звільнити фрагмент
@@ -1733,6 +1742,7 @@ file-filter	Templates	Шаблони
 	Load Text into Clipboard	Завантажити текст у буфер обміну
 	Local Libraries	Локальні бібліотеки
 	Locate Object	Знайти об’єкт
+	Locate Selected Objects	Знаходити виділені об’єкти
 	Location	Розташування
 	Location:	Розташування:
 	Lock	Заблокувати
@@ -2163,6 +2173,7 @@ file-filter	Templates	Шаблони
 	Output White	Вихідний білий
 	Output › Mode	Виведення › Режим
 	Output:	Виведення:
+	Overlap	Перекриття
 	Overlap:	Перекриття:
 	Overlapping	Перекривається
 	Overlay	Накладання
@@ -2940,6 +2951,8 @@ mark-style	Japanese	Японський
 	Show Note	Показати примітку
 	Show Options	Показати параметри
 	Show Original Path	Показати початковий контур
+	Open this dialog with these settings next time	Наступного разу відкривати це діалогове вікно з цими параметрами
+	Auto-Simplify	Автоматичне спрощення
 	Color Panel Options	Параметри панелі «Колір»
 	Show Package	Показати пакет
 	Show Panel	Показати панель
@@ -3037,6 +3050,7 @@ effect	Points	Точки
 	Snap to Pixel	Прив’язати до пікселя
 	Precise Cursors	Точні курсори
 	Snap to Point	Прив’язати до точки
+	Snap to Unit	Прив’язати до одиниць
 	Snapping Tolerance	Допуск прив’язки
 	Social Square Post 1080×1080	Квадратний пост для соцмереж 1080×1080
 	Soft Light	М’яке світло
@@ -3164,7 +3178,7 @@ effect	Points	Точки
 	Delete Library Item	Видалити елемент бібліотеки
 	No results	Нічого не знайдено
 	No items in this library match “{query}”.	У цій бібліотеці немає елементів, що відповідають «{query}».
-	Right-click an item to move it into this group.	Клацніть елемент правою кнопкою миші, щоб перемістити його в цю групу.
+	Drag an item here, or right-click one, to put it in this group.	Перетягніть сюди елемент або клацніть його правою кнопкою миші, щоб покласти його в цю групу.
 	New Group	Нова група
 	New Group…	Нова група…
 	Move to Group	Перемістити в групу
@@ -3883,6 +3897,7 @@ axis	Both	Обидві
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
 @msg	the Color Picker is not open	палітра кольорів не відкрита
+@msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
 @msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
@@ -4120,6 +4135,7 @@ axis	Both	Обидві
 @msg	select a linked image: an embedded one has no file	виділіть пов’язане зображення: у вбудованого немає файлу
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
+@msg	select an Objects on Path group	виділіть групу об’єктів на контурі
 @msg	select a stroke with a variable width	виділіть обведення зі змінною шириною
 @msg	select a symbol instance	виділіть екземпляр символу
 @msg	select an Image Trace object	виділіть об’єкт трасування зображення
@@ -4746,6 +4762,7 @@ lighting	Light	Світло
 @msg	choose a destination folder	виберіть папку призначення
 @msg	choose a source folder	виберіть вихідну папку
 @msg	open a document with data sets	відкрийте документ із наборами даних
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	з набору даних {name} нічого не застосовано: жоден об’єкт не прив’язано до змінної, для якої в ньому є значення
 @msg	the action has no steps	у дії немає кроків
 
 # User Interface › Accent Color
@@ -4820,3 +4837,19 @@ lighting	Light	Світло
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	змінні та набори даних файлу не прочитано (змінних: {variables}, наборів даних: {data_sets}): панель «Змінні» їх не показує
 # Select by Color (select.color)
 	Select by Color	Виділити за кольором
+	Move Anchor Point	Перемістити опорну точку
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} зберігає 1 з {n} монтажних областей документа: файл відкриється знову з однією. Увімкніть «Зберігати можливості редагування», щоб зберегти всі.
+	Chalk & Charcoal…	Крейда і вугілля…
+	Chalk & Charcoal	Крейда і вугілля
+	Graphic Pen…	Графічне перо…
+	Graphic Pen	Графічне перо
+	Reticulation…	Ретикуляція…
+	Reticulation	Ретикуляція
+	Plastic Wrap…	Целофанова плівка…
+	Plastic Wrap	Целофанова плівка
+	Chrome…	Хром…
+	Chrome	Хром
+	Drop here to take it out of its group	Відпустіть тут, щоб вийняти його з групи
+	Move Library Group	Перемістити групу бібліотеки
+	Plaster…	Гіпс…
+	Plaster	Гіпс

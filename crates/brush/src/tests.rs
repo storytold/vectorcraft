@@ -153,6 +153,28 @@ fn art_brush_between_guides_keeps_ends() {
 }
 
 #[test]
+fn art_brush_overlap_splits_at_corners() {
+    let mut bp = BezPath::new();
+    bp.move_to((0.0, 0.0));
+    bp.line_to((100.0, 0.0));
+    bp.line_to((100.0, 100.0));
+    let brush = |overlap: bool| Brush {
+        name: "a".into(),
+        kind: BrushKind::Art(ArtBrush {
+            art: rect_art(10.0, 4.0),
+            scale: ArtScale::Stretch,
+            overlap,
+            colorization: Colorization::None,
+            ..Default::default()
+        }),
+    };
+    let one = stroke_pieces(&Document::new(1.0, 1.0), &brush(false), &bp, &stroke(1.0));
+    let two = stroke_pieces(&Document::new(1.0, 1.0), &brush(true), &bp, &stroke(1.0));
+    assert_eq!(one.len(), 1, "one bent copy along the whole path");
+    assert_eq!(two.len(), 2, "one copy per run between corners");
+}
+
+#[test]
 fn art_brush_follows_curves() {
     let bp = shapes::ellipse(Rect::new(0.0, 0.0, 200.0, 200.0)).to_bezpath();
     let mut bp_open = BezPath::new();

@@ -467,7 +467,11 @@ pub(crate) fn panel_body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width:
                 ui.set_max_height(tall);
                 panels::layers::show(app, ui);
             }
-            Some(DockTab::Libraries) => panels::libraries(app, ui),
+            Some(DockTab::Libraries) => {
+                // Its list scrolls inside `tall` (as in the dock) instead of growing the flyout.
+                ui.set_max_height(tall);
+                panels::libraries(app, ui);
+            }
             None => panels::show_icon_panel(app, ui, id),
         }
     });

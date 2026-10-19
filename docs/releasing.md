@@ -159,6 +159,13 @@ to the target triple, so host build scripts aren't affected.
 `.tar.gz` tree (`bin/`, `share/`). The packages install both programs, the desktop entry, the
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
+**Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
+PSB, `.ps` PostScript and Targa, so file managers list VectorCraft under Open With for them.
+`ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
+documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
+file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.
+A test keeps both files in step with the engine's `OPEN_EXTS`.
+
 The jobs run on `ubuntu-22.04`, the oldest GitHub-hosted image, so the binaries only need
 glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+, Fedora 36+ and RHEL 10. Moving the job to a newer
 image raises that floor, so do it deliberately. After packaging, the job prints the `.deb`'s

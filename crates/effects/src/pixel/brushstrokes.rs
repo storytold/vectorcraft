@@ -516,3 +516,40 @@ pub(super) fn sumi_e(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace,
         *p = premultiply(out, f32::from(p[3]) / 255.0);
     });
 }
+
+const SALT_GRAPHIC: u64 = 200;
+
+/// Graphic Pen: the object redrawn in fine linear ink strokes along `dir`, each `len` (1..15)
+/// points long on white paper; `balance` (0..100) sets the tone threshold (higher draws more
+/// black ink).
+pub(super) fn graphic_pen(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, len: f64, balance: f64, dir: StrokeDirection) {
+    let Some(place) = Place::new(space, w, h) else { return };
+    let len = if len.is_finite() { len.clamp(1.0, 15.0) } else { 1.0 };
+    let smear = Smear::new(px, w, h, &place, len);
+    let tones = Tones::new(px, w, h, TONE_SOFTNESS / place.px);
+    let threshold = 1.0 - balance.clamp(0.0, 100.0) / 100.0;
+    let row = (0.2 * len).max(0.75);
+    let along = dir.along();
+    place.each(px, |x, y, p| {
+        let a = f32::from(p[3]) / 255.0;
+        if a <= 0.0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let (c, stroke_a) = unpremultiply(smear.stroke(SALT_GRAPHIC, q, along, row));
+        let dark = (1.0 - tones.get(x, y)).max(f64::from(1.0 - luma(c)) * f64::from(stroke_a));
+        if dark <= threshold {
+            *p = premultiply([1.0, 1.0, 1.0], a);
+            return;
+        }
+        let weight = ramp((dark - threshold) / (1.0 - threshold).max(1e-3));
+        let u = frame(q, along).0;
+        let on_stroke = {
+            let t = (u / len).rem_euclid(1.0);
+            if t < 0.65 { 1.0 } else { 0.0 }
+        };
+        let grain = 0.08 * streak(SALT_GRAPHIC + 1, q, along, 0.35 * len, 0.5);
+        let ink = (weight * on_stroke + grain).clamp(0.0, 1.0);
+        *p = premultiply([(1.0 - ink) as f32; 3], a);
+    });
+}

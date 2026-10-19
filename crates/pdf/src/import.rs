@@ -149,6 +149,10 @@ pub const PAST_PAGE_NOTE: &str = "art reaching past the page was clipped to it, 
 
 /// Warning: glyphs were kept as outlines rather than read as type.
 pub const OUTLINED_TEXT_NOTE: &str = "text was converted to outlines";
+/// Warning: text drawn invisibly (text rendering mode 3, as a scanned page's OCR layer is) that
+/// can't come in as type (text read as outlines, or a Type 3 font) was left out: as outlines it
+/// would draw nothing (#2675).
+pub const INVISIBLE_TEXT_NOTE: &str = "invisible text (such as a scanned page's searchable OCR layer) that couldn't be read as type was left out";
 /// Warning: glyphs that differ from the installed font of their name were kept as outlines.
 pub const UNMATCHED_GLYPHS_NOTE: &str = "text whose glyphs differ from the installed font of the same name was kept as outlines";
 /// The end of the warning that glyphs whose characters the file doesn't name were kept as
@@ -1652,13 +1656,14 @@ impl<'p> Builder<'p> {
     }
 
     /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
-    /// its outline (no Unicode text, mirrored, or not type mode).
+    /// its outline (no Unicode text, mirrored, or not type mode). No `paint`: invisible text,
+    /// type with neither fill nor stroke.
     fn type_glyph(
         &mut self,
         o: &craft_pdf::interpret::font::OutlineGlyph,
         m: Affine,
         scale: f64,
-        paint: &craft_pdf::interpret::Paint<'_>,
+        paint: Option<&craft_pdf::interpret::Paint<'_>>,
         stroke: Option<&StrokeProps>,
         overprint: bool,
     ) -> bool {
@@ -1690,7 +1695,8 @@ impl<'p> Builder<'p> {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
             None => {
-                if o.as_unicode().is_some_and(|u| replacement(&u)) {
+                // Invisible text isn't kept as outlines: the caller says it was left out.
+                if paint.is_some() && o.as_unicode().is_some_and(|u| replacement(&u)) {
                     let name = self.font_name(key, o).family;
                     self.warn(&format!("text in {name} {UNNAMED_CHARACTERS_NOTE}"));
                 }
@@ -1716,16 +1722,18 @@ impl<'p> Builder<'p> {
         {
             let decided = match self.matched.get(&key) {
                 Some(m) => m.clone(),
-                // A glyph that can't be compared (several characters, a vertical form) decides
-                // nothing: it takes the face of its name until one that can be compared does.
-                None if comparable(&text, upright).is_none() => Some(face.clone()),
+                // A glyph that can't be compared (several characters, a vertical form) or that
+                // shows nothing (invisible text) decides nothing: it takes the face of its name
+                // until one that can be compared does.
+                None if paint.is_none() || comparable(&text, upright).is_none() => Some(face.clone()),
                 None => {
                     let m = matching_face(face, &text, o, upright);
                     self.matched.insert(key, m.clone());
                     m
                 }
             };
-            let Some(f) = decided else {
+            // Invisible text shows no glyphs that could differ: it keeps the face of its name.
+            let Some(f) = decided.or_else(|| paint.is_none().then(|| face.clone())) else {
                 self.warn(UNMATCHED_GLYPHS_NOTE);
                 return false;
             };
@@ -1743,8 +1751,14 @@ impl<'p> Builder<'p> {
             None if self.matched.contains_key(&key) => self.versions.entry(key).or_insert_with(|| named(&info.face)).clone(),
             None => named(&info.face),
         };
-        let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
-        let stroke = stroke.map(|p| (paint.clone(), line_width(p, scale)));
+        let (paint, opacity) = match paint {
+            Some(p) => {
+                let (paint, opacity) = self.paint(p, stroke.is_some(), self.walked(true));
+                (Some(paint), opacity)
+            }
+            None => (None, 1.0),
+        };
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
         let look = Look {
             font: key,
             family: info.family,
@@ -1754,7 +1768,7 @@ impl<'p> Builder<'p> {
             h_scale: at.h_scale,
             overprint_fill: stroke.is_none() && overprint,
             overprint_stroke: stroke.is_some() && overprint,
-            fill: stroke.is_none().then_some(paint),
+            fill: if stroke.is_none() { paint } else { None },
             stroke,
         };
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
@@ -1965,7 +1979,18 @@ impl<'a> Device<'a> for Builder<'_> {
     ) {
         self.pending = false;
         let stroke = match draw_mode {
-            GlyphDrawMode::Invisible => return,
+            // Invisible text (a scanned page's recognized text, over the scan) draws nothing but
+            // is still text: type with neither fill nor stroke, so it stays searchable.
+            GlyphDrawMode::Invisible => {
+                let typed = match glyph {
+                    Glyph::Outline(o) => self.type_glyph(o, transform * glyph_transform, mean_scale(transform), None, None, false),
+                    Glyph::Type3(_) => false,
+                };
+                if !typed {
+                    self.warn(INVISIBLE_TEXT_NOTE);
+                }
+                return;
+            }
             GlyphDrawMode::Fill => None,
             GlyphDrawMode::Stroke(p) => Some(p.clone()),
         };
@@ -1973,7 +1998,7 @@ impl<'a> Device<'a> for Builder<'_> {
             Glyph::Outline(o) => {
                 let scale = mean_scale(transform);
                 let overprint = self.glyph_overprint(stroke.is_some());
-                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke.as_ref(), overprint) {
+                if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
                     return;
                 }
                 self.flush_text();

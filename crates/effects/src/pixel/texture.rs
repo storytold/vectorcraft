@@ -128,7 +128,7 @@ impl Light {
     }
 
     /// The unit vector towards the light (document axes, y down).
-    fn toward(self) -> Vec2 {
+    pub(super) fn toward(self) -> Vec2 {
         let d = FRAC_1_SQRT_2;
         match self {
             Light::Bottom => Vec2::new(0.0, 1.0),

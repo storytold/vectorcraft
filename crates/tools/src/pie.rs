@@ -187,8 +187,8 @@ impl PieDrag {
     }
 
     /// The angle readout next to the pointer.
-    pub fn overlays(&self) -> Vec<Overlay> {
-        if !self.began {
+    pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if !self.began || !cx.measurement_labels {
             return vec![];
         }
         vec![Overlay::Measure { p: self.at, text: format!("{:.1}°", self.angle) }]
@@ -275,6 +275,8 @@ mod tests {
         assert!(v.get("pieStart").is_none(), "{v}");
         assert!(t.transforming());
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "90.0°")));
+        let quiet = ToolContext { measurement_labels: false, ..cx(&d, &s, &p) };
+        assert!(!t.overlays(&quiet).iter().any(|o| matches!(o, Overlay::Measure { .. })));
         // Below the center and to the left: 225°, on the ellipse's own angles (not the page's).
         let a = t.pointer(&c, &ev(PointerKind::Drag, Point::new(100.0, 200.0)));
         assert!(matches!(&a[0], Action::Preview(_, v) if (v["pieEnd"].as_f64().unwrap() - 225.0).abs() < 1e-9), "{a:?}");

@@ -143,8 +143,8 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     let out = export(&d, &opts(&d)).unwrap();
     assert_eq!(
         kinds(&out),
-        ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "SPLINE"],
-        "the fill's outline and hatch, then the stroke, then the ellipse's stroke"
+        ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "CIRCLE"],
+        "the fill's outline and hatch, then the stroke, then the circle's stroke"
     );
     let e = entities(&out);
     // The rectangle, y up from the artboard's bottom-left corner: 10..110 × 40..90.
@@ -164,11 +164,9 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     assert_eq!((get(&e[0], 370), get(&e[2], 370)), (None, Some("35")));
     let hatch = &e[1];
     assert_eq!((get(hatch, 2), get(hatch, 70), get(hatch, 91), get(hatch, 93)), (Some("SOLID"), Some("1"), Some("1"), Some("4")));
-    // The ellipse: four cubics through clamped knots.
-    let spline = &e[3];
-    assert_eq!((get(spline, 71), get(spline, 73)), (Some("3"), Some("13")));
-    assert_eq!(get(spline, 70), Some("9"), "closed planar spline (#1299): 1 = closed, 8 = planar");
-    assert_eq!(all(spline, 40), [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]);
+    // The circular ellipse is preserved as a native circle (#1299).
+    let circle = &e[3];
+    assert_eq!((all(circle, 10), all(circle, 20), all(circle, 40)), (vec![150.0], vec![50.0], vec![30.0]));
     // R14 has lightweight polylines but no lineweights: the stroke is a polyline width.
     let r14 = export(&d, &DxfOptions { version: DxfVersion::R14, ..opts(&d) }).unwrap();
     assert_eq!(get(&entities(&r14)[2], 43), Some("1"));
@@ -177,14 +175,75 @@ fn lines_are_lwpolylines_curves_splines_and_fills_hatches() {
     // R13 has splines and hatches, and polylines of vertices.
     let r13 = export(&d, &DxfOptions { version: DxfVersion::R13, ..opts(&d) }).unwrap();
     let poly = ["POLYLINE", "VERTEX", "VERTEX", "VERTEX", "VERTEX", "SEQEND"];
-    assert_eq!(kinds(&r13), [&poly[..], &["HATCH"], &poly, &["SPLINE"]].concat());
-    // R12: polylines only; the fill is its outline, the ellipse flattened.
+    assert_eq!(kinds(&r13), [&poly[..], &["HATCH"], &poly, &["CIRCLE"]].concat());
+    // R12: visible stroke widths live on old POLYLINE entities, including curved strokes.
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
     let k = kinds(&r12);
     assert!(k.iter().all(|k| matches!(k.as_str(), "POLYLINE" | "VERTEX" | "SEQEND")), "{k:?}");
     assert_eq!(k.iter().filter(|k| *k == "POLYLINE").count(), 3);
-    assert!(k.iter().filter(|k| *k == "VERTEX").count() > 20, "the ellipse is flattened");
+    assert_eq!(k.iter().filter(|k| *k == "CIRCLE").count(), 0);
     assert!(r12.warnings.iter().any(|w| w.contains("R12 has no fills")), "{:?}", r12.warnings);
+}
+
+#[test]
+fn circles_and_circular_arcs_are_native_dxf_entities() {
+    let d = doc_with(|d| {
+        let circle = shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 80.0));
+        let c = Point::new(120.0, 50.0);
+        let r = 30.0;
+        let k = r * shapes::KAPPA;
+        let mut arc = vectorcraft_geom::BezPath::new();
+        arc.move_to(Point::new(c.x + r, c.y));
+        arc.curve_to(Point::new(c.x + r, c.y - k), Point::new(c.x + k, c.y - r), Point::new(c.x, c.y - r));
+        vec![
+            path(d, circle, Paint::None, Paint::solid(Color::BLACK), 1.0),
+            path(d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0),
+        ]
+    });
+    for version in DxfVersion::ALL.into_iter().filter(|version| *version != DxfVersion::R12) {
+        let out = export(&d, &DxfOptions { version, ..opts(&d) }).unwrap();
+        let e = entities(&out);
+        assert_eq!(e.iter().map(|x| kind(x)).collect::<Vec<_>>(), ["CIRCLE", "ARC"], "{version:?}");
+        assert_eq!((all(&e[0], 10), all(&e[0], 20), all(&e[0], 40)), (vec![50.0], vec![50.0], vec![30.0]), "{version:?}");
+        assert_eq!((all(&e[1], 10), all(&e[1], 20), all(&e[1], 40)), (vec![120.0], vec![50.0], vec![30.0]), "{version:?}");
+        assert_eq!((all(&e[1], 50), all(&e[1], 51)), (vec![0.0], vec![90.0]), "{version:?}");
+    }
+
+    // An actual ellipse is not close enough to a circle and remains a spline.
+    let ellipse = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    assert_eq!(kinds(&export(&ellipse, &opts(&ellipse)).unwrap()), ["SPLINE"]);
+}
+
+#[test]
+fn r12_stroked_circles_keep_polyline_width() {
+    let d = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 80.0)), Paint::None, Paint::solid(Color::BLACK), 3.0)]);
+    let out = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    let e = entities(&out);
+    assert_eq!(kind(&e[0]), "POLYLINE");
+    assert_eq!((get(&e[0], 40), get(&e[0], 41)), (Some("3"), Some("3")));
+    assert!(!e.iter().any(|entity| kind(entity) == "CIRCLE"));
+}
+
+#[test]
+fn closed_circular_arc_with_a_closing_chord_is_not_a_circle() {
+    let d = doc_with(|d| {
+        let c = Point::new(50.0, 50.0);
+        let r = 30.0;
+        let k = r * shapes::KAPPA;
+        let mut arc = vectorcraft_geom::BezPath::new();
+        arc.move_to(Point::new(c.x + r, c.y));
+        arc.curve_to(Point::new(c.x + r, c.y - k), Point::new(c.x + k, c.y - r), Point::new(c.x, c.y - r));
+        arc.curve_to(Point::new(c.x - k, c.y - r), Point::new(c.x - r, c.y - k), Point::new(c.x - r, c.y));
+        arc.curve_to(Point::new(c.x - r, c.y + k), Point::new(c.x - k, c.y + r), Point::new(c.x, c.y + r));
+        arc.close_path();
+        vec![path(d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+
+    let modern = export(&d, &opts(&d)).unwrap();
+    assert_eq!(kinds(&modern), ["SPLINE"]);
+    let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    assert!(kinds(&r12).iter().any(|k| k == "POLYLINE"));
+    assert!(!kinds(&r12).iter().any(|k| k == "CIRCLE"));
 }
 
 #[test]
@@ -353,7 +412,7 @@ fn alter_paths_writes_strokes_as_filled_outlines() {
     // Each fill and stroke: its outlines, then its hatch.
     let fill = ["LWPOLYLINE", "HATCH"];
     let rect_stroke = ["LWPOLYLINE", "LWPOLYLINE", "HATCH"];
-    assert_eq!(kinds(&out), [&fill[..], &rect_stroke, &["SPLINE", "SPLINE", "HATCH"]].concat());
+    assert_eq!(kinds(&out), [&fill[..], &rect_stroke, &["CIRCLE", "CIRCLE", "HATCH"]].concat());
     // The rectangle's stroke: an outer and an inner boundary.
     assert_eq!(get(&entities(&out)[4], 91), Some("2"));
     // Preserve Appearance outlines only the strokes a line can't draw.
@@ -362,9 +421,9 @@ fn alter_paths_writes_strokes_as_filled_outlines() {
     if let Some(st) = d.node_mut(rect).and_then(|n| n.appearance.stroke_mut()) {
         st.align = vectorcraft_doc::StrokeAlign::Outside;
     }
-    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), [&fill[..], &rect_stroke, &["SPLINE"]].concat());
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), [&fill[..], &rect_stroke, &["CIRCLE"]].concat());
     let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
-    assert_eq!(kinds(&editable), ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "SPLINE"]);
+    assert_eq!(kinds(&editable), ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "CIRCLE"]);
     assert!(editable.warnings.iter().any(|w| w.contains("stroke alignment")));
 }
 
@@ -451,7 +510,7 @@ fn crop_leaves_out_art_outside_the_region() {
     let d = shapes_doc();
     // Only the ellipse (120..180) reaches into 115..200.
     let o = DxfOptions { region: Rect::new(115.0, 0.0, 200.0, 100.0), crop: true, ..opts(&d) };
-    assert_eq!(kinds(&export(&d, &o).unwrap()), ["SPLINE"]);
+    assert_eq!(kinds(&export(&d, &o).unwrap()), ["CIRCLE"]);
     assert_eq!(kinds(&export(&d, &DxfOptions { crop: false, ..o }).unwrap()).len(), 4);
 }
 

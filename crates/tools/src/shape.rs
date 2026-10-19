@@ -8,7 +8,7 @@
 //! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
 
 use serde_json::{Value, json};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{Point, Rect, Vec2};
 
 use crate::guides::{DrawSnap, Leave, square};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -251,15 +251,21 @@ impl Tool for ShapeTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
-            // A box's size as drawn (from its centre with Alt, square with Shift).
-            let (w, h) = match self.id {
-                "polygon" | "star" | "lineSegment" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
-                _ => {
-                    let r = drag_rect(s, self.last, self.mods);
-                    (r.width(), r.height())
-                }
+            let p = self.last + Vec2::new(cx.tol(12.0), cx.tol(12.0));
+            let text = if self.id == "lineSegment" {
+                cx.segment_measure_label(s, self.last)
+            } else {
+                // A box's size as drawn (from its centre with Alt, square with Shift).
+                let (w, h) = match self.id {
+                    "polygon" | "star" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
+                    _ => {
+                        let r = drag_rect(s, self.last, self.mods);
+                        (r.width(), r.height())
+                    }
+                };
+                cx.size_label(w, h)
             };
-            o.push(Overlay::Measure { p: self.last, text: cx.size_label(w, h) });
+            o.push(Overlay::Measure { p, text });
         }
         o
     }
@@ -422,5 +428,8 @@ mod tests {
         let shift = Mods { shift: true, ..Mods::default() };
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 203.0, 302.0).with_mods(shift));
         assert!(matches!(&a[..], [_, Action::Preview(_, v)] if v["x2"] == 200.0 && (v["y2"].as_f64().unwrap() - 300.0).abs() < 1e-9), "{a:?}");
+        let from = Point::new(300.0, 300.0);
+        let to = Point::new(200.0, 300.0);
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.segment_measure_label(from, to))));
     }
 }

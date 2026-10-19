@@ -1060,6 +1060,7 @@
 	Fill (X), double-click for the Color Picker	Fyllning (X), dubbelklicka för färgväljaren
 	Fill and Stroke	Fyllning och kontur
 	Fill new strokes	Fyll nya konturer
+	Alt key toggles to Smooth Tool	Alt-tangenten växlar till Utjämningsverktyg
 	Fill Color	Fyllnadsfärg
 	Fill New Type Objects With Placeholder Text	Fyll nya textobjekt med platshållartext
 	Fill Rule	Fyllningsregel
@@ -1176,6 +1177,8 @@
 	Large Gaps	Stora mellanrum
 	Gap Preview Color:	Förhandsgranskningsfärg för mellanrum:
 	Close Gaps With Paths	Stäng mellanrum med banor
+	Select Fills	Markera fyllningar
+	Select Strokes	Markera konturer
 	Gaussian Blur…	Gaussisk oskärpa…
 	General	Allmänt
 	General › Placement › X	Allmänt › Placering › X
@@ -1372,6 +1375,12 @@
 	Release Blend	Släpp blandning
 	Release Envelope	Släpp kuvert
 	Release Intertwine	Släpp sammanflätning
+	Objects on Path	Objekt på bana
+	Attach	Fäst
+	Objects on Path Options	Alternativ för objekt på bana
+	Objects on Path Tool	Verktyg för objekt på bana
+	Attach Objects on Path	Fäst objekt på bana
+	Expand Objects on Path	Expandera objekt på bana
 	Release Live Paint	Släpp direktmålning
 	Release Repeat	Släpp upprepning
 	Release Slice	Släpp skiva
@@ -1672,6 +1681,7 @@
 	Load Text into Clipboard	Läs in text till urklipp
 	Local Libraries	Lokala bibliotek
 	Locate Object	Hitta objekt
+	Locate Selected Objects	Hitta markerade objekt
 	Location	Plats
 	Location:	Plats:
 	Lock	Lås
@@ -2102,6 +2112,7 @@
 	Output White	Vitt i utgång
 	Output › Mode	Utgång › Läge
 	Output:	Utgång:
+	Overlap	Överlappning
 	Overlap:	Överlappning:
 	Overlapping	Överlappande
 	Overlay	Överlägg
@@ -2858,6 +2869,8 @@
 	Show Note	Visa anteckning
 	Show Options	Visa alternativ
 	Show Original Path	Visa ursprunglig bana
+	Open this dialog with these settings next time	Öppna den här dialogrutan med de här inställningarna nästa gång
+	Auto-Simplify	Förenkla automatiskt
 	Show Package	Visa paket
 	Show Panel	Visa panel
 	Show Pattern Swatches	Visa mönsterprover
@@ -2952,6 +2965,7 @@
 	Snap to Pixel	Fäst mot pixel
 	Precise Cursors	Exakta markörer
 	Snap to Point	Fäst mot punkt
+	Snap to Unit	Fäst mot enhet
 	Snapping Tolerance	Fästtolerans
 	Social Square Post 1080×1080	Kvadratiskt inlägg för sociala medier 1080×1080
 	Soft Light	Mjukt ljus
@@ -3079,7 +3093,7 @@
 	Delete Library Item	Radera biblioteksobjekt
 	No results	Inga resultat
 	No items in this library match “{query}”.	Inga objekt i det här biblioteket matchar ”{query}”.
-	Right-click an item to move it into this group.	Högerklicka på ett objekt för att flytta det till den här gruppen.
+	Drag an item here, or right-click one, to put it in this group.	Dra hit ett objekt, eller högerklicka på ett, för att lägga det i den här gruppen.
 	New Group	Ny grupp
 	New Group…	Ny grupp…
 	Move to Group	Flytta till grupp
@@ -5097,13 +5111,16 @@ theme	Appearance	Utseende
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp
 @msg	open a document with data sets	öppna ett dokument med datauppsättningar
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	inget i datauppsättningen {name} användes: inget objekt är bundet till en variabel som den har ett värde för
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
+@msg	select an Objects on Path group	markera en grupp med objekt på bana
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en övertoning: ange `gradient`
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" placerar en linjär eller radiell övertoning, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva övertoningen: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
+@msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
 @msg	the action has no steps	åtgärden har inga steg
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lager lästes inte ({_1}): den hämtas in som en sida, i ett enda lager
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lager lästes inte från dess redigeringsdata ({_1}): de kommer från dess PDF-del
@@ -5182,3 +5199,19 @@ theme	Appearance	Utseende
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
+	Move Anchor Point	Flytta ankarpunkt
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behåller 1 av dokumentets {n} ritytor: filen öppnas igen med en. Slå på Bevara redigeringsmöjligheter för att behålla alla.
+	Chalk & Charcoal…	Krita och kol…
+	Chalk & Charcoal	Krita och kol
+	Graphic Pen…	Grafisk penna…
+	Graphic Pen	Grafisk penna
+	Reticulation…	Retikulering…
+	Reticulation	Retikulering
+	Plastic Wrap…	Plastfolie…
+	Plastic Wrap	Plastfolie
+	Chrome…	Krom…
+	Chrome	Krom
+	Drop here to take it out of its group	Släpp här för att ta ut det ur gruppen
+	Move Library Group	Flytta biblioteksgrupp
+	Plaster…	Gips…
+	Plaster	Gips

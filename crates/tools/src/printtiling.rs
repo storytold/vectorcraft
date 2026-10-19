@@ -79,7 +79,7 @@ impl Tool for PrintTilingTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match self.drag {
             // How far the corner is from the artboard's.
-            Some((_, Some(r))) if self.began => {
+            Some((_, Some(r))) if self.began && cx.measurement_labels => {
                 vec![Overlay::Measure { p: self.last, text: cx.offset_label(self.last.x - r.x0, self.last.y - r.y0) }]
             }
             _ => vec![],
@@ -122,6 +122,8 @@ mod tests {
         let a = t.pointer(&c, &ev(PointerKind::Drag, 2.0, 497.0));
         assert_eq!(a, vec![Action::Preview("print.tiling.set".into(), json!({"origin": [0.0, 500.0], "artboard": 0}))]);
         assert!(matches!(t.overlays(&c).as_slice(), [Overlay::Measure { .. }]));
+        let quiet = ToolContext { measurement_labels: false, ..cx(&d, &s, &pd) };
+        assert!(t.overlays(&quiet).is_empty());
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 2.0, 497.0)), vec![Action::Commit]);
         assert!(!t.busy());
         // A click alone changes nothing; a double click resets.

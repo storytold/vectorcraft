@@ -155,6 +155,60 @@ fn symbol_type_redraws_when_its_font_becomes_available() {
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
 
+/// Type that a geometry effect outlines redraws in a font that becomes available: the art drawn for
+/// the effects of the type, of a group that holds it and of a symbol instance whose art holds it
+/// is made again when the fonts change.
+#[test]
+fn type_with_geometry_effects_redraws_when_its_font_becomes_available() {
+    let _adding = adding_fonts();
+    use vectorcraft_doc::Effect;
+    let moved = || Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true };
+    let cases = [
+        ("Moving Serif 4", "the type with a Transform effect"),
+        ("Shadow Serif 5", "the type with a Transform effect and a drop shadow"),
+        ("Massed Serif 4", "the group with a Transform effect"),
+        ("Stamps Serif 4", "the symbol instance with a Transform effect"),
+        ("Darker Serif 4", "the type with a Transform effect in Multiply"),
+    ];
+    for (i, (family, what)) in cases.into_iter().enumerate() {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 50.0, font_family: family.into(), ..Default::default() };
+        let at = if i == 3 { Point::new(-140.0, 20.0) } else { Point::new(10.0, 80.0) };
+        let mut object = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(at, "Hamburg", style))));
+        match i {
+            0 => object.appearance.effects.push(moved()),
+            1 => {
+                object.appearance.effects.push(moved());
+                let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+                object.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params, visible: true });
+            }
+            2 => {
+                object = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                object.appearance.effects.push(moved());
+            }
+            3 => {
+                let art = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+                object = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) });
+                object.appearance.effects.push(moved());
+            }
+            _ => {
+                object.appearance.effects.push(moved());
+                object.blend = vectorcraft_color::BlendMode::Multiply;
+            }
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, object).unwrap();
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        assert!(vectorcraft_text::FontDb::global().add_font(serif_as(family)) > 0);
+        let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        assert_ne!(before, after, "{what}: drawn in the font that arrived");
+        assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "{what}: as a new renderer draws it");
+    }
+}
+
 /// Type that an envelope bends redraws in a font that becomes available, in the envelope and in
 /// the art of a symbol whose instance an envelope bends: the envelopes are evaluated again when the
 /// fonts change.

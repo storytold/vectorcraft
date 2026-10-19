@@ -410,8 +410,9 @@ type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
 /// A clipping path (kept alive) and what it paints: its fills and its strokes ([`Node::clip_paint`]).
 type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 /// An object with effects (kept alive), the art drawn for it ([`Renderer::fx_art`]), and, when that
-/// art can be made from evaluated live objects (`fx::evaluates_live`), the inputs of their
-/// evaluation ([`live::Found`]).
+/// art can be made from evaluated live objects (`fx::evaluates_live`) or from type, symbol art or
+/// colors shaded through the color settings (`fx::reads_outside`), the inputs it was made with
+/// ([`live::Found`]).
 type FxArtEntry = (Arc<Node>, Arc<Node>, Option<live::Found>);
 /// What symbol art placed by [`Renderer::placed_art`] is kept under: the art's address, the bits
 /// of the transform's coefficients, whether strokes scale with it, and the stain ([`stain_bits`]).
@@ -2527,3 +2528,5 @@ mod tests_setup;
 mod tests_strokegradient;
 #[cfg(test)]
 mod tests_tileedge;
+#[cfg(test)]
+mod tests_viewraster;

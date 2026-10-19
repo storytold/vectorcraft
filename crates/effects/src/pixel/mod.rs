@@ -1,7 +1,9 @@
-//! Photoshop-style raster effects (Effect › Artistic › Cutout, Film Grain, Neon Glow and Poster Edges, Blur › Radial Blur and Smart Blur, Brush Strokes ›
-//! Accented Edges, Angled Strokes, Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes
-//! and Sumi-e, Distort › Diffuse Glow, Glass and Ocean Ripple, Pixelate › Color Halftone,
-//! Crystallize, Mezzotint and Pointillize, Sharpen › Unsharp Mask, Sketch › Halftone Pattern, Stylize ›
+//! Photoshop-style raster effects (Effect › Artistic › Cutout, Film Grain, Neon Glow, Plastic Wrap and
+//! Poster Edges, Blur › Radial Blur and Smart Blur, Brush Strokes › Accented Edges, Angled Strokes,
+//! Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes and Sumi-e, Distort › Diffuse
+//! Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize,
+//! Sharpen › Unsharp Mask, Sketch › Chalk & Charcoal, Graphic Pen, Halftone Pattern, Plaster and
+//! Reticulation, Stylize ›
 //! Glowing Edges, Texture
 //! › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and Video ›
 //! De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
@@ -39,10 +41,11 @@ pub use sketch::{HALFTONE_TYPES, HalftonePattern};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 32] = [
+pub const PIXEL_EFFECTS: [&str; 38] = [
     "artistic.cutout",
     "artistic.filmGrain",
     "artistic.neonGlow",
+    "artistic.plasticWrap",
     "artistic.posterEdges",
     "blur.radial",
     "blur.smart",
@@ -62,7 +65,12 @@ pub const PIXEL_EFFECTS: [&str; 32] = [
     "pixelate.mezzotint",
     "pixelate.pointillize",
     "sharpen.unsharpMask",
+    "sketch.chalkCharcoal",
+    "sketch.chrome",
+    "sketch.graphicPen",
     "sketch.halftonePattern",
+    "sketch.plaster",
+    "sketch.reticulation",
     "stylize.glowingEdges",
     "texture.craquelure",
     "texture.grain",
@@ -88,6 +96,9 @@ pub enum PixelFx {
     /// light areas (`size` above 0) or the dark ones (below 0), spread by |`size`| (-24..24), as
     /// strong as `brightness` (0..50).
     NeonGlow { size: f64, brightness: f64, colour: [f32; 3] },
+    /// Artistic › Plastic Wrap: specular highlights as strong as `highlight` (0..20) on a relief
+    /// wrinkled by `detail` (0..15) and softened by `smoothness` (1..15).
+    PlasticWrap { highlight: f64, detail: f64, smoothness: f64 },
     /// Artistic › Poster Edges: colours posterized to `posterization` + 2 levels (0..6) with black
     /// lines on the edges, as thick as `thickness` (0..10) and as dark as `intensity` (0..10).
     PosterEdges { thickness: f64, intensity: f64, posterization: f64 },
@@ -139,9 +150,24 @@ pub enum PixelFx {
     /// Sharpen › Unsharp Mask: colours pushed away from a Gaussian blur of σ = `radius` by `amount`
     /// (1 = 100 %), where they differ from it by at least `threshold` levels.
     UnsharpMask { amount: f64, radius: f64, threshold: f64 },
+    /// Sketch › Chalk & Charcoal: chalk highlights in light areas and charcoal in dark ones;
+    /// `chalk` and `charcoal` (0..20) set how much, `pressure` (0..5) the stroke weight.
+    ChalkCharcoal { chalk: f64, charcoal: f64, pressure: f64 },
+    /// Sketch › Chrome: polished chrome relief with `detail` (0..10) and `smoothness` (0..10).
+    Chrome { detail: f64, smoothness: f64 },
+    /// Sketch › Graphic Pen: fine linear ink strokes along `dir`, each `length` (1..15) points long
+    /// on white paper; `balance` (0..100) sets how much of the tone range becomes black ink.
+    GraphicPen { length: f64, balance: f64, direction: StrokeDirection },
     /// Sketch › Halftone Pattern: black ink on white paper through a `kind` screen of cells `size`
     /// (1..12) apart, its edges as hard as `contrast` (0..50) says.
     HalftonePattern { size: f64, contrast: f64, kind: HalftonePattern },
+    /// Sketch › Plaster: relief plaster lit from `light`; dark areas raised, light recessed;
+    /// `imageBalance` (1..50) shifts more of the image lower at higher values; `smoothness` (1..15)
+    /// softens the relief.
+    Plaster { image_balance: f64, smoothness: f64, light: Light },
+    /// Sketch › Reticulation: black ink on white paper through a high-contrast film-grain screen;
+    /// `density` (0..50), `foreground` and `background` (0..50) pull tones before the grain.
+    Reticulation { density: f64, foreground: f64, background: f64 },
     /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
     GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
     /// Pixelate › Color Halftone: each colour channel screened at its angle (`angles`° of channels
@@ -242,6 +268,11 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             highlight: num(p, "highlightArea", 0.0).clamp(0.0, 20.0),
             intensity: num(p, "intensity", 10.0).clamp(0.0, 10.0),
         },
+        "artistic.plasticWrap" => PixelFx::PlasticWrap {
+            highlight: num(p, "highlightStrength", 20.0).clamp(0.0, 20.0),
+            detail: num(p, "detail", 12.0).clamp(0.0, 15.0),
+            smoothness: num(p, "smoothness", 15.0).clamp(1.0, 15.0),
+        },
         "blur.radial" => PixelFx::RadialBlur {
             amount: num(p, "amount", 10.0).clamp(1.0, 100.0),
             zoom: text(p, "method", "spin").eq_ignore_ascii_case("zoom"),
@@ -311,10 +342,31 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             radius: num(p, "radius", 1.0).clamp(0.1, 250.0),
             threshold: num(p, "threshold", 0.0).clamp(0.0, 255.0),
         },
+        "sketch.chalkCharcoal" => PixelFx::ChalkCharcoal {
+            chalk: num(p, "chalkArea", 6.0).clamp(0.0, 20.0),
+            charcoal: num(p, "charcoalArea", 6.0).clamp(0.0, 20.0),
+            pressure: num(p, "strokePressure", 2.0).clamp(0.0, 5.0),
+        },
+        "sketch.chrome" => PixelFx::Chrome { detail: num(p, "detail", 4.0).clamp(0.0, 10.0), smoothness: num(p, "smoothness", 4.0).clamp(0.0, 10.0) },
+        "sketch.graphicPen" => PixelFx::GraphicPen {
+            length: num(p, "strokeLength", 5.0).clamp(1.0, 15.0),
+            balance: num(p, "lightDarkBalance", 50.0).clamp(0.0, 100.0),
+            direction: StrokeDirection::parse(text(p, "strokeDirection", "rightDiagonal")),
+        },
         "sketch.halftonePattern" => PixelFx::HalftonePattern {
             size: num(p, "size", 1.0).clamp(1.0, 12.0),
             contrast: num(p, "contrast", 5.0).clamp(0.0, 50.0),
             kind: HalftonePattern::parse(text(p, "patternType", "dot")),
+        },
+        "sketch.plaster" => PixelFx::Plaster {
+            image_balance: num(p, "imageBalance", 20.0).clamp(1.0, 50.0),
+            smoothness: num(p, "smoothness", 8.0).clamp(1.0, 15.0),
+            light: Light::parse(text(p, "lightDirection", "top")),
+        },
+        "sketch.reticulation" => PixelFx::Reticulation {
+            density: num(p, "density", 12.0).clamp(0.0, 50.0),
+            foreground: num(p, "foregroundLevel", 6.0).clamp(0.0, 50.0),
+            background: num(p, "backgroundLevel", 6.0).clamp(0.0, 50.0),
         },
         "stylize.glowingEdges" => PixelFx::GlowingEdges {
             width: num(p, "edgeWidth", 2.0).clamp(1.0, 14.0),
@@ -381,7 +433,9 @@ impl PixelFx {
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::AccentedEdges { .. } => 0.0,
             // Strokes reach out of the object as far as they reach into it.
-            PixelFx::AngledStrokes { length, .. } | PixelFx::InkOutlines { length, .. } => brushstrokes::stroke_reach(length),
+            PixelFx::AngledStrokes { length, .. } | PixelFx::GraphicPen { length, .. } | PixelFx::InkOutlines { length, .. } => {
+                brushstrokes::stroke_reach(length)
+            }
             PixelFx::Crosshatch { length, .. } => brushstrokes::stroke_reach(length) + brushstrokes::rough(length),
             PixelFx::DarkStrokes { .. } => brushstrokes::stroke_reach(brushstrokes::LIGHT_LENGTH),
             PixelFx::Spatter { radius, .. } => brushstrokes::spatter_shift(radius),
@@ -392,11 +446,17 @@ impl PixelFx {
             // Content shifted outwards reaches past the bounds by as much as the shift.
             PixelFx::Glass { distortion, .. } => distort::glass_shift(distortion),
             PixelFx::OceanRipple { size, magnitude } => distort::ripple_shift(size, magnitude),
-            PixelFx::UnsharpMask { .. } | PixelFx::HalftonePattern { .. } => 0.0,
+            PixelFx::UnsharpMask { .. }
+            | PixelFx::ChalkCharcoal { .. }
+            | PixelFx::Chrome { .. }
+            | PixelFx::HalftonePattern { .. }
+            | PixelFx::Plaster { .. }
+            | PixelFx::Reticulation { .. } => 0.0,
             PixelFx::GlowingEdges { width, smoothness, .. } => width.max(smoothness * 3.0),
             PixelFx::FilmGrain { .. }
             | PixelFx::Cutout { .. }
             | PixelFx::NeonGlow { .. }
+            | PixelFx::PlasticWrap { .. }
             | PixelFx::PosterEdges { .. }
             | PixelFx::ColorHalftone { .. }
             | PixelFx::Mezzotint { .. }
@@ -422,7 +482,9 @@ impl PixelFx {
             PixelFx::SmartBlur { radius, samples, .. } => Some(blur::edge_reach(radius, samples)),
             PixelFx::AccentedEdges { width, smoothness, .. } => Some(brushstrokes::accent_reach(width, smoothness)),
             // The strokes, and the softened tones that choose them.
-            PixelFx::AngledStrokes { length, .. } => Some(brushstrokes::stroke_reach(length).max(brushstrokes::TONE_REACH)),
+            PixelFx::AngledStrokes { length, .. } | PixelFx::GraphicPen { length, .. } => {
+                Some(brushstrokes::stroke_reach(length).max(brushstrokes::TONE_REACH))
+            }
             PixelFx::Crosshatch { length, .. } => {
                 Some((brushstrokes::stroke_reach(length) + brushstrokes::rough(length)).max(brushstrokes::TONE_REACH))
             }
@@ -439,11 +501,15 @@ impl PixelFx {
             // The cells around the pixel's, and the cells around theirs.
             PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
             PixelFx::Crystallize { cell } => Some(1.5 * cell),
-            PixelFx::FilmGrain { .. } | PixelFx::Mezzotint { .. } | PixelFx::HalftonePattern { .. } => Some(0.0),
+            PixelFx::ChalkCharcoal { .. } => Some(sketch::CHALK_CHARCOAL_REACH),
+            PixelFx::Chrome { smoothness, .. } => Some(sketch::chrome_reach(smoothness)),
+            PixelFx::FilmGrain { .. } | PixelFx::Mezzotint { .. } | PixelFx::HalftonePattern { .. } | PixelFx::Reticulation { .. } => Some(0.0),
+            PixelFx::Plaster { smoothness, .. } => Some(sketch::plaster_reach(smoothness)),
             // Cutout's palette comes from the whole object.
             PixelFx::Cutout { .. } => None,
             // The softened tones around the pixel.
             PixelFx::NeonGlow { size, .. } => Some(3.0 * artistic::glow_spread(size)),
+            PixelFx::PlasticWrap { smoothness, .. } => Some(artistic::plastic_reach(smoothness)),
             // The edges' lines, spread round them.
             PixelFx::PosterEdges { thickness, .. } => Some(3.0 * (0.3 + 0.25 * thickness) + 1.0),
             // The dots' points, and the softened colour around them.
@@ -468,6 +534,7 @@ impl PixelFx {
         match *self {
             PixelFx::Cutout { levels, simplicity, fidelity } => artistic::cutout(px, w, h, space, levels, simplicity, fidelity),
             PixelFx::FilmGrain { grain, highlight, intensity } => artistic::film_grain(px, w, h, space, grain, highlight, intensity),
+            PixelFx::PlasticWrap { highlight, detail, smoothness } => artistic::plastic_wrap(px, w, h, space, highlight, detail, smoothness),
             PixelFx::NeonGlow { size, brightness, colour } => artistic::neon_glow(px, w, h, space, size, brightness, colour),
             PixelFx::PosterEdges { thickness, intensity, posterization } => {
                 artistic::poster_edges(px, w, h, space, thickness, intensity, posterization)
@@ -493,7 +560,12 @@ impl PixelFx {
             }
             PixelFx::OceanRipple { size, magnitude } => distort::ocean_ripple(px, w, h, space, size, magnitude),
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
+            PixelFx::ChalkCharcoal { chalk, charcoal, pressure } => sketch::chalk_charcoal(px, w, h, space, chalk, charcoal, pressure),
+            PixelFx::Chrome { detail, smoothness } => sketch::chrome(px, w, h, space, detail, smoothness),
+            PixelFx::GraphicPen { length, balance, direction } => brushstrokes::graphic_pen(px, w, h, space, length, balance, direction),
             PixelFx::HalftonePattern { size, contrast, kind } => sketch::halftone_pattern(px, w, h, space, size, contrast, kind),
+            PixelFx::Plaster { image_balance, smoothness, light } => sketch::plaster(px, w, h, space, image_balance, smoothness, light),
+            PixelFx::Reticulation { density, foreground, background } => sketch::reticulation(px, w, h, space, density, foreground, background),
             PixelFx::GlowingEdges { width, brightness, smoothness } => edges::glow(px, w, h, to_px(width), brightness, to_px(smoothness)),
             PixelFx::ColorHalftone { max_radius, angles } => pixelate::color_halftone(px, w, h, space, max_radius, angles),
             PixelFx::Crystallize { cell } => pixelate::crystallize(px, w, h, space, cell),

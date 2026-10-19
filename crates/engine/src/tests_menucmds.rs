@@ -1280,6 +1280,17 @@ fn next_object_above_and_below_pass_over_what_cant_be_selected() {
     assert_eq!(selected(&s), vec![a]);
 }
 
+/// A keyboard shortcut runs `object.isolate` with no params; the first selected object is isolated (#2991).
+#[test]
+fn object_isolate_without_id_uses_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    let _b = rect(&mut s, 100.0, 0.0, 50.0, 50.0);
+    sel(&mut s, &[a]);
+    s.execute("object.isolate", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(a));
+}
+
 /// In isolation mode Select › Same and Select › Object select only objects in the isolated group.
 #[test]
 fn select_menu_commands_stay_inside_the_isolated_group() {

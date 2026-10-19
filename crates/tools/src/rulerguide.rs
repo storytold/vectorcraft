@@ -665,8 +665,10 @@ mod tests {
                 2.0,
                 Point::new(inch(0.01), inch(0.03)),
                 Point::new(inch(3.07), inch(3.27)),
-                Point::new(inch(3.06), inch(3.28)),
-                inch(0.05),
+                // An inch ruler's ticks are binary fractions, so at zoom 2 they are 1/16 in
+                // apart, not the 0.05 in a decimal ladder gave (#2827).
+                Point::new(inch(3.0725), inch(3.28)),
+                inch(0.0625),
             ),
         ]
     }

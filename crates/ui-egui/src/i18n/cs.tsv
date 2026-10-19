@@ -264,6 +264,8 @@
 	Large Gaps	Velké mezery
 	Gap Preview Color:	Barva náhledu mezer:
 	Close Gaps With Paths	Uzavřít mezery cestami
+	Select Fills	Vybírat výplně
+	Select Strokes	Vybírat tahy
 	Image Trace	Vektorizace obrazu
 	Image Trace (Make and Expand)	Vektorizace obrazu (vytvořit a rozložit)
 	Release Image Trace	Uvolnit vektorizaci obrazu
@@ -1565,6 +1567,12 @@ lighting	Light	Světlo
 	Release Blend	Uvolnit prolnutí
 	Release Envelope	Uvolnit obálku
 	Release Intertwine	Uvolnit propletení
+	Objects on Path	Objekty na cestě
+	Attach	Připojit
+	Objects on Path Options	Možnosti objektů na cestě
+	Objects on Path Tool	Nástroj Objekty na cestě
+	Attach Objects on Path	Připojit objekty na cestu
+	Expand Objects on Path	Rozložit objekty na cestě
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -1649,7 +1657,7 @@ lighting	Light	Světlo
 	This library is empty	Tato knihovna je prázdná
 	No results	Žádné výsledky
 	No items in this library match “{query}”.	Žádná položka v této knihovně neodpovídá „{query}“.
-	Right-click an item to move it into this group.	Kliknutím pravým tlačítkem na položku ji přesunete do této skupiny.
+	Drag an item here, or right-click one, to put it in this group.	Přetáhněte sem položku nebo na ni klikněte pravým tlačítkem a vložte ji do této skupiny.
 	New Group	Nová skupina
 	New Group…	Nová skupina…
 	Move to Group	Přesunout do skupiny
@@ -1704,6 +1712,8 @@ lighting	Light	Světlo
 	Corner Point Angle Threshold:	Prahový úhel rohových bodů:
 	Convert to Straight Lines	Převést na přímé čáry
 	Show Original Path	Zobrazit původní cestu
+	Open this dialog with these settings next time	Příště otevřít toto dialogové okno s tímto nastavením
+	Auto-Simplify	Automaticky zjednodušit
 	Transparency Options	Možnosti průhlednosti
 	Color Mixer (Shift-click the chip)	Míchání barev (Shift+kliknutí na políčko)
 	Fill: click for swatches, Shift-click for the color mixer	Výplň: kliknutím otevřete vzorník, Shift+kliknutím míchání barev
@@ -1778,6 +1788,7 @@ lighting	Light	Světlo
 	Left in Front	Levý vpředu
 	No document	Žádný dokument
 	Open a document to edit its patterns.	Otevřete dokument, abyste mohli upravit jeho vzorky.
+	Overlap	Překrytí
 	Overlap:	Překrytí:
 	Pattern options are available in pattern editing mode.	Možnosti vzorku jsou dostupné v režimu úprav vzorku.
 	Right in Front	Pravý vpředu
@@ -1905,6 +1916,7 @@ lighting	Light	Světlo
 	Right-Justified Tab	Tabulátor zarovnaný doprava
 	Select a text object to set its tab stops.	Vyberte textový objekt, abyste mohli nastavit jeho zarážky tabulátoru.
 	Select text	Vyberte text
+	Snap to Unit	Přichytávat k jednotkám
 	+ Add Scale	+ Přidat měřítko
 	Add Selected Artwork as One Asset	Přidat vybranou kresbu jako jeden prvek
 	Export Settings	Nastavení exportu
@@ -2241,6 +2253,7 @@ lighting	Light	Světlo
 	Edit selected paths within:	Upravovat vybrané cesty do:
 	Fidelity:	Věrnost:
 	Fill new strokes	Vyplňovat nové tahy
+	Alt key toggles to Smooth Tool	Klávesa Alt přepíná na nástroj Vyhlazení
 	Keep selected	Ponechat vybrané
 	Merge only with selection	Sloučit jen s výběrem
 	The document has no colour swatches.	Dokument nemá ve vzorníku žádné barvy.
@@ -2260,6 +2273,7 @@ lighting	Light	Světlo
 	Layers Panel Options	Možnosti panelu Vrstvy
 	Row Size:	Velikost řádků:
 	Show Layers Only	Zobrazit pouze vrstvy
+	Locate Selected Objects	Najít vybrané objekty
 	Thumbnails:	Miniatury:
 	Anchor Points	Kotevní body
 	Brush Affects:	Štětec ovlivňuje:
@@ -4162,6 +4176,7 @@ imageTrace	Outline	Obrys
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
 @msg	the Color Picker is not open	Výběr barvy není otevřený
+@msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
@@ -4398,6 +4413,7 @@ imageTrace	Outline	Obrys
 @msg	select a linked image: an embedded one has no file	vyberte propojený obrázek: vložený nemá soubor
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
+@msg	select an Objects on Path group	vyberte skupinu objektů na cestě
 @msg	select a stroke with a variable width	vyberte tah s proměnnou šířkou
 @msg	select a symbol instance	vyberte instanci symbolu
 @msg	select an Image Trace object	vyberte objekt vektorizace obrazu
@@ -5154,6 +5170,7 @@ mark-style	Japanese	Japonské
 @msg	choose a destination folder	vyberte cílovou složku
 @msg	choose a source folder	vyberte zdrojovou složku
 @msg	open a document with data sets	otevřete dokument se sadami dat
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
 @msg	the action has no steps	akce nemá žádné kroky
 
 # User Interface › Accent Color
@@ -5226,3 +5243,19 @@ mark-style	Japanese	Japonské
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	proměnné a sady dat souboru nebyly načteny (proměnné: {variables}, sady dat: {data_sets}): panel Proměnné je nezobrazuje
 # Select by Color (select.color)
 	Select by Color	Vybrat podle barvy
+	Move Anchor Point	Přesunout kotevní bod
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zachová 1 z {n} pracovních ploch dokumentu: soubor se znovu otevře s jedním. Zapněte Zachovat možnosti úprav, aby zůstala všechna.
+	Chalk & Charcoal…	Křída a uhel…
+	Chalk & Charcoal	Křída a uhel
+	Graphic Pen…	Grafické pero…
+	Graphic Pen	Grafické pero
+	Reticulation…	Síťování…
+	Reticulation	Síťování
+	Plastic Wrap…	Plastová fólie…
+	Plastic Wrap	Plastová fólie
+	Chrome…	Chrom…
+	Chrome	Chrom
+	Drop here to take it out of its group	Pusťte sem, chcete-li ji vyjmout ze skupiny
+	Move Library Group	Přesunout skupinu knihovny
+	Plaster…	Sádra…
+	Plaster	Sádra

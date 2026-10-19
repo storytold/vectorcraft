@@ -1,5 +1,7 @@
-//! Tabs panel: tab-stop alignment, X position, leader and "align on", and a ruler on which a click
-//! adds a stop, dragging moves one and dragging it off the ruler deletes it.
+//! Tabs panel: tab-stop alignment, X position, leader and "align on", and a ruler numbered in the
+//! General unit on which a click adds a stop, dragging moves one and dragging it off the ruler
+//! deletes it. With Snap to Unit on, or Shift held, a stop placed or dragged on the ruler lands on
+//! the ruler's nearest tick.
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -175,22 +177,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let scale = (w as f64 - 8.0) / span;
     let to_x = |pt: f64| rect.left() + 4.0 + (pt * scale) as f32;
     let to_pt = |x: f32| (((x - rect.left() - 4.0) as f64) / scale).max(0.0);
-    let mut tick = 0.0;
-    while tick <= span + 1e-6 {
-        let x = to_x(tick);
-        let major = (tick / 36.0).round() * 36.0 == tick && ((tick / 36.0) as i64) % 2 == 0;
-        p.line_segment([egui::pos2(x, rect.bottom() - if major { 10.0 } else { 5.0 }), egui::pos2(x, rect.bottom())], Stroke::new(1.0, t.text_dim));
-        if major {
+    // The ruler is numbered in the General unit, with the canvas rulers' label step at its scale
+    // and a tick every tenth of a step.
+    let unit = app.session.general_unit();
+    let step = unit.ruler_step(scale);
+    let minor = step / 10.0;
+    for k in 0..=(unit.from_pt(span) / minor + 1e-6).floor() as usize {
+        let v = k as f64 * minor;
+        let x = to_x(unit.to_pt(v));
+        let len = match k % 10 {
+            0 => 10.0,
+            5 => 7.0,
+            _ => 4.0,
+        };
+        p.line_segment([egui::pos2(x, rect.bottom() - len), egui::pos2(x, rect.bottom())], Stroke::new(1.0, t.text_dim));
+        if k % 10 == 0 {
             p.text(
                 egui::pos2(x + 2.0, rect.top() + 1.0),
                 egui::Align2::LEFT_TOP,
-                format!("{}", (tick / 72.0 * 100.0).round() / 100.0),
+                crate::canvas::ruler_label(v, step),
                 egui::FontId::proportional(9.0),
                 t.text_dim,
             );
         }
-        tick += 18.0;
     }
+    // Snap to Unit, or Shift held: a stop placed or dragged on the ruler lands on its nearest tick.
+    let snap = pstate::<bool>(ui.ctx(), "tabs-snap") || ui.input(|i| i.modifiers.shift);
+    let place = |x: f32| if snap { unit.snap_to_ruler_tick(to_pt(x), scale).max(0.0) } else { to_pt(x) };
     for (i, s) in stops.iter().enumerate() {
         let x = to_x(s.position);
         let c = if i == sel { t.accent } else { t.text };
@@ -230,7 +243,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // Dragged off the ruler: delete.
                 stops.remove(i);
             } else {
-                stops[i].position = to_pt(pos.x);
+                stops[i].position = place(pos.x);
                 stops.sort_by(|a, b| a.position.total_cmp(&b.position));
             }
             apply(app, &stops);
@@ -241,12 +254,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         match hit_at(pos.x) {
             Some(i) => set_pstate(ui.ctx(), "tabs-sel", i),
             None => {
-                let position = to_pt(pos.x);
-                stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
-                stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                let position = place(pos.x);
+                // A snapped click onto a stop's tick selects that stop and records no undo step.
+                let added = !stops.iter().any(|s| s.position == position);
+                if added {
+                    stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
+                    stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                }
                 let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
                 set_pstate(ui.ctx(), "tabs-sel", i);
-                apply(app, &stops);
+                if added {
+                    apply(app, &stops);
+                }
             }
         }
     }
@@ -256,6 +275,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((_, para, _)) = current_para(app) else {
         ui.add_enabled(false, egui::Button::new(tl!("Select text")).frame(false));
+        snap_to_unit_item(ui);
         return;
     };
     let mut stops = para.tabs;
@@ -289,6 +309,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             pos += step;
         }
         apply(app, &stops);
+    }
+    snap_to_unit_item(ui);
+}
+
+/// The panel menu's Snap to Unit, checked while it is on: stops placed or dragged on the ruler land
+/// on its nearest tick.
+fn snap_to_unit_item(ui: &mut Ui) {
+    ui.separator();
+    let on: bool = pstate(ui.ctx(), "tabs-snap");
+    if menu_item(ui, tl!("Snap to Unit"), true, on) {
+        set_pstate(ui.ctx(), "tabs-snap", !on);
     }
 }
 
@@ -405,9 +436,9 @@ mod tests {
         };
         let labels = frame(&mut app, vec![]);
         let at = |label: &str| labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1;
-        // A label sits 2 px right of its tick: 0 and 1 inch give the ruler's scale.
-        let (zero, inch) = (at("0"), at("1"));
-        let to_x = |pt: f32| zero.x - 2.0 + pt * (inch.x - zero.x) / 72.0;
+        // A label sits 2 px right of its tick: 0 and 100 pt give the ruler's scale.
+        let (zero, hundred) = (at("0"), at("100"));
+        let to_x = |pt: f32| zero.x - 2.0 + pt * (hundred.x - zero.x) / 100.0;
         let y = zero.y + 15.0;
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         // Press 3 px right of the stop, then drag right; egui starts the drag 6+ px from the press.
@@ -423,6 +454,150 @@ mod tests {
         assert_eq!(stops.len(), 1);
         let moved_to = to_x(stops[0].position as f32);
         assert!((moved_to - end.x).abs() < 1.0, "stop at {moved_to}, released at {}", end.x);
+    }
+
+    /// One frame of the panel with `events`, Shift held when `shift` → the ruler's labels (9 pt) and
+    /// where they are painted, left to right.
+    fn ruler_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>, shift: bool) -> Vec<(String, egui::Pos2)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 400.0));
+        let modifiers = if shift { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
+        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.job.sections.first().is_some_and(|s| s.format.font_id.size == 9.0) => {
+                    Some((t.galley.text().to_string(), t.pos))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The labels the ruler shows in a frame of [`ruler_frame`].
+    fn ruler_labels(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<String> {
+        ruler_frame(ctx, app, vec![], false).into_iter().map(|(t, _)| t).collect()
+    }
+
+    /// Press on the ruler at `from` (points), move to `to` and release there, Shift held when
+    /// `shift`. A label sits 2 px right of its tick, so the first two labels give the ruler's scale.
+    fn drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64, shift: bool) {
+        let labels = ruler_frame(ctx, app, vec![], shift);
+        let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+        assert_eq!(zero, "0");
+        let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+        let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+        let y = a.y + 15.0;
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y));
+        ruler_frame(ctx, app, vec![egui::Event::PointerMoved(press), button(press, true)], shift);
+        if press != end {
+            for f in [0.25, 0.5, 1.0] {
+                ruler_frame(ctx, app, vec![egui::Event::PointerMoved(press.lerp(end, f))], shift);
+            }
+        }
+        ruler_frame(ctx, app, vec![button(end, false)], shift);
+        ruler_frame(ctx, app, vec![], shift);
+    }
+
+    /// The ruler is numbered in the General unit (the document's units), with labels at least 50 px
+    /// apart as on the canvas rulers.
+    #[test]
+    fn ruler_is_numbered_in_the_general_unit() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        let ctx = egui::Context::default();
+        assert_eq!(ruler_labels(&ctx, &mut app), ["0", "50", "100", "150", "200", "250", "300"]);
+        app.session.execute("document.setUnits", &json!({"units": "in"})).unwrap();
+        assert_eq!(ruler_labels(&ctx, &mut app), ["0", "1", "2", "3", "4"]);
+        app.session.execute("document.setUnits", &json!({"units": "mm"})).unwrap();
+        assert_eq!(ruler_labels(&ctx, &mut app), ["0", "25", "50", "75", "100"]);
+    }
+
+    /// Snap to Unit, chosen from the panel menu with or without text selected, puts a stop dragged
+    /// or placed by a click on the ruler on its nearest tick (every 5 pt on this points ruler).
+    /// Chosen again, it turns off.
+    #[test]
+    fn snap_to_unit_puts_dragged_and_clicked_stops_on_the_nearest_tick() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        let row = |app: &mut VectorcraftApp| {
+            let rows = menu_frame(&ctx, app, vec![]);
+            rows.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == "Snap to Unit").unwrap_or_else(|| panic!("Snap to Unit"))
+        };
+        choose(&ctx, &mut app, "Snap to Unit");
+        assert_eq!(row(&mut app).0, "✓ Snap to Unit");
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+        assert_eq!(ruler_labels(&ctx, &mut app)[..2], ["0", "50"]);
+        let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+        drag_on_ruler(&ctx, &mut app, 50.0, 13.4, false);
+        assert_eq!(positions(&app), [15.0]);
+        // A click at 33.4 pt adds a stop at 35.
+        drag_on_ruler(&ctx, &mut app, 33.4, 33.4, false);
+        assert_eq!(positions(&app), [15.0, 35.0]);
+        assert_eq!(row(&mut app).0, "✓ Snap to Unit");
+        // Chosen again, Snap to Unit turns off and the stop stays where it is dropped.
+        let at = row(&mut app).1.center();
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        menu_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(at), button(true)]);
+        menu_frame(&ctx, &mut app, vec![button(false)]);
+        assert_eq!(row(&mut app).0.trim_start(), "Snap to Unit");
+        drag_on_ruler(&ctx, &mut app, 35.0, 23.4, false);
+        let p = positions(&app);
+        assert!((p[1] - 23.4).abs() < 1.0 && p[1] != 25.0, "{p:?}");
+    }
+
+    /// A snapped click more than 5 px from a stop, nearest to the tick that stop is on, selects the
+    /// stop and records no undo step. On this millimeters ruler the ticks are 2.5 mm (7.09 pt, 12.4
+    /// px) apart.
+    #[test]
+    fn a_snapped_click_onto_a_stop_selects_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("document.setUnits", &json!({"units": "mm"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 224, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 100}]})).unwrap();
+        let ctx = egui::Context::default();
+        assert_eq!(ruler_labels(&ctx, &mut app), ["0", "25", "50", "75"]);
+        set_pstate(&ctx, "tabs-snap", true);
+        let tick = 2.5 * 72.0 / 25.4;
+        drag_on_ruler(&ctx, &mut app, 28.4, 28.4, false);
+        let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+        assert_eq!(positions(&app).len(), 2);
+        assert!((positions(&app)[0] - 4.0 * tick).abs() < 1e-9, "{:?}", positions(&app));
+        set_pstate(&ctx, "tabs-sel", 1usize);
+        let steps = app.session.active().unwrap().history.undo.len();
+        // The click is 3.3 pt (5.8 px) right of the stop, past the 5 px hit tolerance and nearest its tick.
+        drag_on_ruler(&ctx, &mut app, 4.0 * tick + 3.3, 4.0 * tick + 3.3, false);
+        assert_eq!(positions(&app).len(), 2, "{:?}", positions(&app));
+        assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 0);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
+    }
+
+    /// With Snap to Unit off, Shift held during the drag puts the stop on the ruler's nearest tick.
+    #[test]
+    fn shift_drag_snaps_a_stop_to_the_nearest_tick() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+        app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+        let ctx = egui::Context::default();
+        let position = |app: &VectorcraftApp| current(app).unwrap().1[0].position;
+        drag_on_ruler(&ctx, &mut app, 50.0, 13.4, false);
+        assert!((position(&app) - 13.4).abs() < 1.0, "{}", position(&app));
+        let from = position(&app);
+        drag_on_ruler(&ctx, &mut app, from, 41.6, true);
+        assert_eq!(position(&app), 40.0);
+        // In an inches document the ticks divide the inch in half, not in ten (#2827), so the
+        // nearest one to 100 pt is 99 pt -- 1 3/8 in, an eighth of an inch from 1 1/4.
+        app.session.execute("document.setUnits", &json!({"units": "in"})).unwrap();
+        drag_on_ruler(&ctx, &mut app, 40.0, 100.0, true);
+        assert!((position(&app) - 99.0).abs() < 1e-9, "{}", position(&app));
+        assert_eq!((position(&app) / 72.0 * 8.0).round(), position(&app) / 72.0 * 8.0, "a binary fraction of an inch");
     }
 
     /// One frame of the panel menu with `events` → the rows' texts and where they are painted.

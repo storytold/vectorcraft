@@ -227,6 +227,43 @@ fn live_objects_draw_through_new_color_settings() {
     }
 }
 
+/// The art drawn for 3D effects and color adjustments follows the Color Settings: in the next
+/// frame, a CMYK cyan rectangle with Revolve, with Extrude & Bevel, with Inflate, with Rotate, with
+/// Brightness/Contrast, and a group holding it with Brightness/Contrast, draw through the new
+/// working CMYK profile.
+#[test]
+fn effect_art_draws_through_new_color_settings() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let cyan = json!({"c": 100, "m": 0, "y": 0, "k": 0});
+    let brighter = json!({"brightness": 30});
+    let cases = [
+        ("the revolved rectangle", "threeD.revolve", json!({}), false),
+        ("the extruded rectangle", "threeD.extrude", json!({}), false),
+        ("the inflated rectangle", "threeD.inflate", json!({}), false),
+        ("the rotated rectangle", "threeD.rotate", json!({}), false),
+        ("the adjusted rectangle", "adjust.brightnessContrast", brighter.clone(), false),
+        ("the adjusted group", "adjust.brightnessContrast", brighter, true),
+    ];
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let frame = |r: &mut Renderer, s: &Session| r.render(&s.doc().unwrap().doc, 400, 300, Affine::IDENTITY, &opts).pixels;
+    for (what, effect, params, grouped) in cases {
+        let mut s = session();
+        let shape = rect(&mut s, 150.0, 60.0, 60.0, 120.0);
+        exec(&mut s, "paint.setFill", json!({"ids": [shape.0], "color": cyan}));
+        let target = if grouped { id_of(&exec(&mut s, "object.group", json!({"ids": [shape.0]}))) } else { shape };
+        exec(&mut s, "effect.apply", json!({"ids": [target.0], "effect": effect, "params": params}));
+        let mut r = Renderer::new();
+        let before = frame(&mut r, &s);
+        s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+        let fresh = frame(&mut Renderer::new(), &s);
+        let warm = frame(&mut r, &s);
+        cms::set_active(&old).unwrap();
+        assert!(fresh != before, "{what}: the new profile changes the frame");
+        assert!(warm == fresh, "{what}: drawn as a new renderer draws it");
+    }
+}
+
 /// #2276: with a working RGB space other than sRGB, the Eyedropper takes an image's sRGB pixel
 /// into the working space, so the sampled fill shows as the pixel it was picked from.
 #[test]

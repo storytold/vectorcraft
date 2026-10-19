@@ -1026,6 +1026,7 @@
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
 	Fill and Stroke	填色和描边
 	Fill new strokes	为新描边应用填色
+	Alt key toggles to Smooth Tool	Alt 键切换为平滑工具
 	Keep selected	保持选择状态
 	Merge only with selection	仅与所选对象合并
 	Fill Color	填色
@@ -1155,6 +1156,8 @@ file-filter	Templates	模板
 	Large Gaps	大间隙
 	Gap Preview Color:	间隙预览颜色：
 	Close Gaps With Paths	用路径封闭间隙
+	Select Fills	选择填色
+	Select Strokes	选择描边
 	Gaussian Blur…	高斯模糊…
 	General	常规
 	General › Placement › X	一般 › 位置 › X
@@ -1352,6 +1355,12 @@ file-filter	Templates	模板
 	Release Blend	释放混合
 	Release Envelope	释放封套
 	Release Intertwine	释放交织
+	Objects on Path	路径上的对象
+	Attach	附加
+	Objects on Path Options	路径上的对象选项
+	Objects on Path Tool	路径上的对象工具
+	Attach Objects on Path	附加路径上的对象
+	Expand Objects on Path	扩展路径上的对象
 	Release Live Paint	释放实时上色
 	Release Repeat	释放重复
 	Release Slice	释放切片
@@ -1630,6 +1639,7 @@ file-filter	Templates	模板
 	Load Text into Clipboard	将文本载入剪贴板
 	Local Libraries	本地库
 	Locate Object	查找对象
+	Locate Selected Objects	查找所选对象
 	Location	位置
 	Location:	位置：
 	Lock	锁定
@@ -2060,6 +2070,7 @@ file-filter	Templates	模板
 	Output White	输出白色
 	Output › Mode	输出 › 模式
 	Output:	输出：
+	Overlap	重叠
 	Overlap:	重叠：
 	Overlapping	重叠
 	Overlay	叠加
@@ -2245,6 +2256,7 @@ diagnostics	ui	界面
 	Printer mark type:	打印机标记类型：
 	Roman	西式
 mark-style	Japanese	日式
+font-script	Japanese	汉字
 	Printer profile:	打印机配置文件：
 	Printer Setup…	打印机设置…
 	Printer:	打印机：
@@ -2798,6 +2810,8 @@ mark-style	Japanese	日式
 	Show Note	显示注解
 	Show Options	显示选项
 	Show Original Path	显示原始路径
+	Open this dialog with these settings next time	下次以这些设置打开此对话框
+	Auto-Simplify	自动简化
 	Color Panel Options	颜色面板选项
 	Show Package	显示打包
 	Show Panel	显示面板
@@ -2894,6 +2908,7 @@ mark-style	Japanese	日式
 	Snap to Pixel	对齐像素
 	Precise Cursors	精确光标
 	Snap to Point	对齐点
+	Snap to Unit	对齐单位
 	Snapping Tolerance	吸附容差
 	Social Square Post 1080×1080	社交方形帖子 1080×1080
 	Soft Light	柔光
@@ -3021,7 +3036,7 @@ mark-style	Japanese	日式
 	Delete Library Item	删除库项目
 	No results	无结果
 	No items in this library match “{query}”.	此库中没有与“{query}”匹配的项目。
-	Right-click an item to move it into this group.	右键单击项目可将其移到此组。
+	Drag an item here, or right-click one, to put it in this group.	将项目拖到此处，或右键单击项目，即可将其放入此组。
 	New Group	新建组
 	New Group…	新建组…
 	Move to Group	移到组
@@ -3770,6 +3785,7 @@ imageTrace	Outline	轮廓
 @msg	pattern missing	缺少图案
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
+@msg	select an Objects on Path group	请选择一个路径上的对象组
 @msg	select the art to repeat	请选择要重复的图稿
 @msg	the document has no patterns	文档中没有图案
 @msg	no artboard	没有画板
@@ -3958,6 +3974,7 @@ imageTrace	Outline	轮廓
 @msg	no blend options	没有混合选项
 @msg	bad color {v}	颜色 {v} 无效
 @msg	the Color Picker is not open	拾色器未打开
+@msg	the Simplify slider is not open	简化滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
@@ -4248,6 +4265,7 @@ imageTrace	Outline	轮廓
 @msg	choose a destination folder	请选择目标文件夹
 @msg	choose a source folder	请选择源文件夹
 @msg	open a document with data sets	请打开包含数据集的文档
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	数据集 {name} 未应用任何内容：没有对象绑定到该数据集中有值的变量
 @msg	the action has no steps	该动作没有步骤
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
 	Import Shortcut Set	导入快捷键组
@@ -5062,3 +5080,19 @@ lighting	Light	光源
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
 # Select by Color (select.color)
 	Select by Color	按颜色选择
+	Move Anchor Point	移动锚点
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文档 {n} 个画板中的 1 个：文件重新打开时只有一个。打开“保留编辑功能”可全部保留。
+	Chalk & Charcoal…	粉笔和炭笔…
+	Chalk & Charcoal	粉笔和炭笔
+	Graphic Pen…	绘图笔…
+	Graphic Pen	绘图笔
+	Reticulation…	网状…
+	Reticulation	网状
+	Plastic Wrap…	塑料包装…
+	Plastic Wrap	塑料包装
+	Chrome…	铬黄…
+	Chrome	铬黄
+	Drop here to take it out of its group	放到此处可将其移出所在组
+	Move Library Group	移动库组
+	Plaster…	塑料效果…
+	Plaster	塑料效果

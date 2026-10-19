@@ -628,16 +628,14 @@ fn lp_hover(cx: &ToolContext, cache: &mut RegionCache, p: Point, edge: bool) -> 
     LpHover::None
 }
 
-fn lp_overlays(h: &LpHover, cache: &RegionCache) -> Vec<Overlay> {
+/// The highlight of `h`, `width` screen pixels wide in `color`.
+fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32) -> Vec<Overlay> {
     match h {
         LpHover::None => vec![],
-        LpHover::Part(bp) => vec![Overlay::Path { path: bp.clone(), color: HIGHLIGHT_RED, width: 4.0, dashed: false }],
-        LpHover::Region(i) => cache
-            .map
-            .regions
-            .get(*i)
-            .map(|(_, bp, _)| vec![Overlay::Path { path: bp.clone(), color: HIGHLIGHT_RED, width: 4.0, dashed: false }])
-            .unwrap_or_default(),
+        LpHover::Part(bp) => vec![Overlay::Path { path: bp.clone(), color, width, dashed: false }],
+        LpHover::Region(i) => {
+            cache.map.regions.get(*i).map(|(_, bp, _)| vec![Overlay::Path { path: bp.clone(), color, width, dashed: false }]).unwrap_or_default()
+        }
     }
 }
 
@@ -701,7 +699,7 @@ impl Tool for LivePaintBucketTool {
     }
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        lp_overlays(&self.hover, &self.cache)
+        lp_overlays(&self.hover, &self.cache, HIGHLIGHT_RED, 4.0)
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
@@ -711,16 +709,52 @@ impl Tool for LivePaintBucketTool {
 
 // ---------- Live Paint Selection ----------
 
-/// Live Paint Selection: click selects a face (Shift adds); Alt-click selects an edge.
+/// The Live Paint Selection tool's highlight width (screen pixels) by default.
+pub const LP_SELECT_WIDTH: f64 = 4.0;
+/// The least and greatest highlight width (screen pixels) the Live Paint Selection tool takes.
+pub const LP_SELECT_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
+
+/// Live Paint Selection: click selects a face (Shift adds); Alt-click selects an edge. Its Tool
+/// Options (double-click the tool) are `selectFills` and `selectStrokes` (both on), the highlight
+/// `color` (`#rrggbb`, red by default) and its `width` ([`LP_SELECT_WIDTH`] pixels). With Select
+/// Strokes off, Alt-click selects the face under the pointer as a click does; with Select Fills
+/// off, a click selects the edge nearest the pointer as Alt-click does; with both off, a click
+/// selects no face or edge.
 pub struct LivePaintSelectionTool {
     cache: RegionCache,
     hover: LpHover,
+    fills: bool,
+    strokes: bool,
+    color: [u8; 3],
+    width: f64,
 }
 
 impl Default for LivePaintSelectionTool {
     fn default() -> Self {
-        Self { cache: RegionCache::live_paint(), hover: LpHover::None }
+        Self { cache: RegionCache::live_paint(), hover: LpHover::None, fills: true, strokes: true, color: HIGHLIGHT_RED, width: LP_SELECT_WIDTH }
     }
+}
+
+impl LivePaintSelectionTool {
+    /// What a click picks, Alt held or not: Some(true) an edge, Some(false) a face, None nothing.
+    fn picks_edge(&self, alt: bool) -> Option<bool> {
+        match (self.fills, self.strokes) {
+            (true, true) => Some(alt),
+            (true, false) => Some(false),
+            (false, true) => Some(true),
+            (false, false) => None,
+        }
+    }
+}
+
+/// A highlight color option: `#rrggbb` or a layer color's name (any case).
+fn lp_color(v: &Value) -> Option<[u8; 3]> {
+    let s = v.as_str()?.trim();
+    if let Some((_, c)) = vectorcraft_doc::LAYER_COLORS.iter().find(|(name, _)| name.eq_ignore_ascii_case(s)) {
+        return Some(*c);
+    }
+    let [r, g, b, _] = vectorcraft_color::Color::from_hex(s)?.to_rgba8(1.0);
+    Some([r, g, b])
 }
 
 impl Tool for LivePaintSelectionTool {
@@ -730,18 +764,21 @@ impl Tool for LivePaintSelectionTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        let edge = self.picks_edge(ev.mods.alt);
         match ev.kind {
             PointerKind::Move => {
-                self.hover = match lp_hover(cx, &mut self.cache, p, ev.mods.alt) {
-                    h @ LpHover::Part(_) => h,
+                self.hover = match edge.map(|e| lp_hover(cx, &mut self.cache, p, e)) {
+                    Some(h @ LpHover::Part(_)) => h,
                     _ => LpHover::None,
                 };
                 vec![]
             }
             PointerKind::Down => {
                 let mut hit = None;
-                if let Some(g) = live_paint_at(cx.doc, p).and_then(|id| cx.doc.node(id)) {
-                    let part = if ev.mods.alt { edge_near(g, p, cx.tol(4.0)) } else { face_at(g, p) };
+                if let Some(edge) = edge
+                    && let Some(g) = live_paint_at(cx.doc, p).and_then(|id| cx.doc.node(id))
+                {
+                    let part = if edge { edge_near(g, p, cx.tol(4.0)) } else { face_at(g, p) };
                     hit = part.map(|n| n.id);
                 }
                 match (hit, ev.mods.shift) {
@@ -756,11 +793,35 @@ impl Tool for LivePaintSelectionTool {
     }
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        lp_overlays(&self.hover, &self.cache)
+        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32)
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         Cursor::Arrow
+    }
+
+    fn options(&self) -> Value {
+        let [r, g, b] = self.color;
+        json!({
+            "selectFills": self.fills,
+            "selectStrokes": self.strokes,
+            "color": format!("#{r:02x}{g:02x}{b:02x}"),
+            "width": self.width,
+        })
+    }
+
+    fn set_option(&mut self, key: &str, v: &Value) {
+        match key {
+            "selectFills" => self.fills = v.as_bool().unwrap_or(self.fills),
+            "selectStrokes" => self.strokes = v.as_bool().unwrap_or(self.strokes),
+            "color" => self.color = lp_color(v).unwrap_or(self.color),
+            "width" => {
+                let (min, max) = LP_SELECT_WIDTH_RANGE;
+                self.width = v.as_f64().filter(|w| w.is_finite()).map_or(self.width, |w| w.clamp(min, max));
+            }
+            _ => return,
+        }
+        self.hover = LpHover::None;
     }
 }
 
@@ -1012,6 +1073,74 @@ mod tests {
         assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({ "ids": [e.0] }))]);
         let acts = t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
         assert_eq!(acts, vec![Action::Exec("select.none".into(), json!({}))]);
+    }
+
+    #[test]
+    fn live_paint_selection_options_choose_what_a_click_selects() {
+        let (d, _gid, f2, e) = live_group_doc();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+        let none = vec![Action::Exec("select.none".into(), json!({}))];
+        let mut t = LivePaintSelectionTool::default();
+        assert_eq!(t.options(), json!({"selectFills": true, "selectStrokes": true, "color": "#ff2a2a", "width": 4.0}));
+        // Select Fills off: a click inside a face selects nothing, and a click by an edge selects it.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0)), none);
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+        assert!(t.overlays(&cx).is_empty());
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0)), set(&[e]));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[e]));
+        // Select Strokes off: Alt-click by an edge selects the face under the pointer.
+        t.set_option("selectFills", &json!(true));
+        t.set_option("selectStrokes", &json!(false));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[f2]));
+        t.pointer(&cx, &ev(PointerKind::Move, 51.0, 25.0).with_mods(alt));
+        let ov = t.overlays(&cx);
+        let [Overlay::Path { path, .. }] = ov.as_slice() else { panic!("{ov:?}") };
+        assert_eq!(path.bounding_box(), Rect::new(50.0, 0.0, 100.0, 50.0), "the face, not the edge");
+        // Both off: nothing is selected or highlighted.
+        t.set_option("selectFills", &json!(false));
+        for m in [Mods::default(), alt] {
+            assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(m)), none);
+            t.pointer(&cx, &ev(PointerKind::Move, 51.0, 25.0).with_mods(m));
+            assert!(t.overlays(&cx).is_empty());
+        }
+        let shift = Mods { shift: true, ..Default::default() };
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(shift)).is_empty());
+    }
+
+    #[test]
+    fn live_paint_selection_options_set_the_highlight() {
+        let (d, ..) = live_group_doc();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = LivePaintSelectionTool::default();
+        let highlight = |t: &mut LivePaintSelectionTool| {
+            t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+            match t.overlays(&cx).as_slice() {
+                [Overlay::Path { color, width, .. }] => (*color, *width),
+                ov => panic!("{ov:?}"),
+            }
+        };
+        assert_eq!(highlight(&mut t), (HIGHLIGHT_RED, 4.0));
+        t.set_option("color", &json!("#00FF00"));
+        t.set_option("width", &json!(9));
+        assert_eq!(highlight(&mut t), ([0, 0xff, 0], 9.0));
+        // A layer color's name; a value that is not a color, or a width that is not a number, is ignored.
+        t.set_option("color", &json!("light blue"));
+        t.set_option("width", &json!("wide"));
+        assert_eq!(highlight(&mut t), ([0x4f, 0x80, 0xff], 9.0));
+        t.set_option("color", &json!("nope"));
+        assert_eq!(t.options()["color"], "#4f80ff");
+        // The width stays within its range.
+        t.set_option("width", &json!(100));
+        assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.1));
+        t.set_option("width", &json!(0));
+        assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.0));
     }
 
     #[test]

@@ -120,7 +120,9 @@ pub fn options_map(p: &Value) -> Result<Map<String, Value>, String> {
     match o.get("svg") {
         None | Some(Value::Null) => {}
         Some(Value::Object(svg)) => m.extend(svg.clone()),
-        Some(_) => return Err("`svg` must be an object of SVG options (see document.formats)".into()),
+        Some(_) => {
+            return Err("`svg` must be an object of SVG options (see document.formats)".into());
+        }
     }
     Ok(m)
 }
@@ -145,6 +147,17 @@ fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>,
     let named = boards.pick.resolve(n)?;
     let chosen = named.is_some();
     Ok((opts, named.unwrap_or_else(|| vec![0]).into_iter().map(Some).collect(), chosen))
+}
+
+/// What a save of `doc` as SVG (format `label`) with options `p` loses of several artboards: the
+/// file is one artboard and reopens as one, unless it carries the native document (Preserve
+/// Editing Capabilities).
+pub(super) fn lost_artboards_warning(doc: &Document, p: &Value, label: &str) -> Option<String> {
+    let n = doc.artboards.len();
+    let preserved = plan(doc, p).is_ok_and(|(opts, ..)| opts.preserve_editing);
+    (n > 1 && !preserved).then(|| {
+        format!("{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.")
+    })
 }
 
 /// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they

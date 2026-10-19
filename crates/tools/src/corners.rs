@@ -374,7 +374,10 @@ impl CornerDrag {
         if !self.began {
             return vec![];
         }
-        let mut out = vec![Overlay::Measure { p: self.at, text: format!("Radius: {}", cx.len(self.radius)) }];
+        let mut out = vec![];
+        if cx.measurement_labels {
+            out.push(Overlay::Measure { p: self.at, text: format!("Radius: {}", cx.len(self.radius)) });
+        }
         if self.at_limit {
             out.push(Overlay::Path { path: self.corners_at_limit(), color: crate::builder::HIGHLIGHT_RED, width: 2.0, dashed: false });
         }
@@ -465,6 +468,8 @@ mod tests {
             assert!((radius(&a[1]) - 15.0).abs() < 1e-9);
             assert!(matches!(&a[1], Action::Preview(_, v) if v["id"] == id.0));
             assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Radius: 15.00 pt")));
+            let quiet = ToolContext { measurement_labels: false, ..crate::testutil::cx(&d, &s, &p) };
+            assert!(!t.overlays(&quiet).iter().any(|o| matches!(o, Overlay::Measure { .. })));
             // Past the middle the corner is fully round; back outside it is square.
             assert_eq!(radius(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 100.0))[0]), 50.0);
             assert_eq!(radius(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 260.0))[0]), 0.0);

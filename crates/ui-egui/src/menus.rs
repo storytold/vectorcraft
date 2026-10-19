@@ -192,6 +192,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
     ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
+    ("view.snapToGlyph", "Snap to Glyph", "", "{} toggle: drawing snaps to live-text baselines and glyph bounds"),
     (
         "view.preciseCursors",
         "Precise Cursors",
@@ -471,7 +472,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height; OK runs artboard.setProps), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x and y, draws one there with them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), size (pt); OK runs tool.setOption {tool, values})",
+        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height; OK runs artboard.setProps), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x and y, draws one there with them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), size (pt); OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values})",
     ),
     (
         "ui.colorGuideOptions",
@@ -553,7 +554,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layersPanelOptions",
         "Panel Options…",
         "",
-        "{} open the Layers panel's Panel Options: dialog `layersPanelOptions`, fields layersOnly, rowSize (small|medium|large|other), otherSize (12–100 pt), thumbLayers, thumbGroups, thumbObjects; OK applies them (kept with the UI state)",
+        "{} open the Layers panel's Panel Options: dialog `layersPanelOptions`, fields layersOnly, locateSelected (Locate Selected Objects, off by default: when the last selected object changes outside the panel, on the canvas or by a command, the panel opens the layers and groups around it and scrolls to its row, as after layer.locate, without highlighting the row; when Show Layers Only, a search or the filter leaves the object without a row, the panel opens no rows for it and scrolls as with the option off; a change made during a drag is located when the drag ends), rowSize (small|medium|large|other), otherSize (12–100 pt), thumbLayers, thumbGroups, thumbObjects; OK applies them (kept with the UI state)",
     ),
     (
         "ui.layersExpand",
@@ -665,6 +666,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Corners…",
         "",
         "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget opens it too): OK runs object.setLiveShape",
+    ),
+    (
+        "ui.simplifyAuto",
+        "Auto-Simplify",
+        "",
+        "{} the open Simplify slider (Object › Path › Simplify opens it: dialog `simplifySlider` with field `level` 0..100, object.path.simplify's level, 50 as it opens, previewed on the canvas until ui.dialog.confirm keeps it as one undo step; after OK in the Simplify dialog with `retain` ticked, the menu item opens the dialog `simplify` with the fields of that OK instead) moves to the level object.path.simplify {auto: true} picks for the selection and previews it → {level}; an error when the slider isn't open",
+    ),
+    (
+        "ui.simplifyMoreOptions",
+        "More Options",
+        "",
+        "{} the Simplify dialog (dialog `simplify`: tolerance (pt), angleThreshold, straightLines, showOriginal, retain: ticked, OK makes Object › Path › Simplify open this dialog with these fields next time) takes the open Simplify slider's place, at the slider's tolerance → {tolerance}; an error when the slider isn't open",
     ),
     (
         "ui.justification",
@@ -1193,6 +1206,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("no such saved selection".into()),
         },
         "view.snapToPixel" => flag(&mut app.ui.view.snap_to_pixel),
+        "view.snapToGlyph" => flag(&mut app.ui.view.snap_to_glyph),
         // The preference itself (General › Use Precise Cursors), so the command, the dialog and the saved
         // preferences share one value.
         "view.preciseCursors" => {
@@ -1583,6 +1597,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("no such user library".into()),
         },
         "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
+        "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
@@ -1763,6 +1779,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
+        "view.snapToGlyph" => v.snap_to_glyph,
         // Type on a Path effect of the selected path type.
         "type.pathOptions" if p.get("effect").is_some() => {
             selected_text(true).is_some_and(|t| p.get("effect").and_then(Value::as_str) == Some(t.path_effect.id()))
@@ -2292,6 +2309,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
@@ -2572,6 +2590,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     "Intertwine",
                     vec![c("Make", "object.intertwine.make"), c("Edit", "object.intertwine.edit"), c("Release", "object.intertwine.release")],
                 ),
+                sub("Objects on Path", vec![c("Attach", "object.objectsOnPath.attach"), c("Expand", "object.objectsOnPath.expand")]),
                 sub(
                     "Blend",
                     vec![
@@ -2896,7 +2915,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Snap to Grid", "view.snapToGrid"),
                 c("Snap to Pixel", "view.snapToPixel"),
                 c("Snap to Point", "view.snapToPoint"),
-                todo("Snap to Glyph"),
+                c("Snap to Glyph", "view.snapToGlyph"),
                 Sep,
                 c("New View…", "view.saved.new"),
                 c("Edit Views…", "view.saved.edit"),
@@ -3116,6 +3135,10 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         }
         if several && paths {
             v.push(c("Make Compound Path", "object.compoundPath.make"));
+        }
+        // Chooses the Objects on Path tool, whose click on a path attaches the selection to it.
+        if several {
+            v.push(c("Objects on Path", "object.objectsOnPath.attach"));
         }
         if any(|k| matches!(k, NodeKind::Compound { .. })) {
             v.push(c("Release Compound Path", "object.compoundPath.release"));
@@ -3386,10 +3409,10 @@ fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> 
         // Offset Path opens on the values it was last confirmed with.
         "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
-        "object.path.simplify" => (
-            "simplify",
-            json!({"tolerance": "1 pt", "angleThreshold": crate::dialogs::path_ops::ANGLE_THRESHOLD, "straightLines": false, "showOriginal": false, "preview": true}),
-        ),
+        // Simplify opens its slider, or the dialog on the fields it was last confirmed with when
+        // "Open this dialog with these settings next time" was ticked.
+        "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
+        "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields()),
         "object.path.splitIntoGrid" => {
             // The grid starts at the size of the selection.
             let size =

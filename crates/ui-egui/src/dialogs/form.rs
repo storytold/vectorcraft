@@ -611,14 +611,21 @@ pub(super) fn preview_result(
         }
         return None;
     }
+    preview_now(app, d, label, cmd, params)
+}
+
+/// The preview of [`preview_result`] without its checkbox: `params` run again on the interaction's
+/// snapshot when they differ from the last preview. Returns the command's result only when a new
+/// preview succeeds.
+pub(super) fn preview_now(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) -> Option<Value> {
     let mut result = None;
-    if d.fields.get(LAST) != Some(&params) || !app.session.in_interaction() {
+    if d.fields.get(PREVIEWED) != Some(&params) || !app.session.in_interaction() {
         let _ = app.session.begin_interaction(label);
         match app.session.preview(cmd, &params) {
             Ok(r) => result = Some(r),
             Err(e) => app.status(e.to_string()),
         }
-        d.fields.insert(LAST.into(), params);
+        d.fields.insert(PREVIEWED.into(), params);
     }
     result
 }

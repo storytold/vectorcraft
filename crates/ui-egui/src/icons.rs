@@ -84,6 +84,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-measure" => "dc-measure",
         "tool-dimension" => "dc-dimension",
         "tool-blend" => "dc-blend",
+        "tool-objects-on-path" => "dc-objects-on-path",
         "tool-symbol" => "dc-symbol-sprayer",
         "tool-graph" => "chart-column",
         "tool-artboard" => "frame",
@@ -174,6 +175,16 @@ mod tests {
             assert!(exists(name));
             assert_eq!(tool_icon(name), *name);
         }
+    }
+
+    /// Appearance (effects) and Pathfinder both lived in the icon column; they used the same
+    /// overlapping-squares motif (storytold/vectorcraft#2681).
+    #[test]
+    fn appearance_panel_icon_is_not_the_pathfinder_icon() {
+        let appearance = String::from_utf8_lossy(include_bytes!("../../../assets/icons/dc-appearance.svg"));
+        let pathfinder = String::from_utf8_lossy(include_bytes!("../../../assets/icons/dc-pathfinder.svg"));
+        assert_ne!(appearance.as_bytes(), pathfinder.as_bytes());
+        assert!(appearance.contains("<circle") && !pathfinder.contains("<circle"), "appearance should read as a list, not overlapping squares");
     }
 
     #[test]

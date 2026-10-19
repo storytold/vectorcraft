@@ -211,6 +211,7 @@ fn raster_filter_dialogs_preview_and_apply() {
         ("pixelate.mezzotint", "type", "longLines"),
         ("pixelate.pointillize", "cellSize", "12"),
         ("sketch.halftonePattern", "patternType", "line"),
+        ("sketch.plaster", "lightDirection", "bottomLeft"),
         ("texture.craquelure", "crackDepth", "9"),
         ("texture.grain", "grainType", "stippled"),
         ("texture.mosaicTiles", "tileSize", "20"),
@@ -474,6 +475,10 @@ fn menu_parameter_dialogs_are_compact() {
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
         app.run("select.all", json!({})).unwrap();
         crate::menus::invoke(&mut app, id, json!({}));
+        // Simplify opens its slider; More Options opens the dialog.
+        if id == "object.path.simplify" {
+            app.run("ui.simplifyMoreOptions", json!({})).unwrap();
+        }
         assert!(app.ui.dialog.is_some(), "{id} opened no dialog");
         let wide = dialog_rect(&mut app, 1600.0);
         eprintln!("{id}: {:.0} × {:.0} in a 1600-point window", wide.width(), wide.height());

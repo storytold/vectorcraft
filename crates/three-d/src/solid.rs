@@ -433,8 +433,7 @@ struct Camera {
     origin: Point,
     /// The eye's distance in front of the centre; `None` without perspective.
     eye: Option<f64>,
-    /// Deeper than any part of the object: faces drawn first go this far behind it, and faces
-    /// drawn last go this far in front of it.
+    /// Deeper than any part of the object: faces drawn first go this far behind it.
     far: f64,
     light: V3,
 }
@@ -487,7 +486,9 @@ enum Order {
     /// a piece of a twisted wall at the solid's outline covers the walls behind it.
     Twisted,
     /// The face is drawn after every other face when it is turned toward the viewer. A flat end of
-    /// the solid has the whole solid behind its plane, so it covers whatever it overlaps.
+    /// the solid has the whole solid behind its plane, so it covers whatever it overlaps. Its depth
+    /// is `f64::MAX`, so the faces drawn last by several solids sorted together keep the order they
+    /// were added in.
     Last,
 }
 
@@ -526,8 +527,8 @@ impl Builder<'_> {
         }
         let depth = if behind && order != Order::Twisted {
             centre.2 - self.camera.far
-        } else if order == Order::Last {
-            centre.2 + self.camera.far
+        } else if order == Order::Last && facing > 0.0 {
+            f64::MAX
         } else {
             centre.2
         };
@@ -840,12 +841,11 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
         }
     }
     if o.cap {
-        // A cap turned toward the viewer covers the twisted walls it overlaps, even those nearer
-        // than its center.
-        let ends = if o.twist != 0.0 { Order::Last } else { Order::Depth };
+        // A cap turned toward the viewer covers the walls it overlaps, even those nearer than its
+        // center: twisted walls, and the walls of a fill inside the solid of its stroke.
         for (s, n) in [(steps.first(), 1.0), (steps.last(), -1.0)] {
             let Some(s) = s else { continue };
-            b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), ends)?;
+            b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), Order::Last)?;
         }
     }
     Ok(b.finish())
@@ -859,7 +859,11 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
     let camera = Camera::new(view, bounds, 0.0);
     let mut b = Builder { camera: &camera, closed: false, facets: vec![] };
     let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();
-    b.face(contours, camera.rotate(V3(0.0, 0.0, 1.0)), Order::Depth)?;
+    // A plane is one flat face, seen from either side. Its normal is turned toward the viewer, so
+    // it is drawn last, as a cap is, and planes drawn in one order keep the order they are given in.
+    let up = camera.rotate(V3(0.0, 0.0, 1.0));
+    let n = if camera.facing(V3::default(), up) < 0.0 { V3(-up.0, -up.1, -up.2) } else { up };
+    b.face(contours, n, Order::Last)?;
     Ok(b.finish())
 }
 
@@ -1258,39 +1262,94 @@ fn cell_triangles(pieces: &[Vec<Point>]) -> Option<Vec<[Point; 3]>> {
     Some(triangles)
 }
 
-/// The part of `outline` inside `cell`, as rings (holes running the other way).
-fn material(outline: &PathData, cell: Rect) -> Option<Vec<Vec<Point>>> {
+/// The part of `outline` (its rings, each with its bounds) inside `cell`, as rings (holes running
+/// the other way). Only the rings whose bounds meet the cell's go into the boolean.
+fn material(outline: &[(Rect, vectorcraft_geom::SubPath)], cell: Rect) -> Option<Vec<Vec<Point>>> {
     let r = PathData::single(vectorcraft_geom::SubPath::polyline(
         &[Point::new(cell.x0, cell.y0), Point::new(cell.x1, cell.y0), Point::new(cell.x1, cell.y1), Point::new(cell.x0, cell.y1)],
         true,
     ));
+    let near = PathData::new(
+        outline.iter().filter(|(b, _)| b.x0 <= cell.x1 && cell.x0 <= b.x1 && b.y0 <= cell.y1 && cell.y0 <= b.y1).map(|(_, s)| s.clone()).collect(),
+    );
     let rule = FillRule::NonZero;
     let part =
-        vectorcraft_pathops::try_boolean(&r, rule, outline, rule, vectorcraft_pathops::BoolOp::Intersect, vectorcraft_pathops::DEFAULT_PRECISION)
+        vectorcraft_pathops::try_boolean(&r, rule, &near, rule, vectorcraft_pathops::BoolOp::Intersect, vectorcraft_pathops::DEFAULT_PRECISION)
             .ok()?;
     rings(&part, rule, cell.width(), MAX_PLANE_POINTS).ok()
 }
 
-/// Inflate: the shape puffed out like a cushion, its edge kept where the art's outline is.
-pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, view: View) -> Result<Vec<Facet>, String> {
-    check_bounds(bounds)?;
-    let o = options.sanitized();
+/// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
+struct Puff {
+    rings: Vec<Vec<Point>>,
+    /// The index of the rings' edges.
+    edges: Edges,
+    cell: f64,
+    nx: usize,
+    ny: usize,
+    m: Membrane,
+    /// How high the front rises at its peak.
+    height: f64,
+}
+
+/// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
+fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
     let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     if rings.is_empty() {
-        return Ok(vec![]);
+        return Ok(None);
     }
     let size = bounds.width().max(bounds.height());
     if size <= 0.0 {
-        return Ok(vec![]);
+        return Ok(None);
     }
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
     let (nx, ny) = (((bounds.width() / cell).ceil() as usize).max(1), ((bounds.height() / cell).ceil() as usize).max(1));
     let edges = Edges::new(&rings);
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
-    let outline = PathData::new(rings.iter().map(|r| vectorcraft_geom::SubPath::polyline(r, true)).collect());
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;
+    Ok(Some(Puff { rings, edges, cell, nx, ny, m, height }))
+}
+
+/// Inflate: the shape puffed out like a cushion, its edge kept where the art's outline is.
+pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, view: View) -> Result<Vec<Facet>, String> {
+    inflate_together(&[(path, rule)], bounds, options, view).pop().unwrap_or(Ok(vec![]))
+}
+
+/// Inflate for several shapes of one object (a fill and the outlines of its strokes): each puffs
+/// on its own over the grid of `bounds`, and one eye sees them all, as far away as the highest
+/// puff needs with Perspective. One result for each shape, in order.
+pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View) -> Vec<Result<Vec<Facet>, String>> {
+    let o = options.sanitized();
+    let puffs: Vec<Result<Option<Puff>, String>> =
+        shapes.iter().map(|(path, rule)| check_bounds(bounds).and_then(|()| puff(path, *rule, bounds, &o))).collect();
+    let reach = puffs.iter().flatten().flatten().map(|p| p.height).fold(0.0, f64::max);
+    puffs
+        .into_iter()
+        .map(|p| match p {
+            Ok(Some(p)) => inflated(p, bounds, o, view, reach),
+            Ok(None) => Ok(vec![]),
+            Err(e) => Err(e),
+        })
+        .collect()
+}
+
+/// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
+/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together.
+fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result<Vec<Facet>, String> {
+    let Puff { rings, edges, cell, nx, ny, m, height } = p;
+    let outline: Vec<(Rect, vectorcraft_geom::SubPath)> = rings
+        .iter()
+        .filter_map(|r| {
+            let b = r.iter().skip(1).fold(Rect::from_points(*r.first()?, *r.first()?), |b, p| b.union_pt(*p));
+            Some((b, vectorcraft_geom::SubPath::polyline(r, true)))
+        })
+        .collect();
+    // When no shape puffs (no volume, or shapes too narrow for the grid), every front (and a back
+    // that puffs too) lies flat in one plane: its cells are drawn last, as caps are. If one shape
+    // puffs, a flat front can be behind its puff, so the cells keep their depths.
+    let flat = reach <= 0.0;
     let lift = |p: Point| {
         if m.peak <= 0.0 || edges.near(p, 1e-9) {
             return 0.0;
@@ -1315,7 +1374,7 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
         if n.dot(n) > 0.5 { n } else { V3(0.0, 0.0, 1.0) }
     };
     let smooth = view.shade && view.has_colored_lights();
-    let camera = Camera::new(view, bounds, o.depth + 2.0 * height);
+    let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
     // Without its back cap the object is a shell open behind, its inside showing.
     let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
     let half = o.depth / 2.0;
@@ -1464,7 +1523,8 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
                     let front: Vec<Vec<V3>> =
                         pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, half + h)).collect()).collect();
                     let n = newell(&front);
-                    b.face(front, n, Order::Depth)?;
+                    let order = if flat { Order::Last } else { Order::Depth };
+                    b.face(front, n, order)?;
                     if o.both_sides && o.cap {
                         // The back winds the same way round as the front, so its outward normal is
                         // reversed.
@@ -1474,7 +1534,7 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
                             .map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(back_turn.apply(*q), -half - h * back_turn.scale)).collect())
                             .collect();
                         let n = newell(&back);
-                        b.face(back, V3(-n.0, -n.1, -n.2), Order::Depth)?;
+                        b.face(back, V3(-n.0, -n.1, -n.2), order)?;
                     }
                 }
             }
@@ -1482,9 +1542,9 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
     }
     if !o.both_sides && o.cap {
         let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(back_turn.apply(*p), -half)).collect()).collect();
-        // The back turned toward the viewer covers the twisted walls it overlaps, even those
-        // nearer than its center.
-        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), if o.twist != 0.0 { Order::Last } else { Order::Depth })?;
+        // The back turned toward the viewer covers the walls it overlaps, even those nearer than
+        // its center: twisted walls, and the walls of a fill inside the solid of its stroke.
+        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last)?;
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.

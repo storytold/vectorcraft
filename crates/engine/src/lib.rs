@@ -36,6 +36,7 @@ pub use journal::Journal;
 pub use tooling::{UiRequest, ViewInfo};
 pub use vectorcraft_doc as doc;
 pub use vectorcraft_doc::cancel;
+pub use vectorcraft_pathops::{SIMPLIFY_LEVEL, simplify_level_tolerance};
 pub use vectorcraft_tools as tools;
 
 #[derive(Debug, thiserror::Error)]
@@ -1348,6 +1349,8 @@ impl Session {
         // Placed documents are read by the native format's loader.
         vectorcraft_doc::placed_document::set_loader(cmd::place::document::read_document);
         vectorcraft_doc::placed_document::set_file_reader(cmd::place::document::read_file_again);
+        // Clicks find an image's own fills and strokes where their effects draw them.
+        vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
         Self {
             docs: vec![],
             active: None,
@@ -1702,14 +1705,17 @@ impl Session {
         let before = st.doc.clone();
         let before_sel = st.selection.clone();
         let doc = Arc::make_mut(&mut st.doc);
-        // Dimensions follow the art they measure.
+        // Objects attached to a path follow it, and dimensions follow the art they measure.
         let result = match f(doc, &mut st.selection).and_then(|v| {
+            cmd::objects_on_path::refresh(&before, doc);
             cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
             Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
                 Err(e) => Err(e),
                 Ok(()) => {
+                    // Attached Shaper groups whose art was rebuilt go back on their path.
+                    cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
@@ -2186,6 +2192,8 @@ mod tests_nativefile;
 mod tests_newart;
 #[cfg(test)]
 mod tests_newdoc;
+#[cfg(test)]
+mod tests_objects_on_path;
 #[cfg(test)]
 mod tests_objexpand;
 #[cfg(test)]

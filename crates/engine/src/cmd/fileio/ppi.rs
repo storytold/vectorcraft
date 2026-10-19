@@ -220,6 +220,21 @@ mod tests {
         assert!(close(resolution(&jpg).unwrap(), (254.0, 240.0 * 2.54)));
     }
 
+    /// A CMYK JPEG carries no JFIF (it describes one- and three-component images), so its
+    /// resolution is written as EXIF instead and this reader still finds it (#3084).
+    #[test]
+    fn a_cmyk_jpeg_keeps_its_resolution_without_jfif() {
+        use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+        let o = JpegOptions { color_model: ColorModel::Cmyk, ..Default::default() };
+        let jpg = jpeg::encode(&[0; 4 * 4], 2, 2, 90, Some(240.0), &o).unwrap();
+        assert!(!jpg.windows(5).any(|w| w == b"JFIF\0"), "no JFIF on a CMYK file");
+        assert_eq!(resolution(&jpg), Some((240.0, 240.0)));
+        // An RGB file still says it in JFIF, as it always did.
+        let rgb = jpeg::encode(&[0; 3 * 4], 2, 2, 90, Some(240.0), &JpegOptions::default()).unwrap();
+        assert!(rgb.windows(5).any(|w| w == b"JFIF\0"));
+        assert_eq!(resolution(&rgb), Some((240.0, 240.0)));
+    }
+
     /// A little-endian TIFF/EXIF block declaring `x`/`y` resolution in `unit`.
     fn exif_block(x: u32, y: u32, unit: u16) -> Vec<u8> {
         let mut b = b"II*\0".to_vec();

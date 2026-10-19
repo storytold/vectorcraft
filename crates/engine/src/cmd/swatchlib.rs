@@ -272,7 +272,14 @@ impl<L: LibraryFile> Libraries<L> {
             .map(|e| (e.path.clone(), e.lib.clone()))
             .ok_or_else(|| bad(cmd, format!("`{id}` isn't a loaded library")))?;
         let (file, bytes) = match source.filter(|p| L::EXTS.contains(&extension(p).as_str())) {
-            Some(p) => (file_name(&p), read_file(&p)?),
+            Some(p) => {
+                let ext = extension(&p);
+                let base = file_name(&p);
+                // Color books (.acb) name the tab from the book title inside the file; a sandbox
+                // copy of an import often lands as tmp….tmp.acb (#2996).
+                let file = if ext == "acb" || temporary_library_file_name(&base) { library_file_name(lib.name(), &ext) } else { base };
+                (file, read_file(&p)?)
+            }
             None => (library_file_name(lib.name(), ext), encode(&lib)?),
         };
         self.rescan();
@@ -300,6 +307,12 @@ impl<L: LibraryFile> Libraries<L> {
         self.copied.push((id.to_string(), info.id.clone()));
         Ok((info, lib, written.is_some()))
     }
+}
+
+/// A library file name that looks like a host temporary (e.g. macOS `tmp1F2C.tmp.acb`).
+fn temporary_library_file_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.contains(".tmp.")
 }
 
 /// The file name of library `name` with extension `ext`: characters file systems reject become

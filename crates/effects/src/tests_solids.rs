@@ -1,6 +1,6 @@
 use serde_json::json;
 use vectorcraft_doc::{Document, NodeId};
-use vectorcraft_geom::{Affine, BezPath};
+use vectorcraft_geom::{Affine, BezPath, Point, Shape};
 
 use super::*;
 
@@ -44,7 +44,8 @@ fn every_solid_draws_shaded_faces_and_leaves_the_source_editable() {
         let art = solid_art(&n).unwrap_or_else(|| panic!("{id}"));
         assert_eq!(n.path_data(), Some(&source), "{id}");
         assert!(!faces(&art).is_empty(), "{id}");
-        // The faces are the fill's red, shaded: never brighter, never another hue.
+        // The faces are the fill's red or the stroke's black, shaded: never brighter, never another
+        // hue.
         for f in faces(&art) {
             let [r, g, b] = fill_rgb(f);
             assert!(r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4 || id == ROTATE, "{id}: {r} {g} {b}");
@@ -76,10 +77,227 @@ fn rotate_turns_every_fill_and_stroke_and_the_solids_use_the_top_fill() {
     n.appearance.effects[0].params = json!({"rotationX": 0, "rotationY": 60, "rotationZ": 0});
     let b = solid_art(&n).unwrap().children().unwrap()[1].visual_bounds().unwrap();
     assert!((b.width() - 104.0 * 0.5 - 0.75).abs() < 1e-6, "{b:?}");
-    // Extrude & Bevel paints one surface with the top fill.
+    // Extrude & Bevel draws the fill's solid and the stroke's, both opaque, as one surface.
     let mut n = square_node();
     n.appearance.effects.push(fx(EXTRUDE, json!({})));
     assert_eq!(solid_art(&n).unwrap().children().unwrap().len(), 1);
+}
+
+const BLUE: Color = Color::Rgb { r: 0.1, g: 0.3, b: 0.9 };
+
+/// `b` with a red fill and a 6 pt blue stroke above it, on the path.
+fn stroked(b: &BezPath) -> Node {
+    Node::path(NodeId(1), PathData::from_bezpath(b), Appearance::basic(Paint::solid(RED), Paint::solid(BLUE), 6.0))
+}
+
+/// A `width` × 100 pt rectangle at (100, 100), stroked.
+fn stroked_rect(width: f64) -> Node {
+    let mut b = BezPath::new();
+    b.move_to((100.0, 100.0));
+    b.line_to((100.0 + width, 100.0));
+    b.line_to((100.0 + width, 200.0));
+    b.line_to((100.0, 200.0));
+    b.close_path();
+    stroked(&b)
+}
+
+/// Is `face` in the stroke's blue (rather than the fill's red)?
+fn blue(face: &Node) -> bool {
+    let [r, _, b] = fill_rgb(face);
+    b > r
+}
+
+/// The bounds of the faces' own paths (without their seam strokes).
+fn extent(faces: &[&Node]) -> Rect {
+    faces.iter().filter_map(|f| f.path_data()?.bounds()).reduce(|a, b| a.union(b)).unwrap()
+}
+
+fn assert_rect(r: Rect, x0: f64, y0: f64, x1: f64, y1: f64) {
+    assert!([r.x0 - x0, r.y0 - y0, r.x1 - x1, r.y1 - y1].iter().all(|d| d.abs() < 1e-6), "{r:?}");
+}
+
+/// Extrude & Bevel and Inflate build a solid from each stroke's outline as well as from the path
+/// for the fill: seen straight on, the stroke's faces reach 3 pt (half its width) outside the
+/// fill's, and they are drawn in the stroke's paint.
+#[test]
+fn a_stroke_builds_a_solid_from_its_outline_beside_the_fill() {
+    for id in [EXTRUDE, INFLATE] {
+        let mut n = stroked_rect(100.0);
+        n.appearance.effects.push(fx(id, json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0})));
+        let art = solid_art(&n).unwrap();
+        let (strokes, fills): (Vec<&Node>, Vec<&Node>) = faces(&art).into_iter().partition(|f| blue(f));
+        assert!(!strokes.is_empty(), "{id}: the stroke draws");
+        assert_rect(extent(&fills), 100.0, 100.0, 200.0, 200.0);
+        assert_rect(extent(&strokes), 97.0, 97.0, 203.0, 203.0);
+        // Its own blue, shaded: never brighter, never another hue.
+        for f in &strokes {
+            let [r, g, b] = fill_rgb(f);
+            assert!(b <= 0.9 + 1e-6 && (r * 9.0 - b).abs() < 1e-4 && (g * 3.0 - b).abs() < 1e-4, "{id}: {r} {g} {b}");
+        }
+    }
+}
+
+/// Turned, the extrusion's walls show in both paints, and the front caps, which nothing of either
+/// solid can hide, are drawn last: the fill's, then the stroke's above it, equally lit. Without
+/// depth the two flat shapes are drawn in the same order. A stroke below the fill has its cap
+/// drawn below the fill's.
+#[test]
+fn the_front_caps_are_drawn_last_in_the_order_of_the_appearance() {
+    // A triangle wider than deep, so the near ends of the walls lie nearer than the middle of the
+    // caps; the mean of its outline's points is not the mean of the stroke's.
+    let mut b = BezPath::new();
+    b.move_to((100.0, 100.0));
+    b.line_to((400.0, 100.0));
+    b.line_to((100.0, 200.0));
+    b.close_path();
+    for params in [json!({}), json!({"depth": 120, "bevel": "rounded"}), json!({"depth": 0})] {
+        let mut n = stroked(&b);
+        n.appearance.effects.push(fx(EXTRUDE, params.clone()));
+        n.appearance.items.reverse();
+        let art = solid_art(&n).unwrap();
+        let [.., stroke_cap, fill_cap] = faces(&art)[..] else { panic!("{params}: two caps") };
+        assert!(blue(stroke_cap) && !blue(fill_cap), "{params}: the stroke below");
+        n.appearance.items.reverse();
+        let art = solid_art(&n).unwrap();
+        let faces = faces(&art);
+        let flat = params["depth"] == json!(0);
+        assert!(if flat { faces.len() == 2 } else { faces.len() > 4 }, "{params}: {} faces", faces.len());
+        let [.., fill_cap, stroke_cap] = faces.as_slice() else { panic!("{params}: two caps") };
+        assert!(!blue(fill_cap) && blue(stroke_cap), "{params}");
+        // The stroke's cap is a ring: its outline and the hole the fill shows through.
+        assert_eq!(stroke_cap.path_data().unwrap().subpaths.len(), 2, "{params}");
+        assert_eq!(fill_cap.path_data().unwrap().subpaths.len(), 1, "{params}");
+        let shade = |f: &Node, i: usize, of: f32| fill_rgb(f)[i] / of;
+        assert!((shade(fill_cap, 0, 0.8) - shade(stroke_cap, 2, 0.9)).abs() < 1e-5, "{params}: one plane, one light");
+        if !flat {
+            assert!(faces.iter().filter(|f| blue(f)).count() > 2 && faces.iter().filter(|f| !blue(f)).count() > 1, "{params}: walls of both");
+        }
+    }
+}
+
+/// A stroked open path builds a ribbon, the stroke's outline, not the area the path would enclose
+/// if it were closed: for an L of two 100 pt legs, a 6 pt band with butt ends and a mitered corner.
+#[test]
+fn a_stroked_open_path_builds_a_ribbon() {
+    let mut b = BezPath::new();
+    b.move_to((100.0, 100.0));
+    b.line_to((200.0, 100.0));
+    b.line_to((200.0, 200.0));
+    for id in [EXTRUDE, INFLATE] {
+        let mut n = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::None, Paint::solid(BLUE), 6.0));
+        n.appearance.effects.push(fx(id, json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "volume": 0})));
+        let art = solid_art(&n).unwrap();
+        let faces = faces(&art);
+        assert!(faces.iter().all(|f| blue(f)), "{id}");
+        assert_rect(extent(&faces), 100.0, 97.0, 203.0, 200.0);
+        let area: f64 = faces.iter().map(|f| f.path_data().unwrap().to_bezpath().area().abs()).sum();
+        // 6 × 200 less the 3 × 3 the legs share, plus the 3 × 3 miter.
+        assert!((area - 1200.0).abs() < 1e-6, "{id}: {area}");
+    }
+}
+
+/// A stroke whose outline takes more points than a solid takes is left out, and the fill's solid
+/// still draws.
+#[test]
+fn a_stroke_past_the_limits_is_left_out() {
+    // 1,500 corners: within the 2,048 points of the fill's solid, but not the stroke's outline.
+    let points: Vec<Point> = (0..1500)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 1500.0).sin_cos();
+            let r = if k % 2 == 0 { 100.0 } else { 96.0 };
+            Point::new(200.0 + r * c, 200.0 + r * s)
+        })
+        .collect();
+    let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    for id in [EXTRUDE, INFLATE] {
+        let mut n = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(RED), Paint::solid(BLUE), 2.0));
+        n.appearance.effects.push(fx(id, json!({})));
+        let art = solid_art(&n).unwrap_or_else(|| panic!("{id}: the fill's solid draws"));
+        assert!(!faces(&art).is_empty() && faces(&art).iter().all(|f| !blue(f)), "{id}");
+    }
+}
+
+/// At no volume Inflate's front is flat: turned, the fill's cells are all drawn before the stroke's,
+/// whatever their depths, as the extrusion's caps are. When the fill puffs, a stroke too narrow to
+/// puff on the grid stays flat and keeps its depths: the fill's puff is drawn over its far side.
+#[test]
+fn a_flat_inflate_draws_the_strokes_front_above_the_fills() {
+    // On the 100 pt square's grid (cells 101 / 48 pt apart from 99.5) no grid point falls inside a
+    // 1 pt stroke, so the stroke stays flat.
+    for (volume, width, length) in [(0.0, 6.0, 300.0), (50.0, 1.0, 100.0)] {
+        let mut n = stroked_rect(length);
+        if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            s.width = width;
+        }
+        n.appearance.effects.push(fx(INFLATE, json!({ "volume": volume })));
+        let art = solid_art(&n).unwrap();
+        let faces = faces(&art);
+        let first_blue = faces.iter().position(|f| blue(f)).unwrap();
+        let last_red = faces.iter().rposition(|f| !blue(f)).unwrap();
+        assert_eq!(last_red < first_blue, volume == 0.0, "{volume}: red at {last_red}, blue from {first_blue} of {}", faces.len());
+    }
+}
+
+/// With Perspective one eye sees the fill's puff and the stroke's, however much higher one rises:
+/// seen from behind, the back of a stroke aligned outside meets the fill's back exactly.
+#[test]
+fn inflate_sees_the_fill_and_the_stroke_from_one_eye() {
+    let mut n = stroked_rect(100.0);
+    if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+        s.align = vectorcraft_doc::StrokeAlign::Outside;
+    }
+    let params = json!({"volume": 100, "depth": 100, "perspectiveAngle": 120, "rotationX": 15, "rotationY": 160, "rotationZ": 0});
+    n.appearance.effects.push(fx(INFLATE, params));
+    let art = solid_art(&n).unwrap();
+    let [.., fill_back, stroke_back] = faces(&art)[..] else { panic!("two backs") };
+    assert!(!blue(fill_back) && blue(stroke_back));
+    let fill = fill_back.path_data().unwrap().bounds().unwrap();
+    // The ring's inner contour: the smaller of its two.
+    let rims = stroke_back.path_data().unwrap().subpaths.iter().filter_map(|s| PathData::new(vec![s.clone()]).bounds());
+    let hole = rims.reduce(|a, b| a.intersect(b)).unwrap();
+    assert_rect(hole, fill.x0, fill.y0, fill.x1, fill.y1);
+}
+
+/// A stroke with its own transparency or blending is a surface of its own above the fill's, so its
+/// opacity applies to the stroke as a whole.
+#[test]
+fn a_translucent_stroke_is_a_surface_of_its_own() {
+    for (opacity, blend) in [(0.5, BlendMode::Normal), (1.0, BlendMode::Multiply)] {
+        let mut n = stroked_rect(100.0);
+        if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            s.opacity = opacity;
+            s.blend = blend;
+        }
+        n.appearance.effects.push(fx(EXTRUDE, json!({})));
+        let art = solid_art(&n).unwrap();
+        let surfaces = art.children().unwrap();
+        assert_eq!(surfaces.len(), 2);
+        assert_eq!((surfaces[0].opacity, surfaces[0].blend), (1.0, BlendMode::Normal));
+        assert_eq!((surfaces[1].opacity, surfaces[1].blend), (opacity, blend));
+        assert!(surfaces[0].children().unwrap().iter().all(|f| !blue(f)) && surfaces[1].children().unwrap().iter().all(|f| blue(f)));
+    }
+}
+
+/// With a light that is not white, a fill in a gradient with transparent stops is drawn with an
+/// opacity mask over its whole surface: the fill's solid and the stroke's stay surfaces of their
+/// own, and the mask stays on the fill's. Under a white light the same object is one surface.
+#[test]
+fn a_masked_surface_under_a_colored_light_stays_whole() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let mut half = GradientStop::new(1.0, RED);
+    half.opacity = 0.5;
+    let gradient = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops: vec![GradientStop::new(0.0, RED), half] });
+    for (lights, surfaces) in [(json!({"lights": [{"color": "#ff8080"}]}), 2), (json!({}), 1)] {
+        let mut n = stroked_rect(100.0);
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+            f.paint = Paint::Gradient(Box::new(gradient.clone()));
+        }
+        n.appearance.effects.push(fx(EXTRUDE, lights.clone()));
+        let art = solid_art(&n).unwrap();
+        let drawn = art.children().unwrap();
+        assert_eq!(drawn.len(), surfaces, "{lights}");
+        assert_eq!(drawn[0].extras().mask.is_some(), surfaces == 2, "{lights}");
+    }
 }
 
 #[test]
@@ -230,9 +448,9 @@ fn effects_before_it_shape_the_solid_and_effects_after_it_bend_the_result() {
     let mut n = square_node();
     n.appearance.effects.push(fx("path.offsetPath", json!({"offset": 20})));
     n.appearance.effects.push(fx(EXTRUDE, json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "perspectiveAngle": 0})));
-    // Straight on, the extrusion shows its front: the offset square.
+    // Straight on, the extrusion shows its front: the offset square and its 4 pt stroke.
     let b = solid_art(&n).unwrap().visual_bounds().unwrap();
-    assert!((b.width() - 140.0 - 0.75).abs() < 1e-6, "{b:?}");
+    assert!((b.width() - 144.0 - 0.75).abs() < 1e-6, "{b:?}");
     n.appearance.effects.push(fx("distort.twist", json!({"angle": 30})));
     let art = solid_art(&n).unwrap();
     assert!(art.appearance.effects.iter().any(|e| e.id == "distort.twist"), "applied to the result as a whole");
@@ -316,6 +534,9 @@ fn colored_solid_inflate_batches_channels_and_clips_once_per_surface() {
     }
     let (groups, clips, paths) = count(&art);
     assert!(paths > 1000, "exercise a tessellated surface");
-    assert_eq!(clips, 1);
-    assert_eq!(groups, 7, "group count must not grow with triangle count");
+    // The fill's solid and the stroke's, each one composite with its own clip.
+    let surfaces = art.children().unwrap().len();
+    assert_eq!(surfaces, 2);
+    assert_eq!(clips, surfaces);
+    assert_eq!(groups, 1 + 6 * surfaces, "group count must not grow with triangle count");
 }

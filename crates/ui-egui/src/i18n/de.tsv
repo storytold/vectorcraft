@@ -1062,6 +1062,7 @@
 	Fill (X), double-click for the Color Picker	Fläche (X), Doppelklick öffnet den Farbwähler
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
+	Alt key toggles to Smooth Tool	Alt-Taste schaltet auf Glätten-Werkzeug um
 	Keep selected	Ausgewählt lassen
 	Merge only with selection	Nur mit Auswahl zusammenfügen
 	Fill Color	Flächenfarbe
@@ -1192,6 +1193,8 @@ file-filter	Templates	Vorlagen
 	Large Gaps	Große Lücken
 	Gap Preview Color:	Vorschaufarbe für Lücken:
 	Close Gaps With Paths	Lücken mit Pfaden schließen
+	Select Fills	Flächen auswählen
+	Select Strokes	Konturen auswählen
 	Gaussian Blur…	Gaußscher Weichzeichner…
 	General	Allgemein
 	General › Placement › X	Allgemein › Platzierung › X
@@ -1398,6 +1401,12 @@ file-filter	Templates	Vorlagen
 	Release Envelope	Hülle zurückwandeln
 	Release Image Trace	Bildnachzeichner zurückwandeln
 	Release Intertwine	Verflechtung zurückwandeln
+	Objects on Path	Objekte auf Pfad
+	Attach	Anhängen
+	Objects on Path Options	Optionen für Objekte auf Pfad
+	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
+	Attach Objects on Path	Objekte an Pfad anhängen
+	Expand Objects on Path	Objekte auf Pfad umwandeln
 	Release Live Paint	„Interaktiv malen“ zurückwandeln
 	Release Repeat	Wiederholung zurückwandeln
 	Release Slice	Slice zurückwandeln
@@ -1721,6 +1730,7 @@ file-filter	Templates	Vorlagen
 	Load Text into Clipboard	Text in die Zwischenablage laden
 	Local Libraries	Lokale Bibliotheken
 	Locate Object	Objekt ausfindig machen
+	Locate Selected Objects	Ausgewählte Objekte ausfindig machen
 	Location	Speicherort
 	Location:	Ort:
 	Lock	Sperren
@@ -2120,6 +2130,7 @@ file-filter	Templates	Vorlagen
 	Output White	Ausgabe Weiß
 	Output › Mode	Ausgabe › Modus
 	Output:	Ausgabe:
+	Overlap	Überlappung
 	Overlap:	Überlappung:
 	Overlapping	Überlappend
 	Overlay	Ineinanderkopieren
@@ -2897,6 +2908,8 @@ mark-style	Japanese	Japanisch
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
 	Show Original Path	Originalpfad einblenden
+	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
+	Auto-Simplify	Automatisch vereinfachen
 	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
@@ -2994,6 +3007,7 @@ effect	Points	Punkte
 	Snap to Pixel	An Pixel ausrichten
 	Precise Cursors	Präzise Cursor
 	Snap to Point	An Punkt ausrichten
+	Snap to Unit	An Einheit ausrichten
 	Snapping Tolerance	Einrasttoleranz
 	Social Square Post 1080×1080	Quadratischer Social-Media-Beitrag 1080×1080
 	Soft Light	Weiches Licht
@@ -3797,6 +3811,7 @@ theme	Appearance	Erscheinungsbild
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black oder eine Farbe wie "#ff8800"
 @msg	bad color {v}	ungültige Farbe {v}
 @msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
+@msg	the Simplify slider is not open	der Regler „Vereinfachen“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
@@ -4035,6 +4050,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a linked image: an embedded one has no file	wählen Sie ein verknüpftes Bild aus: Ein eingebettetes hat keine Datei
 @msg	select a repeat	wählen Sie eine Wiederholung aus
 @msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
+@msg	select an Objects on Path group	wählen Sie eine Gruppe „Objekte auf Pfad“ aus
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
@@ -4346,7 +4362,7 @@ theme	Appearance	Erscheinungsbild
 	Move to Group	In Gruppe verschieben
 	No results	Keine Ergebnisse
 	No items in this library match “{query}”.	Keine Elemente in dieser Bibliothek entsprechen „{query}“.
-	Right-click an item to move it into this group.	Klicken Sie mit der rechten Maustaste auf ein Element, um es in diese Gruppe zu verschieben.
+	Drag an item here, or right-click one, to put it in this group.	Ziehen Sie ein Element hierher oder klicken Sie mit der rechten Maustaste darauf, um es in diese Gruppe zu legen.
 @msg	Imported library {name}	Bibliothek {name} importiert
 # Linked files changed on disk.
 	Update Changed Links	Geänderte Verknüpfungen aktualisieren
@@ -4732,6 +4748,7 @@ effect	Soft	Weich
 @msg	choose a destination folder	wählen Sie einen Zielordner
 @msg	choose a source folder	wählen Sie einen Quellordner
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
 @msg	the action has no steps	die Aktion hat keine Schritte
 
 # User Interface › Accent Color
@@ -4806,3 +4823,19 @@ effect	Soft	Weich
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
+	Move Anchor Point	Ankerpunkt verschieben
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behält 1 der {n} Zeichenflächen des Dokuments: Die Datei wird mit einer wieder geöffnet. Aktivieren Sie „Bearbeitungsfunktionen beibehalten“, um alle zu behalten.
+	Chalk & Charcoal…	Kreide & Kohle…
+	Chalk & Charcoal	Kreide & Kohle
+	Graphic Pen…	Grafikstift…
+	Graphic Pen	Grafikstift
+	Reticulation…	Retikulation…
+	Reticulation	Retikulation
+	Plastic Wrap…	Kunststofffolie…
+	Plastic Wrap	Kunststofffolie
+	Chrome…	Chrom…
+	Chrome	Chrom
+	Drop here to take it out of its group	Hier ablegen, um es aus seiner Gruppe zu nehmen
+	Move Library Group	Bibliotheksgruppe verschieben
+	Plaster…	Gipsabdruck…
+	Plaster	Gipsabdruck

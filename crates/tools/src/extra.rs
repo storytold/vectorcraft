@@ -402,24 +402,30 @@ impl Tool for ShaperTool {
 pub struct GraphTool {
     id: &'static str,
     start: Option<Point>,
+    last: Point,
+    mods: Mods,
     began: bool,
 }
 
 impl GraphTool {
     fn new(id: &str) -> Self {
         let id = crate::catalog::tool_info(id).map(|t| t.id).unwrap_or("columnGraph");
-        Self { id, start: None, began: false }
+        Self { id, start: None, last: Point::ZERO, mods: Mods::default(), began: false }
     }
     fn kind(&self) -> &'static str {
         vectorcraft_doc::GraphKind::parse(self.id).unwrap_or_default().id()
     }
-    fn params(&self, s: Point, p: Point, m: Mods) -> Value {
+    /// The plot rectangle a drag from `s` to `p` draws (Shift = square, Alt = from the centre).
+    fn plot_rect(s: Point, p: Point, m: Mods) -> vectorcraft_geom::Rect {
         let mut d = p - s;
         if m.shift {
             let k = d.x.abs().max(d.y.abs());
             d = Vec2::new(k * d.x.signum(), k * d.y.signum());
         }
-        let r = if m.alt { vectorcraft_geom::Rect::from_points(s - d, s + d) } else { vectorcraft_geom::Rect::from_points(s, s + d) };
+        if m.alt { vectorcraft_geom::Rect::from_points(s - d, s + d) } else { vectorcraft_geom::Rect::from_points(s, s + d) }
+    }
+    fn params(&self, s: Point, p: Point, m: Mods) -> Value {
+        let r = Self::plot_rect(s, p, m);
         json!({ "type": self.kind(), "x": r.x0, "y": r.y0, "width": r.width().max(1.0), "height": r.height().max(1.0) })
     }
 }
@@ -435,11 +441,14 @@ impl Tool for GraphTool {
         match ev.kind {
             PointerKind::Down => {
                 self.start = Some(ev.pos);
+                self.last = ev.pos;
                 self.began = false;
                 vec![]
             }
             PointerKind::Drag => {
                 let Some(s) = self.start else { return vec![] };
+                self.last = ev.pos;
+                self.mods = ev.mods;
                 let mut out = vec![];
                 if !self.began {
                     if ev.pos.distance(s) < cx.tol(3.0) {
@@ -472,6 +481,14 @@ impl Tool for GraphTool {
         }
         vec![]
     }
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
+            let r = Self::plot_rect(s, self.last, self.mods);
+            vec![Overlay::Measure { p: self.last, text: cx.size_label(r.width(), r.height()) }]
+        } else {
+            vec![]
+        }
+    }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Crosshair
     }
@@ -501,6 +518,38 @@ mod tests {
         assert_eq!(p["longest"].as_f64(), Some(300.0));
         t.set_option("raysOn", &json!(false));
         assert_eq!(t.params(Point::ZERO, 1.0, None)["rays"].as_u64(), Some(0));
+    }
+
+    #[test]
+    fn graph_plot_measure_labels() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let measure_count = |t: &GraphTool, c: &ToolContext| t.overlays(c).iter().filter(|o| matches!(o, Overlay::Measure { .. })).count();
+        let measure_text = |t: &GraphTool, c: &ToolContext| {
+            t.overlays(c).iter().find_map(|o| match o {
+                Overlay::Measure { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+        };
+        let mut t = GraphTool::new("columnGraph");
+        let drag = |t: &mut GraphTool, c: &ToolContext| {
+            t.pointer(c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            t.pointer(c, &PointerEvent::new(PointerKind::Drag, 110.0, 60.0));
+        };
+        let on = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+        drag(&mut t, &on);
+        assert_eq!(measure_count(&t, &on), 1);
+        let text = measure_text(&t, &on).unwrap_or_default();
+        assert!(text.starts_with("W: "), "{text}");
+        assert!(text.contains("\nH: "), "{text}");
+        let off = ToolContext { measurement_labels: false, ..cx(&d, &s, &p) };
+        let mut quiet = GraphTool::new("columnGraph");
+        drag(&mut quiet, &off);
+        assert_eq!(measure_count(&quiet, &off), 0);
     }
 
     #[test]

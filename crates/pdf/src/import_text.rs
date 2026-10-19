@@ -88,14 +88,15 @@ pub(crate) struct Look {
 
 impl Look {
     /// Can a glyph drawn with `other` join a run drawn with this? A fill joins a run whose
-    /// glyphs were also stroked over (fill and stroke rendering draws each glyph twice).
+    /// glyphs were also stroked over (fill and stroke rendering draws each glyph twice); invisible
+    /// text (neither fill nor stroke) joins only invisible text.
     fn takes(&self, other: &Look) -> bool {
         self.font == other.font
             && (self.size - other.size).abs() <= self.size * 0.01
             && (self.h_scale - other.h_scale).abs() < 0.5
             && self.fill == other.fill
             && self.overprint_fill == other.overprint_fill
-            && (other.stroke.is_none() || (self.stroke == other.stroke && self.overprint_stroke == other.overprint_stroke))
+            && ((other.stroke.is_none() && other.fill.is_some()) || (self.stroke == other.stroke && self.overprint_stroke == other.overprint_stroke))
     }
 
     fn style(&self) -> CharStyle {

@@ -300,7 +300,7 @@ fn lines_without_moved_characters_are_written_as_before() {
     }
     let open = |x: &str, anchor: &str| {
         format!(
-            r##"<text transform="matrix(1 0 0 1 20 20)" x="{x}" y="12" xml:space="preserve" font-family="&apos;Source Sans 3&apos;" font-size="12" fill="#000000"{anchor}>"##
+            r##"<text transform="matrix(1 0 0 1 20 20)" x="{x}" y="12" xml:space="preserve" font-family="&apos;Source Sans 3&apos;, sans-serif" font-size="12" fill="#000000"{anchor}>"##
         )
     };
     let words =

@@ -1243,6 +1243,7 @@
 	Fill Color	Màu tô
 	Fill Grid	Tô lưới
 	Fill new strokes	Tô nét mới
+	Alt key toggles to Smooth Tool	Phím Alt chuyển sang công cụ Làm mượt
 	Keep selected	Giữ trạng thái đã chọn
 	Merge only with selection	Chỉ hợp nhất với vùng chọn
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
@@ -1394,6 +1395,8 @@ file-filter	Templates	Mẫu
 	Large Gaps	Khoảng cách lớn
 	Gap Preview Color:	Màu xem trước khoảng cách:
 	Close Gaps With Paths	Đóng khoảng cách bằng đường dẫn
+	Select Fills	Chọn vùng tô
+	Select Strokes	Chọn nét
 	Gaussian Blur	Mờ Gaussian
 	Gaussian Blur…	Làm mờ Gaussian…
 	General	Chung
@@ -1608,6 +1611,12 @@ file-filter	Templates	Mẫu
 	Release Envelope	Giải phóng Envelope
 	Release Image Trace	Giải phóng vector hóa ảnh
 	Release Intertwine	Giải phóng đan xen
+	Objects on Path	Đối tượng trên đường dẫn
+	Attach	Gắn
+	Objects on Path Options	Tùy chọn đối tượng trên đường dẫn
+	Objects on Path Tool	Công cụ Đối tượng trên đường dẫn
+	Attach Objects on Path	Gắn đối tượng lên đường dẫn
+	Expand Objects on Path	Mở rộng đối tượng trên đường dẫn
 	Release Live Paint	Giải phóng tô trực tiếp
 	Release Repeat	Giải phóng lặp lại
 	Release Slice	Giải phóng lát cắt
@@ -1986,6 +1995,7 @@ file-filter	Templates	Mẫu
 	Loaded Texture	Kết cấu đã tải
 	Local Libraries	Thư viện cục bộ
 	Locate Object	Xác định vị trí đối tượng
+	Locate Selected Objects	Xác định vị trí đối tượng đã chọn
 	Location	Vị trí
 	Location:	Vị trí:
 	Lock	Khóa
@@ -2438,6 +2448,7 @@ file-filter	Templates	Mẫu
 	Output › Mode	Đầu ra › Chế độ
 	Output:	Đầu ra:
 	Outside	Bên ngoài
+	Overlap	Chồng lấp
 	Overlap:	Chồng lấp:
 	Overlapping	Chồng lấp
 	Overlay	Phủ lên
@@ -2915,7 +2926,7 @@ mark-style	Japanese	Kiểu Nhật
 	Right Indent	Thụt lề phải
 	Right Plane	Mặt phẳng phải
 	Right to Left	Phải sang trái
-	Right-click an item to move it into this group.	Bấm chuột phải vào mục để di chuyển vào nhóm này.
+	Drag an item here, or right-click one, to put it in this group.	Kéo một mục vào đây, hoặc bấm chuột phải vào mục, để đưa vào nhóm này.
 	Right-Justified Tab	Tab căn phải
 	Right-to-Left Paragraph Direction	Hướng đoạn văn từ phải sang trái
 	Right:	Phải:
@@ -3273,6 +3284,8 @@ mark-style	Japanese	Kiểu Nhật
 	Show Note	Hiện ghi chú
 	Show Options	Hiện tùy chọn
 	Show Original Path	Hiện đường dẫn gốc
+	Open this dialog with these settings next time	Lần sau mở hộp thoại này với các cài đặt này
+	Auto-Simplify	Tự động đơn giản hóa
 	Color Panel Options	Tùy chọn bảng màu
 	Show Package	Hiện gói
 	Show Panel	Hiện bảng
@@ -3365,6 +3378,7 @@ mark-style	Japanese	Kiểu Nhật
 	Snap to Pixel	Hút vào pixel
 	Precise Cursors	Con trỏ chính xác
 	Snap to Point	Hút vào điểm
+	Snap to Unit	Hút vào đơn vị
 	Snapping Tolerance	Dung sai hút
 	Social Square Post 1080×1080	Bài đăng vuông mạng xã hội 1080×1080
 	Soft	Mềm
@@ -4051,6 +4065,7 @@ theme	Appearance	Giao diện
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black hoặc màu như "#ff8800"
 @msg	bad color {v}	màu không hợp lệ {v}
 @msg	the Color Picker is not open	Bộ chọn màu chưa được mở
+@msg	the Simplify slider is not open	Thanh trượt Đơn giản hóa chưa được mở
 @msg	the screen color sampler is already open	công cụ lấy mẫu màu trên màn hình đã được mở
 @msg	this system has no screen color sampler	hệ thống này không có công cụ lấy mẫu màu trên màn hình
 @msg	bad colour `{hex}` (#rrggbb)	màu không hợp lệ `{hex}` (#rrggbb)
@@ -4436,6 +4451,7 @@ theme	Appearance	Giao diện
 @msg	select a Live Paint group	hãy chọn nhóm tô trực tiếp
 @msg	select a repeat	hãy chọn một đối tượng lặp
 @msg	select an Intertwine group	hãy chọn một nhóm đan xen
+@msg	select an Objects on Path group	hãy chọn một nhóm đối tượng trên đường dẫn
 @msg	select a stroke with a variable width	hãy chọn nét có chiều rộng biến đổi
 @msg	select a symbol instance	hãy chọn đối tượng ký hiệu
 @msg	select an envelope	hãy chọn một Envelope
@@ -4746,6 +4762,7 @@ theme	Appearance	Giao diện
 @msg	choose a destination folder	hãy chọn thư mục đích
 @msg	choose a source folder	hãy chọn thư mục nguồn
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
 @msg	the action has no steps	hành động không có bước nào
 
 # User Interface › Accent Color
@@ -4820,3 +4837,19 @@ theme	Appearance	Giao diện
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
+	Move Anchor Point	Di chuyển điểm neo
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} chỉ giữ 1 trong {n} bảng vẽ của tài liệu: tệp sẽ mở lại với một bảng vẽ. Bật Bảo lưu khả năng chỉnh sửa để giữ tất cả.
+	Chalk & Charcoal…	Phấn và than…
+	Chalk & Charcoal	Phấn và than
+	Graphic Pen…	Bút đồ họa…
+	Graphic Pen	Bút đồ họa
+	Reticulation…	Lưới hạt…
+	Reticulation	Lưới hạt
+	Plastic Wrap…	Màng bọc nhựa…
+	Plastic Wrap	Màng bọc nhựa
+	Chrome…	Crôm…
+	Chrome	Crôm
+	Drop here to take it out of its group	Thả vào đây để đưa ra khỏi nhóm
+	Move Library Group	Di chuyển nhóm thư viện
+	Plaster…	Thạch cao…
+	Plaster	Thạch cao

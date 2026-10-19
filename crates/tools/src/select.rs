@@ -424,6 +424,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
+            State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             _ => false,
         }
@@ -542,7 +543,7 @@ impl Tool for SelectionTool {
                             // What the handle moves snaps as a dragged point does: to pixels or the
                             // grid, else with Smart Guides to the other objects, else with Snap to
                             // Point to their anchors; the ruler guides with Snap to Point.
-                            self.targets = Some(PointSnap::new(cx, || Targets::collect(cx.doc, &cx.selection.objects, None)));
+                            self.targets = Some(PointSnap::new(cx, || Targets::for_scale(cx)));
                             self.state = State::Scaling { handle, bx, areas };
                             return vec![Action::Begin(label.into())];
                         }
@@ -713,7 +714,7 @@ impl Tool for SelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
-            State::Pie(d) => o.extend(d.overlays()),
+            State::Pie(d) => o.extend(d.overlays(cx)),
             State::Loaded { press: Some((start, cur)), .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             _ => {}
         }
@@ -924,6 +925,22 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Down, 190.0, 191.0));
         assert!(!t.transforming(), "a press is still a click");
         t.pointer(&cx, &ev(PointerKind::Drag, 175.0, 176.0));
+        assert!(t.transforming());
+    }
+
+    /// A type-on-path bracket drag is a transform, so the sharp selection box hides while the span moves.
+    #[test]
+    fn a_bracket_drag_counts_as_transforming_once_it_moves() {
+        let (d, id) = crate::testutil::doc_with_path_type();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert!(!t.transforming());
+        t.pointer(&cx, &ev(PointerKind::Down, 280.0, 290.0));
+        assert!(!t.transforming(), "a press is still a click");
+        t.pointer(&cx, &ev(PointerKind::Drag, 320.0, 290.0));
         assert!(t.transforming());
     }
 
@@ -1677,6 +1694,38 @@ mod tests {
         t.pointer(&cx_locked, &ev(PointerKind::Drag, 120.0, 120.0));
         let a = t.pointer(&cx_locked, &ev(PointerKind::Up, 120.0, 120.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    }
+
+    /// #3036: with Lock Guides on, a guide object neither takes the press nor stops a marquee
+    /// from starting over it; with guides unlocked, the press still picks it.
+    #[test]
+    fn marquee_passes_through_locked_guide_objects() {
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let g = d.alloc_id();
+        let pts = [Point::new(20.0, 20.0), Point::new(400.0, 20.0), Point::new(400.0, 400.0), Point::new(20.0, 400.0)];
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+        let mut guide = vectorcraft_doc::Node::path(g, path, vectorcraft_doc::Appearance::default_art());
+        let vectorcraft_doc::NodeKind::Path { guide: flag, .. } = &mut guide.kind else { panic!("a path") };
+        *flag = true;
+        d.insert(Some(l), 1, guide).unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let locked = ToolContext { guides: false, ..cx(&d, &s, &p) };
+        for (x, y) in [(20.0, 60.0), (50.0, 50.0)] {
+            let mut t = SelectionTool::default();
+            assert!(t.pointer(&locked, &ev(PointerKind::Down, x, y)).is_empty(), "press at ({x}, {y})");
+            t.pointer(&locked, &ev(PointerKind::Drag, 250.0, 250.0));
+            assert!(matches!(t.state, State::Marquee { .. }), "press at ({x}, {y})");
+            // The rectangle is rubber-band selected (the engine leaves locked guides out).
+            let a = t.pointer(&locked, &ev(PointerKind::Up, 250.0, 250.0));
+            let Some(Action::Exec(c, v)) = a.first() else { panic!("press at ({x}, {y}): {a:?}") };
+            assert_eq!(c, "select.set", "press at ({x}, {y})");
+            assert!(v["ids"].as_array().unwrap().contains(&json!(id.0)), "press at ({x}, {y}): {a:?}");
+        }
+        let unlocked = ToolContext { guides: true, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        assert_eq!(t.pointer(&unlocked, &ev(PointerKind::Down, 20.0, 60.0)), vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
     }
 
     #[test]

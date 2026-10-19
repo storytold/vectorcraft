@@ -143,13 +143,13 @@ pub(super) fn import(bytes: &[u8], o: &LoadOptions, editor_document: bool) -> Re
 }
 
 /// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box) and one
-/// layer of what it shows (text as outlines: it looks as printed), and the import notes.
+/// layer of what it shows, with the same text choice as Open, and the import notes.
 pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
     let opts = ImportOptions {
         pages: Some(vec![page]),
         crop: o.crop,
         password: o.password.clone(),
-        text_as: TextAs::Outlines,
+        text_as: o.text_as,
         layers: false,
         ..Default::default()
     };
@@ -183,13 +183,20 @@ pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     let mut out = json!({"pages": pages.len(), "needsPassword": false, "pageInfo": pages});
-    if let Some(n) = p.get("thumbnail").and_then(Value::as_u64) {
-        let page = usize::try_from(n).ok().and_then(|n| n.checked_sub(1)).filter(|i| *i < info.pages.len());
-        let page = page.ok_or_else(|| bad(INFO, format!("thumbnail: no page {n} (the PDF has {})", info.pages.len())))?;
+    if let Some(page) = thumbnail_page(p, info.pages.len(), "PDF")? {
         let (doc, _) = page_document(&bytes, page, &o)?;
         out["thumbnail"] = json!(thumbnail(&doc, p)?);
     }
     Ok(out)
+}
+
+/// The page (0-based) `document.pdfInfo`'s `thumbnail` names, from 1 to `count`; `None` when it is
+/// absent or null. Any other value (0, a negative or fractional number, a string) is an error that
+/// names the pages the `what` has.
+fn thumbnail_page(p: &Value, count: usize, what: &str) -> Result<Option<usize>> {
+    let Some(v) = p.get("thumbnail").filter(|v| !v.is_null()) else { return Ok(None) };
+    let page = v.as_u64().and_then(|n| usize::try_from(n).ok()).and_then(|n| n.checked_sub(1)).filter(|i| *i < count);
+    page.map(Some).ok_or_else(|| bad(INFO, format!("thumbnail: no page {v} (the {what} has {count})")))
 }
 
 /// `document.pdfInfo` of a PostScript file (an EPS, a `.ps` file, a `.ai` in PostScript form): one
@@ -200,10 +207,7 @@ fn postscript_info(bytes: &[u8], p: &Value) -> Result<Value> {
     let page = vectorcraft_eps::page(bytes).map_err(err)?;
     let info = json!({"width": page.width(), "height": page.height(), "rotation": 0, "boxes": {}});
     let mut out = json!({"pages": 1, "needsPassword": false, "pageInfo": [info]});
-    if let Some(n) = p.get("thumbnail").and_then(Value::as_u64) {
-        if n != 1 {
-            return Err(bad(INFO, format!("thumbnail: no page {n} (the file has 1)")));
-        }
+    if thumbnail_page(p, 1, "file")?.is_some() {
         let doc = vectorcraft_eps::import_with(bytes, false).map_err(err)?.document;
         out["thumbnail"] = json!(thumbnail(&doc, p)?);
     }

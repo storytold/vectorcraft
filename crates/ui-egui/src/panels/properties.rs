@@ -561,6 +561,7 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
     let w = ui.available_width();
     super::character::font_pickers(app, ui, &s, ("font", "font-style"), (w - 4.0, w - 4.0));
+    super::character::variable_font(app, ui, &s, w - 4.0);
     super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
     // As in the Paragraph panel: the seven alignments and Hyphenate (#775); the rest is there.
@@ -811,6 +812,22 @@ mod tests {
         click(&mut app, &ctx, &texts, "Hyphenate");
         let hyphenate = |app: &VectorcraftApp| crate::panels::character::text_style(app).unwrap().1.hyphenate;
         assert!(hyphenate(&app));
+    }
+
+    /// Variable fonts get the same Variable Font button in Properties as in the Character panel.
+    #[test]
+    fn properties_variable_font_button_for_variable_type() {
+        use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+        vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let plain = app.run("text.create", json!({"x": 20, "y": 50, "text": "Static"})).unwrap()["id"].clone();
+        let id = app.run("text.create", json!({"x": 20, "y": 120, "text": "lIn", "font": TWO_AXIS_FAMILY})).unwrap()["id"].clone();
+        let ctx = egui::Context::default();
+        app.run("select.set", json!({"ids": [plain]})).unwrap();
+        assert!(!frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
     }
 
     #[test]

@@ -1398,7 +1398,7 @@ lighting	Light	სინათლე
 	This library is empty	ეს ბიბლიოთეკა ცარიელია
 	No results	შედეგები არ არის
 	No items in this library match “{query}”.	ამ ბიბლიოთეკაში „{query}“-ს შესაბამისი ელემენტი არ არის.
-	Right-click an item to move it into this group.	ამ ჯგუფში გადასატანად დაწკაპეთ ელემენტზე მარჯვენა ღილაკით.
+	Drag an item here, or right-click one, to put it in this group.	ამ ჯგუფში ჩასასმელად ჩაავლეთ ელემენტი აქ ან დაწკაპეთ მასზე მარჯვენა ღილაკით.
 	New Group	ახალი ჯგუფი
 	New Group…	ახალი ჯგუფი…
 	Move to Group	ჯგუფში გადატანა
@@ -1509,6 +1509,7 @@ lighting	Light	სინათლე
 	Left in Front	მარცხენა წინ
 	No document	დოკუმენტი არ არის
 	Open a document to edit its patterns.	გახსენით დოკუმენტი მისი პატერნების რედაქტირებისთვის.
+	Overlap	გადაფარვა
 	Overlap:	გადაფარვა:
 	Pattern options are available in pattern editing mode.	პატერნის პარამეტრები ხელმისაწვდომია პატერნის რედაქტირების რეჟიმში.
 	Right in Front	მარჯვენა წინ
@@ -1635,6 +1636,7 @@ lighting	Light	სინათლე
 	Right-Justified Tab	მარჯვნივ სწორებული ტაბულაცია
 	Select a text object to set its tab stops.	ტაბულაციის გაჩერებების დასაყენებლად მონიშნეთ ტექსტური ობიექტი.
 	Select text	მონიშნეთ ტექსტი
+	Snap to Unit	ერთეულზე მიბმა
 	+ Add Scale	+ მასშტაბის დამატება
 	Add Selected Artwork as One Asset	მონიშნული ნახატის დამატება ერთ რესურსად
 	Export Settings	ექსპორტის პარამეტრები
@@ -1978,6 +1980,7 @@ lighting	Light	სინათლე
 	Layers Panel Options	შრეების პანელის პარამეტრები
 	Row Size:	სტრიქონის ზომა:
 	Show Layers Only	მხოლოდ შრეების ჩვენება
+	Locate Selected Objects	მონიშნული ობიექტების მოძებნა
 	Thumbnails:	ესკიზები:
 	Anchor Points	საყრდენი წერტილები
 	Brush Affects:	ფუნჯი მოქმედებს:
@@ -4754,6 +4757,7 @@ imageTrace	Outline	კონტური
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	ფაილის შრეები ვერ წაიკითხა ({_1}): ის გაიხსნება როგორც მისი გვერდი, ერთ შრეში
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	ფაილის შრეები რედაქტირების მონაცემებიდან ვერ წაიკითხა ({_1}): ისინი მისი PDF ნაწილიდან აიღება
 @msg	the Color Picker is not open	ფერის ამრჩევი გახსნილი არ არის
+@msg	the Simplify slider is not open	გამარტივების სლაიდერი გახსნილი არ არის
 @msg	the screen color sampler is already open	ეკრანიდან ფერის აღება უკვე გახსნილია
 @msg	this system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს
 # Dimension tool and Object › Dimensions. A drafting dimension is ზომა (ზომის დასმა), like a dimension on a technical drawing.
@@ -4828,6 +4832,7 @@ imageTrace	Outline	კონტური
 	Intertwine	გადახლართვა
 	Arrange Intertwine Area	გადახლართვის არის დალაგება
 @msg	select an Intertwine group	მონიშნეთ გადახლართვის ჯგუფი
+@msg	select an Objects on Path group	მონიშნეთ ტრაექტორიაზე ობიექტების ჯგუფი
 	Registration:	საბაზისო წერტილი:
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
@@ -4848,6 +4853,7 @@ imageTrace	Outline	კონტური
 @msg	choose a destination folder	აირჩიეთ დანიშნულების საქაღალდე
 @msg	choose a source folder	აირჩიეთ წყარო საქაღალდე
 @msg	open a document with data sets	გახსენით დოკუმენტი მონაცემთა ნაკრებებით
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	მონაცემთა ნაკრები {name}: არაფერი გამოყენებულა; არცერთი ობიექტი არ არის მიბმული ცვლადზე, რომელსაც მასში მნიშვნელობა აქვს
 @msg	the action has no steps	მოქმედებას ნაბიჯები არ აქვს
 	Convert to Straight Lines	სწორ ხაზებად გარდაქმნა
 	Corner Point Angle Threshold:	კუთხოვანი წერტილის კუთხის ზღვარი:
@@ -4895,6 +4901,8 @@ imageTrace	Outline	კონტური
 	Rotate View to Selection	ხედის შემობრუნება მონიშნულის მიხედვით
 	Update Selection	მონიშნულის განახლება
 	Show Original Path	საწყისი ტრაექტორიის ჩვენება
+	Open this dialog with these settings next time	შემდეგ ჯერზე ამ დიალოგის ამ პარამეტრებით გახსნა
+	Auto-Simplify	ავტომატური გამარტივება
 	Texture Image	ტექსტურის გამოსახულება
 @msg	check a layer to export	მონიშნეთ საექსპორტო შრე
 @msg	select the art to export first	ჯერ მონიშნეთ საექსპორტო ნახატი
@@ -5012,6 +5020,12 @@ imageTrace	Outline	კონტური
 	Release Blend	გადასვლის მოხსნა
 	Release Envelope	გარსის მოხსნა
 	Release Intertwine	გადახლართვის მოხსნა
+	Objects on Path	ობიექტები ტრაექტორიაზე
+	Attach	მიმაგრება
+	Objects on Path Options	ტრაექტორიაზე ობიექტების პარამეტრები
+	Objects on Path Tool	ტრაექტორიაზე ობიექტების ხელსაწყო
+	Attach Objects on Path	ობიექტების ტრაექტორიაზე მიმაგრება
+	Expand Objects on Path	ტრაექტორიაზე ობიექტების გაშლა
 	Release Live Paint	ცოცხალი შეღებვის მოხსნა
 	Release Repeat	გამეორების მოხსნა
 	Release Slice	ნაჭრის მოხსნა
@@ -5032,6 +5046,8 @@ imageTrace	Outline	კონტური
 	Resize Type Area	ტექსტის არის ზომის შეცვლა
 	Scale Design	დიზაინის მასშტაბირება
 	Scale in Perspective	პერსპექტივაში მასშტაბირება
+	Select Fills	შევსებების მონიშვნა
+	Select Strokes	კონტურების მონიშვნა
 	Set History Limit…	ისტორიის ლიმიტის დაყენება…
 	Shape Builder Delete	ფიგურების კონსტრუქტორით წაშლა
 	Sliding	სრიალა
@@ -5133,3 +5149,20 @@ imageTrace	Outline	კონტური
 	Clear Artboard Color	სამუშაო დაფის ფერის გასუფთავება
 @msg	artboard {_1} is locked	სამუშაო დაფა {_1} ჩაკეტილია
 	Include Artboard Fill	სამუშაო დაფის შევსების ჩართვა
+	Move Anchor Point	საყრდენი წერტილის გადაადგილება
+	Alt key toggles to Smooth Tool	Alt კლავიში ჩართავს გაგლუვების ხელსაწყოს
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} ინახავს დოკუმენტის {n} სამუშაო დაფიდან 1-ს: ფაილი ხელახლა ერთით გაიხსნება. ყველას შესანარჩუნებლად ჩართეთ „რედაქტირების შესაძლებლობების შენარჩუნება“.
+	Chalk & Charcoal…	ცარცი და ნახშირი…
+	Chalk & Charcoal	ცარცი და ნახშირი
+	Graphic Pen…	გრაფიკული კალამი…
+	Graphic Pen	გრაფიკული კალამი
+	Reticulation…	რეტიკულაცია…
+	Reticulation	რეტიკულაცია
+	Plastic Wrap…	პლასტიკური აფსკი…
+	Plastic Wrap	პლასტიკური აფსკი
+	Chrome…	ქრომი…
+	Chrome	ქრომი
+	Drop here to take it out of its group	ჯგუფიდან ამოსაღებად ჩააგდეთ აქ
+	Move Library Group	ბიბლიოთეკის ჯგუფის გადატანა
+	Plaster…	თაბაშირი…
+	Plaster	თაბაშირი

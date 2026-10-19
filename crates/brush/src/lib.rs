@@ -287,6 +287,8 @@ pub struct ArtBrush {
     pub width: f64,
     pub flip_along: bool,
     pub flip_across: bool,
+    /// When true, art is placed on each run between sharp corners so folds do not overlap.
+    pub overlap: bool,
     pub colorization: Colorization,
 }
 
@@ -304,6 +306,7 @@ impl Default for ArtBrush {
             width: 100.0,
             flip_along: false,
             flip_across: false,
+            overlap: false,
             colorization: Colorization::Tints,
         }
     }

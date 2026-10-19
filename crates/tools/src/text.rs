@@ -633,7 +633,7 @@ impl Tool for TypeTool {
                     edit::prev_word(&text, self.caret)
                 } else {
                     if lay.glyphs.iter().any(|g| g.rtl) {
-                        vectorcraft_text::caret_horizontal(&lay, self.caret, false)
+                        vectorcraft_text::caret_horizontal_cluster(&lay, &text, self.caret, false)
                     } else {
                         edit::prev_cluster(&text, self.caret)
                     }
@@ -653,7 +653,7 @@ impl Tool for TypeTool {
                     edit::next_word(&text, self.caret)
                 } else {
                     if lay.glyphs.iter().any(|g| g.rtl) {
-                        vectorcraft_text::caret_horizontal(&lay, self.caret, true)
+                        vectorcraft_text::caret_horizontal_cluster(&lay, &text, self.caret, true)
                     } else {
                         edit::next_cluster(&text, self.caret)
                     }

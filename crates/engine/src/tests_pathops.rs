@@ -448,6 +448,58 @@ fn simplify_dense_polyline() {
     assert!(close(bounds(&s, id), Rect::new(0.0, 60.0, 300.0, 140.0), 2.0));
 }
 
+/// A sine wave with an anchor every point over `width` pt, `amplitude` pt high and a wavelength of
+/// `2π × period` pt, its anchors `jag` pt above and below it in turn, selected: (the session, the
+/// path's id).
+fn dense_wave(width: u32, amplitude: f64, period: f64, jag: f64) -> (Session, NodeId) {
+    let mut s = session();
+    let y = |i: u32| 100.0 + amplitude * (f64::from(i) / period).sin() + if i.is_multiple_of(2) { jag } else { -jag };
+    let anchors: Vec<Value> = (0..=width).map(|i| json!({"x": f64::from(i), "y": y(i)})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    (s, NodeId(r["id"].as_u64().unwrap()))
+}
+
+/// The Simplify slider: moving its level from 0 to 100 never lowers the anchor count, level 0
+/// leaves fewer anchors than level 100, and level 50 gives the 1 pt result.
+#[test]
+fn simplify_level_moves_the_anchor_count_monotonically() {
+    let (mut s, id) = dense_wave(300, 40.0, 25.0, 0.0);
+    let mut counts = vec![];
+    for level in (0..=100).step_by(10) {
+        let out = s.execute("object.path.simplify", &json!({ "level": level })).unwrap();
+        assert_eq!(out["level"], json!(f64::from(level)));
+        counts.push(path_of(&s, id).0.anchor_count());
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(counts.windows(2).all(|w| w[0] <= w[1]), "{counts:?}");
+    assert!(counts[0] < counts[10], "{counts:?}");
+    s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
+    assert_eq!(path_of(&s, id).0.anchor_count(), counts[5], "level 50 is 1 pt");
+}
+
+/// Auto-Simplify picks the lowest level whose tolerance is at most 1/400 of the selection's longer
+/// side, and 11 sampled points on each segment of the original path stay that close to the result.
+#[test]
+fn auto_simplify_keeps_the_shape_within_a_400th_of_its_size() {
+    let (mut s, id) = dense_wave(100, 15.0, 8.0, 0.2);
+    let original = path_of(&s, id).0.clone();
+    let out = s.execute("object.path.simplify", &json!({"auto": true})).unwrap();
+    // 100 pt across: 0.25 pt at most, level 70 (0.25 pt).
+    assert_eq!(out["level"], json!(70.0));
+    let result = path_of(&s, id).0.clone();
+    assert!(result.anchor_count() < original.anchor_count() / 2, "{}", result.anchor_count());
+    // How far each point along the original lies from the nearest point of the result.
+    use vectorcraft_geom::ParamCurve;
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    let fitted = &result.subpaths[0];
+    let off = |p: vectorcraft_geom::Point| {
+        (0..fitted.segment_count()).map(|i| fitted.segment(i).nearest(p, 1e-9).distance_sq.sqrt()).fold(f64::INFINITY, f64::min)
+    };
+    let sp = &original.subpaths[0];
+    let worst = (0..sp.segment_count()).flat_map(|i| (0..=10).map(move |k| sp.segment(i).eval(f64::from(k) / 10.0))).map(off).fold(0.0, f64::max);
+    assert!(worst <= 100.0 / 400.0, "{worst}");
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();

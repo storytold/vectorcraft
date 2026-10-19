@@ -187,6 +187,25 @@ fn warp_options_existing_style_edit_keeps_stack_target_visibility_and_history() 
     }
 }
 
+/// A new Warp Options dialog opens on the sliders confirmed last time (#1760 follow-up).
+#[test]
+fn warp_dialog_remembers_last_confirmed_sliders() {
+    let (mut app, _) = app();
+    app.run("effect.dialog", json!({"effect": "warp.arc", "item": null})).unwrap();
+    let ctx = context();
+    settle(&mut app, &ctx);
+    set(&mut app, json!({"bend": -40.0, "horizontal": 12.0, "vertical": -8.0, "orientation": "vertical"}));
+    confirm(&mut app).unwrap();
+    app.run("effect.dialog", json!({"effect": "warp.flag", "item": null})).unwrap();
+    settle(&mut app, &ctx);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.str("__effect"), "warp.flag");
+    assert_eq!(d.f64("bend", 0.0), -40.0);
+    assert_eq!(d.f64("horizontal", 0.0), 12.0);
+    assert_eq!(d.f64("vertical", 0.0), -8.0);
+    assert_eq!(d.str("orientation"), "vertical");
+}
+
 #[test]
 fn warp_options_preview_toggle_and_ok_use_latest_values() {
     let (mut app, id) = app();

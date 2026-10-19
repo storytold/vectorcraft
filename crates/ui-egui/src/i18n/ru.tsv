@@ -1076,6 +1076,7 @@
 	Fill (X), double-click for the Color Picker	Заливка (X), дважды щёлкните для палитры цветов
 	Fill and Stroke	Заливка и обводка
 	Fill new strokes	Заполнять новые обводки
+	Alt key toggles to Smooth Tool	Клавиша Alt переключает на инструмент «Сглаживание»
 	Keep selected	Оставлять выбранным
 	Merge only with selection	Объединять только с выделенным
 	Fill Color	Цвет заливки
@@ -1206,6 +1207,8 @@ file-filter	Templates	Шаблоны
 	Large Gaps	Большие зазоры
 	Gap Preview Color:	Цвет просмотра зазоров:
 	Close Gaps With Paths	Закрыть зазоры контурами
+	Select Fills	Выделять заливки
+	Select Strokes	Выделять обводки
 	Gaussian Blur…	Размытие по Гауссу…
 	General	Общие
 	General › Placement › X	Общие › Размещение › X
@@ -1413,6 +1416,12 @@ file-filter	Templates	Шаблоны
 	Release Envelope	Освободить оболочку
 	Release Image Trace	Освободить трассировку изображения
 	Release Intertwine	Освободить переплетение
+	Objects on Path	Объекты на контуре
+	Attach	Прикрепить
+	Objects on Path Options	Параметры объектов на контуре
+	Objects on Path Tool	Инструмент «Объекты на контуре»
+	Attach Objects on Path	Прикрепить объекты к контуру
+	Expand Objects on Path	Разобрать объекты на контуре
 	Release Live Paint	Освободить быструю заливку
 	Release Repeat	Освободить повтор
 	Release Slice	Освободить фрагмент
@@ -1737,6 +1746,7 @@ file-filter	Templates	Шаблоны
 	Load Text into Clipboard	Загрузить текст в буфер обмена
 	Local Libraries	Локальные библиотеки
 	Locate Object	Найти объект
+	Locate Selected Objects	Находить выделенные объекты
 	Location	Расположение
 	Location:	Расположение:
 	Lock	Заблокировать
@@ -2167,6 +2177,7 @@ file-filter	Templates	Шаблоны
 	Output White	Выходной белый
 	Output › Mode	Вывод › Режим
 	Output:	Вывод:
+	Overlap	Перекрытие
 	Overlap:	Перекрытие:
 	Overlapping	Перекрывающийся
 	Overlay	Перекрытие
@@ -2944,6 +2955,8 @@ mark-style	Japanese	Японский
 	Show Note	Показать примечание
 	Show Options	Показать параметры
 	Show Original Path	Показать исходный контур
+	Open this dialog with these settings next time	Открывать это диалоговое окно с этими параметрами в следующий раз
+	Auto-Simplify	Автоматическое упрощение
 	Color Panel Options	Параметры панели «Цвет»
 	Show Package	Показать пакет
 	Show Panel	Показать панель
@@ -3040,6 +3053,7 @@ mark-style	Japanese	Японский
 	Snap to Pixel	Привязать к пикселю
 	Precise Cursors	Точные курсоры
 	Snap to Point	Привязать к точке
+	Snap to Unit	Привязать к единицам
 	Snapping Tolerance	Допуск привязки
 	Social Square Post 1080×1080	Квадратный пост для соцсетей 1080×1080
 	Soft Light	Мягкий свет
@@ -3167,7 +3181,7 @@ mark-style	Japanese	Японский
 	Delete Library Item	Удалить элемент библиотеки
 	No results	Ничего не найдено
 	No items in this library match “{query}”.	В этой библиотеке нет элементов, соответствующих «{query}».
-	Right-click an item to move it into this group.	Щёлкните элемент правой кнопкой мыши, чтобы переместить его в эту группу.
+	Drag an item here, or right-click one, to put it in this group.	Перетащите сюда элемент или щёлкните его правой кнопкой мыши, чтобы поместить его в эту группу.
 	New Group	Новая группа
 	New Group…	Новая группа…
 	Move to Group	Переместить в группу
@@ -3895,6 +3909,7 @@ axis	Both	Оба
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black или цвет, например "#ff8800"
 @msg	bad color {v}	недопустимый цвет {v}
 @msg	the Color Picker is not open	палитра цветов не открыта
+@msg	the Simplify slider is not open	ползунок «Упростить» не открыт
 @msg	the screen color sampler is already open	средство выбора цвета с экрана уже открыто
 @msg	this system has no screen color sampler	в этой системе нет средства выбора цвета с экрана
 @msg	bad colour `{hex}` (#rrggbb)	недопустимый цвет `{hex}` (#rrggbb)
@@ -4132,6 +4147,7 @@ axis	Both	Оба
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор
 @msg	select an Intertwine group	выделите группу переплетения
+@msg	select an Objects on Path group	выделите группу объектов на контуре
 @msg	select a stroke with a variable width	выделите обводку с переменной шириной
 @msg	select a symbol instance	выделите экземпляр символа
 @msg	select an Image Trace object	выделите объект трассировки изображения
@@ -4762,6 +4778,7 @@ lighting	Light	Свет
 @msg	choose a destination folder	выберите папку назначения
 @msg	choose a source folder	выберите исходную папку
 @msg	open a document with data sets	откройте документ с наборами данных
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	из набора данных {name} ничего не применено: ни один объект не привязан к переменной, для которой в нём есть значение
 @msg	the action has no steps	в действии нет шагов
 
 # User Interface › Accent Color
@@ -4836,3 +4853,19 @@ lighting	Light	Свет
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
 # Select by Color (select.color)
 	Select by Color	Выделить по цвету
+	Move Anchor Point	Переместить опорную точку
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} сохраняет 1 из {n} монтажных областей документа: файл откроется снова с одной. Включите «Сохранять возможности редактирования», чтобы сохранить все.
+	Chalk & Charcoal…	Мел и уголь…
+	Chalk & Charcoal	Мел и уголь
+	Graphic Pen…	Графическое перо…
+	Graphic Pen	Графическое перо
+	Reticulation…	Ретикуляция…
+	Reticulation	Ретикуляция
+	Plastic Wrap…	Целлофановая упаковка…
+	Plastic Wrap	Целлофановая упаковка
+	Chrome…	Хром…
+	Chrome	Хром
+	Drop here to take it out of its group	Отпустите здесь, чтобы вынуть его из группы
+	Move Library Group	Переместить группу библиотеки
+	Plaster…	Гипс…
+	Plaster	Гипс

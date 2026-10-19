@@ -57,14 +57,16 @@ impl Tool for MeasureTool {
         if a == b {
             return vec![];
         }
-        let (dist, ang, dx, dy) = measure(a, b);
-        vec![
-            Overlay::Line { a, b, color: CYAN, dashed: false },
-            Overlay::Measure {
+        let mut out = vec![Overlay::Line { a, b, color: CYAN, dashed: false }];
+        // Measurement Labels decides the readout; the line the tool draws stays.
+        if cx.measurement_labels {
+            let (dist, ang, dx, dy) = measure(a, b);
+            out.push(Overlay::Measure {
                 p: b + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
                 text: format!("D: {}\nAngle: {ang:.1}°\n{}", cx.len(dist), cx.offset_label(dx, dy)),
-            },
-        ]
+            });
+        }
+        out
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
@@ -104,5 +106,9 @@ mod tests {
         assert!((o["angle"].as_f64().unwrap() - 53.130102).abs() < 1e-4);
         let ov = t.overlays(&cx);
         assert!(matches!(&ov[1], Overlay::Measure { text, .. } if text.starts_with("D: 50.00 pt")));
+        let quiet = ToolContext { measurement_labels: false, ..cx };
+        let ov = t.overlays(&quiet);
+        assert!(!ov.iter().any(|o| matches!(o, Overlay::Measure { .. })), "Measurement Labels off hides the readout");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Line { .. })), "the measured line stays");
     }
 }

@@ -185,10 +185,14 @@ fn the_menu_follows_the_selection() {
     let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
     let l = labels(&menus::context_items(&app));
-    for label in ["Group", "Join", "Make Clipping Mask", "Make Compound Path", "Bring to Front", "Move…"] {
+    for label in ["Group", "Join", "Make Clipping Mask", "Make Compound Path", "Objects on Path", "Bring to Front", "Move…"] {
         assert!(l.contains(&label), "{label} in {l:?}");
     }
     assert!(!l.contains(&"Ungroup") && !l.contains(&"Isolate Selected Group"));
+    // Objects on Path chooses its tool, which attaches the selection to the path clicked next.
+    menus::invoke(&mut app, "object.objectsOnPath.attach", json!({}));
+    assert_eq!(app.session.tool_id(), "objectsOnPath");
+    app.select_tool("selection");
     app.run("object.group", json!({})).unwrap();
     let l = labels(&menus::context_items(&app));
     assert!(l.contains(&"Ungroup") && l.contains(&"Isolate Selected Group"));

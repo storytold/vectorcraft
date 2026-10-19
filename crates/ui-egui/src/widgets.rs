@@ -101,11 +101,22 @@ pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
 
 /// [`primary_button`], greyed out and not clickable unless `enabled`.
 pub fn primary_button_enabled(ui: &mut Ui, text: &str, enabled: bool) -> Response {
+    primary_button_sized(ui, text, enabled, 72.0)
+}
+
+/// Primary dialog button with a minimum width, for aligned action columns.
+pub(crate) fn primary_button_width(ui: &mut Ui, text: &str, min_width: f32) -> Response {
+    primary_button_sized(ui, text, true, min_width)
+}
+
+/// Draws a primary button at least `min_width` wide, growing to fit the translated label.
+/// Returns its response with the enabled state and screen-reader name preserved.
+fn primary_button_sized(ui: &mut Ui, text: &str, enabled: bool, min_width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let fg = if enabled { Color32::WHITE } else { t.text_disabled };
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), fg);
     let w = galley.size().x + 32.0;
-    let (rect, resp) = ui.allocate_exact_size(vec2(w.max(72.0), 28.0), if enabled { Sense::click() } else { Sense::hover() });
+    let (rect, resp) = ui.allocate_exact_size(vec2(w.max(min_width), 28.0), if enabled { Sense::click() } else { Sense::hover() });
     let bg = match (enabled, resp.hovered()) {
         (false, _) => t.input,
         (true, true) => t.accent,
@@ -122,10 +133,15 @@ pub fn primary_button_enabled(ui: &mut Ui, text: &str, enabled: bool) -> Respons
 
 /// The quiet secondary button (dialog Cancel).
 pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
+    secondary_button_width(ui, text, 72.0)
+}
+
+/// Secondary dialog button with a minimum width, for aligned action columns.
+pub(crate) fn secondary_button_width(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), t.text);
     let w = galley.size().x + 32.0;
-    let (rect, resp) = ui.allocate_exact_size(vec2(w.max(72.0), 28.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(w.max(min_width), 28.0), Sense::click());
     ui.painter().rect_filled(rect, CornerRadius::same(6), if resp.hovered() { t.hover } else { t.button });
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.text);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(text)));
@@ -2018,8 +2034,9 @@ pub enum PanelDrag {
     /// is dropped on takes `params` (`{swatch}`, `{color}`, `{gradient}`…; null for a colour group,
     /// which paints nothing) through the active proxy's `paint.setFill`/`paint.setStroke`; the
     /// Gradient panel's ramp takes its colour as a stop; the Swatches panel moves `rows`, or makes
-    /// a swatch of a paint dragged from elsewhere.
-    Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows> },
+    /// a swatch of a paint dragged from elsewhere. `library`: the Libraries panel colour it is
+    /// (library id, colour name), which that panel moves to where it is dropped.
+    Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows>, library: Option<(String, String)> },
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
     /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it.
     Appearance(vectorcraft_doc::NodeId),
@@ -2038,8 +2055,13 @@ pub enum PanelDrag {
     /// dropped on takes it (`brush.apply`).
     Brush { name: String, def: serde_json::Value },
     /// A Libraries panel graphic (`item`: its id in `library`): the canvas places a copy centred
-    /// where it is dropped (`library.use`).
+    /// where it is dropped (`library.use`); the panel moves it to where it is dropped.
     LibraryGraphic { library: String, item: String },
+    /// A Libraries panel text style (`item`: its name in `library`), which the panel moves to where
+    /// it is dropped.
+    LibraryItem { library: String, kind: vectorcraft_engine::cmd::library::ItemKind, item: String },
+    /// A Libraries panel group, by its header, which the panel moves to where it is dropped.
+    LibraryGroup { library: String, group: String },
 }
 
 /// A panel list `zone` that takes art dragged off the canvas: outlined while art is held over it;
@@ -2072,7 +2094,7 @@ impl PanelDrag {
             g.geom = None;
             g.freeform = None;
         }
-        Self::Paint { params: crate::panels::paint_params(&paint), paint, rows: None }
+        Self::Paint { params: crate::panels::paint_params(&paint), paint, rows: None, library: None }
     }
     /// The dragged colour (a solid paint's), which the Gradient panel's ramp takes.
     pub fn color(&self) -> Option<vectorcraft_color::Color> {

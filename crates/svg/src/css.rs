@@ -85,6 +85,22 @@ pub(crate) fn font_stretch(st: &CharStyle) -> Option<f64> {
     st.font_axes.get("wdth").copied().filter(|w| w.is_finite() && *w > 0.0)
 }
 
+/// The generic family to list after `family`, with its leading comma, so a viewer without the font draws
+/// the kind of face it was (the font's class, as the font menu's filters know it) rather than its default
+/// serif. Nothing when `family` is a generic family itself.
+fn generic_fallback(family: &str) -> &'static str {
+    const GENERIC: [&str; 5] = ["serif", "sans-serif", "monospace", "cursive", "fantasy"];
+    if GENERIC.iter().any(|g| family.trim().eq_ignore_ascii_case(g)) {
+        return "";
+    }
+    match vectorcraft_text::FontDb::global().family_traits(family).class {
+        vectorcraft_text::FontClass::Serif => ", serif",
+        vectorcraft_text::FontClass::Monospaced => ", monospace",
+        vectorcraft_text::FontClass::Script => ", cursive",
+        _ => ", sans-serif",
+    }
+}
+
 /// The font of character style `st`: family, size (the vertical scale; writers stretch the
 /// horizontal one), weight and style, and its Variable Font settings, lengths written by `len`.
 /// The weight is the style's number (600 for Semibold, 300 for Light) or the `wght` setting,
@@ -98,7 +114,7 @@ pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     } else {
         st.font_family.clone()
     };
-    p.push(("font-family", fam));
+    p.push(("font-family", format!("{fam}{}", generic_fallback(&st.font_family))));
     p.push(("font-size", len(st.size * st.v_scale / 100.0)));
     let (weight, italic) = font_descriptor(st);
     match weight {

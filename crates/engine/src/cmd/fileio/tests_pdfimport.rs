@@ -228,6 +228,27 @@ fn pdf_info_reads_postscript_as_one_page() {
     assert!(e.contains("no page 2"), "{e}");
 }
 
+/// `document.pdfInfo`'s `thumbnail` is a page number from 1, for a PDF and for PostScript alike:
+/// any other value is an error that names the pages, and an absent or null one gives no thumbnail.
+#[test]
+fn pdf_info_refuses_a_thumbnail_that_is_not_a_page_number() {
+    let ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor 0 0 50 20 rectfill\n";
+    let mut s = Session::new();
+    for (bytes, pages) in [(&three_pages()[..], "(the PDF has 3)"), (ps, "(the file has 1)")] {
+        for n in [json!(-1), json!(0), json!(1.5), json!("1"), json!(true)] {
+            let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": n})).unwrap_err().to_string();
+            assert!(e.contains(&format!("thumbnail: no page {n} {pages}")), "{n}: {e}");
+        }
+        for none in [json!({"dataBase64": b64(bytes)}), json!({"dataBase64": b64(bytes), "thumbnail": null})] {
+            assert!(s.execute("document.pdfInfo", &none).unwrap().get("thumbnail").is_none(), "{pages}");
+        }
+        let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 64})).unwrap();
+        let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
+        let img = image::load_from_memory(&png).unwrap();
+        assert_eq!(img.width().max(img.height()), 64, "{pages}");
+    }
+}
+
 /// A page showing only text, with an editor's private data when `private`.
 fn text_page(private: bool, also: &str) -> PdfPage {
     PdfPage {

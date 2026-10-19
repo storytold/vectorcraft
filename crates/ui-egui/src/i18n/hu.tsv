@@ -1365,6 +1365,7 @@
 	Fill and Stroke	Kitöltés és körvonal
 	Fill Color	Kitöltőszín
 	Fill new strokes	Új vonások kitöltése
+	Alt key toggles to Smooth Tool	Az Alt billentyű a Simítás eszközre vált
 	Keep selected	Kijelölés megtartása
 	Merge only with selection	Összeolvasztás csak a kijelöléssel
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
@@ -1504,6 +1505,8 @@ file-filter	Templates	Sablonok
 	Large Gaps	Nagy hézagok
 	Gap Preview Color:	Hézagok előnézeti színe:
 	Close Gaps With Paths	Hézagok lezárása útvonalakkal
+	Select Fills	Kitöltések kijelölése
+	Select Strokes	Körvonalak kijelölése
 	Gaussian Blur	Gauss-elmosás
 	Gaussian Blur…	Gauss-elmosás…
 	General	Általános
@@ -1769,6 +1772,12 @@ file-filter	Templates	Sablonok
 	Release Blend	Összemosás megszüntetése
 	Release Envelope	Burkoló megszüntetése
 	Release Intertwine	Összefonás megszüntetése
+	Objects on Path	Objektumok útvonalon
+	Attach	Csatolás
+	Objects on Path Options	Objektumok útvonalon beállításai
+	Objects on Path Tool	Objektumok útvonalon
+	Attach Objects on Path	Objektumok csatolása útvonalhoz
+	Expand Objects on Path	Objektumok útvonalon kibontása
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -2162,6 +2171,7 @@ file-filter	Templates	Sablonok
 	Loaded Texture	Betöltött textúra
 	Local Libraries	Helyi könyvtárak
 	Locate Object	Objektum megkeresése
+	Locate Selected Objects	Kijelölt objektumok megkeresése
 	Location	Hely
 	Location:	Hely:
 	Lock	Zárolás
@@ -2630,6 +2640,7 @@ file-filter	Templates	Sablonok
 	Output › Mode	Kimenet › Mód
 	Output:	Kimenet:
 	Oval	Ovális
+	Overlap	Átfedés
 	Overlap:	Átfedés:
 	Overlapping	Átfedő
 	Overlay	Átfedés
@@ -3160,7 +3171,7 @@ mark-style	Japanese	Japán
 	Right Indent	Jobb behúzás
 	Right Plane	Jobb sík
 	Right to Left	Jobbról balra
-	Right-click an item to move it into this group.	Egy elemet jobb gombbal kattintva helyezhetsz át ebbe a csoportba.
+	Drag an item here, or right-click one, to put it in this group.	Húzz ide egy elemet, vagy kattints rá jobb gombbal, hogy ebbe a csoportba kerüljön.
 	Right-Justified Tab	Jobbra igazító tabulátor
 	Right-to-Left Paragraph Direction	Jobbról balra haladó bekezdés
 	Right:	Jobb:
@@ -3533,6 +3544,8 @@ mark-style	Japanese	Japán
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
 	Show Original Path	Eredeti útvonal megjelenítése
+	Open this dialog with these settings next time	Legközelebb ez a párbeszédablak nyíljon meg ezekkel a beállításokkal
+	Auto-Simplify	Automatikus egyszerűsítés
 	Color Panel Options	Szín panel beállításai
 	Show Package	Csomag megjelenítése
 	Show Panel	Panel megjelenítése
@@ -3631,6 +3644,7 @@ mark-style	Japanese	Japán
 	Snap to Pixel	Illesztés pixelhez
 	Precise Cursors	Pontos kurzorok
 	Snap to Point	Illesztés pontra
+	Snap to Unit	Illesztés mértékegységhez
 	Snapping Tolerance	Illesztési tűrés
 	Social	Közösségi média
 	Social Landscape Post 1200×630	Fekvő közösségimédia-bejegyzés 1200×630
@@ -4403,6 +4417,7 @@ imageTrace	Outline	Körvonal
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparent, white, black vagy egy szín, például "#ff8800"
 @msg	bad color {v}	hibás szín: {v}
 @msg	the Color Picker is not open	a Színválasztó nincs megnyitva
+@msg	the Simplify slider is not open	az Egyszerűsítés csúszka nincs megnyitva
 @msg	the screen color sampler is already open	a képernyős színmintavevő már nyitva van
 @msg	this system has no screen color sampler	ezen a rendszeren nincs képernyős színmintavevő
 @msg	bad colour `{hex}` (#rrggbb)	hibás szín: `{hex}` (#rrggbb)
@@ -4786,6 +4801,7 @@ imageTrace	Outline	Körvonal
 @msg	select a Live Paint group	jelölj ki egy élőfestés-csoportot
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
+@msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
 @msg	select a stroke with a variable width	jelölj ki egy változó szélességű körvonalat
 @msg	select a symbol instance	jelölj ki egy szimbólumpéldányt
 @msg	select an envelope	jelölj ki egy burkolót
@@ -5140,6 +5156,7 @@ imageTrace	Outline	Körvonal
 @msg	choose a destination folder	válasszon célmappát
 @msg	choose a source folder	válasszon forrásmappát
 @msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
 @msg	the action has no steps	a műveletnek nincsenek lépései
 
 # User Interface › Accent Color
@@ -5212,3 +5229,19 @@ imageTrace	Outline	Körvonal
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	a fájl változói és adatkészletei nem lettek beolvasva (változók: {variables}, adatkészletek: {data_sets}): a Változók panel nem listázza őket
 # Select by Color (select.color)
 	Select by Color	Kijelölés szín szerint
+	Move Anchor Point	Horgonypont áthelyezése
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	A(z) {label} a dokumentum {n} rajztáblájából 1-et tart meg: a fájl eggyel nyílik meg újra. Kapcsolja be a Szerkeszthetőség megtartása beállítást, hogy mind megmaradjon.
+	Chalk & Charcoal…	Kréta és szén…
+	Chalk & Charcoal	Kréta és szén
+	Graphic Pen…	Grafikus toll…
+	Graphic Pen	Grafikus toll
+	Reticulation…	Recézés…
+	Reticulation	Recézés
+	Plastic Wrap…	Fóliázás…
+	Plastic Wrap	Fóliázás
+	Chrome…	Króm…
+	Chrome	Króm
+	Drop here to take it out of its group	Engedd el itt, hogy kikerüljön a csoportjából
+	Move Library Group	Könyvtárcsoport áthelyezése
+	Plaster…	Gipsz…
+	Plaster	Gipsz

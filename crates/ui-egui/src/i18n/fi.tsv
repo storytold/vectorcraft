@@ -271,6 +271,8 @@
 	Large Gaps	Suuret aukot
 	Gap Preview Color:	Aukkojen esikatseluväri:
 	Close Gaps With Paths	Sulje aukot poluilla
+	Select Fills	Valitse täytöt
+	Select Strokes	Valitse viivat
 	Image Trace	Kuvan jäljitys
 	Image Trace (Make and Expand)	Kuvan jäljitys (luo ja laajenna)
 	Release Image Trace	Vapauta kuvan jäljitys
@@ -1539,6 +1541,12 @@ lighting	Light	Valo
 	Release Blend	Vapauta sulautus
 	Release Envelope	Vapauta kuori
 	Release Intertwine	Vapauta lomitus
+	Objects on Path	Objektit polulla
+	Attach	Kiinnitä
+	Objects on Path Options	Objektit polulla -asetukset
+	Objects on Path Tool	Objektit polulla -työkalu
+	Attach Objects on Path	Kiinnitä objektit polulle
+	Expand Objects on Path	Laajenna objektit polulla
 	Release Live Paint	Vapauta elävä maalaus
 	Release Repeat	Vapauta toisto
 	Release Slice	Vapauta siivu
@@ -1612,7 +1620,7 @@ lighting	Light	Valo
 	This library is empty	Tämä kirjasto on tyhjä
 	No results	Ei tuloksia
 	No items in this library match “{query}”.	Mikään tämän kirjaston kohde ei vastaa hakua ”{query}”.
-	Right-click an item to move it into this group.	Siirrä kohde tähän ryhmään napsauttamalla sitä hiiren kakkospainikkeella.
+	Drag an item here, or right-click one, to put it in this group.	Vedä kohde tähän tai napsauta sitä hiiren kakkospainikkeella lisätäksesi sen tähän ryhmään.
 	New Group	Uusi ryhmä
 	New Group…	Uusi ryhmä…
 	Move to Group	Siirrä ryhmään
@@ -1667,6 +1675,8 @@ lighting	Light	Valo
 	Corner Point Angle Threshold:	Kulmapisteiden kulmakynnys:
 	Convert to Straight Lines	Muunna suoriksi viivoiksi
 	Show Original Path	Näytä alkuperäinen polku
+	Open this dialog with these settings next time	Avaa tämä valintaikkuna näillä asetuksilla ensi kerralla
+	Auto-Simplify	Yksinkertaista automaattisesti
 	Transparency Options	Läpinäkyvyysasetukset
 	Color Mixer (Shift-click the chip)	Värisekoitin (Vaihto-napsauta värilaattaa)
 	Fill: click for swatches, Shift-click for the color mixer	Täyttö: napsauta avataksesi värimallit, Vaihto-napsauta avataksesi värisekoittimen
@@ -1741,6 +1751,7 @@ lighting	Light	Valo
 	Left in Front	Vasen edessä
 	No document	Ei asiakirjaa
 	Open a document to edit its patterns.	Avaa asiakirja, niin voit muokata sen kuvioita.
+	Overlap	Limitys
 	Overlap:	Limitys:
 	Pattern options are available in pattern editing mode.	Kuvioasetukset ovat käytettävissä kuvion muokkaustilassa.
 	Right in Front	Oikea edessä
@@ -1868,6 +1879,7 @@ lighting	Light	Valo
 	Right-Justified Tab	Oikealle tasattu sarkain
 	Select a text object to set its tab stops.	Valitse tekstiobjekti, jonka sarkainkohdat haluat asettaa.
 	Select text	Valitse teksti
+	Snap to Unit	Kohdista yksikköön
 	+ Add Scale	+ Lisää skaalaus
 	Add Selected Artwork as One Asset	Lisää valittu kuvitus yhtenä resurssina
 	Export Settings	Vientiasetukset
@@ -2198,6 +2210,7 @@ lighting	Light	Valo
 	Edit selected paths within:	Muokkaa valittuja polkuja etäisyydellä:
 	Fidelity:	Tarkkuus:
 	Fill new strokes	Täytä uudet viivat
+	Alt key toggles to Smooth Tool	Alt-näppäin vaihtaa Tasoitustyökaluun
 	The document has no colour swatches.	Asiakirjassa ei ole värimalleja.
 	Style Name:	Tyylin nimi:
 	Crop To	Rajaa kohteeseen
@@ -2215,6 +2228,7 @@ lighting	Light	Valo
 	Layers Panel Options	Tasot-paneelin asetukset
 	Row Size:	Rivin koko:
 	Show Layers Only	Näytä vain tasot
+	Locate Selected Objects	Paikanna valitut objektit
 	Thumbnails:	Pikkukuvat:
 	Anchor Points	Ankkuripisteet
 	Brush Affects:	Sivellin vaikuttaa:
@@ -5105,13 +5119,16 @@ mark-style	Japanese	Japanilainen
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
 @msg	open a document with data sets	avaa asiakirja, jossa on tietojoukkoja
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	tietojoukosta {name} ei käytetty mitään: mitään objektia ei ole sidottu muuttujaan, jolle siinä on arvo
 @msg	select an Intertwine group	valitse lomitusryhmä
+@msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
 @msg	span must be "object" or "selection", got {v}	span-arvon on oltava "object" tai "selection", saatiin {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" sijoittaa `gradient`-liukuvärin, ei värimallia
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" sijoittaa liukuvärin: anna `gradient`
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" sijoittaa lineaarisen tai säteittäisen liukuvärin, ei vapaamuotoista
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" sijoittaa itse liukuvärin: jätä pois `start` ja `end` (ne sijoittavat sen jo asiakirjan koordinaatteihin)
 @msg	the Color Picker is not open	värinvalitsin ei ole auki
+@msg	the Simplify slider is not open	Yksinkertaista-liukusäädin ei ole auki
 @msg	the action has no steps	toiminnossa ei ole vaiheita
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	tiedoston tasoja ei luettu ({_1}): se tuodaan sivunaan yhdelle tasolle
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	tiedoston tasoja ei luettu sen muokkaustiedoista ({_1}): ne tulevat sen PDF-osasta
@@ -5190,3 +5207,86 @@ mark-style	Japanese	Japanilainen
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	tiedoston muuttujia ja tietojoukkoja ei luettu (muuttujia: {variables}, tietojoukkoja: {data_sets}): Muuttujat-paneeli ei näytä niitä
 # Select by Color (select.color)
 	Select by Color	Valitse värin mukaan
+	Angular	Kulma
+	Away from the Line	Irti viivasta
+	Between Line and Object	Viivan ja objektin väliin
+	Drag out from a segment, or click two points, then click to place.	Vedä segmentistä tai napsauta kahta pistettä ja sijoita napsauttamalla.
+	Drag out from a corner, or click two straight lines, then click to place.	Vedä kulmasta tai napsauta kahta suoraa viivaa ja sijoita napsauttamalla.
+	Drag out from a circle or arc for its radius, inwards for its diameter.	Vedä ympyrästä tai kaaresta ulospäin säteelle, sisäänpäin halkaisijalle.
+	Display	Näyttö
+@msg	Unknown dimension style	Tuntematon mittatyyli
+@msg	Unknown unit	Tuntematon yksikkö
+	Mode	Tila
+	Blur Mode	Sumennustila
+	Edge Only	Vain reunat
+	Overlay Edge	Reunat päällä
+	Path Length	Polun pituus
+swatch	[None]	[Ei mitään]
+swatch	[Registration]	[Kohdistus]
+swatch	White	Valkoinen
+swatch	Black	Musta
+swatch	Red	Punainen
+swatch	Orange Red	Oranssinpunainen
+swatch	Orange	Oranssi
+swatch	Amber	Meripihka
+swatch	Yellow	Keltainen
+swatch	Yellow Green	Kellanvihreä
+swatch	Lime	Limetti
+swatch	Green	Vihreä
+swatch	Emerald	Smaragdi
+swatch	Teal	Sinivihreä
+swatch	Aqua	Vedensininen
+swatch	Cyan Green	Syaaninvihreä
+swatch	Cyan	Syaani
+swatch	Azure	Taivaansininen
+swatch	Blue	Sininen
+swatch	Indigo	Indigo
+swatch	Violet	Violetti
+swatch	Purple	Purppura
+swatch	Magenta	Magenta
+swatch	Rose	Ruusunpunainen
+swatch	Pink	Vaaleanpunainen
+swatch	Brown	Ruskea
+swatch	Tan	Kellanruskea
+swatch	Coffee	Kahvi
+swatch	Chocolate	Suklaa
+swatch	Sand	Hiekka
+swatch	Copper	Kupari
+swatch	Rust	Ruoste
+swatch	Walnut	Pähkinä
+swatch	Espresso	Espresso
+swatch	White, Black	Valkoinen, musta
+swatch	Radial White, Black	Säteittäinen valkoinen, musta
+swatch	Sunset	Auringonlasku
+swatch	Ocean	Valtameri
+swatch	Grays	Harmaat
+swatch	Brights	Kirkkaat
+swatch	Bright Red	Kirkas punainen
+swatch	Bright Yellow	Kirkas keltainen
+swatch	Bright Green	Kirkas vihreä
+swatch	Bright Blue	Kirkas sininen
+swatch	Bright Violet	Kirkas violetti
+	Automate	Automatisoi
+	Include All Subdirectories	Sisällytä kaikki alikansiot
+	Override Action "Open" Commands	Ohita toiminnon "Avaa"-komennot
+	Override Action "Save" Commands	Ohita toiminnon "Tallenna"-komennot
+	Override Action "Export" Commands	Ohita toiminnon "Vie"-komennot
+	Stop on Errors	Pysäytä virheisiin
+	Save and Close	Tallenna ja sulje
+	Play:	Toista:
+	Move Anchor Point	Siirrä ankkuripistettä
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} säilyttää asiakirjan {n} piirtoalustasta 1: tiedosto avautuu uudelleen yhdellä. Ota Säilytä muokkausominaisuudet käyttöön, jotta kaikki säilyvät.
+	Chalk & Charcoal…	Liitu ja hiili…
+	Chalk & Charcoal	Liitu ja hiili
+	Graphic Pen…	Grafiikkakynä…
+	Graphic Pen	Grafiikkakynä
+	Reticulation…	Retikulaatio…
+	Reticulation	Retikulaatio
+	Plastic Wrap…	Muovikalvo…
+	Plastic Wrap	Muovikalvo
+	Chrome…	Kromi…
+	Chrome	Kromi
+	Drop here to take it out of its group	Pudota tähän poistaaksesi sen ryhmästään
+	Move Library Group	Siirrä kirjastoryhmä
+	Plaster…	Kipsi…
+	Plaster	Kipsi

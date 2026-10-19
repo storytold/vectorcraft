@@ -1078,6 +1078,7 @@
 	Fill (X), double-click for the Color Picker	Riempimento (X), fai doppio clic per il selettore colore
 	Fill and Stroke	Riempimento e traccia
 	Fill new strokes	Riempi nuove tracce
+	Alt key toggles to Smooth Tool	Il tasto Alt attiva lo strumento Smussa
 	Keep selected	Mantieni selezionato
 	Merge only with selection	Unisci solo con la selezione
 	Fill Color	Colore riempimento
@@ -1208,6 +1209,8 @@ file-filter	Templates	Modelli
 	Large Gaps	Spazi vuoti grandi
 	Gap Preview Color:	Colore anteprima spazi vuoti:
 	Close Gaps With Paths	Chiudi spazi vuoti con tracciati
+	Select Fills	Seleziona riempimenti
+	Select Strokes	Seleziona tracce
 	Gaussian Blur…	Sfocatura gaussiana…
 	General	Generale
 	General › Placement › X	Generale › Posizionamento › X
@@ -1415,6 +1418,12 @@ file-filter	Templates	Modelli
 	Release Envelope	Rilascia involucro
 	Release Image Trace	Rilascia ricalco immagine
 	Release Intertwine	Rilascia intreccio
+	Objects on Path	Oggetti su tracciato
+	Attach	Aggancia
+	Objects on Path Options	Opzioni oggetti su tracciato
+	Objects on Path Tool	Strumento Oggetti su tracciato
+	Attach Objects on Path	Aggancia oggetti al tracciato
+	Expand Objects on Path	Espandi oggetti su tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -1739,6 +1748,7 @@ file-filter	Templates	Modelli
 	Load Text into Clipboard	Carica testo negli appunti
 	Local Libraries	Librerie locali
 	Locate Object	Individua oggetto
+	Locate Selected Objects	Individua oggetti selezionati
 	Location	Posizione
 	Location:	Posizione:
 	Lock	Blocca
@@ -2171,6 +2181,7 @@ file-filter	Templates	Modelli
 	Output White	Bianco di output
 	Output › Mode	Output › Modalità
 	Output:	Output:
+	Overlap	Sovrapposizione
 	Overlap:	Sovrapposizione:
 	Overlapping	Sovrapposti
 	Overlay	Sovrapponi
@@ -2948,6 +2959,8 @@ mark-style	Japanese	Giapponese
 	Show Note	Mostra nota
 	Show Options	Mostra opzioni
 	Show Original Path	Mostra tracciato originale
+	Open this dialog with these settings next time	Apri questa finestra di dialogo con queste impostazioni la prossima volta
+	Auto-Simplify	Semplifica automaticamente
 	Color Panel Options	Opzioni pannello Colore
 	Show Package	Mostra pacchetto
 	Show Panel	Mostra pannello
@@ -3044,6 +3057,7 @@ mark-style	Japanese	Giapponese
 	Snap to Pixel	Aggancia ai pixel
 	Precise Cursors	Cursori di precisione
 	Snap to Point	Aggancia al punto
+	Snap to Unit	Aggancia all'unità
 	Snapping Tolerance	Tolleranza di aggancio
 	Social Square Post 1080×1080	Post quadrato per social 1080×1080
 	Soft Light	Luce soffusa
@@ -3171,7 +3185,7 @@ mark-style	Japanese	Giapponese
 	Delete Library Item	Elimina elemento della libreria
 	No results	Nessun risultato
 	No items in this library match “{query}”.	Nessun elemento di questa libreria corrisponde a “{query}”.
-	Right-click an item to move it into this group.	Fai clic con il pulsante destro su un elemento per spostarlo in questo gruppo.
+	Drag an item here, or right-click one, to put it in this group.	Trascina qui un elemento, o fai clic con il pulsante destro su uno, per metterlo in questo gruppo.
 	New Group	Nuovo gruppo
 	New Group…	Nuovo gruppo…
 	Move to Group	Sposta nel gruppo
@@ -3899,6 +3913,7 @@ axis	Both	Entrambi
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	sfondo {other}: transparent, white, black o un colore come "#ff8800"
 @msg	bad color {v}	colore non valido {v}
 @msg	the Color Picker is not open	il Selettore colore non è aperto
+@msg	the Simplify slider is not open	il cursore Semplifica non è aperto
 @msg	the screen color sampler is already open	il campionatore di colore dello schermo è già aperto
 @msg	this system has no screen color sampler	questo sistema non ha un campionatore di colore dello schermo
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
@@ -4136,6 +4151,7 @@ axis	Both	Entrambi
 @msg	select a linked image: an embedded one has no file	seleziona un'immagine collegata: un'immagine incorporata non ha un file
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
+@msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
 @msg	select a stroke with a variable width	seleziona una traccia con larghezza variabile
 @msg	select a symbol instance	seleziona un'istanza di simbolo
 @msg	select an Image Trace object	seleziona un oggetto di ricalco immagine
@@ -4766,6 +4782,7 @@ lighting	Light	Luce
 @msg	choose a destination folder	scegli una cartella di destinazione
 @msg	choose a source folder	scegli una cartella di origine
 @msg	open a document with data sets	apri un documento con set di dati
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
 @msg	the action has no steps	l'azione non ha passaggi
 
 # User Interface › Accent Color
@@ -4840,3 +4857,19 @@ lighting	Light	Luce
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	le variabili e i set di dati del file non sono stati letti (variabili: {variables}, set di dati: {data_sets}): il pannello Variabili non li elenca
 # Select by Color (select.color)
 	Select by Color	Seleziona per colore
+	Move Anchor Point	Sposta punto di ancoraggio
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantiene 1 delle {n} tavole da disegno del documento: il file si riapre con una sola. Attiva Mantieni possibilità di modifica per mantenerle tutte.
+	Chalk & Charcoal…	Gesso e carboncino…
+	Chalk & Charcoal	Gesso e carboncino
+	Graphic Pen…	Penna grafica…
+	Graphic Pen	Penna grafica
+	Reticulation…	Reticolo…
+	Reticulation	Reticolo
+	Plastic Wrap…	Pellicola plastica…
+	Plastic Wrap	Pellicola plastica
+	Chrome…	Cromo…
+	Chrome	Cromo
+	Drop here to take it out of its group	Rilascia qui per toglierlo dal suo gruppo
+	Move Library Group	Sposta gruppo di libreria
+	Plaster…	Gesso…
+	Plaster	Gesso

@@ -1050,6 +1050,7 @@
 	Fill and Stroke	填色與筆畫
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
+	Alt key toggles to Smooth Tool	Alt 鍵切換為平滑工具
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
@@ -1179,6 +1180,8 @@ file-filter	Templates	範本
 	Large Gaps	大間隙
 	Gap Preview Color:	間隙預覽顏色：
 	Close Gaps With Paths	以路徑封閉間隙
+	Select Fills	選取填色
+	Select Strokes	選取筆畫
 	Gaussian Blur…	高斯模糊…
 	General	一般
 	General › Placement › X	一般 › 位置 › X
@@ -1387,6 +1390,12 @@ file-filter	Templates	範本
 	Release Envelope	釋放封套
 	Release Image Trace	釋放影像描圖
 	Release Intertwine	釋放交織
+	Objects on Path	路徑上的物件
+	Attach	附加
+	Objects on Path Options	路徑上的物件選項
+	Objects on Path Tool	路徑上的物件工具
+	Attach Objects on Path	附加路徑上的物件
+	Expand Objects on Path	展開路徑上的物件
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -1781,6 +1790,7 @@ file-filter	Templates	範本
 @msg	pattern missing	找不到圖樣
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
+@msg	select an Objects on Path group	請選取路徑上的物件群組
 @msg	select the art to repeat	請選取要重複的圖稿
 @msg	the document has no patterns	文件中沒有圖樣
 @msg	no artboard	沒有工作區域
@@ -1969,6 +1979,7 @@ file-filter	Templates	範本
 @msg	no blend options	沒有漸變選項
 @msg	bad color {v}	顏色 {v} 無效
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
+@msg	the Simplify slider is not open	「簡化」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
@@ -2256,6 +2267,7 @@ file-filter	Templates	範本
 @msg	choose a destination folder	請選擇目的地資料夾
 @msg	choose a source folder	請選擇來源資料夾
 @msg	open a document with data sets	請開啟含有資料集的文件
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	資料集 {name} 未套用任何內容：沒有物件綁定到該資料集中有值的變數
 @msg	the action has no steps	動作沒有步驟
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate
@@ -2440,6 +2452,7 @@ file-filter	Templates	範本
 	Load Text into Clipboard	將文字載入剪貼簿
 	Local Libraries	本機資料庫
 	Locate Object	尋找物件
+	Locate Selected Objects	尋找選取的物件
 	Location	位置
 	Location:	位置：
 	Lock	鎖定
@@ -2885,6 +2898,7 @@ file-filter	Templates	範本
 	Output White	輸出白色
 	Output › Mode	輸出 › 模式
 	Output:	輸出：
+	Overlap	重疊
 	Overlap:	重疊：
 	Overlapping	重疊
 	Overlay	覆蓋
@@ -3072,6 +3086,7 @@ diagnostics	ui	介面
 	Printer mark type:	印表機標記類型：
 	Roman	西式
 mark-style	Japanese	日式
+font-script	Japanese	漢字
 	Printer profile:	印表機描述檔：
 	Printer Setup…	印表機設定…
 	Printer:	印表機：
@@ -3663,6 +3678,8 @@ mark-style	Japanese	日式
 	Show Note	顯示註解
 	Show Options	顯示選項
 	Show Original Path	顯示原始路徑
+	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
+	Auto-Simplify	自動簡化
 	Color Panel Options	顏色面板選項
 	Show Package	顯示封裝
 	Show Panel	顯示面板
@@ -3759,6 +3776,7 @@ mark-style	Japanese	日式
 	Snap to Pixel	靠齊像素
 	Precise Cursors	精確游標
 	Snap to Point	靠齊控制點
+	Snap to Unit	靠齊單位
 	Snapping Tolerance	靠齊容許度
 	Social Square Post 1080×1080	社群正方形貼文 1080×1080
 	Soft Light	柔光
@@ -3886,7 +3904,7 @@ mark-style	Japanese	日式
 	Delete Library Item	刪除資料庫項目
 	No results	沒有結果
 	No items in this library match “{query}”.	此資料庫中沒有符合「{query}」的項目。
-	Right-click an item to move it into this group.	在項目上按一下右鍵，即可將其移至此群組。
+	Drag an item here, or right-click one, to put it in this group.	將項目拖到此處，或在項目上按一下右鍵，即可將其放入此群組。
 	New Group	新增群組
 	New Group…	新增群組…
 	Move to Group	移至群組
@@ -4857,3 +4875,19 @@ lighting	Light	光源
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
+	Move Anchor Point	移動錨點
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文件 {n} 個工作區域中的 1 個：檔案重新開啟時只有一個。開啟「保留編輯功能」可全部保留。
+	Chalk & Charcoal…	粉筆和炭筆…
+	Chalk & Charcoal	粉筆和炭筆
+	Graphic Pen…	繪圖筆…
+	Graphic Pen	繪圖筆
+	Reticulation…	網狀…
+	Reticulation	網狀
+	Plastic Wrap…	塑膠包裝…
+	Plastic Wrap	塑膠包裝
+	Chrome…	鉻黃…
+	Chrome	鉻黃
+	Drop here to take it out of its group	放到此處即可將其移出所屬群組
+	Move Library Group	移動資料庫群組
+	Plaster…	塑膠效果…
+	Plaster	塑膠效果

@@ -491,6 +491,13 @@ hotspot = "The crosshair's centre."
 look = "Crosshair with a target badge (a ring with a centre dot)."
 
 [[cursor]]
+id = "ObjectsOnPath"
+group = "Width, blend, slice and shape builder"
+shown_when = ["The Objects on Path tool over a path the selected objects can attach to: a click attaches them."]
+hotspot = "The crosshair's center."
+look = "Crosshair with a badge of small squares along a curve, as on the tool's icon."
+
+[[cursor]]
 id = "Slice"
 group = "Width, blend, slice and shape builder"
 shown_when = ["The Slice tool, always. With Use Precise Cursors on, the plain crosshair shows instead."]

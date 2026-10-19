@@ -236,32 +236,13 @@ fn regions_of(arr: &Arrangement) -> Vec<Region> {
             // pass per mask for this batch.
             for (m, mask) in masks.iter().enumerate().filter(|(m, _)| batch[*m] == b) {
                 let c = arr.contours(|k| k == mask.as_slice());
-                faces[m].extend(c.grouped().into_iter().map(|g| contours_to_path(&c, g, &arr.tidy)));
+                let owner = vec![m; c.contours().count()];
+                faces[m].extend(face_groups(&c, &owner).into_iter().map(|(_, g)| contours_to_path(&c, g, &arr.tidy)));
             }
             continue;
         };
-        // A contour belongs under the nearest enclosing contour of the same mask, as in that
-        // mask's own pass.
-        let mut children = vec![Vec::new(); owner.len()];
-        let mut roots = Vec::new();
-        for (i, &m) in owner.iter().enumerate() {
-            let mut up = c[ContourIdx(i)].parent;
-            while let Some(p) = up.filter(|p| owner.get(p.0) != Some(&m)) {
-                up = c[p].parent;
-            }
-            match up {
-                Some(p) => children[p.0].push(i),
-                None => roots.push(i),
-            }
-        }
-        for r in roots {
-            let mut group = Vec::new();
-            let mut stack = vec![r];
-            while let Some(i) = stack.pop() {
-                group.push(ContourIdx(i));
-                stack.extend(children[i].iter().rev());
-            }
-            faces[owner[r]].push(contours_to_path(&c, group, &arr.tidy));
+        for (m, group) in face_groups(&c, &owner) {
+            faces[m].push(contours_to_path(&c, group, &arr.tidy));
         }
     }
     let mut out = Vec::new();
@@ -270,6 +251,39 @@ fn regions_of(arr: &Arrangement) -> Vec<Region> {
         out.extend(paths.into_iter().filter(|p| !p.is_empty()).map(|path| Region { path, sources: sources.clone() }));
     }
     out
+}
+
+/// Splits a contour pass into faces: each face is an outer contour plus the holes of the same mask
+/// directly inside it (`owner` gives each contour's mask). A hole belongs under the nearest
+/// enclosing contour of its mask, as in that mask's own pass; an outer contour always starts a face
+/// of its own, even inside a hole of its mask (an island left in a cutout is a separate face, not
+/// part of the frame around it).
+fn face_groups(c: &linesweeper::topology::Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
+    let mut children = vec![Vec::new(); owner.len()];
+    let mut roots = Vec::new();
+    for (i, &m) in owner.iter().enumerate() {
+        let ct = &c[ContourIdx(i)];
+        let mut up = if ct.outer { None } else { ct.parent };
+        while let Some(p) = up.filter(|p| owner.get(p.0) != Some(&m)) {
+            up = c[p].parent;
+        }
+        match up {
+            Some(p) => children[p.0].push(i),
+            None => roots.push(i),
+        }
+    }
+    roots
+        .into_iter()
+        .map(|r| {
+            let mut group = Vec::new();
+            let mut stack = vec![r];
+            while let Some(i) = stack.pop() {
+                group.push(ContourIdx(i));
+                stack.extend(children[i].iter().rev());
+            }
+            (owner[r], group)
+        })
+        .collect()
 }
 
 /// A point as a map key (the arrangement's vertices are exact).

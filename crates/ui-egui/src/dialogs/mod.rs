@@ -51,6 +51,7 @@ pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
 pub mod live_paint_gaps;
+pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
@@ -88,6 +89,7 @@ pub mod save_swatch_library;
 pub mod script_check;
 mod shapes;
 pub mod shortcut_import;
+pub(crate) mod simplify_slider;
 pub mod slices;
 pub mod spot_colors;
 pub(crate) mod svg_options;
@@ -134,6 +136,15 @@ type DialogResult = Result<Value, String>;
 const MARGIN: i8 = 22;
 const EDGE_GAP: f32 = 8.0;
 
+/// An action requested by a dialog that draws its buttons inside its body.
+#[derive(Default)]
+pub(crate) enum DialogAction {
+    #[default]
+    None,
+    Confirm,
+    Cancel,
+}
+
 /// How a dialog draws and applies itself. Specs start from [`DialogSpec::FORM`] and override what
 /// differs.
 pub(crate) struct DialogSpec {
@@ -142,8 +153,12 @@ pub(crate) struct DialogSpec {
     /// The heading (and window title), in the UI language: the spec translates its own text and
     /// leaves names in it (a document's, a plug-in's) as they are.
     pub heading: fn(&Dialog) -> String,
+    /// Optional heading band inside the shared window; normal dialogs use `modal::heading`.
+    pub header: Option<fn(&mut egui::Ui, &str)>,
     /// Draws the fields. Returns true to close the dialog as Cancel would.
     pub body: fn(&mut VectorcraftApp, &mut egui::Ui, &mut Dialog) -> bool,
+    /// Optional body with inline buttons; replaces `body` and the shared footer.
+    pub body_with_actions: Option<fn(&mut VectorcraftApp, &mut egui::Ui, &mut Dialog) -> DialogAction>,
     /// OK, Enter or `ui.dialog.confirm`: applies the dialog and closes it when done.
     pub confirm: fn(&mut VectorcraftApp, &Dialog) -> DialogResult,
     /// The OK button's label. None: no OK button, Enter does nothing and Cancel reads "Close".
@@ -166,10 +181,12 @@ impl DialogSpec {
     pub const FORM: Self = Self {
         window: None,
         heading: |_| tl!("Dialog").into(),
+        header: None,
         body: |app, ui, d| {
             form::grid(ui, d, app.session.general_unit());
             false
         },
+        body_with_actions: None,
         confirm: |app, _| {
             app.ui.dialog = None;
             Ok(Value::Null)
@@ -309,6 +326,7 @@ registry! {
     Plugin: [plugin::KIND] => plugin::SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
+    SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
@@ -320,6 +338,7 @@ registry! {
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
+    LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
@@ -402,6 +421,8 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
 /// until Enter has been let go.
 pub(crate) const AFTER_PANEL: &str = "__afterPanel";
 
+/// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
+/// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
     settle(app);
@@ -461,17 +482,32 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
         ui.set_min_width(spec.min_width.min(room));
         ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
-        modal::heading(ui, &heading);
+        if let Some(header) = spec.header {
+            header(ui, &heading);
+        } else {
+            modal::heading(ui, &heading);
+        }
         ui.add_space(12.0);
         // Just opened: its first enabled field takes the keyboard focus, as in the reference app
         // (type a value, press Enter). Only the body's fields can take it.
         if focus_first {
             ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
         }
-        cancel = (spec.body)(app, ui, &mut d);
+        if let Some(body) = spec.body_with_actions {
+            match body(app, ui, &mut d) {
+                DialogAction::None => {}
+                DialogAction::Confirm => ok = true,
+                DialogAction::Cancel => cancel = true,
+            }
+        } else {
+            cancel = (spec.body)(app, ui, &mut d);
+        }
         // Taken (the flag is gone): done. Still there (the window's measuring frame): next frame.
         if focus_first && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
             ui.data_mut(|m| m.remove::<bool>(focus_id));
+        }
+        if spec.body_with_actions.is_some() {
+            return;
         }
         ui.add_space(16.0);
         // The button row is as wide as the fields above it and as tall as the buttons: a
