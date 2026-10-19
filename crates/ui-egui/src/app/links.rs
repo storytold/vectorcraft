@@ -45,7 +45,9 @@ impl VectorcraftApp {
     pub(super) fn open_queued_urls(&mut self) {
         let queued = self.cloud_urls.try_borrow_mut().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
         for url in queued {
-            self.open_url(&url);
+            if let Err(e) = self.open_document_url(&url) {
+                self.ui.status = e;
+            }
         }
     }
 

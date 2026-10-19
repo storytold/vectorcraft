@@ -11,11 +11,12 @@
 //! with. The egui context is woken afterwards, because a worker answering is not a local event and
 //! the window would otherwise sit still until the mouse moved.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
 use craft_cloud_client::{Client, Error};
+use vectorcraft_engine::cmd::fileio;
 use vectorcraft_ui_egui::cloud::{Account, CloudBackend, Event, Fault, Job, Post};
 
 /// How long to keep polling a sign-in before giving up on it.
@@ -249,6 +250,11 @@ fn token_path() -> Option<PathBuf> {
 fn load_token() -> Option<String> {
     let raw = std::fs::read(token_path()?).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&raw).ok()?;
+    let service = vectorcraft_ui_egui::cloud::base_url()?;
+    let saved_service = value.get("service")?.as_str()?;
+    if saved_service != service.as_str() {
+        return None;
+    }
     value.get("token")?.as_str().map(str::to_owned).filter(|t| !t.is_empty())
 }
 
@@ -277,11 +283,9 @@ fn remember_account(subject: &str, display: &str) {
 fn write_session(value: serde_json::Value) {
     let Some(path) = token_path() else { return };
     let Ok(text) = serde_json::to_vec(&value) else { return };
-    if let Err(e) = std::fs::write(&path, text) {
+    if let Err(e) = fileio::write_atomic(&path, &text) {
         log::warn!("could not save the cloud session: {e}");
-        return;
     }
-    restrict(&path);
 }
 
 fn forget_token() {
@@ -289,17 +293,6 @@ fn forget_token() {
         let _ = std::fs::remove_file(path);
     }
 }
-
-#[cfg(unix)]
-fn restrict(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-}
-
-/// On Windows the per-user AppData folder is already owner-scoped, and setting an ACL would need a
-/// Win32 call this application makes nowhere else.
-#[cfg(not(unix))]
-fn restrict(_path: &Path) {}
 
 /// Open `url` in the user's browser.
 ///

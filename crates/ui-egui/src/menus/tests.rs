@@ -828,6 +828,29 @@ fn menus_are_as_wide_as_their_items() {
 }
 
 #[test]
+fn cloud_commands_refuse_without_a_service() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for id in ["cloud.open", "cloud.browse", "cloud.shared", "cloud.link"] {
+        assert_eq!(app.run(id, json!({})).unwrap_err(), crate::cloud::UNAVAILABLE, "{id}");
+    }
+    assert_eq!(app.run("cloud.saveAs", json!({})).unwrap_err(), crate::cloud::UNAVAILABLE);
+}
+
+#[test]
+fn cloud_menu_items_stay_hidden_without_a_service() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for id in ["cloud.open", "cloud.saveAs", "cloud.browse", "cloud.shared", "cloud.link"] {
+        assert!(shown_state(&app, id, &json!({})).is_none(), "{id}");
+    }
+}
+
+#[test]
+fn cloud_open_file_without_a_handle_or_name_is_refused() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert_eq!(app.run("cloud.openFile", json!({})).unwrap_err(), "no such file in the cloud listing");
+}
+
+#[test]
 fn long_menus_scroll_inside_a_short_window() {
     // The Window menu is taller than a 600 pt window: it stops above the bottom edge and
     // scrolls instead of running off screen.

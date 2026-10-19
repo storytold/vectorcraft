@@ -9,7 +9,6 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour, is_address};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::cmd::recovery::{self, Hold, RecoveryStore};
-use vectorcraft_ui_egui::cloud;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
@@ -160,7 +159,6 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 if let Some(invitation) = invite.take() {
                     open_invite(&mut app, invitation);
                 }
-                cloud::start(&mut app);
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
         )

@@ -56,8 +56,9 @@ impl Service {
                 post(Event::Linked(answer));
             }
             Job::SignOut => {
-                let _ = fetch_logout().await;
-                let _ = web_sys::window().and_then(|w| w.location().reload().ok());
+                if fetch_logout().await.is_ok() {
+                    let _ = web_sys::window().and_then(|w| w.location().reload().ok());
+                }
             }
             Job::List(path) => {
                 let entries = self.client.list(&path).await.map_err(fault);
@@ -130,6 +131,10 @@ async fn fetch_logout() -> Result<(), String> {
     let req = web_sys::Request::new_with_str_and_init("/auth/logout", &init).map_err(|e| format!("{e:?}"))?;
     let promised = fetch.call1(global.as_ref(), req.as_ref()).map_err(|e| format!("{e:?}"))?;
     let promised: js_sys::Promise = promised.dyn_into().map_err(|_| "not a promise".to_owned())?;
-    wasm_bindgen_futures::JsFuture::from(promised).await.map_err(|e| format!("{e:?}"))?;
+    let value = wasm_bindgen_futures::JsFuture::from(promised).await.map_err(|e| format!("{e:?}"))?;
+    let response: web_sys::Response = value.dyn_into().map_err(|_| "logout response was not a Response".to_owned())?;
+    if !response.ok() {
+        return Err(format!("logout failed with HTTP {}", response.status()));
+    }
     Ok(())
 }
