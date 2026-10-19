@@ -6063,3 +6063,24 @@ breakText	Glyphs	Glif
 	Small to Large	Kecil ke besar
 	Large to Small	Besar ke kecil
 	Distribute Evenly	Distribusikan merata
+
+@msg	the FreeHand file is empty	berkas FreeHand kosong
+@msg	the FreeHand file is cut off in the header	berkas FreeHand terpotong di header
+@msg	not a FreeHand file	bukan berkas FreeHand
+@msg	the FreeHand file is cut off in its compressed data	berkas FreeHand terpotong di data terkompresinya
+@msg	the FreeHand file's compressed data is damaged	data terkompresi berkas FreeHand rusak
+@msg	the FreeHand file is cut off in the dictionary	berkas FreeHand terpotong di kamus
+@msg	the FreeHand file is cut off in the record list	berkas FreeHand terpotong di daftar rekaman
+@msg	the FreeHand file is cut off in a record	berkas FreeHand terpotong di sebuah rekaman
+@msg	the FreeHand file claims more records than can be read	berkas FreeHand menyatakan lebih banyak rekaman daripada yang dapat dibaca
+@msg	the FreeHand file claims a dictionary larger than can be read	berkas FreeHand menyatakan kamus yang lebih besar daripada yang dapat dibaca
+@msg	the FreeHand file claims more path nodes than can be read	berkas FreeHand menyatakan lebih banyak simpul jalur daripada yang dapat dibaca
+@msg	the FreeHand file claims more list entries than can be read	berkas FreeHand menyatakan lebih banyak entri daftar daripada yang dapat dibaca
+@msg	a FreeHand record id points past the end of the file	id rekaman FreeHand menunjuk melewati akhir berkas
+@msg	the FreeHand file decompresses past the safety limit	berkas FreeHand terdekompresi melewati batas keamanan
+@msg	the FreeHand file's data block runs past the end of the file	blok data berkas FreeHand melewati akhir berkas
+@msg	the FreeHand file is larger than can be read	berkas FreeHand lebih besar daripada yang dapat dibaca
+@msg	the FreeHand file claims more entries than can be read	berkas FreeHand menyatakan lebih banyak entri daripada yang dapat dibaca
+@msg	the FreeHand file has a record whose size is not known	berkas FreeHand memiliki rekaman yang ukurannya tidak diketahui
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	versi FreeHand {n} tidak didukung: VectorCraft membuka FreeHand 8 hingga MX (11); buka di FreeHand yang lebih baru lalu simpan, atau ekspor sebagai EPS, PDF atau AI
+@msg	the drawing has more objects than can be read; the rest were left out	gambar memiliki lebih banyak objek daripada yang dapat dibaca; sisanya tidak disertakan

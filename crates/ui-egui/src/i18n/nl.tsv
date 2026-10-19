@@ -6107,3 +6107,24 @@ breakText	Glyphs	Glyphs
 	Small to Large	Van klein naar groot
 	Large to Small	Van groot naar klein
 	Distribute Evenly	Gelijkmatig verdelen
+
+@msg	the FreeHand file is empty	het FreeHand-bestand is leeg
+@msg	the FreeHand file is cut off in the header	het FreeHand-bestand is afgekapt in de header
+@msg	not a FreeHand file	geen FreeHand-bestand
+@msg	the FreeHand file is cut off in its compressed data	het FreeHand-bestand is afgekapt in de gecomprimeerde gegevens
+@msg	the FreeHand file's compressed data is damaged	de gecomprimeerde gegevens van het FreeHand-bestand zijn beschadigd
+@msg	the FreeHand file is cut off in the dictionary	het FreeHand-bestand is afgekapt in het woordenboek
+@msg	the FreeHand file is cut off in the record list	het FreeHand-bestand is afgekapt in de recordlijst
+@msg	the FreeHand file is cut off in a record	het FreeHand-bestand is afgekapt in een record
+@msg	the FreeHand file claims more records than can be read	het FreeHand-bestand geeft meer records op dan er gelezen kunnen worden
+@msg	the FreeHand file claims a dictionary larger than can be read	het FreeHand-bestand geeft een woordenboek op dat groter is dan er gelezen kan worden
+@msg	the FreeHand file claims more path nodes than can be read	het FreeHand-bestand geeft meer padpunten op dan er gelezen kunnen worden
+@msg	the FreeHand file claims more list entries than can be read	het FreeHand-bestand geeft meer lijstitems op dan er gelezen kunnen worden
+@msg	a FreeHand record id points past the end of the file	een FreeHand-record-id wijst voorbij het einde van het bestand
+@msg	the FreeHand file decompresses past the safety limit	het FreeHand-bestand wordt voorbij de veiligheidsgrens gedecomprimeerd
+@msg	the FreeHand file's data block runs past the end of the file	het gegevensblok van het FreeHand-bestand loopt voorbij het einde van het bestand
+@msg	the FreeHand file is larger than can be read	het FreeHand-bestand is groter dan er gelezen kan worden
+@msg	the FreeHand file claims more entries than can be read	het FreeHand-bestand geeft meer items op dan er gelezen kunnen worden
+@msg	the FreeHand file has a record whose size is not known	het FreeHand-bestand heeft een record waarvan de grootte niet bekend is
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	niet-ondersteunde FreeHand-versie {n}: VectorCraft opent FreeHand 8 tot MX (11); open het in een nieuwere FreeHand en sla het op, of exporteer het als EPS, PDF of AI
+@msg	the drawing has more objects than can be read; the rest were left out	de tekening heeft meer objecten dan er gelezen kunnen worden; de rest is weggelaten

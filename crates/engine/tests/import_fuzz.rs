@@ -7,7 +7,7 @@
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor FreeHand
-//! drawings (mutated record streams), nor the
+//! drawings (mutated record streams, including a 63-level shared-record chain), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -418,6 +418,14 @@ proptest! {
         bytes.truncate(keep);
         survive("FreeHand mutated", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
     }
+
+    // Shallow shared records through the importer: group A_k names List[A_{k-1}, A_{k-1}].
+    // Depth stays under 8 so the default work budget is not asked to build millions of items.
+    #[test]
+    fn freehand_shared_records_render_and_export(levels in 1u32..8) {
+        let bytes = vectorcraft_freehand::synth::shared_groups(levels);
+        survive("FreeHand shared records", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
 }
 
 #[test]
@@ -432,6 +440,37 @@ fn deeply_nested_freehand_groups_and_cycles_are_read_within_the_cap() {
         open_deep("cycle.fh9", &cycle).expect("a group cycle opens");
         open_deep("symbol.fh9", &symbol).expect("a symbol cycle opens");
     });
+}
+
+/// Group `A_k` names `List[A_{k-1}, A_{k-1}]` for k = 1..=63, with one path at the bottom.
+/// About 130 records, and about 2^63 visits if sharing is walked again. The reader's work
+/// budget is tightened here (the importer's default `max_items` is 2_000_000) so the test
+/// stops quickly, without a panic, and the built tree stays inside that budget.
+#[test]
+fn shared_freehand_records_sixty_three_deep_stay_inside_the_work_budget() {
+    let bytes = vectorcraft_freehand::synth::shared_groups(63);
+    assert!(vectorcraft_freehand::is_freehand(&bytes));
+    let limits = vectorcraft_freehand::Limits { max_items: 4_096, ..vectorcraft_freehand::Limits::default() };
+    let started = std::time::Instant::now();
+    let read = vectorcraft_freehand::read(&bytes, limits);
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "shared-record read took {elapsed:?}");
+    let doc = read.expect("63-level shared records stay readable");
+    assert!(doc.warnings.iter().any(|w| w.contains("the drawing has more objects than can be read")), "{:?}", doc.warnings);
+    let n: usize = doc.layers.iter().map(|layer| freehand_items(&layer.items)).sum();
+    assert!(n <= limits.max_items, "built {n} items, budget {}", limits.max_items);
+}
+
+fn freehand_items(items: &[vectorcraft_freehand::Item]) -> usize {
+    items
+        .iter()
+        .map(|item| {
+            1 + match item {
+                vectorcraft_freehand::Item::Group(kids) | vectorcraft_freehand::Item::ClipGroup { children: kids, .. } => freehand_items(kids),
+                _ => 0,
+            }
+        })
+        .sum()
 }
 
 /// Import must not panic; whatever comes back must render and export without panicking either.

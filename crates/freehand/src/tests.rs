@@ -107,6 +107,29 @@ proptest::proptest! {
         }
         let _ = read(&bytes, Limits::default());
     }
+
+    // Group A_k names List[A_{k-1}, A_{k-1}]. Level 63 is weighted so that shape is in the run.
+    // The work budget is tightened: the default would still stop, after millions of items.
+    #[test]
+    fn shared_record_chains_stay_inside_the_work_budget(
+        levels in proptest::prop_oneof![4 => proptest::prelude::Just(63u32), 1 => 1u32..64u32],
+    ) {
+        let limits = Limits { max_items: 4_096, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::shared_groups(levels), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "shared-record read of {levels} levels took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n: usize = doc.layers.iter().map(|layer| count_items(&layer.items)).sum();
+                assert!(n <= limits.max_items, "level {levels} built {n} items, budget {}", limits.max_items);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("can be read") || msg.contains("limit"), "{msg}");
+            }
+        }
+    }
 }
 
 fn group_depth(items: &[Item]) -> usize {
@@ -400,4 +423,6 @@ fn write_fuzz_seeds() {
     std::fs::write(format!("{dir}/content.fh"), synth::content_fill()).expect("write");
     std::fs::write(format!("{dir}/empty-group.fh"), synth::empty_group_and_content_fill()).expect("write");
     std::fs::write(format!("{dir}/nested.fh"), synth::nested_groups(4)).expect("write");
+    // Group A_k -> List[A_{k-1}, A_{k-1}] for k = 1..=63, one path at the bottom.
+    std::fs::write(format!("{dir}/shared-63.fh"), synth::shared_groups(63)).expect("write");
 }

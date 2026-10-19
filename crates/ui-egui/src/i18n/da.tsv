@@ -6063,3 +6063,24 @@ breakText	Glyphs	Glyffer
 	Small to Large	Fra lille til stor
 	Large to Small	Fra stor til lille
 	Distribute Evenly	Fordel jævnt
+
+@msg	the FreeHand file is empty	FreeHand-filen er tom
+@msg	the FreeHand file is cut off in the header	FreeHand-filen er afkortet i headeren
+@msg	not a FreeHand file	ikke en FreeHand-fil
+@msg	the FreeHand file is cut off in its compressed data	FreeHand-filen er afkortet i de komprimerede data
+@msg	the FreeHand file's compressed data is damaged	FreeHand-filens komprimerede data er beskadiget
+@msg	the FreeHand file is cut off in the dictionary	FreeHand-filen er afkortet i ordlisten
+@msg	the FreeHand file is cut off in the record list	FreeHand-filen er afkortet i postlisten
+@msg	the FreeHand file is cut off in a record	FreeHand-filen er afkortet i en post
+@msg	the FreeHand file claims more records than can be read	FreeHand-filen angiver flere poster, end der kan læses
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand-filen angiver en ordliste, der er større, end der kan læses
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand-filen angiver flere kurvepunkter, end der kan læses
+@msg	the FreeHand file claims more list entries than can be read	FreeHand-filen angiver flere listeelementer, end der kan læses
+@msg	a FreeHand record id points past the end of the file	et FreeHand-post-id peger forbi slutningen af filen
+@msg	the FreeHand file decompresses past the safety limit	FreeHand-filen dekomprimeres forbi sikkerhedsgrænsen
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand-filens datablok rækker forbi slutningen af filen
+@msg	the FreeHand file is larger than can be read	FreeHand-filen er større, end der kan læses
+@msg	the FreeHand file claims more entries than can be read	FreeHand-filen angiver flere elementer, end der kan læses
+@msg	the FreeHand file has a record whose size is not known	FreeHand-filen har en post, hvis størrelse ikke kendes
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	FreeHand-version {n} understøttes ikke: VectorCraft åbner FreeHand 8 til MX (11); åbn den i en nyere FreeHand og gem, eller eksportér den som EPS, PDF eller AI
+@msg	the drawing has more objects than can be read; the rest were left out	tegningen har flere objekter, end der kan læses; resten blev udeladt

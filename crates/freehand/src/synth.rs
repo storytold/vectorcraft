@@ -713,7 +713,14 @@ pub fn fuzz_file(input: &[u8]) -> Vec<u8> {
     let b = |i: usize| input.get(i).copied().unwrap_or(0);
     let version = 8 + (b(0) % 4);
     let nest = u32::from(b(1) % 24).max(1);
-    let mut file = if b(2) & 1 == 0 { demo_at(version) } else { nested_groups(nest) };
+    // `b(6) == 0` is the 63-level shared-record shape: group A_k names List[A_{k-1}, A_{k-1}].
+    // Other shared files stay shallow so a mutated read at the default budget stays small.
+    let shared_levels = if b(6) == 0 { 63 } else { u32::from(b(1) % 6).max(1) };
+    let mut file = match b(2) % 3 {
+        0 => demo_at(version),
+        1 => nested_groups(nest),
+        _ => shared_groups(shared_levels),
+    };
     if file.is_empty() {
         return file;
     }
