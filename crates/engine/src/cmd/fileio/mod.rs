@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|ai|png|jpg|webp|gif|png8|txt|dxf|eps|emf|wmf|tiff|bmp|tga|psd|vectorcraft|template (default: from the path's extension, else png; png8 writes an indexed .png; ait, a .ait template, is written by file.saveAsTemplate), selectedOnly?: false (the selected objects alone, in their layers), artboardFill?: false (draw the artboard colours, artboard.setColor, behind the art; exports leave them out otherwise), artboard?: 0, artboards?: [i…], rect?: [x, y, width, height] (raster formats: that area of the page in points, y down, instead of an artboard; not with artboard, artboards, range or useArtboards), range?: \"1-3, 5\" | \"all\" (1-based; PDF and .ai write one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf/ai: every page) | false (pdf/ai/raster: the bounds of the visible art; SVG has it as an SVG option), ppi?: 72 (raster formats: pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), embedIcc?: true (png: an sRGB chunk marks the colours as sRGB), quality?: 90 (jpg: 0–100), colorModel?: rgb|cmyk|gray (jpg), method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map), colors?: 256 (gif/png8: 2–256), reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray, dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, transparency?: true, matte?: white|\"#rrggbb\"|none, interlaced?, lossless?: true (webp: lossy WebP isn't available yet: written lossless, with a warning), encoding?: utf8|utf16 (txt: the stories in stacking order, back to front, a thread once; utf16 with a byte order mark), lineEndings?: lf|crlf, selectionOnly?: false, svg?: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers, encoding, profile, embedFonts} (see document.formats), …the SVG options given flat instead, …the PDF options of document.exportPdf, …the DXF options of document.exportDxf (useArtboards: one drawing per artboard), …the EPS options of document.exportEps (useArtboards: one file per artboard, {stem}_{artboard}.eps; else the visible art), …emf and wmf write one picture of the artboard (useArtboards: true one file per chosen artboard, false the bounds of the visible art; EMF keeps curves, clipping, transparent images and gradients as images clipped to their shape; WMF flattens curves into polygons behind a placeable header; what a format leaves out comes back in warnings), colorModel?: rgb|cmyk|gray (tiff: rgb keeps transparency as an alpha channel), lzw?: true, byteOrder?: little|big, embedIcc?: true, colorModel?: rgb|gray (bmp), depth?: 24 (bmp: 1 black and white, 4|8 a palette by reduction and dither, 16, 24, 32 with alpha), fileFormat?: windows|os2 (1, 4, 8 or 24 bits), rle?: false (4 and 8 bits, windows), flipRows?: false (top-down rows), depth?: 24 (tga: 16 one-bit alpha, 24, 32 with alpha), colorModel?: rgb|cmyk|gray (psd), layers?: true (each top-level layer a pixel layer with its opacity and blend mode; a background colour is a Background layer; false: one flat image, on white), maxEditability?: false (layers and sublayers become groups, each object a layer named as in the Layers panel, text by its text; clipping, masked or knockout layers stay one layer), hiddenLayers?: false (hidden layers and objects written hidden instead of left out), embedIcc?: true (at most 30000 pixels a side; formats without alpha are flattened on white)} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|ai|png|jpg|webp|gif|png8|txt|dxf|eps|emf|wmf|tiff|bmp|tga|psd|vectorcraft|template (default: from the path's extension, else png; png8 writes an indexed .png; ait, a .ait template, is written by file.saveAsTemplate; an exporter plug-in's format is plugin.<plug-in id>, which an extension only it lists picks too), params?: {…} (an exporter plug-in's parameters; missing ones take their defaults, see plugin.info), selectedOnly?: false (the selected objects alone, in their layers), artboardFill?: false (draw the artboard colours, artboard.setColor, behind the art; exports leave them out otherwise), artboard?: 0, artboards?: [i…], rect?: [x, y, width, height] (raster formats: that area of the page in points, y down, instead of an artboard; not with artboard, artboards, range or useArtboards), range?: \"1-3, 5\" | \"all\" (1-based; PDF and .ai write one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf/ai: every page) | false (pdf/ai/raster: the bounds of the visible art; SVG has it as an SVG option), ppi?: 72 (raster formats: pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), embedIcc?: true (png: an sRGB chunk marks the colours as sRGB), quality?: 90 (jpg: 0–100), colorModel?: rgb|cmyk|gray (jpg), method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map), colors?: 256 (gif/png8: 2–256), reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray, dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, transparency?: true, matte?: white|\"#rrggbb\"|none, interlaced?, lossless?: true (webp: lossy WebP isn't available yet: written lossless, with a warning), encoding?: utf8|utf16 (txt: the stories in stacking order, back to front, a thread once; utf16 with a byte order mark), lineEndings?: lf|crlf, selectionOnly?: false, svg?: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers, encoding, profile, embedFonts} (see document.formats), …the SVG options given flat instead, …the PDF options of document.exportPdf, …the DXF options of document.exportDxf (useArtboards: one drawing per artboard), …the EPS options of document.exportEps (useArtboards: one file per artboard, {stem}_{artboard}.eps; else the visible art), …emf and wmf write one picture of the artboard (useArtboards: true one file per chosen artboard, false the bounds of the visible art; EMF keeps curves, clipping, transparent images and gradients as images clipped to their shape; WMF flattens curves into polygons behind a placeable header; what a format leaves out comes back in warnings), colorModel?: rgb|cmyk|gray (tiff: rgb keeps transparency as an alpha channel), lzw?: true, byteOrder?: little|big, embedIcc?: true, colorModel?: rgb|gray (bmp), depth?: 24 (bmp: 1 black and white, 4|8 a palette by reduction and dither, 16, 24, 32 with alpha), fileFormat?: windows|os2 (1, 4, 8 or 24 bits), rle?: false (4 and 8 bits, windows), flipRows?: false (top-down rows), depth?: 24 (tga: 16 one-bit alpha, 24, 32 with alpha), colorModel?: rgb|cmyk|gray (psd), layers?: true (each top-level layer a pixel layer with its opacity and blend mode; a background colour is a Background layer; false: one flat image, on white), maxEditability?: false (layers and sublayers become groups, each object a layer named as in the Layers panel, text by its text; clipping, masked or knockout layers stay one layer), hiddenLayers?: false (hidden layers and objects written hidden instead of left out), embedIcc?: true (at most 30000 pixels a side; formats without alpha are flattened on white)} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -198,7 +198,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "File Formats",
             [],
             None,
-            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}}], readable: [id…], writable: [id…], openExtensions: [ext…], unsupported: [{id, label, extensions, hint}] (formats asked for that can be neither opened nor written, such as DWG and PICT, with what to use instead)}",
+            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}, plugin?: the id of the exporter plug-in that adds the format (its id is plugin.<plug-in id>; see plugin.list)}], readable: [id…], writable: [id…], openExtensions: [ext…], unsupported: [{id, label, extensions, hint}] (formats asked for that can be neither opened nor written, such as DWG and PICT, with what to use instead)}",
             always,
             formats
         ),
@@ -713,7 +713,8 @@ pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
 pub fn export_extensions() -> Vec<&'static str> {
     let mut v: Vec<&'static str> = Vec::new();
-    for e in FORMATS.iter().filter(|f| f.write).filter_map(|f| f.extensions.first()) {
+    let added = plugin_formats();
+    for e in FORMATS.iter().chain(added.iter().copied()).filter(|f| f.write).filter_map(|f| f.extensions.first()) {
         if !v.contains(e) {
             v.push(e);
         }
@@ -800,10 +801,47 @@ pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static
         .chain(std::iter::once(("Word", DOCX_EXTS)))
 }
 
-/// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).
+/// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
+/// one, else one an exporter plug-in adds ([`plugin_formats`]). A built-in format keeps its
+/// extension, so an exporter that lists it too is found by its format id.
 pub fn format(id_or_ext: &str) -> Option<&'static Format> {
     let k = id_or_ext.trim_start_matches('.').to_ascii_lowercase();
-    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k.as_str())))
+    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k.as_str()))).or_else(|| {
+        let added = plugin_formats();
+        added.iter().find(|f| f.id.eq_ignore_ascii_case(&k)).or_else(|| added.iter().find(|f| f.extensions.contains(&k.as_str()))).copied()
+    })
+}
+
+/// The formats the installed exporter plug-ins add ([`vectorcraft_plugins::export`]), by plug-in
+/// id: write only, with the plug-in's name as the label and its extensions. Each is made once for
+/// each installation of its plug-in, its strings interned, so formats live as long as the catalogues
+/// that hold them.
+pub fn plugin_formats() -> Vec<&'static Format> {
+    use vectorcraft_plugins::{export, registry};
+    static MADE: std::sync::Mutex<Vec<(u64, &'static Format)>> = std::sync::Mutex::new(Vec::new());
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    export::installed()
+        .iter()
+        .map(|p| {
+            if let Some((_, f)) = made.iter().find(|(serial, _)| *serial == p.serial()) {
+                return *f;
+            }
+            let m = p.manifest();
+            let extensions: Vec<&'static str> = m.extensions.iter().map(|e| registry::intern(e)).collect();
+            let f: &'static Format = Box::leak(Box::new(Format {
+                id: registry::intern(&export::format_id(&m.id)),
+                label: registry::intern(&m.name),
+                extensions: Box::leak(extensions.into_boxed_slice()),
+                mime: "application/octet-stream",
+                read: false,
+                write: true,
+                raster: false,
+                options: &[],
+            }));
+            made.push((p.serial(), f));
+            f
+        })
+        .collect()
 }
 
 /// The lower-case extension of a file name or path (empty when it has none).
@@ -858,9 +896,18 @@ fn writable(cmd: &str, format_param: Option<&str>, path: Option<&str>) -> Result
 }
 
 fn formats(_: &mut Session, _: &Value) -> Result<Value> {
-    let ids = |pick: fn(&Format) -> bool| FORMATS.iter().filter(|f| pick(f)).map(|f| f.id).collect::<Vec<_>>();
+    let added = plugin_formats();
+    let all = || FORMATS.iter().chain(added.iter().copied());
+    let ids = |pick: fn(&Format) -> bool| all().filter(|f| pick(f)).map(|f| f.id).collect::<Vec<_>>();
+    let listed = |f: &Format| {
+        let mut v = f.to_json();
+        if let Some(id) = vectorcraft_plugins::export::plugin_id(f.id) {
+            v["plugin"] = json!(id);
+        }
+        v
+    };
     Ok(json!({
-        "formats": FORMATS.iter().map(Format::to_json).collect::<Vec<_>>(),
+        "formats": all().map(listed).collect::<Vec<_>>(),
         "readable": ids(|f| f.read),
         "writable": ids(|f| f.write),
         "openExtensions": OPEN_EXTS,

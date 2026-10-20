@@ -1526,6 +1526,7 @@ file-filter	Templates	Vorlagen
 	Inspect Object	Objekt untersuchen
 	Install Plug-in	Plug-in installieren
 	Install Plug-in…	Plug-in installieren…
+	Open this setting's help page	Hilfeseite zu dieser Einstellung öffnen
 	Installed plug-in {}	Plug-in {} installiert
 	Intensity:	Intensität:
 	Intent:	Renderpriorität:
@@ -3178,6 +3179,7 @@ effect	Points	Punkte
 	Text Wrap Options	Textumflussoptionen
 	Text Wrap Options…	Textumflussoptionen…
 	The bounds of the visible art.	Die Begrenzung der sichtbaren Grafik.
+	The plug-in writes the whole document.	Das Plug-in exportiert das ganze Dokument.
 	The cell shows the type object's text as HTML.	Die Zelle zeigt den Text des Textobjekts als HTML.
 	The document has no colour swatches.	Das Dokument enthält keine Farbfelder.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Der Papierrand, den der Drucker nicht erreicht: Die Grafik liegt innerhalb davon, und die Vorschau zeigt ihn gestrichelt.
@@ -4180,6 +4182,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{_1} files are written by file.saveAsTemplate	{_1}-Dateien werden von file.saveAsTemplate geschrieben
 @msg	{_1} font families available	{_1} Schriftfamilien verfügbar
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} ist ein Live-Effekt (Effekt › Plug-ins)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} ist ein Export-Plug-in (Datei › Exportieren › Exportieren als…)
 @msg	{_1} is already used by {_2}	{_1} wird bereits von {_2} verwendet
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} verknüpfte Datei(en) können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
@@ -4771,6 +4774,28 @@ effect	Soft	Weich
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
+	Smudge Stick…	Wischstift…
+	Smudge Stick	Wischstift
+	Sponge…	Schwamm…
+	Sponge	Schwamm
+	Watercolor…	Aquarell…
+	Watercolor	Aquarell
+	Brush Size	Pinselgröße
+	Definition	Definition
+	Brush Detail	Pinseldetail
+	Shadow Intensity	Schattenintensität
+	Bas Relief…	Basrelief…
+	Bas Relief	Basrelief
+	Charcoal…	Holzkohle…
+	Charcoal	Holzkohle
+	Photocopy…	Fotokopie…
+	Photocopy	Fotokopie
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Stärke
+	Detail	Detail
+	Light/Dark Balance	Hell-Dunkel-Balance
+	Light Direction	Lichtrichtung
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Original bearbeiten öffnet nur Bild- und Dokumentdateien; „{name}“ gehört nicht dazu
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	nur http-, https- und mailto-URLs werden im Browser geöffnet, nicht „{url}“
@@ -4839,3 +4864,5 @@ effect	Soft	Weich
 	Move Library Group	Bibliotheksgruppe verschieben
 	Plaster…	Gipsabdruck…
 	Plaster	Gipsabdruck
+	Note Paper…	Prägepapier…
+	Note Paper	Prägepapier

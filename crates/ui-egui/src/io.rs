@@ -725,9 +725,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         Some(z) if f.id == "svg" && z.id == "svgz" => z,
         _ => f,
     };
-    // Background Export: encoded and written from this snapshot while editing goes on.
+    // Background Export: encoded and written from this snapshot while editing goes on. The
+    // encoder is told the file it writes (an exporter plug-in gets its name and extension).
     let label = format!("Exporting {}", fileio::file_name(&path));
-    let (params, target) = (params.clone(), path.clone());
+    let (mut params, target) = (params.clone(), path.clone());
+    if let Some(o) = params.as_object_mut() {
+        o.insert("path".into(), json!(path));
+    }
     // The progress dialog's counts and Cancel: a cancelled export stops drawing and never starts
     // writing.
     let progress = Progress::new();

@@ -228,6 +228,7 @@
 	Plug-ins	პლაგინები
 	No filter plug-ins installed	ფილტრის პლაგინები არ არის დაყენებული
 	Install Plug-in…	პლაგინის დაყენება…
+	Open this setting's help page	ამ პარამეტრის დახმარების გვერდის გახსნა
 	Reload Plug-ins	პლაგინების ხელახლა ჩატვირთვა
 	Type	ტექსტი
 	Font	შრიფტი
@@ -1879,6 +1880,7 @@ lighting	Light	სინათლე
 	One file per artboard: <name>-<artboard>.{ext}	ერთი ფაილი თითო სამუშაო დაფაზე: <name>-<artboard>.{ext}
 	One page per artboard.	ერთი გვერდი თითო სამუშაო დაფაზე.
 	The bounds of the visible art.	ხილული ნახატის საზღვრები.
+	The plug-in writes the whole document.	პლაგინი მთელ დოკუმენტს ჩაწერს.
 	Use Artboards	სამუშაო დაფების გამოყენება
 	Choose a folder	საქაღალდის არჩევა
 	Create Sub-folders	ქვესაქაღალდეების შექმნა
@@ -4015,6 +4017,7 @@ effect	Regular	ჩვეულებრივი
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} ფაილების გახსნა შესაძლებელია, ჩაწერა — არა (იხ. document.formats)
 @msg	{_1} font families available	ხელმისაწვდომი შრიფტების ოჯახები: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} ცოცხალი ეფექტია (ეფექტი › პლაგინები)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} ექსპორტის პლაგინია (ფაილი › ექსპორტირება › ექსპორტირება ფორმატში…)
 @msg	{_1} is already used by {_2}	{_1} უკვე გამოიყენება აქ: {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({_1}): ჩანს მათი გადახედვა
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({_1}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
@@ -5149,6 +5152,27 @@ imageTrace	Outline	კონტური
 	Clear Artboard Color	სამუშაო დაფის ფერის გასუფთავება
 @msg	artboard {_1} is locked	სამუშაო დაფა {_1} ჩაკეტილია
 	Include Artboard Fill	სამუშაო დაფის შევსების ჩართვა
+	Smudge Stick…	დასაზელი ჯოხი…
+	Smudge Stick	დასაზელი ჯოხი
+	Sponge…	ღრუბელი…
+	Sponge	ღრუბელი
+	Watercolor…	აკვარელი…
+	Watercolor	აკვარელი
+	Brush Size	ფუნჯის ზომა
+	Definition	განსაზღვრულობა
+	Brush Detail	ფუნჯის დეტალი
+	Shadow Intensity	ჩრდილის ინტენსივობა
+	Bas Relief…	დაბალი რელიეფი…
+	Bas Relief	დაბალი რელიეფი
+	Charcoal…	ნახშირი…
+	Charcoal	ნახშირი
+	Photocopy…	ფოტოასლი…
+	Photocopy	ფოტოასლი
+	Stamp…	ბეჭედი…
+	Stamp	ბეჭედი
+	Thickness	სისქე
+	Detail	დეტალი
+	Light/Dark Balance	ნათელი/მუქი ბალანსი
 	Move Anchor Point	საყრდენი წერტილის გადაადგილება
 	Alt key toggles to Smooth Tool	Alt კლავიში ჩართავს გაგლუვების ხელსაწყოს
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} ინახავს დოკუმენტის {n} სამუშაო დაფიდან 1-ს: ფაილი ხელახლა ერთით გაიხსნება. ყველას შესანარჩუნებლად ჩართეთ „რედაქტირების შესაძლებლობების შენარჩუნება“.
@@ -5166,3 +5190,5 @@ imageTrace	Outline	კონტური
 	Move Library Group	ბიბლიოთეკის ჯგუფის გადატანა
 	Plaster…	თაბაშირი…
 	Plaster	თაბაშირი
+	Note Paper…	ჩანაწერების ქაღალდი…
+	Note Paper	ჩანაწერების ქაღალდი

@@ -17,6 +17,9 @@ use crate::dib::Rgba;
 
 /// How deep symbols, brush art and pattern tiles may nest in one another (deeper art is left out).
 const MAX_NEST: u32 = 8;
+/// Most pattern tiles written in all. One fill tiles at most 250,000 (`PatternDef::offsets_covering`),
+/// but a tile whose art is filled with a pattern again multiplies that at every level of nesting.
+const MAX_TILES: usize = 250_000;
 /// Most pixels along a side of a gradient's image (its colours are smooth).
 const MAX_GRADIENT_PX: f64 = 512.0;
 /// Opacity at or above this is written as opaque.
@@ -29,6 +32,7 @@ const RASTER_FX: &str = "raster effects (shadows, glows, blurs, feathering) are 
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
 const FLAT_GRADIENTS: &str = "gradients are written as one colour, the average of their stops";
 const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
+const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
 
 /// A stroke as a pen draws it.
 #[derive(Clone, Debug, PartialEq)]
@@ -115,6 +119,8 @@ pub(crate) struct Scene<'a> {
     opacity: f32,
     /// Symbols, brush art and pattern tiles being written inside one another.
     nest: u32,
+    /// Pattern tiles left to write ([`MAX_TILES`]).
+    tiles_left: usize,
 }
 
 impl<'a> Scene<'a> {
@@ -130,6 +136,7 @@ impl<'a> Scene<'a> {
             brushes: None,
             opacity: 1.0,
             nest: 0,
+            tiles_left: MAX_TILES,
         }
     }
 
@@ -296,9 +303,16 @@ impl<'a> Scene<'a> {
         match paint {
             Paint::None => {}
             Paint::Gradient(g) if self.clips => self.gradient(bp, rule, g, opacity, bounds),
-            Paint::Pattern { pattern, xf } if self.clips && self.nest < MAX_NEST && self.doc.pattern(pattern).is_some() => {
+            Paint::Pattern { pattern, xf } if self.clips && self.nest < MAX_NEST && self.tiles_left > 0 && self.doc.pattern(pattern).is_some() => {
                 let area = bp.bounding_box().intersect(self.region);
                 let tiles = self.doc.pattern(pattern).map(|def| def.instances_in(*xf, area)).unwrap_or_default();
+                if tiles.len() > self.tiles_left {
+                    self.tiles_left = 0;
+                    self.warn(TOO_MANY_TILES);
+                    self.flat_fill(bp, rule, paint, opacity);
+                    return;
+                }
+                self.tiles_left -= tiles.len();
                 let outer = self.opacity;
                 self.opacity *= opacity.clamp(0.0, 1.0);
                 self.ops.push(Op::Clip { path: bp.clone(), rule });
@@ -308,12 +322,15 @@ impl<'a> Scene<'a> {
                 self.ops.push(Op::Unclip);
                 self.opacity = outer;
             }
-            p => {
-                let Some(rgb) = self.flat(p) else { return };
-                self.check_opacity(opacity);
-                self.ops.push(Op::Fill { path: bp.clone(), rule, rgb });
-            }
+            p => self.flat_fill(bp, rule, p, opacity),
         }
+    }
+
+    /// Fill `bp` with one colour for `paint` at `opacity`.
+    fn flat_fill(&mut self, bp: &BezPath, rule: FillRule, paint: &Paint, opacity: f32) {
+        let Some(rgb) = self.flat(paint) else { return };
+        self.check_opacity(opacity);
+        self.ops.push(Op::Fill { path: bp.clone(), rule, rgb });
     }
 
     /// One colour for a paint: a solid colour, the average of a gradient's stops, or a pattern's

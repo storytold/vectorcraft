@@ -106,6 +106,8 @@ if has appimage; then
   APPDIR="$WORK/VectorCraft.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
+  # Keep the third-party runtime notice after dropping the full documentation tree.
+  install -Dm644 "$ROOT/NOTICE" "$APPDIR/usr/share/doc/vectorcraft/NOTICE"
   ln -s usr/bin/vectorcraft "$APPDIR/AppRun"
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   cp "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"

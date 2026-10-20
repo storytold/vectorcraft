@@ -120,7 +120,7 @@ pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows,
 };
-pub(crate) use form::humanize;
+pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
 pub use new_document::{open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
@@ -324,6 +324,7 @@ registry! {
     PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
+    PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
@@ -576,6 +577,10 @@ mod tests_export;
 mod tests_import_pdf;
 #[cfg(test)]
 mod tests_package;
+#[cfg(test)]
+mod tests_plugin_export;
+#[cfg(test)]
+mod tests_plugin_fields;
 #[cfg(test)]
 mod tests_raster_formats;
 #[cfg(test)]

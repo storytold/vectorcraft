@@ -1,7 +1,8 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
 //! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead, and with only
-//! ruler guides selected their X (vertical guides) and Y (horizontal ones).
+//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead (a new W or H
+//! resizes every selected artboard), and with only ruler guides selected their X (vertical guides)
+//! and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -62,28 +63,34 @@ pub fn reference_locator(ui: &mut Ui, refi: usize) {
     }
 }
 
-/// Set artboard `index` (now at `r`) to a new X, Y, W or H from reference point `refi`
-/// ([`artboard_rect`]) with `artboard.setProps`, passing the Artboard tool's Move and Scale Artwork
-/// with Artboard options as `moveArt` and `scaleArt`; an error is shown in the status bar.
-pub fn set_artboard(app: &mut VectorcraftApp, index: usize, r: Rect, refi: usize, xywh: [Option<f64>; 4], link: bool) {
+/// Set artboard `index` to a new X, Y, W or H from reference point `refi` ([`artboard_rect`]) with
+/// `artboard.setProps`, passing the Artboard tool's Move and Scale Artwork with Artboard options as
+/// `moveArt` and `scaleArt`; an error is shown in the status bar. A new X or Y moves artboard
+/// `index` alone; a new W or H resizes every selected artboard about its own reference point
+/// ([`crate::panels::artboards::resized_with`]), in one undo step.
+pub fn set_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [Option<f64>; 4], link: bool) {
     let [x, y, w, h] = xywh;
-    let n = artboard_rect(r, refi, x, y, w, h, link);
     let scale_art = crate::panels::artboards::scale_art(app);
     let move_art = crate::panels::artboards::move_art(app);
-    let p = json!({"index": index, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height(), "scaleArt": scale_art, "moveArt": move_art});
-    if let Err(e) = app.run("artboard.setProps", p) {
+    let indices = if x.is_none() && y.is_none() { crate::panels::artboards::resized_with(app, index) } else { vec![index] };
+    let common = json!({"scaleArt": scale_art, "moveArt": move_art});
+    let r = crate::panels::artboards::set_props(app, &indices, common, |i, r| {
+        let n = artboard_rect(r, refi, x, y, w, h, link);
+        Some(json!({"index": i, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height()}))
+    });
+    if let Err(e) = r {
         app.status(e);
     }
 }
 
-/// The Artboard tool's view of the panel: the active artboard's position and size.
+/// The Artboard tool's view of the panel: the active artboard's position and size ([`set_artboard`]).
 fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi = reference_index(ui);
     let link = proportional(app, ui);
     let rp = vectorcraft_geom::reference_point(r, refi);
-    let set = |app: &mut VectorcraftApp, x, y, w, h| set_artboard(app, index, r, refi, [x, y, w, h], link);
+    let set = |app: &mut VectorcraftApp, x, y, w, h| set_artboard(app, index, refi, [x, y, w, h], link);
     ui.horizontal(|ui| {
         reference_locator(ui, refi);
         ui.add_space(4.0);

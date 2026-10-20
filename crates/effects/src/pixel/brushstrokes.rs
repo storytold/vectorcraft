@@ -64,9 +64,9 @@ impl StrokeDirection {
 }
 
 /// Along a right diagonal stroke, rising to the right (y down).
-const RIGHT: Vec2 = Vec2::new(FRAC_1_SQRT_2, -FRAC_1_SQRT_2);
+pub(super) const RIGHT: Vec2 = Vec2::new(FRAC_1_SQRT_2, -FRAC_1_SQRT_2);
 /// Along a left diagonal stroke, falling to the right.
-const LEFT: Vec2 = Vec2::new(FRAC_1_SQRT_2, FRAC_1_SQRT_2);
+pub(super) const LEFT: Vec2 = Vec2::new(FRAC_1_SQRT_2, FRAC_1_SQRT_2);
 
 /// The most samples a stroke averages, whatever its length.
 const MAX_SAMPLES: usize = 16;
@@ -75,7 +75,7 @@ const MAX_SAMPLES: usize = 16;
 const JITTER: f64 = 0.25;
 
 /// How soft (points, the σ) the tones are that decide which strokes a pixel gets.
-const TONE_SOFTNESS: f64 = 1.0;
+pub(super) const TONE_SOFTNESS: f64 = 1.0;
 
 /// Dark Strokes' short dark strokes and long light ones (points).
 pub(super) const DARK_LENGTH: f64 = 3.0;
@@ -86,7 +86,7 @@ const INK_SOFTNESS: f64 = 0.6;
 
 /// A pixel at 72 ppi (points): how far the neighbours of the Sobel operator and of sampling
 /// between pixels add to a filter's reach.
-const MARGIN: f64 = 1.0;
+pub(super) const MARGIN: f64 = 1.0;
 
 /// How far (document units) strokes `len` long reach: half their length, their random shift, the
 /// softening between their samples and the pixels a sample is taken between.
@@ -137,18 +137,18 @@ pub(super) fn spray_shift(radius: f64) -> f64 {
 
 /// The object's colours averaged along strokes `len` long: [`MAX_SAMPLES`] at most, the object
 /// softened first when they lie more than a pixel apart.
-struct Smear<'a> {
+pub(super) struct Smear<'a> {
     /// Premultiplied colours (0..1).
     src: Vec<[f32; 4]>,
     w: usize,
     h: usize,
     place: &'a Place,
-    len: f64,
+    pub(super) len: f64,
     n: usize,
 }
 
 impl<'a> Smear<'a> {
-    fn new(px: &[[u8; 4]], w: usize, h: usize, place: &'a Place, len: f64) -> Self {
+    pub(super) fn new(px: &[[u8; 4]], w: usize, h: usize, place: &'a Place, len: f64) -> Self {
         let len = if len.is_finite() { len.max(0.0) } else { 0.0 };
         let span = len / place.px;
         let n = if span.is_finite() { (span.ceil() as usize).saturating_add(1).clamp(1, MAX_SAMPLES) } else { MAX_SAMPLES };
@@ -218,7 +218,7 @@ impl<'a> Smear<'a> {
     }
 
     /// The stroke of pattern `salt` through `q` along `dir`, its rows `width` apart.
-    fn stroke(&self, salt: u64, q: Point, dir: Vec2, width: f64) -> [f32; 4] {
+    pub(super) fn stroke(&self, salt: u64, q: Point, dir: Vec2, width: f64) -> [f32; 4] {
         self.at(q + dir * stroke_shift(salt, q, dir, self.len, width), dir)
     }
 }
@@ -242,37 +242,37 @@ fn stroke_shift(salt: u64, q: Point, dir: Vec2, len: f64, width: f64) -> f64 {
 }
 
 /// Smooth noise in [-1, 1) streaked along `dir`: blobs `along` long and `across` wide.
-fn streak(salt: u64, q: Point, dir: Vec2, along: f64, across: f64) -> f64 {
+pub(super) fn streak(salt: u64, q: Point, dir: Vec2, along: f64, across: f64) -> f64 {
     let (u, v) = frame(q, dir);
     2.0 * value_noise(salt, u / along.max(1e-3), v / across.max(1e-3)) - 1.0
 }
 
 /// The straight colour and coverage of premultiplied `pm` (0..1).
-fn unpremultiply(pm: [f32; 4]) -> ([f32; 3], f32) {
+pub(super) fn unpremultiply(pm: [f32; 4]) -> ([f32; 3], f32) {
     let a = pm[3].clamp(0.0, 1.0);
     if a > 1e-6 { ([pm[0], pm[1], pm[2]].map(|v| (v / a).clamp(0.0, 1.0)), a) } else { ([0.0; 3], 0.0) }
 }
 
 /// `a` + (`b` − `a`) × `t`, channel by channel.
-fn mix<const N: usize>(a: [f32; N], b: [f32; N], t: f32) -> [f32; N] {
+pub(super) fn mix<const N: usize>(a: [f32; N], b: [f32; N], t: f32) -> [f32; N] {
     std::array::from_fn(|k| a[k] + (b[k] - a[k]) * t)
 }
 
 /// A smooth step from 0 at `t` ≤ 0 to 1 at `t` ≥ 1.
-fn ramp(t: f64) -> f64 {
+pub(super) fn ramp(t: f64) -> f64 {
     let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
     t * t * (3.0 - 2.0 * t)
 }
 
 /// Pixel `p` (premultiplied 0..255) as premultiplied 0..1.
-fn unit(p: [u8; 4]) -> [f32; 4] {
+pub(super) fn unit(p: [u8; 4]) -> [f32; 4] {
     p.map(|v| f32::from(v) / 255.0)
 }
 
 /// The object's edges after softening it by `sigma` (document units): about 1 across a step from
 /// black to white or from clear to opaque, the same at any resolution. Empty when the sizes don't
 /// match.
-fn edges(px: &[[u8; 4]], w: usize, h: usize, place: &Place, sigma: f64) -> Vec<f32> {
+pub(super) fn edges(px: &[[u8; 4]], w: usize, h: usize, place: &Place, sigma: f64) -> Vec<f32> {
     let mut tone: Vec<f32> = px.iter().map(|p| luma(straight(*p)) * f32::from(p[3]) / 255.0).collect();
     let mut cover: Vec<f32> = px.iter().map(|p| f32::from(p[3]) / 255.0).collect();
     let s = sigma / place.px;

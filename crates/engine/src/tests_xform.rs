@@ -816,6 +816,50 @@ fn artboard_set_props_scales_art_only_when_asked_and_resized() {
     assert!(s.execute("artboard.setProps", &json!({"index": 9, "width": 10, "scaleArt": true})).is_err());
 }
 
+/// #1482: `artboard.setProps {artboards}` resizes several artboards in one undo step, and with
+/// `scaleArt` each object scales once, with the artboard it was inside before the change: art that
+/// the first artboard's new size moves into the second stays as the first one put it, and art
+/// inside two overlapping artboards goes with the first one listed. An empty list, an artboard
+/// listed twice, an entry without an index and an index that names no artboard are refused.
+#[test]
+fn artboard_set_props_resizes_several_artboards_and_scales_each_object_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "created": null})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "x": 0, "y": 0})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "x": 120, "y": 0})).unwrap();
+    let art = rect(&mut s, 70.0, 10.0, 10.0, 10.0);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let out = s
+        .execute(
+            "artboard.setProps",
+            &json!({"artboards": [{"index": 0, "width": 200}, {"index": 1, "width": 200, "name": " Back\t"}], "scaleArt": true}),
+        )
+        .unwrap();
+    assert_eq!(out["scaled"], json!([art.0]));
+    let boards = &s.doc().unwrap().doc.artboards;
+    assert_eq!((boards[0].rect, boards[1].rect), (Rect::new(0.0, 0.0, 200.0, 100.0), Rect::new(120.0, 0.0, 320.0, 100.0)));
+    assert_eq!(boards[1].name, "Back");
+    assert_eq!(bounds(&s, art), Rect::new(140.0, 10.0, 160.0, 20.0), "scaled once, with Artboard 1");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    // Artboard 2 over Artboard 1's right half: the art inside both goes with Artboard 2, listed first.
+    s.execute("artboard.setProps", &json!({"index": 1, "x": 50})).unwrap();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "width": 200}, {"index": 0, "width": 200}], "scaleArt": true})).unwrap();
+    assert_eq!(bounds(&s, art), Rect::new(90.0, 10.0, 110.0, 20.0));
+    let was = s.doc().unwrap().doc.clone();
+    for bad in [
+        json!({"artboards": []}),
+        json!({"artboards": [{"index": 0, "width": 50}, {"index": 0, "height": 50}]}),
+        json!({"artboards": [{"index": 0, "width": 50}, {"height": 50}]}),
+        json!({"artboards": [{"index": 0, "width": 50}, {"index": 2, "height": 50}]}),
+    ] {
+        assert!(s.execute("artboard.setProps", &bad).is_err(), "{bad}");
+        assert_eq!(*s.doc().unwrap().doc, *was, "{bad}");
+    }
+}
+
 /// Move Artwork is independent of scaling and takes only fully contained art and board guides.
 #[test]
 fn coordinate_moves_honor_move_art_and_keep_resize_behavior() {

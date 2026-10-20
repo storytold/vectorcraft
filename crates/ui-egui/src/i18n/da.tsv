@@ -269,6 +269,7 @@
 	Plug-ins	Plug-ins
 	No filter plug-ins installed	Ingen filter-plug-ins installeret
 	Install Plug-in…	Installér plug-in…
+	Open this setting's help page	Åbn hjælpesiden for denne indstilling
 	Reload Plug-ins	Genindlæs plug-ins
 	Type	Tekst
 	Font	Skrifttype
@@ -1980,6 +1981,7 @@ lighting	Light	Lys
 	One file per artboard: <name>-<artboard>.{ext}	Én fil pr. tegnebræt: <name>-<artboard>.{ext}
 	One page per artboard.	Én side pr. tegnebræt.
 	The bounds of the visible art.	Den synlige grafiks grænser.
+	The plug-in writes the whole document.	Plug-ins eksporterer hele dokumentet.
 	Use Artboards	Brug tegnebrætter
 	Choose a folder	Vælg en mappe
 	Create Sub-folders	Opret undermapper
@@ -5223,6 +5225,27 @@ swatch	Bright Violet	Kraftig violet
 	Justification	Justering
 # Select by Color (select.color)
 	Select by Color	Markér efter farve
+	Smudge Stick…	Udtværingsstift…
+	Smudge Stick	Udtværingsstift
+	Sponge…	Svamp…
+	Sponge	Svamp
+	Watercolor…	Akvarel…
+	Watercolor	Akvarel
+	Brush Size	Penselstørrelse
+	Definition	Definition
+	Brush Detail	Penseldetalje
+	Shadow Intensity	Skyggeintensitet
+	Bas Relief…	Basrelief…
+	Bas Relief	Basrelief
+	Charcoal…	Kul…
+	Charcoal	Kul
+	Photocopy…	Fotokopi…
+	Photocopy	Fotokopi
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Tykkelse
+	Detail	Detalje
+	Light/Dark Balance	Lys/mørk-balance
 	Move Anchor Point	Flyt ankerpunkt
 	Chalk & Charcoal…	Kridt og kul…
 	Chalk & Charcoal	Kridt og kul
@@ -5238,3 +5261,5 @@ swatch	Bright Violet	Kraftig violet
 	Move Library Group	Flyt biblioteksgruppe
 	Plaster…	Gips…
 	Plaster	Gips
+	Note Paper…	Notatpapir…
+	Note Paper	Notatpapir

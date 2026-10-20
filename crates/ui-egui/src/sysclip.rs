@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -59,6 +59,7 @@ pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static
         }
         SVG => ("clipboard.importSvg", json!({ "dataBase64": b64(), "center": center })),
         PDF => ("clipboard.importPdf", json!({ "dataBase64": b64(), "center": center })),
+        AI => ("clipboard.importPdf", json!({ "dataBase64": b64(), "editingData": true, "center": center })),
         EPS => ("clipboard.importEps", json!({ "dataBase64": b64(), "center": center })),
         EMF => ("clipboard.importEmf", json!({ "dataBase64": b64(), "center": center })),
         mime => ("clipboard.importImage", json!({ "dataBase64": b64(), "mime": mime, "center": center })),

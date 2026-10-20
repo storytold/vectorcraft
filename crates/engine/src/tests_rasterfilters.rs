@@ -31,12 +31,15 @@ const BRUSH_STROKES: [(&str, &str); 8] = [
 ];
 
 /// Effect › Artistic, at their defaults.
-const ARTISTIC: [(&str, &str); 5] = [
+const ARTISTIC: [(&str, &str); 8] = [
     ("artistic.cutout", "{}"),
     ("artistic.filmGrain", "{}"),
     ("artistic.neonGlow", "{}"),
     ("artistic.plasticWrap", "{}"),
     ("artistic.posterEdges", "{}"),
+    ("artistic.smudgeStick", "{}"),
+    ("artistic.sponge", "{}"),
+    ("artistic.watercolor", "{}"),
 ];
 
 /// Effect › Distort (Diffuse Glow with its highlights glowing from a low brightness up, as the
@@ -49,13 +52,18 @@ const PIXELATE: [(&str, &str); 4] =
     [("pixelate.colorHalftone", "{}"), ("pixelate.crystallize", "{}"), ("pixelate.mezzotint", "{}"), ("pixelate.pointillize", "{}")];
 
 /// Effect › Sketch, at their defaults.
-const SKETCH: [(&str, &str); 6] = [
+const SKETCH: [(&str, &str); 11] = [
+    ("sketch.basRelief", "{}"),
     ("sketch.chalkCharcoal", "{}"),
+    ("sketch.charcoal", "{}"),
     ("sketch.chrome", "{}"),
     ("sketch.graphicPen", "{}"),
     ("sketch.halftonePattern", "{}"),
+    ("sketch.notePaper", "{}"),
+    ("sketch.photocopy", "{}"),
     ("sketch.plaster", "{}"),
     ("sketch.reticulation", "{}"),
+    ("sketch.stamp", "{}"),
 ];
 
 /// Effect › Texture, at their defaults.

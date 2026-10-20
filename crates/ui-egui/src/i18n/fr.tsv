@@ -1519,6 +1519,7 @@
 	Inspect Object	Inspecter l’objet
 	Install Plug-in	Installer un module externe
 	Install Plug-in…	Installer un module externe…
+	Open this setting's help page	Ouvrir la page d’aide de ce réglage
 	Installed plug-in {}	Module externe {} installé
 	Intensity:	Intensité :
 	Intent:	Mode de rendu :
@@ -3209,6 +3210,7 @@
 	Text Wrap Options	Options d’habillage de texte
 	Text Wrap Options…	Options d’habillage de texte…
 	The bounds of the visible art.	Les limites de l’illustration visible.
+	The plug-in writes the whole document.	Le module externe exporte le document entier.
 	The cell shows the type object's text as HTML.	La cellule affiche le texte de l’objet texte au format HTML.
 	The document has no colour swatches.	Le document ne contient aucune nuance de couleur.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Le bord du papier que l’imprimante ne peut pas atteindre : l’illustration reste à l’intérieur, et l’aperçu l’affiche en pointillés.
@@ -4239,6 +4241,7 @@ axis	Both	Les deux
 @msg	{_1} files are written by file.saveAsTemplate	les fichiers {_1} sont écrits par file.saveAsTemplate
 @msg	{_1} font families available	{_1} familles de polices disponibles
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} est un effet dynamique (Effet › Plug-ins)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} est un module externe d’exportation (Fichier › Exporter › Exporter sous…)
 @msg	{_1} is already used by {_2}	{_1} est déjà utilisé par {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} fichier(s) lié(s) illisible(s) ici : leurs aperçus sont affichés
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} image(s) liée(s) modifiée(s) sur le disque : Mettre à jour les liens affiche les nouvelles versions
@@ -5191,6 +5194,27 @@ theme	Appearance	Apparence
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
+	Smudge Stick…	Estompe…
+	Smudge Stick	Estompe
+	Sponge…	Éponge…
+	Sponge	Éponge
+	Watercolor…	Aquarelle…
+	Watercolor	Aquarelle
+	Brush Size	Taille du pinceau
+	Definition	Définition
+	Brush Detail	Détail du pinceau
+	Shadow Intensity	Intensité des ombres
+	Bas Relief…	Bas-relief…
+	Bas Relief	Bas-relief
+	Charcoal…	Fusain…
+	Charcoal	Fusain
+	Photocopy…	Photocopie…
+	Photocopy	Photocopie
+	Stamp…	Tampon…
+	Stamp	Tampon
+	Thickness	Épaisseur
+	Detail	Détail
+	Light/Dark Balance	Équilibre clair/foncé
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Modifier l’original n’ouvre que les fichiers d’image et de document ; « {name} » n’en est pas un
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	seules les URL http, https et mailto s’ouvrent dans le navigateur, pas « {url} »
@@ -5258,3 +5282,5 @@ theme	Appearance	Apparence
 	Move Library Group	Déplacer le groupe de bibliothèque
 	Plaster…	Plâtre…
 	Plaster	Plâtre
+	Note Paper…	Papier gaufré…
+	Note Paper	Papier gaufré

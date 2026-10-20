@@ -62,6 +62,8 @@ enum State {
         start: Point,
         grab: Option<Point>,
         began: bool,
+        /// Group Selection: Shift-click on a selected object toggles it off on release.
+        deselect: Option<NodeId>,
     },
     /// Dragging a curved segment: it follows the pointer (`path.reshapeSegment`).
     Segment {
@@ -452,14 +454,25 @@ impl Tool for DirectSelectionTool {
                 } else {
                     h.leaf
                 };
-                self.state = State::MoveObject { start: p, grab: None, began: false };
-                if cx.selection.contains(target) {
-                    vec![]
-                } else if ev.mods.shift || cx.selection.contains(h.leaf) {
-                    vec![Action::Exec("select.add".into(), json!({"ids": [target.0]}))]
-                } else {
-                    vec![Action::Exec("select.set".into(), json!({"ids": [target.0]}))]
+                let mut deselect = None;
+                let mut out = vec![];
+                if ev.mods.shift {
+                    // Shift on a selected member deselects what was hit (a compound path's part),
+                    // not the next ancestor a plain click would add (#2441).
+                    if cx.selection.contains(h.leaf) {
+                        deselect = Some(h.leaf);
+                    } else {
+                        out.push(Action::Exec("select.toggle".into(), json!({"id": target.0})));
+                    }
+                } else if !cx.selection.contains(target) {
+                    if cx.selection.contains(h.leaf) {
+                        out.push(Action::Exec("select.add".into(), json!({"ids": [target.0]})));
+                    } else {
+                        out.push(Action::Exec("select.set".into(), json!({"ids": [target.0]})));
+                    }
                 }
+                self.state = State::MoveObject { start: p, grab: None, began: false, deselect };
+                out
             }
             (PointerKind::DoubleClick, _) if self.group => release_guide_at(cx, p, ev.mods).into_iter().collect(),
             (PointerKind::DoubleClick, _) if !self.group => {
@@ -522,7 +535,7 @@ impl Tool for DirectSelectionTool {
                     }
                     // Alt picks the whole path (and Alt-drag copies it), as on a segment.
                     if ev.mods.alt {
-                        self.state = State::MoveObject { start: p, grab: Some(grab), began: false };
+                        self.state = State::MoveObject { start: p, grab: Some(grab), began: false, deselect: None };
                         let whole = cx.selection.contains(id) && cx.selection.partial(id).is_none();
                         return if whole { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                     }
@@ -533,7 +546,7 @@ impl Tool for DirectSelectionTool {
                     // Paths all selected whole move as objects, held by this anchor, so Alt can turn
                     // the copy on and off during the drag as with the Selection tool.
                     self.state = if already && cx.selection.anchors.is_empty() {
-                        State::MoveObject { start: p, grab: Some(grab), began: false }
+                        State::MoveObject { start: p, grab: Some(grab), began: false, deselect: None }
                     } else {
                         State::MoveAnchors { start: p, grab, began: false }
                     };
@@ -586,7 +599,7 @@ impl Tool for DirectSelectionTool {
                         }
                     }
                     // Clicking the fill selects the whole leaf path (all anchors).
-                    self.state = State::MoveObject { start: p, grab: None, began: false };
+                    self.state = State::MoveObject { start: p, grab: None, began: false, deselect: None };
                     if ev.mods.shift {
                         return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
                     }
@@ -638,14 +651,14 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
-            (PointerKind::Drag, State::MoveObject { start, grab, began }) => {
+            (PointerKind::Drag, State::MoveObject { start, grab, began, .. }) => {
                 let mut out = vec![];
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
                     out.push(Action::Begin(if ev.mods.alt { "Copy".into() } else { "Move".into() }));
-                    self.state = State::MoveObject { start, grab, began: true };
+                    self.state = State::MoveObject { start, grab, began: true, deselect: None };
                     if grab.is_some() {
                         // Alt can go down or up at any time: gather both while nothing has moved.
                         self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
@@ -763,16 +776,23 @@ impl Tool for DirectSelectionTool {
                 | State::SpineSegment { began, .. }
                 | State::TypeArea { began, .. },
             ) => {
+                let deselect = match self.state {
+                    State::MoveObject { deselect, .. } => deselect,
+                    _ => None,
+                };
                 self.state = State::Idle;
                 self.guides.clear();
                 (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
-                match (began, self.click.take(), self.click_segment.take()) {
-                    (true, _, _) => vec![Action::Commit],
-                    (false, Some((id, si, ai)), _) => {
+                match (began, deselect, self.click.take(), self.click_segment.take()) {
+                    (true, ..) => vec![Action::Commit],
+                    (false, Some(id), _, _) => vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))],
+                    (false, None, Some((id, si, ai)), _) => {
                         vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
                     }
-                    (false, None, Some((id, si, seg))) => vec![Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[si, seg]]}))],
-                    (false, None, None) => vec![],
+                    (false, None, None, Some((id, si, seg))) => {
+                        vec![Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[si, seg]]}))]
+                    }
+                    (false, None, None, None) => vec![],
                 }
             }
             (PointerKind::Up, State::Handle { .. } | State::SpineHandle { .. }) => {
@@ -1375,6 +1395,35 @@ mod tests {
         let mut s = Selection::default();
         s.set([outer]);
         assert_eq!(click(&s, 25.0, 100.0), vec![Action::Exec("select.add".into(), json!({"ids": [compound.0]}))]);
+    }
+
+    /// Group Selection Shift-click on a selected compound-path member deselects it on release.
+    #[test]
+    fn group_selection_shift_click_deselects_a_compound_path_member() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (outer, hole, compound) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let rect = |id, a: f64, b: f64| {
+            std::sync::Arc::new(vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(a, a, b, b)), Default::default()))
+        };
+        let mut c = vectorcraft_doc::Node::new(
+            compound,
+            vectorcraft_doc::NodeKind::Compound {
+                children: vec![rect(outer, 0.0, 200.0), rect(hole, 50.0, 150.0)],
+                rule: vectorcraft_geom::FillRule::EvenOdd,
+            },
+        );
+        c.appearance = vectorcraft_doc::Appearance::default_art().into();
+        d.insert(Some(l), 0, c).unwrap();
+        let p = paint();
+        let mut s = Selection::default();
+        s.set([outer]);
+        let shift = Mods { shift: true, ..Mods::default() };
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(true);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 25.0, 100.0).with_mods(shift));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 25.0, 100.0).with_mods(shift));
+        assert_eq!(a, vec![Action::Exec("select.toggle".into(), json!({"id": outer.0}))]);
     }
 
     /// A path inside an inner group, a sibling path outside it, and the groups' ids.

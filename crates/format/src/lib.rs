@@ -163,6 +163,13 @@ fn preview_mime(bytes: &[u8]) -> &'static str {
     if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { vectorcraft_doc::links::PROXY_MIME }
 }
 
+/// The JSON of a native file without the data after it (version 4 keeps images there): a
+/// complete JSON value whose `images` give each image's MIME type and where its data was, without
+/// the data.
+pub fn json_part(file: &[u8]) -> &[u8] {
+    split_tail(file).0
+}
+
 /// The JSON of a file and the data after it (v4), split at [`BLOB_MAGIC`] after the first JSON
 /// value.
 fn split_tail(text: &[u8]) -> (&[u8], &[u8]) {

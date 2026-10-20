@@ -1479,6 +1479,7 @@ file-filter	Templates	模板
 	Inspect Object	检查对象
 	Install Plug-in	安装插件
 	Install Plug-in…	安装增效工具…
+	Open this setting's help page	打开此设置的帮助页面
 	Installed plug-in {}	已安装增效工具 {}
 	Intensity:	强度：
 	Intent:	意图：
@@ -3096,6 +3097,7 @@ font-script	Japanese	汉字
 	Text Wrap Options	文字绕图选项
 	Text Wrap Options…	文本绕排选项…
 	The bounds of the visible art.	可见图稿的边界。
+	The plug-in writes the whole document.	增效工具会导出整个文档。
 	The cell shows the type object's text as HTML.	该单元格以 HTML 显示文字对象的内容。
 	The document has no colour swatches.	文档没有颜色色板。
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	打印机无法触及的纸张边缘：图稿会放在其内侧，预览中会以虚线显示。
@@ -4014,6 +4016,7 @@ imageTrace	Outline	轮廓
 @msg	missing `id` (see plugin.list)	缺少 `id` (请参阅 plugin.list)
 @msg	no plug-in {id} is installed	未安装增效工具 {id}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} 是实时效果 (效果 › 增效工具)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是导出增效工具 (文件 › 导出 › 导出为…)
 @msg	a preset named `{_1}` exists	名为 `{_1}` 的预设已存在
 @msg	a swatch or color group named `{n}` exists	名为 `{n}` 的色板或颜色组已存在
 @msg	no print preset named `{base}`	没有名为 `{base}` 的打印预设
@@ -5025,6 +5028,27 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
+	Smudge Stick…	涂抹棒…
+	Smudge Stick	涂抹棒
+	Sponge…	海绵…
+	Sponge	海绵
+	Watercolor…	水彩…
+	Watercolor	水彩
+	Brush Size	画笔大小
+	Definition	清晰度
+	Brush Detail	画笔细节
+	Shadow Intensity	阴影强度
+	Bas Relief…	浅浮雕…
+	Bas Relief	浅浮雕
+	Charcoal…	炭笔…
+	Charcoal	炭笔
+	Photocopy…	影印…
+	Photocopy	影印
+	Stamp…	图章…
+	Stamp	图章
+	Thickness	粗细
+	Detail	细节
+	Light/Dark Balance	明暗平衡
 	Enable Guides for 9-Slice Scaling	启用 9-slice 缩放参考线
 @msg	cancelled; nothing was changed	已取消；未做任何更改
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存会写入 {_1}，而不是 {_2}：要写入该格式请使用 file.saveAsTemplate
@@ -5096,3 +5120,5 @@ lighting	Light	光源
 	Move Library Group	移动库组
 	Plaster…	塑料效果…
 	Plaster	塑料效果
+	Note Paper…	便条纸…
+	Note Paper	便条纸

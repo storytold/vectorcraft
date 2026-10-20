@@ -8,6 +8,7 @@
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
+use vectorcraft_geom::Rect;
 
 use super::{alt_held, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -110,7 +111,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
                 "width" => [None, None, Some(nv), None],
                 _ => [None, None, None, Some(nv)],
             };
-            super::transform::set_artboard(app, i, r, refi, xywh, link);
+            super::transform::set_artboard(app, i, refi, xywh, link);
         }
     }
     true
@@ -151,6 +152,53 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     all.sort_unstable();
     all.dedup();
     all
+}
+
+/// The artboards a new size for artboard `i` goes to: the selected artboards ([`picked`]) when
+/// `i` is one of them, else `i` alone.
+pub(crate) fn resized_with(app: &VectorcraftApp, i: usize) -> Vec<usize> {
+    let all = picked(app, app.session.active().map_or(0, |d| d.doc.artboards.len()));
+    if all.contains(&i) { all } else { vec![i] }
+}
+
+/// The `artboard.setProps` params that set `entries` (each an artboard's `index` and its fields)
+/// with `common` (an object: `scaleArt`, `moveArt`), in one undo step: the one entry's fields
+/// beside `common`, or an `artboards` list of several beside it; None for no entry.
+pub(crate) fn set_props_params(common: Value, mut entries: Vec<Value>) -> Option<Value> {
+    let mut p = common;
+    let o = p.as_object_mut()?;
+    match entries.len() {
+        0 => return None,
+        1 => {
+            if let Value::Object(e) = entries.remove(0) {
+                o.extend(e);
+            }
+        }
+        _ => {
+            o.insert("artboards".into(), Value::Array(entries));
+        }
+    }
+    Some(p)
+}
+
+/// Run `artboard.setProps` with `common` on each artboard of `indices` that `entry` gives fields for
+/// (from its index and rectangle), in one undo step ([`set_props_params`]). Nothing runs when it
+/// gives none.
+pub(crate) fn set_props(
+    app: &mut VectorcraftApp,
+    indices: &[usize],
+    common: Value,
+    entry: impl Fn(usize, Rect) -> Option<Value>,
+) -> Result<Value, String> {
+    let entries: Vec<Value> = app
+        .session
+        .active()
+        .map(|d| indices.iter().filter_map(|&i| d.doc.artboards.get(i).and_then(|a| entry(i, a.rect))).collect())
+        .unwrap_or_default();
+    match set_props_params(common, entries) {
+        Some(p) => app.run("artboard.setProps", p),
+        None => Ok(Value::Null),
+    }
 }
 
 /// Delete the picked artboards and select a remaining one.

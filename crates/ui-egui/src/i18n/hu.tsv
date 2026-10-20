@@ -1911,6 +1911,7 @@ file-filter	Templates	Sablonok
 	Inspect Object	Objektum vizsgálata
 	Install Plug-in	Bővítmény telepítése
 	Install Plug-in…	Bővítmény telepítése…
+	Open this setting's help page	A beállítás súgóoldalának megnyitása
 	Installed plug-in {}	Telepített bővítmény: {}
 	Intensity	Erősség
 	Intensity:	Erősség:
@@ -3869,6 +3870,7 @@ mark-style	Japanese	Japán
 	Texturizer…	Textúrázó…
 	Thai	Thai
 	The bounds of the visible art.	A látható grafika határai.
+	The plug-in writes the whole document.	A bővítmény a teljes dokumentumot exportálja.
 	The cell shows the type object's text as HTML.	A cella a szövegobjektum szövegét HTML-ként mutatja.
 	The dialog was closed before its file dialog answered	A párbeszédablak bezárult, mielőtt a fájlválasztó válaszolt volna
 	The document has no colour swatches.	A dokumentumban nincs színminta.
@@ -4978,6 +4980,7 @@ imageTrace	Outline	Körvonal
 @msg	{_1} font families available	Elérhető betűcsaládok: {_1}
 @msg	{_1} has no {_2} style	ennek nincs ilyen stílusa: {_1} ({_2})
 @msg	{_1} is a live effect (Effect › Plug-ins)	élő effektus: {_1} (Effektus › Bővítmények)
+@msg	{_1} is an exporter (File › Export › Export As…)	exportáló bővítmény: {_1} (Fájl › Exportálás › Exportálás másként…)
 @msg	{_1} is already used by {_2}	már foglalt: {_1} (használja: {_2})
 @msg	{_1} linked file(s) can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {_1}; az előnézetük látszik
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {_1}; a Csatolások frissítése az új változatokat mutatja
@@ -5178,6 +5181,27 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
+	Smudge Stick…	Elmosó rúd…
+	Smudge Stick	Elmosó rúd
+	Sponge…	Szivacs…
+	Sponge	Szivacs
+	Watercolor…	Akvarell…
+	Watercolor	Akvarell
+	Brush Size	Ecsetméret
+	Definition	Kidolgozottság
+	Brush Detail	Ecsetrészletesség
+	Shadow Intensity	Árnyék intenzitása
+	Bas Relief…	Dombormű…
+	Bas Relief	Dombormű
+	Charcoal…	Szén…
+	Charcoal	Szén
+	Photocopy…	Fénymásolat…
+	Photocopy	Fénymásolat
+	Stamp…	Bélyegző…
+	Stamp	Bélyegző
+	Thickness	Vastagság
+	Detail	Részletesség
+	Light/Dark Balance	Világos/sötét egyensúly
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	az Eredeti szerkesztése csak kép- és dokumentumfájlokat nyit meg; ez nem ilyen: „{name}”
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	a böngészőben csak a http-, https- és mailto-URL-ek nyílnak meg; ez nem ilyen: „{url}”
@@ -5245,3 +5269,5 @@ imageTrace	Outline	Körvonal
 	Move Library Group	Könyvtárcsoport áthelyezése
 	Plaster…	Gipsz…
 	Plaster	Gipsz
+	Note Paper…	Jegyzetpapír…
+	Note Paper	Jegyzetpapír

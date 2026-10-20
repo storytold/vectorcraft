@@ -20,11 +20,14 @@
 </p>
 
 <p align="center">
-  <img alt="Status: in active development" src="https://img.shields.io/badge/status-in%20active%20development-e8573f">
-  <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-b83a24?logo=rust&logoColor=white">
-  <img alt="Runs on macOS, Windows, Linux, FreeBSD and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-555555">
-  <img alt="MCP server for agents" src="https://img.shields.io/badge/agents-MCP%20server-555555">
-  <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-555555">
+  <img alt="Status: in active development" src="https://img.shields.io/badge/status-in%20active%20development-e8573f?style=flat-square">
+  <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-b83a24?style=flat-square&logo=rust&logoColor=white">
+  <img alt="Runs on macOS, Windows, Linux, FreeBSD and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-555555?style=flat-square">
+  <img alt="MCP server for agents" src="https://img.shields.io/badge/agents-MCP%20server-555555?style=flat-square">
+  <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-555555?style=flat-square">
+  <br>
+  <a href="https://sonarcloud.io/project/overview?id=storytold_vectorcraft"><img alt="Scanned by SonarCloud" src="https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white"></a>
+  <a href="https://coderabbit.ai"><img alt="Reviewed by CodeRabbit" src="https://img.shields.io/coderabbit/prs/github/storytold/vectorcraft?style=flat-square&label=Reviewed%20by%20CodeRabbit&logo=coderabbit"></a>
 </p>
 
 <p align="center">
@@ -163,6 +166,8 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 
 ## Quick start
 
+For posters and sewing patterns, see [Print a large poster across multiple pages](docs/print-tiling.md).
+
 ```sh
 git clone https://github.com/storytold/vectorcraft
 cd vectorcraft
@@ -177,6 +182,8 @@ cargo xtask bundle                                        # dist/VectorCraft.app
 cd apps/vectorcraft-web && trunk build --release            # web build → dist/web
 cargo xtask ci                                            # fmt, clippy, tests, layering, wasm, vendor names
 ```
+
+For text and custom letter shapes, see [Typography and Custom Lettering](docs/typography-lettering.md).
 
 Japanese fonts come from [storytold/craft-fonts](https://github.com/storytold/craft-fonts), an optional
 build input (releases always use it): `CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p vectorcraft` (an absolute path).
@@ -246,7 +253,7 @@ The scores are self-assessed from our code against public documentation;
 - reliable exchange of .ai files (layer structure in real files; proprietary editing data isn't written);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
-- about half of the raster effects (24 of 57 still missing; Cutout, Film Grain, Neon Glow and Poster Edges are available under Artistic, Halftone Pattern under Sketch) and the Effect Gallery;
+- most of the raster effects (11 of 57 still missing; Cutout, Film Grain, Neon Glow, Plastic Wrap, Poster Edges, Smudge Stick, Sponge and Watercolor are available under Artistic, Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster, Reticulation and Stamp under Sketch) and the Effect Gallery;
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.

@@ -1538,6 +1538,7 @@ file-filter	Templates	Шаблони
 	Inspect Object	Перевірити об’єкт
 	Install Plug-in	Встановити модуль
 	Install Plug-in…	Встановити модуль…
+	Open this setting's help page	Відкрити сторінку довідки для цього параметра
 	Installed plug-in {}	Встановлено модуль {}
 	Intensity:	Інтенсивність:
 	Intent:	Призначення:
@@ -3238,6 +3239,7 @@ effect	Points	Точки
 	Text Wrap Options	Параметри обтікання текстом
 	Text Wrap Options…	Параметри обтікання текстом…
 	The bounds of the visible art.	Кордони видимого малюнка.
+	The plug-in writes the whole document.	Модуль експортує весь документ.
 	The cell shows the type object's text as HTML.	Осередок показує текст текстового об’єкта як HTML.
 	The document has no colour swatches.	У документі немає кольорових зразків.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Край паперу, до якого не приходить принтер: малюнок залишається всередині нього, а перегляд показує його пунктиром.
@@ -4265,6 +4267,7 @@ axis	Both	Обидві
 @msg	{_1} files are written by file.saveAsTemplate	файли {_1} записує file.saveAsTemplate
 @msg	{_1} font families available	доступно сімейства шрифтів: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} - динамічний ефект (Ефект › Модулі)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} - модуль експорту (Файл › Експорт › Експортувати як…)
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
@@ -4785,6 +4788,27 @@ lighting	Light	Світло
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
+	Smudge Stick…	Розтушовування…
+	Smudge Stick	Розтушовування
+	Sponge…	Губка…
+	Sponge	Губка
+	Watercolor…	Акварель…
+	Watercolor	Акварель
+	Brush Size	Розмір пензля
+	Definition	Чіткість
+	Brush Detail	Деталізація пензля
+	Shadow Intensity	Інтенсивність тіней
+	Bas Relief…	Барельєф…
+	Bas Relief	Барельєф
+	Charcoal…	Вугілля…
+	Charcoal	Вугілля
+	Photocopy…	Фотокопія…
+	Photocopy	Фотокопія
+	Stamp…	Штамп…
+	Stamp	Штамп
+	Thickness	Товщина
+	Detail	Деталі
+	Light/Dark Balance	Баланс світлого й темного
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	«Редагувати оригінал» відкриває лише файли зображень і документів; «{name}» до них не належить
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	у браузері відкриваються лише URL з http, https і mailto, а не «{url}»
@@ -4853,3 +4877,5 @@ lighting	Light	Світло
 	Move Library Group	Перемістити групу бібліотеки
 	Plaster…	Гіпс…
 	Plaster	Гіпс
+	Note Paper…	Поштовий папір…
+	Note Paper	Поштовий папір

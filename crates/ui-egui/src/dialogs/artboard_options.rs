@@ -1,6 +1,6 @@
 //! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
 //! panel's options icon or menu): the artboard's fields, sizes parsed with units, and its position
-//! from a reference point.
+//! from a reference point. A new size also goes to the other selected artboards.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -31,10 +31,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::grid_then(ui, d, unit, |ui, d| {
         let (w, h) = (d.f64("width", 0.0), d.f64("height", 0.0));
         let n = artboard_rect(was, refi, None, None, Some(w), Some(h), false);
-        // Only the side that changed moves, so an untouched coordinate stays exactly as it was.
-        for (key, changed, at) in [("x", w != w0, n.x0), ("y", h != h0, n.y0)] {
+        // Only the side that changed moves, so an untouched coordinate stays exactly as it was. The
+        // reference point's column or row is kept for the other selected artboards (`confirm`).
+        for (key, changed, at, part) in [("x", w != w0, n.x0, refi % 3), ("y", h != h0, n.y0, refi / 3)] {
             if changed {
                 d.fields.insert(key.into(), json!(at));
+                d.fields.insert(format!("__ref{key}"), json!(part));
             }
         }
         position_rows(ui, d, refi, unit, origin);
@@ -92,6 +94,10 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(json!({ "dialog": KIND }))
 }
 
+/// OK sets the artboard's fields. A Width or Height that differs from the artboard's also goes to
+/// the other selected artboards (when this one is among them), each resized about the reference
+/// point the form's last Width or Height change used (fields `__refx` and `__refy`, its column and
+/// row; the top-left corner when the form set none), all in one undo step.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.bool("new") {
         return confirm_new(app, d);
@@ -102,7 +108,27 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             p[k] = json!(d.f64(k, 0.0));
         }
     }
-    p["moveArt"] = json!(crate::panels::artboards::move_art(app));
+    if let Some(o) = p.as_object_mut() {
+        o.retain(|k, _| !k.starts_with("__"));
+    }
+    let index = p["index"].as_u64().and_then(|i| usize::try_from(i).ok()).unwrap_or(0);
+    let was = app.session.active().and_then(|st| st.doc.artboards.get(index)).map(|a| a.rect);
+    let changed = |k: &str, old: Option<f64>| p[k].as_f64().filter(|v| old.is_some_and(|old| (v - old).abs() > 1e-6));
+    let (w, h) = (changed("width", was.map(|r| r.width())), changed("height", was.map(|r| r.height())));
+    let part = |k: &str| d.fields.get(k).and_then(Value::as_u64).map_or(0, |v| v.min(2) as usize);
+    let refi = part("__refy") * 3 + part("__refx");
+    let mut entries = vec![];
+    if w.is_some() || h.is_some() {
+        for i in crate::panels::artboards::resized_with(app, index).into_iter().filter(|i| *i != index) {
+            if let Some(r) = app.session.active().and_then(|st| st.doc.artboards.get(i)).map(|a| a.rect) {
+                let n = artboard_rect(r, refi, None, None, w, h, false);
+                entries.push(json!({"index": i, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height()}));
+            }
+        }
+    }
+    entries.insert(0, p);
+    let common = json!({"moveArt": crate::panels::artboards::move_art(app)});
+    let p = crate::panels::artboards::set_props_params(common, entries).ok_or("no artboard")?;
     run_and_close(app, "artboard.setProps", p)
 }
 

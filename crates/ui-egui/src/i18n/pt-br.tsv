@@ -1315,6 +1315,7 @@
 	Inspect Object	Inspecionar Objeto
 	Install Plug-in	Instalar Plug-in
 	Install Plug-in…	Instalar Plug-in…
+	Open this setting's help page	Abrir a página de ajuda desta configuração
 	Intensity:	Intensidade:
 	Intent:	Intenção:
 	Interface Language	Idioma da Interface
@@ -2625,6 +2626,7 @@
 	Text Wrap Options…	Opções de Quebra de Texto…
 	The Print Tiling tool placed the pages.	A ferramenta Tesselação de Impressão colocou as páginas.
 	The bounds of the visible art.	Os limites da arte visível.
+	The plug-in writes the whole document.	O plug-in exporta o documento inteiro.
 	The cell shows the type object's text as HTML.	A célula mostra o texto do objeto de tipo como HTML.
 	The document has no colour swatches.	O documento não tem amostras de cor.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	A borda do papel que a impressora não alcança: a arte fica dentro dela, e a visualização a mostra tracejada.
@@ -3822,6 +3824,7 @@ axis	Both	Ambos
 @msg	{_1} files are written by file.saveAsTemplate	arquivos {_1} são gravados por file.saveAsTemplate
 @msg	{_1} font families available	{_1} famílias de fontes disponíveis
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} é um efeito dinâmico (Efeito › Plug-ins)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} é um plug-in de exportação (Arquivo › Exportar › Exportar Como…)
 @msg	{_1} is already used by {_2}	{_1} já é usado por {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} arquivo(s) vinculado(s) não podem ser lidos aqui: suas visualizações são exibidas
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagem(ns) vinculada(s) mudou(aram) no disco: Atualizar links mostra as novas versões
@@ -5109,6 +5112,27 @@ mark-style	Japanese	Japonesas
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
+	Smudge Stick…	Esfuminho…
+	Smudge Stick	Esfuminho
+	Sponge…	Esponja…
+	Sponge	Esponja
+	Watercolor…	Aquarela…
+	Watercolor	Aquarela
+	Brush Size	Tamanho do pincel
+	Definition	Definição
+	Brush Detail	Detalhe do pincel
+	Shadow Intensity	Intensidade da sombra
+	Bas Relief…	Baixo-relevo…
+	Bas Relief	Baixo-relevo
+	Charcoal…	Carvão…
+	Charcoal	Carvão
+	Photocopy…	Fotocópia…
+	Photocopy	Fotocópia
+	Stamp…	Carimbo…
+	Stamp	Carimbo
+	Thickness	Espessura
+	Detail	Detalhe
+	Light/Dark Balance	Equilíbrio claro/escuro
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Editar Original abre apenas arquivos de imagem e de documento; “{name}” não é um deles
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	apenas URLs http, https e mailto abrem no navegador, não “{url}”
@@ -5176,3 +5200,5 @@ mark-style	Japanese	Japonesas
 	Move Library Group	Mover grupo de biblioteca
 	Plaster…	Gesso…
 	Plaster	Gesso
+	Note Paper…	Papel de carta…
+	Note Paper	Papel de carta

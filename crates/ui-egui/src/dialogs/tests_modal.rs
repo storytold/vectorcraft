@@ -144,12 +144,13 @@ fn check_plugin_dialog(kind: &str, count: usize, check: impl FnOnce(&egui::Conte
 /// settings is as tall as they are.
 #[test]
 fn a_plug_in_dialog_of_many_settings_fits_the_window() {
-    use vectorcraft_plugins::manifest::MAX_PARAMS;
+    // As many as a plug-in may declare outside groups.
+    use vectorcraft_plugins::manifest::MAX_UNGROUPED;
     let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
     let shown = |texts: &[(String, Rect)], text: &str| texts.iter().find(|(t, r)| t == text && screen.contains_rect(*r)).map(|(_, r)| *r);
     for kind in ["effect", "filter"] {
-        check_plugin_dialog(kind, MAX_PARAMS, |ctx, app, window, heading| {
-            let last = format!("Setting{}:", MAX_PARAMS - 1);
+        check_plugin_dialog(kind, MAX_UNGROUPED, |ctx, app, window, heading| {
+            let last = format!("Setting{}:", MAX_UNGROUPED - 1);
             let texts = frame(ctx, app, vec![]);
             let rect = rect_of(ctx, window);
             assert!(screen.contains_rect(rect) && rect.height() > 0.75 * SCREEN.y, "{kind}: the dialog is at {rect:?} in the {SCREEN:?} window");

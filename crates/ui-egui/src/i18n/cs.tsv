@@ -305,6 +305,7 @@
 	Plug-ins	Zásuvné moduly
 	No filter plug-ins installed	Nejsou nainstalovány žádné filtry
 	Install Plug-in…	Nainstalovat zásuvný modul…
+	Open this setting's help page	Otevřít stránku nápovědy k tomuto nastavení
 	Reload Plug-ins	Znovu načíst zásuvné moduly
 	Type	Text
 	Font	Písmo
@@ -2168,6 +2169,7 @@ lighting	Light	Světlo
 	One file per artboard: <name>-<artboard>.{ext}	Jeden soubor na pracovní plochu: <name>-<artboard>.{ext}
 	One page per artboard.	Jedna stránka na pracovní plochu.
 	The bounds of the visible art.	Hranice viditelné kresby.
+	The plug-in writes the whole document.	Zásuvný modul exportuje celý dokument.
 	Use Artboards	Použít pracovní plochy
 	Choose a folder	Vyberte složku
 	Create Sub-folders	Vytvořit podsložky
@@ -4543,6 +4545,7 @@ imageTrace	Outline	Obrys
 @msg	{_1} files are written by file.saveAsTemplate	soubory {_1} zapisuje file.saveAsTemplate
 @msg	{_1} font families available	Dostupné rodiny písem: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} je živý efekt (Efekt › Zásuvné moduly)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} je exportní zásuvný modul (Soubor › Export › Exportovat jako…)
 @msg	{_1} is already used by {_2}	{_1} už používá {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	propojené soubory ({_1}) zde nelze přečíst: zobrazují se jejich náhledy
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	propojené obrázky ({_1}) se na disku změnily: nové verze zobrazí Aktualizovat propojení
@@ -5192,6 +5195,27 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
+	Smudge Stick…	Rozmazávací tyčinka…
+	Smudge Stick	Rozmazávací tyčinka
+	Sponge…	Houba…
+	Sponge	Houba
+	Watercolor…	Akvarel…
+	Watercolor	Akvarel
+	Brush Size	Velikost štětce
+	Definition	Definice
+	Brush Detail	Detail štětce
+	Shadow Intensity	Intenzita stínů
+	Bas Relief…	Basreliéf…
+	Bas Relief	Basreliéf
+	Charcoal…	Uhel…
+	Charcoal	Uhel
+	Photocopy…	Fotokopie…
+	Photocopy	Fotokopie
+	Stamp…	Razítko…
+	Stamp	Razítko
+	Thickness	Tloušťka
+	Detail	Detail
+	Light/Dark Balance	Vyvážení světlé/tmavé
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Upravit originál otevírá pouze soubory obrázků a dokumentů; „{name}“ mezi ně nepatří
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	v prohlížeči se otevírají pouze adresy URL http, https a mailto, ne „{url}“
@@ -5259,3 +5283,5 @@ mark-style	Japanese	Japonské
 	Move Library Group	Přesunout skupinu knihovny
 	Plaster…	Sádra…
 	Plaster	Sádra
+	Note Paper…	Dopisní papír…
+	Note Paper	Dopisní papír

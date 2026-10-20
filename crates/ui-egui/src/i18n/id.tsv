@@ -269,6 +269,7 @@
 	Plug-ins	Plug-in
 	No filter plug-ins installed	Tidak ada plug-in filter yang terinstal
 	Install Plug-in…	Instal plug-in…
+	Open this setting's help page	Buka halaman bantuan pengaturan ini
 	Reload Plug-ins	Muat ulang plug-in
 	Type	Teks
 	Font	Font
@@ -1980,6 +1981,7 @@ lighting	Light	Cahaya
 	One file per artboard: <name>-<artboard>.{ext}	Satu file per artboard: <name>-<artboard>.{ext}
 	One page per artboard.	Satu halaman per artboard.
 	The bounds of the visible art.	Batas karya seni yang terlihat.
+	The plug-in writes the whole document.	Plug-in mengekspor seluruh dokumen.
 	Use Artboards	Gunakan artboard
 	Choose a folder	Pilih folder
 	Create Sub-folders	Buat subfolder
@@ -5223,6 +5225,27 @@ swatch	Bright Violet	Violet cerah
 	Justification	Justifikasi
 # Select by Color (select.color)
 	Select by Color	Pilih berdasarkan warna
+	Smudge Stick…	Tongkat olesan…
+	Smudge Stick	Tongkat olesan
+	Sponge…	Spons…
+	Sponge	Spons
+	Watercolor…	Cat air…
+	Watercolor	Cat air
+	Brush Size	Ukuran kuas
+	Definition	Definisi
+	Brush Detail	Detail kuas
+	Shadow Intensity	Intensitas bayangan
+	Bas Relief…	Relief dangkal…
+	Bas Relief	Relief dangkal
+	Charcoal…	Arang…
+	Charcoal	Arang
+	Photocopy…	Fotokopi…
+	Photocopy	Fotokopi
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Ketebalan
+	Detail	Detail
+	Light/Dark Balance	Keseimbangan terang/gelap
 	Move Anchor Point	Pindahkan titik jangkar
 	Chalk & Charcoal…	Kapur dan arang…
 	Chalk & Charcoal	Kapur dan arang
@@ -5238,3 +5261,5 @@ swatch	Bright Violet	Violet cerah
 	Move Library Group	Pindahkan grup pustaka
 	Plaster…	Plester…
 	Plaster	Plester
+	Note Paper…	Kertas Catatan…
+	Note Paper	Kertas Catatan

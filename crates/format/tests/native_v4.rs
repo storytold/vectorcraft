@@ -58,6 +58,19 @@ fn small_files_stay_plain_json_and_older_versions_inline() {
     assert_eq!(load(&v3).unwrap().images["big"].bytes, big.images["big"].bytes);
 }
 
+/// `json_part` (what exporter plug-ins are given): the whole JSON value, without the data after
+/// it; a file without such data is its JSON already.
+#[test]
+fn json_part_is_the_json_without_the_data_after_it() {
+    let big = save_with(&doc_with_image("big", INLINE_MAX + 10), &SaveOptions::default()).unwrap();
+    let json = vectorcraft_format::json_part(&big);
+    assert!(json.len() < big.len() - INLINE_MAX && !has_tail(json));
+    let v: Value = serde_json::from_slice(json).unwrap();
+    assert!(v["images"]["big"].get("blob").is_some() && v["images"]["big"].get("data").is_none(), "{}", v["images"]);
+    let small = save_with(&doc_with_image("small", 100), &SaveOptions::default()).unwrap();
+    assert_eq!(vectorcraft_format::json_part(&small), &small[..]);
+}
+
 #[test]
 fn damaged_offsets_are_refused_not_a_crash() {
     let d = doc_with_image("big", INLINE_MAX + 10);

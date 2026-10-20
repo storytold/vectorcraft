@@ -1494,6 +1494,7 @@
 	Inspect Object	Инспектиране на обекта
 	Install Plug-in	Инсталиране на приставка
 	Install Plug-in…	Инсталиране на приставка…
+	Open this setting's help page	Отваряне на страницата с помощ за тази настройка
 	Installed plug-in {}	Инсталирана приставка {}
 	Intensity:	Интензивност:
 	Intent:	Цел:
@@ -3153,6 +3154,7 @@
 	Text Wrap Options	Опции за обтичане на текст
 	Text Wrap Options…	Опции за обтичане на текст…
 	The bounds of the visible art.	Границите на видимия макет.
+	The plug-in writes the whole document.	Приставката експортира целия документ.
 	The cell shows the type object's text as HTML.	Клетката показва текста на текстовия обект като HTML.
 	The document has no colour swatches.	Документът няма цветови образци.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Краят на хартията, до който принтерът не може да стигне: макетът навлиза в него, а прегледът го показва с пунктир.
@@ -5165,6 +5167,27 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	no symbol named `{n}`	няма символ с име `{n}`
+	Smudge Stick…	Размазваща пръчка…
+	Smudge Stick	Размазваща пръчка
+	Sponge…	Гъба…
+	Sponge	Гъба
+	Watercolor…	Акварел…
+	Watercolor	Акварел
+	Brush Size	Размер на четката
+	Definition	Дефиниция
+	Brush Detail	Детайл на четката
+	Shadow Intensity	Интензивност на сенките
+	Bas Relief…	Барелеф…
+	Bas Relief	Барелеф
+	Charcoal…	Въглен…
+	Charcoal	Въглен
+	Photocopy…	Фотокопие…
+	Photocopy	Фотокопие
+	Stamp…	Печат…
+	Stamp	Печат
+	Thickness	Дебелина
+	Detail	Детайл
+	Light/Dark Balance	Баланс светло/тъмно
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	„Редактиране на оригинал“ отваря само файлове с изображения и документи; „{name}“ не е такъв файл
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузъра се отварят само URL адреси с http, https и mailto, не „{url}“
@@ -5220,3 +5243,5 @@ theme	Appearance	Външен вид
 	Move Library Group	Преместване на библиотечна група
 	Plaster…	Гипс…
 	Plaster	Гипс
+	Note Paper…	Хартия за писма…
+	Note Paper	Хартия за писма

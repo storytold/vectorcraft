@@ -290,7 +290,7 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
         let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(l, f, &path, bounds)?;
+            let (fl, path, bounds) = fill_shape(l, item, &path, bounds)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -363,15 +363,16 @@ fn reshaped(l: &Node) -> Option<Node> {
     Some(m)
 }
 
-/// Path `l` (outline `path`, box `bounds`) as fill `f` paints it on the canvas, with its outline
-/// and box: when the fill has visible geometry effects, `l` with the outline they make of `path`
-/// as a plain path, and that outline's box.
-fn fill_shape(l: &Node, f: &FillLayer, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
+/// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
+/// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
+/// `path` as a plain path, and that outline's box.
+fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
-    if !has_geometry(&f.effects) {
+    if !has_geometry(item.effects()) {
         return Some((l.clone(), path.clone(), bounds));
     }
-    let outline = apply_geometry_with(&f.effects, path, bounds, &GeomContext::of(l));
+    // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
+    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext::of(l).item(item));
     let b = outline.bounds()?;
     Some((with_path(l, outline.clone()), outline, b))
 }
@@ -432,7 +433,7 @@ fn expand_patterns(d: &mut Document, l: &Node) -> Option<Node> {
     for item in &l.appearance.items {
         let fill = pattern_fill(d, item).map(|(f, def, xf)| (f, def.clone(), xf));
         let tiles = fill.and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(l, f, &path, bounds)?;
+            let (fl, _, bounds) = fill_shape(l, item, &path, bounds)?;
             let t = pattern_tiles(d, &def, xf, bounds);
             (!t.is_empty()).then_some((f, fl, t))
         });

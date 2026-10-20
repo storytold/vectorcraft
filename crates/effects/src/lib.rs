@@ -56,7 +56,7 @@ mod tests;
 mod tests_scale;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
 pub use adjust::{
@@ -155,6 +155,7 @@ fn lengths_of(id: &str) -> Lengths {
         "texture.stainedGlass" => always(&["cellSize"]),
         "sketch.graphicPen" => always(&["strokeLength"]),
         "sketch.halftonePattern" => always(&["size"]),
+        "sketch.notePaper" => always(&["relief"]),
         RASTERIZE => always(&["addAround"]),
         _ => Lengths::default(),
     }
@@ -378,6 +379,27 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"edgeThickness": 2.0, "edgeIntensity": 1.0, "posterization": 2.0}),
         ),
         r(
+            "artistic.smudgeStick",
+            "Smudge Stick…",
+            ARTISTIC,
+            "{strokeLength: 0..10 (2; length of the short diagonal strokes), highlightArea: 0..20 (12; widens the area counted as light), intensity: 0..10 (10; how far the light areas are lightened)} smudges the dark areas along short diagonal strokes; the lighter areas become brighter and lose detail. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"strokeLength": 2.0, "highlightArea": 12.0, "intensity": 10.0}),
+        ),
+        r(
+            "artistic.sponge",
+            "Sponge…",
+            ARTISTIC,
+            "{brushSize: 0..10 (2; size of the sponge's pores), definition: 0..25 (12; how strongly lighter and darker blobs contrast), smoothness: 1..15 (5; softer blob edges)} paints the object as if dabbed with a sponge, in highly textured areas of contrasting colour. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"brushSize": 2.0, "definition": 12.0, "smoothness": 5.0}),
+        ),
+        r(
+            "artistic.watercolor",
+            "Watercolor…",
+            ARTISTIC,
+            "{brushDetail: 1..14 (9; the larger, the more detail stays), shadowIntensity: 0..10 (1; deepens the shadows), texture: 1..3 (1; paper grain, whole numbers)} paints the object in a watercolor style: detail simplified, colour saturated and darker where tones change at edges. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"brushDetail": 9.0, "shadowIntensity": 1.0, "texture": 1.0}),
+        ),
+        r(
             "blur.radial",
             "Radial Blur…",
             BLUR,
@@ -476,11 +498,25 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"amount": 50.0, "radius": 1.0, "threshold": 0.0}),
         ),
         r(
+            "sketch.basRelief",
+            "Bas Relief…",
+            SKETCH,
+            "{detail: 1..15 (13; the larger, the finer the features that stay), smoothness: 1..15 (3; rounds the carving), lightDirection: \"bottom\"|\"bottomLeft\"|\"left\"|\"topLeft\"|\"top\"|\"topRight\"|\"right\"|\"bottomRight\" (\"bottom\"; where the light comes from)} carves the object in low relief in black and white: surfaces facing the light turn white, those turned away black, flat areas grey. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"}),
+        ),
+        r(
             "sketch.chalkCharcoal",
             "Chalk & Charcoal…",
             SKETCH,
             "{chalkArea: 0..20 (6; chalk in light areas), charcoalArea: 0..20 (6; charcoal in dark areas), strokePressure: 0..5 (2)} redraws the object with chalk highlights and charcoal strokes on white paper, keeping its coverage. Original visual approximation from public documentation; slider ranges and defaults are VectorCraft choices, not verified proprietary values.",
             json!({"chalkArea": 6.0, "charcoalArea": 6.0, "strokePressure": 2.0}),
+        ),
+        r(
+            "sketch.charcoal",
+            "Charcoal…",
+            SKETCH,
+            "{thickness: 1..7 (1; width of the bold edges and of the strokes' spacing), detail: 0..5 (1; the larger, the finer the edges), lightDarkBalance: 0..100 (50; how far into the lights the charcoal reaches)} redraws the object in black charcoal on white paper: bold edges and diagonal strokes over the midtones. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"thickness": 1.0, "detail": 1.0, "lightDarkBalance": 50.0}),
         ),
         r(
             "sketch.chrome",
@@ -500,8 +536,22 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "sketch.halftonePattern",
             "Halftone Pattern…",
             SKETCH,
-            "{size: pt 1..12 (1; how far apart the screen's dots, rings or lines are), contrast: 0..50 (5; 50 draws pure black and white), patternType: \"circle\"|\"dot\"|\"line\" (\"dot\"; rings round the object's centre, dots on a square grid, horizontal lines)} redraws the object in black ink on white paper through a halftone screen whose ink covers as much as the colour is dark, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            "{size: pt 1..12 (1; how far apart the screen's dots, rings or lines are), contrast: 0..50 (5; 50 draws pure black and white), patternType: \"circle\"|\"dot\"|\"line\" (\"dot\"; rings round the object's centre, dots on a square grid, horizontal lines)} redraws the object in black ink on white paper through a halftone screen whose ink covers as much as the colour is dark, keeping its coverage. Original visual approximation from the public Sketch effects reference; slider ranges follow the documented control names, numeric defaults are chosen for VectorCraft and are not verified against proprietary defaults (the public help pages give no numbers).",
             json!({"size": 1.0, "contrast": 5.0, "patternType": "dot"}),
+        ),
+        r(
+            "sketch.notePaper",
+            "Note Paper…",
+            SKETCH,
+            "{imageBalance: 0..50 (25; lower tones darken the emboss, higher lighten it), graininess: 0..10 (0; fibrous paper texture), relief: 0..50 (4; emboss strength in points)} embosses the object's tones on warm paper, keeping its coverage. Original visual approximation from the public Sketch effects reference; slider ranges follow the documented control names, numeric defaults are chosen for VectorCraft and are not verified against proprietary defaults (the public help pages give no numbers).",
+            json!({"imageBalance": 25.0, "graininess": 0.0, "relief": 4.0}),
+        ),
+        r(
+            "sketch.photocopy",
+            "Photocopy…",
+            SKETCH,
+            "{detail: 1..24 (7; the larger, the finer the features that copy), darkness: 1..50 (25; the larger, the more of the dark copies)} copies the object in black on white: large dark areas copy only around their edges and midtones go to black or white. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"detail": 7.0, "darkness": 25.0}),
         ),
         r(
             "sketch.plaster",
@@ -516,6 +566,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             SKETCH,
             "{density: 0..50 (12; finer grain at higher values), foregroundLevel: 0..50 (6; pulls shadows toward black ink), backgroundLevel: 0..50 (6; pulls highlights toward white paper)} redraws the object in black ink on white paper through a high-contrast film-grain screen, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
             json!({"density": 12.0, "foregroundLevel": 6.0, "backgroundLevel": 6.0}),
+        ),
+        r(
+            "sketch.stamp",
+            "Stamp…",
+            SKETCH,
+            "{lightDarkBalance: 0..50 (25; the larger, the more of the object prints black), smoothness: 1..50 (5; rounds the shapes)} simplifies the object to solid black and white, as a rubber stamp would print it. Coverage is kept. Original visual approximation; chosen VectorCraft defaults.",
+            json!({"lightDarkBalance": 25.0, "smoothness": 5.0}),
         ),
         r(
             "stylize.glowingEdges",
@@ -884,6 +941,12 @@ pub struct GeomContext<'a> {
     /// The seed of the Transform effect's Random: the object's id, so each object varies its own
     /// way and keeps its result on every redraw.
     pub seed: u64,
+    /// The object's appearance, which live-effect plug-ins are given read only (their fills and
+    /// strokes).
+    pub appearance: Option<&'a Appearance>,
+    /// The index in `appearance.items` of the fill or stroke whose own effects these are; `None`:
+    /// the object's effects.
+    pub item: Option<usize>,
 }
 
 impl<'a> GeomContext<'a> {
@@ -893,15 +956,17 @@ impl<'a> GeomContext<'a> {
             NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,
             _ => FillRule::NonZero,
         };
-        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule, seed: n.id.0 }
+        let stroke = n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0);
+        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
-    /// stroke's own effects outline that stroke.
+    /// stroke's own effects outline that stroke, and a plug-in is told which item it is on.
     pub fn item(self, item: &'a AppearanceItem) -> Self {
+        let at = self.appearance.and_then(|a| a.items.iter().position(|i| std::ptr::eq(i, item)));
         match item {
-            AppearanceItem::Stroke(s) => Self { stroke: Some(s), ..self },
-            AppearanceItem::Fill(_) => self,
+            AppearanceItem::Stroke(s) => Self { stroke: Some(s), item: at, ..self },
+            AppearanceItem::Fill(_) => Self { item: at, ..self },
         }
     }
 }
@@ -940,7 +1005,8 @@ pub fn apply_geometry_bez(effects: &[Effect], path: &BezPath, bounds: Rect, ctx:
 pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -> PathData {
     use util::*;
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
-        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule).unwrap_or_else(|| path.clone());
+        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
+        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints).unwrap_or_else(|| path.clone());
     }
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p),

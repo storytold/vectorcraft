@@ -739,6 +739,10 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     let mut change: Option<(String, Value)> = None;
     let mut edit = false;
     let built_in = built_in_effect(&e.id);
+    // A plug-in effect's parameters are labelled, measured and shown as its manifest says.
+    let plugin = vectorcraft_plugins::effect::installed(&e.id);
+    let manifest = plugin.as_ref().map(|p| p.manifest());
+    let visible = manifest.map(|m| m.visible(&params));
     let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
     let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
@@ -747,9 +751,16 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
             widgets::dim_label(ui, tl!("No options"));
         }
         for (key, v) in &params {
+            if visible.as_ref().is_some_and(|v| !v.contains(key.as_str())) {
+                continue;
+            }
+            let ui_keys = manifest.and_then(|m| m.param(key)).map(|p| &p.ui);
             ui.horizontal(|ui| {
-                let label = param_label(key, built_in);
-                ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label.as_str()).size(11.5).color(t.text)).truncate());
+                let label = ui_keys.and_then(|u| u.label.clone()).unwrap_or_else(|| param_label(key, built_in));
+                let shown = ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label.as_str()).size(11.5).color(t.text)).truncate());
+                if let Some(help) = ui_keys.and_then(|u| u.help.as_deref()) {
+                    shown.on_hover_text(help);
+                }
                 if e.id == "stylize.dropShadow" && key == "shade" {
                     let cur = v.as_str().unwrap_or_default();
                     for (label, value) in crate::dialogs::SHADES {
@@ -771,6 +782,19 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                     }
                     return;
                 }
+                // A plug-in's number list is typed as its dialog's is: "45, 135".
+                if let Some(spec) = manifest.and_then(|m| m.param(key)).map(|p| &p.spec)
+                    && matches!(spec, vectorcraft_plugins::manifest::ParamSpec::NumberList { .. })
+                {
+                    let typed = widgets::exact_text_field(ui, ("fx", item, k, key.as_str()), &crate::dialogs::number_list_text(v), 90.0);
+                    if let Some(list) = typed.and_then(|text| crate::dialogs::read_number_list(&text, spec)) {
+                        change = Some((key.clone(), list));
+                    }
+                    if let Some(unit) = ui_keys.and_then(|u| u.unit.as_deref()) {
+                        widgets::dim_label(ui, unit);
+                    }
+                    return;
+                }
                 // Only our own effects show a `mode` parameter as the blend mode dropdown; a plug-in's `mode` stays a plain field.
                 if built_in && let Some(cur) = widgets::blend_param(key, v) {
                     if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
@@ -786,10 +810,11 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                     }
                     Value::Number(n) => {
                         let (x, id) = (n.as_f64().unwrap_or(0.0), ("fx", item, k, key.as_str()));
+                        let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                         let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
                             widgets::num_field(ui, id, Some(x), unit, 70.0)
                         } else {
-                            widgets::plain_field(ui, id, x, "", 2, 70.0)
+                            widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
                         };
                         if let Some(nx) = nx {
                             change = Some((key.clone(), json!(nx)));
@@ -1162,6 +1187,46 @@ mod tests {
         app.run("plugin.remove", json!({"id": "test.ui.inlinechoice"})).unwrap();
         let texts = shown_texts(&mut app, &ctx);
         assert!(texts.iter().any(|s| s == "screen") && !texts.iter().any(|s| s == "Screen"), "{texts:?}");
+    }
+
+    /// A plug-in effect's editor labels its parameters, shows their units and leaves out those whose
+    /// `visibleWhen` isn't met, as the effect's dialog does, and reads a typed number list the same
+    /// way.
+    #[test]
+    fn a_plug_in_effect_s_editor_follows_its_manifest() {
+        use vectorcraft_plugins::wat as tpl;
+        let params = r#"{"outline":{"type":"bool","default":true,"label":"Outline"},
+            "spacing":{"type":"number","min":0.1,"max":10,"default":1.5,"label":"Spacing","unit":"mm","help":"Distance between the lines."},
+            "angles":{"type":"numberList","min":0,"max":360,"default":[45,135],"minItems":1,"maxItems":4,"unit":"°"},
+            "width":{"type":"number","min":0,"max":10,"default":0.5,"label":"Width","unit":"pt","visibleWhen":{"outline":[true]}}}"#;
+        let src = tpl::module(&tpl::manifest("test.ui.inlinekeys", "effect", params), tpl::ECHO, "", 1);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "plugin.test.ui.inlinekeys"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "ap-fx-open-None-0", true);
+        let texts = shown_texts(&mut app, &ctx);
+        for shown in ["Spacing", "1.5 mm", "Angles", "45, 135", "°", "Width", "0.5 pt"] {
+            assert!(texts.iter().any(|s| s == shown), "no {shown:?} in {texts:?}");
+        }
+        assert!(!texts.iter().any(|s| s == "spacing" || s == "width"), "the labels replace the names: {texts:?}");
+        // Without the outline, its width isn't shown.
+        app.run("effect.setParams", json!({"item": null, "index": 0, "params": {"outline": false}})).unwrap();
+        let texts = shown_texts(&mut app, &ctx);
+        assert!(!texts.iter().any(|s| s == "Width") && texts.iter().any(|s| s == "Spacing"), "{texts:?}");
+        // A list typed in the field: separated by a semicolon and a space, and clamped.
+        click_text(&mut app, &ctx, "45, 135");
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        panel_frame(&mut app, &ctx, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+        panel_frame(&mut app, &ctx, vec![egui::Event::Text("10; 400 20".into())]);
+        panel_frame(&mut app, &ctx, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+        panel_frame(&mut app, &ctx, vec![]);
+        let angles = app.session.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance.effects[0].params["angles"].clone();
+        assert_eq!(angles, json!([10.0, 360.0, 20.0]));
+        app.run("plugin.remove", json!({"id": "test.ui.inlinekeys"})).unwrap();
     }
 
     /// Glass with a loaded texture lists Loaded Texture in its Texture menu, as its dialog does.

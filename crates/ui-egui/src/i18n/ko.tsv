@@ -285,6 +285,7 @@
 	Plug-ins	플러그인
 	No filter plug-ins installed	설치된 필터 플러그인 없음
 	Install Plug-in…	플러그인 설치…
+	Open this setting's help page	이 설정의 도움말 페이지 열기
 	Reload Plug-ins	플러그인 다시 불러오기
 	Type	문자
 	Font	글꼴
@@ -2954,6 +2955,7 @@ mark-style	Japanese	일본식
 	Text Import Options	텍스트 가져오기 옵션
 	The Print Tiling tool placed the pages.	인쇄 타일링 도구가 페이지를 배치했습니다.
 	The bounds of the visible art.	보이는 아트워크의 경계입니다.
+	The plug-in writes the whole document.	플러그인이 문서 전체를 내보냅니다.
 	The cell shows the type object's text as HTML.	셀에 문자 개체의 텍스트가 HTML로 표시됩니다.
 	The document has no colour swatches.	문서에 색상 견본이 없습니다.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	프린터가 닿지 않는 용지 가장자리입니다. 아트워크는 이 안쪽에 놓이며, 미리 보기에는 점선으로 표시됩니다.
@@ -4203,6 +4205,7 @@ theme	Appearance	외관
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1}은(는) 라이브 효과입니다(효과 › 플러그인)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1}은(는) 내보내기 플러그인입니다(파일 › 내보내기 › 다른 이름으로 내보내기…)
 @msg	a preset named `{_1}` exists	`{_1}`이라는 프리셋이 이미 있습니다
 @msg	a swatch or color group named `{n}` exists	`{n}`이라는 견본 또는 색상 그룹이 이미 있습니다
 @msg	no print preset named `{base}`	`{base}`라는 인쇄 프리셋이 없습니다
@@ -4768,6 +4771,27 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
+	Smudge Stick…	문지르기 막대…
+	Smudge Stick	문지르기 막대
+	Sponge…	스펀지…
+	Sponge	스펀지
+	Watercolor…	수채화…
+	Watercolor	수채화
+	Brush Size	브러시 크기
+	Definition	선명도
+	Brush Detail	브러시 세부 묘사
+	Shadow Intensity	그림자 강도
+	Bas Relief…	부조…
+	Bas Relief	부조
+	Charcoal…	목탄…
+	Charcoal	목탄
+	Photocopy…	복사…
+	Photocopy	복사
+	Stamp…	스탬프…
+	Stamp	스탬프
+	Thickness	두께
+	Detail	세부
+	Light/Dark Balance	밝음/어두움 균형
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	원본 편집은 이미지 및 문서 파일만 엽니다. “{name}”은(는) 해당하지 않습니다
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	브라우저에서는 http, https, mailto URL만 열립니다. “{url}”은(는) 열 수 없습니다
@@ -4836,3 +4860,5 @@ lighting	Light	광원
 	Move Library Group	라이브러리 그룹 이동
 	Plaster…	석고…
 	Plaster	석고
+	Note Paper…	메모지…
+	Note Paper	메모지

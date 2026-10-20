@@ -2106,6 +2106,44 @@ fn halftone_pattern_params_take_defaults_and_stay_in_range() {
     assert_eq!(f.reach(), Some(0.0));
 }
 
+#[test]
+fn note_paper_params_take_defaults_and_stay_in_range() {
+    assert_eq!(fx("sketch.notePaper", json!({})), PixelFx::NotePaper { balance: 25.0, graininess: 0.0, relief: 4.0 });
+    assert_eq!(
+        fx("sketch.notePaper", json!({"imageBalance": -1, "graininess": 20, "relief": 100})),
+        PixelFx::NotePaper { balance: 0.0, graininess: 10.0, relief: 50.0 }
+    );
+    let doc = crate::effect_info("sketch.notePaper").unwrap().params;
+    assert!(doc.contains("imageBalance") && doc.contains("graininess") && doc.contains("relief"), "{doc}");
+    let f = fx("sketch.notePaper", json!({"relief": 12}));
+    assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
+    assert_eq!(f.reach(), Some(0.0));
+}
+
+/// Note Paper embosses a horizontal gradient and graininess adds fibre.
+#[test]
+fn note_paper_embosses_a_gradient_and_grain_changes_pixels() {
+    let (w, h) = (32, 32);
+    let src = image(w, h, |x, _| grey((x * 255 / (w - 1)) as u8));
+    let flat = {
+        let mut out = src.clone();
+        fx("sketch.notePaper", json!({"relief": 0, "graininess": 0})).apply(&mut out, w, h, &space(w, h));
+        out
+    };
+    let embossed = {
+        let mut out = src.clone();
+        fx("sketch.notePaper", json!({"relief": 50, "graininess": 0})).apply(&mut out, w, h, &space(w, h));
+        out
+    };
+    assert_ne!(flat, embossed, "relief changes the emboss");
+    let grainy = {
+        let mut out = src.clone();
+        fx("sketch.notePaper", json!({"relief": 0, "graininess": 10})).apply(&mut out, w, h, &space(w, h));
+        out
+    };
+    assert_ne!(flat, grainy, "graininess adds fibre");
+}
+
 /// Line's rows repeat every Size points: Size pixels at 72 ppi, twice as many at 144 ppi.
 #[test]
 fn halftone_line_period_is_the_size_at_any_resolution() {

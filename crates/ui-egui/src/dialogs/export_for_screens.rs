@@ -133,6 +133,10 @@ pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
         d.fields.insert("tab".into(), json!("assets"));
         if let Some(c) = checked {
             d.fields.insert("assets".into(), json!(c));
+            // The list scrolls to the first of them once: new assets land at its end.
+            if let Some(first) = c.first() {
+                d.fields.insert("__scrollTo".into(), json!(first));
+            }
         }
     }
 }
@@ -544,9 +548,12 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             on.clear();
         }
     });
+    // Asked for until the row is in view: the dialog's first frame only measures it.
+    let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| st.doc.assets.iter().any(|a| a.id == *id));
+    let mut in_view = scroll_to.is_none();
     egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
         for a in &st.doc.assets {
-            ui.horizontal(|ui| {
+            let row = ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
                 crate::panels::asset_export::paint_thumb(ui, st, a, r);
                 let checked = on.contains(&a.id);
@@ -557,8 +564,18 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                     }
                 }
             });
+            if scroll_to == Some(a.id) {
+                if ui.clip_rect().contains_rect(row.response.rect) {
+                    in_view = true;
+                } else {
+                    row.response.scroll_to_me(Some(egui::Align::Center));
+                }
+            }
         }
     });
+    if in_view {
+        d.fields.remove("__scrollTo");
+    }
     if on != before {
         d.fields.insert("assets".into(), json!(on));
     }

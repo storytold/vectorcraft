@@ -283,6 +283,7 @@
 	Plug-ins	Plug-ins
 	No filter plug-ins installed	Geen filterplug-ins geïnstalleerd
 	Install Plug-in…	Plug-in installeren…
+	Open this setting's help page	Helppagina van deze instelling openen
 	Reload Plug-ins	Plug-ins opnieuw laden
 	Type	Type
 	Font	Lettertype
@@ -1994,6 +1995,7 @@ lighting	Light	Licht
 	One file per artboard: <name>-<artboard>.{ext}	Eén bestand per tekenbord: <name>-<artboard>.{ext}
 	One page per artboard.	Eén pagina per tekenbord.
 	The bounds of the visible art.	De grenzen van de zichtbare artwork.
+	The plug-in writes the whole document.	De plug-in exporteert het hele document.
 	Use Artboards	Tekenborden gebruiken
 	Choose a folder	Kies een map
 	Create Sub-folders	Submappen maken
@@ -5265,6 +5267,27 @@ swatch	Bright Violet	Felviolet
 	Justification	Uitvullen
 # Select by Color (select.color)
 	Select by Color	Selecteren op kleur
+	Smudge Stick…	Uitsmeerstift…
+	Smudge Stick	Uitsmeerstift
+	Sponge…	Spons…
+	Sponge	Spons
+	Watercolor…	Aquarel…
+	Watercolor	Aquarel
+	Brush Size	Penseelgrootte
+	Definition	Definitie
+	Brush Detail	Penseeldetail
+	Shadow Intensity	Schaduwintensiteit
+	Bas Relief…	Basreliëf…
+	Bas Relief	Basreliëf
+	Charcoal…	Houtskool…
+	Charcoal	Houtskool
+	Photocopy…	Fotokopie…
+	Photocopy	Fotokopie
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Dikte
+	Detail	Detail
+	Light/Dark Balance	Licht/donker-balans
 	Move Anchor Point	Ankerpunt verplaatsen
 	Chalk & Charcoal…	Krijt en houtskool…
 	Chalk & Charcoal	Krijt en houtskool
@@ -5280,3 +5303,5 @@ swatch	Bright Violet	Felviolet
 	Move Library Group	Bibliotheekgroep verplaatsen
 	Plaster…	Gips…
 	Plaster	Gips
+	Note Paper…	Notitiepapier…
+	Note Paper	Notitiepapier

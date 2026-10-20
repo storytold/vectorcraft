@@ -1456,6 +1456,7 @@
 	Inspect Object	Επιθεώρηση αντικειμένου
 	Install Plug-in	Εγκατάσταση προσθέτου
 	Install Plug-in…	Εγκατάσταση προσθέτου…
+	Open this setting's help page	Άνοιγμα της σελίδας βοήθειας αυτής της ρύθμισης
 	Installed plug-in {}	Εγκαταστάθηκε επέκταση {}
 	Intensity:	Ένταση:
 	Intent:	Σκοπός μετατροπής:
@@ -3541,6 +3542,7 @@ theme	Appearance	Εμφάνιση
 	Text Wrap Options	Επιλογές αναδίπλωσης κειμένου
 	Text Wrap Options…	Επιλογές αναδίπλωσης κειμένου…
 	The bounds of the visible art.	Τα όρια του ορατού σχεδίου.
+	The plug-in writes the whole document.	Το πρόσθετο εξάγει ολόκληρο το έγγραφο.
 	The cell shows the type object's text as HTML.	Το κελί εμφανίζει το κείμενο του αντικειμένου ως HTML.
 	The document has no colour swatches.	Το έγγραφο δεν περιέχει δείγματα χρωμάτων.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Το περιθώριο του χαρτιού όπου δεν μπορεί να εκτυπώσει ο εκτυπωτής: το σχέδιο βρίσκεται εντός του και η προεπισκόπηση το δείχνει διακεκομμένο.
@@ -4216,6 +4218,7 @@ theme	Appearance	Εμφάνιση
 @msg	{_1} files are written by file.saveAsTemplate	τα αρχεία {_1} αποθηκεύονται με το file.saveAsTemplate
 @msg	{_1} font families available	{_1} διαθέσιμες οικογένειες γραμματοσειρών
 @msg	{_1} is a live effect (Effect › Plug-ins)	το {_1} είναι δυναμικό εφέ (Εφέ › Πρόσθετα)
+@msg	{_1} is an exporter (File › Export › Export As…)	το {_1} είναι πρόσθετο εξαγωγής (Αρχείο › Εξαγωγή › Εξαγωγή ως…)
 @msg	{_1} is already used by {_2}	το {_1} χρησιμοποιείται ήδη από το {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} συνδεδεμένα αρχεία δεν μπορούν να διαβαστούν εδώ: εμφανίζονται οι προεπισκοπήσεις τους
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
@@ -5144,6 +5147,27 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
+	Smudge Stick…	Μουτζούρα…
+	Smudge Stick	Μουτζούρα
+	Sponge…	Σφουγγάρι…
+	Sponge	Σφουγγάρι
+	Watercolor…	Υδατογραφία…
+	Watercolor	Υδατογραφία
+	Brush Size	Μέγεθος πινέλου
+	Definition	Ευκρίνεια
+	Brush Detail	Λεπτομέρεια πινέλου
+	Shadow Intensity	Ένταση σκιών
+	Bas Relief…	Ανάγλυφο…
+	Bas Relief	Ανάγλυφο
+	Charcoal…	Κάρβουνο…
+	Charcoal	Κάρβουνο
+	Photocopy…	Φωτοαντίγραφο…
+	Photocopy	Φωτοαντίγραφο
+	Stamp…	Σφραγίδα…
+	Stamp	Σφραγίδα
+	Thickness	Πάχος
+	Detail	Λεπτομέρεια
+	Light/Dark Balance	Ισορροπία φωτεινού/σκούρου
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	η Επεξεργασία πρωτοτύπου ανοίγει μόνο αρχεία εικόνων και εγγράφων· το «{name}» δεν είναι τέτοιο αρχείο
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	στο πρόγραμμα περιήγησης ανοίγουν μόνο URL http, https και mailto, όχι το «{url}»
@@ -5211,3 +5235,5 @@ effect	Points	Σημεία
 	Move Library Group	Μετακίνηση ομάδας βιβλιοθήκης
 	Plaster…	Γύψος…
 	Plaster	Γύψος
+	Note Paper…	Χαρτί σημειώσεων…
+	Note Paper	Χαρτί σημειώσεων

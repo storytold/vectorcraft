@@ -7,7 +7,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
-use crate::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
+use crate::cmd::clipboard::{AI, BITMAP, EPS, FILE_HEAD, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour};
 
 fn session() -> Session {
     let mut s = Session::new();
@@ -241,7 +241,8 @@ fn copied_ai_files_paste_as_the_pdf_or_postscript_inside() {
     let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n1 0 0 setrgbcolor\nnewpath 0 0 moveto 40 0 lineto 40 40 lineto closepath fill\nshowpage\n";
     let of = |name: &str, bytes: &[u8]| file_flavour(name, &bytes[..bytes.len().min(FILE_HEAD)], &PASTE_ORDER);
     for name in ["art.ai", "art.ait", "ART.AI"] {
-        assert_eq!(of(name, &pdf), Some(PDF), "{name}");
+        // Asked for as PDF; Paste reads it from its editing data (tests_aiimport).
+        assert_eq!(of(name, &pdf), Some(AI), "{name}");
         assert_eq!(of(name, ps), Some(EPS), "{name}");
     }
     // Neither PDF nor PostScript: nothing to paste, whatever the name says.
@@ -313,6 +314,53 @@ fn copy_offers_flavours_by_the_preferences() {
     run(&mut s, "prefs.set", json!({"key": "copyAsSvg", "value": true}));
     let f = s.clipboard_flavours();
     assert_eq!((f[0].data.as_slice(), f[1].mime), (b"Words".as_slice(), SVG));
+}
+
+/// A PNG of `side` × `side` noise pixels: noise keeps it about `side² × 3` bytes, as a photo.
+fn noise_png(side: u32) -> Vec<u8> {
+    let mut x: u32 = 0x9e37_79b9;
+    let px = (0..side * side * 3)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            (x >> 24) as u8
+        })
+        .collect();
+    let mut out = vec![];
+    image::RgbImage::from_raw(side, side, px).unwrap().write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #2213: a placed photo in the plain-text flavour made every paste read megabytes of SVG back
+/// through the system clipboard. Past 1 MiB of embedded images the SVG goes out under its own type
+/// and the PNG only; a small picture, vector art of any size and type keep their text.
+#[test]
+fn a_copy_with_a_large_image_offers_no_svg_text() {
+    let mut s = session();
+    let mimes = |s: &Session| s.clipboard_flavours().iter().map(|f| f.mime).collect::<Vec<_>>();
+    for (side, text) in [(700, false), (64, true)] {
+        let png = noise_png(side);
+        assert_eq!(png.len() > 1 << 20, !text, "{} bytes", png.len());
+        run(&mut s, "clipboard.importImage", json!({"dataBase64": vectorcraft_format::base64_encode(&png)}));
+        run(&mut s, "edit.paste", json!({}));
+        run(&mut s, "edit.copy", json!({}));
+        let want: &[&str] = if text { &[TEXT, SVG, PNG] } else { &[SVG, PNG] };
+        assert_eq!(mimes(&s), want, "{side} px");
+        assert_eq!(run(&mut s, "clipboard.flavours", json!({}))["flavours"], json!(want), "{side} px");
+        // The SVG still embeds the picture, for apps that read it.
+        let svg = s.clipboard_flavours().into_iter().find(|f| f.mime == SVG).unwrap();
+        assert!(String::from_utf8_lossy(&svg.data).contains("data:image/png;base64,"));
+        run(&mut s, "edit.clear", json!({}));
+    }
+    // Vector art of more than 1 MiB of SVG keeps its text: only embedded images count.
+    let rects: String =
+        (0..30_000).map(|i| format!(r##"<rect x="{}.25" y="{}.75" width="3.5" height="3.5" fill="#{:06x}"/>"##, i % 400, i / 100, i * 977)).collect();
+    run(&mut s, "clipboard.importSvg", json!({"svg": format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">{rects}</svg>"#)}));
+    run(&mut s, "edit.paste", json!({}));
+    run(&mut s, "edit.copy", json!({}));
+    let f = s.clipboard_flavours();
+    assert!(f[0].mime == TEXT && f[0].data.len() > 1 << 20, "{} bytes of text", f[0].data.len());
 }
 
 /// The Type tool pastes the text it copied with its formatting, unless pasted text is kept plain.

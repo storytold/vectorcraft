@@ -165,6 +165,67 @@ fn wall_clock_budget_stops_runaway_plugins() {
 }
 
 #[test]
+fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
+    let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
+    let p = Plugin::load(&spin, Limits { fuel_base: u64::MAX / 4, ..Limits::default() }).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let t = Instant::now();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
+    assert_eq!(r, Err(Error::Cancelled));
+    assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+    // Outside a cancelled scope the same module still runs to its budget.
+    let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, ..Limits::default() });
+    assert_eq!(e, Error::Limit("instruction budget".into()));
+}
+
+#[test]
+fn an_exporter_returns_its_file_with_an_export_s_budget() {
+    use vectorcraft_plugins::export::{self, Target};
+    let target = Target { extension: "tst", name: "Poster" };
+    let manifest = tpl::exporter("test.exporter", r#"["tst"]"#, r#"{"level":{"type":"int","min":1,"max":3,"default":2}}"#);
+    let p = Plugin::load(&build(&tpl::returning(&manifest, r#"{"dataBase64":"SGk=","warnings":["note"]}"#)), Limits::default()).unwrap();
+    assert_eq!((p.manifest().kind, p.manifest().extensions.clone()), (Kind::Exporter, vec!["tst".to_string()]));
+    let out = export::run(&p, br#"{"format":"vectorcraft"}"#, &json!({"level": 9}), target).unwrap();
+    assert_eq!((out.data_base64.as_str(), out.warnings), ("SGk=", vec!["note".to_string()]));
+    let limits = export::limits(&p);
+    assert_eq!((limits.fuel_base, limits.wall_time_ms), (export::FUEL, export::WALL_TIME_MS));
+    // Its parameters are checked, and a filter is not an exporter.
+    assert!(matches!(export::run(&p, b"{}", &json!({"level": "high"}), target), Err(Error::Params(_))));
+    let filter = Plugin::load(&ok_module("(i64.const 0)"), Limits::default()).unwrap();
+    assert!(matches!(export::run(&filter, b"{}", &Value::Null, target), Err(Error::Params(_))));
+}
+
+/// The echo exporter the engine and UI tests read back what they hand a plug-in with: its file is
+/// its input, or its parameters, byte for byte, whatever their length modulo three.
+#[test]
+fn the_echo_exporter_writes_what_it_is_given() {
+    use vectorcraft_plugins::export::{self, Target};
+    let manifest = tpl::exporter("test.echo", r#"["txt"]"#, "{}");
+    let input = Plugin::load(&build(&tpl::echo_exporter(&manifest, tpl::Echo::Input)), Limits::default()).unwrap();
+    let params = Plugin::load(&build(&tpl::echo_exporter(&manifest, tpl::Echo::Params)), Limits::default()).unwrap();
+    let target = Target { extension: "txt", name: "a" };
+    let decoded = |out: export::Exported| String::from_utf8(base64_decode(&out.data_base64)).unwrap();
+    for doc in ["{}", r#"{"a":1}"#, r#"{"ab":12}"#, r#"{"format":"vectorcraft","é":"\u0000"}"#] {
+        assert_eq!(decoded(export::run(&input, doc.as_bytes(), &Value::Null, target).unwrap()), doc);
+    }
+    let sent: Value = serde_json::from_str(&decoded(export::run(&params, b"{}", &Value::Null, target).unwrap())).unwrap();
+    assert_eq!(sent, json!({"_context": {"mode": "export", "extension": "txt", "name": "a"}}));
+}
+
+/// Standard base64 (RFC 4648, padded), decoded here so the test needs no other crate.
+fn base64_decode(s: &str) -> Vec<u8> {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let sextets: Vec<u32> = s.bytes().filter(|b| *b != b'=').map(|b| ALPHABET.iter().position(|a| *a == b).unwrap() as u32).collect();
+    let mut out = Vec::new();
+    for group in sextets.chunks(4) {
+        let bits = group.iter().enumerate().fold(0u32, |acc, (i, v)| acc | v << (18 - 6 * i));
+        out.extend(bits.to_be_bytes()[1..].iter().take(group.len() - 1));
+    }
+    out
+}
+
+#[test]
 fn memory_cap_limits_input_and_growth() {
     let echo = build(&tpl::module(MANIFEST, tpl::ECHO, "", 1));
     let p = Plugin::load(&echo, Limits { max_memory_bytes: 1 << 20, ..Limits::default() }).unwrap();

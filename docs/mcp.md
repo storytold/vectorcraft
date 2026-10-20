@@ -14,21 +14,41 @@ It has two backends:
 With no flag, the server tries `127.0.0.1:7979` and falls back to headless. Logs go to stderr; stdout carries
 only protocol messages.
 
-## Build and register
+## Install and register
+
+From the repository root, with Rust 1.95+ and the platform's source-build prerequisites installed:
 
 ```sh
-cargo build --release -p vectorcraft-cli
-claude mcp add vectorcraft -- "$PWD/target/release/vectorcraft-cli" mcp
+cargo install --path apps/vectorcraft-cli --locked
+# POSIX shells, for Cargo's default install location:
+export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+vectorcraft-cli --help
+claude mcp add vectorcraft -- vectorcraft-cli mcp
 # or pin a mode:
-claude mcp add vectorcraft-headless -- "$PWD/target/release/vectorcraft-cli" mcp --headless
-claude mcp add vectorcraft-app -- "$PWD/target/release/vectorcraft-cli" mcp --connect 127.0.0.1:7979
+claude mcp add vectorcraft-headless -- vectorcraft-cli mcp --headless
+claude mcp add vectorcraft-app -- vectorcraft-cli mcp --connect 127.0.0.1:7979
 ```
+
+Cargo installs a binary, not a symlink into `target/`, so it survives `cargo clean`.
+Re-run the install command after updating the checkout.
+By default the executable goes in `$CARGO_HOME/bin` (`~/.cargo/bin` when unset), or
+`%USERPROFILE%\.cargo\bin` on Windows. If you set `--root`, `CARGO_INSTALL_ROOT`, or
+Cargo's `install.root`, use that installation root's `bin` directory instead. Add it
+to the `PATH` inherited by the MCP client, not just an interactive shell, and restart
+the client after changing its environment. Installing does not start or register a server.
 
 Other clients use the same command in their JSON config:
 
 ```json
-{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli", "args": ["mcp"]}}}
+{"mcpServers": {"vectorcraft": {"command": "vectorcraft-cli", "args": ["mcp"]}}}
 ```
+
+If a client reports `ENOENT` or "Executable not found in $PATH", verify the install with
+`command -v vectorcraft-cli` (PowerShell: `Get-Command vectorcraft-cli`) in the client's
+environment. If that environment cannot be changed, set JSON `command` to the absolute
+installed binary path, not a literal `~` or `$HOME` expression. Avoid symlinks into
+`target/release`: cleaning the build directory breaks them. A source build alone does
+not put the CLI on `PATH`.
 
 For a live session, start the app first: `cargo run --release -p vectorcraft -- --control 7979`.
 
@@ -56,7 +76,7 @@ vectorcraft-cli mcp --automation-read-root /work/project --automation-write-root
 ```
 
 ```json
-{"mcpServers": {"vectorcraft": {"command": "/abs/path/target/release/vectorcraft-cli",
+{"mcpServers": {"vectorcraft": {"command": "vectorcraft-cli",
   "args": ["mcp", "--automation-read-root", "/work/project", "--automation-write-root", "/work/project/out"]}}}
 ```
 
@@ -2682,6 +2702,26 @@ value: true}`; the Control bar's and Properties' Scale Artwork with Artboard che
 Artboard) makes its handle drags proportional and passes `scaleArt`, as do Properties' and the Transform panel's
 artboard size fields while the tool is in use.
 
+`artboard.setProps {artboards: [{index, name?, x?, y?, width?, height?}…], scaleArt?, moveArt?, …}` sets several
+artboards in one undo step, each with its own fields; the other params apply to all of them. The art that moves or
+scales with each artboard is the art inside it before any of them changes, and an object inside several of them goes
+with the first one listed that moves or scales its art. An empty list and a list that names an artboard twice are
+refused.
+
+With several artboards selected with the Artboard tool, the desktop app gives a new size to each of them in one such
+call. Properties' W and H and the Transform panel's W and H do this, and so do Properties' Preset and orientation
+buttons, the Control bar's preset, orientation, W and H, and a new Width or Height in Artboard Options. The W and H of
+the Transform panel and the Control bar resize each artboard about its own reference point, and with the proportions
+linked they keep each artboard's own proportions. Artboard Options resizes each artboard about the reference point its
+form used for the new Width or Height. Properties' W and H and the preset and orientation buttons keep each artboard's
+top-left corner. A preset sizes each artboard in its own orientation, and an orientation
+swaps the width and height of each artboard that is not square and not already in it. A new X or Y moves the active
+artboard only, and Artboard Options' Name renames only the artboard it shows.
+
+```json
+{"name":"run_command","arguments":{"command":"artboard.setProps","params":{"artboards":[{"index":0,"width":300},{"index":2,"width":300}],"scaleArt":true}}}
+```
+
 ```json
 {"name":"run_command","arguments":{"command":"artboard.copy","params":{"index":0}}}
 {"name":"run_command","arguments":{"command":"edit.paste","params":{}}}
@@ -2882,7 +2922,8 @@ They are kept across restarts, in the desktop app and in `vectorcraft-cli` alike
 
 Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their text when they are all type.
 `clipboard.flavours` lists what Copy offers for the current clipboard, best first, by the Clipboard Handling
-preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg`), `image/svg+xml`
+preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg` when the images it
+embeds total at most 1 MiB, so a paste never reads a photo back as text, #2213), `image/svg+xml`
 (`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
 area). Each one has a query command:
 `clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
@@ -2892,9 +2933,12 @@ transparent around them). As in `document.export`, the PDF's and the PNG's repli
 shows the first note of the PDF and PNG it offers in the status bar.
 
 What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
-password?}` (the page's objects), `clipboard.importEps {dataBase64}` (an EPS or other PostScript picture's objects,
-as `document.open` reads one), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its
-physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
+password?, editingData?}` (the page's objects; with `editingData: true` the data is a `.ai` or `.ait` file, and every
+object of its editing data comes in as `document.open` reads it, each layer's objects in stacking order and a hidden
+layer's objects hidden, or the page's objects when `document.open` would not use that copy), `clipboard.importEps
+{dataBase64}` (an EPS or other PostScript picture's objects, as `document.open` reads one, a hidden layer's objects
+hidden), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its physical size) or
+`clipboard.importText {text}` (point text in the default type style), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
 copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
@@ -2906,7 +2950,9 @@ them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). On the web Copy publishes SVG text, and
-Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image).
+Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image). A `.ai`
+or `.ait` file that holds a PDF, copied in a file manager or carried by a paste, is loaded with `clipboard.importPdf
+{editingData: true}`, and its objects go into the active layer.
 
 The `pasteTextFormatting` preference (`keep` or `plain`): with `plain`, text the Type tool copied pastes into type
 without its formatting, taking the style at the caret.
@@ -3959,7 +4005,10 @@ them again at startup (`plugin.remove` deletes them there):
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
-`effect.list` lists it. A failing plug-in returns an error and leaves the document as it was.
+`effect.list` lists it. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
+`document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
+that no built-in format has. A failing plug-in returns an error and leaves the document as it was (an export writes
+no file).
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}

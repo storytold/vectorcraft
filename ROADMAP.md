@@ -29,7 +29,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
-| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 33/57, 3D 4/4 (initial types, no materials) |
+| **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 46/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
 | **To full parity** | **~360–590 h** one agent · ~95–165 h with 4–6 agents | estimated |
@@ -76,7 +76,7 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | Strokes, brushes, width profiles | 88% | 8–15 |
 | Appearance, transparency, graphic styles, masks | 97% | 1–2 |
 | Live vector effects | 85% | 6–10 |
-| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 49% | 21–35 |
+| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 81% | 8–14 |
 | 3D and Materials | ~25% | 30–55 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
@@ -123,7 +123,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 2. **`.ai` files from real users** (G9): layer structure, guides, speed: 10–20 h.
 3. **Launch and stability on real machines** (G10): 20–35 h.
 4. **Core-tool correctness** (G11: Shape Builder regions, Asset Export borders): 8–15 h.
-5. **Raster effects** (G2) alongside: 24 filters and the Effect Gallery, 21–35 h.
+5. **Raster effects** (G2) alongside: the 11 remaining filters (7 Artistic, 3 Sketch, 1 more) and the Effect Gallery, 8–14 h.
 6. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3).
 
 ## Progress log

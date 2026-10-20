@@ -1544,6 +1544,7 @@ file-filter	Templates	Modelli
 	Inspect Object	Ispeziona oggetto
 	Install Plug-in	Installa plug-in
 	Install Plug-in…	Installa plug-in…
+	Open this setting's help page	Apri la pagina della guida di questa impostazione
 	Installed plug-in {}	Plug-in {} installato
 	Intensity:	Intensità:
 	Intent:	Intento:
@@ -3245,6 +3246,7 @@ mark-style	Japanese	Giapponese
 	Text Wrap Options	Opzioni testo attorno
 	Text Wrap Options…	Opzioni testo attorno…
 	The bounds of the visible art.	I limiti della grafica visibile.
+	The plug-in writes the whole document.	Il plug-in esporta l'intero documento.
 	The cell shows the type object's text as HTML.	La cella mostra il testo dell'oggetto testo come HTML.
 	The document has no colour swatches.	Il documento non ha campioni di colore.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Il bordo del foglio che la stampante non riesce a raggiungere: la grafica resta al suo interno e l'anteprima lo mostra tratteggiato.
@@ -4281,6 +4283,7 @@ axis	Both	Entrambi
 @msg	{_1} files are written by file.saveAsTemplate	i file {_1} vengono scritti da file.saveAsTemplate
 @msg	{_1} font families available	{_1} famiglie di font disponibili
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} è un effetto dinamico (Effetto › Plug-in)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} è un plug-in di esportazione (File › Esporta › Esporta come…)
 @msg	{_1} is already used by {_2}	{_1} è già usato da {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	file collegati non leggibili qui: {_1}; vengono mostrate le loro anteprime
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	immagini collegate modificate su disco: {_1}; Aggiorna collegamenti mostra le nuove versioni
@@ -4805,6 +4808,27 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
+	Smudge Stick…	Sfumino…
+	Smudge Stick	Sfumino
+	Sponge…	Spugna…
+	Sponge	Spugna
+	Watercolor…	Acquerello…
+	Watercolor	Acquerello
+	Brush Size	Dimensione pennello
+	Definition	Definizione
+	Brush Detail	Dettaglio pennello
+	Shadow Intensity	Intensità ombre
+	Bas Relief…	Bassorilievo…
+	Bas Relief	Bassorilievo
+	Charcoal…	Carboncino…
+	Charcoal	Carboncino
+	Photocopy…	Fotocopia…
+	Photocopy	Fotocopia
+	Stamp…	Timbro…
+	Stamp	Timbro
+	Thickness	Spessore
+	Detail	Dettaglio
+	Light/Dark Balance	Equilibrio chiaro/scuro
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Modifica originale apre solo file di immagini e documenti; “{name}” non lo è
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	nel browser si aprono solo URL http, https e mailto, non “{url}”
@@ -4873,3 +4897,5 @@ lighting	Light	Luce
 	Move Library Group	Sposta gruppo di libreria
 	Plaster…	Gesso…
 	Plaster	Gesso
+	Note Paper…	Carta da lettere…
+	Note Paper	Carta da lettere

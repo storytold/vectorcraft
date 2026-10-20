@@ -1542,6 +1542,7 @@ file-filter	Templates	Шаблоны
 	Inspect Object	Проверить объект
 	Install Plug-in	Установить модуль
 	Install Plug-in…	Установить модуль…
+	Open this setting's help page	Открыть страницу справки по этому параметру
 	Installed plug-in {}	Установлен модуль {}
 	Intensity:	Интенсивность:
 	Intent:	Назначение:
@@ -3241,6 +3242,7 @@ mark-style	Japanese	Японский
 	Text Wrap Options	Параметры обтекания текстом
 	Text Wrap Options…	Параметры обтекания текстом…
 	The bounds of the visible art.	Границы видимого рисунка.
+	The plug-in writes the whole document.	Модуль экспортирует весь документ.
 	The cell shows the type object's text as HTML.	Ячейка показывает текст текстового объекта как HTML.
 	The document has no colour swatches.	В документе нет цветовых образцов.
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	Край бумаги, до которого не доходит принтер: рисунок остаётся внутри него, а просмотр показывает его пунктиром.
@@ -4277,6 +4279,7 @@ axis	Both	Оба
 @msg	{_1} files are written by file.saveAsTemplate	файлы {_1} записывает file.saveAsTemplate
 @msg	{_1} font families available	доступно семейств шрифтов: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} — динамический эффект (Эффект › Модули)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} — модуль экспорта (Файл › Экспорт › Экспортировать как…)
 @msg	{_1} is already used by {_2}	{_1} уже используется {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	здесь невозможно прочитать связанных файлов: {_1}: отображаются их предварительные просмотры
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	связанных изображений ({_1}) изменились на диске: «Обновить связи» покажет новые версии
@@ -4801,6 +4804,27 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
+	Smudge Stick…	Растушёвка…
+	Smudge Stick	Растушёвка
+	Sponge…	Губка…
+	Sponge	Губка
+	Watercolor…	Акварель…
+	Watercolor	Акварель
+	Brush Size	Размер кисти
+	Definition	Чёткость
+	Brush Detail	Детализация кисти
+	Shadow Intensity	Интенсивность теней
+	Bas Relief…	Барельеф…
+	Bas Relief	Барельеф
+	Charcoal…	Уголь…
+	Charcoal	Уголь
+	Photocopy…	Фотокопия…
+	Photocopy	Фотокопия
+	Stamp…	Штамп…
+	Stamp	Штамп
+	Thickness	Толщина
+	Detail	Детали
+	Light/Dark Balance	Баланс светлого и тёмного
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	«Редактировать оригинал» открывает только файлы изображений и документов; «{name}» к ним не относится
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузере открываются только URL с http, https и mailto, а не «{url}»
@@ -4869,3 +4893,5 @@ lighting	Light	Свет
 	Move Library Group	Переместить группу библиотеки
 	Plaster…	Гипс…
 	Plaster	Гипс
+	Note Paper…	Почтовая бумага…
+	Note Paper	Почтовая бумага

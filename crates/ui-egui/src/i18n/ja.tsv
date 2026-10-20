@@ -289,6 +289,7 @@
 	Plug-ins	プラグイン
 	No filter plug-ins installed	フィルタープラグインはインストールされていません
 	Install Plug-in…	プラグインをインストール…
+	Open this setting's help page	この設定のヘルプページを開く
 	Reload Plug-ins	プラグインを再読み込み
 	Type	書式
 	Font	フォント
@@ -2960,6 +2961,7 @@ mark-style	Japanese	日本式
 	Text Import Options	テキスト読み込みオプション
 	The Print Tiling tool placed the pages.	プリント分割ツールでページが配置されています。
 	The bounds of the visible art.	表示されているアートの範囲。
+	The plug-in writes the whole document.	プラグインがドキュメント全体を書き出します。
 	The cell shows the type object's text as HTML.	セルには文字オブジェクトのテキストが HTML として表示されます。
 	The document has no colour swatches.	ドキュメントにカラースウォッチがありません。
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	プリンターが印刷できない用紙の端の部分です。アートはこの内側に配置され、プレビューでは破線で表示されます。
@@ -4271,6 +4273,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	missing `id` (see plugin.list)	`id` が指定されていません (plugin.list を参照)
 @msg	no plug-in {id} is installed	プラグイン {id} はインストールされていません
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} はライブ効果です (「効果 › プラグイン」から使用してください)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} は書き出しプラグインです (「ファイル › 書き出し › 形式を指定して書き出し…」から使用してください)
 @msg	a preset named `{_1}` exists	`{_1}` という名前のプリセットはすでに存在します
 @msg	a swatch or color group named `{n}` exists	`{n}` という名前のスウォッチまたはカラーグループはすでに存在します
 @msg	no print preset named `{base}`	`{base}` という名前のプリントプリセットが見つかりません
@@ -4845,6 +4848,27 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
+	Smudge Stick…	スマッジスティック…
+	Smudge Stick	スマッジスティック
+	Sponge…	スポンジ…
+	Sponge	スポンジ
+	Watercolor…	水彩…
+	Watercolor	水彩
+	Brush Size	ブラシサイズ
+	Definition	精細度
+	Brush Detail	ブラシの細かさ
+	Shadow Intensity	シャドウの強さ
+	Bas Relief…	レリーフ…
+	Bas Relief	レリーフ
+	Charcoal…	木炭…
+	Charcoal	木炭
+	Photocopy…	コピー…
+	Photocopy	コピー
+	Stamp…	スタンプ…
+	Stamp	スタンプ
+	Thickness	太さ
+	Detail	ディテール
+	Light/Dark Balance	明暗のバランス
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「オリジナルを編集」で開けるのは画像ファイルとドキュメントファイルだけです: 「{name}」はどちらでもありません
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ブラウザーで開けるのは http、https、mailto の URL だけです: 「{url}」は開けません
@@ -4913,3 +4937,5 @@ lighting	Light	ライト
 	Move Library Group	ライブラリグループを移動
 	Plaster…	石膏…
 	Plaster	石膏
+	Note Paper…	ノート用紙…
+	Note Paper	ノート用紙

@@ -1515,6 +1515,7 @@ file-filter	Templates	範本
 	Inspect Object	檢查物件
 	Install Plug-in	安裝增效模組
 	Install Plug-in…	安裝增效模組…
+	Open this setting's help page	開啟此設定的說明頁面
 	Installed plug-in {}	已安裝增效模組 {}
 	Intensity:	強度：
 	Intent:	目的：
@@ -2019,6 +2020,7 @@ file-filter	Templates	範本
 @msg	missing `id` (see plugin.list)	未提供 `id` (請參閱 plugin.list)
 @msg	no plug-in {id} is installed	未安裝增效模組 {id}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} 是即時效果 (效果 › 增效模組)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是匯出增效模組 (檔案 › 匯出 › 匯出為…)
 @msg	a preset named `{_1}` exists	名為 `{_1}` 的預設集已存在
 @msg	a swatch or color group named `{n}` exists	名為 `{n}` 的色票或顏色群組已存在
 @msg	no print preset named `{base}`	沒有名為 `{base}` 的列印預設集
@@ -3964,6 +3966,7 @@ font-script	Japanese	漢字
 	Text Wrap Options	文字繞圖選項
 	Text Wrap Options…	文字繞圖選項…
 	The bounds of the visible art.	可見圖稿的邊界。
+	The plug-in writes the whole document.	增效模組會匯出整份文件。
 	The cell shows the type object's text as HTML.	儲存格以 HTML 顯示文字物件的文字。
 	The document has no colour swatches.	文件中沒有色票。
 	The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.	印表機無法觸及的紙張邊緣：圖稿會放在其內側，預覽中會以虛線顯示。
@@ -4835,6 +4838,27 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
+	Smudge Stick…	塗抹棒…
+	Smudge Stick	塗抹棒
+	Sponge…	海綿…
+	Sponge	海綿
+	Watercolor…	水彩…
+	Watercolor	水彩
+	Brush Size	筆刷大小
+	Definition	清晰度
+	Brush Detail	筆刷細節
+	Shadow Intensity	陰影強度
+	Bas Relief…	淺浮雕…
+	Bas Relief	淺浮雕
+	Charcoal…	炭筆…
+	Charcoal	炭筆
+	Photocopy…	影印…
+	Photocopy	影印
+	Stamp…	圖章…
+	Stamp	圖章
+	Thickness	粗細
+	Detail	細節
+	Light/Dark Balance	明暗平衡
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
 	Library Panel Options	資料庫面板選項
@@ -4891,3 +4915,5 @@ lighting	Light	光源
 	Move Library Group	移動資料庫群組
 	Plaster…	塑膠效果…
 	Plaster	塑膠效果
+	Note Paper…	便條紙…
+	Note Paper	便條紙

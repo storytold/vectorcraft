@@ -266,6 +266,7 @@
 	Plug-ins	Wtyczki
 	No filter plug-ins installed	Brak zainstalowanych wtyczek filtrów
 	Install Plug-in…	Zainstaluj wtyczkę…
+	Open this setting's help page	Otwórz stronę pomocy dla tego ustawienia
 	Reload Plug-ins	Wczytaj ponownie wtyczki
 	Type	Tekst
 	Font	Czcionka
@@ -2083,6 +2084,7 @@ lighting	Light	Światło
 	One file per artboard: <name>-<artboard>.{ext}	Jeden plik na obszar kompozycji: <nazwa>-<obszar>.{ext}
 	One page per artboard.	Jedna strona na obszar kompozycji.
 	The bounds of the visible art.	Granice widocznej kompozycji.
+	The plug-in writes the whole document.	Wtyczka eksportuje cały dokument.
 	Use Artboards	Użyj obszarów kompozycji
 	Choose a folder	Wybierz folder
 	Create Sub-folders	Utwórz podfoldery
@@ -4368,6 +4370,7 @@ imageTrace	Outline	Kontur
 @msg	{_1} files are written by file.saveAsTemplate	pliki {_1} zapisuje file.saveAsTemplate
 @msg	{_1} font families available	dostępne rodziny czcionek: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} to efekt na żywo (Efekt › Wtyczki)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} to wtyczka eksportu (Plik › Eksportuj › Eksportuj jako…)
 @msg	{_1} is already used by {_2}	{_1} jest już używany przez {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	połączonych plików nie można tu odczytać ({_1}): wyświetlane są ich podglądy
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	połączone obrazy zmienione na dysku: {_1} — Aktualizuj łącza pokaże nowe wersje
@@ -5044,6 +5047,27 @@ mark-style	Japanese	Japońskie
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
+	Smudge Stick…	Rozmazywacz…
+	Smudge Stick	Rozmazywacz
+	Sponge…	Gąbka…
+	Sponge	Gąbka
+	Watercolor…	Akwarela…
+	Watercolor	Akwarela
+	Brush Size	Rozmiar pędzla
+	Definition	Wyrazistość
+	Brush Detail	Szczegółowość pędzla
+	Shadow Intensity	Intensywność cieni
+	Bas Relief…	Płaskorzeźba…
+	Bas Relief	Płaskorzeźba
+	Charcoal…	Węgiel…
+	Charcoal	Węgiel
+	Photocopy…	Fotokopia…
+	Photocopy	Fotokopia
+	Stamp…	Stempel…
+	Stamp	Stempel
+	Thickness	Grubość
+	Detail	Szczegóły
+	Light/Dark Balance	Równowaga jasne/ciemne
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Edytuj oryginał otwiera tylko pliki obrazów i dokumentów; „{name}” do nich nie należy
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	w przeglądarce otwierają się tylko adresy URL http, https i mailto, a nie „{url}”
@@ -5111,3 +5135,5 @@ mark-style	Japanese	Japońskie
 	Move Library Group	Przenieś grupę biblioteki
 	Plaster…	Gips…
 	Plaster	Gips
+	Note Paper…	Papier listowy…
+	Note Paper	Papier listowy

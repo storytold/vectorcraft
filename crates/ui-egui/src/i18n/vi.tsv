@@ -1787,6 +1787,7 @@ file-filter	Templates	Mẫu
 	Inspect Object	Kiểm tra đối tượng
 	Install Plug-in	Cài đặt plug-in
 	Install Plug-in…	Cài đặt plug-in…
+	Open this setting's help page	Mở trang trợ giúp của thiết lập này
 	Installed plug-in {}	Đã cài plug-in {}
 	Intensity	Cường độ
 	Intensity:	Cường độ:
@@ -3572,6 +3573,7 @@ mark-style	Japanese	Kiểu Nhật
 	Texturizer…	Texturizer…
 	Thai	Tiếng Thái
 	The bounds of the visible art.	Vùng giới hạn của đối tượng hiển thị.
+	The plug-in writes the whole document.	Plug-in xuất toàn bộ tài liệu.
 	The cell shows the type object's text as HTML.	Ô hiển thị văn bản của đối tượng chữ dưới dạng HTML.
 	The dialog was closed before its file dialog answered	Hộp thoại đã đóng trước khi hộp thoại tệp phản hồi
 	The document has no colour swatches.	Tài liệu không có mẫu màu.
@@ -4636,6 +4638,7 @@ theme	Appearance	Giao diện
 @msg	{_1} font families available	{_1} họ phông chữ khả dụng
 @msg	{_1} has no {_2} style	{_1} không có kiểu {_2}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} là hiệu ứng trực tiếp (Hiệu ứng › Plug-ins)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} là plug-in xuất (Tệp › Xuất › Xuất thành…)
 @msg	{_1} is already used by {_2}	{_1} đã được dùng bởi {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} tệp liên kết không thể đọc ở đây: bản xem trước được hiển thị
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} ảnh liên kết đã thay đổi trên đĩa: Cập nhật liên kết hiển thị phiên bản mới
@@ -4785,6 +4788,27 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
+	Smudge Stick…	Bút chì xóa mờ…
+	Smudge Stick	Bút chì xóa mờ
+	Sponge…	Bọt biển…
+	Sponge	Bọt biển
+	Watercolor…	Màu nước…
+	Watercolor	Màu nước
+	Brush Size	Kích thước cọ
+	Definition	Độ nét
+	Brush Detail	Chi tiết cọ
+	Shadow Intensity	Cường độ bóng
+	Bas Relief…	Chạm nổi…
+	Bas Relief	Chạm nổi
+	Charcoal…	Than củi…
+	Charcoal	Than củi
+	Photocopy…	Bản photocopy…
+	Photocopy	Bản photocopy
+	Stamp…	Con dấu…
+	Stamp	Con dấu
+	Thickness	Độ dày
+	Detail	Chi tiết
+	Light/Dark Balance	Cân bằng sáng/tối
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Chỉnh sửa bản gốc chỉ mở tệp hình ảnh và tài liệu; “{name}” không thuộc loại đó
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	chỉ URL http, https và mailto mới được mở trong trình duyệt, không mở “{url}”
@@ -4853,3 +4877,5 @@ theme	Appearance	Giao diện
 	Move Library Group	Di chuyển nhóm thư viện
 	Plaster…	Thạch cao…
 	Plaster	Thạch cao
+	Note Paper…	Giấy ghi chú…
+	Note Paper	Giấy ghi chú

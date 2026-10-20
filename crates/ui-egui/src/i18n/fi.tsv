@@ -302,6 +302,7 @@
 	Plug-ins	Laajennukset
 	No filter plug-ins installed	Suodinlaajennuksia ei ole asennettu
 	Install Plug-in…	Asenna laajennus…
+	Open this setting's help page	Avaa tämän asetuksen ohjesivu
 	Reload Plug-ins	Lataa laajennukset uudelleen
 	Type	Teksti
 	Font	Fontti
@@ -2125,6 +2126,7 @@ lighting	Light	Valo
 	One file per artboard: <name>-<artboard>.{ext}	Yksi tiedosto piirtoalustaa kohden: <name>-<artboard>.{ext}
 	One page per artboard.	Yksi sivu piirtoalustaa kohden.
 	The bounds of the visible art.	Näkyvän kuvituksen rajat.
+	The plug-in writes the whole document.	Laajennus vie koko asiakirjan.
 	Use Artboards	Käytä piirtoalustoja
 	Choose a folder	Valitse kansio
 	Create Sub-folders	Luo alikansiot
@@ -4463,6 +4465,7 @@ imageTrace	Outline	Ääriviiva
 @msg	{_1} files are written by file.saveAsTemplate	{_1}-tiedostot kirjoitetaan komennolla file.saveAsTemplate
 @msg	{_1} font families available	{_1} fonttiperhettä käytettävissä
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} on live-tehoste (Tehoste › Laajennukset)
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} on vientilaajennus (Tiedosto › Vie › Vie muodossa…)
 @msg	{_1} is already used by {_2}	{_1} on jo käytössä kohteella {_2}
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} linkitettyä tiedostoa ei voi lukea täällä: niiden esikatselut näytetään
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
@@ -5156,6 +5159,27 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
+	Smudge Stick…	Sumennuskynä…
+	Smudge Stick	Sumennuskynä
+	Sponge…	Sieni…
+	Sponge	Sieni
+	Watercolor…	Vesiväri…
+	Watercolor	Vesiväri
+	Brush Size	Siveltimen koko
+	Definition	Terävyys
+	Brush Detail	Siveltimen yksityiskohta
+	Shadow Intensity	Varjojen voimakkuus
+	Bas Relief…	Matala korkokuva…
+	Bas Relief	Matala korkokuva
+	Charcoal…	Hiili…
+	Charcoal	Hiili
+	Photocopy…	Valokopio…
+	Photocopy	Valokopio
+	Stamp…	Leima…
+	Stamp	Leima
+	Thickness	Paksuus
+	Detail	Yksityiskohta
+	Light/Dark Balance	Vaalean ja tumman tasapaino
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	Muokkaa alkuperäistä avaa vain kuva- ja asiakirjatiedostoja; “{name}” ei ole sellainen
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	selaimessa avataan vain http-, https- ja mailto-URL-osoitteet, ei “{url}”
@@ -5290,3 +5314,5 @@ swatch	Bright Violet	Kirkas violetti
 	Move Library Group	Siirrä kirjastoryhmä
 	Plaster…	Kipsi…
 	Plaster	Kipsi
+	Note Paper…	Kirjepaperi…
+	Note Paper	Kirjepaperi

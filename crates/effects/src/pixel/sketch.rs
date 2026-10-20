@@ -1,4 +1,4 @@
-//! Effect › Sketch (Chalk & Charcoal, Chrome, Halftone Pattern, Plaster and Reticulation; Graphic Pen lives in
+//! Effect › Sketch (Chalk & Charcoal, Chrome, Halftone Pattern, Note Paper, Plaster and Reticulation; Graphic Pen lives in
 //! [`super::brushstrokes`]). Original filters built from public behaviour documentation:
 //! <https://helpx.adobe.com/illustrator/using/summary-effects.html> (Sketch effects redraw in
 //! black and white) and the public Photoshop Elements Artistic filters guide. Visual
@@ -97,6 +97,59 @@ pub(super) fn halftone_pattern(px: &mut [[u8; 4]], w: usize, h: usize, space: &P
             0.0
         };
         *p = premultiply([(1.0 - ink) as f32; 3], f32::from(p[3]) / 255.0);
+    });
+}
+
+/// Note Paper: the object embossed on fibrous paper. `balance` (0..50) shifts tones toward
+/// highlights or shadows around the middle; `graininess` (0..10) adds paper fibre; `relief`
+/// (0..50, points) is how strongly the tones stand out in the light. Coverage is kept.
+pub(super) fn note_paper(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, balance: f64, graininess: f64, relief: f64) {
+    if !(balance.is_finite() && graininess.is_finite() && relief.is_finite()) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let height: Vec<f32> = px
+        .iter()
+        .map(|p| {
+            if p[3] == 0 {
+                0.0
+            } else {
+                let mut l = f64::from(luma(straight(*p)));
+                l += (balance - 25.0) / 125.0;
+                l.clamp(0.0, 1.0) as f32
+            }
+        })
+        .collect();
+    let sample = |x: i32, y: i32| -> f32 {
+        if x < 0 || y < 0 || x >= w as i32 || y >= h as i32 {
+            return 0.0;
+        }
+        height.get(y as usize * w + x as usize).copied().unwrap_or(0.0)
+    };
+    let emboss = relief / 50.0;
+    let grain = graininess / 10.0;
+    let light = (-0.6_f64, -0.6, 0.8);
+    let ln = (light.0 * light.0 + light.1 * light.1 + light.2 * light.2).sqrt().max(1e-9);
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let xi = x as i32;
+        let yi = y as i32;
+        let h0 = height.get(y * w + x).copied().unwrap_or(0.0);
+        let dx = (sample(xi + 1, yi) - sample(xi - 1, yi)) as f64;
+        let dy = (sample(xi, yi + 1) - sample(xi, yi - 1)) as f64;
+        let dz = emboss * 0.12;
+        let nx = -dx;
+        let ny = -dy;
+        let nz = dz;
+        let nn = (nx * nx + ny * ny + nz * nz).sqrt().max(1e-9);
+        let shade = ((nx * light.0 + ny * light.1 + nz * light.2) / (nn * ln) * 0.5 + 0.5).clamp(0.0, 1.0);
+        let tone = (0.35 + 0.65 * f64::from(h0)) * shade;
+        let q = place.at(x, y);
+        let fibre = if grain > 0.0 { value_noise(0x4e4f_5450, q.x * 0.35, q.y * 0.35) * grain * 0.18 } else { 0.0 };
+        let v = (tone + fibre).clamp(0.0, 1.0) as f32;
+        *p = premultiply([v; 3], f32::from(p[3]) / 255.0);
     });
 }
 

@@ -174,6 +174,94 @@ fn live_effect_plugins_reshape_editable_art_and_expand() {
     assert_eq!(baked.unwrap().bounds(), triangle().bounds());
 }
 
+/// A live effect is given its object's fills and strokes, read only, and which of them it sits on;
+/// a change of paint runs it again.
+#[test]
+fn live_effects_are_given_their_object_s_paints() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "paint.setStroke", json!({"ids": [id.0], "color": "#000000"}));
+    run(&mut s, "stroke.set", json!({"ids": [id.0], "weight": 5}));
+    // The red fill as the host writes paints: a JSON value, its keys sorted.
+    let red = serde_json::to_value(&node(&s, id).appearance.fill().unwrap().paint).unwrap().to_string();
+    let tri = json!({"objects": [{"path": triangle()}]}).to_string();
+    // Each draws the triangle while it is given what it looks for, else hands the geometry back.
+    let effect = |id: &str, given, needle: &str| tpl::when_given(&tpl::manifest(id, "effect", "{}"), given, needle, &tri);
+    install_wat(&mut s, &effect("test.engine.wide", tpl::Given::Input, r#""width":5.0"#));
+    install_wat(&mut s, &effect("test.engine.red", tpl::Given::Input, &format!(r#""fills":[{red}]"#)));
+    install_wat(&mut s, &effect("test.engine.second", tpl::Given::Params, r#""item":{"stroke":1}"#));
+    let effected = |s: &Session, item: Option<usize>| {
+        let n = node(s, id);
+        let path = n.path_data().unwrap().clone();
+        let ctx = vectorcraft_render::effects::GeomContext::of(&n);
+        let (effects, ctx) = match item {
+            Some(i) => match &n.appearance.items[i] {
+                vectorcraft_doc::AppearanceItem::Stroke(st) => (st.effects.clone(), ctx.item(&n.appearance.items[i])),
+                other => panic!("not a stroke: {other:?}"),
+            },
+            None => (n.appearance.effects.clone(), ctx),
+        };
+        vectorcraft_render::effects::apply_geometry_with(&effects, &path, path.bounds().unwrap(), &ctx)
+    };
+    let own = node(&s, id).path_data().unwrap().clone();
+    let remove = |s: &mut Session| run(s, "effect.remove", json!({"ids": [id.0], "index": 0, "item": null}));
+    for effect in ["plugin.test.engine.wide", "plugin.test.engine.red"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": null}));
+        assert_eq!(effected(&s, None), triangle(), "{effect}: given the 5 pt stroke and the red fill");
+        remove(&mut s);
+    }
+    // Run again once the stroke is thinner.
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.wide", "item": null}));
+    run(&mut s, "stroke.set", json!({"ids": [id.0], "weight": 3, "item": 1}));
+    assert_eq!(effected(&s, None), own, "a 3 pt stroke");
+    remove(&mut s);
+    // On the second of two strokes, and not on the first.
+    run(&mut s, "appearance.addStroke", json!({"ids": [id.0]}));
+    let top = node(&s, id).appearance.items.len() - 1;
+    for item in [1, top] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.second", "item": item}));
+    }
+    assert_eq!(effected(&s, Some(1)), own, "the first stroke");
+    assert_eq!(effected(&s, Some(top)), triangle(), "the second stroke");
+}
+
+/// Expand gives a plug-in effect on a fill the context drawing gives it (`_context.item`), so a
+/// gradient fill is expanded into the shape the canvas fills.
+#[test]
+fn expanding_a_fill_gives_its_plug_in_effect_the_fill_it_sits_on() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear"}}));
+    let tri = json!({"objects": [{"path": triangle()}]}).to_string();
+    let on_fill = tpl::when_given(&tpl::manifest("test.engine.onfill", "effect", "{}"), tpl::Given::Params, r#""item":{"fill":0}"#, &tri);
+    install_wat(&mut s, &on_fill);
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.onfill", "item": fill}));
+    // Drawn, the gradient fills the triangle: a point of it outside the rectangle is painted.
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let drawn = vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 40, 40, vectorcraft_geom::Affine::IDENTITY, &opts);
+    assert_ne!(drawn.pixel(15, 1), [255, 255, 255, 255], "drawn as a triangle");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.expand", json!({"steps": 2}));
+    // The gradient's strips sit in a clip group whose clipping path is the shape filled.
+    let group = s.doc().unwrap().selection.objects[0];
+    let clip = node(&s, group).children().unwrap()[0].clone();
+    assert_eq!(clip.path_data().unwrap().bounds(), triangle().bounds(), "the triangle the canvas fills");
+}
+
+/// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
+/// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
+/// object's stroke is 5 pt wide, and hands the geometry back otherwise.
+#[test]
+fn stroke_width_test_effect() {
+    let Some(dir) = std::env::var_os("CRAFT_PLUGIN_PAINTS_WASM") else { return };
+    let triangle = PathData::single(SubPath::polyline(&[Point::new(100.0, 230.0), Point::new(300.0, 230.0), Point::new(200.0, 80.0)], true));
+    let manifest = r#"{"id":"org.example.strokewidth","name":"Stroke Width (test plug-in)","version":"1","kind":"effect",
+        "description":"Draws a triangle while the object's stroke is 5 pt wide.","params":{}}"#;
+    let src = tpl::when_given(manifest, tpl::Given::Input, r#""width":5.0"#, &json!({"objects": [{"path": triangle}]}).to_string());
+    std::fs::write(std::path::Path::new(&dir).join("stroke-width-test-effect.wasm"), wat::parse_str(src).unwrap()).unwrap();
+}
+
 #[test]
 fn plugin_management_commands() {
     let mut s = session();

@@ -96,3 +96,26 @@ fn artboard_colour_is_exported_only_when_asked() {
     s.execute("artboard.setColor", &json!({"index": 0, "color": null})).unwrap();
     assert!(!svg(&mut s, json!({"format": "svg", "artboardFill": true})).contains("336699"));
 }
+
+/// Batch edits validate locked geometry before changing any artboard or consuming history.
+#[test]
+fn batch_artboard_edits_preserve_locks_and_are_atomic() {
+    let mut s = three_boards();
+    s.execute("artboard.lock", &json!({"index": 1})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for entries in [json!([{"index": 0, "width": 50}, {"index": 1, "width": 50}]), json!([{"index": 1, "x": 5}, {"index": 0, "x": 5}])] {
+        let e = s.execute("artboard.setProps", &json!({"artboards": entries, "scaleArt": true})).unwrap_err();
+        assert!(e.to_string().contains("locked"));
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+    // A locked board can still be renamed alongside a resize of an unlocked one.
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "width": 50}, {"index": 1, "name": "Cover"}]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 50.0);
+    assert_eq!(s.doc().unwrap().doc.artboards[1].name, "Cover");
+    assert!(s.doc().unwrap().doc.artboards[1].locked);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *before);
+}
