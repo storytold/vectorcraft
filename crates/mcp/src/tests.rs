@@ -350,6 +350,58 @@ fn trace_and_style_prompt_steps_run_in_order() {
     assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
 }
 
+/// `screenshot` and `render_preview` with `traceViews: true` draw an Image Trace object in the
+/// view set with imageTrace.setView, as the app's window does; without it they draw the tracing
+/// result, as exports do. The image is a dark disc (r = 30 px) on blue, traced with Ignore White.
+#[test]
+fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
+    let mut s = server();
+    let png = tmp("trace-views.png");
+    image::RgbImage::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
+    })
+    .save(&png)
+    .unwrap();
+    let ok = |s: &mut Server, id: u64, name: &str, args: Value| {
+        let r = call(s, id, name, args);
+        assert_eq!(r["isError"], false, "{name}: {r}");
+        r
+    };
+    ok(&mut s, 1, "open_file", json!({"path": png.to_str().unwrap()}));
+    ok(&mut s, 2, "run_command", json!({"command": "select.all"}));
+    ok(&mut s, 3, "run_command", json!({"command": "imageTrace.make", "params": {"params": {"ignoreWhite": true}}}));
+    let pixels = |r: &Value| {
+        let data = r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap()["data"].as_str().unwrap();
+        image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().to_rgba8()
+    };
+    let dark = |p: &image::Rgba<u8>| p[0] < 60 && p[1] < 60 && p[2] < 60;
+    let white = |p: &image::Rgba<u8>| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let blue = |p: &image::Rgba<u8>| p[0] < 200 && p[2] > 245;
+    let (middle, beside) = ((50, 50), (10, 10));
+    let renders = [("screenshot", json!({})), ("render_preview", json!({"max_side": 100}))];
+    for (id, (name, args)) in (10..).zip(renders) {
+        let with = |mut a: Value| {
+            a["traceViews"] = json!(true);
+            a
+        };
+        ok(&mut s, id, "run_command", json!({"command": "imageTrace.setView", "params": {"view": "sourceImage"}}));
+        let (view, result) = (pixels(&ok(&mut s, id, name, with(args.clone()))), pixels(&ok(&mut s, id, name, args.clone())));
+        assert_eq!((view.width(), result.width()), (100, 100), "{name}");
+        assert!(blue(view.get_pixel(beside.0, beside.1)), "{name}: the source image beside the disc {:?}", view.get_pixel(beside.0, beside.1));
+        assert!(white(result.get_pixel(beside.0, beside.1)), "{name}: the tracing result {:?}", result.get_pixel(beside.0, beside.1));
+        assert!(dark(view.get_pixel(middle.0, middle.1)) && dark(result.get_pixel(middle.0, middle.1)), "{name}: the disc's middle");
+        // Outlines: a line at the disc's right side (x = 80) and no fill in its middle.
+        ok(&mut s, id, "run_command", json!({"command": "imageTrace.setView", "params": {"view": "outlines"}}));
+        let (view, result) = (pixels(&ok(&mut s, id, name, with(args.clone()))), pixels(&ok(&mut s, id, name, args.clone())));
+        let row: Vec<u8> = (75..=85).map(|x| view.get_pixel(x, 50)[0]).collect();
+        assert!(row.iter().any(|&r| r < 128), "{name}: the disc's outline {row:?}");
+        assert!(white(view.get_pixel(middle.0, middle.1)), "{name}: no fill in outlines {:?}", view.get_pixel(middle.0, middle.1));
+        assert!(dark(result.get_pixel(middle.0, middle.1)), "{name}: the tracing result's fill");
+        assert_eq!(call(&mut s, id, name, json!({"traceViews": "yes"}))["isError"], true, "{name}: a non-boolean traceViews");
+    }
+}
+
 #[test]
 fn headless_path_gesture_undo() {
     let mut s = server();

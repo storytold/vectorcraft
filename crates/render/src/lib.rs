@@ -582,6 +582,10 @@ pub struct Renderer {
     /// The art the last frame drew with Overprint Preview or Separations Preview: the next frame
     /// draws it again for the objects that have not changed ([`proof::prepare`]).
     proof_art: Option<proof::Prepared>,
+    /// Width of [`Self::hairline`] in the pixels being drawn: 1, or the supersampling factor while
+    /// a supersampled render draws its larger frame, so outlines stay one output pixel wide. Type
+    /// outlines and dotted guides scale by it too.
+    hairline: f64,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -697,6 +701,7 @@ impl Renderer {
             isolation: None,
             isolation_settled: false,
             proof_art: None,
+            hairline: 1.0,
         }
     }
 
@@ -713,7 +718,9 @@ impl Renderer {
             let (w, h) = (width.clamp(1, MAX_CONTEXT_SIDE), height.clamp(1, MAX_CONTEXT_SIDE));
             if let Some(k) = supersample_factor(w, h) {
                 let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
+                let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
                 let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks);
+                self.hairline = hairline;
                 let pixels = downsample(&big.pixels, big.width as usize, big.height as usize, k as usize);
                 self.stats.micros = now().saturating_sub(start);
                 return Rendered { width: w, height: h, pixels };
@@ -1371,9 +1378,10 @@ impl Renderer {
                     // running far off screen (from a file) asked for millions of them. Past
                     // [`MAX_GUIDE_DASHES`] (by its control polygon, which is at least as long) it
                     // is drawn solid.
-                    if dots && polygon_length(&screen) / 4.0 <= MAX_GUIDE_DASHES {
+                    let h = self.hairline;
+                    if dots && polygon_length(&screen) / (4.0 * h) <= MAX_GUIDE_DASHES {
                         ctx.set_transform(Affine::IDENTITY);
-                        ctx.set_stroke(kurbo::Stroke::new(1.5).with_dashes(0.0, [1.5, 2.5]));
+                        ctx.set_stroke(kurbo::Stroke::new(1.5 * h).with_dashes(0.0, [1.5 * h, 2.5 * h]));
                         ctx.set_paint(f.ink.fixed([r, g, b, 255]));
                         ctx.stroke_path(&screen);
                     } else {
@@ -1570,7 +1578,7 @@ impl Renderer {
         ctx.set_transform(Affine::IDENTITY);
         let mut screen = bp.clone();
         screen.apply_affine(f.view);
-        ctx.set_stroke(kurbo::Stroke::new(1.0));
+        ctx.set_stroke(kurbo::Stroke::new(self.hairline));
         ctx.set_paint(f.ink.fixed(rgba));
         ctx.stroke_path(&screen);
     }
@@ -1931,7 +1939,7 @@ impl Renderer {
             let mut p = g.all.clone();
             p.apply_affine(xf);
             ctx.set_transform(Affine::IDENTITY);
-            ctx.set_stroke(kurbo::Stroke::new(1.0));
+            ctx.set_stroke(kurbo::Stroke::new(self.hairline));
             ctx.set_paint(peniko::Color::BLACK);
             ctx.stroke_path(&p);
             // Colour bitmap glyphs: their boxes, as images show in outline mode.
