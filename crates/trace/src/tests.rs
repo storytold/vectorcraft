@@ -624,6 +624,40 @@ fn document_library_uses_the_most_used_swatches_exactly() {
     assert_eq!(trace(&hard, &none).palette.len(), 4);
 }
 
+#[test]
+fn document_library_keeps_neutral_tones_off_a_saturated_swatch() {
+    // Black, gray, brown and blue patches on a light background. The gray and the brown lie
+    // nearer to the blue than to the black or the light color in plain Oklab distance.
+    let img = Raster::from_fn(400, 100, |x, y| {
+        let inside = (10..90).contains(&(x % 100)) && (10..90).contains(&y);
+        match (inside, x / 100) {
+            (false, _) => [240, 240, 220, 255],
+            (true, 0) => [0, 0, 0, 255],
+            (true, 1) => [128, 128, 128, 255],
+            (true, 2) => [112, 88, 64, 255],
+            (true, _) => [40, 120, 240, 255],
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::DocumentLibrary,
+        swatches: vec![[0, 0, 0], [240, 240, 220], [40, 120, 240]],
+        colors: 3,
+        paths: 90.0,
+        corners: 60.0,
+        noise: 4,
+        method: Method::Abutting,
+        ..TraceParams::default()
+    };
+    let res = trace(&img, &params);
+    let blue: Vec<_> = res.paths.iter().filter(|p| p.color == [40, 120, 240]).collect();
+    assert!(!blue.is_empty(), "the blue patch stays blue: {:?}", res.palette);
+    for p in blue {
+        let b = p.path.bounds().unwrap();
+        assert!(b.x0 > 299.0, "a blue path reaches {b:?}: the gray or the brown patch traced as blue");
+    }
+}
+
 fn strokes(fills: bool) -> TraceParams {
     TraceParams { strokes: true, fills, stroke_width: 6.0, noise: 4, ..bw() }
 }

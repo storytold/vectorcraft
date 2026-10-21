@@ -110,19 +110,17 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                 }
                 let mut lut = vec![0u16; 1 << 15];
                 let center_labs = labs(&centers);
+                let library = params.palette == Palette::DocumentLibrary && !params.swatches.is_empty();
+                let nearest = if library { nearest_library } else { nearest_lab };
                 for (i, c, _) in &every {
-                    lut[*i] = nearest_lab(&center_labs, oklab(*c)) as u16;
+                    lut[*i] = nearest(&center_labs, oklab(*c)) as u16;
                 }
                 let labels =
                     img.rgba.as_chunks::<4>().0.iter().map(|p| if p[3] < 128 { TRANSPARENT } else { lut[hk.key(p[0], p[1], p[2])] }).collect();
                 let palette = centers.iter().map(|c| [c[0].round() as u8, c[1].round() as u8, c[2].round() as u8]).collect();
                 let q = compact(labels, palette);
                 // A swatch library's colours are used as they are.
-                if params.palette == Palette::DocumentLibrary && !params.swatches.is_empty() {
-                    q
-                } else {
-                    merge_mixed(q, img.width as usize, img.height as usize, &rare)
-                }
+                if library { q } else { merge_mixed(q, img.width as usize, img.height as usize, &rare) }
             };
             let q = reduce(params.colors);
             let q = settled(q, img, &own);
@@ -614,6 +612,24 @@ fn nearest_lab(labs: &[[f64; 3]], c: [f64; 3]) -> usize {
     best.1
 }
 
+/// How much more a difference in hue and chroma (Oklab a and b) counts than one in lightness when
+/// a pixel takes a library color.
+const LIBRARY_CHROMA_WEIGHT: f64 = 3.0;
+
+/// The index of the library color of `labs` (Oklab) nearest to `c` (Oklab), with differences in
+/// hue and chroma counted [`LIBRARY_CHROMA_WEIGHT`] times: a neutral or muted tone takes a neutral
+/// library color of another lightness rather than a saturated one of its own lightness.
+fn nearest_library(labs: &[[f64; 3]], c: [f64; 3]) -> usize {
+    let mut best = (f64::INFINITY, 0);
+    for (i, m) in labs.iter().enumerate() {
+        let d = (m[0] - c[0]).powi(2) + (LIBRARY_CHROMA_WEIGHT * (m[1] - c[1])).powi(2) + (LIBRARY_CHROMA_WEIGHT * (m[2] - c[2])).powi(2);
+        if d < best.0 {
+            best = (d, i);
+        }
+    }
+    best.1
+}
+
 fn labs(colors: &[[f64; 3]]) -> Vec<[f64; 3]> {
     colors.iter().map(|c| oklab(*c)).collect()
 }
@@ -678,7 +694,8 @@ fn flat_colors(used: &[Used], detail: f64) -> Option<usize> {
 /// The most histogram bins flat art's main colours spread over (a few bins per colour).
 const FLAT_BINS: usize = 96;
 
-/// Document Library: the `k` swatches (at most) that the most pixels are nearest to.
+/// Document Library: the `k` swatches (at most) that the most pixels are nearest to (see
+/// [`nearest_library`]).
 fn library_colors(used: &[Used], swatches: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
     let mut all: Vec<[f64; 3]> = vec![];
     for s in swatches {
@@ -690,7 +707,7 @@ fn library_colors(used: &[Used], swatches: &[[u8; 3]], k: usize) -> Vec<[f64; 3]
     let mut weight = vec![0.0; all.len()];
     let all_labs = labs(&all);
     for (_, c, n) in used {
-        if let Some(w) = weight.get_mut(nearest_lab(&all_labs, oklab(*c))) {
+        if let Some(w) = weight.get_mut(nearest_library(&all_labs, oklab(*c))) {
             *w += n;
         }
     }
