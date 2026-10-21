@@ -54,9 +54,10 @@ struct PathWidgets {
 
 impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
-    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection.
+    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection. `id` is
+    /// editable ([`Document::is_editable`]).
     fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
-        if !doc.is_editable(id) || selection.segments.contains_key(&id) {
+        if selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
@@ -103,7 +104,9 @@ impl CornerWidgets {
     /// The widgets at `zoom` (screen px per document point), if the selection has them: on any
     /// path with Direct Selection (`any_path`), on live rectangles and polygons with Selection.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, any_path: bool) -> Option<Self> {
-        let paths: Vec<_> = selection.objects.iter().filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
+        let editable = doc.editable();
+        let paths: Vec<_> =
+            selection.objects.iter().filter(|id| editable(**id)).filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
         (!paths.is_empty()).then_some(Self { paths })
     }
 
@@ -399,7 +402,7 @@ mod tests {
 
     /// A live `w` × `h` rectangle with corner radius `r`.
     fn live_shape(w: f64, h: f64, r: f64, xf: Affine) -> (Document, NodeId) {
-        let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), xf };
+        let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), radii_relative: false, xf };
         doc_with(live.to_path(), Some(live))
     }
 
@@ -482,7 +485,14 @@ mod tests {
     #[test]
     fn widgets_of_several_selected_paths_drag_together() {
         let (mut d, a) = live_rect(0.0, Affine::translate((100.0, 100.0)));
-        let live = LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), xf: Affine::translate((300.0, 100.0)) };
+        let live = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::translate((300.0, 100.0)),
+        };
         let b = d.alloc_id();
         let mut n = Node::path(b, live.to_path(), Appearance::default_art());
         if let NodeKind::Path { live: slot, .. } = &mut n.kind {
@@ -638,6 +648,7 @@ mod tests {
                 h: 100.0,
                 radii: [0.0, top_right, 0.0, 0.0],
                 kinds: Default::default(),
+                radii_relative: false,
                 xf: Affine::translate((100.0, 100.0)),
             };
             let (d, id) = doc_with(live.to_path(), Some(live));
@@ -788,7 +799,8 @@ mod tests {
     /// cuts outline in red.
     #[test]
     fn a_live_polygon_rounds_with_either_tool() {
-        let live = LiveShape::Polygon { radius: 80.0, sides: 6, xf: Affine::translate((200.0, 200.0)), radii: vec![], kinds: vec![] };
+        let live =
+            LiveShape::Polygon { radius: 80.0, sides: 6, xf: Affine::translate((200.0, 200.0)), radii: vec![], kinds: vec![], radii_relative: false };
         let (d, id) = doc_with(live.to_path(), Some(live));
         let s = selected(id);
         let p = paint();

@@ -36,6 +36,13 @@
 	Channel 4	Канал 4
 	Cell Size	Розмір комірки
 	Fine Dots	Дрібні точки
+
+	Simple	Простий
+	Light Rough	Світла грубість
+	Dark Rough	Темна грубість
+	Wide Sharp	Широкий різкий
+	Wide Blurry	Широкий розмитий
+	Sparkle	Іскра
 	Medium Dots	Середні точки
 	Grainy Dots	Зернисті точки
 	Coarse Dots	Великі точки
@@ -301,6 +308,7 @@
 	Blur	Розмиття
 	Bottom	Внизу
 	Bottom in Front	Нижній спереду
+	Bottom-Justified Tab	Табуляція з вирівнюванням по нижньому краю
 	Bottom:	Внизу:
 	Bounds	Межі
 	Bounds (Fill Proportionally)	Межі (заповнювати пропорційно)
@@ -1046,6 +1054,7 @@
 	Eyedropper Picks Up:	Піпетка бере:
 	Eyedropper Tool	Інструмент «Піпетка»
 	Eyedropper: click the art to sample the stop's colour	Піпетка: натисніть на малюнок, щоб взяти колір точки переходу
+	Eyedropper: click the art to sample the key color	Піпетка: натисніть на малюнок, щоб взяти ключовий колір
 	Favorites	Вибране
 	Feather…	Розтушування…
 	Feet	Фути
@@ -1075,6 +1084,14 @@
 	Alt key toggles to Smooth Tool	Клавіша Alt перемикає на інструмент «Згладжування»
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
+	Consider Open Filled Paths as Closed	Вважати відкриті контури із заливкою замкненими
+	Pick Color From:	Джерело кольору:
+	Artwork	Графіка
+	Cursor Swatch Preview	Зразки біля вказівника
+	Selection:	Виділення:
+	Freeform	Довільно
+	Straight Line	Пряма лінія
+	Highlight:	Підсвічування:
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
 	Fill Rule	Правило заливки
@@ -1203,6 +1220,8 @@ file-filter	Templates	Шаблони
 	Large Gaps	Великі проміжки
 	Gap Preview Color:	Колір перегляду проміжків:
 	Close Gaps With Paths	Закрити проміжки контурами
+	Show Live Paint Gaps	Показати проміжки швидкої заливки
+	Hide Live Paint Gaps	Приховати проміжки швидкої заливки
 	Select Fills	Виділяти заливки
 	Select Strokes	Виділяти обведення
 	Gaussian Blur…	Розмиття за Гауссом…
@@ -1309,6 +1328,7 @@ file-filter	Templates	Шаблони
 	Hand-Drawn	Намальований від руки
 	Handles	Маркери
 	Hard Light	Жорстке світло
+	Hard Mix	Жорстке накладання
 	Harmony Rules:	Правила гармонії:
 	Harmony Sets	Набори гармонії
 	Height	Висота
@@ -1847,6 +1867,9 @@ file-filter	Templates	Шаблони
 	Modified:	Змінено:
 	Modify	Змінити
 	Mojikumi	Mojikumi
+	Insert Kashidas	Вставляти кашиди
+	Long	Довгі
+	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
 	Kinsoku Set	Набір kinsoku
 	Hard	Суворий
@@ -1881,6 +1904,7 @@ file-filter	Templates	Шаблони
 	Move Slices	Перемістити фрагменти
 	Move Spine Point	Перемістити точку осі
 	Reshape Spine Segment	Змінити форму сегмента осі
+	Move Brush	Перемістити пензель
 	Move Swatch	Перемістити зразок
 	Move Up	Перемістити вгору
 	Move…	Перемістити…
@@ -1936,6 +1960,13 @@ file-filter	Templates	Шаблони
 	Tints and Shades	Відтінки й тіні
 	Hue Shift	Зсув тону
 	Key Color:	Ключовий колір:
+	Tips	Поради
+	Colorization Tips	Поради щодо перефарбування
+	The samples show this brush on a blue stroke.	Зразки показують цей пензель на синьому обведенні.
+	The art keeps its own colors.	Малюнок зберігає власні кольори.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Чорний стає кольором обведення, а білий залишається білим. Інші кольори стають відтінками кольору обведення, і що світліший колір, то світліший його відтінок.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Чорний залишається чорним, а білий залишається білим. Інші кольори стають тінями кольору обведення, якщо вони темні, і його відтінками, якщо вони світлі.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Ключовий колір стає кольором обведення. Інші кольори зсуваються по колірному колу на стільки ж, на скільки ключовий колір, і зберігають насиченість та яскравість.
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
@@ -1956,6 +1987,14 @@ file-filter	Templates	Шаблони
 	Round Fan	Кругла віялова
 	Flat Fan	Пласка віялова
 	New Brush…	Новий пензель…
+	New Brush	Новий пензель
+	Calligraphic Brush	Каліграфічний пензель
+	Scatter Brush	Пензель-розпорошення
+	Art Brush	Художній пензель
+	Bristle Brush	Щетинний пензель
+	Pattern Brush	Візерунковий пензель
+	Select art to make a scatter, art or pattern brush.	Виділіть малюнок, щоб створити пензель-розпорошення, художній або візерунковий пензель.
+	Brush Art	Малюнок пензля
 	New Calligraphic Brush	Новий каліграфічний пензель
 	New Character Style	Новий стиль символу
 	New Color Group	Нова колірна група
@@ -1986,6 +2025,7 @@ file-filter	Templates	Шаблони
 	New View	Новий вигляд
 	New View…	Новий вигляд…
 	New Window	Нове вікно
+	New Without Dialog	Створити без діалогового вікна
 	New Workspace	Нове робоче середовище
 	New Workspace…	Нове робоче середовище…
 	New {kind} Style…	Новий стиль {kind}…
@@ -2571,6 +2611,7 @@ mark-style	Japanese	Японський
 	Reorder	Змінити порядок
 	Reorder Appearance Item	Змінити порядок елемента оформлення
 	Repeat	Повторити
+	Repeat Objects	Об’єкти повтору
 	Repeat Options	Параметри повтору
 	Repeat Pathfinder	Повторити обробку контурів
 	Repeat Tab	Повторити табуляцію
@@ -2578,7 +2619,7 @@ mark-style	Japanese	Японський
 	Replace	Замінити
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
-	Replace Spine	Замінити кістяк
+	Replace Spine	Замінити вісь
 	Replace Symbol	Замінити символ
 	Replace With Font	Замінити шрифтом
 	Replaces the saved preset of that name.	Замінює збережений набір із таким ім’ям.
@@ -2782,6 +2823,7 @@ mark-style	Japanese	Японський
 	Scale Cursor Proportional to UI	Масштабувати курсор пропорційно до інтерфейсу
 	Scale Lineweights	Масштабувати товщини ліній
 	Scale Strokes & Effects	Масштабувати обведення та ефекти
+	Scale Text Attributes	Масштабувати атрибути тексту
 	Scale to Fit Artboard	Масштабувати по монтажній області
 	Scale Tool	Інструмент «Масштаб»
 	Scale:	Масштаб:
@@ -3055,6 +3097,7 @@ effect	Points	Точки
 	Snapping Tolerance	Допуск прив’язки
 	Social Square Post 1080×1080	Квадратний пост для соцмереж 1080×1080
 	Soft Light	М’яке світло
+	Soft Mix	М’яке змішування
 	Solid	Суцільний
 	Sort by Kind	Сортувати за типом
 	Sort by Name	Сортувати за назвою
@@ -3295,6 +3338,7 @@ effect	Points	Точки
 	Tools	Інструменти
 	Top	Вгорі
 	Top in Front	Верхній спереду
+	Top-Justified Tab	Табуляція з вирівнюванням по верхньому краю
 	Top:	Вгорі:
 	Total Width:	Загальна ширина:
 	Touch Type	Налаштування тексту
@@ -3634,7 +3678,8 @@ imageTrace	Outline	Контур
 	 to sample a color	 для взяття зразка кольору
 	 across a selected object to set the gradient direction	 по виділеному об’єкту, щоб задати напрям градієнта
 	 to select an artboard  |  	 для вибору монтажної області  |  
-	 on the canvas to create one	 на полотні для створення однієї
+	 on the canvas to create one (	 на полотні для створення однієї (
+	 selects several, or draws one inside an artboard)	 вибирає кілька або створює нову всередині монтажної області)
 	 a stroke to add a width point  |  	 обведення для додавання точки ширини  |  
 	 to change one side  |  	 для зміни однієї сторони  |  
 	 to select more points  |  	 для виділення інших точок  |  
@@ -3801,7 +3846,7 @@ axis	Both	Обидві
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
-@msg	Replace Spine: select a blend and a path	Заміна кістяка: виділіть перехід і контур
+@msg	Replace Spine: select a blend and a path	Заміна осі: виділіть перехід і контур
 @msg	select two or more objects to distribute	виділіть два або більше об’єктів для розподілу
 @msg	select paths or anchor points	виділіть контури або опорні точки
 @msg	SVG parse error: {0}	Помилка розбору SVG: {0}
@@ -3866,6 +3911,25 @@ axis	Both	Обидві
 @msg	a PostScript error ({name} in `{op}`: {at})	помилка PostScript ({name} у `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	помилка PostScript ({name} `{op}`: {at}), {procs}
 @msg	a PostScript error ({name})	помилка PostScript ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	помилка PostScript ({name} у `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	помилка PostScript ({name} у `{op}`; {meaning}), у {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	помилка PostScript ({name} у `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	помилка PostScript ({name} у `{op}`: {at}; {meaning}), у {procs}
+@msg	a PostScript error ({name}; {meaning})	помилка PostScript ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	програма закриває словник, який вона не відкривала
+@msg	the program opens a file, which the reader can't do	програма відкриває файл, а читач PostScript цього не вміє
+@msg	the program restores a saved state that was already restored	програма відновлює збережений стан, який уже відновлено
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	дані, які читає програма, пошкоджені або обірвані, або програма запитує позицію у файлі, який її не має
+@msg	the program goes past one of the reader's limits	програма виходить за одну з меж читача PostScript
+@msg	the path has no point to continue from	контур не має точки, від якої можна продовжити
+@msg	a value is outside the range the operator takes	значення поза діапазоном, який приймає оператор
+@msg	the operator needs more values than the stack holds	операторові потрібно більше значень, ніж є в стеку
+@msg	part of the program isn't valid PostScript text	частина програми не є допустимим текстом PostScript
+@msg	a value has the wrong type for the operator	значення має неправильний тип для оператора
+@msg	the program runs, deletes or renames a file, which the reader can't do	програма запускає, видаляє або перейменовує файл, а читач PostScript цього не вміє
+@msg	the program asks for a resource that isn't defined	програма запитує ресурс, який не визначено
+@msg	a calculation has no result, as in a division by zero	обчислення не має результату, як під час ділення на нуль
+@msg	the operator looks for a mark on the stack and finds none	оператор шукає мітку в стеку й не знаходить її
 @msg	a bitmap is empty	растрове зображення порожнє
 @msg	a bitmap is too large to read	растрове зображення занадто велике для читання
 @msg	a colour index is 0 to {_1}, not {n}	індекс кольору від 0 до {_1}, а не {n}
@@ -3993,7 +4057,9 @@ axis	Both	Обидві
 @msg	no blend options	немає параметрів переходу
 @msg	no bounds	немає кордонів
 @msg	no brush named `{name}`	немає пензля з ім’ям `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	найбільша довжина імені щетинного пензля (символів): {max}; у `{name}` символів: {count}
 @msg	no brush selected	пензель не вибрано
+@msg	brushes move only within their type	пензлі можна переміщувати лише в межах їхнього типу
 @msg	no catalog	немає каталогу
 @msg	no changes since the last save	немає змін з моменту останнього збереження
 @msg	no clock to keep a heartbeat by	немає годинника для підтримки сигналу
@@ -4047,6 +4113,7 @@ axis	Both	Обидві
 @msg	no such action	такої дії немає
 @msg	no such anchor	такої опорної точки немає
 @msg	no such artboard	такої монтажної області немає
+@msg	the artboard is locked	монтажна область заблокована
 @msg	no such document	такого документа немає
 @msg	no such layer or object	такого шару чи об’єкта немає
 @msg	no such object {0}	об’єкт {0} не існує
@@ -4138,6 +4205,10 @@ axis	Both	Обидві
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
 @msg	select an Objects on Path group	виділіть групу об’єктів на контурі
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	до контуру всередині складеного контуру, переходу, оболонки, повтору або групи переплетення не можна прикріпити об’єкти
+@msg	a clipping path can't take objects	до відсічного контуру не можна прикріпити об’єкти
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	об’єкти всередині переходу, оболонки, повтору або групи переплетення не можна прикріпити до контуру
+@msg	a clipping path can't be attached to a path	відсічний контур не можна прикріпити до контуру
 @msg	select a stroke with a variable width	виділіть обведення зі змінною шириною
 @msg	select a symbol instance	виділіть екземпляр символу
 @msg	select an Image Trace object	виділіть об’єкт трасування зображення
@@ -4257,6 +4328,7 @@ axis	Both	Обидві
 @msg	unknown workspace (one of {_1})	невідоме робоче середовище (одна з: {_1})
 @msg	unsupported: {0}	не підтримується: {0}
 @msg	variables are locked	змінні заблоковані
+@msg	variables that aren't text were left out: {kinds}	змінні, що не є текстовими, пропущено: {kinds}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файли версії {0} не можуть бути стиснуті: тільки версія {COMPRESSED_SINCE} і новіші відкривають стислі файли
 @msg	width and height are at least 1 pixel	ширина та висота повинні бути не менше 1 пікселя
 @msg	workspace name can't be empty	ім’я робочого середовища не може бути порожнім
@@ -4509,6 +4581,7 @@ axis	Both	Обидві
 	Activate Panel	Активувати панель
 	Change Panel Layout	Змінити розташування панелей
 	Close Panel	Закрити панель
+	Collapse Panel Group	Згорнути групу панелей
 	Move Panel	Перемістити панель
 	Group with	Згрупувати з
 	Resize panels	Змінити розмір панелей
@@ -4519,6 +4592,12 @@ axis	Both	Обидві
 @msg	before must name a panel	before має вказувати панель
 @msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
 @msg	group must be true or false	group має мати значення true або false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	панель від’єднана; згорніть її групу через window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	панель не входить до групи дока
+@msg	only a dock group above or below others collapses, not one beside another	згорнути можна лише групу дока над або під іншими, а не поруч з ними
+@msg	icon must be true or false	icon має бути true або false
+@msg	icon only docks a panel in the icon column, with no anchor	icon лише закріплює панель у стовпці значків, без anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column закріплює набір як стовпець дока, без anchor та icon
 @msg	move requires a destination panel	Для переміщення потрібна цільова панель
 @msg	move requires an existing destination panel	Для переміщення потрібна наявна цільова панель
 @msg	onto must name a floating panel	onto має вказувати плаваючу панель
@@ -4595,12 +4674,24 @@ lighting	Light	Світло
 	Reset Ruler Origin	Скинути початок координат лінійок
 	Artistic	Художні
 	Film Grain…	Зернистість плівки…
+	Colored Pencil…	Кольоровий олівець…
+	Colored Pencil	Кольоровий олівець
 	Cutout…	Аплікація…
 	Cutout	Аплікація
+	Dry Brush…	Суха кисть…
+	Dry Brush	Суха кисть
 	Neon Glow…	Неонове сяйво…
+	Palette Knife…	Ніж палітри…
 	Neon Glow	Неонове сяйво
+	Paint Daubs…	Мазки фарби…
+	Paint Daubs	Мазки фарби
+	Palette Knife	Ніж палітри
 	Poster Edges…	Плакатні краї…
+	Rough Pastels…	Грубі пастелі…
 	Poster Edges	Плакатні краї
+	Rough Pastels	Грубі пастелі
+	Underpainting…	Підмалювання…
+	Underpainting	Підмалювання
 	Levels	Рівні
 	Edge Simplicity	Простота країв
 	Edge Fidelity	Точність країв
@@ -4690,6 +4781,9 @@ lighting	Light	Світло
 	Softness	М'якість
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта
+	3D Lighting Preset	Попереднє налаштування 3D освітлення
+	Standard	Стандартне
+	Diffuse	Розсіяне
 # 3D light management.
 	Lights	Джерела світла
 	Add Light	Додати світло
@@ -4736,6 +4830,7 @@ lighting	Light	Світло
 @msg	Measured anchor no longer exists	Виміряна опорна точка більше не існує
 @msg	Measured segment no longer exists	Виміряний сегмент більше не існує
 @msg	Non-finite dimension	Розмір не є скінченним числом
+@msg	Scale Text Attributes: selected type has no scale to bake	Масштабувати атрибути тексту: у вибраного тексту немає масштабу для застосування
 @msg	Scale must be drawing:real, for example 1:10	Масштаб має бути у вигляді креслення:реальність, наприклад 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Співвідношення масштабу має бути від 1:1000000 до 1000000:1
 @msg	Second measured segment no longer exists	Другий виміряний сегмент більше не існує
@@ -4754,6 +4849,7 @@ lighting	Light	Світло
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
 	Export Data Sets…	Експортувати набори даних…
+	Load Variable Library…	Завантажити бібліотеку змінних…
 	Make Graph Dynamic	Зробити діаграму динамічною
 	Batch…	Пакетна обробка…
 	Source Folder:	Вихідна папка:
@@ -4777,6 +4873,8 @@ lighting	Light	Світло
 	Sketch	Ескіз
 	Halftone Pattern…	Напівтоновий візерунок…
 	Halftone Pattern	Напівтоновий візерунок
+	Torn Edges…	Порвані краї…
+	Torn Edges	Порвані краї
 	Pattern Type	Тип візерунка
 	Dot	Крапка
 # User Interface › Color Scheme
@@ -4795,6 +4893,7 @@ lighting	Light	Світло
 	Watercolor…	Акварель…
 	Watercolor	Акварель
 	Brush Size	Розмір пензля
+	Texture Coverage	Покриття текстурою
 	Definition	Чіткість
 	Brush Detail	Деталізація пензля
 	Shadow Intensity	Інтенсивність тіней
@@ -4823,24 +4922,14 @@ lighting	Light	Світло
 @msg	the image's pixels can't be read	не вдається прочитати пікселі зображення
 	Persistent	Постійна
 	Library Panel Options	Параметри панелі бібліотеки
+	Locate Library…	Знайти бібліотеку…
 @msg	Persistent libraries not found: {files}	Постійні бібліотеки не знайдено: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` — не панель бібліотеки (див. window.swatchLibrary)
 @msg	library panel `{given}` isn't open	панель бібліотеки `{given}` не відкрита
 @msg	too many library panels were opened in this session	у цьому сеансі відкрито забагато панелей бібліотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Зображення {_1} × {_2} пікселів, понад {LARGE_TRACE_SIDE} з одного боку: трасування виконується, але повільніше. Стиль із нижчою точністю або менша копія зображення трасуються швидше.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Зображення трасовано в розмірі {_1} × {_2} пікселів, зменшене з {_3} × {_4} (щонайбільше {_5} мегапікселів).
-	Lock Artboards	Заблокувати монтажні області
-	Unlock Artboards	Розблокувати монтажні області
-	Artboard Color	Колір монтажної області
-	Lock Selected	Заблокувати вибрані
-	Lock All Except Selected	Заблокувати всі, крім вибраних
-	Lock All	Заблокувати всі
-	Unlock Selected	Розблокувати вибрані
-	Lock Artboard	Заблокувати монтажну область
-	Unlock Artboard	Розблокувати монтажну область
-	Clear Artboard Color	Очистити колір монтажної області
-@msg	artboard {_1} is locked	монтажна область {_1} заблокована
-	Include Artboard Fill	Включити колір монтажної області
+	Gap Length:	Довжина проміжку:
 	Artboard {n} of {total}	Монтажна область {n} з {total}
 	Encoding and writing the file…	Кодування та запис файлу…
 @plural	{n} more export waiting|{n} more exports waiting	Ще {n} експорт в очікуванні|Ще {n} експорти в очікуванні|Ще {n} експортів в очікуванні
@@ -4879,3 +4968,9 @@ lighting	Light	Світло
 	Plaster	Гіпс
 	Note Paper…	Поштовий папір…
 	Note Paper	Поштовий папір
+	Water Paper…	Мокрий папір…
+	Water Paper	Мокрий папір
+	Ruby…	Рубі…
+	Ruby	Рубі
+	Fresco…	Фреска…
+	Fresco	Фреска

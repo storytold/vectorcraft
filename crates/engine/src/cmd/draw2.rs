@@ -152,24 +152,40 @@ pub fn specs() -> Vec<CommandSpec> {
 
 // ---------- helpers ----------
 
-/// `[[x,y]…]` or `[{x,y}…]`; non-finite points are dropped.
+/// `[[x,y]…]` or `[{x,y}…]`.
 fn points_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Point>> {
     Ok(samples_param(p, key, cmd)?.into_iter().map(|(pt, _)| pt).collect())
 }
 
+/// The point `[x, y, …]` or `{x, y, …}` that `v` holds, or an error when its x or y is not a finite
+/// number.
+fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
+    let xy = match v {
+        Value::Array(xy) => xy.first().and_then(Value::as_f64).zip(xy.get(1).and_then(Value::as_f64)),
+        Value::Object(_) => v.get("x").and_then(Value::as_f64).zip(v.get("y").and_then(Value::as_f64)),
+        _ => None,
+    };
+    xy.filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)).ok_or_else(|| bad(cmd, "x and y must both be numbers"))
+}
+
 /// [`points_param`] with each point's pen pressure, if it has one: `[[x,y,pressure]…]` or
-/// `[{x,y,pressure}…]` (0..1).
+/// `[{x,y,pressure}…]` (0..1). A point whose x or y is not a number, or whose pressure is neither a
+/// number nor null, is an error.
 fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f64>)>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
     let pts: Vec<(Point, Option<f64>)> = a
         .iter()
-        .filter_map(|v| match v {
-            Value::Array(xy) => Some((Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?), xy.get(2).and_then(Value::as_f64))),
-            Value::Object(_) => Some((Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?), v.get("pressure").and_then(Value::as_f64))),
-            _ => None,
+        .map(|v| {
+            let pressure = match v {
+                Value::Array(xy) => xy.get(2),
+                _ => v.get("pressure"),
+            };
+            match pressure {
+                None | Some(Value::Null) | Some(Value::Number(_)) => Ok((point_entry(v, cmd)?, pressure.and_then(Value::as_f64))),
+                Some(f) => Err(bad(cmd, format!("`pressure` must be a number, not {f}"))),
+            }
         })
-        .filter(|(p, _)| p.x.is_finite() && p.y.is_finite())
-        .collect();
+        .collect::<Result<_>>()?;
     if pts.is_empty() {
         return Err(bad(cmd, "need at least one point"));
     }
@@ -211,8 +227,9 @@ fn within_input_bound(q: Point) -> bool {
     q.x.is_finite() && q.y.is_finite() && q.x.abs() < MAX_INPUT && q.y.abs() < MAX_INPUT
 }
 
+/// The whole number of 0 or more that `key` holds, read with [`index`].
 fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(|v| v as usize).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
 }
 
 /// The whole number of 0 or more that `key` holds, or `None` when `key` is absent or null. Any other
@@ -293,7 +310,8 @@ fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<NodeId> {
             }
         }
     }
-    out.retain(|id| doc.is_editable(*id));
+    let editable = doc.editable();
+    out.retain(|id| editable(*id));
     out
 }
 
@@ -646,7 +664,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pressure = stroke_pressure(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
-    let tol = f64_or(p, "fidelity", 1.5).clamp(0.05, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(0.05, 100.0);
     let closed = bool_or(p, "closed", false);
     let brush = str_param(p, "style") == Some("brush");
     let keep_selected = bool_or(p, "keepSelected", true);
@@ -722,7 +740,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if let Some(rd) = p.get("redraw").filter(|v| !v.is_null()) {
         let id = id_param(rd, "id").ok_or_else(|| bad(C, "redraw needs id"))?;
-        let within = f64_or(rd, "within", 12.0);
+        let within = number_or(rd, "within", 12.0, C)?;
         if !within.is_finite() || within < 0.0 {
             return Err(bad(C, "redraw within must be a finite distance of 0 or more"));
         }
@@ -762,16 +780,8 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
 fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.curvature";
     let arr = p.get("points").and_then(Value::as_array).ok_or_else(|| bad(C, "missing points"))?;
-    let pts: Vec<(Point, bool)> = arr
-        .iter()
-        .filter_map(|v| {
-            let pt = match v {
-                Value::Array(xy) => Point::new(xy.first()?.as_f64()?, xy.get(1)?.as_f64()?),
-                _ => Point::new(v.get("x")?.as_f64()?, v.get("y")?.as_f64()?),
-            };
-            (pt.x.is_finite() && pt.y.is_finite()).then(|| (pt, v.get("corner").and_then(Value::as_bool).unwrap_or(false)))
-        })
-        .collect();
+    let pts: Vec<(Point, bool)> =
+        arr.iter().map(|v| Ok((point_entry(v, C)?, v.get("corner").and_then(Value::as_bool).unwrap_or(false)))).collect::<Result<_>>()?;
     if pts.is_empty() {
         return Err(bad(C, "need at least one point"));
     }
@@ -805,6 +815,7 @@ fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.curvatureEdit";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
+    check_numbers(p, &["x", "y", "t"], C)?;
     let at = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
         (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Some(Point::new(x, y)),
         (None, None) => None,
@@ -978,9 +989,11 @@ fn convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
     let smooth = str_param(p, "to") == Some("smooth");
+    check_numbers(p, &["x", "y"], C)?;
     let target = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
         (Some(x), Some(y)) => Some(Point::new(x, y)),
-        _ => None,
+        (None, None) => None,
+        _ => return Err(bad(C, "x and y must be given together")),
     };
     if target.is_some_and(|q| !within_input_bound(q)) {
         return Err(bad(C, "x and y must be finite"));
@@ -1012,8 +1025,8 @@ fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let seg = usize_req(p, "segment", C)?;
-    let t = f64_or(p, "t", 0.5).clamp(0.05, 0.95);
-    let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
+    let t = number_or(p, "t", 0.5, C)?.clamp(0.05, 0.95);
+    let dv = Vec2::new(number_or(p, "dx", 0.0, C)?, number_or(p, "dy", 0.0, C)?);
     if !(dv.x.is_finite() && dv.y.is_finite() && dv.hypot() < MAX_INPUT) {
         return Err(bad(C, "invalid delta"));
     }
@@ -1130,7 +1143,7 @@ fn knife(s: &mut Session, p: &Value) -> Result<Value> {
 fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseRegion";
     let pts = points_param(p, "points", C)?;
-    let size = f64_or(p, "size", 10.0);
+    let size = number_or(p, "size", 10.0, C)?;
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }
@@ -1172,7 +1185,7 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
 fn erase_segments(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseSegments";
     let pts = points_param(p, "points", C)?;
-    let w = f64_or(p, "width", 8.0);
+    let w = number_or(p, "width", 8.0, C)?;
     if !(w.is_finite() && w > 0.0) {
         return Err(bad(C, "width must be positive"));
     }
@@ -1315,8 +1328,8 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
 fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.smoothRegion";
     let pts = points_param(p, "points", C)?;
-    let radius = f64_or(p, "radius", 12.0).max(0.0);
-    let tol = f64_or(p, "fidelity", 2.5).clamp(0.05, 100.0);
+    let radius = number_or(p, "radius", 12.0, C)?.max(0.0);
+    let tol = number_or(p, "fidelity", 2.5, C)?.clamp(0.05, 100.0);
     let st = s.doc()?;
     let near = |q: Point| dist_to_polyline(&pts, q) <= radius;
     let mut plan = vec![];
@@ -1363,7 +1376,7 @@ fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
 fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.joinScrub";
     let pts = points_param(p, "points", C)?;
-    let tol = f64_or(p, "tolerance", 12.0).max(0.0);
+    let tol = number_or(p, "tolerance", 12.0, C)?.max(0.0);
     let st = s.doc()?;
     // Open endpoints near the scrub, ordered along it: (order, id, subpath, at_start).
     let poly = {
@@ -1462,7 +1475,7 @@ fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
 fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.blob";
     let pts = points_param(p, "points", C)?;
-    let size = f64_or(p, "size", 10.0);
+    let size = number_or(p, "size", 10.0, C)?;
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }

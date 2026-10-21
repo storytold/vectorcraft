@@ -165,11 +165,13 @@ fn apply_to_all(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let o = dimension_of(&st.doc, from)?.options;
     let mut ids = vec![];
+    let editable = st.doc.editable();
     st.doc.walk(|n| {
-        if n.extras().dimension.is_some() && st.doc.is_editable(n.id) {
+        if n.extras().dimension.is_some() && editable(n.id) {
             ids.push(n.id);
         }
     });
+    drop(editable);
     s.edit("Apply to All", |doc, _| {
         for id in &ids {
             let mut dim = dimension_of(doc, *id)?;
@@ -351,6 +353,7 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
     };
     let mut text = TextObject::point(Point::ZERO, &label, style);
     text.para.justify = vectorcraft_doc::Justify::Center;
+    text.system_layout = doc.setup.system_layout;
     super::typecmd::refresh_bounds(&mut text);
     // Centre the label's box on its anchor point, along the line.
     let bounds = text.cached_bounds.unwrap_or_else(|| text.estimate_bounds());

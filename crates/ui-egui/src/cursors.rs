@@ -409,7 +409,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 76] = [
+const GLYPHS: [Cursor; 78] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -463,7 +463,9 @@ const GLYPHS: [Cursor; 76] = [
     Cursor::Lasso,
     Cursor::MagicWand,
     Cursor::Pencil,
+    Cursor::PencilClose,
     Cursor::Paintbrush,
+    Cursor::PaintbrushClose,
     Cursor::BlobBrush,
     Cursor::Eraser,
     Cursor::Smooth,
@@ -510,6 +512,12 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
         Cursor::Crosshair => crosshair(ink, p),
+        // The crosshair the Pencil and the Paintbrush borrow, with the PenClose ring below right.
+        Cursor::PencilClose | Cursor::PaintbrushClose => {
+            crosshair(ink, p);
+            ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(3.0, HALO));
+            ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(1.2, INK));
+        }
         Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),
         Cursor::ResizeV => double_arrow(ink, p, vec2(0.0, 1.0)),
@@ -845,6 +853,39 @@ mod tests {
             let [hx, hy] = drawing.hotspot.map(usize::from);
             let nib = (hx + (8.0 * ppp) as usize, hy + (8.0 * ppp) as usize);
             assert_eq!(pixel(&new, nib.0, nib.1), pixel(&drawing, nib.0, nib.1), "at {ppp}");
+        }
+    }
+
+    /// The Pencil's and the Paintbrush's closing cursors are the crosshair those tools show, with a
+    /// ring below right.
+    #[test]
+    fn the_closing_cursors_are_the_crosshair_with_a_ring() {
+        for ppp in [1.0, 2.0] {
+            let cross = rasterize(Cursor::Crosshair, ppp).unwrap();
+            for c in [Cursor::PencilClose, Cursor::PaintbrushClose] {
+                let img = rasterize(c, ppp).unwrap();
+                assert_eq!(img.hotspot, cross.hotspot, "{c:?} at {ppp}");
+                let [hx, hy] = img.hotspot.map(usize::from);
+                let at = |img: &CustomCursorImage, dx: f32, dy: f32| {
+                    let (x, y) = ((hx as f32 + dx * ppp) as usize, (hy as f32 + dy * ppp) as usize);
+                    if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y) } else { [0; 4] }
+                };
+                // Black pixels in the square 4 to 12 points right of and below the hotspot, clear of the arms.
+                let ring_ink = |img: &CustomCursorImage| {
+                    let steps = (8.0 * ppp) as usize;
+                    (0..steps * steps)
+                        .filter(|i| {
+                            let p = at(img, 4.0 + (i % steps) as f32 / ppp, 4.0 + (i / steps) as f32 / ppp);
+                            p[3] > 200 && p[0] < 64
+                        })
+                        .count()
+                };
+                assert!(ring_ink(&img) > 0, "{c:?} has its ring at {ppp}");
+                assert_eq!(ring_ink(&cross), 0, "the crosshair has no ring at {ppp}");
+                assert_eq!(at(&img, 8.0, 8.0)[3], 0, "{c:?}'s ring is hollow at {ppp}");
+                // The arms are the crosshair's.
+                assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "{c:?} at {ppp}");
+            }
         }
     }
 

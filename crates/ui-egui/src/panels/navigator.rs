@@ -54,7 +54,7 @@ thread_local! {
 impl Cache {
     /// Upload image `r` showing `key` over `region`.
     fn upload(&mut self, ctx: &egui::Context, key: ImageKey, region: DRect, r: &vectorcraft_render::Rendered, ms: f64) {
-        let img = egui::ColorImage::from_rgba_premultiplied([r.width as usize, r.height as usize], &r.pixels);
+        let img = crate::canvas::color_image(r);
         match &mut self.tex {
             Some(tx) => tx.set(img, egui::TextureOptions::LINEAR),
             None => self.tex = Some(ctx.load_texture("navigator", img, egui::TextureOptions::LINEAR)),

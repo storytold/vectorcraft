@@ -173,6 +173,29 @@ fn global_process_colours_are_global_swatches_at_their_tint() {
     assert_eq!(doc.swatch("Black global").unwrap().paint.color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), "the swatch is the full colour");
 }
 
+/// A gradient stop naming a global process colour doesn't make it an ink (#1771): the colour
+/// operator's definition (`Xk`) makes the swatch, though the gradient, defined first, names the
+/// colour first. The lines are the ones posted in #1771, with a neutral name.
+#[test]
+fn a_gradient_stop_naming_a_process_colour_leaves_its_swatch_process() {
+    let defs = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n<00FF>\n0\n\
+                0.930000007152557 0.100000001490116 0 0 1 1 6 50 0 %_BS\n\
+                %_0.930000007152557 0.100000001490116 0 0 (Test Cyan) 0 0 5 1 6 50 0 Bs\n\
+                %_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("0.930000007152557 0.100000001490116 0 0 (Test Cyan) 0 0 Xk\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let near =
+        |c: Option<Color>| matches!(c, Some(Color::Cmyk { c, m, y, k }) if (c - 0.93).abs() < 1e-3 && (m - 0.1).abs() < 1e-3 && y == 0.0 && k == 0.0);
+    let doc = read_ok(&format!("{defs}{}", layer(&art_))).doc;
+    let sw = doc.swatch("Test Cyan").unwrap();
+    assert!(sw.global && !sw.spot, "a global process colour, not an ink: {sw:?}");
+    assert!(near(sw.paint.color()), "C=93 M=10: {sw:?}");
+    assert!(near(fill(&art(&doc)[0]).color()), "the fill: {:?}", fill(&art(&doc)[0]));
+    // Named only by the stop, the colour is still a swatch of its own, at the stop's values.
+    let doc = read_ok(&format!("{defs}{}", layer(&format!("{}f\n", rect_path(0.0, 0.0, 10.0, 10.0))))).doc;
+    let sw = doc.swatch("Test Cyan").unwrap();
+    assert!(near(sw.paint.color()), "{sw:?}");
+}
+
 /// A pattern's definition (`%AI3_BeginPattern`): its name and tile (8 points square here, y up),
 /// then its art on `%_` lines (a group of the tile's unpainted box and a dot, a round-capped
 /// stroke of no length), `E`.

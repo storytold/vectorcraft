@@ -60,27 +60,17 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
 /// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
-///
-/// With `artboardFill: true` the artboard colours ([`vectorcraft_doc::Artboard::color`]) are drawn
-/// behind the art; without it exports leave them out.
 pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
-    let doc = if bool_or(p, "selectedOnly", false) {
-        let keep: HashSet<NodeId> = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc)).into_iter().collect();
-        if keep.is_empty() {
-            return Err(bad("document.export", "select something to export (or turn off selectedOnly)"));
-        }
-        let mut d = Document::clone(&st.doc);
-        d.layers = st.doc.layers.iter().filter_map(|l| selected_part(l, &keep)).map(Arc::new).collect();
-        Cow::Owned(d)
-    } else {
-        Cow::Borrowed(&*st.doc)
-    };
-    if bool_or(p, "artboardFill", false)
-        && let Some(filled) = doc.with_artboard_fill()
-    {
-        return Ok(Cow::Owned(filled));
+    if !bool_or(p, "selectedOnly", false) {
+        return Ok(Cow::Borrowed(&*st.doc));
     }
-    Ok(doc)
+    let keep: HashSet<NodeId> = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc)).into_iter().collect();
+    if keep.is_empty() {
+        return Err(bad("document.export", "select something to export (or turn off selectedOnly)"));
+    }
+    let mut d = Document::clone(&st.doc);
+    d.layers = st.doc.layers.iter().filter_map(|l| selected_part(l, &keep)).map(Arc::new).collect();
+    Ok(Cow::Owned(d))
 }
 
 /// `n` with only the parts in `keep` (whole, with everything inside them), `None` when none is.

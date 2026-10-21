@@ -71,7 +71,7 @@ fn chosen(d: &Dialog) -> Option<&'static Format> {
     find(&id).or_else(|| find("png"))
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let Some(f) = chosen(d) else { return false };
     let missing = unavailable(d);
@@ -107,12 +107,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     });
-    // Artboard colours stay out of exports unless asked for (raster formats; the SVG and PDF
-    // commands take `artboardFill` too).
-    if f.raster && app.session.active().is_some_and(|st| st.doc.artboards.iter().any(|a| a.color.is_some())) {
-        ui.add_space(6.0);
-        form::check(ui, d, "artboardFill", tl!("Include Artboard Fill"));
-    }
     ui.add_space(8.0);
     let ext = f.extensions[0];
     let hint = match (use_artboards, f.id) {
@@ -172,9 +166,6 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
                 return Ok(Value::Null);
             }
             if f.raster {
-                if d.bool("artboardFill") {
-                    params["artboardFill"] = json!(true);
-                }
                 png_options::open(app, f, params);
                 return Ok(Value::Null);
             }

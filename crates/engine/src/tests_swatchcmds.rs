@@ -56,6 +56,17 @@ fn move_between_groups_is_one_undo_step() {
     assert_eq!(names(&s, None).last().map(String::as_str), Some("White"));
 }
 
+/// A swatch or color group moved to place 2^32 goes last. A 32-bit build read the place as 0 and
+/// moved it to the front.
+#[test]
+fn move_past_u32_goes_last() {
+    let mut s = session();
+    run(&mut s, "swatch.move", json!({"name": "White", "to": 1u64 << 32}));
+    assert_eq!(names(&s, None).last().map(String::as_str), Some("White"));
+    run(&mut s, "swatch.move", json!({"name": "Grays", "to": 1u64 << 32}));
+    assert_eq!(doc(&s).swatch_groups.last().map(|g| g.name.as_str()), Some("Grays"));
+}
+
 #[test]
 fn move_reorders_groups_and_refuses_bad_moves() {
     let mut s = session();
@@ -265,6 +276,38 @@ fn a_cmyk_document_stores_rgb_colors_given_to_the_swatch_commands_as_cmyk() {
     assert_eq!(color(&s, &r["name"]), Some(green));
     let r = run(&mut s, "swatch.new", json!({"colors": ["#00ff00"], "mode": "rgb"}));
     assert_eq!(color(&s, &r["names"][0]), Some(green));
+}
+
+/// In a CMYK document `swatch.new` (with `color`, `colors` or `mode`), `swatch.newGroup`,
+/// `swatch.edit` (its `keepModel` and its `paint`'s) and `swatch.editGroup` refuse a `keepModel` given
+/// as text or as another value that is not true or false, and the swatches and the undo history stay
+/// as they were. Null is read as `keepModel` left out.
+#[test]
+fn the_swatch_commands_refuse_a_keep_model_given_as_text() {
+    use vectorcraft_color::Color;
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": "cmyk"}));
+    let cms = vectorcraft_color::cms::active();
+    let managed = |c: Color| cms.convert(&c, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent);
+    let name = run(&mut s, "swatch.new", json!({"color": "#000000", "keepModel": true}))["name"].clone();
+    run(&mut s, "swatch.newGroup", json!({"name": "G", "colors": ["#00ff00"]}));
+    let before = (doc(&s).clone(), undo_len(&s));
+    let calls = [
+        ("swatch.new", json!({"color": "#ff0000", "keepModel": "true"})),
+        ("swatch.new", json!({"colors": ["#ff0000"], "keepModel": 1})),
+        ("swatch.new", json!({"color": "#ff0000", "mode": "rgb", "keepModel": "false"})),
+        ("swatch.newGroup", json!({"name": "K", "colors": ["#00ff00"], "keepModel": "true"})),
+        ("swatch.edit", json!({"name": name, "color": "#ff0000", "keepModel": [true]})),
+        ("swatch.edit", json!({"name": name, "paint": {"color": "#ff0000", "keepModel": "true"}, "mode": "cmyk"})),
+        ("swatch.editGroup", json!({"group": "G", "colors": ["#ff0000"], "keepModel": "true"})),
+    ];
+    for (cmd, p) in &calls {
+        let r = s.execute(cmd, p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "`keepModel` must be true or false"), "{cmd} {p}: {r:?}");
+        assert_eq!((doc(&s).clone(), undo_len(&s)), before, "{cmd} {p}");
+    }
+    let r = run(&mut s, "swatch.new", json!({"color": "#ff0000", "keepModel": null}));
+    assert_eq!(doc(&s).swatch(r["name"].as_str().unwrap()).and_then(|w| w.paint.color()), Some(managed(Color::rgb(1.0, 0.0, 0.0))));
 }
 
 #[test]

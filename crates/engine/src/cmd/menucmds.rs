@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (locked and hidden art only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -348,11 +348,11 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let mh = f64_or(p, "moveH", 0.0).clamp(-1.0e7, 1.0e7);
     let mv = f64_or(p, "moveV", 0.0).clamp(-1.0e7, 1.0e7);
     let rot = f64_or(p, "rotate", 0.0);
-    let rx = bool_or(p, "reflectX", false);
-    let ry = bool_or(p, "reflectY", false);
-    let random = bool_or(p, "random", false);
+    let rx = switch_or(p, "reflectX", false, "object.transformEach")?;
+    let ry = switch_or(p, "reflectY", false, "object.transformEach")?;
+    let random = switch_or(p, "random", false, "object.transformEach")?;
     let refi = whole_or(p, "reference", 4, "object.transformEach")?.min(8) as usize;
-    let copy = bool_or(p, "copy", false);
+    let copy = switch_or(p, "copy", false, "object.transformEach")?;
     let objects = super::object::transforms_objects(p);
     if sh == 0.0 || sv == 0.0 {
         return Err(bad("object.transformEach", "scale must be non-zero"));
@@ -598,7 +598,7 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
     let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
     let cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
     let rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
-    let gray = bool_or(p, "gray", false);
+    let gray = switch_or(p, "gray", false, C)?;
     let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
     // Tiles in image space, placed by the image transform (scaled to a new size if asked).
     let b = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
@@ -613,7 +613,7 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
     let ppx = (xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot().max(1e-9);
     let ppy = (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot().max(1e-9);
     let (gx, gy) = ((f64_or(p, "spacingX", 0.0).max(0.0) / ppx).min(tw * 0.9), (f64_or(p, "spacingY", 0.0).max(0.0) / ppy).min(th * 0.9));
-    let delete = bool_or(p, "deleteRaster", false);
+    let delete = switch_or(p, "deleteRaster", false, C)?;
     let (gid, n) = s.edit("Create Object Mosaic", |d, sel| {
         let mut tiles = vec![];
         for r in 0..rows {
@@ -670,7 +670,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
-    if p.get("trim").and_then(Value::as_bool) == Some(true) {
+    if switch_or(p, "trim", false, C)? {
         return trim_image(s, id, (**im).clone());
     }
     let ib = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
@@ -836,9 +836,9 @@ impl Session {
 fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.createTrimMarks";
     check_numbers(p, &["offset", "length", "bleed", "weight"], C)?;
-    let style = match str_param(p, "style") {
-        Some(v) => MarkStyle::parse(v).ok_or_else(|| bad(C, "`style` must be roman or japanese"))?,
-        None => s.crop_mark_style(),
+    let style = match p.get("style") {
+        None | Some(Value::Null) => s.crop_mark_style(),
+        Some(v) => v.as_str().and_then(MarkStyle::parse).ok_or_else(|| bad(C, "`style` must be roman or japanese"))?,
     };
     let d = TrimMarks::default();
     let marks = TrimMarks {
@@ -849,7 +849,7 @@ fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
         weight: f64_or(p, "weight", d.weight).max(0.01),
     };
     let st = s.doc()?;
-    let rects: Vec<Rect> = if bool_or(p, "allArtboards", st.selection.is_empty()) {
+    let rects: Vec<Rect> = if switch_or(p, "allArtboards", st.selection.is_empty(), C)? {
         st.doc.artboards.iter().map(|a| a.rect).collect()
     } else {
         st.doc.bounds_of(&selected_roots(s)?, true).into_iter().collect()
@@ -899,7 +899,14 @@ pub(crate) fn detect_shape(path: &PathData) -> Option<LiveShape> {
         }
         let rot = Affine::rotate(e0.y.atan2(e0.x));
         let flip = if e0.cross(e1) < 0.0 { Affine::scale_non_uniform(1.0, -1.0) } else { Affine::IDENTITY };
-        return Some(LiveShape::Rectangle { w, h, radii: [0.0; 4], kinds: Default::default(), xf: Affine::translate(a[0].p.to_vec2()) * rot * flip });
+        return Some(LiveShape::Rectangle {
+            w,
+            h,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::translate(a[0].p.to_vec2()) * rot * flip,
+        });
     }
     let b = path.bounds()?;
     let c = b.center();
@@ -964,9 +971,9 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
                 id: aid,
                 name: format!("Artboard {aid}"),
                 rect: b,
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
-                locked: false,
                 color: None,
             });
             converted.push(id);
@@ -986,9 +993,10 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     use super::newdoc::ArtboardLayout as L;
     // A value given (not null) must be one of the names.
     let named = |key: &str| p.get(key).filter(|v| !v.is_null()).map(|v| v.as_str().unwrap_or_default());
+    let by_column = switch_or(p, "byColumn", false, CMD)?;
     let layout = match named("layout") {
         Some(l) => L::parse(l).ok_or_else(|| bad(CMD, "layout must be gridByRow, gridByColumn, row or column"))?,
-        None if bool_or(p, "byColumn", false) => L::GridByColumn,
+        None if by_column => L::GridByColumn,
         None => L::GridByRow,
     };
     let rtl = match named("order") {
@@ -1009,33 +1017,39 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     };
     check_numbers(p, &["spacing"], CMD)?;
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
-    let move_art = bool_or(p, "moveArtwork", true);
+    let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     let locked_and_hidden = s.prefs.move_locked_with_artboard;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
     let first = rects.first().map_or(Point::ZERO, |r| r.origin());
     let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
-    let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
-    // A locked artboard stays where it is: the layout would have to move it.
-    let moved_locked: Vec<usize> =
-        (0..d.artboards.len()).filter(|i| deltas.get(*i).is_some_and(|dl| dl.x.abs() > 1e-9 || dl.y.abs() > 1e-9)).collect();
-    super::layer::ensure_unlocked(d, &moved_locked)?;
+    // A locked artboard stays where it is, and keeps its place in the grid.
+    let deltas: Vec<Vec2> =
+        rects.iter().zip(origins).zip(&d.artboards).map(|((r, o), a)| if a.locked { Vec2::ZERO } else { o - r.origin() }).collect();
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
     if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
         return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
     }
-    // With moveArtwork, each top-level object moves with the artboard its center is on, with symbol
-    // instances measured by their art as `Document::art_on_artboard` measures them; locked and
-    // hidden art moves only when prefs moveLockedWithArtboard is on.
+    // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
+    // artboard its center is on, with symbol instances measured by their art as
+    // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
+    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
+        for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
+            if c.is_layer() { objects(c, all, out) } else { out.push(c) }
+        }
+    }
+    let locks = d.locked_artboards();
     let symbols = d.symbol_boxes();
     let art: Vec<(NodeId, Vec2)> = if move_art {
-        d.layers
-            .iter()
-            .filter(|l| l.rides_with_artboard(locked_and_hidden))
-            .flat_map(|l| l.children().into_iter().flatten())
-            .filter(|n| n.rides_with_artboard(locked_and_hidden))
+        let mut tops = vec![];
+        for l in d.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
+            objects(l, locked_and_hidden, &mut tops);
+        }
+        tops.into_iter()
+            .filter(|n| locked_and_hidden || !locks.holds(n))
             .filter_map(|n| {
                 let c = n.geometric_bounds_with(&symbols)?.center();
                 let dl = *d.artboard_holding(c, false).and_then(|i| deltas.get(i))?;

@@ -189,7 +189,7 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action, current: &str) -> 
                 f();
                 return Ok(());
             }
-            let pick = crate::FilePick { filters: vec![("Flattener presets", PRESET_EXTS)], ..Default::default() };
+            let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Flattener presets", PRESET_EXTS)], ..Default::default() };
             let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
             let r = app.run("flattener.presets.import", json!({ "path": path }))?;
             if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {

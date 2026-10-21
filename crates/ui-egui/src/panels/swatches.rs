@@ -194,7 +194,7 @@ fn pattern_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paint: &Paint) {
     );
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).unwrap_or_else(|| {
         let tex = vectorcraft_render::render_pattern_swatch(&st.doc, pattern, px).map(|img| {
-            let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+            let color = crate::canvas::color_image(&img);
             ui.ctx().load_texture(format!("pattern-swatch-{pattern}-{px}"), color, egui::TextureOptions::LINEAR)
         });
         CACHE.with(|c| {
@@ -570,10 +570,10 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
         },
         // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
         Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| w.tint_of().is_none() && same_kind(&w.paint, &paint)) => {
-            ("swatch.edit", json!({"name": t, "paint": super::paint_params(&paint)}))
+            ("swatch.edit", json!({"name": t, "paint": super::swatch_paint_params(&paint)}))
         }
         Drop::New { paint, target, .. } => {
-            let mut p = super::paint_params(&paint);
+            let mut p = super::swatch_paint_params(&paint);
             if paint.color().is_some()
                 && let Some(g) = target.and_then(|t| group_of(d, &t))
             {
@@ -988,7 +988,7 @@ fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modifiers) {
         app.run("ui.newSwatch", json!({"spot": spot, "global": global, "group": group})).ok();
         return;
     }
-    let mut params = super::paint_params(&paint);
+    let mut params = super::swatch_paint_params(&paint);
     if paint.color().is_some() {
         params["spot"] = json!(spot);
         params["global"] = json!(global);
@@ -1540,6 +1540,58 @@ mod tests {
         for n in ["New Gradient Swatch 1", "New Gradient Swatch 2"] {
             assert!(doc.swatch(n).is_some_and(|w| matches!(w.paint, Paint::Gradient(_)) && !w.global && !w.spot), "{n}");
         }
+    }
+
+    /// In a CMYK document a swatch made from an RGB fill keeps RGB, as the Color Guide's copies
+    /// do: Alt-click on New Swatch, the New Swatch dialog, the Fill proxy dropped on the panel and
+    /// Alt-dropped on a color swatch, and the same for a gradient's stops.
+    #[test]
+    fn swatches_made_from_an_rgb_fill_stay_rgb_in_a_cmyk_document() {
+        let mut app = app();
+        let ctx = context();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let newest = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatches.last().map(|w| w.paint.clone()).expect("a swatch");
+        let stop_colors = |p: &Paint| match p {
+            Paint::Gradient(g) => g.gradient.stops.iter().map(|s| s.color).collect::<Vec<_>>(),
+            other => panic!("a gradient: {other:?}"),
+        };
+        let drop_on = |app: &mut VectorcraftApp, name: &str, paint: Paint, m: Modifiers, time: f64| {
+            frame(app, &ctx, vec![], time, show);
+            let at = tile_center(&ctx, name);
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::paint(paint));
+            let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: m };
+            frame_with(app, &ctx, vec![Event::PointerMoved(at), release], m, time + 0.5, show);
+        };
+        let rgb = Color::from_hex("#2a6fb0").unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("paint.setFill", json!({"color": "#2a6fb0", "keepModel": true})).unwrap();
+        new_swatch(&mut app, &[], Modifiers::ALT);
+        assert_eq!(newest(&app), Paint::solid(rgb), "Alt-click on New Swatch");
+        new_swatch(&mut app, &[], Modifiers::NONE);
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(newest(&app), Paint::solid(rgb), "the New Swatch dialog");
+        drop_on(&mut app, "Red", Paint::solid(rgb), Modifiers::NONE, 3.0);
+        assert_eq!(newest(&app), Paint::solid(rgb), "the proxy dropped on the panel: {}", app.ui.status);
+        drop_on(&mut app, "Red", Paint::solid(rgb), Modifiers::ALT, 5.0);
+        assert_eq!(app.session.doc().unwrap().doc.swatch("Red").map(|w| w.paint.color()), Some(Some(rgb)), "Alt-dropped on Red");
+        // A gradient's RGB stops.
+        let stops = json!([{"offset": 0, "color": "#ff8000"}, {"offset": 1, "color": "#2a6fb0"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops}, "keepModel": true})).unwrap();
+        let grad = crate::panels::current_paints(&app).0;
+        let rgb_stops = vec![Color::from_hex("#ff8000").unwrap(), rgb];
+        assert_eq!(stop_colors(&grad), rgb_stops);
+        new_swatch(&mut app, &[], Modifiers::ALT);
+        assert_eq!(stop_colors(&newest(&app)), rgb_stops, "Alt-click on New Swatch");
+        new_swatch(&mut app, &[], Modifiers::NONE);
+        frame(&mut app, &ctx, vec![], 6.0, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(stop_colors(&newest(&app)), rgb_stops, "the New Swatch dialog");
+        drop_on(&mut app, "Red", grad.clone(), Modifiers::NONE, 7.0);
+        assert_eq!(stop_colors(&newest(&app)), rgb_stops, "the gradient dropped on the panel");
+        drop_on(&mut app, "Ocean", grad, Modifiers::ALT, 9.0);
+        let ocean = app.session.doc().unwrap().doc.swatch("Ocean").map(|w| w.paint.clone()).expect("Ocean");
+        assert_eq!(stop_colors(&ocean), rgb_stops, "Alt-dropped on Ocean");
     }
 
     #[test]

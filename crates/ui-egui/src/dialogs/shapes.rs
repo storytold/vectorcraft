@@ -93,10 +93,31 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+/// The top-left corner of a rectangle or ellipse: the click itself, or with Alt held (draw from centre) the click minus half the size.
+fn box_origin(d: &Dialog) -> (f64, f64) {
     let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
+    if d.fields.get("alt").and_then(Value::as_bool).unwrap_or(false) {
+        (x - d.f64("width", 100.0) / 2.0, y - d.f64("height", 100.0) / 2.0)
+    } else {
+        (x, y)
+    }
+}
+
+fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let count = match d.kind.as_str() {
+        "polygon" => Some(("sides", 6.0, 3.0)),
+        "star" => Some(("points", 5.0, 2.0)),
+        _ => None,
+    };
+    let options = count.map(|(key, default, min)| {
+        let mut values = json!({});
+        values[key] = json!(d.f64(key, default).clamp(min, 1000.0) as u64);
+        values
+    });
+    let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
+    let (bx, by) = box_origin(d);
     let (id, params) = match d.kind.as_str() {
-        "ellipse" => ("shape.ellipse", json!({"x": x, "y": y, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0)})),
+        "ellipse" => ("shape.ellipse", json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0)})),
         "polygon" => ("shape.polygon", json!({"cx": x, "cy": y, "radius": d.f64("radius", 50.0), "sides": d.f64("sides", 6.0) as u64})),
         "star" => (
             "shape.star",
@@ -121,11 +142,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
         _ => (
             "shape.rectangle",
-            json!({"x": x, "y": y, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "radius": d.f64("radius", 0.0)}),
+            json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "radius": d.f64("radius", 0.0)}),
         ),
     };
     // On the active plane while the perspective grid shows, sized in plane units from the click.
-    let options = matches!(d.kind.as_str(), "rectangularGrid" | "polarGrid").then(|| params.clone());
+    let options = options.or_else(|| matches!(d.kind.as_str(), "rectangularGrid" | "polarGrid").then(|| params.clone()));
     let result = match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
         Some((id, params)) => run_and_close(app, &id, params),
         None => run_and_close(app, id, params),
@@ -134,4 +155,16 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.run("tool.setOption", json!({"tool": d.kind, "values": options}))?;
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alt_click_centres_the_typed_size_on_the_click() {
+        let fields = |alt: bool| Dialog::new("rectangle", json!({"x": 100.0, "y": 50.0, "alt": alt, "width": "40 pt", "height": "20 pt"}));
+        assert_eq!(box_origin(&fields(false)), (100.0, 50.0));
+        assert_eq!(box_origin(&fields(true)), (80.0, 40.0));
+    }
 }

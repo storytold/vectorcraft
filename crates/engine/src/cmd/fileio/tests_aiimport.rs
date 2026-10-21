@@ -346,6 +346,77 @@ fn an_ai_file_saved_without_its_pdf_part_opens_with_pages_naming_every_page() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// [`PLACEHOLDER`]'s `.ai` files as `dataBase64`: the sample's editing data, damaged editing data
+/// and none.
+fn placeholder_files() -> [String; 3] {
+    [compressed(&ai::sample_data()), b"%AI12_CompressedData not zlib".to_vec(), vec![]]
+        .map(|private| vectorcraft_format::base64_encode(&ai::ai(&private, PLACEHOLDER)))
+}
+
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_pastes_from_its_editing_data() {
+    let [sample, damaged, plain] = placeholder_files();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    // clipboard.importPdf (the PDF flavor's command) takes every object of both layers, as
+    // document.open reads them.
+    let r = s.execute("clipboard.importPdf", &json!({"dataBase64": sample})).unwrap();
+    assert_eq!(r["count"], json!(7), "{r}");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let art = s.doc().unwrap().doc.layers[0].children().unwrap().clone();
+    assert_eq!(names(&art), ["Pair", "Ring", "Window", "Shaded", "", "Sub", ""]);
+    assert_eq!(art.iter().map(|n| n.visible).collect::<Vec<_>>(), [true, true, true, false, false, false, false], "the hidden layer's objects");
+    let e = s.execute("clipboard.importPdf", &json!({"dataBase64": damaged})).unwrap_err().to_string();
+    assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
+    let e = s.execute("clipboard.importPdf", &json!({"dataBase64": plain})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+}
+
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
+    let [sample, damaged, plain] = placeholder_files();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    // The place takes the art of the layers that show on the artboard and clips it to the artboard.
+    let r = s.execute("file.place", &json!({"name": "art.ai", "dataBase64": sample, "link": false})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{r}");
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    let kids = placed.children().unwrap();
+    assert_eq!(names(&kids[1..]), ["Pair", "Ring", "Window"], "after the clipping path");
+    // With `crop: "bounding"` the size is the bounds of the art that shows. They run from the red
+    // square's left edge to the window's right one; the pair's hidden square, stroked 2 pt wide,
+    // is left out.
+    let r = s.execute("file.place.info", &json!({"name": "art.ai", "dataBase64": sample, "crop": "bounding"})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(170.0), Some(40.0)), "{r}");
+    // The place takes the art of both layers that show.
+    let square = |x: f64| format!("0 g\n{}f\n", ai::rect(x, 10.0, x + 40.0, 50.0));
+    let two = ai::editing_data(200.0, 100.0, &[ai::layer("Back", &square(10.0)), ai::layer("Front", &square(110.0))].concat());
+    let two = vectorcraft_format::base64_encode(&ai::ai(&compressed(two.as_bytes()), PLACEHOLDER));
+    let r = s.execute("file.place.info", &json!({"name": "two.ai", "dataBase64": two, "crop": "bounding"})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(140.0), Some(40.0)), "{r}");
+    // The file has two 100-point artboards and one placeholder page. The second artboard lies 50
+    // below the first. A square of 40 lies on the first and an oblong of 60 × 40 on the second.
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let art = format!("0 g\n{}f\n{}f\n", ai::rect(10.0, 10.0, 50.0, 50.0), ai::rect(10.0, -140.0, 70.0, -100.0));
+    let paged = ai::editing_data(100.0, 100.0, &(boards.to_string() + &ai::layer("Art", &art)));
+    let paged = vectorcraft_format::base64_encode(&ai::ai(&compressed(paged.as_bytes()), PLACEHOLDER));
+    let mut size = |page: u64| {
+        let r = s.execute("file.place.info", &json!({"name": "boards.ai", "dataBase64": paged, "page": page, "crop": "bounding"}));
+        r.map(|r| (r["width"].as_f64(), r["height"].as_f64())).map_err(|e| e.to_string())
+    };
+    assert_eq!(size(1), Ok((Some(40.0), Some(40.0))));
+    assert_eq!(size(2), Ok((Some(60.0), Some(40.0))));
+    let third = size(3);
+    assert!(third.as_ref().is_err_and(|e| e.contains("has 2 page(s)")), "{third:?}");
+    let e = s.execute("file.place", &json!({"name": "damaged.ai", "dataBase64": damaged})).unwrap_err().to_string();
+    assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
+    let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
+    assert!(e.contains("placeholder"), "{e}");
+}
+
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.
 const TEXT_ART: &str = "BT /F1 36 Tf 10 40 Td (Text only) Tj ET";
 

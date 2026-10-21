@@ -183,7 +183,9 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
    "strokes": [{"paint": {"type": "gradient", "gradient": {"kind": "Linear", "stops": [
        {"offset": 0, "color": {"model": "gray", "k": 0}},
        {"offset": 1, "color": {"model": "cmyk", "c": 0, "m": 0.5, "y": 1, "k": 0}}]}, "angle": 0},
-     "width": 2}],
+     "width": 2, "join": "round", "cap": "butt", "miterLimit": 10}],
+   "effects": [{"id": "distort.roughen", "params": {"detail": 10, "points": "smooth", "relative": true, "seed": 0,
+     "size": 5}, "visible": true}],
    "opacity": 1,
    "bounds": [10, 0, 75, 60]}
 ]}
@@ -192,12 +194,16 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
 - `type`: `"path"` or `"compound"` (a compound path: `path` holds its members' subpaths, painted as one).
 - `path`: VectorCraft's own path form. Each subpath is a run of anchors; `p` is the anchor, `in` / `out` its handles
   (absent: no handle), `kind` `"Smooth"` when the handles stay collinear. Coordinates are points, y down.
-- `fills`, `strokes`: the object's fills and strokes in paint order (bottom first); `null` is no paint. Paints use the
+- `fills`, `strokes`: the object's fills and strokes in paint order (bottom first); `null` is no paint. A stroke has its
+  `paint`, `width` in points, `join` (`"miter"`, `"round"` or `"bevel"`), `cap` (`"butt"`, `"round"` or `"square"`)
+  and `miterLimit`. Paints use the
   native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`, `{"type": "gradient", "gradient":
   {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity, midpoint}]}, "geom"?, "angle",
   "freeform"?}`, `{"type": "pattern", "pattern", "xf"?}`. Colours are `{"model": "rgb", r, g, b}`, `{"model": "cmyk",
   c, m, y, k}`, `{"model": "gray", k}` (ink: 0 white, 1 black) or `{"model": "lab", l, a, b}`; components 0–1 except
   Lab's.
+- `effects` (filters): the object's own effects in order, as its effect records: `id` (as `effect.list` lists it, or
+  `plugin.<id>` for a live-effect plug-in), `params` and `visible`. Its fills' and strokes' own effects aren't listed.
 - `bounds`: `[x0, y0, x1, y1]`, the geometric bounds (read only).
 
 ### Parameters
@@ -226,17 +232,27 @@ For an **object filter**, the output is the new state of the input objects:
 
 - An object with the `id` of an input object updates it; keys it leaves out keep their value (`{"id": 12}` keeps the
   object as it is). `fills` and `strokes` set the object's fills and strokes in order: extra entries add fills (above
-  the last one) or strokes, missing ones are removed; each stroke keeps its weight unless `width` is given (a new one: 1 pt).
+  the last one) or strokes, missing ones are removed; each stroke keeps its weight, join, cap and miter limit unless
+  `width`, `join`, `cap` or `miterLimit` are given (a new one: 1 pt, miter join, butt cap, miter limit 10).
+- `effects` replaces the object's own effects, in order: each `{id, params?, visible?}`. A record the object already had
+  stays as it is; a new one is admitted as `effect.apply` admits it: an effect `effect.list` lists or an installed
+  live-effect plug-in, with parameters it takes (filled in to their defaults; a plug-in's checked against its
+  manifest), at most one 3D effect (its fills' and strokes' own effects counted), which must fit the object, and a
+  Glass `textureImage` as Glass stores it (base64 of a PNG: a plug-in can't have the host read a file). A tool can
+  then set up objects for a live effect in one step.
 - An object without an `id` is new and needs a `path`. It goes just above the object listed before it, or, listed
   before any input object, just below the first one listed after it. New objects take a path's defaults: no fills or
   strokes, full opacity.
 - Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
+- A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
+  plain path.
 
 The host validates everything before the document changes: coordinates must be finite and within ±4,000,000 pt, at
 most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops; colours, opacities and offsets are
-clamped into range, stroke weights to 0–1,000 pt; a pattern must exist in the document. A paint returned unchanged
-keeps its swatch link; any other paint is unlinked.
+clamped into range, stroke weights to 0–1,000 pt and miter limits to 1–500; a pattern must exist in the document. A
+paint returned unchanged keeps its swatch link; any other paint is unlinked. One refused effect record refuses the
+whole output.
 
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
 object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry.

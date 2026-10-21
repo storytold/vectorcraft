@@ -156,17 +156,44 @@ impl Dsc {
     }
 }
 
-/// What went wrong, for the user (and for us, reading a report): the PostScript error, the
-/// operator that raised it and the procedure it ran in (`fault`).
+/// The PostScript errors the reader raises and what each means, which import warnings and errors
+/// show after the error's name. `undefined` is not listed: its message names the undefined name
+/// and leaves the error's name out.
+pub const POSTSCRIPT_ERRORS: &[(&str, &str)] = &[
+    ("dictstackunderflow", "the program ends a dictionary it didn't begin"),
+    ("invalidfileaccess", "the program opens a file, which the reader can't do"),
+    ("invalidrestore", "the program restores a saved state that was already restored"),
+    ("ioerror", "data the program reads is damaged or cut short, or the program asks for a position in a file that has none"),
+    ("limitcheck", "the program goes past one of the reader's limits"),
+    ("nocurrentpoint", "the path has no point to continue from"),
+    ("rangecheck", "a value is outside the range the operator takes"),
+    ("stackunderflow", "the operator needs more values than the stack holds"),
+    ("syntaxerror", "part of the program isn't valid PostScript text"),
+    ("typecheck", "a value has the wrong type for the operator"),
+    ("undefinedfilename", "the program runs, deletes or renames a file, which the reader can't do"),
+    ("undefinedresource", "the program asks for a resource that isn't defined"),
+    ("undefinedresult", "a calculation has no result, as in a division by zero"),
+    ("unmatchedmark", "the operator looks for a mark on the stack and finds none"),
+];
+
+/// What went wrong, for the user (and for us, reading a report): the PostScript error with what
+/// it means ([`POSTSCRIPT_ERRORS`]), the operator that raised it and the procedure it ran in
+/// (`fault`).
 fn reason(e: &PsError, fault: Option<&Fault>) -> String {
     let what = match e {
         PsError::Ps("undefined", at) => format!("it uses `{at}`, which VectorCraft's PostScript reader doesn't know"),
-        PsError::Ps(name, at) => match fault.and_then(|f| f.op) {
-            Some(op) if at.is_empty() || at == op => format!("a PostScript error ({name} in `{op}`)"),
-            Some(op) => format!("a PostScript error ({name} in `{op}`: {at})"),
-            None if at.is_empty() => format!("a PostScript error ({name})"),
-            None => format!("a PostScript error ({name} in `{at}`)"),
-        },
+        PsError::Ps(name, at) => {
+            let detail = match fault.and_then(|f| f.op) {
+                Some(op) if at.is_empty() || at == op => format!("{name} in `{op}`"),
+                Some(op) => format!("{name} in `{op}`: {at}"),
+                None if at.is_empty() => name.to_string(),
+                None => format!("{name} in `{at}`"),
+            };
+            match POSTSCRIPT_ERRORS.iter().find(|(n, _)| n == name) {
+                Some((_, meaning)) => format!("a PostScript error ({detail}; {meaning})"),
+                None => format!("a PostScript error ({detail})"),
+            }
+        }
         PsError::Limit(what) => return what.to_string(),
         PsError::Exit | PsError::Stop => return "the program stopped with an error".into(),
         PsError::Quit => return "the program ended early".into(),
@@ -206,6 +233,12 @@ pub fn page(bytes: &[u8]) -> Result<Rect, String> {
 /// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
 /// (else what its page prints, as any EPS).
 pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {
+    import_trusting(bytes, editing_data, false)
+}
+
+/// [`import_with`]; `trust`: an Illustrator EPS's layers are used even where they draw differently
+/// from its page, with a note (`editingData: "always"`, as for a `.ai`).
+pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -233,7 +266,7 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out))),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),

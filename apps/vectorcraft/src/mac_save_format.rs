@@ -26,9 +26,7 @@ use objc2_app_kit::{NSModalResponse, NSModalResponseOK, NSPopUpButton, NSSavePan
 use objc2_foundation::{NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_ui_egui::{FilePick, i18n};
-
-type Filter = (&'static str, &'static [&'static str]);
+use vectorcraft_ui_egui::{FileFilter as Filter, FilePick, i18n};
 
 /// The accessory's height and the room around and between its label and menu, in points.
 const HEIGHT: f64 = 38.0;
@@ -70,7 +68,8 @@ define_class!(
 /// The file types a Format menu lists: `filters` without "every file" ones. Empty when fewer than
 /// two remain, and the panel is then left to rfd.
 fn menu_formats(filters: &[Filter]) -> Vec<Filter> {
-    let named: Vec<Filter> = filters.iter().copied().filter(|(_, extensions)| !extensions.is_empty() && !extensions.contains(&"*")).collect();
+    let named: Vec<Filter> =
+        filters.iter().filter(|(_, extensions)| !extensions.is_empty() && !extensions.iter().any(|x| x == "*")).cloned().collect();
     if named.len() < 2 { Vec::new() } else { named }
 }
 
@@ -95,10 +94,10 @@ fn filename(name: &str, extension: &str, filters: &[Filter]) -> String {
 /// The extensions a panel with menu `filters` allows, those of entry `selected` first. AppKit adds
 /// the first one to a name typed without an extension, and a name typed with another of them is
 /// saved in that format.
-fn allowed_types(filters: &[Filter], selected: usize) -> Vec<&'static str> {
-    let first = filters.get(selected).map_or(&[][..], |(_, extensions)| *extensions);
+fn allowed_types(filters: &[Filter], selected: usize) -> Vec<&str> {
+    let first = filters.get(selected).map_or(&[][..], |(_, extensions)| extensions.as_slice());
     let others = filters.iter().enumerate().filter(|(i, _)| *i != selected).flat_map(|(_, (_, extensions))| extensions.iter());
-    first.iter().chain(others).copied().collect()
+    first.iter().chain(others).map(String::as_str).collect()
 }
 
 /// Set `panel`'s allowed file types ([`allowed_types`]).
@@ -184,26 +183,28 @@ fn accessory(mtm: MainThreadMarker, panel: &NSSavePanel, filters: Vec<Filter>, s
 mod tests {
     use super::*;
 
-    const FILTERS: &[Filter] = &[("VectorCraft", &["vectorcraft"]), ("SVG", &["svg"]), ("PDF", &["pdf"])];
+    fn filters() -> Vec<Filter> {
+        FilePick::filters([("VectorCraft", &["vectorcraft"][..]), ("SVG", &["svg"]), ("PDF", &["pdf"])])
+    }
 
     /// Save, Save As and Save a Copy list every save format with the default first; a panel with one
     /// named type, or one for every file, gets no menu, and rfd shows it.
     #[test]
     fn save_panels_with_several_formats_get_the_menu() {
-        let save = menu_formats(&fileio::save_filters("vectorcraft"));
+        let save = menu_formats(&FilePick::filters(fileio::save_filters("vectorcraft")));
         assert!(save.len() >= 2, "{save:?}");
-        assert_eq!(save.first().map(|(_, e)| *e), Some(&["vectorcraft"][..]));
-        assert!(menu_formats(&fileio::save_filters("svg")).first().is_some_and(|(_, e)| e.contains(&"svg")));
-        assert!(menu_formats(&fileio::template_filters("template")).len() >= 2);
-        assert!(menu_formats(&[("PDF", &["pdf"])]).is_empty());
-        assert!(menu_formats(&[("PDF", &["pdf"]), ("All files", &["*"]), ("Any", &[])]).is_empty());
-        assert_eq!(menu_formats(&[("PDF", &["pdf"]), ("All files", &["*"]), ("SVG", &["svg"])]).len(), 2);
+        assert_eq!(save.first().map(|(_, e)| e.as_slice()), Some(&["vectorcraft".to_owned()][..]));
+        assert!(menu_formats(&FilePick::filters(fileio::save_filters("svg"))).first().is_some_and(|(_, e)| e.iter().any(|e| e == "svg")));
+        assert!(menu_formats(&FilePick::filters(fileio::template_filters("template"))).len() >= 2);
+        assert!(menu_formats(&FilePick::filters([("PDF", &["pdf"][..])])).is_empty());
+        assert!(menu_formats(&FilePick::filters([("PDF", &["pdf"][..]), ("All files", &["*"]), ("Any", &[])])).is_empty());
+        assert_eq!(menu_formats(&FilePick::filters([("PDF", &["pdf"][..]), ("All files", &["*"]), ("SVG", &["svg"])])).len(), 2);
     }
 
     #[test]
     fn the_suggested_name_selects_its_format_and_an_unknown_one_the_default() {
         for (name, index) in [("Untitled-1", 0), ("a b.SVG", 1), ("art.pdf", 2), ("version.2", 0), ("", 0)] {
-            assert_eq!(initial_format(name, FILTERS), index, "{name}");
+            assert_eq!(initial_format(name, &filters()), index, "{name}");
         }
     }
 
@@ -219,7 +220,7 @@ mod tests {
             ("photo.png", "photo.svg"),
             ("", ""),
         ] {
-            assert_eq!(filename(name, "svg", FILTERS), expected, "{name}");
+            assert_eq!(filename(name, "svg", &filters()), expected, "{name}");
         }
     }
 
@@ -227,19 +228,19 @@ mod tests {
     /// type. The others stay allowed.
     #[test]
     fn the_chosen_format_is_the_first_allowed_type() {
-        assert_eq!(allowed_types(FILTERS, 0), ["vectorcraft", "svg", "pdf"]);
-        assert_eq!(allowed_types(FILTERS, 1), ["svg", "vectorcraft", "pdf"]);
-        assert_eq!(allowed_types(FILTERS, 2), ["pdf", "vectorcraft", "svg"]);
-        assert_eq!(allowed_types(FILTERS, 9), ["vectorcraft", "svg", "pdf"]);
+        assert_eq!(allowed_types(&filters(), 0), ["vectorcraft", "svg", "pdf"]);
+        assert_eq!(allowed_types(&filters(), 1), ["svg", "vectorcraft", "pdf"]);
+        assert_eq!(allowed_types(&filters(), 2), ["pdf", "vectorcraft", "svg"]);
+        assert_eq!(allowed_types(&filters(), 9), ["vectorcraft", "svg", "pdf"]);
     }
 
     /// Each entry of the Save As menu gives a name the save command reads as that entry's format.
     #[test]
     fn each_menu_entry_names_a_file_the_save_command_writes_in_that_format() {
-        let filters = menu_formats(&fileio::save_filters("vectorcraft"));
+        let filters = menu_formats(&FilePick::filters(fileio::save_filters("vectorcraft")));
         for (label, extensions) in &filters {
-            let name = filename("Untitled-1.vectorcraft", extensions[0], &filters);
-            assert_eq!(fileio::format_for_name(&name).map(|f| f.label), Some(*label), "{name}");
+            let name = filename("Untitled-1.vectorcraft", &extensions[0], &filters);
+            assert_eq!(fileio::format_for_name(&name).map(|f| f.label), Some(label.as_str()), "{name}");
         }
     }
 

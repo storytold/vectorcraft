@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::cms::{self, Intent, ProfileKind};
 
-use crate::settings::{choice, within};
+use crate::settings::{Choice, choice, within};
 use crate::{BleedSettings, MarkSettings, PdfError};
 
 choice! {
@@ -19,20 +19,41 @@ choice! {
     } default All
 }
 
-choice! {
-    /// The paper (portrait sizes; [`Media::Custom`] is [`PrintSettings::width`] ×
-    /// [`PrintSettings::height`]).
-    Media {
-        Letter = "letter", "Letter";
-        Legal = "legal", "Legal";
-        Tabloid = "tabloid", "Tabloid";
-        A3 = "a3", "A3";
-        A4 = "a4", "A4";
-        A5 = "a5", "A5";
-        B4 = "b4", "B4";
-        B5 = "b5", "B5";
-        Custom = "custom", "Custom";
-    } default Letter
+/// The paper (portrait sizes; [`Media::Custom`] is [`PrintSettings::width`] ×
+/// [`PrintSettings::height`]).
+///
+/// `B4` and `B5` keep their ISO 216 dimensions (250 × 353 mm and 176 × 250 mm) so settings saved
+/// before the Japanese papers existed keep their paper, and their dialogs say "(ISO)". Japanese
+/// printing uses the JIS sizes, which are separate choices: `b4 (jis)` 257 × 364 mm, `b5 (jis)`
+/// 182 × 257 mm and `b6 (jis)` 128 × 182 mm. The other Japanese papers are はがき
+/// (`japanese postcard`, 100 × 148 mm), 往復はがき (`japanese double postcard`, 148 × 200 mm),
+/// 封筒 長形3号/長形4号/角形2号/角形3号 and 四六判 (`yonroku-ban`, 127 × 188 mm).
+///
+/// Written out rather than through the `choice!` macro because a paper also comes from a person:
+/// [`Media::from_name`] accepts a JSON id or a dialog label, any case and spacing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Media {
+    #[default]
+    Letter,
+    Legal,
+    Tabloid,
+    A3,
+    A4,
+    A5,
+    B4,
+    B5,
+    A6,
+    B4Jis,
+    B5Jis,
+    B6Jis,
+    JapanesePostcard,
+    JapaneseDoublePostcard,
+    JapaneseEnvelope3,
+    JapaneseEnvelope4,
+    Kaku2,
+    Kaku3,
+    YonrokuBan,
+    Custom,
 }
 
 impl Media {
@@ -46,10 +67,132 @@ impl Media {
             Self::A3 => mm(297.0, 420.0),
             Self::A4 => mm(210.0, 297.0),
             Self::A5 => mm(148.0, 210.0),
+            Self::A6 => mm(105.0, 148.0),
+            // ISO 216.
             Self::B4 => mm(250.0, 353.0),
             Self::B5 => mm(176.0, 250.0),
+            // JIS B (JIS X 6310): the Japanese B sizes print a little larger than ISO's.
+            Self::B4Jis => mm(257.0, 364.0),
+            Self::B5Jis => mm(182.0, 257.0),
+            Self::B6Jis => mm(128.0, 182.0),
+            // はがき, 往復はがき, 封筒 長形3号/長形4号, 角形2号/角形3号, 四六判.
+            Self::JapanesePostcard => mm(100.0, 148.0),
+            Self::JapaneseDoublePostcard => mm(148.0, 200.0),
+            Self::JapaneseEnvelope3 => mm(120.0, 235.0),
+            Self::JapaneseEnvelope4 => mm(90.0, 225.0),
+            Self::Kaku2 => mm(240.0, 332.0),
+            Self::Kaku3 => mm(216.0, 277.0),
+            Self::YonrokuBan => mm(127.0, 188.0),
             Self::Custom => None,
         }
+    }
+
+    /// The paper an id or a dialog label names, ignoring case and anything but letters and digits:
+    /// `"b5 (jis)"`, `"B5 (JIS)"` and `"b5jis"` all mean [`Media::B5Jis`], and `"b5"` stays the ISO
+    /// size that settings and presets already use. `None` for a name that is no paper.
+    pub fn from_name(name: &str) -> Option<Self> {
+        let norm = |s: &str| s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect::<String>();
+        let n = norm(name);
+        if n.is_empty() {
+            return None;
+        }
+        let at = |names: &'static [&'static str]| names.iter().position(|name| norm(name) == n);
+        at(Self::IDS).or_else(|| at(Self::LABELS)).and_then(|i| Self::ALL.get(i).copied())
+    }
+}
+
+impl Choice for Media {
+    const ALL: &'static [Self] = &[
+        Self::Letter,
+        Self::Legal,
+        Self::Tabloid,
+        Self::A3,
+        Self::A4,
+        Self::A5,
+        Self::B4,
+        Self::B5,
+        Self::A6,
+        Self::B4Jis,
+        Self::B5Jis,
+        Self::B6Jis,
+        Self::JapanesePostcard,
+        Self::JapaneseDoublePostcard,
+        Self::JapaneseEnvelope3,
+        Self::JapaneseEnvelope4,
+        Self::Kaku2,
+        Self::Kaku3,
+        Self::YonrokuBan,
+        Self::Custom,
+    ];
+    const IDS: &'static [&'static str] = &[
+        "letter",
+        "legal",
+        "tabloid",
+        "a3",
+        "a4",
+        "a5",
+        "b4",
+        "b5",
+        "a6",
+        "b4 (jis)",
+        "b5 (jis)",
+        "b6 (jis)",
+        "japanese postcard",
+        "japanese double postcard",
+        "japanese envelope #3",
+        "japanese envelope #4",
+        "kaku #2",
+        "kaku #3",
+        "yonroku-ban",
+        "custom",
+    ];
+    const LABELS: &'static [&'static str] = &[
+        "Letter",
+        "Legal",
+        "Tabloid",
+        "A3",
+        "A4",
+        "A5",
+        "B4 (ISO)",
+        "B5 (ISO)",
+        "A6",
+        "B4 (JIS)",
+        "B5 (JIS)",
+        "B6 (JIS)",
+        "Japanese Postcard",
+        "Japanese Double Postcard",
+        "Japanese Envelope #3",
+        "Japanese Envelope #4",
+        "Kaku #2",
+        "Kaku #3",
+        "Yonroku-ban",
+        "Custom",
+    ];
+}
+
+impl Media {
+    /// The label shown in the Print dialogs.
+    pub fn label(self) -> &'static str {
+        Self::ALL.iter().position(|m| *m == self).and_then(|i| Self::LABELS.get(i)).copied().unwrap_or_default()
+    }
+
+    /// The JSON id.
+    pub fn id(self) -> &'static str {
+        Self::ALL.iter().position(|m| *m == self).and_then(|i| Self::IDS.get(i)).copied().unwrap_or_default()
+    }
+}
+
+impl Serialize for Media {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.id())
+    }
+}
+
+impl<'de> Deserialize<'de> for Media {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let name = String::deserialize(deserializer)?;
+        Self::from_name(&name).ok_or_else(|| D::Error::custom(format!("unknown paper `{name}` ({})", Self::IDS.join("|"))))
     }
 }
 

@@ -94,6 +94,12 @@ pub const UNSUPPORTED: &[Unsupported] = &[
         extensions: &["pict", "pct", "pic"],
         hint: "PICT is a retired format and is not supported: convert the file to PDF or PNG first",
     },
+    Unsupported {
+        id: "pmd",
+        label: "PageMaker",
+        extensions: &["pmd"],
+        hint: "PageMaker (.pmd) is not supported: open the layout in PageMaker and export PDF or EPS, or place a PDF export here",
+    },
 ];
 
 /// The unsupported format an id or extension (any case, leading dot allowed) names.

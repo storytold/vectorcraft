@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "appearance.addFill",
             "Add New Fill",
             ["Window", "Appearance"],
-            None,
+            Some("Cmd+/"),
             "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row (a copy of its top fill; type without one: its characters' fill; else the default fill)",
             has_doc,
             |s, p| add_item(s, p, true)
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "appearance.addStroke",
             "Add New Stroke",
             ["Window", "Appearance"],
-            None,
+            Some("Cmd+Alt+/"),
             "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row (a copy of its top stroke, else the default stroke)",
             has_doc,
             |s, p| add_item(s, p, false)
@@ -119,7 +119,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: the selection), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead; `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead; `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
             has_doc,
             copy_from
         ),
@@ -218,7 +218,7 @@ pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Re
         Some(Value::Null) => Ok(ItemTarget::Top),
         Some(v) => v
             .as_u64()
-            .map(|i| ItemTarget::Item { index: i as usize, explicit: true })
+            .map(|i| ItemTarget::Item { index: index(i), explicit: true })
             .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
         // The active item is a row of the first selected object's own stack.
         None if p.get("ids").is_some() || p.get("id").is_some() || targets_contents(p)? => Ok(ItemTarget::Top),
@@ -383,8 +383,9 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     Ok(ids.first().and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 
+/// The whole number of 0 or more that `key` holds, read with [`index`].
 pub(crate) fn index_param(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(|i| i as usize).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
 }
 
 fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
@@ -547,6 +548,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = index_param(p, "index", "appearance.setItem")?;
+    super::paint::check_keep_model(p, "appearance.setItem")?;
     let paint = paint_from(s, p)?;
     let ids = appearance_targets(s, p)?;
     if ids.is_empty() {
@@ -603,7 +605,7 @@ fn item_indices(p: &Value, cmd: &str) -> Result<Vec<usize>> {
     let mut v = match p.get("indices") {
         Some(a) => a
             .as_array()
-            .and_then(|a| a.iter().map(|x| x.as_u64().map(|i| i as usize)).collect::<Option<Vec<_>>>())
+            .and_then(|a| a.iter().map(|x| x.as_u64().map(index)).collect::<Option<Vec<_>>>())
             .filter(|v| !v.is_empty())
             .ok_or_else(|| bad(cmd, "`indices` must be a non-empty array of item indices"))?,
         None => vec![index_param(p, "index", cmd)?],
@@ -756,11 +758,13 @@ fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
+/// Sample enabled attributes, refusing object transparency that a text range cannot store.
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.copyFrom";
     let clicked = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
     let (reverse, append) = (bool_or(p, "reverse", false), bool_or(p, "append", false));
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
+    let range = if !reverse && !append && p.get("ids").is_none() { super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b) } else { None };
     let selected = match ids_param(p, "ids") {
         Some(v) => outermost(&s.doc()?.doc, v),
         None => selected_roots(s)?,
@@ -774,11 +778,37 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     };
     targets.retain(|id| *id != src_id);
     let picked = Picked::of(s.doc()?.doc.node(src_id).ok_or(EngineError::NoNode(src_id))?);
+    let range = range.filter(|(id, _, _)| targets.contains(id));
+    // Character styles cannot represent object transparency. Refuse before even changing
+    // paint defaults; applying it to the object would also alter the unselected characters.
+    if let Some((id, _, _)) = range.filter(|_| attrs.appearance.transparency) {
+        let target = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        if picked.opacity != 1.0 || picked.blend != BlendMode::Normal || target.opacity != 1.0 || target.blend != BlendMode::Normal {
+            return Err(bad(
+                C,
+                "object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object",
+            ));
+        }
+    }
     if !reverse {
         picked.to_defaults(s, &attrs.appearance);
     }
     if targets.is_empty() || attrs.is_empty() {
         return Ok(json!({ "ids": [] }));
+    }
+    if let Some((id, start, end)) = range {
+        let before = s.doc()?.doc.clone();
+        super::overprint::edit_counted(s, "Eyedropper", |d| {
+            let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+            let placed = picked.placed(Some(t.local_bounds()));
+            vectorcraft_text::edit::style_range(&mut t.runs, start, end, |st| picked.run(st, &placed, &attrs));
+            if let Some((_, para)) = picked.text.as_ref().filter(|_| attrs.paragraph) {
+                t.edit_paras(Some(t.paragraphs_in(start, end)), |p| *p = para.clone());
+            }
+            super::typecmd::refresh_bounds(t);
+            Ok(count_changed(d, &before, &[id]))
+        })?;
+        return Ok(json!({ "ids": [id.0] }));
     }
     // When every target comes out as it was, the document and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
@@ -841,6 +871,22 @@ impl Picked {
         }
     }
 
+    /// Copy character attributes and the enabled paint attributes through the same path for
+    /// whole text objects and highlighted character ranges.
+    fn run(&self, st: &mut CharStyle, placed: &Appearance, a: &EyedropperAttrs) {
+        if let Some((cs, _)) = self.text.as_ref().filter(|_| a.character) {
+            *st = CharStyle {
+                fill: std::mem::take(&mut st.fill),
+                stroke: std::mem::take(&mut st.stroke),
+                stroke_width: st.stroke_width,
+                overprint_fill: st.overprint_fill,
+                overprint_stroke: st.overprint_stroke,
+                ..cs.clone()
+            };
+        }
+        run_attrs(st, placed, &a.appearance);
+    }
+
     /// Apply attributes `a` to `n`. `append` adds the fills and strokes (and effects) on top of its
     /// stack instead. Type takes the paints on its characters, and character and paragraph
     /// attributes from type.
@@ -860,19 +906,7 @@ impl Picked {
             let placed = self.placed(Some(t.local_bounds()));
             let text = self.text.as_ref();
             for r in &mut t.runs {
-                if let Some((cs, _)) = text.filter(|_| a.character) {
-                    // The character attributes; the paints follow the appearance attributes.
-                    let st = &mut r.style;
-                    *st = CharStyle {
-                        fill: std::mem::take(&mut st.fill),
-                        stroke: std::mem::take(&mut st.stroke),
-                        stroke_width: st.stroke_width,
-                        overprint_fill: st.overprint_fill,
-                        overprint_stroke: st.overprint_stroke,
-                        ..cs.clone()
-                    };
-                }
-                run_attrs(&mut r.style, &placed, ap);
+                self.run(&mut r.style, &placed, a);
             }
             if let Some((_, para)) = text.filter(|_| a.paragraph) {
                 // The source's first paragraph's attributes, on every paragraph.

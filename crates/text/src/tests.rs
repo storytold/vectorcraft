@@ -67,6 +67,63 @@ fn add_font_rejects_garbage_and_duplicates() {
     assert_eq!(db().add_font(bytes), 0, "already bundled");
 }
 
+/// Character panel menu › System Layout: each character that takes space advances by a whole
+/// number of points, at least one. Off (the default) keeps the font's fractional advances. A
+/// tate-chu-yoko continuation stays at zero.
+/// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+#[test]
+fn system_layout_rounds_positive_advances_to_whole_points() {
+    let mut off = point("Hi", style(13.0));
+    off.runs[0].style.tracking = 50.0;
+    assert!(!off.system_layout);
+    let fractional: Vec<f64> = layout(db(), &off).glyphs.iter().map(|g| g.advance).collect();
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    let mut on = off.clone();
+    on.system_layout = true;
+    let whole: Vec<f64> = layout(db(), &on).glyphs.iter().map(|g| g.advance).collect();
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    let mut tiny = point("i", style(0.4));
+    tiny.system_layout = true;
+    let laid = layout(db(), &tiny);
+    assert!(laid.glyphs.iter().any(|g| (g.advance - 1.0).abs() < 1e-9), "{:?}", laid.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    let mut tcy = point("10", style(20.0));
+    tcy.vertical = true;
+    tcy.system_layout = true;
+    let adv: Vec<f64> = layout(db(), &tcy).glyphs.iter().map(|g| g.advance).collect();
+    assert!(adv.contains(&0.0), "a tate-chu-yoko continuation stays at zero: {adv:?}");
+    assert!(adv.iter().all(|a| *a == 0.0 || (a - a.round()).abs() < 1e-9), "{adv:?}");
+}
+
+/// Character panel menu › Fractional Widths, off: each character that takes space advances by a
+/// whole number of points, at least one. On (the default) keeps the font's fractional advances,
+/// including tracking. A tate-chu-yoko continuation stays at zero.
+/// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+#[test]
+fn fractional_widths_off_rounds_positive_advances_to_whole_points() {
+    let mut on = point("Hi", style(13.0));
+    on.runs[0].style.tracking = 50.0;
+    assert!(on.fractional_widths);
+    let fractional: Vec<f64> = layout(db(), &on).glyphs.iter().map(|g| g.advance).collect();
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    let mut off = on.clone();
+    off.fractional_widths = false;
+    let whole: Vec<f64> = layout(db(), &off).glyphs.iter().map(|g| g.advance).collect();
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    // Smaller than half a point: rounding alone would be 0, which would run the type together.
+    let mut tiny = point("i", style(0.4));
+    tiny.fractional_widths = false;
+    let laid = layout(db(), &tiny);
+    assert!(laid.glyphs.iter().any(|g| (g.advance - 1.0).abs() < 1e-9), "{:?}", laid.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    let mut tcy = point("10", style(20.0));
+    tcy.vertical = true;
+    tcy.fractional_widths = false;
+    let adv: Vec<f64> = layout(db(), &tcy).glyphs.iter().map(|g| g.advance).collect();
+    assert!(adv.contains(&0.0), "a tate-chu-yoko continuation stays at zero: {adv:?}");
+    assert!(adv.iter().all(|a| *a == 0.0 || (a - a.round()).abs() < 1e-9), "{adv:?}");
+}
+
 #[test]
 fn glyph_count_and_advances() {
     let l = layout(db(), &point("Hello", style(24.0)));
@@ -935,10 +992,90 @@ fn optical_margin_alignment_hangs_punctuation_and_letter_edges_outside_the_margi
     };
     let (on, off) = (vertical(true), vertical(false));
     assert!((on[1].origin - off[0].origin).hypot() < 1e-6, "{:?} {:?}", on[1].origin, off[0].origin);
-    // Right-to-left paragraphs are placed as before: a full stop ending one, set at the left of a
-    // left-aligned line, doesn't hang.
-    let rtl = |on: bool| lay("שלום, עולם.", Justify::Left, on).iter().map(|g| g.origin).collect::<Vec<_>>();
-    assert_eq!(rtl(true), rtl(false));
+}
+
+/// Right-to-left paragraphs hang at the margins their alignment places their lines against: Auto
+/// and right-aligned lines hang at the right, left-aligned lines hang at the left, and justified
+/// lines hang at both. The line is read from right to left, so `."` ending it hangs both glyphs at its left, and `".`
+/// starting it hangs only the quotation mark at its right. Roman Hanging Punctuation hangs them
+/// the same way. In vertical type the characters run from the top down, and the pair is read
+/// from the top.
+#[test]
+fn optical_margin_alignment_hangs_right_to_left_paragraphs() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 400.0);
+    let object = |text: &str, justify: Justify, on: bool| {
+        let mut t = area(text, style(20.0), frame, justify);
+        t.optical_margin = on;
+        t
+    };
+    let lay = |text: &str, justify: Justify, on: bool| layout(db(), &object(text, justify, on)).glyphs;
+    let at = |glyphs: &[PositionedGlyph], b: usize| glyphs.iter().find(|g| g.byte == b).cloned().unwrap();
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let end = |g: &PositionedGlyph| g.origin.x + g.advance;
+    let alef = 'א'.len_utf8();
+    // Auto aligns the line at the right: the opening quotation mark (logically first, drawn at the
+    // right end) hangs wholly past the right edge, and the letter after it ends at the edge.
+    let text = "\"שלום\" עולם";
+    let (on, off) = (lay(text, Justify::Auto, true), lay(text, Justify::Auto, false));
+    assert!(off.iter().all(|g| g.rtl) && near(end(&at(&off, 0)), 300.0), "{off:?}");
+    assert!(near(at(&on, 0).origin.x, 300.0) && at(&on, 0).advance > 1.0, "{:?}", at(&on, 0).origin);
+    assert!(near(end(&at(&on, 1)), 300.0), "{}", end(&at(&on, 1)));
+    // Left aligned: the full stop ending the line is drawn at its left and hangs there.
+    let text = "שלום, עולם.";
+    let stop = text.len() - 1;
+    let (on, off) = (lay(text, Justify::Left, true), lay(text, Justify::Left, false));
+    assert!(near(off[0].origin.x, 0.0) && near(at(&on, stop).origin.x, -at(&on, stop).advance), "{:?}", at(&on, stop).origin);
+    // Justified: `."` ending the line hangs both glyphs at the left; the right end doesn't hang.
+    let text = "שלום עולם.\"";
+    let (quote, stop) = (text.len() - 1, text.len() - 2);
+    let on = lay(text, Justify::JustifyAll, true);
+    let (q, s) = (at(&on, quote), at(&on, stop));
+    assert!(near(q.origin.x, -q.advance - s.advance) && near(s.origin.x, -s.advance), "{:?} {:?}", q.origin, s.origin);
+    assert!(near(end(&at(&on, 0)), 300.0), "{}", end(&at(&on, 0)));
+    // A justified line of one word, spread between its letters: the opening quotation mark hangs
+    // wholly past the right edge, the letter after it ends at the edge, and the last letter starts
+    // at the left edge.
+    let on = lay("\"שלום", Justify::JustifyAll, true);
+    let mem = 1 + 3 * alef;
+    assert!(near(at(&on, 0).origin.x, 300.0) && near(end(&at(&on, 1)), 300.0), "{:?} {:?}", at(&on, 0).origin, at(&on, 1).origin);
+    assert!(near(at(&on, mem).origin.x, 0.0), "{:?}", at(&on, mem).origin);
+    // `".` starting a right-aligned line: the quotation mark hangs and the full stop doesn't.
+    let on = lay("\".שלום", Justify::Right, true);
+    assert!(near(at(&on, 0).origin.x, 300.0) && near(end(&at(&on, 1)), 300.0), "{:?} {:?}", at(&on, 0).origin, at(&on, 1).origin);
+    // A wrapped left-aligned line: the comma ending it hangs, and the space after it stays to its left.
+    let first = width(&point("אבגד, ", style(20.0)));
+    let mut t = area("אבגד, הוזח", style(20.0), Rect::new(0.0, 0.0, first + 1.0, 400.0), Justify::Left);
+    t.optical_margin = true;
+    let l = layout(db(), &t);
+    let (comma, space) = (at(&l.glyphs, 4 * alef), at(&l.glyphs, 4 * alef + 1));
+    assert!(l.lines.len() == 2 && near(comma.origin.x, -comma.advance), "{:?} {:?}", l.lines, comma.origin);
+    assert!(near(end(&space), comma.origin.x), "{:?} {:?}", space.origin, comma.origin);
+    // Point type: Auto grows the line left from its anchor, and the opening quotation mark hangs
+    // to the right of the anchor.
+    let mut t = point("\"שלום", style(20.0));
+    (t.para.justify, t.optical_margin) = (Justify::Auto, true);
+    let l = layout(db(), &t);
+    assert!(near(at(&l.glyphs, 0).origin.x, 0.0) && near(end(&at(&l.glyphs, 1)), 0.0), "{:?}", at(&l.glyphs, 0).origin);
+    // Roman Hanging Punctuation hangs the full stop the same way.
+    let mut t = area("שלום, עולם.", style(20.0), frame, Justify::Left);
+    t.para.roman_hanging = true;
+    let l = layout(db(), &t);
+    let stop = "שלום, עולם".len();
+    assert!(near(at(&l.glyphs, stop).origin.x, -at(&l.glyphs, stop).advance), "{:?}", at(&l.glyphs, stop).origin);
+    // Vertical type: the letter after the quotation mark takes the mark's place at the column's top.
+    let vertical = |text: &str, justify: Justify, on: bool| {
+        let mut t = object(text, justify, on);
+        t.vertical = true;
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (vertical("\"שלום", Justify::Left, true), vertical("\"שלום", Justify::Left, false));
+    assert!((at(&on, 1).origin - at(&off, 0).origin).hypot() < 1e-6, "{:?} {:?}", at(&on, 1).origin, at(&off, 0).origin);
+    // …and `."` ending a line at the column's bottom hangs both glyphs there.
+    let text = "שלום.\"";
+    let (on, off) = (vertical(text, Justify::Right, true), vertical(text, Justify::Right, false));
+    let (stop, mem) = (text.len() - 2, text.len() - 2 - alef);
+    let shift = at(&off, stop).advance + at(&off, stop + 1).advance;
+    assert!(near((at(&on, mem).origin - at(&off, mem).origin).hypot(), shift), "{:?} {:?}", at(&on, mem).origin, at(&off, mem).origin);
 }
 
 /// Roman Hanging Punctuation (a paragraph attribute) hangs the punctuation Optical Margin
@@ -979,6 +1116,163 @@ fn roman_hanging_punctuation_hangs_punctuation_but_not_letters() {
     let at = |b: usize| l.glyphs.iter().find(|g| g.byte == b).unwrap().origin.x;
     assert!(at(0) < -1.0, "first paragraph hangs: {}", at(0));
     assert!(near(at("“One\n".len()), 0.0), "second doesn't: {}", at("“One\n".len()));
+}
+
+/// Type on a path hangs at its brackets, measured along the path: a left-aligned line at the
+/// start bracket, a right-aligned line at the end bracket, a centered line at both, and the
+/// justified alignments where they place the line. A mark hanging past the end bracket doesn't
+/// overflow. A hang never takes a glyph off an open path's ends, nor past the other bracket of a
+/// closed path. Right-to-left type hangs at the bracket Auto places it at and is read from right to
+/// left. Roman Hanging Punctuation hangs path type the same way, without the letters.
+#[test]
+fn optical_margin_alignment_hangs_type_on_a_path_at_its_brackets() {
+    // A straight path along y = 50 from x = 0 to 500: distance along it is x.
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let path = PathData::from_bezpath(&line);
+    let on_path = |text: &str, justify: Justify, start: f64, end: Option<f64>, on: bool| {
+        let mut t = point(text, style(20.0));
+        t.kind = TextKind::OnPath { path: path.clone(), start, end };
+        t.para.justify = justify;
+        t.optical_margin = on;
+        t
+    };
+    let lay = |text: &str, justify: Justify, on: bool| layout(db(), &on_path(text, justify, 0.1, Some(0.9), on));
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let end = |g: &PositionedGlyph| g.origin.x + g.advance;
+    // Left aligned: the opening quotation mark hangs wholly before the start bracket (x = 50).
+    let (on, off) = (lay("“Hello", Justify::Left, true), lay("“Hello", Justify::Left, false));
+    assert!(near(off.glyphs[0].origin.x, 50.0) && near(on.glyphs[1].origin.x, 50.0), "{:?}", on.glyphs[1].origin);
+    assert!(near(on.glyphs[0].origin.x, 50.0 - on.glyphs[0].advance) && on.glyphs[0].advance > 1.0);
+    // Auto, Justify All and Justify with Last Line Aligned Left place the line at the start bracket
+    // and hang there too.
+    for justify in [Justify::Auto, Justify::JustifyAll, Justify::JustifyLeft] {
+        assert!(near(lay("“Hello", justify, true).glyphs[1].origin.x, 50.0), "{justify:?}");
+    }
+    // Right aligned: the full stop hangs past the end bracket (x = 450) without overflowing.
+    for justify in [Justify::Right, Justify::JustifyRight] {
+        let (on, off) = (lay("Hello there.", justify, true), lay("Hello there.", justify, false));
+        let n = on.glyphs.len();
+        assert!(near(end(&off.glyphs[n - 1]), 450.0) && near(on.glyphs[n - 1].origin.x, 450.0), "{justify:?}: {:?}", on.glyphs[n - 1].origin);
+        assert!(!on.overflow);
+    }
+    // A right-aligned line doesn't hang at its start, nor a left-aligned one at its end.
+    assert!(near(lay("“Hello", Justify::Right, true).glyphs.last().map_or(0.0, end), 450.0));
+    assert!(near(lay("Hello.", Justify::Left, true).glyphs[0].origin.x, 50.0));
+    // Centered: the letters between the hanging hyphens are centered between the brackets.
+    for justify in [Justify::Center, Justify::JustifyCenter] {
+        let on = lay("-ab-", justify, true).glyphs;
+        assert!(near((on[1].origin.x + end(&on[2])) * 0.5, 250.0), "{justify:?}: {on:?}");
+    }
+    // The hanging full stop is room: a line that overflows by part of its full stop fits with it.
+    let wide = lay("Hello.", Justify::Left, false).glyphs;
+    let w: f64 = wide.iter().map(|g| g.advance).sum();
+    let tight = |on: bool| layout(db(), &on_path("Hello.", Justify::Left, 0.1, Some((50.0 + w - 0.5 * wide[5].advance) / 500.0), on));
+    let (on, off) = (tight(true), tight(false));
+    assert!(off.overflow && off.glyphs.len() == 5, "{} {}", off.overflow, off.glyphs.len());
+    assert!(!on.overflow && on.glyphs.len() == 6, "{} {}", on.overflow, on.glyphs.len());
+    // Only the glyphs that hang take that room: a letter ending past the end bracket by less than
+    // the overset story's last full stop still overflows.
+    let story = lay("Hello there.", Justify::Left, false).glyphs;
+    let past = (end(&story[3]) - 0.5 * story[11].advance) / 500.0;
+    let overset = |on: bool| layout(db(), &on_path("Hello there.", Justify::Left, 0.1, Some(past), on));
+    assert!(overset(true).overflow && overset(true).glyphs.len() == 3, "{}", overset(true).glyphs.len());
+    assert_eq!(overset(false).glyphs.len(), 3);
+    // A hang stops at an open path's first point: no glyph is held there.
+    let at_start = |on: bool| layout(db(), &on_path("“Hello", Justify::Left, 0.0, None, on)).glyphs;
+    assert!(near(at_start(true)[0].origin.x, 0.0) && near(at_start(true)[1].origin.x, at_start(false)[1].origin.x));
+    let quote = at_start(false)[0].advance;
+    let part = layout(db(), &on_path("“Hello", Justify::Left, 0.5 * quote / 500.0, None, true)).glyphs;
+    assert!(near(part[0].origin.x, 0.0), "cut to the room before the bracket: {:?}", part[0].origin);
+    // Vertical type on the path: the letter after the quotation mark takes the mark's place.
+    let vertical = |on: bool| {
+        let mut t = on_path("“Hello", Justify::Left, 0.1, Some(0.9), on);
+        t.vertical = true;
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (vertical(true), vertical(false));
+    assert!((on[1].origin - off[0].origin).hypot() < 1e-6 && (on[0].origin - off[0].origin).hypot() > 1.0, "{:?} {:?}", on[1].origin, off[0].origin);
+    // With Spacing on a curve, the letter after the hanging quotation mark still starts at the
+    // bracket: the rest of the line is drawn as the same text without the mark.
+    let mut curve = BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    let spaced = |text: &str, on: bool| {
+        let mut t = point(text, style(20.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.2, end: None };
+        (t.path_spacing, t.optical_margin) = (12.0, on);
+        layout(db(), &t).glyphs.iter().map(|g| (g.origin, g.angle)).collect::<Vec<_>>()
+    };
+    let (on, off) = (spaced("“Hello", true), spaced("Hello", false));
+    assert!(on.len() == 6 && on[1..].iter().zip(&off).all(|(a, b)| (a.0 - b.0).hypot() < 1e-6 && (a.1 - b.1).abs() < 1e-6), "{on:?} {off:?}");
+    // A closed path whose brackets take all of it leaves no room to hang.
+    let circle = PathData::from_bezpath(&kurbo::Circle::new((0.0, 0.0), 100.0).to_path(0.1));
+    let round = |on: bool| {
+        let mut t = point("“Around the circle”", style(14.0));
+        t.kind = TextKind::OnPath { path: circle.clone(), start: 0.0, end: None };
+        t.optical_margin = on;
+        layout(db(), &t).glyphs.iter().map(|g| g.origin).collect::<Vec<_>>()
+    };
+    assert_eq!(round(true), round(false));
+    // On a closed path whose brackets leave a stretch narrower than a quotation mark, a
+    // right-aligned line hangs its closing mark into that stretch; its opening mark doesn't take it.
+    let mut square = BezPath::new();
+    square.move_to((0.0, 0.0));
+    square.line_to((500.0, 0.0));
+    square.line_to((500.0, 10.0));
+    square.line_to((0.0, 10.0));
+    square.close_path();
+    let square = PathData::from_bezpath(&square);
+    let gap = 0.5 * quote;
+    let closed = |justify: Justify, on: bool| {
+        // 1,020 pt round; the brackets are at 102 and at 102 - gap on the top side.
+        let mut t = on_path("“Hi”", justify, 0.1, None, on);
+        t.kind = TextKind::OnPath { path: square.clone(), start: 0.1, end: Some((102.0 - gap) / 1020.0) };
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (closed(Justify::Right, true), closed(Justify::Right, false));
+    assert!(near(off.last().map_or(0.0, end), 102.0 - gap) && near(on.last().map_or(0.0, end), 102.0), "{on:?}");
+    // Centered, each mark hangs into half of it, and the line stays where it was.
+    let origins = |on: bool| closed(Justify::Center, on).iter().map(|g| g.origin).collect::<Vec<_>>();
+    let (on, off) = (origins(true), origins(false));
+    assert!(on.iter().zip(&off).all(|(a, b)| (*a - *b).hypot() < 1e-6), "{on:?} {off:?}");
+    // Right-to-left type on a path hangs too. Auto places it at the end bracket, where its opening
+    // quotation mark, drawn last, hangs wholly past the bracket.
+    let (on, off) = (lay("\"שלום\" עולם", Justify::Auto, true), lay("\"שלום\" עולם", Justify::Auto, false));
+    let n = on.glyphs.len();
+    assert!(near(end(&off.glyphs[n - 1]), 450.0) && near(on.glyphs[n - 1].origin.x, 450.0), "{:?}", on.glyphs[n - 1].origin);
+    assert!(!on.overflow);
+    // The line is read from right to left: left aligned, `."` ending it hangs both glyphs before the
+    // start bracket.
+    let (on, off) = (lay("עולם.\"", Justify::Left, true), lay("עולם.\"", Justify::Left, false));
+    assert!(near(off.glyphs[0].origin.x, 50.0) && near(on.glyphs[2].origin.x, 50.0), "{:?}", on.glyphs[2].origin);
+    // On a closed path, Auto right-to-left type takes the stretch past the end bracket first, as
+    // right-aligned type does.
+    let closed_rtl = |on: bool| {
+        let mut t = on_path("\"שלום\"", Justify::Auto, 0.1, None, on);
+        t.kind = TextKind::OnPath { path: square.clone(), start: 0.1, end: Some((102.0 - gap) / 1020.0) };
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (closed_rtl(true), closed_rtl(false));
+    assert!(near(off.last().map_or(0.0, end), 102.0 - gap) && near(on.last().map_or(0.0, end), 102.0), "{on:?}");
+    // Vertical type on a path whose paragraph runs right to left reads from the top: the letter
+    // after the quotation mark takes the mark's place.
+    let vertical_rtl = |on: bool| {
+        let mut t = on_path("\"שלום", Justify::Left, 0.1, Some(0.9), on);
+        t.vertical = true;
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (vertical_rtl(true), vertical_rtl(false));
+    assert!((on[1].origin - off[0].origin).hypot() < 1e-6 && (on[0].origin - off[0].origin).hypot() > 1.0, "{:?} {:?}", on[1].origin, off[0].origin);
+    // Roman Hanging Punctuation hangs the quotation mark and no letters.
+    let roman = |text: &str| {
+        let mut t = on_path(text, Justify::Left, 0.1, Some(0.9), false);
+        t.para.roman_hanging = true;
+        layout(db(), &t).glyphs
+    };
+    assert!(near(roman("“Hello")[1].origin.x, 50.0) && near(roman("AVA")[0].origin.x, 50.0));
+    assert!(near(lay("AVA", Justify::Left, true).glyphs[0].origin.x, 50.0 - 0.1 * lay("AVA", Justify::Left, true).glyphs[0].advance));
 }
 
 /// With craft-fonts and no installed fonts (the web), Thai is set in Noto Sans Thai, not as empty
@@ -1034,4 +1328,21 @@ fn thai_loanwords_stay_whole() {
     // No line ends inside the word, whatever the Thai font's widths put beside it.
     let word = text.find("โปรแกรม").unwrap();
     assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
+}
+
+/// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps
+/// at the space without the mark.
+#[test]
+fn no_break_keeps_marked_words_on_one_line() {
+    let plain = style(20.0);
+    let marked = CharStyle { no_break: true, ..plain.clone() };
+    let hello: f64 = layout(db(), &point("hello ", plain.clone())).glyphs.iter().map(|g| g.advance).sum();
+    let whole: f64 = layout(db(), &point("hello world", plain.clone())).glyphs.iter().map(|g| g.advance).sum();
+    assert!(whole > hello + 1.0, "the second word takes room");
+    let frame = Rect::new(0.0, 0.0, hello + 1.0, 200.0);
+    let wrapped = layout(db(), &area("hello world", plain, frame, Justify::Left));
+    assert!(wrapped.lines.len() > 1, "it wraps at the space");
+    let kept = layout(db(), &area("hello world", marked, frame, Justify::Left));
+    assert_eq!(kept.lines.len(), 1, "the marked words stay together");
+    assert_eq!(kept.lines[0].end, "hello world".len());
 }

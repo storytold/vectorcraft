@@ -413,6 +413,8 @@ impl Bristle {
     pub const SIZE_RANGE: (f64, f64) = (0.1, 1296.0);
     pub const LENGTH_RANGE: (f64, f64) = (25.0, 300.0);
     pub const PERCENT_RANGE: (f64, f64) = (1.0, 100.0);
+    /// The most characters `brush.new` and `brush.options` take for a new bristle brush name.
+    pub const MAX_NAME_CHARS: usize = 31;
 }
 
 impl Default for Bristle {
@@ -454,6 +456,31 @@ impl Brush {
             }
             BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
         }
+    }
+
+    /// A brush definition from JSON (a stored library entry or a command's params), its values
+    /// kept within their ranges ([`Brush::sanitize`]). A Hue Shift colorization without a `key`
+    /// takes the color the art's fills and strokes use most (the first of [`art_colors`]), or
+    /// black when they use no solid color.
+    pub fn from_json(mut v: serde_json::Value) -> Result<Brush, serde_json::Error> {
+        let keyless = v.get("colorization").is_some_and(|c| {
+            c.get("method").and_then(serde_json::Value::as_str) == Some("hueShift") && c.get("key").is_none_or(serde_json::Value::is_null)
+        });
+        if keyless {
+            // Read the art with the colorization field left out.
+            let mut plain = v.clone();
+            if let Some(o) = plain.as_object_mut() {
+                o.remove("colorization");
+            }
+            let b: Brush = serde_json::from_value(plain)?;
+            let key = art_colors(b.art()).first().copied().unwrap_or(vectorcraft_color::Color::BLACK);
+            if let Some(c) = v.get_mut("colorization").and_then(serde_json::Value::as_object_mut) {
+                c.insert("key".into(), serde_json::to_value(key)?);
+            }
+        }
+        let mut b: Brush = serde_json::from_value(v)?;
+        b.sanitize();
+        Ok(b)
     }
 
     /// Keep every value of the definition within its range (definitions come from files and
@@ -517,14 +544,9 @@ pub fn library(doc: &Document) -> Vec<Brush> {
 }
 
 /// Parse a stored library value (malformed entries are skipped, values kept within their
-/// ranges — see [`Brush::sanitize`]).
+/// ranges; see [`Brush::from_json`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    let parse = |b: &serde_json::Value| {
-        let mut b: Brush = serde_json::from_value(b.clone()).ok()?;
-        b.sanitize();
-        Some(b)
-    };
-    v.as_array().map(|a| a.iter().filter_map(parse).collect()).unwrap_or_default()
+    v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default()
 }
 
 /// Store `lib` as the document's brush library.

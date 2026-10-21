@@ -22,6 +22,7 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 	File	Berkas
 	New…	Baru…
+	New Without Dialog	Baru tanpa dialog
 	New from Template…	Baru dari templat…
 	Open…	Buka…
 	Open Recent Files	Buka berkas terbaru
@@ -760,6 +761,7 @@
 	Activate Panel	Aktifkan panel
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
+	Collapse Panel Group	Ciutkan grup panel
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -1056,7 +1058,8 @@ lighting	Light	Cahaya
 	 to sample a color	 untuk mengambil sampel warna
 	 across a selected object to set the gradient direction	 melintasi objek terpilih untuk mengatur arah gradien
 	 to select an artboard  |  	 untuk memilih artboard  |  
-	 on the canvas to create one	 di kanvas untuk membuatnya
+	 on the canvas to create one (	 di kanvas untuk membuatnya (
+	 selects several, or draws one inside an artboard)	 memilih beberapa, atau membuat satu di dalam artboard)
 	 a stroke to add a width point  |  	 stroke untuk menambah titik lebar  |  
 	 to change one side  |  	 untuk mengubah satu sisi  |  
 	 to select more points  |  	 untuk memilih lebih banyak titik  |  
@@ -1376,6 +1379,7 @@ lighting	Light	Cahaya
 	{count} more rules: Export writes every one.	{count} aturan lagi: Ekspor menuliskan semuanya.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objek tanpa nama tidak disertakan: beri nama, atau aktifkan Objek Tanpa Nama di menu panel.
 	All Categories	Semua kategori
+	Repeat Objects	Objek pengulangan
 	Save…	Simpan…
 	Selection Only	Hanya seleksi
 	{title} (selection)	{title} (seleksi)
@@ -1409,6 +1413,7 @@ lighting	Light	Cahaya
 	Edit the selected point's colour in the Color panel	Edit warna titik terpilih di panel Warna
 	Edit the stop	Edit stop
 	Eyedropper: click the art to sample the stop's colour	Pipet: klik karya seni untuk mengambil sampel warna stop
+	Eyedropper: click the art to sample the key color	Pipet: klik karya seni untuk mengambil sampel warna kunci
 	Gradient across stroke	Gradien melintasi stroke
 	Gradient along stroke	Gradien sepanjang stroke
 	Gradient Fill: click to apply, drag onto art	Isian gradien: klik untuk menerapkan, seret ke karya seni
@@ -1572,6 +1577,9 @@ lighting	Light	Cahaya
 	Left Indent	Indentasi kiri
 	Left-to-Right Paragraph Direction	Arah paragraf kiri ke kanan
 	Line-end Punctuation Half Width	Tanda baca akhir baris lebar setengah
+	Insert Kashidas	Sisipkan kashida
+	Long	Panjang
+	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
 	Kinsoku Set	Set Kinsoku
 	Hard	Keras
@@ -1723,6 +1731,7 @@ lighting	Light	Cahaya
 	Select art and click New Symbol to make one.	Pilih karya seni dan klik Simbol Baru untuk membuatnya.
 	Symbol Libraries (on the roadmap)	Pustaka simbol (ada di peta jalan)
 	Align On:	Ratakan pada:
+	Bottom-Justified Tab	Tab rata bawah
 	Center-Justified Tab	Tab rata tengah
 	Above Text	Di atas teks
 	Position Panel Above Text	Posisikan panel di atas teks
@@ -1734,6 +1743,7 @@ lighting	Light	Cahaya
 	No text selected	Tidak ada teks yang dipilih
 	Repeat Tab	Ulangi tab
 	Right-Justified Tab	Tab rata kanan
+	Top-Justified Tab	Tab rata atas
 	Select a text object to set its tab stops.	Pilih objek teks untuk mengatur tab stop-nya.
 	Select text	Pilih teks
 	Snap to Unit	Snap ke satuan
@@ -1849,6 +1859,13 @@ lighting	Light	Cahaya
 	Tints and Shades	Tint dan shade
 	Hue Shift	Pergeseran rona
 	Key Color:	Warna kunci:
+	Tips	Kiat
+	Colorization Tips	Kiat pewarnaan
+	The samples show this brush on a blue stroke.	Contoh menampilkan kuas ini pada stroke biru.
+	The art keeps its own colors.	Karya seni mempertahankan warnanya sendiri.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Hitam menjadi warna stroke dan putih tetap putih. Warna lain menjadi tint dari warna stroke, dan makin terang suatu warna, makin terang tint-nya.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Hitam tetap hitam dan putih tetap putih. Warna lain menjadi shade dari warna stroke jika gelap dan tint darinya jika terang.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Warna kunci menjadi warna stroke. Warna lain bergeser di roda warna sejauh warna kunci bergeser dan mempertahankan saturasi serta kecerahannya.
 	Size:	Ukuran:
 	Calligraphic Brush Options	Opsi kuas kaligrafi
 	Bristle Brush Options	Opsi kuas bristle
@@ -2665,12 +2682,21 @@ lighting	Light	Cahaya
 	Darken	Menggelapkan
 	Exclusion	Pengecualian
 	Hard Light	Cahaya keras
+	Hard Mix	Campuran keras
 	Lighten	Menerangkan
 	Luminosity	Luminositas
 	Overlay	Menimpa
 	Soft Light	Cahaya lembut
+	Soft Mix	Campuran lembut
 	Crosshatch	Arsir silang
 	Fine Dots	Titik halus
+
+	Simple	Sederhana
+	Light Rough	Kasar terang
+	Dark Rough	Kasar gelap
+	Wide Sharp	Lebar tajam
+	Wide Blurry	Lebar buram
+	Sparkle	Kilau
 	Medium Dots	Titik sedang
 	Grainy Dots	Titik berbutir
 	Coarse Dots	Titik kasar
@@ -2742,6 +2768,14 @@ theme	Appearance	Tampilan
 	Edit Symbol	Edit simbol
 	Expand Brush Strokes	Perluas guratan kuas
 	New Brush…	Kuas baru…
+	New Brush	Kuas baru
+	Calligraphic Brush	Kuas kaligrafi
+	Scatter Brush	Kuas sebar
+	Art Brush	Kuas seni
+	Bristle Brush	Kuas bristle
+	Pattern Brush	Kuas pola
+	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
+	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
 	New Symbol…	Simbol baru…
 	Place Symbol Instance	Tempatkan instansi simbol
@@ -3202,6 +3236,7 @@ theme	Appearance	Tampilan
 	Scale Corners	Skalakan sudut
 	Scale Cursor Proportional to UI	Skalakan kursor proporsional dengan UI
 	Scale Strokes & Effects	Skalakan guratan & efek
+	Scale Text Attributes	Skalakan atribut teks
 	Scratch Disks	Disk scratch
 	Secondary	Sekunder
 	Select Same Tint %	Pilih tint yang sama %
@@ -3302,6 +3337,7 @@ theme	Appearance	Tampilan
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel
+	Move Brush	Pindahkan kuas
 	Move Swatch	Pindahkan sampel
 	New Color Group	Grup warna baru
 	New Swatch	Sampel baru
@@ -3885,6 +3921,25 @@ imageTrace	Outline	Kontur
 @msg	a PostScript error ({name} in `{op}`: {at})	kesalahan PostScript ({name} dalam `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	kesalahan PostScript ({name} dalam `{op}`: {at}), dalam {procs}
 @msg	a PostScript error ({name})	kesalahan PostScript ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	kesalahan PostScript ({name} dalam `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	kesalahan PostScript ({name} dalam `{op}`; {meaning}), dalam {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	kesalahan PostScript ({name} dalam `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	kesalahan PostScript ({name} dalam `{op}`: {at}; {meaning}), dalam {procs}
+@msg	a PostScript error ({name}; {meaning})	kesalahan PostScript ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	program mengakhiri kamus yang tidak dimulainya
+@msg	the program opens a file, which the reader can't do	program membuka berkas, yang tidak dapat dilakukan pembaca PostScript
+@msg	the program restores a saved state that was already restored	program memulihkan keadaan tersimpan yang sudah dipulihkan
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	data yang dibaca program rusak atau terpotong, atau program meminta posisi dalam berkas yang tidak memiliki posisi
+@msg	the program goes past one of the reader's limits	program melewati salah satu batas pembaca PostScript
+@msg	the path has no point to continue from	jalur tidak memiliki titik untuk dilanjutkan
+@msg	a value is outside the range the operator takes	sebuah nilai berada di luar rentang yang diterima operator
+@msg	the operator needs more values than the stack holds	operator memerlukan lebih banyak nilai daripada yang ada di tumpukan
+@msg	part of the program isn't valid PostScript text	sebagian program bukan teks PostScript yang valid
+@msg	a value has the wrong type for the operator	sebuah nilai memiliki tipe yang salah untuk operator
+@msg	the program runs, deletes or renames a file, which the reader can't do	program menjalankan, menghapus, atau mengganti nama berkas, yang tidak dapat dilakukan pembaca PostScript
+@msg	the program asks for a resource that isn't defined	program meminta sumber daya yang tidak didefinisikan
+@msg	a calculation has no result, as in a division by zero	sebuah perhitungan tidak memiliki hasil, seperti pada pembagian dengan nol
+@msg	the operator looks for a mark on the stack and finds none	operator mencari penanda di tumpukan dan tidak menemukannya
 @msg	a bitmap is empty	bitmap kosong
 @msg	a bitmap is too large to read	bitmap terlalu besar untuk dibaca
 @msg	a colour index is 0 to {_1}, not {n}	indeks warna 0 hingga {_1}, bukan {n}
@@ -4003,6 +4058,7 @@ imageTrace	Outline	Kontur
 @msg	no bounds	tidak ada batas
 @msg	no brush named `{name}`	tidak ada kuas bernama `{name}`
 @msg	no brush selected	tidak ada kuas yang dipilih
+@msg	brushes move only within their type	kuas hanya dapat dipindahkan di dalam jenisnya sendiri
 @msg	no catalog	tidak ada katalog
 @msg	no changes since the last save	tidak ada perubahan sejak penyimpanan terakhir
 @msg	no clock to keep a heartbeat by	tidak ada jam untuk menjaga detak
@@ -4395,6 +4451,12 @@ imageTrace	Outline	Kontur
 @msg	before must name a panel	before harus menyebutkan panel
 @msg	docking action contains an unknown panel or an excessive split path	tindakan docking berisi panel tidak dikenal atau jalur pemisahan berlebihan
 @msg	group must be true or false	group harus true atau false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel mengambang; ciutkan grupnya dengan window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	panel tidak berada dalam grup dok
+@msg	only a dock group above or below others collapses, not one beside another	hanya grup dok di atas atau di bawah grup lain yang bisa diciutkan, bukan yang berada di sampingnya
+@msg	icon must be true or false	icon harus true atau false
+@msg	icon only docks a panel in the icon column, with no anchor	icon hanya menambatkan panel di kolom ikon, tanpa anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column menambatkan satu set sebagai kolom dok, tanpa anchor atau icon
 @msg	move requires a destination panel	move memerlukan panel tujuan
 @msg	move requires an existing destination panel	move memerlukan panel tujuan yang sudah ada
 @msg	onto must name a floating panel	onto harus menyebutkan panel mengambang
@@ -4781,6 +4843,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	3D Lighting Preset	Preset Pencahayaan 3D
+	Standard	Standar
+	Diffuse	Difus
 # 3D light management.
 	Lights	Lampu
 	Add Light	Tambah Lampu
@@ -4825,6 +4890,7 @@ mark-style	Japanese	Jepang
 	Painting	Painting
 	Printing and Proofing	Printing and Proofing
 	Tracing	Tracing
+	Touch	Touch
 	Typography	Typography
 	VectorCraft	VectorCraft
 	Web	Web
@@ -4891,6 +4957,7 @@ mark-style	Japanese	Jepang
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
+@msg	Scale Text Attributes: selected type has no scale to bake	Skalakan atribut teks: teks yang dipilih tidak memiliki skala untuk diterapkan
 @msg	Scale must be drawing:real, for example 1:10	Skala harus dalam format gambar:sebenarnya, misalnya 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Rasio skala harus antara 1:1000000 dan 1000000:1
 @msg	Second measured segment no longer exists	Segmen yang diukur kedua sudah tidak ada
@@ -4917,6 +4984,8 @@ mark-style	Japanese	Jepang
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…
 	Export Data Sets…	Ekspor himpunan data…
+	Load Variable Library…	Muat pustaka variabel…
+@msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
 	Make Graph Dynamic	Jadikan grafik dinamis
 	Batch…	Batch…
 	Source Folder:	Folder sumber:
@@ -5061,9 +5130,18 @@ swatch	Bright Violet	Violet cerah
 @msg	select the art to export first	pilih dulu karya yang akan diekspor
 @msg	no saved selection recalled	tidak ada seleksi tersimpan yang dipanggil
 	Merge only with selection	Gabungkan hanya dengan seleksi
+	Consider Open Filled Paths as Closed	Anggap jalur terbuka yang terisi sebagai tertutup
+	Pick Color From:	Ambil warna dari:
+	Artwork	Karya seni
+	Cursor Swatch Preview	Pratinjau swatch di kursor
+	Selection:	Seleksi:
+	Straight Line	Garis lurus
+	Highlight:	Sorotan:
 	Sketch	Sketsa
 	Halftone Pattern…	Pola halftone…
 	Halftone Pattern	Pola halftone
+	Torn Edges…	Tepi robek…
+	Torn Edges	Tepi robek
 	Pattern Type	Jenis pola
 	Dot	Titik
 	Export Type:	Jenis ekspor:
@@ -5092,6 +5170,8 @@ swatch	Bright Violet	Violet cerah
 	Gap Detection	Deteksi celah
 	Gap Options	Opsi celah
 	Gap Preview Color:	Warna pratinjau celah:
+	Show Live Paint Gaps	Tampilkan celah Live Paint
+	Hide Live Paint Gaps	Sembunyikan celah Live Paint
 	Graph Column	Kolom grafik
 	JavaScript Files	File JavaScript
 	JavaScript:	JavaScript:
@@ -5112,12 +5192,24 @@ swatch	Bright Violet	Violet cerah
 	Lock Variables	Kunci variabel
 	Unlock Variables	Buka kunci variabel
 	Change to Artboard Rulers	Ubah ke penggaris artboard
+	Colored Pencil…	Pensil warna…
+	Colored Pencil	Pensil warna
 	Cutout…	Potongan…
+	Dry Brush…	Kuas kering…
 	Neon Glow…	Pendar neon…
+	Palette Knife…	Pisau palet…
 	Poster Edges…	Tepi poster…
+	Rough Pastels…	Pastel kasar…
 	Cutout	Potongan
+	Dry Brush	Kuas kering
 	Neon Glow	Pendar neon
+	Paint Daubs…	Coretan cat…
+	Paint Daubs	Coretan cat
+	Palette Knife	Pisau palet
 	Poster Edges	Tepi poster
+	Rough Pastels	Pastel kasar
+	Underpainting…	Underpainting…
+	Underpainting	Underpainting
 	Apply Data Set	Terapkan set data
 	Cancel Pattern Editing	Batalkan pengeditan pola
 	Copy Appearance	Salin tampilan
@@ -5194,19 +5286,9 @@ swatch	Bright Violet	Violet cerah
 	Thread Text	Untai teks
 	Typing	Mengetik
 	Persistent	Persisten
+	Locate Library…	Temukan pustaka…
 	Library Panel Options	Opsi panel pustaka
-	Lock Artboards	Kunci artboard
-	Unlock Artboards	Buka kunci artboard
-	Artboard Color	Warna artboard
-	Lock Selected	Kunci yang dipilih
-	Lock All Except Selected	Kunci semua kecuali yang dipilih
-	Lock All	Kunci semua
-	Unlock Selected	Buka kunci yang dipilih
-	Lock Artboard	Kunci artboard
-	Unlock Artboard	Buka kunci artboard
-	Clear Artboard Color	Hapus warna artboard
-@msg	artboard {_1} is locked	artboard {_1} terkunci
-	Include Artboard Fill	Sertakan warna artboard
+	Gap Length:	Panjang celah:
 	Artboard {n} of {total}	Artboard {n} dari {total}
 	Encoding and writing the file…	Mengodekan dan menulis berkas…
 @plural	{n} more export waiting|{n} more exports waiting	{n} ekspor lagi menunggu
@@ -5232,6 +5314,7 @@ swatch	Bright Violet	Violet cerah
 	Watercolor…	Cat air…
 	Watercolor	Cat air
 	Brush Size	Ukuran kuas
+	Texture Coverage	Cakupan tekstur
 	Definition	Definisi
 	Brush Detail	Detail kuas
 	Shadow Intensity	Intensitas bayangan
@@ -5263,3 +5346,9 @@ swatch	Bright Violet	Violet cerah
 	Plaster	Plester
 	Note Paper…	Kertas Catatan…
 	Note Paper	Kertas Catatan
+	Water Paper…	Kertas Basah…
+	Water Paper	Kertas Basah
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Fresko…
+	Fresco	Fresko

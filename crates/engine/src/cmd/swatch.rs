@@ -137,6 +137,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.new";
     let mode = str_param(p, "mode");
+    super::paint::check_keep_model(p, C)?;
     let paints = match (p.get("colors").and_then(Value::as_array), str_param(p, "pattern")) {
         (Some(cs), _) => {
             let stored = |c: Color| if mode.is_some() { c } else { super::paint::new_color(s, p, c) };
@@ -302,6 +303,7 @@ fn link_colors(d: &mut Document, ids: &[NodeId], links: &[(Color, String)]) -> u
 fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.newGroup";
     let mut names = str_list(p, "swatches");
+    super::paint::check_keep_model(p, C)?;
     let colors: Vec<Color> = p
         .get("colors")
         .and_then(Value::as_array)
@@ -351,7 +353,7 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The name of the item that items moving to index `to` of `list` go before: the first one at or
 /// after `to` that isn't moving (`None`: the end).
-fn anchor<T>(list: &[T], to: Option<usize>, moving: &[String], name: impl Fn(&T) -> &str) -> Option<String> {
+pub(super) fn anchor<T>(list: &[T], to: Option<usize>, moving: &[String], name: impl Fn(&T) -> &str) -> Option<String> {
     list.iter().skip(to?).map(&name).find(|n| !moving.iter().any(|m| m == n)).map(str::to_string)
 }
 
@@ -364,7 +366,7 @@ fn insert_before<T>(list: &mut Vec<T>, items: Vec<T>, anchor: Option<&str>, name
 fn swatch_move(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.move";
     let names = names_param(p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).map(|v| v as usize);
+    let to = p.get("to").and_then(Value::as_u64).map(index);
     let group = str_param(p, "group").map(str::to_string);
     let moved = names.len();
     s.edit("Move Swatch", |d, _| {
@@ -537,6 +539,10 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
         && ["color", "mode", "paint", "global", "spot"].iter().any(|k| given(k))
     {
         return Err(bad(C, format!("`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)")));
+    }
+    super::paint::check_keep_model(p, C)?;
+    if let Some(v) = p.get("paint") {
+        super::paint::check_keep_model(v, C)?;
     }
     // A replacement paint of the swatch's kind (a dropped colour or edited gradient).
     let paint = match p.get("paint").filter(|v| !v.is_null()) {
@@ -875,6 +881,7 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .map(|v| color_value(v).ok_or_else(|| bad(C, format!("bad colour {v}"))))
         .collect::<Result<_>>()?;
+    super::paint::check_keep_model(p, C)?;
     // A color its swatch already has keeps its model. The others take the document's.
     let old: Vec<Option<Color>> =
         s.doc()?.doc.swatch_groups.iter().find(|g| g.name == group).map(|g| g.swatches.iter().map(|w| w.paint.color()).collect()).unwrap_or_default();

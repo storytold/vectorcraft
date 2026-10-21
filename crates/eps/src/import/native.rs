@@ -234,6 +234,8 @@ fn fill_slots(
             let frame = ai::slot_frame(n.name.as_deref());
             let state = (n.opacity, n.blend, n.isolate, n.knockout);
             let transparent = see_through(n);
+            // An art style read onto the slot (fills, strokes and effects round the characters) is the type's.
+            let styled = (!n.appearance.items.is_empty() || !n.appearance.effects.is_empty()).then(|| n.appearance.clone());
             let replacement = match content.next() {
                 Some(Content::Page(parts)) if !parts.is_empty() => {
                     // The page's type (and the strokes round it) take the slot's place as they are.
@@ -286,6 +288,11 @@ fn fill_slots(
                         made.push((story, frame, text.id));
                     }
                     text.visible = visible;
+                    // Type with an art style is what the page draws as the style's look: it is seen.
+                    let seen = seen || styled.is_some();
+                    if let Some(appearance) = styled {
+                        text.appearance = appearance;
+                    }
                     // Type the page shows is kept; other made type is weighed against the page.
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
                     let extra: Vec<Arc<Node>> = extra.iter().map(|p| reid(doc, p)).collect();
@@ -833,6 +840,10 @@ struct PageView {
     page: vectorcraft_render::Rendered,
     /// Where the page's own type is, in its pixels.
     page_type: Vec<Rect>,
+    /// Where objects read with their art style lie, in its pixels: the page has Illustrator's
+    /// rendering of the style there, the layers VectorCraft's live effects, and the two aren't
+    /// held to look alike.
+    restyled: Vec<Rect>,
     layers: vectorcraft_render::Renderer,
     scale: f64,
     samples: u32,
@@ -848,7 +859,18 @@ impl PageView {
         let page = comparison_render(&mut vectorcraft_render::Renderer::new(), frame.page, ra, scale, samples);
         let mut page_type = vec![];
         type_areas(&frame.page.layers, ra, scale, &mut page_type);
-        Self { page, page_type, layers: vectorcraft_render::Renderer::new(), scale, samples }
+        Self { page, page_type, restyled: vec![], layers: vectorcraft_render::Renderer::new(), scale, samples }
+    }
+
+    /// Leave the drawn looks in `looks` (on `region`, the page's area in the layers' document) out
+    /// of the comparisons ([`Structure::restyled`](ai::Structure)).
+    fn restyled(&mut self, looks: &[Rect], region: Rect) {
+        let s = self.scale;
+        self.restyled = looks
+            .iter()
+            .map(|r| r.inflate(OUTLINE_REACH, OUTLINE_REACH))
+            .map(|r| Rect::new((r.x0 - region.x0) * s, (r.y0 - region.y0) * s, (r.x1 - region.x0) * s, (r.y1 - region.y0) * s))
+            .collect();
     }
 
     /// How `b` on `rb` (a rectangle the page's size) draws differently from the page ([`compared`]).
@@ -859,7 +881,7 @@ impl PageView {
         let y = comparison_render(&mut self.layers, b, rb, self.scale, self.samples);
         let mut areas = self.page_type.clone();
         type_areas(&b.layers, rb, self.scale, &mut areas);
-        compared(&self.page, &y, &areas)
+        compared(&self.page, &y, &areas, &self.restyled)
     }
 
     /// The share (0 to 1) of the pixels where `b` on `rb` draws another colour than the page
@@ -890,19 +912,22 @@ fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> Difference {
     let mut areas = vec![];
     type_areas(&a.layers, ra, scale, &mut areas);
     type_areas(&b.layers, rb, scale, &mut areas);
-    compared(&x, &y, &areas)
+    compared(&x, &y, &areas, &[])
 }
 
 /// How two drawings of the same size differ, each drawn on nothing and seen on white, away from
-/// the type in `areas` (pixels). Pixels are compared by lightness, and by whether they are inked
+/// the type in `areas` (pixels), pixels in `skip` counting as alike. Pixels are compared by lightness, and by whether they are inked
 /// at all ([`differ`]): the page of an RGB document is written in the colours' CMYK equivalents,
 /// and what the comparison looks for is art that is missing or out of place.
-fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect]) -> Difference {
+fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect], skip: &[Rect]) -> Difference {
     if x.width == 0 || x.height == 0 || x.width != y.width || x.height != y.height {
         return Difference { any: 1.0, art: 1.0, solid: 1.0 };
     }
-    let differs: Vec<bool> = x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).map(|(p, q)| differ(p, q)).collect();
     let (w, h) = (x.width as usize, x.height as usize);
+    // Pixels in `skip` count as alike.
+    let skipped = in_areas(skip, w, h);
+    let differs: Vec<bool> =
+        x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).zip(&skipped).map(|((p, q), s)| !*s && differ(p, q)).collect();
     let at = |i: usize, j: usize| j.checked_mul(w).and_then(|row| row.checked_add(i)).and_then(|k| differs.get(k)).copied().unwrap_or(false);
     let typed = in_areas(areas, w, h);
     let art = differs.iter().zip(&typed).filter(|(d, t)| **d && !**t).count();
@@ -1002,7 +1027,8 @@ struct Frame<'a> {
 fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, trust: bool, unit: f64) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, warnings } = ai::read(data, matches!(page, Page::Art))?;
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, restyled, warnings } =
+        ai::read(data, matches!(page, Page::Art))?;
     // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
     // scaled down to those units, and the document read from it is scaled up by `unit`.
     let board = artboard.map(|a| to_doc.transform_rect_bbox(a));
@@ -1153,6 +1179,7 @@ fn build(data: &[u8], visible: Option<&Document>, page: Page, outlined: bool, tr
     match frame {
         Some(frame) => {
             let mut view = PageView::new(&frame);
+            view.restyled(&restyled, frame.rect);
             let unseen = prune_unseen(&frame, &mut view, &mut doc);
             if unseen > 0 {
                 notes.push(format!("{unseen} {UNSEEN_TEXT}"));
@@ -1327,9 +1354,9 @@ fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why.
-pub(super) fn layered(ps: &[u8], visible: Imported) -> Imported {
+pub(super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
-    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false, false, 1.0));
+    let result = data.and_then(|data| build(&data, Some(&visible.document), Page::Art, false, trust, 1.0));
     match result {
         Ok((document, mut warnings)) => {
             for w in &visible.warnings {
@@ -1615,7 +1642,7 @@ mod tests {
         let mut renderer = vectorcraft_render::Renderer::new();
         let a = comparison_render(&mut renderer, &page, rect, 0.4, 1);
         let b = comparison_render(&mut vectorcraft_render::Renderer::new(), &vector, rect, 0.4, 1);
-        assert!(compared(&a, &b, &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
+        assert!(compared(&a, &b, &[], &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
         let frame = Frame { page: &page, page_rect: rect, rect, whole: false };
         let mut view = PageView::new(&frame);
         assert!(compare(&frame, &mut view, &vector).is_ok());

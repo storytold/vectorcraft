@@ -43,7 +43,7 @@ const JS_EXTS: &[&str] = &["js"];
 
 /// The open dialog for a JavaScript file.
 fn pick() -> FilePick {
-    FilePick { filters: vec![("JavaScript", JS_EXTS)], ..Default::default() }
+    FilePick { filters: vec![FilePick::filter("JavaScript", JS_EXTS)], ..Default::default() }
 }
 
 /// Choose…: the file picked in the open dialog into File or URL, as a `file:///` URL

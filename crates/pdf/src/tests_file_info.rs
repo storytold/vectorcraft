@@ -207,3 +207,44 @@ fn a_written_pdf_gives_its_file_info_back() {
     assert_eq!(f.keywords, Some(vec!["fair".to_string(), "print".into()]));
     assert_eq!((f.created, f.modified), (Some(CREATED), Some(CREATED)));
 }
+
+#[test]
+fn a_written_pdf_gives_its_copyright_back() {
+    use vectorcraft_doc::CopyrightStatus;
+    let notice = "(c) 2026 Ada & <Babbage>\r\nAll rights \"reserved\"";
+    let url = "https://example.com/rights?a=1&b=2";
+    for standard in [Standard::None, Standard::PdfA2b, Standard::PdfX1a, Standard::PdfX4] {
+        for (status, marked) in
+            [(CopyrightStatus::Copyrighted, Some(true)), (CopyrightStatus::PublicDomain, Some(false)), (CopyrightStatus::Unknown, None)]
+        {
+            let mut d = Document::new(100.0, 100.0);
+            d.metadata.author = "Ada Lovelace".into();
+            (d.metadata.copyright_status, d.metadata.copyright_notice, d.metadata.copyright_url) = (status, notice.into(), url.into());
+            let mut o = PdfOptions { created: Some(CREATED), ..PdfOptions::uncompressed() };
+            (o.settings.standard, o.settings.compatibility) = (standard, standard.version());
+            let bytes = export(&d, &o).unwrap();
+            let f = file_info(&bytes, None).unwrap();
+            let what = format!("{standard:?} {status:?}");
+            assert_eq!(f.copyright_notice.as_deref(), Some(notice), "{what}");
+            assert_eq!(f.copyright_url.as_deref(), Some(url), "{what}");
+            assert_eq!(f.copyrighted, marked, "{what}");
+            // The writer's own properties stay readable beside them.
+            assert_eq!((f.author.as_deref(), f.created), (Some("Ada Lovelace"), Some(CREATED)), "{what}");
+            let t = String::from_utf8_lossy(&bytes);
+            assert_eq!(t.contains("<pdfxid:GTS_PDFXVersion"), standard == Standard::PdfX4, "{what}: the PDF/X-4 identification");
+            assert_eq!(import(&bytes).unwrap().artboards.len(), 1, "{what}: the file reads back");
+        }
+    }
+    // A status alone is written; a document without any copyright gets none of the properties.
+    let mut d = Document::new(100.0, 100.0);
+    d.metadata.copyright_status = CopyrightStatus::PublicDomain;
+    let f = file_info(&export(&d, &PdfOptions::uncompressed()).unwrap(), None).unwrap();
+    assert_eq!((f.copyrighted, f.copyright_notice, f.copyright_url), (Some(false), None, None));
+    let bytes = export(&Document::new(100.0, 100.0), &PdfOptions::uncompressed()).unwrap();
+    assert!(!String::from_utf8_lossy(&bytes).contains("xmpRights") && !String::from_utf8_lossy(&bytes).contains("dc:rights"));
+    // Characters XML doesn't allow are left out, so the packet still reads.
+    let mut d = Document::new(100.0, 100.0);
+    (d.metadata.author, d.metadata.copyright_notice) = ("Ada".into(), "(c)\u{1} Ada\u{FFFF}".into());
+    let f = file_info(&export(&d, &PdfOptions::uncompressed()).unwrap(), None).unwrap();
+    assert_eq!((f.author.as_deref(), f.copyright_notice.as_deref()), (Some("Ada"), Some("(c) Ada")));
+}

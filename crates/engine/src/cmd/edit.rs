@@ -171,7 +171,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(|v| v as usize).or(s.active_index()).ok_or(EngineError::NoDocument)?;
+    let i = p.get("index").and_then(Value::as_u64).map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
     if !s.close_document(i) {
         return Err(bad("file.close", "no such document"));
     }
@@ -179,7 +179,7 @@ fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad("document.activate", "missing index"))? as usize;
+    let i = p.get("index").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.activate", "missing index"))?;
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
 }
 
@@ -399,6 +399,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     if guides_locked {
         crate::deselect_guides(&st.doc, &mut st.selection);
     }
+    st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     Ok(json!({ "undone": label }))
 }
@@ -423,6 +424,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     if guides_locked {
         crate::deselect_guides(&st.doc, &mut st.selection);
     }
+    st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     Ok(json!({ "redone": label }))
 }

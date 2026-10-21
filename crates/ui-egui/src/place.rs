@@ -139,7 +139,9 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     let paths = if app.services.pick_open_multi.is_some() {
         crate::picks::open_many(app)
     } else {
-        crate::picks::open(app, &crate::FilePick { filters: fileio::place_filters().collect(), ..Default::default() }).into_iter().collect()
+        crate::picks::open(app, &crate::FilePick { filters: crate::FilePick::filters(fileio::place_filters()), ..Default::default() })
+            .into_iter()
+            .collect()
     };
     if paths.is_empty() {
         return Err("cancelled".into());

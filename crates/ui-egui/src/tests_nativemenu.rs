@@ -135,7 +135,7 @@ fn language_and_appearance_are_in_the_app_menu() {
     assert_eq!(ids(submenu(app_menu, "Language"))[..2], ["app.language", "---"], "Automatic, then the languages");
     let langs: Vec<(String, Option<bool>)> = items(submenu(app_menu, "Language")).iter().map(|it| (it.label.clone(), it.checked)).collect();
     let mut want = vec![("Automatic".to_string(), Some(false))];
-    want.extend(Lang::all().map(|l| (l.name().to_string(), Some(l.code() == "ja"))));
+    want.extend(Lang::for_picker().into_iter().map(|l| (l.name().to_string(), Some(l.code() == "ja"))));
     assert_eq!(langs, want);
     // In every UI language the languages keep their own names.
     for ui in Lang::all() {
@@ -481,7 +481,12 @@ fn a_move_dragged_onto_a_panel_reads_the_menus() {
     assert_eq!(read, 0, "the menus weren't read at any step of the drag");
     let synced = m.fake.synced();
     let panel = Pos2::new(m.app.canvas_rect.unwrap().right() + 40.0, start.y);
+    // Over a panel the move waits: the menus keep the interaction's state.
     m.frame(vec![Event::PointerMoved(panel)]);
+    assert!(m.app.session.in_interaction(), "the move waits over the panel");
+    assert_eq!(m.fake.synced(), synced, "the menus weren't read");
+    // Released over the panel, the move is dropped and the menus are read.
+    m.frame(vec![click(panel, false)]);
     assert!(!m.app.session.in_interaction(), "the move was dropped");
     assert_eq!(m.fake.synced(), synced + 1, "the menus were read");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, undo);

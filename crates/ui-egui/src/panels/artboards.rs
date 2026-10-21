@@ -1,13 +1,19 @@
-//! Artboards panel: numbered list with inline rename (double-click the name), move up / down, new
+//! Artboards panel: numbered list with inline rename (double-click the name, or the panel menu's
+//! Rename; while several artboards are selected, the name typed goes to all of them, numbered),
+//! move up / down, new
 //! (Alt-click: Artboard Options for the new artboard first), delete; a row dragged onto New
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
 //! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
-//! the active artboard's icon, or a double-click on another row's icon.
+//! the active artboard's icon, or a double-click on another row's icon. The lock column left of it
+//! shows a lock on a locked artboard, and a click there locks or unlocks the artboard
+//! (`artboard.setProps` with `locked`); Delete leaves locked artboards.
 
 use egui::{Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
+use vectorcraft_color::Color;
+use vectorcraft_doc::ColorMode;
 use vectorcraft_geom::Rect;
 
 use super::{alt_held, pstate, set_pstate};
@@ -129,6 +135,24 @@ pub(crate) fn move_art(app: &VectorcraftApp) -> bool {
     app.session.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true)
 }
 
+/// The Fill list of an artboard (Properties › Artboards › Fill, Artboard Options): no background
+/// color, White and Black.
+pub(crate) const FILLS: [&str; 3] = ["None", "White", "Black"];
+
+/// The background colors [`FILLS`] stand for, White and Black in the document's color mode.
+pub(crate) fn fill_colors(app: &VectorcraftApp) -> [Option<Color>; 3] {
+    if app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk) {
+        [None, Some(Color::cmyk(0.0, 0.0, 0.0, 0.0)), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0))]
+    } else {
+        [None, Some(Color::WHITE), Some(Color::BLACK)]
+    }
+}
+
+/// The name the Fill list shows for background `color`: one of [`FILLS`], else Custom.
+pub(crate) fn fill_name(app: &VectorcraftApp, color: Option<Color>) -> &'static str {
+    fill_colors(app).iter().position(|c| *c == color).map_or("Custom", |i| FILLS[i])
+}
+
 /// The active artboard (of `n`).
 pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
     app.view().map_or(0, |v| v.artboard).min(n.saturating_sub(1))
@@ -154,11 +178,24 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     all
 }
 
-/// The artboards a new size for artboard `i` goes to: the selected artboards ([`picked`]) when
-/// `i` is one of them, else `i` alone.
-pub(crate) fn resized_with(app: &VectorcraftApp, i: usize) -> Vec<usize> {
+/// The picked artboards that can be deleted: those that aren't locked.
+pub(crate) fn deletable(app: &VectorcraftApp, n: usize) -> Vec<usize> {
+    let locked = |i: &usize| app.session.active().and_then(|d| d.doc.artboards.get(*i)).is_some_and(|a| a.locked);
+    picked(app, n).into_iter().filter(|i| !locked(i)).collect()
+}
+
+/// The artboards a name typed in artboard `i`'s row's name field goes to: the selected artboards
+/// ([`picked`]) when `i` is one of them, else `i` alone. Locked artboards are renamed too.
+pub(crate) fn renamed_with(app: &VectorcraftApp, i: usize) -> Vec<usize> {
     let all = picked(app, app.session.active().map_or(0, |d| d.doc.artboards.len()));
     if all.contains(&i) { all } else { vec![i] }
+}
+
+/// The artboards a new size for artboard `i` goes to: those [`renamed_with`] gives. Another
+/// selected artboard that is locked keeps its size.
+pub(crate) fn resized_with(app: &VectorcraftApp, i: usize) -> Vec<usize> {
+    let locked = |j: &usize| app.session.active().and_then(|d| d.doc.artboards.get(*j)).is_some_and(|a| a.locked);
+    renamed_with(app, i).into_iter().filter(|j| *j == i || !locked(j)).collect()
 }
 
 /// The `artboard.setProps` params that set `entries` (each an artboard's `index` and its fields)
@@ -201,20 +238,42 @@ pub(crate) fn set_props(
     }
 }
 
-/// Delete the picked artboards and select a remaining one.
+/// Rename the artboards of `indices` in one undo step (`artboard.setProps`): one artboard takes
+/// `name` (trimmed), and several take it numbered in panel order, `name-1`, `name-2` and so on.
+fn rename(app: &mut VectorcraftApp, indices: &[usize], name: &str) -> Result<Value, String> {
+    let name = name.trim();
+    let mut all = indices.to_vec();
+    all.sort_unstable();
+    all.dedup();
+    let several = all.len() > 1;
+    let numbered = |k: usize| if several { format!("{name}-{}", k + 1) } else { name.to_string() };
+    let entries = all.iter().enumerate().map(|(k, i)| json!({"index": i, "name": numbered(k)})).collect();
+    match set_props_params(json!({}), entries) {
+        Some(p) => app.run("artboard.setProps", p),
+        None => Ok(Value::Null),
+    }
+}
+
+/// Open the name field on artboard `i`'s row. The name typed there goes to the artboards
+/// [`renamed_with`] gives for `i` now, numbered when there are several ([`rename`]).
+fn start_rename(ctx: &egui::Context, app: &VectorcraftApp, i: usize) {
+    set_pstate(ctx, "ab-edit", Some(i));
+    set_pstate(ctx, "ab-edit-all", renamed_with(app, i));
+}
+
+/// Delete the picked artboards that aren't locked and select a remaining one.
 pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
-    let mut all = picked(app, n);
+    let mut all = deletable(app, n);
+    if all.is_empty() {
+        return;
+    }
     if n > 1 && all.len() == n {
         // Deleting all artboards keeps artboard 1 (the public Delete artboards guide).
         all.retain(|i| *i != 0);
     }
-    if n > all.len() {
-        // A locked artboard refuses: the status bar says which.
-        match app.run("artboard.delete", json!({ "indices": all })) {
-            Ok(_) => select(app, all.first().copied().unwrap_or(0).saturating_sub(1)),
-            Err(e) => app.status(e),
-        }
+    if n > all.len() && app.run("artboard.delete", json!({ "indices": all })).is_ok() {
+        select(app, all.first().copied().unwrap_or(0).saturating_sub(1));
     }
 }
 
@@ -325,9 +384,7 @@ pub(crate) fn duplicate_picked(app: &mut VectorcraftApp) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
-    // Each artboard's lock and colour, for the row's lock toggle and colour chip.
-    let looks: Vec<(bool, Option<vectorcraft_doc::color::Color>)> =
-        app.session.active().map(|d| d.doc.artboards.iter().map(|a| (a.locked, a.color)).collect()).unwrap_or_default();
+    let locked: Vec<bool> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.locked).collect()).unwrap_or_default();
     if abs.is_empty() {
         super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;
@@ -357,47 +414,50 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.0),
                     t.text_dim,
                 );
-                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 72.0, r.bottom() - 2.0));
+                let name_rect = egui::Rect::from_min_max(pos2(r.left() + 32.0, r.top() + 2.0), pos2(r.right() - 46.0, r.bottom() - 2.0));
                 if editing == Some(i) {
+                    // The artboards the field renames: the artboards selected when it opened, when
+                    // there were several and this row's artboard is one of them, else this row's
+                    // artboard alone. With several, the field starts empty.
+                    let opened_on: Vec<usize> = pstate(ui.ctx(), "ab-edit-all");
+                    let targets = if opened_on.len() > 1 && opened_on.contains(&i) { opened_on } else { vec![i] };
+                    let shown = if targets.len() > 1 { "" } else { name.as_str() };
                     let id = ui.id().with(("ab-name", i));
-                    let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
-                    let kept = widgets::own_field_shift_enter(ui, id, &mut buf, name);
+                    let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.to_string());
+                    let kept = widgets::own_field_shift_enter(ui, id, &mut buf, shown);
                     let te = ui.put(name_rect, egui::TextEdit::singleline(&mut buf).id(id).font(egui::FontId::proportional(12.0)));
                     if !te.has_focus() && !te.lost_focus() {
                         te.request_focus();
                     }
                     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+                    let renames = !buf.trim().is_empty() && buf != shown;
                     if te.lost_focus() {
                         set_pstate::<Option<usize>>(ui.ctx(), "ab-edit", None);
+                        set_pstate::<Vec<usize>>(ui.ctx(), "ab-edit-all", vec![]);
                         ui.data_mut(|d| d.remove::<String>(id));
-                        if !ui.input(|i| i.key_pressed(egui::Key::Escape)) && !buf.trim().is_empty() && buf != *name {
-                            app.run("artboard.setProps", json!({"index": i, "name": buf.trim()})).ok();
+                        if !ui.input(|i| i.key_pressed(egui::Key::Escape)) && renames {
+                            rename(app, &targets, &buf).ok();
                         }
-                    } else if kept && !buf.trim().is_empty() && buf != *name {
-                        // Shift+Enter renames it and keeps the field open.
-                        app.run("artboard.setProps", json!({"index": i, "name": buf.trim()})).ok();
+                    } else if kept && renames {
+                        // Shift+Enter renames them and keeps the field open.
+                        rename(app, &targets, &buf).ok();
                     }
                 } else {
                     ui.painter().text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
                 }
-                let (locked, color) = looks.get(i).copied().unwrap_or_default();
-                // The lock toggle: the lock shows when locked, or dim while the row is hovered. A
-                // click locks or unlocks the selected artboards when this row is one of them.
-                let lock = egui::Rect::from_center_size(r.right_center() - vec2(34.0, 0.0), vec2(14.0, 14.0));
+                // The lock column, right of the name: the lock shows while the artboard is locked
+                // (dimmed under the pointer while it isn't), and a click locks or unlocks it.
+                let is_locked = locked.get(i).copied().unwrap_or(false);
+                let lock = egui::Rect::from_center_size(r.right_center() - vec2(36.0, 0.0), vec2(14.0, 14.0));
                 let lresp = ui.interact(lock, ui.id().with(("ab-lock", i)), Sense::click());
-                if locked {
-                    icons::paint(ui, "lock", lock, if lresp.hovered() { t.text_strong } else { t.icon });
-                } else if resp.hovered() || lresp.hovered() {
-                    icons::paint(ui, "lock", lock, t.text_disabled);
+                if is_locked {
+                    icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.icon);
+                } else if lresp.hovered() {
+                    icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.text_disabled);
                 }
-                if lresp.on_hover_text(if locked { tl!("Unlock Artboard") } else { tl!("Lock Artboard") }).clicked() {
-                    let targets = if all.contains(&i) { all.clone() } else { vec![i] };
-                    app.run("artboard.lock", json!({ "indices": targets, "locked": !locked })).ok();
+                if lresp.clicked() {
+                    app.run("artboard.setProps", json!({"index": i, "locked": !is_locked})).ok();
                 }
-                // The colour chip: a click picks the artboard colour (set when the pointer is
-                // released, one undo step); an empty chip means the paper shows.
-                let chip = egui::Rect::from_center_size(r.right_center() - vec2(54.0, 0.0), vec2(14.0, 14.0));
-                artboard_color_chip(app, ui, i, chip, color, &all);
                 let opt = egui::Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0));
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
                 icons::paint(ui, "dc-artboard-options", opt, if oresp.hovered() { t.text_strong } else { t.icon });
@@ -430,7 +490,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if resp.double_clicked() && on_number {
                     app.run("view.goToArtboard", json!({ "index": i })).ok();
                 } else if resp.double_clicked() {
-                    set_pstate(ui.ctx(), "ab-edit", Some(i));
+                    start_rename(ui.ctx(), app, i);
                 }
             }
         });
@@ -469,47 +529,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
             select(app, n);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1 && !deletable(app, n).is_empty(), 24.0).clicked() {
             delete_selected(app);
         }
     });
-}
-
-/// Artboard `i`'s colour chip in `chip`: the colour button, with a red slash while the artboard has
-/// no colour. The colour is set (`artboard.setColor`, on every selected artboard when `i` is one
-/// of them) once the pointer is released, so a drag in the picker is one undo step.
-fn artboard_color_chip(
-    app: &mut VectorcraftApp,
-    ui: &mut Ui,
-    i: usize,
-    chip: egui::Rect,
-    color: Option<vectorcraft_doc::color::Color>,
-    all: &[usize],
-) {
-    let pending_id = egui::Id::new(("ab-color-pending", i));
-    let [r, g, b, _] = color.unwrap_or(vectorcraft_doc::color::Color::WHITE).to_rgba8(1.0);
-    let mut rgb = [r, g, b];
-    let changed = ui
-        .scope_builder(egui::UiBuilder::new().max_rect(chip), |ui| {
-            ui.spacing_mut().interact_size = vec2(14.0, 14.0);
-            ui.spacing_mut().button_padding = vec2(0.0, 0.0);
-            ui.color_edit_button_srgb(&mut rgb).on_hover_text(tl!("Artboard Color")).changed()
-        })
-        .inner;
-    if color.is_none() {
-        ui.painter().line_segment([chip.left_bottom(), chip.right_top()], egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 40, 40)));
-    }
-    if changed {
-        ui.data_mut(|d| d.insert_temp(pending_id, rgb));
-    }
-    let pending = ui.data(|d| d.get_temp::<[u8; 3]>(pending_id));
-    if let Some([r, g, b]) = pending
-        && !ui.input(|inp| inp.pointer.any_down())
-    {
-        ui.data_mut(|d| d.remove::<[u8; 3]>(pending_id));
-        let targets = if all.contains(&i) { all.to_vec() } else { vec![i] };
-        app.run("artboard.setColor", json!({ "indices": targets, "color": format!("#{r:02x}{g:02x}{b:02x}") })).ok();
-    }
 }
 
 /// Open Rearrange All Artboards (#681).
@@ -526,24 +549,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
         duplicate_picked(app);
     }
-    if menu_item(ui, tl!("Delete Artboards"), n > 1, false) {
+    if menu_item(ui, tl!("Delete Artboards"), n > 1 && !deletable(app, n).is_empty(), false) {
         delete_selected(app);
     }
     if menu_item(ui, tl!("Rename"), n > 0, false) {
-        set_pstate(ui.ctx(), "ab-edit", Some(sel));
+        start_rename(ui.ctx(), app, sel);
     }
     menu_item(ui, tl!("Delete Empty Artboards"), false, false);
     ui.separator();
-    let boards = picked(app, n);
-    let locked = app.session.active().is_some_and(|d| boards.iter().any(|i| d.doc.artboards.get(*i).is_some_and(|a| a.locked)));
-    if menu_item(ui, if locked { tl!("Unlock Artboards") } else { tl!("Lock Artboards") }, n > 0, false) {
-        app.run("artboard.lock", json!({ "indices": boards, "locked": !locked })).ok();
+    if menu_item(ui, tl!("Convert to Artboards"), crate::menus::enabled(app, "artboard.convertToArtboards"), false) {
+        crate::menus::invoke(app, "artboard.convertToArtboards", json!({}));
     }
-    if menu_item(ui, tl!("Clear Artboard Color"), n > 0, false) {
-        app.run("artboard.setColor", json!({ "indices": boards, "color": null })).ok();
-    }
-    ui.separator();
-    menu_item(ui, tl!("Convert to Artboards"), false, false);
     if menu_item(ui, tl!("Artboard Options…"), n > 0, false) {
         app.run("tool.options", json!({ "tool": "artboard" })).ok();
     }
@@ -560,34 +576,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
-
-    /// With the Artboard tool, the canvas context menu locks and unlocks artboards: Lock Selected
-    /// locks the selected one (the others stay free), Unlock All frees every artboard.
-    #[test]
-    fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
-        use crate::menus::Item;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
-        let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
-        let run = |app: &mut VectorcraftApp, menu: &str, label: &str| {
-            let items = crate::menus::context_items(app);
-            let Some(Item::Sub(_, subs)) = items.iter().find(|i| matches!(i, Item::Sub(t, _) if *t == menu)) else { panic!("no {menu}") };
-            let Some(Item::Cmd(_, id, p)) = subs.iter().find(|i| matches!(i, Item::Cmd(l, ..) if *l == label)) else { panic!("no {label}") };
-            crate::menus::invoke(app, id, p.clone());
-        };
-        // Without the Artboard tool the menu has no such submenu.
-        assert!(!crate::menus::context_items(&app).iter().any(|i| matches!(i, Item::Sub(t, _) if *t == "Lock Artboards")));
-        app.select_tool("artboard");
-        select(&mut app, 1);
-        run(&mut app, "Lock Artboards", "Lock Selected");
-        assert_eq!(locked(&app), [false, true, false]);
-        run(&mut app, "Lock Artboards", "Lock All Except Selected");
-        assert_eq!(locked(&app), [true, true, true], "the others lock, the locked one stays");
-        run(&mut app, "Unlock Artboards", "Unlock Selected");
-        assert_eq!(locked(&app), [true, false, true]);
-        run(&mut app, "Unlock Artboards", "Unlock All");
-        assert_eq!(locked(&app), [false, false, false]);
-    }
 
     /// Clicking a row makes its artboard the active one (the navigator's, Fit Artboard in Window's).
     #[test]
@@ -844,6 +832,116 @@ mod tests {
         assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), None, "and closes the field");
     }
 
+    /// With artboards 1, 3 and 4 selected with the Artboard tool, the panel menu's Rename opens an
+    /// empty name field on the active artboard's row, and the name typed there goes to all three,
+    /// numbered in panel order, in one undo step. With one artboard selected, Rename gives it the
+    /// name as typed.
+    #[test]
+    fn the_panel_menus_rename_numbers_several_selected_artboards() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [400, 800, 1200] {
+            app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
+        }
+        app.select_tool("artboard");
+        select(&mut app, 2);
+        app.session.set_tool_option("selected", &json!([2, 0, 3]));
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let raw = |events| egui::RawInput { events, screen_rect: screen, ..Default::default() };
+        let rename = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(raw(vec![]), |ui| menu(app, ui));
+            out.textures_delta.clear();
+            let item = out
+                .shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.text().trim_start() == "Rename" => Some(t.visual_bounding_rect().center()),
+                    _ => None,
+                })
+                .unwrap();
+            let button =
+                |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            ctx.run_ui(raw(vec![egui::Event::PointerMoved(item), button(true), button(false)]), |ui| menu(app, ui)).textures_delta.clear();
+        };
+        let frame = |app: &mut VectorcraftApp, events| ctx.run_ui(raw(events), |ui| show(app, ui)).textures_delta.clear();
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        rename(&mut app);
+        assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), Some(2), "the field opens on the active artboard's row");
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text("abc".into())]);
+        frame(&mut app, vec![enter.clone()]);
+        frame(&mut app, vec![]);
+        assert_eq!(names(&app), ["abc-1", "Artboard 2", "abc-2", "abc-3"]);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3", "Artboard 4"], "one undo step");
+        // One artboard selected: the field shows its name, and the name typed replaces it.
+        select(&mut app, 1);
+        rename(&mut app);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        let all = egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+        frame(&mut app, vec![all, egui::Event::Text("Solo".into())]);
+        frame(&mut app, vec![enter]);
+        frame(&mut app, vec![]);
+        assert_eq!(names(&app), ["Artboard 1", "Solo", "Artboard 3", "Artboard 4"]);
+    }
+
+    /// With the Artboard tool, a double-click on a name with Shift or Ctrl/Cmd held that leaves
+    /// several artboards selected opens the name field for all of them. A plain double-click
+    /// selects the row's artboard alone and opens the field for it.
+    #[test]
+    fn a_shift_or_ctrl_double_click_on_a_name_renames_every_selected_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [400, 800, 1200] {
+            app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
+        }
+        app.select_tool("artboard");
+        select(&mut app, 0);
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let shapes = frame(&mut app, 0.0, vec![]);
+        // `row(k)` returns the point where row `k`'s name is painted.
+        let row = |k: usize| {
+            shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.text() == format!("Artboard {k}") => Some(t.pos + vec2(4.0, 4.0)),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let click = |k: usize, modifiers: egui::Modifiers| {
+            let at = row(k);
+            let b = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+            vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(at), b(true), b(false)]
+        };
+        // Two clicks on row `k`'s name in two frames 0.1 s apart, then the row and the artboards
+        // the name field opened for, and the field closed again.
+        let double_click = |app: &mut VectorcraftApp, time: f64, k: usize, modifiers: egui::Modifiers| {
+            frame(app, time, click(k, modifiers));
+            frame(app, time + 0.1, click(k, modifiers));
+            let opened = (pstate::<Option<usize>>(&ctx, "ab-edit"), pstate::<Vec<usize>>(&ctx, "ab-edit-all"));
+            set_pstate::<Option<usize>>(&ctx, "ab-edit", None);
+            set_pstate::<Vec<usize>>(&ctx, "ab-edit-all", vec![]);
+            frame(app, time + 0.5, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+            opened
+        };
+        frame(&mut app, 1.0, click(1, egui::Modifiers::NONE));
+        assert_eq!(double_click(&mut app, 2.0, 3, egui::Modifiers::SHIFT), (Some(2), vec![0, 1, 2]), "Shift: Artboards 1 to 3");
+        assert_eq!(double_click(&mut app, 4.0, 2, egui::Modifiers::COMMAND), (Some(1), vec![0, 1, 2]), "Ctrl/Cmd on a selected one");
+        assert_eq!(double_click(&mut app, 6.0, 4, egui::Modifiers::NONE), (Some(3), vec![3]), "a plain double-click");
+    }
+
     /// A row's options icon opens Artboard Options for that row's artboard and leaves the tool as
     /// it is (#1876): a click on the active artboard's icon, or a double-click on another row's
     /// icon, whose first click only makes that artboard active. With the Artboard tool in use, the
@@ -966,6 +1064,52 @@ mod tests {
         app.run("edit.undo", json!({})).unwrap();
         let d = &app.session.active().unwrap().doc;
         assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (3, 2), "one undo step");
+    }
+
+    /// The panel menu's Convert to Artboards turns the geometric bounds of each selected rectangle
+    /// into a new artboard and removes the rectangles, in one undo step, as Object › Artboards ›
+    /// Convert to Artboards does; with nothing selected it is off.
+    #[test]
+    fn the_panel_menus_convert_to_artboards_converts_the_selected_objects() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [10, 60] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 30})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let item = frame(&mut app, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == "Convert to Artboards" => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let click = |app: &mut VectorcraftApp| frame(app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+        let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        let first = boards(&app)[0];
+        app.session.execute("select.none", &json!({})).unwrap();
+        frame(&mut app, vec![]);
+        click(&mut app);
+        // An enabled item would run the command, and its refusal would show in the status bar.
+        assert_eq!((boards(&app), app.ui.status.as_str()), (vec![first], ""), "off with nothing selected");
+        app.session.execute("select.all", &json!({})).unwrap();
+        // Draw one frame with the item enabled, as the app redraws the panel after the selection changes.
+        frame(&mut app, vec![]);
+        click(&mut app);
+        let rect = vectorcraft_geom::Rect::new;
+        assert_eq!(boards(&app), [first, rect(10.0, 10.0, 30.0, 40.0), rect(60.0, 10.0, 80.0, 40.0)]);
+        let d = app.session.active().unwrap();
+        assert_eq!((d.doc.layers[0].children().unwrap().len(), d.selection.objects.len()), (0, 0), "the rectangles are removed");
+        app.run("edit.undo", json!({})).unwrap();
+        let d = &app.session.active().unwrap().doc;
+        assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (1, 2), "one undo step");
     }
 
     /// One headless frame of the Control bar, 2,000 points wide, with `events` → the texts painted,
@@ -1296,6 +1440,85 @@ mod tests {
         let d = &app.session.active().unwrap().doc;
         assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (2, 2), "the artboard and its art");
         assert_eq!(app.view().unwrap().artboard, 1);
+    }
+
+    /// A click in a row's lock column locks its artboard and shows the lock next to the name, a
+    /// second click unlocks it, and each click is one undo step. Delete Artboard leaves a locked
+    /// artboard.
+    #[test]
+    fn the_lock_column_locks_and_unlocks_an_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 400, "y": 0, "width": 200, "height": 150})).unwrap();
+        select(&mut app, 1);
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        // The highlighted row (Artboard 2's): its lock column is 36 points in from its right end.
+        let shapes = frame(&mut app, 0.0, vec![]);
+        let row = shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == Tokens::get(&ctx).row_selected => Some(r.rect),
+                _ => None,
+            })
+            .unwrap();
+        let lock = egui::pos2(row.right() - 36.0, row.center().y);
+        let click = |at: egui::Pos2| {
+            let b = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            vec![egui::Event::PointerMoved(at), b(true), b(false)]
+        };
+        let away = vec![egui::Event::PointerMoved(egui::pos2(-50.0, -50.0))];
+        let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
+        // Whether something is drawn in the lock column of Artboard 2's row.
+        let cell = egui::Rect::from_center_size(lock, vec2(14.0, 14.0));
+        let lock_drawn = |shapes: Vec<egui::epaint::ClippedShape>| {
+            shapes.iter().any(|c| {
+                let b = c.shape.visual_bounding_rect();
+                b.is_positive() && cell.contains_rect(b)
+            })
+        };
+        assert!(!lock_drawn(frame(&mut app, 1.0, away.clone())));
+        frame(&mut app, 2.0, click(lock));
+        assert_eq!(locked(&app), [false, true]);
+        assert!(lock_drawn(frame(&mut app, 3.0, away.clone())), "the lock shows");
+        assert!(deletable(&app, 2).is_empty(), "Delete Artboard leaves it");
+        delete_selected(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards.len(), 2);
+        frame(&mut app, 5.0, click(lock));
+        assert_eq!(locked(&app), [false, false]);
+        assert!(!lock_drawn(frame(&mut app, 6.0, away)));
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(locked(&app), [false, true], "one undo step");
+    }
+
+    /// A new size for the selected artboards leaves a locked one among them as it is. The
+    /// artboard the field belongs to stays listed when it is locked, so `artboard.setProps`
+    /// refuses the change. A name typed for them goes to the locked one too.
+    #[test]
+    fn a_new_size_for_the_selected_artboards_leaves_a_locked_one() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [400, 800] {
+            app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
+        }
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([0, 1, 2]));
+        app.session.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+        assert_eq!(resized_with(&app, 0), [0, 2]);
+        assert_eq!(resized_with(&app, 1), [0, 1, 2], "the field's own artboard stays listed");
+        crate::panels::transform::set_artboard(&mut app, 0, 0, [None, None, Some(300.0), None], false);
+        let widths = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect::<Vec<_>>();
+        assert_eq!(widths, [300.0, 200.0, 300.0]);
+        let all = renamed_with(&app, 0);
+        assert_eq!(all, [0, 1, 2]);
+        rename(&mut app, &all, "abc").unwrap();
+        let names = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names, ["abc-1", "abc-2", "abc-3"]);
     }
 
     /// Alt-click on New Artboard opens Artboard Options for the new artboard and adds nothing yet:

@@ -192,7 +192,7 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
             dim(ui, tl!("Rasters"));
             let rail = (ui.available_width() - FIELD - 56.0).clamp(80.0, 200.0);
             let shown = widgets::SliderValue::field(o.balance, 0.0..=100.0, "", 0);
-            if let (Some(x), _) = widgets::color_slider_valued(
+            let (x, _, keyed) = widgets::color_slider_stepped(
                 ui,
                 (id, "balance-slider"),
                 tl!("Raster/Vector Balance:"),
@@ -200,8 +200,9 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
                 (o.balance / 100.0) as f32,
                 rail,
                 &|_| t.input_border,
-            ) {
-                o.balance = (x as f64 * 100.0).round();
+            );
+            if let Some(b) = x.map(|x| (x as f64 * 100.0).round()).or(keyed) {
+                o.balance = b;
             }
             dim(ui, tl!("Vectors"));
             if let Some(v) = widgets::plain_field(ui, (id, "balance"), o.balance, "", 0, FIELD - 12.0) {

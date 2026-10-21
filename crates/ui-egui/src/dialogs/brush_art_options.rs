@@ -1,10 +1,12 @@
 //! Scatter, Art and Pattern Brush Options: the [`super::brush_options`] of the brushes made of
 //! art. Each has the brush's own values, Colorization (Method, and Key Color for Hue Shift, picked
-//! from the art's colours) and a live preview of a stroke.
+//! from the art's colors), a Tips button beside Method that opens Colorization Tips (what each
+//! method does, beside a sample of the brush painted with it) and a live preview of a stroke.
 //!
 //! Fields (besides `__brush`, `__type` and `name`): `__def` (the brush definition, for the preview),
 //! `__colors` (the art's colours, most used first), `colorization` (`none` | `tints` |
-//! `tintsAndShades` | `hueShift`), `keyColor` (a colour).
+//! `tintsAndShades` | `hueShift`), `keyColor` (a color), `tips` (whether Colorization Tips is
+//! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure`), `rotationRelativeTo` (`page` | `path`).
 //! Art: `width` (%), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
@@ -14,14 +16,16 @@
 //! `flipAcross`, `__tiles` (slot → preview key, for the tiles the brush has).
 
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, Direction, PatternBrush, PatternFit, Scatter, Variation};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Document, Node};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId};
 
 use super::brush_options::{clamped, mode_key, stroke_preview};
+use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets;
@@ -44,6 +48,15 @@ const LABEL_W: f32 = 132.0;
 
 /// Width of the stroke preview.
 const PREVIEW_W: f32 = 420.0;
+
+/// The color of the stroke the Colorization Tips samples are painted on.
+pub(super) const TIP_STROKE: Color = Color::Rgb { r: 0.18, g: 0.44, b: 0.86 };
+
+/// Size of a Colorization Tips sample.
+const TIP_SAMPLE: egui::Vec2 = vec2(120.0, 44.0);
+
+/// Width of the text beside a Colorization Tips sample.
+const TIP_TEXT_W: f32 = 250.0;
 
 pub(super) fn heading(ty: &str) -> &'static str {
     match ty {
@@ -187,22 +200,27 @@ pub(super) fn params(d: &Dialog) -> Value {
 
 // ---------- body ----------
 
-pub(super) fn body(ui: &mut egui::Ui, d: &mut Dialog) {
+pub(super) fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     match d.str("__type").as_str() {
         "scatter" => scatter_body(ui, d),
         "art" => art_body(ui, d),
         _ => pattern_body(ui, d),
     }
     ui.add_space(6.0);
-    colorization_body(ui, d);
+    colorization_body(app, ui, d);
     ui.add_space(10.0);
     // The brush as OK would make it, on a sample stroke.
+    let ty = d.str("__type");
+    stroke_preview(ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
+}
+
+/// The brush definition as OK would make it: `__def` with the fields' params.
+pub(super) fn edited_def(d: &Dialog) -> Value {
     let mut def = d.fields.get("__def").cloned().unwrap_or_default();
     if let (Some(o), Value::Object(p)) = (def.as_object_mut(), params(d)) {
         o.extend(p);
     }
-    let ty = d.str("__type");
-    stroke_preview(ui, &ty, def, vec2(PREVIEW_W, 64.0));
+    def
 }
 
 /// A whole-number field (`suffix`: % or °) bound to `d.fields[key]`, kept within `range`.
@@ -212,6 +230,13 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, range: (f64, f64), suffi
             d.fields.insert(key.into(), json!(v));
         }
     });
+}
+
+/// A row labeled `label` with a slider and a whole-number field (%) bound to `d.fields[key]`, both
+/// kept within `range`; screen readers call the slider `label`.
+fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, range: (f64, f64)) {
+    let rail = Tokens::get(ui.ctx()).input_border;
+    widgets::label_row(ui, label, LABEL_W, |ui| super::form::slider_field_named(ui, d, key, label, range.0..=range.1, "%", &|_| rail));
 }
 
 /// A row of radio buttons bound to the string field `key`: (value, label).
@@ -260,7 +285,7 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| number(ui, d, "width", ArtBrush::WIDTH_RANGE, "%", true));
+    slider_row(ui, d, "width", tl!("Width:"), ArtBrush::WIDTH_RANGE);
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -318,7 +343,7 @@ fn arrow_button(ui: &mut egui::Ui, dir: Direction, selected: bool, tip: &str) ->
 }
 
 fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, tl!("Scale:"), LABEL_W, |ui| number(ui, d, "scale", PatternBrush::SCALE_RANGE, "%", true));
+    slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
     tiles(ui, d);
@@ -369,6 +394,74 @@ fn tiles(ui: &mut egui::Ui, d: &Dialog) {
     });
 }
 
+/// Colorization Tips: for each method, a sample of the brush as OK would make it, painted with
+/// that method on a [`TIP_STROKE`] stroke (Hue Shift with the dialog's Key Color), beside the
+/// method's name and what it does. Screen readers call the popover "Colorization Tips" and each
+/// sample by its method's name.
+fn tips(ui: &mut egui::Ui, d: &Dialog) {
+    let t = Tokens::get(ui.ctx());
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_role(egui::accesskit::Role::Dialog);
+        node.set_label(tl!("Colorization Tips"));
+    });
+    ui.label(egui::RichText::new(tl!("Colorization Tips")).strong().color(t.text_strong));
+    ui.label(egui::RichText::new(tl!("The samples show this brush on a blue stroke.")).color(t.text_dim));
+    ui.add_space(4.0);
+    let names = [tl!("None"), tl!("Tints"), tl!("Tints and Shades"), tl!("Hue Shift")];
+    let about = [
+        tl!("The art keeps its own colors."),
+        tl!("Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness."),
+        tl!("Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it."),
+        tl!("The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness."),
+    ];
+    let (def, ty, key) = (edited_def(d), d.str("__type"), key_color(d));
+    for ((id, name), about) in Colorization::IDS.into_iter().zip(names).zip(about) {
+        let Some(method) = Colorization::parse(id, key) else { continue };
+        ui.horizontal(|ui| {
+            tip_sample(ui, &def, &ty, method, name);
+            ui.vertical(|ui| {
+                ui.set_width(TIP_TEXT_W);
+                ui.label(egui::RichText::new(name).strong().color(t.text_strong));
+                ui.label(egui::RichText::new(about).color(t.text));
+            });
+        });
+        ui.add_space(4.0);
+    }
+}
+
+/// A Colorization Tips sample: [`tip_doc`] on white, which screen readers call `name`.
+fn tip_sample(ui: &mut egui::Ui, def: &Value, ty: &str, method: Colorization, name: &str) {
+    let t = Tokens::get(ui.ctx());
+    let (r, resp) = ui.allocate_exact_size(TIP_SAMPLE, Sense::hover());
+    ui.painter().rect_filled(r, 0.0, Color32::WHITE);
+    let key = format!("brush-tip:{}:{def}", json!(method));
+    if let Some(tex) = widgets::doc_preview(ui, &key, r.size(), |w, h| tip_doc(def, ty, method, w, h)) {
+        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    }
+    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, name));
+}
+
+/// A document of `w` × `h` showing brush definition `def` (of type `ty`) with colorization
+/// `method`, drawn by [`vectorcraft_brush::stroke_pieces`] along a gentle S-curve stroked
+/// [`TIP_STROKE`] 1 pt wide, and scaled to fit, centered.
+pub(super) fn tip_doc(def: &Value, ty: &str, method: Colorization, w: f64, h: f64) -> Option<Document> {
+    let mut def = match def {
+        Value::Object(o) => o.clone(),
+        _ => Map::new(),
+    };
+    def.insert("name".into(), json!("tip"));
+    def.insert("type".into(), json!(ty));
+    def.insert("colorization".into(), serde_json::to_value(method).ok()?);
+    let brush: Brush = serde_json::from_value(Value::Object(def)).ok()?;
+    let ap = Appearance::basic(Paint::None, Paint::solid(TIP_STROKE), 1.0);
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((0.0, 20.0));
+    bp.curve_to((35.0, 6.0), (65.0, 34.0), (100.0, 20.0));
+    let pieces = vectorcraft_brush::stroke_pieces(&Document::new(w, h), &brush, &bp, ap.stroke()?);
+    tile_doc(&Node::group(NodeId(0), pieces.into_iter().map(Arc::new).collect()), w, h)
+}
+
 /// A document of `w` × `h` showing `art` scaled to fit, centred.
 fn tile_doc(art: &Node, w: f64, h: f64) -> Option<Document> {
     let b = art.visual_bounds().or_else(|| art.geometric_bounds())?;
@@ -387,7 +480,15 @@ fn tile_doc(art: &Node, w: f64, h: f64) -> Option<Document> {
     Some(doc)
 }
 
-fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
+/// Key Color eyedropper: sample the next click on the art into this dialog's `keyColor`.
+fn key_color_eyedropper(app: &mut VectorcraftApp) {
+    let back = app.session.tool_id();
+    app.select_tool("eyedropper");
+    app.session.set_tool_option("brushKeyColor", &json!(true));
+    app.session.set_tool_option("stop", &json!(back));
+}
+
+fn colorization_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     widgets::section_header(ui, tl!("Colorization"));
     let methods = [tl!("None"), tl!("Tints"), tl!("Tints and Shades"), tl!("Hue Shift")];
     let cur = d.str("colorization");
@@ -397,6 +498,14 @@ fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
             .and_then(|i| Colorization::IDS.get(i))
         {
             d.fields.insert("colorization".into(), json!(id));
+        }
+        // Tips opens and closes Colorization Tips; Escape and a click outside it close it too.
+        ui.add_space(6.0);
+        let button = widgets::flat_button(ui, tl!("Tips"), 64.0);
+        let mut open = d.bool("tips") != button.clicked();
+        egui::Popup::from_response(&button).open_bool(&mut open).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| tips(ui, d));
+        if open != d.bool("tips") {
+            d.fields.insert("tips".into(), json!(open));
         }
     });
     // Hue Shift's key colour: the art colour that becomes the stroke colour.
@@ -413,6 +522,19 @@ fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
                     d.fields.insert("keyColor".into(), serde_json::to_value(c).unwrap_or_default());
                 }
             }
+            if widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the key color"), false, 22.0).clicked() {
+                key_color_eyedropper(app);
+            }
         });
     });
+}
+
+/// Apply a sampled colour to the open Brush Options dialog (`brushKeyColor` tool request).
+pub(super) fn apply_key_color_sample(app: &mut VectorcraftApp, color: &Value) {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == super::brush_options::KIND) else { return };
+    if d.str("colorization") != "hueShift" {
+        return;
+    }
+    let Some(c) = vectorcraft_engine::cmd::color_value(color) else { return };
+    d.fields.insert("keyColor".into(), serde_json::to_value(c).unwrap_or_default());
 }

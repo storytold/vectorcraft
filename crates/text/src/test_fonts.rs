@@ -297,6 +297,52 @@ pub fn vertical_punctuation_font(alternates: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`half_form_font`].
+pub const HALF_FORM_FAMILY: &str = "Halftest Sans";
+
+/// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses K, the halant uses a period, Ssa
+/// uses S and the zero width joiner uses the space. The `GSUB` table lists the `dev2` script either
+/// way. With `half`, its `half` feature substitutes k for K followed by the period (Ka's half form);
+/// without it, the script has no features and Ka has no half form. `None` when it can't be built.
+pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('ष', 'S'), ('\u{200D}', ' ')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = HALF_FORM_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Halftest Sans Regular"), (6, "HalftestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let (features, lookups) = if half {
+        let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+        let coverage = CoverageFormat1::new(vec![gid('K')?]);
+        let subst = LigatureSubstFormat1::new(coverage.into(), vec![LigatureSet::new(vec![Ligature::new(gid('k')?, vec![gid('.')?])])]);
+        let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"half"), Feature::new(None, vec![0]))]);
+        let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+        (features, lookups)
+    } else {
+        (FeatureList::new(vec![]), SubstitutionLookupList::new(vec![]))
+    };
+    let langsys = LangSys::new(if half { vec![0] } else { vec![] });
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(langsys), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`pair_kerning_font`].
 pub const PAIR_KERNING_FAMILY: &str = "Pairtest Sans";
 

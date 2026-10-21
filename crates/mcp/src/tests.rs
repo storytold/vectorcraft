@@ -1184,6 +1184,31 @@ fn cmd_shift_x_resets_horizontal_scale_for_agents() {
     assert_eq!(runs[0]["style"]["h_scale"], json!(100.0), "{runs}");
 }
 
+/// `press_key` runs Cmd+/ and Cmd+Alt+/ for agents: a new fill and then a new stroke go on top of
+/// the selected rectangle's appearance stack.
+#[test]
+fn cmd_slash_and_cmd_alt_slash_add_a_fill_and_a_stroke_for_agents() {
+    let mut s = server();
+    let r = call(&mut s, 1, "run_command", json!({"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 100, "height": 100}}));
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap();
+    let r = call(&mut s, 2, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let kinds = |s: &mut Server, n: u64| {
+        let r = call(s, n, "run_command", json!({"command": "effect.list", "params": {}}));
+        let items = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["applied"][0]["items"].clone();
+        items.as_array().unwrap().iter().map(|it| it["kind"].as_str().unwrap().to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(kinds(&mut s, 3), ["fill", "stroke"]);
+    let r = call(&mut s, 4, "press_key", json!({"key": "/", "mods": {"cmd": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "appearance.addFill", "{r}");
+    assert_eq!(kinds(&mut s, 5), ["fill", "stroke", "fill"]);
+    let r = call(&mut s, 6, "press_key", json!({"key": "/", "mods": {"cmd": true, "alt": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["command"], "appearance.addStroke", "{r}");
+    assert_eq!(kinds(&mut s, 7), ["fill", "stroke", "fill", "stroke"]);
+}
+
 /// The drawing tools snap to Smart Guides over MCP as with the mouse (#506): a Rectangle drawn
 /// from near another object's corner starts on it, and a Pen anchor placed beside that object's
 /// centre lines up with it.

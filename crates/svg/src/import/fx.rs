@@ -2,7 +2,8 @@
 //! source, its silhouette blurred, moved or inverted, a colour flood, a coloured silhouette…),
 //! and the result recognised as one of the effects the canvas draws: Gaussian Blur, Drop Shadow,
 //! Outer Glow, Inner Glow or Feather. That covers `feGaussianBlur`, `feDropShadow`, the usual
-//! shadow chains (offset, blur, flood or color matrix, composite, merge), the object moved and
+//! shadow chains (offset, blur, flood or color matrix, composite, merge), blur and shadow graphs
+//! with `feBlend` and transparent backdrops (as exported by Figma and others), the object moved and
 //! blurred with its colors scaled by `feComponentTransfer` (a drop shadow with Darkness) and what
 //! our export writes, so export → import keeps the effects.
 
@@ -197,15 +198,52 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
             }
             Kind::Offset(o) => input(o.input())?.offset(o.dx() as f64, o.dy() as f64)?,
             Kind::Flood(fl) => V::Flood(color(fl.color()), fl.opacity().get()),
+            Kind::Blend(b) => {
+                let (a, b_in) = (input(b.input1())?, input(b.input2())?);
+                let transparent = |v: &V| matches!(v, V::Flood(_, o) if *o <= 1e-6);
+                if transparent(&b_in) {
+                    a
+                } else if transparent(&a) {
+                    b_in
+                } else if b.mode() == usvg::BlendMode::Normal {
+                    V::Stack(b_in.layers().into_iter().chain(a.layers()).collect())
+                } else {
+                    return None;
+                }
+            }
             Kind::Composite(c) => {
                 let (a, b) = (input(c.input1())?, input(c.input2())?);
+                let transparent = |v: &V| matches!(v, V::Flood(_, o) if *o <= 1e-6);
                 match c.operator() {
                     CompositeOperator::In => a.inside(b)?,
-                    CompositeOperator::Over => V::Stack(b.layers().into_iter().chain(a.layers()).collect()),
+                    CompositeOperator::Over => {
+                        if transparent(&b) {
+                            a
+                        } else if transparent(&a) {
+                            b
+                        } else {
+                            V::Stack(b.layers().into_iter().chain(a.layers()).collect())
+                        }
+                    }
                     _ => return None,
                 }
             }
-            Kind::Merge(m) => V::Stack(m.inputs().iter().map(input).collect::<Option<Vec<_>>>()?.into_iter().flat_map(V::layers).collect()),
+            Kind::Merge(m) => {
+                let mut layers: Vec<V> = m
+                    .inputs()
+                    .iter()
+                    .map(input)
+                    .collect::<Option<Vec<_>>>()?
+                    .into_iter()
+                    .flat_map(V::layers)
+                    .filter(|v| !matches!(v, V::Flood(_, o) if *o <= 1e-6))
+                    .collect();
+                match layers.len() {
+                    0 => return None,
+                    1 => layers.remove(0),
+                    _ => V::Stack(layers),
+                }
+            }
             Kind::ColorMatrix(c) => match c.kind() {
                 ColorMatrixKind::Matrix(m) => input(c.input())?.color_matrix(m)?,
                 _ => return None,

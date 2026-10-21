@@ -29,6 +29,7 @@
 	Quit VectorCraft	VectorCraft-იდან გასვლა
 	File	ფაილი
 	New…	ახალი…
+	New Without Dialog	ახალი დიალოგის გარეშე
 	New from Template…	შაბლონიდან შექმნა…
 	Open…	გახსნა…
 	Open Recent Files	ბოლოს გახსნილი ფაილების გახსნა
@@ -702,6 +703,7 @@
 	Activate Panel	პანელის გააქტიურება
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
+	Collapse Panel Group	პანელების ჯგუფის აკეცვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -1292,6 +1294,7 @@ lighting	Light	სინათლე
 	{count} more rules: Export writes every one.	კიდევ წესები: {count}. ექსპორტი ყველას ჩაწერს.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {count}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
 	All Categories	ყველა კატეგორია
+	Repeat Objects	გამეორების ობიექტები
 	Save…	შენახვა…
 	Selection Only	მხოლოდ მონიშნული
 	{title} (selection)	{title} (მონიშნული)
@@ -1325,6 +1328,7 @@ lighting	Light	სინათლე
 	Edit the selected point's colour in the Color panel	მონიშნული წერტილის ფერის რედაქტირება ფერის პანელში
 	Edit the stop	გადასვლის წერტილის რედაქტირება
 	Eyedropper: click the art to sample the stop's colour	პიპეტი: დაწკაპეთ ნახატზე გადასვლის წერტილის ფერის ასაღებად
+	Eyedropper: click the art to sample the key color	პიპეტი: დაწკაპეთ ნახატზე საკვანძო ფერის ასაღებად
 	Gradient across stroke	გრადიენტი კონტურის განივად
 	Gradient along stroke	გრადიენტი კონტურის სიგრძეზე
 	Gradient Fill: click to apply, drag onto art	გრადიენტული შევსება: დაწკაპეთ გამოსაყენებლად, ჩაავლეთ ნახატზე
@@ -1474,6 +1478,9 @@ lighting	Light	სინათლე
 	Left Indent	მარცხენა შეწევა
 	Left-to-Right Paragraph Direction	აბზაცის მიმართულება მარცხნიდან მარჯვნივ
 	Line-end Punctuation Half Width	სტრიქონის ბოლოს პუნქტუაცია ნახევარი სიგანით
+	Insert Kashidas	ქაშიდების ჩასმა
+	Long	გრძელი
+	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
 	Kinsoku Set	Kinsoku-ის ნაკრები
 	Hard	მკაცრი
@@ -1624,6 +1631,7 @@ lighting	Light	სინათლე
 	Select art and click New Symbol to make one.	მონიშნეთ ნახატი და შესაქმნელად დაწკაპეთ „ახალ სიმბოლოზე“.
 	Symbol Libraries (on the roadmap)	სიმბოლოების ბიბლიოთეკები (სამომავლო გეგმაშია)
 	Align On:	სწორება მიმართ:
+	Bottom-Justified Tab	ქვემოთ სწორებული ტაბულაცია
 	Center-Justified Tab	ცენტრით სწორებული ტაბულაცია
 	Above Text	ტექსტის ზემოთ
 	Position Panel Above Text	პანელის ტექსტის ზემოთ განთავსება
@@ -1635,6 +1643,7 @@ lighting	Light	სინათლე
 	No text selected	ტექსტი მონიშნული არ არის
 	Repeat Tab	ტაბულაციის გამეორება
 	Right-Justified Tab	მარჯვნივ სწორებული ტაბულაცია
+	Top-Justified Tab	ზემოთ სწორებული ტაბულაცია
 	Select a text object to set its tab stops.	ტაბულაციის გაჩერებების დასაყენებლად მონიშნეთ ტექსტური ობიექტი.
 	Select text	მონიშნეთ ტექსტი
 	Snap to Unit	ერთეულზე მიბმა
@@ -1749,6 +1758,13 @@ lighting	Light	სინათლე
 	Tints and Shades	ტონირებები და ჩრდილები
 	Hue Shift	ფერის ტონის წანაცვლება
 	Key Color:	საკვანძო ფერი:
+	Tips	რჩევები
+	Colorization Tips	შეფერადების რჩევები
+	The samples show this brush on a blue stroke.	ნიმუშები ამ ფუნჯს ლურჯ კონტურზე აჩვენებს.
+	The art keeps its own colors.	ნახატი საკუთარ ფერებს ინარჩუნებს.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	შავი კონტურის ფერი ხდება, თეთრი კი თეთრად რჩება. სხვა ფერები კონტურის ფერის ტონირებები ხდება და რაც უფრო ღიაა ფერი, მით უფრო ღიაა მისი ტონირება.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	შავი შავად რჩება, თეთრი კი თეთრად რჩება. სხვა ფერები კონტურის ფერის ჩრდილები ხდება, თუ მუქია, და მისი ტონირებები, თუ ღიაა.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	საკვანძო ფერი კონტურის ფერი ხდება. სხვა ფერები ფერთა წრეზე იმდენივეს გადაინაცვლებს, რამდენსაც საკვანძო ფერი, და ინარჩუნებს გაჯერებასა და სიკაშკაშეს.
 	Size:	ზომა:
 	Calligraphic Brush Options	კალიგრაფიული ფუნჯის პარამეტრები
 	Bristle Brush Options	ჯაგრის ფუნჯის პარამეტრები
@@ -2478,12 +2494,21 @@ lighting	Light	სინათლე
 	Darken	ჩამუქება
 	Exclusion	გამორიცხვა
 	Hard Light	მკვეთრი სინათლე
+	Hard Mix	მკაცრი შერევა
 	Lighten	გაღიავება
 	Luminosity	ნათება
 	Overlay	გადაფარვა
 	Soft Light	რბილი სინათლე
+	Soft Mix	რბილი შერევა
 	Crosshatch	ჯვარედინი დაშტრიხვა
 	Fine Dots	წვრილი წერტილები
+
+	Simple	მარტივი
+	Light Rough	ღია ხასიათიანი
+	Dark Rough	მუქი ხასიათიანი
+	Wide Sharp	ფართო მკვეთრი
+	Wide Blurry	ფართო ბუნდოვანი
+	Sparkle	ციმციმი
 	Medium Dots	საშუალო წერტილები
 	Grainy Dots	მარცვლოვანი წერტილები
 	Coarse Dots	მსხვილი წერტილები
@@ -2555,6 +2580,14 @@ theme	Appearance	იერსახე
 	Edit Symbol	სიმბოლოს რედაქტირება
 	Expand Brush Strokes	ფუნჯის შტრიხების გაშლა
 	New Brush…	ახალი ფუნჯი…
+	New Brush	ახალი ფუნჯი
+	Calligraphic Brush	კალიგრაფიული ფუნჯი
+	Scatter Brush	გაფანტვის ფუნჯი
+	Art Brush	მხატვრული ფუნჯი
+	Bristle Brush	ჯაგრის ფუნჯი
+	Pattern Brush	პატერნის ფუნჯი
+	Select art to make a scatter, art or pattern brush.	მონიშნეთ ნახატი გაფანტვის, მხატვრული ან პატერნის ფუნჯის შესაქმნელად.
+	Brush Art	ფუნჯის ნახატი
 	New Symbol	ახალი სიმბოლო
 	New Symbol…	ახალი სიმბოლო…
 	Place Symbol Instance	სიმბოლოს ეგზემპლარის განთავსება
@@ -3013,6 +3046,7 @@ theme	Appearance	იერსახე
 	Scale Corners	კუთხეების მასშტაბირება
 	Scale Cursor Proportional to UI	კურსორის მასშტაბირება ინტერფეისის პროპორციულად
 	Scale Strokes & Effects	კონტურებისა და ეფექტების მასშტაბირება
+	Scale Text Attributes	ტექსტის ატრიბუტების მასშტაბირება
 	Scratch Disks	სამუშაო დისკები
 	Secondary	მეორადი
 	Select Same Tint %	იგივე ტონირების % მონიშვნა
@@ -3107,6 +3141,7 @@ theme	Appearance	იერსახე
 	Delete Swatch	ფერის ნიმუშის წაშლა
 	Duplicate Swatch	ფერის ნიმუშის დუბლირება
 	Merge Swatches	ფერის ნიმუშების შერწყმა
+	Move Brush	ფუნჯის გადატანა
 	Move Swatch	ფერის ნიმუშის გადატანა
 	New Color Group	ფერების ახალი ჯგუფი
 	New Swatch	ფერის ახალი ნიმუში
@@ -3647,6 +3682,25 @@ effect	Regular	ჩვეულებრივი
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript-ის შეცდომა ({name} `{op}`-ში: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript-ის შეცდომა ({name} `{op}`-ში: {at}), {procs}-ში
 @msg	a PostScript error ({name})	PostScript-ის შეცდომა ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript-ის შეცდომა ({name} `{op}`-ში; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	PostScript-ის შეცდომა ({name} `{op}`-ში; {meaning}), {procs}-ში
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript-ის შეცდომა ({name} `{op}`-ში: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	PostScript-ის შეცდომა ({name} `{op}`-ში: {at}; {meaning}), {procs}-ში
+@msg	a PostScript error ({name}; {meaning})	PostScript-ის შეცდომა ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	პროგრამა ასრულებს ლექსიკონს, რომელიც მას არ დაუწყია
+@msg	the program opens a file, which the reader can't do	პროგრამა ფაილს ხსნის, რაც PostScript-ის წამკითხველს არ შეუძლია
+@msg	the program restores a saved state that was already restored	პროგრამა აღადგენს შენახულ მდგომარეობას, რომელიც უკვე აღდგენილია
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	მონაცემები, რომლებსაც პროგრამა კითხულობს, დაზიანებული ან შეწყვეტილია, ან პროგრამა ითხოვს პოზიციას ფაილში, რომელსაც პოზიცია არ აქვს
+@msg	the program goes past one of the reader's limits	პროგრამა PostScript-ის წამკითხველის ერთ-ერთ ზღვარს სცდება
+@msg	the path has no point to continue from	ტრაექტორიას არ აქვს წერტილი, საიდანაც გაგრძელდება
+@msg	a value is outside the range the operator takes	მნიშვნელობა ოპერატორის მისაღებ დიაპაზონს სცდება
+@msg	the operator needs more values than the stack holds	ოპერატორს სტეკში არსებულზე მეტი მნიშვნელობა სჭირდება
+@msg	part of the program isn't valid PostScript text	პროგრამის ნაწილი სწორი PostScript ტექსტი არ არის
+@msg	a value has the wrong type for the operator	მნიშვნელობას ოპერატორისთვის არასწორი ტიპი აქვს
+@msg	the program runs, deletes or renames a file, which the reader can't do	პროგრამა ფაილს უშვებს, შლის ან გადაარქმევს, რაც PostScript-ის წამკითხველს არ შეუძლია
+@msg	the program asks for a resource that isn't defined	პროგრამა ითხოვს რესურსს, რომელიც განსაზღვრული არ არის
+@msg	a calculation has no result, as in a division by zero	გამოთვლას შედეგი არ აქვს, მაგალითად ნულზე გაყოფისას
+@msg	the operator looks for a mark on the stack and finds none	ოპერატორი სტეკზე ნიშნულს ეძებს და ვერ პოულობს
 @msg	a bitmap is empty	ბიტმაპი ცარიელია
 @msg	a bitmap is too large to read	ბიტმაპი წასაკითხად ზედმეტად დიდია
 @msg	a colour index is 0 to {_1}, not {n}	ფერის ინდექსი არის 0-დან {_1}-მდე და არა {n}
@@ -3761,7 +3815,9 @@ effect	Regular	ჩვეულებრივი
 @msg	no blend options	გადასვლის პარამეტრები არ არის
 @msg	no bounds	საზღვრები არ არის
 @msg	no brush named `{name}`	ფუნჯი სახელით `{name}` არ არის
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	ჯაგრის ფუნჯის სახელი შეიძლება შეიცავდეს არაუმეტეს {max} სიმბოლოს: `{name}` შეიცავს {count} სიმბოლოს
 @msg	no brush selected	ფუნჯი მონიშნული არ არის
+@msg	brushes move only within their type	ფუნჯების გადატანა მხოლოდ საკუთარი ტიპის ფარგლებში შეიძლება
 @msg	no catalog	კატალოგი არ არის
 @msg	no changes since the last save	ბოლო შენახვის შემდეგ ცვლილებები არ არის
 @msg	no clock to keep a heartbeat by	პულსის შესანარჩუნებელი საათი არ არის
@@ -3814,6 +3870,7 @@ effect	Regular	ჩვეულებრივი
 @msg	no such action	ასეთი მოქმედება არ არის
 @msg	no such anchor	ასეთი საყრდენი წერტილი არ არის
 @msg	no such artboard	ასეთი სამუშაო დაფა არ არის
+@msg	the artboard is locked	სამუშაო დაფა ჩაკეტილია
 @msg	no such document	ასეთი დოკუმენტი არ არსებობს
 @msg	no such layer or object	ასეთი შრე ან ობიექტი არ არის
 @msg	no such object {0}	ასეთი ობიექტი {0} არ არის
@@ -4145,6 +4202,12 @@ effect	Regular	ჩვეულებრივი
 @msg	before must name a panel	before უნდა ასახელებდეს პანელს
 @msg	docking action contains an unknown panel or an excessive split path	მიმაგრების მოქმედება შეიცავს უცნობ პანელს ან ზედმეტად გრძელ გაყოფის გზას
 @msg	group must be true or false	group უნდა იყოს true ან false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	პანელი მცურავია; მისი ჯგუფი აკეცეთ window.panel.float {panel, collapsed}-ით
+@msg	panel is not in a dock group	პანელი არ არის დოკის ჯგუფში
+@msg	only a dock group above or below others collapses, not one beside another	იკეცება მხოლოდ სხვების ზემოთ ან ქვემოთ მდებარე დოკის ჯგუფი, არა სხვის გვერდით მდებარე
+@msg	icon must be true or false	icon უნდა იყოს true ან false
+@msg	icon only docks a panel in the icon column, with no anchor	icon პანელს მხოლოდ ხატულების სვეტში ამაგრებს, anchor-ის გარეშე
+@msg	column docks a set as a dock column, with no anchor or icon	column ნაკრებს დოკის სვეტად ამაგრებს, anchor-ის ან icon-ის გარეშე
 @msg	move requires a destination panel	move-ს სჭირდება სამიზნე პანელი
 @msg	move requires an existing destination panel	move-ს სჭირდება არსებული სამიზნე პანელი
 @msg	onto must name a floating panel	onto უნდა ასახელებდეს მცურავ პანელს
@@ -4692,6 +4755,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	3D Lighting Preset	3D განათების წინასწარი პარამეტრი
+	Standard	სტანდარტული
+	Diffuse	დიფუზური
 	Line {line}	სტრიქონი {line}
 	Line {line}: {name}: {status}	სტრიქონი {line}: {name}: {status}
 	Needs Attention Only	მხოლოდ საყურადღებო
@@ -4800,6 +4866,7 @@ imageTrace	Outline	კონტური
 @msg	Measured anchor no longer exists	გაზომილი საყრდენი წერტილი აღარ არსებობს
 @msg	Measured segment no longer exists	გაზომილი სეგმენტი აღარ არსებობს
 @msg	Non-finite dimension	ზომა სასრული რიცხვი არ არის
+@msg	Scale Text Attributes: selected type has no scale to bake	ტექსტის ატრიბუტების მასშტაბირება: არჩეულ ტექსტს არ აქვს გადასაყვანი მასშტაბი
 @msg	Scale must be drawing:real, for example 1:10	მასშტაბი უნდა იყოს ნახაზი:რეალური, მაგალითად 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	მასშტაბის შეფარდება 1:1000000-სა და 1000000:1-ს შორის უნდა იყოს
 @msg	Second measured segment no longer exists	მეორე გაზომილი სეგმენტი აღარ არსებობს
@@ -4836,6 +4903,10 @@ imageTrace	Outline	კონტური
 	Arrange Intertwine Area	გადახლართვის არის დალაგება
 @msg	select an Intertwine group	მონიშნეთ გადახლართვის ჯგუფი
 @msg	select an Objects on Path group	მონიშნეთ ტრაექტორიაზე ობიექტების ჯგუფი
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	შედგენილ ტრაექტორიაში, გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
+@msg	a clipping path can't take objects	მომჭრელ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფი ობიექტების ტრაექტორიაზე მიმაგრება ვერ ხერხდება
+@msg	a clipping path can't be attached to a path	მომჭრელი ტრაექტორიის ტრაექტორიაზე მიმაგრება ვერ ხერხდება
 	Registration:	საბაზისო წერტილი:
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
@@ -4845,6 +4916,7 @@ imageTrace	Outline	კონტური
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
+	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Make Graph Dynamic	დიაგრამის დინამიკურად ქცევა
 	Batch…	პაკეტური დამუშავება…
 	Source Folder:	წყარო საქაღალდე:
@@ -4888,6 +4960,13 @@ imageTrace	Outline	კონტური
 	Time (hhmmss)	დრო (hhmmss)
 	PDF Print	PDF (ბეჭდვა)
 	Merge only with selection	შერწყმა მხოლოდ მონიშნულთან
+	Consider Open Filled Paths as Closed	შევსებული ღია ტრაექტორიების შეკრულად მიჩნევა
+	Pick Color From:	ფერის წყარო:
+	Artwork	ნახატი
+	Cursor Swatch Preview	ფერის ნიმუშები მაჩვენებელთან
+	Selection:	მონიშვნა:
+	Straight Line	სწორი ხაზი
+	Highlight:	გამოკვეთა:
 	Words Longer Than:	სიტყვები, რომელთა სიგრძე აღემატება:
 	After First:	პირველის შემდეგ:
 	Before Last:	ბოლომდე:
@@ -4916,6 +4995,8 @@ imageTrace	Outline	კონტური
 	Sketch	ესკიზი
 	Halftone Pattern…	ნახევარტონური პატერნი…
 	Halftone Pattern	ნახევარტონური პატერნი
+	Torn Edges…	დაგვერძნილი კიდეები…
+	Torn Edges	დაგვერძნილი კიდეები
 	Pattern Type	პატერნის ტიპი
 	Dot	წერტილი
 	Color Scheme	ფერის სქემა
@@ -4947,7 +5028,11 @@ imageTrace	Outline	კონტური
 	Create Slice from Selection	ნაჭრის შექმნა მონიშნულიდან
 	Create Slices from Guides	ნაჭრების შექმნა დამხმარე ხაზებიდან
 	Cutout	აპლიკაცია
+	Colored Pencil…	ფერადი ფანქარი…
+	Colored Pencil	ფერადი ფანქარი
+	Dry Brush	მშრალი ფერწანი
 	Cutout…	აპლიკაცია…
+	Dry Brush…	მშრალი ფერწანი…
 	Delete All Slices	ყველა ნაჭრის წაშლა
 	Delete Data Sets	მონაცემთა ნაკრებების წაშლა
 	Delete Graphic Styles	გრაფიკული სტილების წაშლა
@@ -4979,6 +5064,8 @@ imageTrace	Outline	კონტური
 	Gap Detection	ღრეჩოების აღმოჩენა
 	Gap Options	ღრეჩოს პარამეტრები
 	Gap Preview Color:	ღრეჩოს ნახვის ფერი:
+	Show Live Paint Gaps	ცოცხალი შეღებვის ღრეჩოების ჩვენება
+	Hide Live Paint Gaps	ცოცხალი შეღებვის ღრეჩოების დამალვა
 	Glow Brightness	ნათების სიკაშკაშე
 	Glow Size	ნათების ზომა
 	Graph Column	დიაგრამის სვეტი
@@ -4989,6 +5076,7 @@ imageTrace	Outline	კონტური
 	Last Artboard	ბოლო სამუშაო დაფა
 	Levels	დონეები
 	Library Panel Options	ბიბლიოთეკის პანელის პარამეტრები
+	Locate Library…	ბიბლიოთეკის მოძებნა…
 	Lights	სინათლის წყაროები
 	Link JavaScript Files…	JavaScript ფაილების დაკავშირება…
 	Live Shape	ცოცხალი ფიგურა
@@ -5008,7 +5096,11 @@ imageTrace	Outline	კონტური
 	Move Slice	ნაჭრის გადაადგილება
 	Move Type on a Path	ტრაექტორიაზე ტექსტის გადაადგილება
 	Neon Glow	ნეონის ნათება
+	Paint Daubs…	საღებავის კვეთები…
+	Paint Daubs	საღებავის კვეთები
+	Palette Knife	პალეტის დანა
 	Neon Glow…	ნეონის ნათება…
+	Palette Knife…	პალეტის დანა…
 	New Artboard Options…	ახალი სამუშაო დაფის პარამეტრები…
 	New Guide	ახალი დამხმარე ხაზი
 	Next Artboard	შემდეგი სამუშაო დაფა
@@ -5016,7 +5108,11 @@ imageTrace	Outline	კონტური
 	Persistent	მუდმივი
 	Place from Library	ბიბლიოთეკიდან განთავსება
 	Poster Edges	პოსტერის კიდეები
+	Rough Pastels	მკვრივი პასტელი
+	Underpainting…	ქვეფენის მხატვრობა…
+	Underpainting	ქვეფენის მხატვრობა
 	Poster Edges…	პოსტერის კიდეები…
+	Rough Pastels…	მკვრივი პასტელი…
 	Posterization	პოსტერიზაცია
 	Previous Artboard	წინა სამუშაო დაფა
 	Rearrange Artboards	სამუშაო დაფების გადალაგება
@@ -5109,6 +5205,7 @@ imageTrace	Outline	კონტური
 @msg	the spine has no segments	ხერხემალს სეგმენტები არ აქვს
 @msg	too many library panels were opened in this session	ამ სესიაში ზედმეტად ბევრი ბიბლიოთეკის პანელი გაიხსნა
 @msg	variables are locked	ცვლადები ჩაკეტილია
+@msg	variables that aren't text were left out: {kinds}	ცვლადები, რომლებიც ტექსტი არ არის, გამოტოვებულია: {kinds}
 @msg	x and y must be finite	x და y სასრული უნდა იყოს
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის
@@ -5140,18 +5237,7 @@ imageTrace	Outline	კონტური
 # Select by Color (select.color)
 	Select by Color	მონიშვნა ფერის მიხედვით
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: გვერდი {n} არ არსებობს (ფაილს 1 გვერდი აქვს)
-	Lock Artboards	სამუშაო დაფების ჩაკეტვა
-	Unlock Artboards	სამუშაო დაფების განბლოკვა
-	Artboard Color	სამუშაო დაფის ფერი
-	Lock Selected	მონიშნულის ჩაკეტვა
-	Lock All Except Selected	მონიშნულის გარდა ყველაფრის ჩაკეტვა
-	Lock All	ყველაფრის ჩაკეტვა
-	Unlock Selected	მონიშნულის განბლოკვა
-	Lock Artboard	სამუშაო დაფის ჩაკეტვა
-	Unlock Artboard	სამუშაო დაფის განბლოკვა
-	Clear Artboard Color	სამუშაო დაფის ფერის გასუფთავება
-@msg	artboard {_1} is locked	სამუშაო დაფა {_1} ჩაკეტილია
-	Include Artboard Fill	სამუშაო დაფის შევსების ჩართვა
+	Gap Length:	ღრეჩოს სიგრძე:
 	Smudge Stick…	დასაზელი ჯოხი…
 	Smudge Stick	დასაზელი ჯოხი
 	Sponge…	ღრუბელი…
@@ -5159,6 +5245,7 @@ imageTrace	Outline	კონტური
 	Watercolor…	აკვარელი…
 	Watercolor	აკვარელი
 	Brush Size	ფუნჯის ზომა
+	Texture Coverage	ტექსტურის დაფარვა
 	Definition	განსაზღვრულობა
 	Brush Detail	ფუნჯის დეტალი
 	Shadow Intensity	ჩრდილის ინტენსივობა
@@ -5192,3 +5279,13 @@ imageTrace	Outline	კონტური
 	Plaster	თაბაშირი
 	Note Paper…	ჩანაწერების ქაღალდი…
 	Note Paper	ჩანაწერების ქაღალდი
+	Water Paper…	სველი ქაღალდი…
+	Water Paper	სველი ქაღალდი
+
+# Artboard tool hints (#2497)
+	 on the canvas to create one (	 ტილოზე — ახლის შესაქმნელად (
+	 selects several, or draws one inside an artboard)	 რამდენიმეს მონიშნავს ან ახალს სამუშაო დაფის შიგნით ხატავს)
+	Ruby…	რუბი…
+	Ruby	რუბი
+	Fresco…	ფრესკა…
+	Fresco	ფრესკა

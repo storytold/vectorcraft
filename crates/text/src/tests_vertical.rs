@@ -2,7 +2,7 @@
 //! Japanese text only with craft-fonts' faces, skipped without them).
 use super::*;
 use kurbo::Shape;
-use vectorcraft_doc::{CharStyle, Justify, TextKind};
+use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
 fn vertical(text: &str) -> TextObject {
@@ -316,6 +316,67 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     }
     let step = ink(&tracked, 1).center().y - ink(&tracked, 0).center().y;
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
+}
+
+/// Character panel menu › Tate-chu-yoko: a marked run stands across one em of the column, including
+/// a number longer than three digits and Latin letters. Unmarked text keeps the automatic rule
+/// (two or three digits only). Horizontal type stores the mark and does not move the letters.
+#[test]
+fn manual_tate_chu_yoko_sets_marked_characters_across_one_em() {
+    let marked = CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() };
+    let year = layout(FontDb::global(), &vertical_styled("2026", marked.clone()));
+    assert_eq!(year.glyphs.len(), 4);
+    assert!((year.glyphs[0].advance - 20.0).abs() < 1e-6, "{:?}", year.glyphs[0].advance);
+    assert!(year.glyphs[1..].iter().all(|g| g.advance == 0.0));
+    let inks: Vec<Rect> = (0..4).map(|i| ink(&year, i)).collect();
+    for pair in inks.windows(2) {
+        assert!((pair[0].center().y - pair[1].center().y).abs() < 1.0, "one row: {inks:?}");
+        assert!(pair[1].center().x > pair[0].center().x, "left to right: {inks:?}");
+    }
+    let union = inks.iter().copied().reduce(|a, b| a.union(b)).unwrap();
+    assert!(union.width() <= 21.0, "squeezed into the em: {union:?}");
+    assert!(union.center().x.abs() < 1.5, "centred on the column: {union:?}");
+
+    let plain = layout(FontDb::global(), &vertical("2026"));
+    let down: f64 = plain.glyphs.iter().map(|g| g.advance).sum();
+    assert!(down > 30.0 && plain.glyphs.iter().all(|g| g.advance > 0.0), "unmarked 2026 runs down the column: {down}");
+
+    let letters = layout(FontDb::global(), &vertical_styled("AB", marked.clone()));
+    assert!((letters.glyphs[0].advance - 20.0).abs() < 1e-6 && letters.glyphs[1].advance == 0.0);
+    let (a, b) = (ink(&letters, 0), ink(&letters, 1));
+    assert!((a.center().y - b.center().y).abs() < 1.0 && b.center().x > a.center().x, "letters side by side: {a:?} {b:?}");
+    let side = layout(FontDb::global(), &vertical("AB"));
+    assert!(ink(&side, 1).center().y > ink(&side, 0).center().y + 5.0, "unmarked letters run down the column");
+
+    let mut horizontal = TextObject::point(Point::ZERO, "AB", marked);
+    horizontal.xf = Affine::IDENTITY;
+    let row = layout(FontDb::global(), &horizontal);
+    assert!(!row.vertical);
+    assert!(row.glyphs.iter().all(|g| g.advance > 0.0));
+    assert!(ink(&row, 1).center().x > ink(&row, 0).center().x + 5.0, "horizontal type stays a row");
+}
+
+/// A marked run is one block; the unmarked digits beside it still follow the automatic rule.
+/// A column shorter than two ems holds the marked number on one line.
+#[test]
+fn manual_tate_chu_yoko_leaves_unmarked_digits_and_stays_on_one_line() {
+    let plain = CharStyle { size: 20.0, ..CharStyle::default() };
+    let marked = CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let mut t = vertical_styled("", plain.clone());
+    t.runs = vec![TextRun::new("X", plain), TextRun::new("2026", marked), TextRun::new("10", CharStyle { size: 20.0, ..CharStyle::default() })];
+    let l = layout(FontDb::global(), &t);
+    assert_eq!(l.glyphs.len(), 7);
+    assert!(l.glyphs[0].advance > 0.0 && l.glyphs[0].advance < 20.0, "X on its side: {:?}", l.glyphs[0].advance);
+    assert!((l.glyphs[1].advance - 20.0).abs() < 1e-6 && l.glyphs[2].advance == 0.0 && l.glyphs[3].advance == 0.0 && l.glyphs[4].advance == 0.0);
+    assert!((l.glyphs[5].advance - 20.0).abs() < 1e-6 && l.glyphs[6].advance == 0.0, "unmarked 10 stays automatic");
+
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 80.0, 30.0).to_path(0.1)) };
+    t.runs = vec![TextRun::new("2026", CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() })];
+    let one = layout(FontDb::global(), &t);
+    assert_eq!(one.lines.len(), 1, "the block is one em, so it fits a 30 pt column");
+    t.runs = vec![TextRun::new("2026", CharStyle { size: 20.0, ..CharStyle::default() })];
+    let wrapped = layout(FontDb::global(), &t);
+    assert!(wrapped.lines.len() > 1, "unmarked 2026 is longer than the column");
 }
 
 /// Issue #260 as reported, with a Japanese face of craft-fonts (whose own digits are proportional).

@@ -34,6 +34,13 @@
 	Channel 4	Kanal 4
 	Cell Size	Cellstorlek
 	Fine Dots	Fina punkter
+
+	Simple	Enkel
+	Light Rough	Lätt grov
+	Dark Rough	Mörk grov
+	Wide Sharp	Bred skarp
+	Wide Blurry	Bred suddig
+	Sparkle	Glittra
 	Medium Dots	Medelstora punkter
 	Grainy Dots	Korniga punkter
 	Coarse Dots	Grova punkter
@@ -296,6 +303,7 @@
 	Blur	Oskärpa
 	Bottom	Nederkant
 	Bottom in Front	Nederkant framför
+	Bottom-Justified Tab	Bottenjusterad tabb
 	Bottom:	Nederkant:
 	Bounds	Gränser
 	Bounds (Fill Proportionally)	Gränser (fyll proportionellt)
@@ -1034,6 +1042,7 @@
 	Eyedropper Picks Up:	Pipetten hämtar:
 	Eyedropper Tool	Pipettverktyg
 	Eyedropper: click the art to sample the stop's colour	Pipett: klicka på grafiken för att hämta stoppets färg
+	Eyedropper: click the art to sample the key color	Pipett: klicka på grafiken för att hämta nyckelfärgen
 	Favorites	Favoriter
 	Feather…	Fjädring…
 	Feet	Fot
@@ -1177,6 +1186,8 @@
 	Large Gaps	Stora mellanrum
 	Gap Preview Color:	Förhandsgranskningsfärg för mellanrum:
 	Close Gaps With Paths	Stäng mellanrum med banor
+	Show Live Paint Gaps	Visa mellanrum i direktmålning
+	Hide Live Paint Gaps	Dölj mellanrum i direktmålning
 	Select Fills	Markera fyllningar
 	Select Strokes	Markera konturer
 	Gaussian Blur…	Gaussisk oskärpa…
@@ -1283,6 +1294,7 @@
 	Hand-Drawn	Handritad
 	Handles	Handtag
 	Hard Light	Hårt ljus
+	Hard Mix	Hård blandning
 	Harmony Rules:	Harmoniregler:
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -1786,6 +1798,9 @@
 	Modified:	Ändrad:
 	Modify	Ändra
 	Mojikumi	Mojikumi
+	Insert Kashidas	Infoga kashidor
+	Long	Lång
+	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
 	Kinsoku Set	Kinsoku-uppsättning
 	Hard	Hård
@@ -1820,6 +1835,7 @@
 	Move Slices	Flytta skivor
 	Move Spine Point	Flytta ryggradspunkt
 	Reshape Spine Segment	Omforma ryggradssegment
+	Move Brush	Flytta pensel
 	Move Swatch	Flytta färgruta
 	Move Up	Flytta upp
 	Move…	Flytta…
@@ -1875,6 +1891,13 @@
 	Tints and Shades	Ljusare och mörkare toner
 	Hue Shift	Nyansförskjutning
 	Key Color:	Nyckelfärg:
+	Tips	Tips
+	Colorization Tips	Tips om färgläggning
+	The samples show this brush on a blue stroke.	Exemplen visar den här penseln på en blå kontur.
+	The art keeps its own colors.	Grafiken behåller sina egna färger.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Svart blir konturfärgen och vitt förblir vitt. Andra färger blir ljusare toner av konturfärgen, och ju ljusare en färg är, desto ljusare är dess ton.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Svart förblir svart och vitt förblir vitt. Andra färger blir mörkare toner av konturfärgen när de är mörka och ljusare toner av den när de är ljusa.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Nyckelfärgen blir konturfärgen. De andra färgerna flyttas lika långt runt färghjulet som nyckelfärgen och behåller sin mättnad och ljusstyrka.
 	Roundness:	Rundhet:
 	Fixed	Fast
 	Pressure	Tryck
@@ -1895,6 +1918,14 @@
 	Round Fan	Rund solfjäder
 	Flat Fan	Platt solfjäder
 	New Brush…	Ny pensel…
+	New Brush	Ny pensel
+	Calligraphic Brush	Kalligrafisk pensel
+	Scatter Brush	Spridningspensel
+	Art Brush	Konstpensel
+	Bristle Brush	Borstpensel
+	Pattern Brush	Mönsterpensel
+	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
+	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
 	New Character Style	Ny teckenstil
 	New Color Group	Ny färggrupp
@@ -1925,6 +1956,7 @@
 	New View	Ny vy
 	New View…	Ny vy…
 	New Window	Nytt fönster
+	New Without Dialog	Ny utan dialogruta
 	New Workspace	Ny arbetsyta
 	New Workspace…	Ny arbetsyta…
 	New {kind} Style…	Ny {kind}stil…
@@ -2503,6 +2535,7 @@
 	Reorder	Ändra ordning
 	Reorder Appearance Item	Ändra ordning på utseendeobjekt
 	Repeat	Upprepa
+	Repeat Objects	Upprepningsobjekt
 	Repeat Options	Upprepningsalternativ
 	Repeat Pathfinder	Upprepa banöverlappning
 	Repeat Tab	Upprepa tabb
@@ -2711,6 +2744,7 @@
 	Scale Cursor Proportional to UI	Skala pekaren proportionellt mot gränssnittet
 	Scale Lineweights	Skala linjebredder
 	Scale Strokes & Effects	Skala konturer och effekter
+	Scale Text Attributes	Skala textattribut
 	Scale to Fit Artboard	Skala för att passa ritytan
 	Scale Tool	Skalningsverktyg
 	Scale:	Skala:
@@ -2970,6 +3004,7 @@
 	Snapping Tolerance	Fästtolerans
 	Social Square Post 1080×1080	Kvadratiskt inlägg för sociala medier 1080×1080
 	Soft Light	Mjukt ljus
+	Soft Mix	Mjuk blandning
 	Solid	Enfärgad
 	Sort by Kind	Sortera efter typ
 	Sort by Name	Sortera efter namn
@@ -3210,6 +3245,7 @@
 	Tools	Verktyg
 	Top	Överkant
 	Top in Front	Ovansidan framför
+	Top-Justified Tab	Toppjusterad tabb
 	Top:	Överkant:
 	Total Width:	Total bredd:
 	Touch Type Tool	Beröringstextverktyg
@@ -3547,7 +3583,8 @@ imageTrace	Outline	Disposition
 	 to sample a color	 för att hämta en färg
 	 across a selected object to set the gradient direction	 över ett markerat objekt för att ange gradientens riktning
 	 to select an artboard  |  	 för att markera en rityta  |  
-	 on the canvas to create one	 på arbetsytan för att skapa en
+	 on the canvas to create one (	 på arbetsytan för att skapa en (
+	 selects several, or draws one inside an artboard)	 markerar flera eller skapar en ny i en rityta)
 	 a stroke to add a width point  |  	 en kontur för att lägga till en breddpunkt  |  
 	 to change one side  |  	 för att ändra en sida  |  
 	 to select more points  |  	 för att markera fler punkter  |  
@@ -3771,6 +3808,25 @@ axis	Both	Båda
 @msg	a PostScript error ({name} in `{op}`: {at})	ett PostScript-fel ({name} i `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	ett PostScript-fel ({name} i `{op}`: {at}), i {procs}
 @msg	a PostScript error ({name})	ett PostScript-fel ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	ett PostScript-fel ({name} i `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	ett PostScript-fel ({name} i `{op}`; {meaning}), i {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	ett PostScript-fel ({name} i `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	ett PostScript-fel ({name} i `{op}`: {at}; {meaning}), i {procs}
+@msg	a PostScript error ({name}; {meaning})	ett PostScript-fel ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	programmet avslutar en ordlista som det inte har påbörjat
+@msg	the program opens a file, which the reader can't do	programmet öppnar en fil, vilket PostScript-läsaren inte kan
+@msg	the program restores a saved state that was already restored	programmet återställer ett sparat läge som redan har återställts
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	data som programmet läser är skadade eller avkortade, eller så frågar programmet efter en position i en fil som inte har någon
+@msg	the program goes past one of the reader's limits	programmet överskrider en av PostScript-läsarens gränser
+@msg	the path has no point to continue from	banan har ingen punkt att fortsätta från
+@msg	a value is outside the range the operator takes	ett värde ligger utanför intervallet som operatorn tar emot
+@msg	the operator needs more values than the stack holds	operatorn behöver fler värden än stacken innehåller
+@msg	part of the program isn't valid PostScript text	en del av programmet är inte giltig PostScript-text
+@msg	a value has the wrong type for the operator	ett värde har fel typ för operatorn
+@msg	the program runs, deletes or renames a file, which the reader can't do	programmet kör, tar bort eller byter namn på en fil, vilket PostScript-läsaren inte kan
+@msg	the program asks for a resource that isn't defined	programmet begär en resurs som inte är definierad
+@msg	a calculation has no result, as in a division by zero	en beräkning har inget resultat, som vid division med noll
+@msg	the operator looks for a mark on the stack and finds none	operatorn letar efter en markering på stacken och hittar ingen
 @msg	a bitmap is empty	en bitmapp är tom
 @msg	a bitmap is too large to read	en bitmapp är för stor för att läsas
 @msg	a colour index is 0 to {_1}, not {n}	ett färgindex är 0 till {_1}, inte {n}
@@ -3894,7 +3950,9 @@ axis	Both	Båda
 @msg	no blend options	inga blandningsalternativ
 @msg	no bounds	inga gränser
 @msg	no brush named `{name}`	ingen pensel med namnet `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	namnet på en borstpensel får ha högst {max} tecken: `{name}` har {count}
 @msg	no brush selected	ingen pensel är markerad
+@msg	brushes move only within their type	penslar kan bara flyttas inom sin egen typ
 @msg	no catalog	ingen katalog
 @msg	no changes since the last save	inga ändringar sedan senaste sparningen
 @msg	no clock to keep a heartbeat by	ingen klocka att styra hjärtslagen efter
@@ -3948,6 +4006,7 @@ axis	Both	Båda
 @msg	no such action	åtgärden finns inte
 @msg	no such anchor	ankaret finns inte
 @msg	no such artboard	ritytan finns inte
+@msg	the artboard is locked	ritytan är låst
 @msg	no such document	dokumentet finns inte
 @msg	no such layer or object	lagret eller objektet finns inte
 @msg	no such object {0}	objektet {0} finns inte
@@ -4156,6 +4215,7 @@ axis	Both	Båda
 @msg	unknown workspace (one of {_1})	okänd arbetsyta (en av {_1})
 @msg	unsupported: {0}	stöds inte: {0}
 @msg	variables are locked	variablerna är låsta
+@msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	filer i version {0} kan inte komprimeras: endast version {COMPRESSED_SINCE} och senare kan öppna komprimerade filer
 @msg	width and height are at least 1 pixel	bredd och höjd är minst 1 pixel
 @msg	workspace name can't be empty	arbetsytans namn får inte vara tomt
@@ -4420,6 +4480,7 @@ effect	Soft	Mjuk
 	Activate Panel	Aktivera panel
 	Change Panel Layout	Ändra panellayout
 	Close Panel	Stäng panel
+	Collapse Panel Group	Komprimera panelgrupp
 	Move Panel	Flytta panel
 	Group with	Gruppera med
 	Resize panels	Ändra storlek på paneler
@@ -4430,6 +4491,12 @@ effect	Soft	Mjuk
 @msg	before must name a panel	before måste ange en panel
 @msg	docking action contains an unknown panel or an excessive split path	dockningsåtgärden innehåller en okänd panel eller en alltför djup delningssökväg
 @msg	group must be true or false	group måste vara true eller false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panelen flyter; komprimera dess grupp med window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	panelen ligger inte i en dockningsgrupp
+@msg	only a dock group above or below others collapses, not one beside another	bara en dockningsgrupp ovanför eller under andra komprimeras, inte en bredvid en annan
+@msg	icon must be true or false	icon måste vara true eller false
+@msg	icon only docks a panel in the icon column, with no anchor	icon dockar bara en panel i ikonkolumnen, utan anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column dockar en uppsättning som en dockningskolumn, utan anchor eller icon
 @msg	move requires a destination panel	flyttning kräver en målpanel
 @msg	move requires an existing destination panel	flyttning kräver en befintlig målpanel
 @msg	onto must name a floating panel	onto måste ange en flytande panel
@@ -4504,12 +4571,24 @@ lighting	Light	Ljus
 	Reset Ruler Origin	Återställ linjalens origo
 	Artistic	Konstnärligt
 	Film Grain…	Filmkorn…
+	Colored Pencil…	Färgpenna…
+	Colored Pencil	Färgpenna
 	Cutout…	Urklipp…
 	Cutout	Urklipp
+	Dry Brush…	Torr pensel…
+	Dry Brush	Torr pensel
 	Neon Glow…	Neonsken…
+	Palette Knife…	Palettkniv…
 	Neon Glow	Neonsken
+	Paint Daubs…	Färgklickar…
+	Paint Daubs	Färgklickar
+	Palette Knife	Palettkniv
 	Poster Edges…	Affischkanter…
+	Rough Pastels…	Grova pasteller…
 	Poster Edges	Affischkanter
+	Rough Pastels	Grova pasteller
+	Underpainting…	Undermålning…
+	Underpainting	Undermålning
 	Levels	Nivåer
 	Edge Simplicity	Kantförenkling
 	Edge Fidelity	Kanttrohet
@@ -5017,6 +5096,9 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	3D Lighting Preset	Förinställning för 3D-belysning
+	Standard	Standard
+	Diffuse	Diffust
 # 3D light management.
 	Lights	Ljuskällor
 	Add Light	Lägg till ljus
@@ -5043,6 +5125,7 @@ theme	Appearance	Utseende
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Ritning : verklig storlek — 1:10 visar 1 enhet på sidan som 10.
 	Editable	Redigerbar
 	Export Data Sets…	Exportera datauppsättningar…
+	Load Variable Library…	Läs in variabelbibliotek…
 	Filter	Filter
 	Filter Layers Panel Rows	Filtrera rader i panelen Lager
 	Flatten	Platta till
@@ -5059,6 +5142,13 @@ theme	Appearance	Utseende
 	Isolate Selected Object	Isolera markerat objekt
 	Keep selected	Behåll markerad
 	Merge only with selection	Sammanfoga endast med markeringen
+	Consider Open Filled Paths as Closed	Behandla öppna fyllda banor som slutna
+	Pick Color From:	Hämta färg från:
+	Artwork	Bildmaterial
+	Cursor Swatch Preview	Förhandsvisning av färgprover vid pekaren
+	Selection:	Markering:
+	Straight Line	Rak linje
+	Highlight:	Framhävning:
 	Legacy (version 7)	Äldre (version 7)
 	Legacy .ai Options	Alternativ för äldre .ai
 	Linked Files	Länkade filer
@@ -5104,6 +5194,7 @@ theme	Appearance	Utseende
 @msg	Measured anchor no longer exists	Den mätta ankarpunkten finns inte längre
 @msg	Measured segment no longer exists	Det mätta segmentet finns inte längre
 @msg	Non-finite dimension	Måttet är inte ett ändligt tal
+@msg	Scale Text Attributes: selected type has no scale to bake	Skala textattribut: det valda texten har ingen skalning att tillämpa
 @msg	Scale must be drawing:real, for example 1:10	Skalan måste anges som ritning:verklighet, till exempel 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Skalförhållandet måste ligga mellan 1:1000000 och 1000000:1
 @msg	Second measured segment no longer exists	Det andra mätta segmentet finns inte längre
@@ -5117,6 +5208,10 @@ theme	Appearance	Utseende
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	inget i datauppsättningen {name} användes: inget objekt är bundet till en variabel som den har ett värde för
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
+@msg	a clipping path can't take objects	en klippbana kan inte ta emot objekt
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekt inuti en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte fästas på en bana
+@msg	a clipping path can't be attached to a path	en klippbana kan inte fästas på en bana
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en övertoning: ange `gradient`
@@ -5140,6 +5235,8 @@ theme	Appearance	Utseende
 	Sketch	Skiss
 	Halftone Pattern…	Rastermönster…
 	Halftone Pattern	Rastermönster
+	Torn Edges…	Riviga kanter…
+	Torn Edges	Riviga kanter
 	Pattern Type	Mönstertyp
 	Dot	Punkt
 # User Interface › Color Scheme
@@ -5158,6 +5255,7 @@ theme	Appearance	Utseende
 	Watercolor…	Akvarell…
 	Watercolor	Akvarell
 	Brush Size	Penselstorlek
+	Texture Coverage	Texturtäckning
 	Definition	Skärpa
 	Brush Detail	Penseldetalj
 	Shadow Intensity	Skuggintensitet
@@ -5186,24 +5284,14 @@ theme	Appearance	Utseende
 @msg	the image's pixels can't be read	bildens pixlar kan inte läsas
 	Persistent	Beständig
 	Library Panel Options	Alternativ för bibliotekspanelen
+	Locate Library…	Hitta bibliotek…
 @msg	Persistent libraries not found: {files}	Beständiga bibliotek hittades inte: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` är inte en bibliotekspanel (se window.swatchLibrary)
 @msg	library panel `{given}` isn't open	bibliotekspanelen `{given}` är inte öppen
 @msg	too many library panels were opened in this session	för många bibliotekspaneler har öppnats i den här sessionen
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Bilden är {_1} × {_2} pixlar, mer än {LARGE_TRACE_SIDE} på en sida: den vektoriseras, men långsammare. En förinställning med lägre återgivning eller en mindre kopia av bilden går snabbare.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Bilden vektoriserades vid {_1} × {_2} pixlar, nedskalad från {_3} × {_4} (högst {_5} megapixlar).
-	Lock Artboards	Lås ritytor
-	Unlock Artboards	Lås upp ritytor
-	Artboard Color	Ritytans färg
-	Lock Selected	Lås markerade
-	Lock All Except Selected	Lås alla utom markerade
-	Lock All	Lås alla
-	Unlock Selected	Lås upp markerade
-	Lock Artboard	Lås rityta
-	Unlock Artboard	Lås upp rityta
-	Clear Artboard Color	Rensa ritytans färg
-@msg	artboard {_1} is locked	ritytan {_1} är låst
-	Include Artboard Fill	Ta med ritytans färg
+	Gap Length:	Lucklängd:
 	Artboard {n} of {total}	Rityta {n} av {total}
 	Encoding and writing the file…	Kodar och skriver filen…
 @plural	{n} more export waiting|{n} more exports waiting	{n} export till väntar|{n} exporter till väntar
@@ -5241,3 +5329,9 @@ theme	Appearance	Utseende
 	Plaster	Gips
 	Note Paper…	Anteckningspapper…
 	Note Paper	Anteckningspapper
+	Water Paper…	Vått papper…
+	Water Paper	Vått papper
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Fresk…
+	Fresco	Fresk

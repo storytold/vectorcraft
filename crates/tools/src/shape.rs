@@ -201,7 +201,9 @@ impl Tool for ShapeTool {
                     self.began = false;
                     vec![Action::Commit]
                 } else {
-                    vec![Action::Dialog(self.id.into(), json!({ "x": s.x, "y": s.y }))]
+                    // Alt (draw from centre) is passed on, so the size dialog can centre the shape on the click.
+                    let args = if ev.mods.alt { json!({ "x": s.x, "y": s.y, "alt": true }) } else { json!({ "x": s.x, "y": s.y }) };
+                    vec![Action::Dialog(self.id.into(), args)]
                 }
             }
             _ => vec![],
@@ -382,6 +384,21 @@ mod tests {
         assert_eq!(
             t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)),
             vec![Action::Dialog("star".into(), json!({"x": 10.0, "y": 10.0}))]
+        );
+    }
+
+    #[test]
+    fn alt_click_passes_draw_from_centre_to_the_dialog() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut t = ShapeTool::new("rectangle");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(alt));
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(alt)),
+            vec![Action::Dialog("rectangle".into(), json!({"x": 10.0, "y": 10.0, "alt": true}))]
         );
     }
 

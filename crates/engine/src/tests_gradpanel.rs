@@ -38,6 +38,8 @@ fn sample_color_with_a_stop_recolours_that_stop_in_one_undo_step() {
     s.execute("paint.sampleColor", &json!({"color": "#ff0000", "stop": 1})).unwrap();
     assert_eq!(stop_hexes(&s, id, false), ["#ffffff", "#ff0000"]);
     assert!(s.execute("paint.sampleColor", &json!({"color": "#ff0000", "stop": 2})).unwrap_err().to_string().contains("no stop 2"));
+    // A 32-bit build read 2^32 + 1 as stop 1.
+    assert!(s.execute("paint.sampleColor", &json!({"color": "#00ff00", "stop": (1u64 << 32) + 1})).is_err());
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(stop_hexes(&s, id, false), ["#ffffff", "#000000"]);
     // The stroke's gradient through `stroke`, the fill left alone.

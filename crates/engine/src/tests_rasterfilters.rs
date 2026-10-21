@@ -31,12 +31,20 @@ const BRUSH_STROKES: [(&str, &str); 8] = [
 ];
 
 /// Effect › Artistic, at their defaults.
-const ARTISTIC: [(&str, &str); 8] = [
+const ARTISTIC: [(&str, &str); 15] = [
+    ("artistic.coloredPencil", "{}"),
     ("artistic.cutout", "{}"),
+    ("artistic.dryBrush", "{}"),
     ("artistic.filmGrain", "{}"),
+    ("artistic.fresco", "{}"),
     ("artistic.neonGlow", "{}"),
+    // Wide Blurry softens dabs; Simple leaves uniform fills unchanged on the striped art.
+    ("artistic.paintDaubs", r#"{"brushType": "wideBlurry"}"#),
+    ("artistic.paletteKnife", "{}"),
     ("artistic.plasticWrap", "{}"),
     ("artistic.posterEdges", "{}"),
+    ("artistic.underpainting", "{}"),
+    ("artistic.roughPastels", "{}"),
     ("artistic.smudgeStick", "{}"),
     ("artistic.sponge", "{}"),
     ("artistic.watercolor", "{}"),
@@ -52,7 +60,7 @@ const PIXELATE: [(&str, &str); 4] =
     [("pixelate.colorHalftone", "{}"), ("pixelate.crystallize", "{}"), ("pixelate.mezzotint", "{}"), ("pixelate.pointillize", "{}")];
 
 /// Effect › Sketch, at their defaults.
-const SKETCH: [(&str, &str); 11] = [
+const SKETCH: [(&str, &str); 12] = [
     ("sketch.basRelief", "{}"),
     ("sketch.chalkCharcoal", "{}"),
     ("sketch.charcoal", "{}"),
@@ -64,6 +72,7 @@ const SKETCH: [(&str, &str); 11] = [
     ("sketch.plaster", "{}"),
     ("sketch.reticulation", "{}"),
     ("sketch.stamp", "{}"),
+    ("sketch.waterPaper", "{}"),
 ];
 
 /// Effect › Texture, at their defaults.
@@ -206,6 +215,7 @@ fn artistic_settings_survive_a_save_and_open() {
             json!({"levels": 3.0, "edgeSimplicity": 2.0, "edgeFidelity": 3.0}),
             [json!({"levels": 2.0}), json!({"edgeSimplicity": 10.0})],
         ),
+        ("artistic.fresco", json!({"brushSize": 4.0, "brushDetail": 6.0, "texture": 2.0}), [json!({"brushSize": 8.0}), json!({"texture": 3.0})]),
         (
             "artistic.neonGlow",
             json!({"glowSize": -6.0, "glowBrightness": 30.0, "color": "#ff3300"}),
@@ -220,6 +230,19 @@ fn artistic_settings_survive_a_save_and_open() {
             "artistic.plasticWrap",
             json!({"highlightStrength": 18.0, "detail": 10.0, "smoothness": 8.0}),
             [json!({"highlightStrength": 5.0}), json!({"highlightStrength": 0.0})],
+        ),
+        (
+            "artistic.roughPastels",
+            json!({
+                "strokeLength": 8.0,
+                "strokeDetail": 12.0,
+                "texture": "sandstone",
+                "scaling": 100.0,
+                "relief": 8.0,
+                "lightDirection": "topLeft",
+                "invert": false
+            }),
+            [json!({"strokeLength": 20.0}), json!({"relief": 0.0})],
         ),
     ] {
         let (mut s, g) = striped();
@@ -332,6 +355,29 @@ fn glass_refuses_a_texture_that_is_not_an_image() {
     let e = s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"textureImage": {"dataBase64": junk}}})).unwrap_err();
     assert!(e.to_string().contains("textureImage"), "{e}");
     assert_eq!(glass_params(&s, g), before);
+}
+
+/// Effect › Texture › Texturizer › Load Texture: an image is stored with the effect and drawn in relief.
+#[test]
+fn texturizer_loads_a_texture_and_draws_it() {
+    let png = rings_png();
+    let data = vectorcraft_format::base64_encode(&png);
+    let (mut s, g) = striped();
+    let file = json!({"name": "rings.png", "dataBase64": data});
+    s.execute("effect.apply", &json!({"effect": "texture.texturizer", "ids": [g], "params": {"relief": 20, "textureImage": file}})).unwrap();
+    let p = glass_params(&s, g);
+    assert_eq!(p["texture"], json!("loaded"));
+    let loaded = render(&s);
+    assert!(glass_params(&s, g)["textureImage"].as_str().is_some());
+    for (_, builtin) in vectorcraft_render::effects::pixel::TEXTURES {
+        s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": builtin}})).unwrap();
+        assert!(mean_diff(&loaded, &render(&s)) > 0.001, "{builtin}");
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [g], "params": {"texture": "loaded"}})).unwrap();
+    assert_eq!(render(&s).pixels, loaded.pixels);
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
+    assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
 }
 
 #[test]

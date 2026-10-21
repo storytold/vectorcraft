@@ -89,4 +89,53 @@ mod tests {
         g.extras_mut().trace = Some(Box::new(serde_json::json!({"view": "sepia"})));
         assert_eq!(g.trace_view(), TraceView::Result);
     }
+    #[test]
+    fn live_trace_result_bounds_exclude_the_retained_bitmap_at_any_angle() {
+        use crate::{Appearance, Document, ImageObject, NodeId, NodeKind};
+        use std::sync::Arc;
+        use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath};
+        let mut source = Node::new(
+            NodeId(2),
+            NodeKind::Image(Box::new(ImageObject {
+                key: "synthetic".into(),
+                width: 200,
+                height: 200,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+            })),
+        );
+        source.visible = false;
+        let art = Node::path(
+            NodeId(3),
+            PathData::single(SubPath::polyline(
+                &[Point::new(20.0, 30.0), Point::new(80.0, 30.0), Point::new(80.0, 90.0), Point::new(20.0, 90.0)],
+                true,
+            )),
+            Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+        );
+        let mut group = Node::group(NodeId(1), vec![Arc::new(source), Arc::new(art.clone())]);
+        group.extras_mut().trace = Some(Box::new(serde_json::json!({})));
+        let doc = Document::new(300.0, 300.0);
+        for view in TraceView::ALL {
+            group.extras_mut().trace = Some(Box::new(serde_json::json!({"view":view.id()})));
+            let want = if view.shows_source() { Rect::new(0.0, 0.0, 200.0, 200.0) } else { Rect::new(20.0, 30.0, 80.0, 90.0) };
+            assert_eq!(group.geometric_bounds(), Some(want));
+            assert_eq!(group.visual_bounds(), Some(want));
+            if !view.shows_source() {
+                for angle in [0.0_f64, 30.0, 90.0] {
+                    let xf = Affine::rotate(angle.to_radians());
+                    for visual in [false, true] {
+                        assert_eq!(group.bounds_in(&doc.symbol_boxes(), xf, visual), art.bounds_in(&doc.symbol_boxes(), xf, visual));
+                    }
+                }
+            }
+        }
+        group.extras_mut().trace = None;
+        assert_eq!(
+            group.geometric_bounds(),
+            Some(Rect::new(0.0, 0.0, 200.0, 200.0)),
+            "ordinary hidden group members retain their existing bounds policy"
+        );
+    }
 }

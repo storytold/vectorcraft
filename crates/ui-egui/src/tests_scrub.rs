@@ -6,7 +6,7 @@ use std::cell::Cell;
 use egui::{CursorIcon, Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_doc::Unit;
-use vectorcraft_engine::Session;
+use vectorcraft_engine::{DocState, Session};
 
 use crate::{VectorcraftApp, scrub, widgets};
 
@@ -239,6 +239,10 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
 
+fn objects(doc: &DocState) -> usize {
+    doc.doc.layers[0].children().map_or(0, |c| c.len())
+}
+
 /// Drag the W label by `dx` in four moves (`escape`: Escape before the release).
 fn drag_w(app: &mut VectorcraftApp, ctx: &egui::Context, dx: f32, escape: bool) {
     let mut w = None;
@@ -279,4 +283,79 @@ fn scrubbing_w_in_the_app_is_one_undo_step() {
     app.run("prefs.set", json!({"key": "scrubNumericFields", "value": false})).unwrap();
     drag_w(&mut app, &ctx, 40.0, false);
     assert!((width(&app) - 100.0).abs() < 1e-6, "off: {}", width(&app));
+}
+
+/// A scrub does not close an undo group that is open in another document, and that document keeps
+/// its edits, when Escape ends the drag and when the drag is released.
+#[test]
+fn a_scrub_leaves_another_documents_undo_group_open() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 50})).unwrap();
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let ctx = egui::Context::default();
+    let other = |app: &VectorcraftApp| (app.session.documents()[0].undo_group.is_some(), objects(&app.session.documents()[0]));
+    drag_w(&mut app, &ctx, 40.0, true);
+    assert!((width(&app) - 100.0).abs() < 1e-6, "Escape: {}", width(&app));
+    assert_eq!(other(&app), (true, 1), "Escape");
+    drag_w(&mut app, &ctx, 40.0, false);
+    assert!((width(&app) - (100.0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
+    assert_eq!(other(&app), (true, 1), "released");
+}
+
+/// A scrub in a document whose undo group is already open joins that group's undo step and
+/// leaves the group open; Escape puts the document back as it was before the drag, with the edits
+/// made in the group, and drops the drag's journal entries.
+#[test]
+fn a_scrub_inside_an_open_undo_group_joins_its_step() {
+    let (mut app, ctx) = app_with_rect();
+    app.run("edit.undoGroup.begin", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 100, "height": 50})).unwrap();
+    let undo = undo_len(&app);
+    let (before, journal) = (app.session.doc().unwrap().doc.clone(), app.session.journal.len());
+    drag_w(&mut app, &ctx, 40.0, true);
+    assert!((width(&app) - 100.0).abs() < 1e-6, "Escape: {}", width(&app));
+    assert!(std::sync::Arc::ptr_eq(&app.session.doc().unwrap().doc, &before), "Escape puts the document back");
+    assert_eq!(app.session.journal.len(), journal, "and drops the drag's journal entries");
+    assert_eq!(objects(app.session.doc().unwrap()), 2, "the rectangle drawn in the group stays");
+    drag_w(&mut app, &ctx, 40.0, false);
+    assert!((width(&app) - (100.0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
+    assert!(app.session.doc().unwrap().undo_group.is_some(), "the group stays open");
+    assert_eq!(undo_len(&app), undo, "the drag joins the group's step");
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(objects(app.session.doc().unwrap()), 1, "one undo takes back the rectangle and the drag");
+}
+
+/// A scrub closes the undo group it opened in its own document when another document becomes
+/// active during the drag (as `document.activate` does), and leaves that document's group open.
+#[test]
+fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let ctx = egui::Context::default();
+    let undo = undo_len(&app);
+    let mut w = None;
+    for _ in 0..4 {
+        w = app_frame(&mut app, &ctx, vec![], "W:");
+    }
+    let at = w.expect("the W label is shown").center();
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    app_frame(&mut app, &ctx, vec![Event::PointerMoved(at)], "");
+    app_frame(&mut app, &ctx, vec![button(at, true)], "");
+    for i in 1..=4 {
+        app_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(10.0 * i as f32, 0.0))], "");
+    }
+    app.session.set_active(0);
+    app_frame(&mut app, &ctx, vec![button(at + vec2(40.0, 0.0), false)], "");
+    app_frame(&mut app, &ctx, vec![], "");
+    let second = &app.session.documents()[1];
+    assert!(second.undo_group.is_none(), "the scrub's group is closed");
+    assert_eq!(second.history.undo.len(), undo + 1, "one undo step for the drag");
+    assert!(app.session.documents()[0].undo_group.is_some(), "the active document's group stays open");
 }

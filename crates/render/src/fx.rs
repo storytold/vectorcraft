@@ -2065,6 +2065,8 @@ impl Renderer {
         let doc = self.doc_inputs(f.doc);
         let mut h = DefaultHasher::new();
         (doc.cms, f.opts.anti_alias.threshold(), self.knockout, f.doc.raster_effects_ppi.to_bits()).hash(&mut h);
+        // Cached effects on containers can include paths made into guides.
+        f.opts.hide_guides.hash(&mut h);
         if let Some((isolated, path)) = self.isolation_path(f)
             && n.id != isolated
             && path.contains(&n.id)

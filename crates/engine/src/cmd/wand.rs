@@ -141,9 +141,10 @@ fn paintable(doc: &Document) -> Vec<NodeId> {
             out.push(n.id);
         }
     });
+    let editable = doc.editable();
     out.retain(|id| {
         !doc.parent_of(*id).is_some_and(|p| compounds.contains(&p))
-            && doc.is_editable(*id)
+            && editable(*id)
             && doc.is_visible(*id)
             && doc.node(*id).is_some_and(|n| n.visible)
     });

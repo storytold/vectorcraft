@@ -284,6 +284,21 @@ fn offset_path_remembers_its_last_values() {
     assert_eq!((d.f64("offset", 0.0), d.str("joins"), d.f64("miterLimit", 0.0)), (-4.5, "round".to_string(), 4.0));
 }
 
+/// Offset Path's Preview checkbox keeps its last state across opens, like the other fields (#3195).
+#[test]
+fn offset_path_remembers_its_last_preview_state() {
+    let mut app = app_with_selection();
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("preview"), "a first open is unchecked");
+    d.fields.insert("preview".into(), json!(true));
+    confirm(&mut app).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(d.bool("preview"), "the state it was confirmed with");
+}
+
 fn app_with_dense_path() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();

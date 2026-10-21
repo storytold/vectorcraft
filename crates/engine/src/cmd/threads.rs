@@ -1,6 +1,8 @@
-//! Type → Threaded Text: one story flowing through area-type frames in order.
+//! Type → Threaded Text: one story flowing through frames in order: area type and type on a path,
+//! in any mix. Illustrator links type objects of any shape, as long as their text is in an area or
+//! along a path, not at a point (<https://helpx.adobe.com/illustrator/using/manage-text-area.html>).
 //!
-//! Frames are ordinary area text objects holding their slice of the story; the document lists the
+//! Frames are ordinary text objects holding their slice of the story; the document lists the
 //! thread order. After every edit, threads whose frames changed are re-flowed ([`reflow`]).
 
 use serde_json::{Value, json};
@@ -17,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create",
             ["Type", "Threaded Text"],
             None,
-            "{} thread the selected area type (and closed paths, which become frames) in stacking order → {ids}",
+            "{} thread the selected area type and type on a path (and closed paths, which become area frames) in stacking order → {ids}",
             has_multi,
             create
         ),
@@ -26,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Thread Text",
             [],
             None,
-            "{from, to?, rect?: [x, y, width, height], at?: [x, y]} thread area type `from` (a click on its out port) into one more frame, put after it in its thread: closed path or area type `to`, a new rectangle `rect`, or a new frame of `from`'s shape and size with its top-left at `at` (give one of the three) → {id}; the two frames are selected",
+            "{from, to?, rect?: [x, y, width, height], at?: [x, y]} thread area type or type on a path `from` (a click on its out port) into one more frame, put after it in its thread: closed path, area type or type on a path `to`, a new rectangle `rect`, or a new frame of `from`'s kind, shape and size with its top-left at `at` (give one of the three) → {id}; the two frames are selected",
             has_doc,
             add
         ),
@@ -64,9 +66,10 @@ fn has_thread_selection(s: &Session) -> std::result::Result<(), String> {
     }
 }
 
+/// The text object `id` when it can be a frame of a thread: area type or type on a path.
 fn text_of(d: &Document, id: NodeId) -> Option<&TextObject> {
     match d.node(id).map(|n| &n.kind) {
-        Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Area { .. }) => Some(t),
+        Some(NodeKind::Text(t)) if !matches!(t.kind, TextKind::Point) => Some(t),
         _ => None,
     }
 }
@@ -202,7 +205,7 @@ pub(crate) fn with_threads(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// A closed path converted to an empty area-type frame with `style`.
-fn frame_from_path(n: &Node, style: vectorcraft_doc::CharStyle) -> Option<Node> {
+fn frame_from_path(n: &Node, style: vectorcraft_doc::CharStyle, system_layout: bool) -> Option<Node> {
     let NodeKind::Path { path, .. } = &n.kind else { return None };
     if !path.subpaths.first().is_some_and(|s| s.closed) {
         return None;
@@ -210,6 +213,7 @@ fn frame_from_path(n: &Node, style: vectorcraft_doc::CharStyle) -> Option<Node> 
     let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", style);
     t.kind = TextKind::Area { frame: path.clone() };
     t.xf = vectorcraft_geom::Affine::IDENTITY;
+    t.system_layout = system_layout;
     refresh_bounds(&mut t);
     Some(Node::new(n.id, NodeKind::Text(Box::new(t))))
 }
@@ -219,7 +223,8 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
     let style = ids.iter().find_map(|i| text_of(d, *i)).map(|t| t.first_style()).unwrap_or_default();
-    let ok = ids.iter().all(|i| text_of(d, *i).is_some() || d.node(*i).is_some_and(|n| frame_from_path(n, style.clone()).is_some()));
+    let system = d.setup.system_layout;
+    let ok = ids.iter().all(|i| text_of(d, *i).is_some() || d.node(*i).is_some_and(|n| frame_from_path(n, style.clone(), system).is_some()));
     if ids.len() < 2 || !ok || !ids.iter().any(|i| text_of(d, *i).is_some()) {
         return Err(bad(C, "select area type and closed paths (at least one area type object)"));
     }
@@ -228,7 +233,7 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
         for id in &ids {
             if text_of(d, *id).is_none() {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-                let f = frame_from_path(&n, style.clone()).ok_or_else(|| bad(C, "not a closed path"))?;
+                let f = frame_from_path(&n, style.clone(), d.setup.system_layout).ok_or_else(|| bad(C, "not a closed path"))?;
                 *d.node_mut(*id).ok_or(EngineError::NoNode(*id))? = f;
             }
         }
@@ -261,16 +266,17 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let given = |k: &str| p.get(k).filter(|v| !v.is_null());
     let from = checked_id(s, given("from").unwrap_or(&Value::Null), C)?;
     let d = &s.doc()?.doc;
-    let src = text_of(d, from).ok_or_else(|| bad(C, "`from` must be area type"))?;
+    let src = text_of(d, from).ok_or_else(|| bad(C, "`from` must be area type or type on a path"))?;
     let style = src.first_style();
     // The frame to thread into: an existing object (`to`), or a new one beside `from`.
     let (to, new) = match (given("to"), given("rect"), given("at")) {
         (Some(v), None, None) => {
             let to = checked_id(s, v, C)?;
             let parent = d.parent_of(to).and_then(|i| d.node(i));
-            let frame = text_of(d, to).is_some() || d.node(to).is_some_and(|n| frame_from_path(n, style.clone()).is_some());
+            let system = d.setup.system_layout;
+            let frame = text_of(d, to).is_some() || d.node(to).is_some_and(|n| frame_from_path(n, style.clone(), system).is_some());
             if to == from || !frame || parent.is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
-                return Err(bad(C, "`to` must be a closed path or area type other than `from`"));
+                return Err(bad(C, "`to` must be a closed path, area type or type on a path other than `from`"));
             }
             if d.text_threads.iter().any(|t| t.contains(&to)) {
                 return Err(bad(C, "`to` is already threaded"));
@@ -282,14 +288,18 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 .filter(|[_, _, w, h]| *w > 0.0 && *h > 0.0)
                 .ok_or_else(|| bad(C, "`rect` must be [x, y, width, height] with a positive size"))?;
             let frame = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, w, h));
-            (NodeId(0), Some(empty_frame(src, style.clone(), frame, vectorcraft_geom::Affine::translate((x, y)))))
+            (NodeId(0), Some(empty_frame(src, style.clone(), TextKind::Area { frame }, vectorcraft_geom::Affine::translate((x, y)))))
         }
         (None, None, Some(v)) => {
             let [x, y] = finite_numbers(v).ok_or_else(|| bad(C, "`at` must be [x, y]"))?;
-            let TextKind::Area { frame } = &src.kind else { return Err(bad(C, "`from` must be area type")) };
-            let b = frame.bounds().map(|b| src.xf.transform_rect_bbox(b)).ok_or_else(|| bad(C, "`from` has an empty frame"))?;
+            let shape = match &src.kind {
+                TextKind::Area { frame } => frame,
+                TextKind::OnPath { path, .. } => path,
+                TextKind::Point => return Err(bad(C, "`from` must be area type or type on a path")),
+            };
+            let b = shape.bounds().map(|b| src.xf.transform_rect_bbox(b)).ok_or_else(|| bad(C, "`from` has an empty frame"))?;
             let xf = vectorcraft_geom::Affine::translate((x - b.x0, y - b.y0)) * src.xf;
-            (NodeId(0), Some(empty_frame(src, style.clone(), frame.clone(), xf)))
+            (NodeId(0), Some(empty_frame(src, style.clone(), src.kind.clone(), xf)))
         }
         _ => return Err(bad(C, "give one of `to`, `rect` or `at`")),
     };
@@ -309,7 +319,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             None => {
                 if text_of(d, to).is_none() {
                     let n = d.node(to).cloned().ok_or(EngineError::NoNode(to))?;
-                    *d.node_mut(to).ok_or(EngineError::NoNode(to))? = frame_from_path(&n, style).ok_or_else(|| bad(C, "not a closed path"))?;
+                    *d.node_mut(to).ok_or(EngineError::NoNode(to))? =
+                        frame_from_path(&n, style, d.setup.system_layout).ok_or_else(|| bad(C, "not a closed path"))?;
                 }
                 to
             }
@@ -330,12 +341,13 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-/// An empty area-type frame `frame` placed by `xf`, with the type options of `src`.
-fn empty_frame(src: &TextObject, style: vectorcraft_doc::CharStyle, frame: vectorcraft_geom::PathData, xf: vectorcraft_geom::Affine) -> TextObject {
+/// An empty frame of `kind` (area type or type on a path) placed by `xf`, with the type options of
+/// `src`.
+fn empty_frame(src: &TextObject, style: vectorcraft_doc::CharStyle, kind: TextKind, xf: vectorcraft_geom::Affine) -> TextObject {
     let mut t = src.clone();
     t.runs = vec![TextRun { text: String::new(), style, inline: None }];
     t.set_all_paras(src.para_at(0).clone());
-    t.kind = TextKind::Area { frame };
+    t.kind = kind;
     t.xf = xf;
     refresh_bounds(&mut t);
     t
@@ -371,6 +383,16 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
                     t.runs = vec![TextRun { text: String::new(), style: style.clone(), inline: None }];
                     t.set_all_paras(first_para.clone());
                     refresh_bounds(t);
+                }
+            }
+            // The first frame that stays holds the whole story, and the others none, for the
+            // re-flow to share it out among them once.
+            let end_style = story.last().map_or_else(|| style.clone(), |r| r.style.clone());
+            let last_para = paras.last().cloned().unwrap_or_default();
+            for id in keep.iter().skip(1) {
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    t.runs = vec![TextRun { text: String::new(), style: end_style.clone(), inline: None }];
+                    t.set_all_paras(last_para.clone());
                 }
             }
             if let Some(first) = keep.first()
@@ -593,6 +615,48 @@ mod tests {
         assert_eq!(threads(&s), [[a, c, d]]);
     }
 
+    /// Type on a path along a line beside the area type of [`setup`].
+    fn type_on_a_line(s: &mut Session) -> u64 {
+        let line = new_id(s.execute("shape.line", &json!({"x1": 10, "y1": 250, "x2": 110, "y2": 250})).unwrap());
+        new_id(s.execute("text.createInPath", &json!({"path": line, "mode": "onPath", "text": ""})).unwrap())
+    }
+
+    /// Type on a path threads as area type does, in any mix: a story flows from area type along a
+    /// path and on into area type, and a new frame threaded from type on a path at a point is type
+    /// on a path of the same shape.
+    #[test]
+    fn type_on_a_path_threads_with_area_type() {
+        let (mut s, a, b) = setup();
+        let on_path = type_on_a_line(&mut s);
+        s.execute("text.thread.add", &json!({"from": a, "to": on_path})).unwrap();
+        s.execute("text.thread.add", &json!({"from": on_path, "to": b})).unwrap();
+        assert_eq!(threads(&s), [[a, on_path, b]]);
+        let shares = [a, on_path, b].map(|id| text(&s, id));
+        assert!(shares.iter().all(|t| !t.is_empty()), "each frame takes a share: {shares:?}");
+        assert_eq!(shares.concat(), TEXT.repeat(4));
+
+        let c = new_id(s.execute("text.thread.add", &json!({"from": on_path, "at": [300, 250]})).unwrap());
+        let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(c)).unwrap().kind else { panic!("not text") };
+        assert!(matches!(t.kind, TextKind::OnPath { .. }), "type on a path, as the frame it was threaded from");
+        assert_eq!(threads(&s), [[a, on_path, c, b]]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(threads(&s), [[a, on_path, b]]);
+    }
+
+    /// Type on a path released from its thread gives its text back to the frame before it.
+    #[test]
+    fn type_on_a_path_is_released_from_its_thread() {
+        let (mut s, a, _) = setup();
+        let on_path = type_on_a_line(&mut s);
+        s.execute("text.thread.add", &json!({"from": a, "to": on_path})).unwrap();
+        assert!(!text(&s, on_path).is_empty());
+        s.execute("select.set", &json!({"ids": [on_path]})).unwrap();
+        s.execute("text.thread.releaseSelection", &json!({})).unwrap();
+        assert!(threads(&s).is_empty());
+        assert!(text(&s, on_path).is_empty());
+        assert_eq!(text(&s, a), TEXT.repeat(4));
+    }
+
     /// Area type threaded into from an out port takes the overflow at once, before its own text.
     #[test]
     fn add_into_area_type_flows_the_story_into_it() {
@@ -632,6 +696,22 @@ mod tests {
         s.execute("text.thread.add", &json!({"from": a, "to": b})).unwrap();
         let c = new_id(s.execute("text.create", &json!({"x": 10, "y": 200, "text": "x", "area": {"width": 50, "height": 20}})).unwrap());
         assert!(s.execute("text.thread.add", &json!({"from": c, "to": b})).is_err(), "a frame already threaded");
+    }
+
+    /// A frame released from a thread that keeps two or more frames gives its text back to them:
+    /// the story flows through them once.
+    #[test]
+    fn release_from_a_longer_thread_keeps_the_story_once() {
+        let (mut s, a, b) = setup();
+        let c = new_id(s.execute("text.create", &json!({"x": 10, "y": 100, "text": "", "area": {"width": 150, "height": 40}})).unwrap());
+        s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+        s.execute("text.thread.add", &json!({"from": c, "to": b})).unwrap();
+        assert_eq!(threads(&s), [[a, c, b]]);
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        s.execute("text.thread.releaseSelection", &json!({})).unwrap();
+        assert_eq!(threads(&s), [[a, b]]);
+        assert!(text(&s, c).is_empty());
+        assert_eq!(format!("{}{}", text(&s, a), text(&s, b)), TEXT.repeat(4));
     }
 
     #[test]

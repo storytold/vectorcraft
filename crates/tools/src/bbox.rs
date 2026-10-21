@@ -46,6 +46,20 @@ impl Handle {
             _ => (true, true),
         }
     }
+    /// The handle's point in the 9-point reference grid (row-major from the top-left, 4 the center)
+    /// that `object.setBounds` takes as `reference`.
+    pub fn reference(self) -> usize {
+        match self {
+            Handle::TopLeft => 0,
+            Handle::Top => 1,
+            Handle::TopRight => 2,
+            Handle::Left => 3,
+            Handle::Right => 5,
+            Handle::BottomLeft => 6,
+            Handle::Bottom => 7,
+            Handle::BottomRight => 8,
+        }
+    }
 }
 
 /// Handle under `p` (within `tol` document units).
@@ -122,6 +136,9 @@ mod tests {
         assert_eq!(Handle::Top.opposite(), Handle::Bottom);
         assert_eq!(hit_handle(R, Point::new(99.0, 24.0), 3.0), Some(Handle::Right));
         assert_eq!(hit_handle(R, Point::new(50.0, 25.0), 3.0), None);
+        for h in Handle::ALL {
+            assert_eq!(vectorcraft_geom::reference_point(R, h.reference()), h.pos(R), "{h:?}");
+        }
     }
 
     #[test]

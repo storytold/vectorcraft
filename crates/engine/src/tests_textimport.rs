@@ -367,6 +367,47 @@ fn docx_tables_breaks_and_fields_place_as_paragraphs_and_tabs() {
 }
 
 #[test]
+fn docx_kashida_justification_places_with_insert_kashidas() {
+    use vectorcraft_doc::Justify;
+    use vectorcraft_doc::text::Kashida;
+    // The document holds right-to-left paragraphs justified with each kashida length and with `both`, a paragraph style
+    // that sets `mediumKashida`, that style under direct formatting, and a left-to-right paragraph.
+    let styles = r#"<w:style w:type="paragraph" w:styleId="Kashidas"><w:pPr><w:bidi/><w:jc w:val="mediumKashida"/></w:pPr></w:style>"#;
+    let para = |ppr: &str| format!(r#"<w:p><w:pPr>{ppr}</w:pPr><w:r><w:t>كتاب جميل</w:t></w:r></w:p>"#);
+    let body: String = [
+        r#"<w:bidi/><w:jc w:val="lowKashida"/>"#,
+        r#"<w:bidi/><w:jc w:val="mediumKashida"/>"#,
+        r#"<w:bidi/><w:jc w:val="highKashida"/>"#,
+        r#"<w:bidi/><w:jc w:val="both"/>"#,
+        r#"<w:pStyle w:val="Kashidas"/>"#,
+        r#"<w:pStyle w:val="Kashidas"/><w:jc w:val="both"/>"#,
+        r#"<w:jc w:val="highKashida"/>"#,
+        r#"<w:pStyle w:val="Kashidas"/><w:jc w:val="center"/>"#,
+    ]
+    .map(para)
+    .concat();
+    let mut s = session();
+    let r = s.execute("file.place", &json!({"name": "kashida.docx", "dataBase64": vectorcraft_format::base64_encode(&docx(&body, styles))})).unwrap();
+    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+    let paras: Vec<_> = t.paragraph_styles().iter().map(|p| (p.justify, p.kashida)).collect();
+    assert_eq!(
+        paras,
+        [
+            (Justify::JustifyRight, Kashida::Short),
+            (Justify::JustifyRight, Kashida::Medium),
+            (Justify::JustifyRight, Kashida::Long),
+            (Justify::JustifyRight, Kashida::None),
+            (Justify::JustifyRight, Kashida::Medium),
+            (Justify::JustifyRight, Kashida::None),
+            (Justify::JustifyLeft, Kashida::Long),
+            (Justify::Center, Kashida::None),
+        ],
+        "low, medium and high kashida lengths are Short, Medium and Long; other alignments have none"
+    );
+}
+
+#[test]
 fn malformed_docx_fails_cleanly() {
     let mut s = session();
     let place = |s: &mut Session, name: &str, bytes: &[u8]| {

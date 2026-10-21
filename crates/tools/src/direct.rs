@@ -231,7 +231,8 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
         }
     });
     v.reverse();
-    v.retain(|(id, _)| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|(id, _)| editable(*id));
     v
 }
 
@@ -288,7 +289,8 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
         }
     });
     v.reverse();
-    v.retain(|id| cx.doc.is_editable(*id));
+    let editable = cx.doc.editable();
+    v.retain(|id| editable(*id));
     v
 }
 
@@ -437,7 +439,7 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Idle;
                     return out;
                 }
-                let Some(mut h) = hit_test(cx.doc, p, cx.hit_options()) else {
+                let Some(mut h) = hit_test(cx.doc, p, cx.selection_hit_options()) else {
                     self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift, enclosed: false };
                     return vec![];
                 };
@@ -486,6 +488,7 @@ impl Tool for DirectSelectionTool {
                 if crate::rulerguide::guide_at(cx, p).is_some() {
                     return vec![];
                 }
+                // A double-click edits what is drawn: not a clipping path's outline.
                 if hit_test(cx.doc, p, cx.hit_options()).and_then(|h| cx.doc.node(h.leaf)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
                     return vec![Action::SwitchTool("type".into())];
                 }
@@ -573,7 +576,7 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Idle;
                     return out;
                 }
-                if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
+                if let Some(h) = hit_test(cx.doc, p, cx.selection_hit_options()) {
                     // A segment pick keeps its endpoints available for movement without selecting
                     // the anchors themselves. Dragging reshapes a curve, else moves it. Alt picks
                     // the whole path (and Alt-drag copies it), as with Group Selection.
@@ -810,7 +813,8 @@ impl Tool for DirectSelectionTool {
                 // (members of groups too), each whole, as a click selects one.
                 if enclosed {
                     let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
-                    touched.retain(|id| cx.doc.is_editable(*id));
+                    let editable = cx.doc.editable();
+                    touched.retain(|id| editable(*id));
                     let ids: Vec<Value> = crate::select::inside(cx, r, touched).into_iter().map(|id| json!(id.0)).collect();
                     let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": ids }));
                     return std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, true)).collect();
@@ -833,7 +837,8 @@ impl Tool for DirectSelectionTool {
                         sel.push((id, vec![]));
                     }
                 }
-                sel.retain(|(id, _)| cx.doc.is_editable(*id));
+                let editable = cx.doc.editable();
+                sel.retain(|(id, _)| editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
                 let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
                 std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, false)).collect()
@@ -942,7 +947,7 @@ impl DirectSelectionTool {
         if m.shift || self.guide.cursor(cx, p).is_some() {
             return None;
         }
-        let h = hit_test(cx.doc, p, cx.hit_options())?;
+        let h = hit_test(cx.doc, p, cx.selection_hit_options())?;
         let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none();
         let curved = matches!(h.kind, HitKind::Stroke | HitKind::Outline) && segment_at(cx, h.leaf, p).is_some_and(|s| s.curved);
         (!whole && curved).then_some(Cursor::ReshapeSegment)
@@ -952,7 +957,7 @@ impl DirectSelectionTool {
 /// The anchor within a press's reach of `p` ([`ToolContext::point_tol`]), of a selected path or the
 /// path under `p`: what Highlight anchors on mouse over marks (a press there picks it).
 fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
-    let under = hit_test(cx.doc, p, cx.hit_options()).map(|h| h.leaf);
+    let under = hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.leaf);
     let tol = cx.point_tol();
     cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
@@ -1075,6 +1080,27 @@ mod tests {
         let zoomed = ToolContext { zoom: 2.0, ..cx(&d, &s, &p) };
         assert_eq!(press(&zoomed, 102.1, 100.2), corner);
         assert_ne!(press(&zoomed, 102.6, 100.2), corner);
+    }
+
+    /// A press on a clip group's clipping path, where the art it clips lies over its edge, takes
+    /// the clipping path's segment, so the mask can be reshaped on the canvas; inside the mask the
+    /// art is taken, as before.
+    #[test]
+    fn a_press_on_a_clipping_path_takes_its_segment_over_the_art() {
+        let (d, _, clip, art) = doc_with_masked_square();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let press = |x: f64, y: f64| DirectSelectionTool::new(false).pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+        let names = |actions: &[Action], id: NodeId| {
+            actions.iter().any(|a| matches!(a, Action::Exec(_, v) if v["id"] == json!(id.0) || v["ids"] == json!([id.0])))
+        };
+        // The middle of the right edge, on it and just inside it.
+        for x in [500.0, 498.5] {
+            let a = press(x, 450.0);
+            assert!(names(&a, clip), "at {x}: {a:?}");
+        }
+        let a = press(450.0, 450.0);
+        assert!(names(&a, art) && !names(&a, clip), "{a:?}");
     }
 
     /// A blend of two 20 pt squares centred on (110, 310) and (210, 310), selected.
@@ -1998,6 +2024,29 @@ mod tests {
         }
     }
 
+    /// #1816: Group Selection and Direct Selection move a whole path with Snap to Grid as the
+    /// Selection tool does, landing an edge on the grid; the center does not snap. A 45 pt square at
+    /// 90–135 on the 9 pt grid, dragged right by 22 to 112–157, lands its left edge on the gridline
+    /// 108 and moves by 18. Its center, at 134.5 after the drag, is nearer the gridline 135 and
+    /// does not snap.
+    #[test]
+    fn a_move_of_objects_lands_an_edge_on_the_grid() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let sq = vectorcraft_geom::shapes::rectangle(Rect::new(90.0, 90.0, 135.0, 135.0));
+        d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, sq, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let p = paint();
+        let mut s = Selection::default();
+        s.set([id]);
+        let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        for group in [true, false] {
+            let mut t = DirectSelectionTool::new(group);
+            let (v, _) = drag(&mut t, &c, (110.0, 110.0), (132.0, 110.0), Mods::default());
+            assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, 18.0, 0.0]), "group: {group}");
+        }
+    }
+
     /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its
     /// line when it snaps, as the Selection tool does: level by 13.04 with Snap to Grid on, B's
     /// right side (413.04) lands on the gridline 414, and its top stays at 300, between 297 and
@@ -2016,6 +2065,16 @@ mod tests {
             let (x, y) = (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
             assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "group: {group}: {v}");
         }
+    }
+
+    /// Direct Selection's double-click on type where a layer's clipping mask edge runs through it
+    /// edits the type, though a press there takes the mask's segment.
+    #[test]
+    fn a_double_click_on_type_at_a_layer_masks_edge_edits_it() {
+        let (d, _, at) = doc_with_type_on_a_layer_masks_edge();
+        let (s, p) = (Selection::default(), paint());
+        let acts = DirectSelectionTool::new(false).pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y));
+        assert_eq!(acts, vec![Action::SwitchTool("type".into())]);
     }
 
     #[test]

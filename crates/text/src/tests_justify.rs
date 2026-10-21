@@ -3,6 +3,7 @@
 
 use super::*;
 use kurbo::{Affine, Shape};
+use vectorcraft_doc::text::Kashida;
 use vectorcraft_doc::{CharStyle, JustificationOptions, Justify, SingleWordJustify, TextKind};
 use vectorcraft_geom::PathData;
 
@@ -111,6 +112,24 @@ fn justified_lines_use_word_then_letter_spacing_then_glyph_scaling() {
     assert!((at(&l, 2).advance - (space + 10.0 - letters)).abs() < 1e-6);
 }
 
+/// Full Justify spreads a right-to-left word between its letters as they are drawn: the word runs
+/// from the left edge to the right edge, with the same gap between each two letters.
+#[test]
+fn a_justified_right_to_left_word_is_spread_between_its_drawn_letters() {
+    let text = "שלום";
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+    let l = layout(db(), &area(text, 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    // The letters from left to right: ם, ו, ל, ש.
+    let mut drawn: Vec<&PositionedGlyph> = l.glyphs.iter().collect();
+    drawn.sort_by(|a, b| a.origin.x.total_cmp(&b.origin.x));
+    assert!(drawn.len() == 4 && drawn.iter().all(|g| g.rtl), "{drawn:?}");
+    let gaps: Vec<f64> = drawn.windows(2).map(|p| p[1].origin.x - p[0].origin.x - at(&natural, p[0].byte).advance).collect();
+    let last = drawn[3];
+    assert!(drawn[0].origin.x.abs() < 1e-6, "{:?}", drawn[0].origin);
+    assert!((last.origin.x + at(&natural, last.byte).advance - 300.0).abs() < 1e-6, "{:?}", last.origin);
+    assert!(gaps.iter().all(|&g| g > 1.0 && (g - gaps[0]).abs() < 1e-6), "{gaps:?}");
+}
+
 /// Single Word Justification: a justified line holding one word is spread between its letters
 /// (Full Justify, the default) or aligned as chosen.
 #[test]
@@ -134,6 +153,173 @@ fn single_word_lines_follow_single_word_justification() {
     assert!((r1 - w).abs() < 1e-3 && (r0 - 30.0).abs() < 1e-3, "{r0}..{r1}");
     let (c0, c1) = first(SingleWordJustify::AlignCenter);
     assert!((c0 - 15.0).abs() < 1e-3 && (c1 - (w - 15.0)).abs() < 1e-3, "centred: {c0}..{c1}");
+}
+
+/// An OpenType (GSUB) Arabic face with a tatweel: craft-fonts' Noto Sans Arabic when the build has
+/// craft-fonts (`CRAFT_FONTS_DIR`), else an installed one. None skips the test.
+fn arabic_face(test: &str) -> Option<std::sync::Arc<FontFace>> {
+    let opentype = |face: &FontFace| {
+        use skrifa::raw::TableProvider;
+        face.skrifa().is_some_and(|f| f.gsub().is_ok())
+    };
+    let face = ["Noto Sans Arabic", "Arial", "Geeza Pro"]
+        .into_iter()
+        .filter_map(|name| db().face(name, "Regular"))
+        .find(|face| face.covers('ب') && face.covers('د') && face.covers('\u{0640}') && opentype(face));
+    match &face {
+        Some(face) => eprintln!("ASSERTIONS RUN: {test}; Arabic font {} {}", face.family, face.style),
+        None => eprintln!("SKIPPED: {test}; no font covers Arabic and the tatweel"),
+    }
+    face
+}
+
+/// Arabic type at 20 pt in `face`, in a frame 300 pt wide, aligned as `justify` with `kashida`.
+fn arabic_area(face: &FontFace, text: &str, justify: Justify, kashida: Kashida) -> TextObject {
+    let st = CharStyle { font_family: face.family.clone(), font_style: face.style.clone(), size: 20.0, ..CharStyle::default() };
+    let mut t = TextObject::point(Point::ZERO, text, st);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 300.0, 1000.0).to_path(0.1)) };
+    t.xf = Affine::IDENTITY;
+    t.para.justify = justify;
+    t.para.kashida = kashida;
+    t
+}
+
+/// The kashida glyphs of a layout: tatweels that stand for no character.
+fn kashidas<'a>(l: &'a TextLayout, face: &FontFace) -> Vec<&'a PositionedGlyph> {
+    let tatweel = face.glyph_for('\u{0640}');
+    l.glyphs.iter().filter(|g| g.len == 0 && g.gid == tatweel).collect()
+}
+
+/// Insert Kashidas: a justified Arabic line lengthens each word with one kashida between its last
+/// two joined letters, up to a quarter, half or whole em (Stylistic: whole tatweels up to an em),
+/// before it widens the word space. The line keeps its width, the kashida fills the gap between
+/// the letters it joins, and None leaves the line as it was.
+#[test]
+fn justified_arabic_lines_take_their_room_on_kashidas() {
+    let Some(face) = arabic_face("justified_arabic_lines_take_their_room_on_kashidas") else { return };
+    // Two words whose last letters join (teh and beh, meem and dal) and one whose letters (waw, reh,
+    // dal) join none after them.
+    let text = "كتب ورد محمد";
+    let spaces: Vec<usize> = text.match_indices(' ').map(|(b, _)| b).collect();
+    let off = layout(db(), &arabic_area(&face, text, Justify::JustifyAll, Kashida::None));
+    assert!(off.glyphs.iter().all(|g| g.len > 0), "no kashidas without Insert Kashidas");
+    let measure = |l: &TextLayout| l.lines[0].x1 - l.lines[0].x0;
+    assert!((measure(&off) - 300.0).abs() < 1e-6, "the line fills the frame: {}", measure(&off));
+    let space = at(&off, spaces[0]).advance;
+    let tatweel = face.advance(face.glyph_for('\u{0640}')) * 20.0 / face.units_per_em();
+    for (kind, longest) in [(Kashida::Short, 5.0), (Kashida::Medium, 10.0), (Kashida::Long, 20.0), (Kashida::Stylistic, 20.0)] {
+        let on = layout(db(), &arabic_area(&face, text, Justify::JustifyAll, kind));
+        let k = kashidas(&on, &face);
+        let mut bytes: Vec<usize> = k.iter().map(|g| g.byte).collect();
+        bytes.sort_unstable();
+        bytes.dedup();
+        assert_eq!(bytes, ["كتب".len() - 'ب'.len_utf8(), text.len() - 'د'.len_utf8()], "{kind:?}: before the last letter of each word");
+        let each = if kind == Kashida::Stylistic { (longest / tatweel).floor() * tatweel } else { longest };
+        let mut total = 0.0;
+        for &b in &bytes {
+            let (start, end, count) = kashida_span(&on, &face, b);
+            assert!((end - start - each).abs() < 1e-6, "{kind:?}: {start}..{end}");
+            total += end - start;
+            if kind == Kashida::Stylistic {
+                assert!((count as f64 * tatweel - each).abs() < 1e-6, "{kind:?}: whole tatweels");
+            }
+            // The letter after the kashida in the text advances over it to the letter before it,
+            // so the caret before that letter and a selection of it reach the letter before it.
+            let after = on.glyphs.iter().filter(|o| o.byte == b && o.len > 0);
+            let len = after.clone().map(|o| o.len).max().unwrap();
+            let ink = after.clone().map(|o| o.origin.x).fold(f64::MAX, f64::min);
+            assert!(ink < start && (after.map(|o| o.origin.x + o.advance).fold(f64::MIN, f64::max) - end).abs() < 1e-6, "{kind:?}");
+            let caret = caret_position(&on, b).0.x;
+            assert!((caret - end).abs() < 1e-6, "{kind:?}: the caret before the letter: {caret} {end}");
+            let x_max = selection_quads(&on, b, b + len).iter().flatten().map(|p| p.x).fold(f64::MIN, f64::max);
+            assert!((x_max - end).abs() < 1e-6, "{kind:?}: the selection takes the kashida in: {x_max} {end}");
+        }
+        assert!((measure(&on) - measure(&off)).abs() < 1e-6, "{kind:?}: same width");
+        for &b in &spaces {
+            assert!((at(&on, b).advance - (space - total / 2.0)).abs() < 1e-6, "{kind:?}: the spaces give up the kashidas' length");
+        }
+    }
+    // A click on a letter and its kashida goes to the nearer edge of the two taken together: dal is
+    // narrower than a Long kashida.
+    let on = layout(db(), &arabic_area(&face, text, Justify::JustifyAll, Kashida::Long));
+    let dal = text.len() - 'د'.len_utf8();
+    let (start, end, _) = kashida_span(&on, &face, dal);
+    let ink = on.glyphs.iter().filter(|o| o.byte == dal && o.len > 0).map(|o| o.origin.x).fold(f64::MAX, f64::min);
+    let middle = (ink + end) / 2.0;
+    assert!(start < middle, "the kashida is longer than the letter: {ink} {start} {end}");
+    assert_eq!(byte_in_line(&on, 0, (start + middle) / 2.0), text.len(), "left of the middle: the letter's left edge");
+    assert_eq!(byte_in_line(&on, 0, (middle + end) / 2.0), dal, "right of the middle: its right edge");
+    // A letter with a vowel mark is a cluster of two glyphs: the caret before it and a selection of
+    // it still reach the letter before the kashida.
+    let marked = "كتبَ ورد";
+    let on = layout(db(), &arabic_area(&face, marked, Justify::JustifyAll, Kashida::Medium));
+    let beh = "كت".len();
+    let (_, end, _) = kashida_span(&on, &face, beh);
+    assert!(on.glyphs.iter().filter(|o| o.byte == beh && o.len > 0).count() >= 2, "beh and fatha");
+    assert!((caret_position(&on, beh).0.x - end).abs() < 1e-6, "{} {end}", caret_position(&on, beh).0.x);
+    let x_max = selection_quads(&on, beh, "كتبَ".len()).iter().flatten().map(|p| p.x).fold(f64::MIN, f64::max);
+    assert!((x_max - end).abs() < 1e-6, "{x_max} {end}");
+    // Punctuation ends a word as a space does.
+    let text = "كتب/محمد";
+    let on = layout(db(), &arabic_area(&face, text, Justify::JustifyAll, Kashida::Medium));
+    let mut bytes: Vec<usize> = kashidas(&on, &face).iter().map(|g| g.byte).collect();
+    bytes.sort_unstable();
+    assert_eq!(bytes, ["كتب".len() - 'ب'.len_utf8(), text.len() - 'د'.len_utf8()]);
+    // At 50% horizontal scale an em is half as wide; the line still fills the frame.
+    for kind in [Kashida::Long, Kashida::Stylistic] {
+        let text = "كتب ورد محمد";
+        let mut t = arabic_area(&face, text, Justify::JustifyAll, kind);
+        for r in &mut t.runs {
+            r.style.h_scale = 50.0;
+        }
+        let half = layout(db(), &t);
+        let each = if kind == Kashida::Stylistic { (10.0 / (tatweel * 0.5)).floor() * tatweel * 0.5 } else { 10.0 };
+        for b in ["كتب".len() - 'ب'.len_utf8(), text.len() - 'د'.len_utf8()] {
+            let (start, end, _) = kashida_span(&half, &face, b);
+            assert!((end - start - each).abs() < 1e-6, "{kind:?} at 50%: {start}..{end}");
+        }
+        assert!((measure(&half) - 300.0).abs() < 1e-6, "{kind:?} at 50%: {}", measure(&half));
+    }
+}
+
+/// Where the kashida before the cluster at byte `b` starts, where the letter before it in the text
+/// starts (the kashida's end), and how many tatweels draw it.
+fn kashida_span(l: &TextLayout, face: &FontFace, b: usize) -> (f64, f64, usize) {
+    let k: Vec<_> = kashidas(l, face).into_iter().filter(|g| g.byte == b).collect();
+    let start = k.iter().map(|g| g.origin.x).fold(f64::MAX, f64::min);
+    let end = l.glyphs.iter().filter(|o| o.byte + o.len == b && o.len > 0).map(|o| o.origin.x).fold(f64::MAX, f64::min);
+    (start, end, k.len())
+}
+
+/// Insert Kashidas changes only justified horizontal lines of Arabic: right-aligned and Auto
+/// Arabic paragraphs, a justified Latin one and justified vertical Arabic type are set as with
+/// None.
+#[test]
+fn kashidas_leave_unjustified_and_latin_lines_as_they_were() {
+    let same = |a: &TextLayout, b: &TextLayout| {
+        assert_eq!(a.glyphs.len(), b.glyphs.len());
+        for (x, y) in a.glyphs.iter().zip(&b.glyphs) {
+            assert_eq!((x.gid, x.byte, x.len, x.origin, x.advance), (y.gid, y.byte, y.len, y.origin, y.advance));
+        }
+    };
+    let latin = |k: Kashida| {
+        let mut t = area("ab cd", 300.0, Justify::JustifyAll, JustificationOptions::default());
+        t.para.kashida = k;
+        layout(db(), &t)
+    };
+    same(&latin(Kashida::Long), &latin(Kashida::None));
+    let Some(face) = arabic_face("kashidas_leave_unjustified_and_latin_lines_as_they_were") else { return };
+    let arabic = |j: Justify, k: Kashida| layout(db(), &arabic_area(&face, "كتب محمد", j, k));
+    same(&arabic(Justify::Right, Kashida::Long), &arabic(Justify::Right, Kashida::None));
+    same(&arabic(Justify::Auto, Kashida::Medium), &arabic(Justify::Auto, Kashida::None));
+    assert!(!kashidas(&arabic(Justify::JustifyAll, Kashida::Medium), &face).is_empty());
+    // Vertical type is set as with None too.
+    let vertical = |k: Kashida| {
+        let mut t = arabic_area(&face, "كتب محمد", Justify::JustifyAll, k);
+        t.vertical = true;
+        layout(db(), &t)
+    };
+    same(&vertical(Kashida::Medium), &vertical(Kashida::None));
 }
 
 /// Auto Leading: characters whose leading is Auto are set at the paragraph's share of their size;

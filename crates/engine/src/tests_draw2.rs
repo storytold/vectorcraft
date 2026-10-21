@@ -867,6 +867,72 @@ fn draw2_commands_reject_bad_params() {
     }
 }
 
+/// The Pencil refuses a `fidelity` or a redraw `within` given as text or as another value that is
+/// not a number, and draws or redraws nothing; null is read as the key left out.
+#[test]
+fn pencil_refuses_a_fidelity_or_within_given_as_text() {
+    let mut s = session();
+    let id = line(&mut s, 100.0, 100.0, 300.0, 100.0);
+    let stroke = json!({"points": [[100, 100], [150, 140], [200, 140], [250, 100]]});
+    refuses_a_number_given_as_text(&mut s, "path.freehand", &stroke, "fidelity");
+    for v in [json!("12"), json!([12]), json!(false)] {
+        let p = with(&stroke, json!({"redraw": {"id": id.0, "within": v}}));
+        refuses_with(&mut s, "path.freehand", &p, &format!("`within` must be a number, not {v}"));
+    }
+    let before = path(&s, id);
+    s.execute("path.freehand", &with(&stroke, json!({"fidelity": null, "redraw": {"id": id.0, "within": null}}))).unwrap();
+    assert!(path(&s, id) != before, "the stroke redraws the line within 12 pt");
+}
+
+/// The drawing tools' commands refuse a point whose x or y is not a number, such as "10" or a point
+/// written as text, and a pen pressure given as text, instead of leaving the point out or drawing it
+/// at full pressure; the document stays as it was.
+#[test]
+fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let good = [json!([90, 150]), json!([150, 150]), json!([210, 150])];
+    let cmds = ["path.freehand", "path.knife", "path.eraseRegion", "path.eraseSegments", "path.smoothRegion", "path.joinScrub", "path.blob"];
+    for cmd in cmds.into_iter().chain(["path.curvature"]) {
+        for bad in [json!(["150", 150]), json!({"x": 150, "y": "150"}), json!("150, 150"), json!([150]), json!(null)] {
+            let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
+            refuses_with(&mut s, cmd, &json!({"points": points}), "x and y must both be numbers");
+        }
+    }
+    for cmd in cmds {
+        for bad in [json!([150, 150, "0.5"]), json!({"x": 150, "y": 150, "pressure": "0.5"})] {
+            let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
+            refuses_with(&mut s, cmd, &json!({"points": points}), "`pressure` must be a number, not \"0.5\"");
+        }
+    }
+    let pressed = json!({"points": [[100, 400], [150, 420, null], {"x": 200, "y": 400, "pressure": 0.5}], "keepSelected": false});
+    s.execute("path.freehand", &pressed).unwrap();
+}
+
+/// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, width, radius,
+/// fidelity or tolerance given as text or as another value that is not a number, and change
+/// nothing; null is read as the key left out.
+#[test]
+fn drawing_commands_refuse_a_size_given_as_text() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let stroke = json!({"points": [[90, 150], [150, 150], [210, 150]]});
+    for (cmd, key) in [
+        ("path.eraseRegion", "size"),
+        ("path.eraseSegments", "width"),
+        ("path.smoothRegion", "radius"),
+        ("path.smoothRegion", "fidelity"),
+        ("path.joinScrub", "tolerance"),
+        ("path.blob", "size"),
+    ] {
+        refuses_a_number_given_as_text(&mut s, cmd, &stroke, key);
+    }
+    let erased = s.execute("path.eraseRegion", &with(&stroke, json!({"size": null}))).unwrap();
+    assert_eq!(erased["ids"].as_array().map(Vec::len), Some(2), "the default 10 pt Eraser cuts the square in two: {erased}");
+}
+
 /// A path of two open subpaths, each of three anchors from x 100 to x 300 with a middle anchor that
 /// has two handles: subpath 0 at y 100, subpath 1 at y 300.
 fn two_subpaths(s: &mut Session) -> NodeId {
@@ -896,6 +962,33 @@ fn refuses_an_index_that_is_not_whole(s: &mut Session, cmd: &str, p: &serde_json
         assert!(s.doc().unwrap().doc == before, "{cmd} {p} changed the document");
         assert_eq!(undo_steps(s), undo, "{cmd} {p} left an undo step");
     }
+}
+
+/// Runs `cmd` with `p` and `key` set to each of "10", [10] and true: each call fails with
+/// "`key` must be a number, not <value>", and the document and the undo history stay as they were.
+fn refuses_a_number_given_as_text(s: &mut Session, cmd: &str, p: &serde_json::Value, key: &str) {
+    for v in [json!("10"), json!([10]), json!(true)] {
+        let mut p = p.clone();
+        p[key] = v.clone();
+        let before = s.doc().unwrap().doc.clone();
+        let undo = undo_steps(s);
+        let r = s.execute(cmd, &p);
+        let want = format!("`{key}` must be a number, not {v}");
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(s.doc().unwrap().doc == before, "{cmd} {p} changed the document");
+        assert_eq!(undo_steps(s), undo, "{cmd} {p} left an undo step");
+    }
+}
+
+/// Runs `cmd` with `p`: the call fails with `want`, and the document and the undo history stay as
+/// they were.
+fn refuses_with(s: &mut Session, cmd: &str, p: &serde_json::Value, want: &str) {
+    let before = s.doc().unwrap().doc.clone();
+    let undo = undo_steps(s);
+    let r = s.execute(cmd, p);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{cmd} {p}: {r:?}");
+    assert!(s.doc().unwrap().doc == before, "{cmd} {p} changed the document");
+    assert_eq!(undo_steps(s), undo, "{cmd} {p} left an undo step");
 }
 
 /// Runs `cmd` with `p` on path `id` (made by [`two_subpaths`]) with `subpath: 1`, without `subpath`
@@ -974,6 +1067,50 @@ fn split_refuses_a_subpath_anchor_or_segment_that_is_not_a_whole_number() {
     }
 }
 
+/// A subpath, anchor or segment of 2^32 + k fails, where k names one that exists, and the document
+/// and the undo history stay as they were. A 32-bit build read the number as k.
+#[test]
+fn path_commands_refuse_a_subpath_anchor_or_segment_past_u32() {
+    let mut s = session();
+    let id = two_subpaths(&mut s);
+    let at_anchor = json!({"id": id.0, "anchor": 1});
+    let at_segment = json!({"id": id.0, "segment": 0, "t": 0.5});
+    let curvature_move = json!({"id": id.0, "op": "move", "anchor": 1, "x": 200, "y": 150});
+    let curvature_insert = json!({"id": id.0, "op": "insert", "segment": 0, "t": 0.5});
+    let convert = json!({"id": id.0, "anchor": 1, "to": "corner"});
+    let reshape = json!({"id": id.0, "segment": 0, "t": 0.5, "dx": 0, "dy": 20});
+    let handle = json!({"id": id.0, "anchor": 0, "which": "out", "x": 140, "y": 250});
+    let moved = json!({"id": id.0, "anchor": 0, "x": 140, "y": 250});
+    for (cmd, p, key) in [
+        ("path.curvatureEdit", &curvature_move, "subpath"),
+        ("path.curvatureEdit", &curvature_move, "anchor"),
+        ("path.curvatureEdit", &curvature_insert, "segment"),
+        ("path.removeAnchor", &at_anchor, "subpath"),
+        ("path.removeAnchor", &at_anchor, "anchor"),
+        ("path.convertAnchor", &convert, "subpath"),
+        ("path.convertAnchor", &convert, "anchor"),
+        ("path.reshapeSegment", &reshape, "subpath"),
+        ("path.reshapeSegment", &reshape, "segment"),
+        ("path.split", &at_anchor, "anchor"),
+        ("path.split", &at_segment, "segment"),
+        ("path.setHandle", &handle, "subpath"),
+        ("path.setHandle", &handle, "anchor"),
+        ("path.moveAnchor", &moved, "subpath"),
+        ("path.moveAnchor", &moved, "anchor"),
+        ("path.insertAnchor", &at_segment, "subpath"),
+        ("path.insertAnchor", &at_segment, "segment"),
+    ] {
+        let mut p = p.clone();
+        let k = if key == "subpath" { 1 } else { p[key].as_u64().unwrap() };
+        p[key] = json!((1u64 << 32) + k);
+        let before = s.doc().unwrap().doc.clone();
+        let undo = undo_steps(&s);
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p} succeeded");
+        assert!(s.doc().unwrap().doc == before, "{cmd} {p} changed the document");
+        assert_eq!(undo_steps(&s), undo, "{cmd} {p} left an undo step");
+    }
+}
+
 #[test]
 fn set_handle_refuses_a_subpath_that_is_not_a_whole_number() {
     let mut s = session();
@@ -1008,6 +1145,89 @@ fn insert_anchor_refuses_a_subpath_that_is_not_a_whole_number() {
     let p = json!({"id": id.0, "segment": 0, "t": 0.5});
     refuses_an_index_that_is_not_whole(&mut s, "path.insertAnchor", &p, "subpath");
     edits_the_subpath_given(&mut s, "path.insertAnchor", &p, id);
+}
+
+/// `path.reshapeSegment` refuses a `t`, `dx` or `dy` given as text or as another value that is not
+/// a number, instead of bending the segment by 0 or at its middle; `dy: 20` bends it, with a null
+/// `t` read as the middle.
+#[test]
+fn reshape_segment_refuses_a_number_given_as_text() {
+    let mut s = session();
+    let id = curve(&mut s);
+    let p = json!({"id": id.0, "segment": 0, "t": 0.5, "dx": 0, "dy": 20});
+    for key in ["t", "dx", "dy"] {
+        refuses_a_number_given_as_text(&mut s, "path.reshapeSegment", &p, key);
+    }
+    let before = path(&s, id);
+    s.execute("path.reshapeSegment", &with(&p, json!({"t": null}))).unwrap();
+    assert!(path(&s, id) != before, "the segment bends");
+}
+
+/// `path.convertAnchor` refuses an `x` or `y` given as text, and an `x` without a `y` or a `y`
+/// without an `x`, instead of converting the anchor without a handle position; both as numbers
+/// place the out handle there.
+#[test]
+fn convert_anchor_refuses_a_handle_position_given_as_text_or_alone() {
+    let mut s = session();
+    let id = curve(&mut s);
+    let p = json!({"id": id.0, "anchor": 1, "to": "smooth", "x": 330, "y": 150});
+    for key in ["x", "y"] {
+        refuses_a_number_given_as_text(&mut s, "path.convertAnchor", &p, key);
+    }
+    for lone in [json!({"y": null}), json!({"x": null}), json!({"y": null, "to": "corner"})] {
+        refuses_with(&mut s, "path.convertAnchor", &with(&p, lone), "x and y must be given together");
+    }
+    s.execute("path.convertAnchor", &p).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[1].h_out, Point::new(330.0, 150.0));
+}
+
+/// The Curvature tool's edits and Add Anchor Point refuse a `t`, `x` or `y` given as text or as
+/// another value that is not a number, instead of inserting at the middle of the segment or leaving
+/// the new anchor where it was inserted.
+#[test]
+fn curvature_edit_and_insert_anchor_refuse_a_number_given_as_text() {
+    let mut s = session();
+    let id = curve(&mut s);
+    let insert = json!({"id": id.0, "op": "insert", "segment": 0, "t": 0.25});
+    let moved = json!({"id": id.0, "op": "insert", "segment": 0, "t": 0.25, "x": 150, "y": 160});
+    refuses_a_number_given_as_text(&mut s, "path.curvatureEdit", &insert, "t");
+    for key in ["x", "y"] {
+        refuses_a_number_given_as_text(&mut s, "path.curvatureEdit", &moved, key);
+        refuses_a_number_given_as_text(&mut s, "path.curvatureEdit", &json!({"id": id.0, "op": "move", "anchor": 1, "x": 300, "y": 150}), key);
+    }
+    refuses_a_number_given_as_text(&mut s, "path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": 0.25}), "t");
+    s.execute("path.curvatureEdit", &moved).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[1].p, Point::new(150.0, 160.0));
+    s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": null})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 4, "a null t inserts at the middle");
+}
+
+/// Move Anchors, the Reshape tool's command and Close Path refuse a number or handle given as text
+/// or as another value that is not a number, and change nothing; null is read as the key left out.
+#[test]
+fn move_anchors_reshape_and_close_refuse_a_number_given_as_text() {
+    let mut s = session();
+    let id = curve(&mut s);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    let nudge = json!({"dx": 10, "dy": 0});
+    for key in ["dx", "dy"] {
+        refuses_a_number_given_as_text(&mut s, "path.moveAnchors", &nudge, key);
+    }
+    let reshape = json!({"id": id.0, "x": 200, "y": 100, "dx": 0, "dy": 30, "tol": 3, "radius": 50});
+    for key in ["dx", "dy", "tol", "radius"] {
+        refuses_a_number_given_as_text(&mut s, "path.reshape", &reshape, key);
+    }
+    for h in [json!("200, 150"), json!([200]), json!([200, "150"]), json!({"x": 200, "y": 150})] {
+        refuses_with(&mut s, "path.close", &json!({"id": id.0, "in": h}), "`in` must be [x, y]");
+    }
+    let before = path(&s, id);
+    s.execute("path.moveAnchors", &json!({"dx": 10, "dy": null})).unwrap();
+    s.execute("path.reshape", &with(&reshape, json!({"radius": null}))).unwrap();
+    s.execute("path.close", &json!({"id": id.0, "in": null})).unwrap();
+    // The Reshape tool's grab adds an anchor between the two, so the moved anchor is the last.
+    let after = path(&s, id);
+    let moved = after.subpaths[0].anchors.last().map(|a| a.p.x);
+    assert!(after.subpaths[0].closed && moved == Some(before.subpaths[0].anchors[1].p.x + 10.0), "{after:?}");
 }
 
 #[test]
@@ -1606,6 +1826,36 @@ fn pen_with_cmd_borrows_direct_selection_and_goes_on_drawing() {
     s.select_tool("rectangle", v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Up, 600.0, 100.0), v).unwrap();
     assert_eq!(s.tool_id(), "rectangle");
+}
+
+#[test]
+fn cmd_alt_lends_group_selection_while_direct_selection_is_active() {
+    let (cmd, cmd_alt) = (Mods { cmd: true, ..Mods::default() }, Mods { cmd: true, alt: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    // Cmd+Alt while the Pen borrows Direct Selection keeps Direct Selection (Alt is copy/subtract).
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("pen", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 50.0).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "pen");
+    // Cmd alone still lends Direct Selection.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 60.0, 60.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 60.0, 60.0).with_mods(cmd), v).unwrap();
+    // While Direct Selection is active, Cmd+Alt lends Group Selection for the gesture.
+    s.select_tool("directSelection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 70.0, 70.0).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "groupSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 70.0, 70.0).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    // Selection last: Cmd+Alt still lends Selection, not Group Selection.
+    s.select_tool("selection", v).unwrap();
+    s.select_tool("pen", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 80.0).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 80.0, 80.0).with_mods(cmd_alt), v).unwrap();
 }
 
 #[test]

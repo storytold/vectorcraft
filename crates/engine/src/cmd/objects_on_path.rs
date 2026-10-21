@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::objects_on_path::{CENTER, ObjectsOnPath, attachable_path, is_objects_on_path, place};
+use vectorcraft_doc::objects_on_path::{CENTER, Held, ObjectsOnPath, attachable_path, held, is_objects_on_path, place};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
@@ -168,7 +168,10 @@ fn path_refused(d: &Document, path: NodeId) -> Option<&'static str> {
     if group_around(d, path).is_some() {
         return Some("the path is already in an Objects on Path group");
     }
-    None
+    match held(d, path)? {
+        Held::Live => Some("a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects"),
+        Held::Clipping => Some("a clipping path can't take objects"),
+    }
 }
 
 /// Why `n` can't be attached to a path, if it can't (the help page names graphs).
@@ -178,6 +181,11 @@ fn object_refused(d: &Document, n: &Node) -> Option<&'static str> {
     }
     if group_around(d, n.id).is_some() {
         return Some("an object already on a path can't be attached again");
+    }
+    match held(d, n.id) {
+        Some(Held::Live) => return Some("objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path"),
+        Some(Held::Clipping) => return Some("a clipping path can't be attached to a path"),
+        None => {}
     }
     let mut graph = false;
     n.walk(&mut |c| graph |= c.extras().graph.is_some());

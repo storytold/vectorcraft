@@ -349,6 +349,8 @@ fn layer_options_validate_and_template_locks_and_dims() {
         p["id"] = json!(layer.0);
         assert!(s.execute("layer.setProps", &p).is_err(), "{bad}");
     }
+    // A 32-bit build read color 2^32 + 4 as preset 4.
+    assert!(s.execute("layer.setProps", &json!({"id": layer.0, "color": (1u64 << 32) + 4})).is_err());
     let color = |s: &Session| match node(s, layer).kind {
         NodeKind::Layer { color, .. } => color,
         _ => panic!("not a layer"),

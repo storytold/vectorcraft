@@ -294,6 +294,126 @@ fn composer_x_inline_graphics() {
     }
 }
 
+#[test]
+fn composer_x_mixed_sizes() {
+    // A 24 pt word among 12 pt text: in a rectangle the every-line composer breaks the paragraph as
+    // it breaks uniform 12 pt text in which that word is set at 200% horizontal scale, as wide as
+    // at 24 pt, and not as the single-line composer does.
+    let st = sans(12.0);
+    let runs = |x: CharStyle| vec![run("Destroy all creatures with toughness ", st.clone()), run("X", x), run(" or less.", st.clone())];
+    let big = sans(24.0);
+    let wide = CharStyle { h_scale: 200.0, ..sans(12.0) };
+    let mut probe = area(runs(big.clone()), Rect::new(0.0, 0.0, 10_000.0, 100.0));
+    probe.runs[2] = run(" or", st.clone());
+    let w = layout(db(), &probe).lines[0].x1 + 2.0;
+    let breaks = |x: &CharStyle, composer: Composer| {
+        let mut t = area(runs(x.clone()), Rect::new(0.0, 0.0, w, 200.0));
+        t.para.composer = composer;
+        line_texts(&t, &layout(db(), &t))
+    };
+    let greedy = ["Destroy all creatures with toughness X or", "less."];
+    let every = ["Destroy all creatures with toughness X", "or less."];
+    assert_eq!(breaks(&wide, Composer::EveryLine), every, "uniform sizes");
+    assert_eq!(breaks(&wide, Composer::SingleLine), greedy, "uniform sizes");
+    assert_eq!(breaks(&big, Composer::EveryLine), every, "mixed sizes");
+    assert_eq!(breaks(&big, Composer::SingleLine), greedy, "mixed sizes");
+    // The same in a rectangle split into two columns, one line in each.
+    let mut t = area(runs(big.clone()), Rect::new(0.0, 0.0, 2.0 * w + 12.0, 34.0));
+    (t.area.columns, t.area.gutter) = (2, 12.0);
+    t.para.composer = Composer::EveryLine;
+    let l = layout(db(), &t);
+    assert_eq!(line_texts(&t, &l), every, "two columns");
+    assert!(!l.overflow && l.lines[1].x0 > w, "{:?}", l.lines);
+    // The 24 pt word's line is set at its own size.
+    let mut t = area(runs(big.clone()), Rect::new(0.0, 0.0, w, 200.0));
+    t.para.composer = Composer::EveryLine;
+    let l = layout(db(), &t);
+    let x = l.glyphs.iter().find(|g| t.plain_text()[g.byte..].starts_with('X')).unwrap();
+    assert_eq!(x.line, 0);
+    assert!(l.lines[0].ascent > l.lines[1].ascent + 1.0, "{:?}", l.lines);
+    // A rectangle that wraps around an object, and a frame that isn't a rectangle (a corner cut),
+    // both far below the text, break mixed sizes line by line and still break uniform sizes with
+    // the every-line composer.
+    let below = PathData::from_bezpath(&Rect::new(0.0, 180.0, 20.0, 190.0).to_path(0.1));
+    for (x, want) in [(&wide, every), (&big, greedy)] {
+        let mut t = area(runs(x.clone()), Rect::new(0.0, 0.0, w, 200.0));
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: below.clone(), wrap: Default::default() }];
+        t.para.composer = Composer::EveryLine;
+        assert_eq!(line_texts(&t, &layout(db(), &t)), want, "wrap, {}", x.size);
+    }
+    let cut = kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((0.0, 0.0).into()),
+        kurbo::PathEl::LineTo((w, 0.0).into()),
+        kurbo::PathEl::LineTo((w, 190.0).into()),
+        kurbo::PathEl::LineTo((w - 10.0, 200.0).into()),
+        kurbo::PathEl::LineTo((0.0, 200.0).into()),
+        kurbo::PathEl::ClosePath,
+    ]);
+    for (x, want) in [(&wide, every), (&big, greedy)] {
+        let mut t = area(runs(x.clone()), Rect::ZERO);
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&cut) };
+        t.para.composer = Composer::EveryLine;
+        assert_eq!(line_texts(&t, &layout(db(), &t)), want, "cut corner, {}", x.size);
+    }
+}
+
+#[test]
+fn composer_x_mixed_line_metrics() {
+    // In a rectangle the every-line composer also breaks a paragraph whose characters differ in
+    // other line metrics: vertical scale, leading, font, and an inline graphic raised above the text.
+    let st = sans(12.0);
+    let wide = CharStyle { h_scale: 200.0, ..sans(12.0) };
+    let xs = [
+        ("vertical scale", run("X", CharStyle { v_scale: 200.0, ..wide.clone() })),
+        ("leading", run("X", CharStyle { leading: Some(30.0), ..wide.clone() })),
+        ("font", run("X", serif(12.0, 0.0))),
+        ("inline graphic", sym(0.7, 20.0, st.clone())),
+    ];
+    let mut wrong = vec![];
+    for (name, x) in xs {
+        let runs = |end: &str| vec![run("Destroy all creatures with toughness ", st.clone()), x.clone(), run(end, st.clone())];
+        let w = layout(db(), &area(runs(" or"), Rect::new(0.0, 0.0, 10_000.0, 100.0))).lines[0].x1 + 2.0;
+        let greedy = [format!("Destroy all creatures with toughness {} or", x.text), "less.".to_string()];
+        let every = [format!("Destroy all creatures with toughness {}", x.text), "or less.".to_string()];
+        for (composer, want) in [(Composer::EveryLine, every), (Composer::SingleLine, greedy)] {
+            let mut t = area(runs(" or less."), Rect::new(0.0, 0.0, w, 200.0));
+            t.para.composer = composer;
+            let got = line_texts(&t, &layout(db(), &t));
+            if got != want {
+                wrong.push((name, composer, got));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[test]
+fn composer_x_lines_start_after_the_spaces() {
+    // A line may end after a dash or between two spaces, but the every-line composer breaks after
+    // the spaces that follow, as the single-line composer does: no line starts with a space, in
+    // uniform 12 pt text and with a 24 pt word in it.
+    let st = sans(12.0);
+    let runs = |x: CharStyle| {
+        vec![run("Destroy all creatures \u{2014} with toughness  ", st.clone()), run("X", x), run(" or less \u{2014} then draw a card.", st.clone())]
+    };
+    let mut wrong = vec![];
+    for x in [sans(12.0), sans(24.0)] {
+        for justify in [Justify::Left, Justify::JustifyLeft] {
+            for w in (40..400).step_by(4) {
+                let mut t = area(runs(x.clone()), Rect::new(0.0, 0.0, f64::from(w), 2000.0));
+                t.para.composer = Composer::EveryLine;
+                t.para.justify = justify;
+                let text = t.plain_text();
+                let l = layout(db(), &t);
+                if l.lines.iter().any(|li| text[li.start..].starts_with(' ')) {
+                    wrong.push((x.size, justify, w, line_texts(&t, &l)));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
 const INLINE: char = vectorcraft_doc::text::INLINE_CHAR;
 
 // ---------- vertical alignment × … ----------

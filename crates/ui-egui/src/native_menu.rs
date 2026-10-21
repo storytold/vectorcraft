@@ -365,7 +365,7 @@ pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
 /// with the `interfaceLanguage` preference checked.
 fn language_node(app: &VectorcraftApp, lang: Lang) -> Node {
     let mut children = vec![Node::Item(native_item(app, "Automatic", "app.language", json!({"lang": "auto"}))), Node::Separator];
-    children.extend(Lang::all().map(|l| Node::Item(native_item(app, l.name(), "app.language", json!({"lang": l.code()})))));
+    children.extend(Lang::for_picker().into_iter().map(|l| Node::Item(native_item(app, l.name(), "app.language", json!({"lang": l.code()})))));
     Node::Submenu { label: tr(lang, "Language").into(), children }
 }
 

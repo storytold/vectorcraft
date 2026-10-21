@@ -129,7 +129,7 @@ fn file_open_of_a_script_checks_it_with_what_it_includes() {
     }));
     app.ui.dialog = None;
     menus::run_ui_command(&mut app, "ui.checkScript", &json!({})).unwrap().unwrap();
-    assert_eq!(asked.borrow().as_slice(), [vec![("Scripts", &["jsx", "jsxinc", "jsxbin"][..])]]);
+    assert_eq!(asked.borrow().as_slice(), [crate::FilePick::filters([("Scripts", &["jsx", "jsxinc", "jsxbin"][..])])]);
     assert_eq!(report(&app)["name"], "main.jsx");
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -172,7 +172,7 @@ fn check_script_asks_off_the_ui_thread_and_needs_no_document() {
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     assert!(app.run("ui.checkScript", json!({})).is_err(), "nothing yet: the dialog is open");
     assert!(
-        matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Open(pick)] if pick.filters == [("Scripts", &["jsx", "jsxinc", "jsxbin"][..])])
+        matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Open(pick)] if pick.filters == crate::FilePick::filters([("Scripts", &["jsx", "jsxinc", "jsxbin"][..])]))
     );
     app.run("file.close", json!({})).unwrap();
     shown.answer(&[&path.to_string_lossy()]);

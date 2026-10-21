@@ -150,6 +150,25 @@ fn unclip_chords(i: &mut egui::InputState) {
     }
 }
 
+/// Drop each key press made with Ctrl and Alt held that is followed by the text it typed. Firefox
+/// on Windows reports AltGr as Ctrl and Alt held, so AltGr+L on a Polish layout arrives as a
+/// Ctrl+Alt+L press and then the text "ł", which the Type tool types. Without the press no command
+/// chord runs for it: neither Cmd+Alt+L nor Cmd+L, which egui matches with the extra Alt held.
+fn drop_typing_presses(i: &mut egui::InputState) {
+    let next = i.events.iter().skip(1).map(Some).chain([None]);
+    let typed: Vec<bool> = i
+        .events
+        .iter()
+        .zip(next)
+        .map(|(e, next)| {
+            matches!(e, egui::Event::Key { pressed: true, modifiers, .. } if modifiers.ctrl && modifiers.alt)
+                && matches!(next, Some(egui::Event::Text(t)) if !t.is_empty())
+        })
+        .collect();
+    let mut typed = typed.into_iter();
+    i.events.retain(|_| !typed.next().unwrap_or(false));
+}
+
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
 /// press (or a Paste event) reported was a paste of a bitmap or a PDF.
@@ -213,29 +232,74 @@ fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
     // on with it when the window comes back (measured with Kotoeri), as the tool does.
     let shortcut_mods = ctx.input(|i| is_shortcut_chord(i.modifiers));
-    let events: Vec<egui::Event> =
-        ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
-    for e in events {
+    // A frame that began composing keeps its editing keys for the IME: a Backspace that empties the
+    // marked text must not then delete the committed character before it.
+    let was_composing = app.session.tool_composing();
+    // Text, IME events and plain Backspace/Delete are taken together, in the order they arrived, so
+    // a keyboard-hook IME (UniKey/OpenKey) whose tone key sends Backspace(s) and then re-injects
+    // characters in one frame interleaves correctly. Taken as two passes (all text, then the keys)
+    // the deletes land after the inserts and the diacritics are lost. Each handled event is removed
+    // so `route_type_input` below does not process the same Backspace/Delete again.
+    enum Seq {
+        Text(String),
+        Preedit(String, Option<std::ops::Range<usize>>),
+        Commit(String),
+        Erase(ToolKey, Mods),
+    }
+    let mut seq = vec![];
+    ctx.input_mut(|i| {
+        i.events.retain(|e| match e {
+            egui::Event::Text(t) => {
+                seq.push(Seq::Text(t.clone()));
+                false
+            }
+            egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
+                seq.push(Seq::Preedit(text.clone(), active_range_chars.clone()));
+                false
+            }
+            egui::Event::Ime(egui::ImeEvent::Commit(t)) => {
+                seq.push(Seq::Commit(t.clone()));
+                false
+            }
+            // Only unmodified Backspace/Delete interleave with injected text; word-delete and other
+            // modified forms stay with `route_type_input`.
+            egui::Event::Key { key: key @ (Key::Backspace | Key::Delete), pressed: true, modifiers: m, .. } if !m.command && !m.alt && !m.ctrl => {
+                let tk = if *key == Key::Backspace { ToolKey::Backspace } else { ToolKey::Delete };
+                seq.push(Seq::Erase(tk, Mods { shift: m.shift, ..Mods::default() }));
+                false
+            }
+            _ => true,
+        })
+    });
+    for e in seq {
         // Errors are already reported by the engine's interaction (a failed preview keeps it).
         let _ = match e {
             // Keys the IME passed through come as text only when nothing is marked.
-            egui::Event::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
-            egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
+            Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => app.session.tool_text(&t, view),
+            Seq::Text(_) => Ok(vec![]),
+            Seq::Preedit(text, active_range_chars) => {
                 app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
                 app.session.tool_preedit(&text, active_range_chars, view)
             }
             // A bare line break confirms the composition (Enter): the marked text, not a newline.
-            egui::Event::Ime(egui::ImeEvent::Commit(t)) if t == "\n" || t == "\r" => {
+            Seq::Commit(t) if t == "\n" || t == "\r" => {
                 keep_marked_text(app);
                 Ok(vec![])
             }
-            egui::Event::Ime(egui::ImeEvent::Commit(t)) => {
+            Seq::Commit(t) => {
                 app.ime_marked = None;
                 app.session.tool_text(&t, view)
             }
-            // `DeleteSurrounding` isn't sent by egui-winit (desktop); the web host has no IME
-            // path to the canvas yet.
-            _ => Ok(vec![]),
+            // While composing (or in a frame that began composing), editing keys belong to the IME.
+            Seq::Erase(tk, m) if !was_composing && !app.session.tool_composing() => {
+                // Mirror `route_type_input`/`text_key`: surface an erase error in the status bar
+                // instead of discarding it.
+                if let Err(e) = app.session.tool_key(tk, m, view) {
+                    app.status(e.to_string());
+                }
+                Ok(vec![])
+            }
+            Seq::Erase(..) => Ok(vec![]),
         };
     }
 }
@@ -257,7 +321,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if crate::shortcut_editor::is_recording(app) {
             return;
         }
-        if ctx.input(|i| i.key_pressed(Key::Escape)) {
+        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
+        // leaves the dialog open.
+        let popup = app.ui.dialog.as_ref().is_some_and(|d| egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d));
+        if !popup && ctx.input(|i| i.key_pressed(Key::Escape)) {
             crate::dialogs::cancel(app);
             app.ui.palette_open = false;
         }
@@ -332,6 +399,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // would count as typing.
     if ctx.input(|i| i.key_pressed(Key::Tab)) {
         ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    }
+    // While the Type tool edits text, a character typed with AltGr runs no command chord.
+    if app.session.tool_wants_text() {
+        ctx.input_mut(drop_typing_presses);
     }
     // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
@@ -728,6 +799,87 @@ mod tests {
         assert!(!is_shortcut_chord(M::SHIFT));
         assert!(!is_shortcut_chord(M::ALT), "Option+key types é, ø on macOS");
         assert!(!is_shortcut_chord(M::CTRL | M::ALT), "AltGr types @ on a German keyboard");
+    }
+
+    /// A press of `key` with Ctrl and Alt held (as Firefox on Windows reports AltGr), followed by
+    /// the text it typed when `typed` is given.
+    fn ctrl_alt_press(key: Key, typed: Option<&str>) -> Vec<egui::Event> {
+        let m = Modifiers::CTRL | Modifiers::ALT | Modifiers::COMMAND;
+        let mut v =
+            vec![egui::Event::ModifiersChanged(m), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: m }];
+        v.extend(typed.map(|t| egui::Event::Text(t.into())));
+        v
+    }
+
+    /// The text of the type object `id`, and the document's layer count.
+    fn text_and_layers(app: &mut VectorcraftApp, id: u64) -> (String, usize) {
+        let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+        let text = r["runs"].as_array().unwrap().iter().filter_map(|run| run["text"].as_str()).collect();
+        (text, app.session.active().unwrap().doc.layers.len())
+    }
+
+    /// While the Type tool edits text, a character typed with AltGr (Ctrl+Alt in Firefox on
+    /// Windows) is typed and runs no command: not New Layer Options… (Cmd+Alt+L), Reset Tracking
+    /// (Cmd+Alt+Q), Export for Screens (Cmd+Alt+E), Select All on Active Artboard (Cmd+Alt+A) or
+    /// Undo (Cmd+Z).
+    #[test]
+    fn altgr_characters_typed_in_text_run_no_command() {
+        let mut wrong = vec![];
+        for (key, typed) in [(Key::L, "ł"), (Key::Q, "@"), (Key::E, "€"), (Key::A, "ą"), (Key::Z, "ż")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+            app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+            let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "tracking": 200, "kerning": -40})).unwrap();
+            app.select_tool("type");
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            app.session.set_tool_option("select", &json!({"start": 2, "end": 2}));
+            assert!(app.session.tool_wants_text());
+            let layers = text_and_layers(&mut app, id).1;
+            let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.len();
+            let before = selected(&app);
+            frame(&mut app, ctrl_alt_press(key, Some(typed)));
+            let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+            let spaced =
+                r["runs"].as_array().unwrap().iter().all(|run| run["style"]["tracking"] == json!(200.0) && run["style"]["kerning"] == json!(-40.0));
+            let got = (text_and_layers(&mut app, id), spaced, selected(&app) == before, app.ui.dialog.is_none(), app.session.tool_wants_text());
+            if got != ((format!("Hi{typed}"), layers), true, true, true, true) {
+                wrong.push(format!("{key:?}: (text, layers), tracking and kerning kept, selection kept, no dialog, still editing = {got:?}"));
+            }
+        }
+        assert!(wrong.is_empty(), "{wrong:#?}");
+    }
+
+    /// Ctrl and Ctrl+Alt chords that type no text still run their commands while the Type tool
+    /// edits, and with the Selection tool a Ctrl+Alt press runs its chord as before. Ctrl+L is New
+    /// Layer, and Ctrl+Alt+L is New Layer Options…, which opens Layer Options for a new layer.
+    #[test]
+    fn ctrl_alt_chords_without_typed_text_still_run() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(app.session.tool_wants_text());
+        let layers = text_and_layers(&mut app, id).1;
+        let new_layer_options =
+            |app: &VectorcraftApp| app.ui.dialog.as_ref().is_some_and(|d| d.kind == "layerOptions" && d.fields.get("mode") == Some(&json!("new")));
+        let m = Modifiers::COMMAND | Modifiers::CTRL;
+        let ctrl_l = egui::Event::Key { key: Key::L, physical_key: Some(Key::L), pressed: true, repeat: false, modifiers: m };
+        frame(&mut app, vec![egui::Event::ModifiersChanged(m), ctrl_l]);
+        assert_eq!(text_and_layers(&mut app, id), ("Hi".into(), layers + 1), "Ctrl+L while editing: New Layer");
+        assert!(app.ui.dialog.is_none(), "Ctrl+L opens no dialog");
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(app.session.tool_wants_text());
+        frame(&mut app, ctrl_alt_press(Key::L, None));
+        assert!(new_layer_options(&app), "Ctrl+Alt+L with no text typed while editing: New Layer Options…");
+        assert_eq!(text_and_layers(&mut app, id), ("Hi".into(), layers + 1), "no layer is added until OK");
+        crate::dialogs::cancel(&mut app);
+        app.select_tool("selection");
+        frame(&mut app, ctrl_alt_press(Key::L, Some("ł")));
+        assert!(new_layer_options(&app), "Selection tool: Ctrl+Alt+L runs New Layer Options… as before");
+        assert_eq!(text_and_layers(&mut app, id), ("Hi".into(), layers + 1), "no layer is added until OK");
     }
 
     /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard

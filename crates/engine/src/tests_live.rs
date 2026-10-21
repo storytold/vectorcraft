@@ -80,6 +80,13 @@ fn refuses_non_number(s: &mut Session, cmd: &str, p: &Value, key: &str) {
     assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
 }
 
+/// `cmd` with `p` fails with the error for `key`, which `p` gives as something other than true or false.
+fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &Value, key: &str) {
+    let r = s.execute(cmd, p);
+    let want = format!("`{key}` must be true or false");
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
 // ---------- Blend ----------
 
 #[test]
@@ -167,6 +174,38 @@ fn blend_options_refuse_a_number_given_as_text() {
     let defaults = s.prefs.blend_options;
     for (key, p) in &calls {
         refuses_non_number(&mut s, "object.blend.options", p, key);
+    }
+    assert_eq!(s.prefs.blend_options, defaults, "the options new blends start with stayed");
+}
+
+/// Make and Blend Options refuse a `smooth` given as text or as another value that is not true or
+/// false, also beside Specified Steps: Make makes no blend, and the selected blend and the options new
+/// blends start with keep their spacing. Null is read as `smooth` left out, and true still gives
+/// Smooth Color.
+#[test]
+fn blend_make_and_options_refuse_a_smooth_given_as_text() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    let calls = [json!({"smooth": "true"}), json!({"smooth": 1}), json!({"steps": 4, "smooth": "false"}), json!({"smooth": [true]})];
+    for p in &calls {
+        refuses_non_boolean(&mut s, "object.blend.make", p, "smooth");
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "not blended");
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "smooth": null})).unwrap());
+    let n = undo_len(&s);
+    for p in &calls {
+        refuses_non_boolean(&mut s, "object.blend.options", p, "smooth");
+    }
+    assert_eq!((undo_len(&s), steps_of(&s, g).len()), (n, 5), "the blend kept its options");
+    s.execute("object.blend.options", &json!({"smooth": true})).unwrap();
+    assert!(matches!(&node(&s, g).kind, NodeKind::Blend { spec, .. } if spec.spacing == BlendSpacing::SmoothColor));
+    s.execute("select.none", &json!({})).unwrap();
+    let defaults = s.prefs.blend_options;
+    for p in &calls {
+        refuses_non_boolean(&mut s, "object.blend.options", p, "smooth");
     }
     assert_eq!(s.prefs.blend_options, defaults, "the options new blends start with stayed");
 }
@@ -534,6 +573,24 @@ fn envelope_options_and_edit_contents() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![e]);
 }
 
+/// Edit Contents refuses an `editing` given as text or as another value that is not true or false,
+/// and the envelope, the selection and the undo history stay as they were; a null `editing` toggles,
+/// as a missing one does.
+#[test]
+fn envelope_edit_contents_refuses_editing_given_as_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 50})).unwrap());
+    let before = (node(&s, e), undo_len(&s), s.doc().unwrap().selection.objects.clone());
+    for p in [json!({"editing": "true"}), json!({"editing": 1}), json!({"editing": "false"}), json!({"editing": [true]})] {
+        refuses_non_boolean(&mut s, "object.envelope.editContents", &p, "editing");
+        assert_eq!((node(&s, e), undo_len(&s), s.doc().unwrap().selection.objects.clone()), before, "{p}");
+    }
+    let r = s.execute("object.envelope.editContents", &json!({"editing": null})).unwrap();
+    assert_eq!((r["editing"].clone(), s.doc().unwrap().selection.objects.clone()), (json!(true), vec![a]));
+}
+
 /// The warp's `bend`, and `h` and `v` by those keys or by their long names, given as text.
 fn warp_numbers_as_text() -> [(&'static str, Value); 5] {
     [
@@ -601,6 +658,37 @@ fn envelope_reset_with_mesh_refuses_a_number_given_as_text() {
     assert_eq!((node(&s, e), undo_len(&s)), (before, n), "nothing changed");
 }
 
+/// Make with Warp and Reset with Warp refuse a `horizontal` given as text or as another value that
+/// is not true or false, also beside an `orientation`, and Reset with Mesh refuses such a
+/// `maintainShape`: no envelope is made, and a warp envelope keeps its warp. Null is read as the key
+/// left out.
+#[test]
+fn envelope_make_and_reset_refuse_a_boolean_given_as_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    let warps = [json!({"horizontal": "false"}), json!({"style": "arch", "horizontal": 0}), json!({"orientation": "vertical", "horizontal": "true"})];
+    for p in &warps {
+        refuses_non_boolean(&mut s, "object.envelope.makeWithWarp", p, "horizontal");
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "not enveloped");
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 50, "horizontal": null})).unwrap());
+    let (before, n) = (node(&s, e), undo_len(&s));
+    for p in &warps {
+        refuses_non_boolean(&mut s, "object.envelope.resetWithWarp", p, "horizontal");
+    }
+    for p in [json!({"maintainShape": "false"}), json!({"rows": 2, "cols": 2, "maintainShape": 0})] {
+        refuses_non_boolean(&mut s, "object.envelope.resetWithMesh", &p, "maintainShape");
+    }
+    assert_eq!((node(&s, e), undo_len(&s)), (before, n), "nothing changed");
+    s.execute("object.envelope.resetWithWarp", &json!({"horizontal": false})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Warp { horizontal: false, .. })));
+    s.execute("object.envelope.resetWithMesh", &json!({"rows": 2, "cols": 2, "maintainShape": null})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Mesh { rows: 2, cols: 2, .. })));
+}
+
 /// Envelope Options refuses a fidelity, bend or distortion given as text, for the selected
 /// envelope and for the options new envelopes get, and changes neither.
 #[test]
@@ -621,6 +709,40 @@ fn envelope_options_refuse_a_number_given_as_text() {
         refuses_non_number(&mut s, "object.envelope.options", p, key);
     }
     assert_eq!(s.envelope_defaults, None, "the options new envelopes get stayed");
+}
+
+/// Envelope Options refuses Anti-Alias, the three Distort options or a warp's `horizontal` given as
+/// text or as another value that is not true or false, for a selected warp envelope, a selected mesh
+/// envelope and the options new envelopes get, and changes none of them; null keeps the current
+/// value, as a missing key does.
+#[test]
+fn envelope_options_refuse_a_boolean_given_as_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let warp = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 50})).unwrap());
+    let b = rect(&mut s, 400.0, 100.0, 100.0, 100.0);
+    sel(&mut s, &[b]);
+    let mesh = id_of(&s.execute("object.envelope.makeWithMesh", &json!({"rows": 2, "cols": 2})).unwrap());
+    let calls = [
+        ("antiAlias", json!({"antiAlias": "false"})),
+        ("distortAppearance", json!({"fidelity": 80, "distortAppearance": 1})),
+        ("distortLinearGradients", json!({"distortLinearGradients": "true"})),
+        ("distortPatternFills", json!({"distortPatternFills": [true]})),
+        ("horizontal", json!({"horizontal": "false"})),
+    ];
+    for ids in [vec![warp], vec![mesh], vec![]] {
+        sel(&mut s, &ids);
+        let before = (node(&s, warp), node(&s, mesh), undo_len(&s));
+        for (key, p) in &calls {
+            refuses_non_boolean(&mut s, "object.envelope.options", p, key);
+        }
+        assert_eq!((node(&s, warp), node(&s, mesh), undo_len(&s)), before, "nothing changed with {ids:?} selected");
+    }
+    assert_eq!(s.envelope_defaults, None, "the options new envelopes get stayed");
+    sel(&mut s, &[warp]);
+    s.execute("object.envelope.options", &json!({"antiAlias": false, "distortAppearance": null, "horizontal": null})).unwrap();
+    assert!(matches!(&node(&s, warp).kind, NodeKind::Envelope { options, .. } if !options.anti_alias && options.distort_appearance));
 }
 
 #[test]

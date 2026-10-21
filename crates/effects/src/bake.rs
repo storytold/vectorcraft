@@ -151,17 +151,19 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     bake_leaf(d, n)
 }
 
-/// `m`, art evaluated from an object, with its children baked and given ids of their own (the
-/// pieces copied from the source keep the source's ids until then).
+/// `m`, art evaluated from an object, with its children baked and then given ids of their own (the
+/// pieces copied from the source keep the source's ids until then). The pieces are baked with the
+/// ids the renderer draws them with: Random in a Transform effect takes its seed from the id.
 fn bake_pieces(d: &mut Document, mut m: Node) -> Node {
     let mut seen = std::collections::HashSet::from([m.id]);
     let children = m.children().cloned().unwrap_or_default();
     let children = children
         .into_iter()
         .map(|c| {
-            let mut c = Arc::unwrap_or_clone(c);
+            let c = Arc::unwrap_or_clone(c);
+            let mut c = bake_node(d, &c).unwrap_or(c);
             fresh_ids(d, &mut c, &mut seen);
-            Arc::new(bake_node(d, &c).unwrap_or(c))
+            Arc::new(c)
         })
         .collect();
     if let Some(ch) = m.children_mut() {

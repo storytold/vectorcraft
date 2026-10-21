@@ -381,6 +381,8 @@ fn pf_label(op: PathfinderOp) -> &'static str {
         PathfinderOp::Crop => "Crop",
         PathfinderOp::Outline => "Outline",
         PathfinderOp::MinusBack => "Minus Back",
+        PathfinderOp::HardMix => "Hard Mix",
+        PathfinderOp::SoftMix => "Soft Mix",
     }
 }
 
@@ -946,7 +948,8 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
         for l in &d.layers {
             visit(l, false, false, false, &mut v, (stray, unpainted, empty_text));
         }
-        v.retain(|id| d.is_editable(*id));
+        let editable = d.editable();
+        v.retain(|id| editable(*id));
         v
     };
     if found.is_empty() {
@@ -991,13 +994,15 @@ fn divide_objects_below(s: &mut Session, _: &Value) -> Result<Value> {
         }
         // Compound children are handled via their compound.
         targets.retain(|id| !matches!(d.parent_of(*id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Compound { .. })));
+        let editable = d.editable();
         targets.retain(|id| {
             *id != cutter_id
-                && d.is_editable(*id)
+                && editable(*id)
                 && d.is_visible(*id)
                 && d.index_path(*id).is_some_and(|ip| ip < cutter_pos)
                 && d.node(*id).and_then(Node::geometric_bounds).is_some_and(|b| b.intersect(cb).area() > 0.0)
         });
+        drop(editable);
         let mut out = vec![];
         let mut cut = Beside::replacing(d, &[targets.as_slice(), &[cutter_id]].concat());
         for t in targets {

@@ -227,6 +227,78 @@ fn focus_false_keeps_the_active_proxy() {
     assert_eq!(node(&s, id).appearance.stroke_paint().color().unwrap().to_hex(), "#ff0000");
 }
 
+/// Toggle Fill/Stroke Focus, Invert, Complement, Apply Last Color, Apply Last Gradient,
+/// `paint.setFill` and `paint.setStroke` refuse a `fill`, `stroke`, `focus` or `none` given as text or
+/// as another value that is not true or false. The object, the defaults for new art, the proxy in
+/// front and the undo history stay as they were, with the object selected and with nothing selected.
+/// Null is read as the key left out.
+#[test]
+fn proxy_commands_refuse_a_boolean_given_as_text() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let calls = [
+        ("paint.toggleActive", json!({"fill": "false"}), "fill"),
+        ("paint.invert", json!({"stroke": "true"}), "stroke"),
+        ("paint.complement", json!({"stroke": 1}), "stroke"),
+        ("paint.lastColor", json!({"stroke": "true"}), "stroke"),
+        ("paint.lastGradient", json!({"stroke": [true]}), "stroke"),
+        ("paint.setStroke", json!({"color": "#0000ff", "focus": "false"}), "focus"),
+        ("paint.setFill", json!({"none": "true"}), "none"),
+        ("paint.setFill", json!({"color": "#0000ff", "none": "false"}), "none"),
+    ];
+    let state = |s: &Session| (node(s, id), s.paint.clone(), s.fill_active, history(s));
+    for selected in [true, false] {
+        if !selected {
+            s.execute("select.none", &json!({})).unwrap();
+        }
+        let before = state(&s);
+        for (cmd, p, key) in &calls {
+            let r = s.execute(cmd, p);
+            let want = format!("`{key}` must be true or false");
+            assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+            assert_eq!(state(&s), before, "{cmd} {p}, selected: {selected}");
+        }
+    }
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let r = s.execute("paint.toggleActive", &json!({"fill": null})).unwrap();
+    assert_eq!(r["fillActive"], json!(false), "a null `fill` swaps the proxy in front");
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "none": null, "focus": null})).unwrap();
+    assert_eq!((node(&s, id).appearance.fill_paint().color().unwrap().to_hex(), s.fill_active), ("#0000ff".to_string(), true));
+}
+
+/// `appearance.setItem`, `livePaint.fill`, `livePaint.strokeEdge`, a `shapeBuilder.merge` `fill`
+/// object, `swatch.new` and `swatch.edit`'s `paint` refuse a `none` given as text or as another value
+/// that is not true or false. The document, the defaults for new art and the undo history stay as
+/// they were. Null is read as `none` left out.
+#[test]
+fn the_commands_that_take_a_paint_refuse_a_none_given_as_text() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let name = s.execute("swatch.new", &json!({"color": "#00ff00"})).unwrap()["name"].clone();
+    let refused = |r: &Result<Value>| matches!(r, Err(EngineError::BadParams { msg, .. }) if msg == "`none` must be true or false");
+    let state = |s: &Session| (s.doc().unwrap().doc.clone(), s.paint.clone(), history(s));
+    let before = state(&s);
+    let calls = [
+        ("appearance.setItem", json!({"index": 0, "ids": [id.0], "none": "true"})),
+        ("livePaint.fill", json!({"ids": [id.0], "point": [20, 30], "none": 1})),
+        ("shapeBuilder.merge", json!({"ids": [id.0], "points": [[20, 30]], "fill": {"none": "true"}})),
+        ("swatch.new", json!({"none": [true]})),
+        ("swatch.edit", json!({"name": name, "paint": {"none": "false"}})),
+    ];
+    for (cmd, p) in &calls {
+        let r = s.execute(cmd, p);
+        assert!(refused(&r), "{cmd} {p}: {r:?}");
+        assert_eq!(state(&s), before, "{cmd} {p}");
+    }
+    let r = s.execute("livePaint.fill", &json!({"ids": [id.0], "point": [20, 30], "color": "#ff0000", "none": null})).unwrap();
+    let g = NodeId(r["group"].as_u64().unwrap());
+    let before = state(&s);
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [10, 30], "none": "true"}));
+    assert!(refused(&r), "livePaint.strokeEdge: {r:?}");
+    assert_eq!(state(&s), before, "livePaint.strokeEdge");
+}
+
 #[test]
 fn a_mixed_selection_shows_a_question_mark_proxy() {
     let mut s = session();

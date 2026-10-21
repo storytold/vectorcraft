@@ -68,6 +68,19 @@ fn swatch_bounds_outline_the_period_dashed() {
     assert!((51..70).all(|x| is_white(off.pixel(x, 90))));
 }
 
+/// #3261: exports (which leave templates and guides out) don't draw the tile edge or the swatch
+/// bounds, but do draw the tile's art.
+#[test]
+fn exports_leave_the_tile_edge_and_swatch_bounds_out() {
+    let d = editing(TileType::BrickByRow { offset: 0.5 }, true, true);
+    let opts = RenderOptions { background: Some([255; 4]), tile_edge: [0, 200, 0], skip_templates: true, ..Default::default() };
+    let out = Renderer::new().render(&d, 120, 120, Affine::translate((50.5, 50.5)), &opts);
+    assert!(is_white(out.pixel(50, 65)), "tile edge: {:?}", out.pixel(50, 65));
+    assert!((51..70).all(|x| is_white(out.pixel(x, 90))), "swatch bounds");
+    let p = out.pixel(55, 55);
+    assert!(p[0] > 200 && p[1] < 60 && p[2] < 60, "the red square is still drawn: {p:?}");
+}
+
 /// #1534: a path made into a guide is drawn in the guide colour and style (Preferences › Guides &
 /// Grid), as ruler guides are: a line, or dots with gaps between them.
 #[test]

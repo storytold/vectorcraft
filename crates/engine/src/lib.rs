@@ -297,10 +297,25 @@ pub(crate) struct PreviewCopies {
 pub struct UndoGroup {
     /// The document before the group's first edit, as the undo step that edit recorded keeps it.
     first: Option<Arc<Document>>,
-    /// The journal's length when the group began: a cancelled group drops the entries after it.
-    journal: usize,
+    /// The numbers of the journal entries made in the group's document while it was open: a canceled
+    /// group drops them. An entry that changed the active document has the index of the document it
+    /// left active, and a canceled group turns it into that change.
+    journal: Vec<(usize, Option<usize>)>,
     /// The undo step's name; else the first edit's.
     label: Option<String>,
+}
+
+/// One undo step begun with [`Session::begin_undo_scope`], which [`Session::end_undo_scope`] ends.
+#[derive(Clone, Debug)]
+pub struct UndoScope {
+    /// The document ([`DocState::uid`]).
+    uid: u64,
+    /// The journal's length when the scope began.
+    journal: usize,
+    /// When the document's undo group was open already: the document, its selection and the document
+    /// that the group's undo step keeps, as they were when the scope began; `None` when the scope
+    /// opened the group.
+    joined: Option<(Arc<Document>, Selection, Option<Arc<Document>>)>,
 }
 
 /// Per-document editing state.
@@ -626,6 +641,7 @@ impl DocState {
         if let Some(it) = self.interaction.take() {
             self.doc = it.doc;
             self.selection = Arc::unwrap_or_clone(it.selection);
+            self.sync_new_art();
             self.active_layer = it.active_layer;
             self.layer_rows = it.layer_rows;
             self.variables_highlight = it.variables_highlight;
@@ -636,6 +652,60 @@ impl DocState {
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).
     pub fn mark_unsaved(&mut self) {
         self.saved_doc = Arc::new(Document::new(1.0, 1.0));
+    }
+    /// Deselect the art on a locked artboard, except new art ([`Document::new_art`]). New art
+    /// becomes the objects of layers on a locked artboard that hold selected objects (a group for
+    /// its selected members) and that an edit made (those not in `before`, the document before
+    /// it), or that held objects selected in `was` that were new art (`old`, the new art of that
+    /// selection), or were inside new art in `before` (the members of an ungrouped group). New art
+    /// that a selection leaves out, or that leaves the locked artboards, is protected from then
+    /// on. The selection and the document get the new art; the document's changes in place, so a
+    /// selection change doesn't replace the document.
+    fn protect_locked_artboards(&mut self, was: &[NodeId], old: &std::collections::HashSet<NodeId>, before: Option<&Document>) {
+        let new_art: std::collections::HashSet<NodeId> = {
+            let (doc, locks) = (&self.doc, self.doc.locked_artboards());
+            if locks.is_empty() {
+                Default::default()
+            } else {
+                // `was` and `old` name the objects of the document they were selected in.
+                let then = before.unwrap_or(doc);
+                let was: std::collections::HashSet<NodeId> =
+                    was.iter().filter_map(|o| then.layer_object(*o)).map(|n| n.id).filter(|o| old.contains(o)).collect();
+                let selected: Vec<(NodeId, &vectorcraft_doc::Node)> =
+                    self.selection.objects.iter().filter_map(|o| doc.layer_object(*o).map(|n| (*o, n))).collect();
+                // One walk of the document before the edit finds where the selected objects were;
+                // the objects the edit made aren't in it.
+                let paths = before.filter(|_| !selected.is_empty()).map(|b| b.index_paths(selected.iter().flat_map(|(o, n)| [*o, n.id])));
+                let new = |o: NodeId, object: NodeId| {
+                    was.contains(&object)
+                        || before.zip(paths.as_ref()).is_some_and(|(b, p)| {
+                            !p.contains_key(&object) || p.get(&o).and_then(|p| b.layer_object_at(p)).is_some_and(|n| was.contains(&n.id))
+                        })
+                };
+                selected.into_iter().filter(|(o, n)| new(*o, n.id) && locks.overlaps(n)).map(|(_, n)| n.id).collect()
+            }
+        };
+        if new_art != *self.selection.new_art {
+            self.selection.new_art = Arc::new(new_art);
+        }
+        self.sync_new_art();
+        self.selection.deselect_on_locked_artboards(&self.doc);
+    }
+    /// Give the document the selection's new art ([`Selection::new_art`]), less the objects the
+    /// selection no longer holds: after Undo, Redo or a failed batch brings back a document and
+    /// a selection, and after a command that changed the selection directly.
+    pub(crate) fn sync_new_art(&mut self) {
+        if !self.selection.new_art.is_empty() {
+            let held: std::collections::HashSet<NodeId> =
+                self.selection.objects.iter().filter_map(|o| self.doc.layer_object(*o)).map(|n| n.id).collect();
+            if !self.selection.new_art.is_subset(&held) {
+                self.selection.new_art = Arc::new(self.selection.new_art.intersection(&held).copied().collect());
+            }
+        }
+        let doc = self.doc.new_art.get();
+        if !Arc::ptr_eq(&doc, &self.selection.new_art) && *doc != *self.selection.new_art {
+            self.doc.new_art.set(self.selection.new_art.clone());
+        }
     }
     pub fn title(&self) -> String {
         let name = self
@@ -1246,6 +1316,9 @@ pub struct Session {
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
     pub(crate) last_view: ViewInfo,
+    /// The selection tools' measurements for the active document as it is: a pointer move or a
+    /// cursor asked for again over an unchanged document and selection measures nothing again.
+    pub(crate) preview_memo: vectorcraft_tools::select::PreviewMemo,
     depth: u32,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
@@ -1368,6 +1441,7 @@ impl Session {
             lender: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
+            preview_memo: Default::default(),
             depth: 0,
             tool_panic: None,
             draw_mode: DrawMode::Normal,
@@ -1594,6 +1668,9 @@ impl Session {
             }
             (spec.run)(s, params)
         };
+        // The entries the command journals belong to the undo groups of the documents it edits, and to
+        // the group of the document it starts in when it ends there too.
+        let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         let r = r?;
         if self.depth == 0 {
@@ -1604,6 +1681,7 @@ impl Session {
             self.journal.push((id.to_string(), p));
         }
         if self.depth == 0 {
+            self.journal_in_undo_groups(doc, &grouped, journal);
             self.after_command();
         }
         Ok(r)
@@ -1676,7 +1754,7 @@ impl Session {
     fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
         let snapshot = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone()));
         let active = self.active;
-        match guard::catch_panic(|| self.run_nested(f)) {
+        let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
             Err(msg) => {
                 self.depth = 0;
@@ -1694,7 +1772,13 @@ impl Session {
                 }
                 Err(EngineError::Internal { cmd: id.to_string(), msg })
             }
+        };
+        // Undo, Redo and a failed batch bring back documents with their selections: each document
+        // gets its selection's new art on a locked artboard.
+        for st in &mut self.docs {
+            st.sync_new_art();
         }
+        r
     }
 
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -1760,6 +1844,9 @@ impl Session {
                 if guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
                 }
+                // The art on a locked artboard can't stay selected, however it got there, except
+                // the new art this edit made and new art still selected.
+                st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -1811,12 +1898,16 @@ impl Session {
         let guides_locked = self.menu.guides_locked;
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
+        let new_art = st.selection.new_art.clone();
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
         // Lock Guides locks the paths made into guides too (#1534), whatever selects them.
         if guides_locked {
             deselect_guides(&st.doc, &mut st.selection);
         }
+        // The art on a locked artboard can't be selected, whatever selects it, except new art
+        // that was selected and still is.
+        st.protect_locked_artboards(&before, &new_art, None);
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
         if st.selection.objects != before
@@ -1879,7 +1970,7 @@ impl Session {
         }
         // The previous preview's paint is undone with it.
         self.pending_paint = None;
-        let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params);
+        let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params).or_else(|| cmd::bounds_rewrite(self, cmd, params));
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
@@ -1933,7 +2024,9 @@ impl Session {
         if perspective_again.is_some() {
             st.last_perspective = perspective_again;
         }
+        let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         self.journal.push(preview);
+        self.journal_in_undo_groups(doc, &grouped, journal);
         Ok(())
     }
 
@@ -1972,18 +2065,48 @@ impl Session {
 
     /// [`Session::begin_undo_group`] with the undo step named `label` (else after its first edit).
     pub fn begin_named_undo_group(&mut self, label: Option<String>) {
-        let journal = self.journal.len();
         if let Some(st) = self.active_mut()
             && st.undo_group.is_none()
         {
-            st.undo_group = Some(UndoGroup { first: None, journal, label });
+            st.undo_group = Some(UndoGroup { first: None, journal: vec![], label });
+        }
+    }
+
+    /// The documents with an undo group open ([`DocState::uid`]), each with the document it holds.
+    fn undo_group_docs(&self) -> Vec<(u64, *const Document)> {
+        self.docs.iter().filter(|st| st.undo_group.is_some()).map(|st| (st.uid, Arc::as_ptr(&st.doc))).collect()
+    }
+
+    /// Note the journal entries from number `from` on in the undo groups they belong to: the group of
+    /// each document in `grouped` ([`Session::undo_group_docs`] before the entries) that they changed,
+    /// each group they opened and edited, and the group of the document with [`DocState::uid`] `doc`
+    /// when they started in it and it is still the active one. A cancel drops them. The last entry of a command that changed the
+    /// active document keeps the index of the document it left active.
+    fn journal_in_undo_groups(&mut self, doc: Option<u64>, grouped: &[(u64, *const Document)], from: usize) {
+        let to = self.journal.len();
+        let active = self.active().map(|d| d.uid);
+        let switched = if active == doc { None } else { self.active };
+        for st in &mut self.docs {
+            let Some(g) = &mut st.undo_group else { continue };
+            let started = doc == Some(st.uid) && active == doc;
+            // A group the entries opened has an edit of theirs once it has a first edit.
+            let edited = match grouped.iter().find(|&&(uid, _)| uid == st.uid) {
+                Some(&(_, d)) => !std::ptr::eq(d, Arc::as_ptr(&st.doc)),
+                None => g.first.is_some(),
+            };
+            if started || edited {
+                // A committed interaction inside the command noted its entry already.
+                let noted = g.journal.partition_point(|&(n, _)| n < from);
+                g.journal.truncate(noted);
+                g.journal.extend((from..to).map(|n| (n, switched.filter(|_| n + 1 == to))));
+            }
         }
     }
 
     /// Close the open undo groups: their edits stay one undo step or, `cancel`led (Escape), are
     /// undone and dropped from the journal.
     pub fn end_undo_group(&mut self, cancel: bool) {
-        let mut journal = None;
+        let mut journal: Vec<(usize, Option<usize>)> = vec![];
         for st in &mut self.docs {
             let Some(g) = st.undo_group.take() else { continue };
             // Only while the group's step is still the newest one.
@@ -1997,13 +2120,90 @@ impl Session {
                 if self.menu.guides_locked {
                     deselect_guides(&st.doc, &mut st.selection);
                 }
+                st.sync_new_art();
                 st.revision += 1;
-                journal = Some(g.journal);
+                // The journal drops only the canceled groups' own entries and keeps the ones made in other documents meanwhile.
+                journal.extend(g.journal);
             }
         }
-        if let Some(len) = journal {
-            self.journal.truncate(len);
+        // A batch that edited two of the documents is in both groups.
+        journal.sort_unstable();
+        journal.dedup_by_key(|&mut (n, _)| n);
+        // An entry that changed the active document becomes that change, so the entries after it run
+        // in the same document when the journal is replayed.
+        for &(n, index) in &journal {
+            if let Some(index) = index {
+                self.journal.replace(n, ("document.activate".to_string(), serde_json::json!({ "index": index })));
+            }
         }
+        let gone: Vec<usize> = journal.into_iter().filter(|(_, index)| index.is_none()).map(|(n, _)| n).collect();
+        self.journal.remove(&gone);
+    }
+
+    /// [`Session::end_undo_group`] for the open document with [`DocState::uid`] `uid` only (it may
+    /// have closed since): its open undo group closes, and undo groups open in other documents stay
+    /// open.
+    fn end_document_undo_group(&mut self, uid: u64, cancel: bool) {
+        // The other documents' groups are set aside while `end_undo_group` closes this one's.
+        let others: Vec<(u64, UndoGroup)> =
+            self.docs.iter_mut().filter(|st| st.uid != uid).filter_map(|st| Some((st.uid, st.undo_group.take()?))).collect();
+        self.end_undo_group(cancel);
+        for (other, g) in others {
+            if let Some(st) = self.document_mut(other) {
+                st.undo_group = Some(g);
+            }
+        }
+    }
+
+    /// Make the edits that follow in the active document one undo step, until
+    /// [`Session::end_undo_scope`]: open an undo group there or, when one is open already, join it,
+    /// so that the edits are part of its step. `None` without a document.
+    pub fn begin_undo_scope(&mut self) -> Option<UndoScope> {
+        let journal = self.journal.len();
+        let st = self.active()?;
+        let uid = st.uid;
+        let joined = st.undo_group.as_ref().map(|g| (st.doc.clone(), st.selection.clone(), g.first.clone()));
+        if joined.is_none() {
+            self.begin_undo_group();
+        }
+        Some(UndoScope { uid, journal, joined })
+    }
+
+    /// End `scope` in its own document, whichever document is active now; undo groups open in other
+    /// documents stay open. The undo group the scope opened closes as [`Session::end_undo_group`]
+    /// closes it. A scope that joined an open group leaves the group open; with `cancel`, it puts the
+    /// document and its selection back as they were when the scope began and cuts the journal back to
+    /// where the scope began (only while the group's step is still the newest one), and an undo step
+    /// that the scope's first edit recorded goes too.
+    pub fn end_undo_scope(&mut self, scope: UndoScope, cancel: bool) {
+        let Some((doc, selection, first)) = scope.joined else {
+            self.end_document_undo_group(scope.uid, cancel);
+            return;
+        };
+        let guides_locked = self.menu.guides_locked;
+        let Some(st) = self.document_mut(scope.uid) else { return };
+        let Some(g) = &mut st.undo_group else { return };
+        let newest = g.first.as_ref().is_some_and(|f| st.history.undo.last().is_some_and(|e| Arc::ptr_eq(&e.doc, f)));
+        if !cancel || !newest {
+            return;
+        }
+        match &first {
+            // The scope's first edit recorded the group's step.
+            None => {
+                st.history.undo.pop();
+                g.first = None;
+            }
+            Some(f) if g.first.as_ref().is_some_and(|now| Arc::ptr_eq(now, f)) => {}
+            Some(_) => return,
+        }
+        st.doc = doc;
+        st.selection = selection;
+        if guides_locked {
+            deselect_guides(&st.doc, &mut st.selection);
+        }
+        st.history.recost_last(&st.doc);
+        st.revision += 1;
+        self.journal.truncate(scope.journal);
     }
 
     /// Commands with enablement (for menus, palette, MCP `list_commands`).
@@ -2045,8 +2245,6 @@ mod tests_adjust;
 mod tests_appearance;
 #[cfg(test)]
 mod tests_areafit;
-#[cfg(test)]
-mod tests_artboard_lock;
 #[cfg(test)]
 mod tests_assets;
 #[cfg(test)]

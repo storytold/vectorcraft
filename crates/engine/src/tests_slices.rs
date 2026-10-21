@@ -140,6 +140,9 @@ fn divide_two_by_three_and_by_size() {
     assert_eq!(hs, [25.0, 25.0, 10.0]);
     assert!(s.execute("object.slice.divide", &json!({"rows": 0})).is_err());
     assert!(s.execute("object.slice.divide", &json!({"columns": 5000})).is_err());
+    // A 32-bit build read 2^32 + 2 as 2, passed the check and went on to list 2^32 + 3 cuts.
+    let e = s.execute("object.slice.divide", &json!({"rows": (1u64 << 32) + 2})).unwrap_err().to_string();
+    assert!(e.contains("divide into 1 to"), "{e}");
     assert!(s.execute("object.slice.divide", &json!({})).is_err(), "nothing to divide by");
 }
 

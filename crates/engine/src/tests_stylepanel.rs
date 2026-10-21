@@ -102,6 +102,16 @@ fn move_reorders_and_undoes_in_one_step() {
     assert!(s.execute("graphicStyle.move", &json!({"name": first})).is_err());
 }
 
+/// A graphic style moved to place 2^32 goes last. A 32-bit build read the place as 0 and moved it
+/// to the front.
+#[test]
+fn move_past_u32_goes_last() {
+    let mut s = session();
+    let second = names(&s)[1].clone();
+    run(&mut s, "graphicStyle.move", json!({"name": second, "to": 1u64 << 32}));
+    assert_eq!(names(&s).last().unwrap(), &second);
+}
+
 #[test]
 fn override_character_color_clears_the_run_fill() {
     let mut s = session();

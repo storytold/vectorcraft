@@ -98,7 +98,8 @@ impl PieWidget {
         if !selection.anchors.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return vec![];
         }
-        let shown = |id: &&NodeId| doc.is_editable(**id) && !selection.segments.contains_key(*id);
+        let editable = doc.editable();
+        let shown = |id: &&NodeId| editable(**id) && !selection.segments.contains_key(*id);
         let mut out = vec![];
         for id in selection.objects.iter().filter(shown) {
             let Some((e, (start, end))) = Ellipse::of(doc, *id) else { continue };

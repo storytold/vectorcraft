@@ -44,6 +44,9 @@
 	Japanese	일본어
 	Join Our Discord	Discord 참여하기
 	Line-end Punctuation Half Width	줄 끝 문장 부호 반각
+	Insert Kashidas	카시다 삽입
+	Long	길게
+	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
 	Kinsoku Set	긴소쿠 세트
 	Hard	강하게
@@ -69,6 +72,7 @@
 	Quit VectorCraft	VectorCraft 종료
 	File	파일
 	New…	새로 만들기…
+	New Without Dialog	대화상자 없이 새로 만들기
 	New from Template…	템플릿에서 새로 만들기…
 	Open…	열기…
 	Open Recent Files	최근 파일 열기
@@ -258,6 +262,8 @@
 	Large Gaps	큰 간격
 	Gap Preview Color:	간격 미리 보기 색상:
 	Close Gaps With Paths	패스로 간격 닫기
+	Show Live Paint Gaps	라이브 페인트 간격 표시
+	Hide Live Paint Gaps	라이브 페인트 간격 숨기기
 	Select Fills	칠 선택
 	Select Strokes	선 선택
 	Image Trace	이미지 추적
@@ -736,7 +742,8 @@
 	 from center  |  	 중심에서  |  
 	 keeps its proportions)	 비율 유지)
 	 near a selected pin to rotate  |  	 선택한 핀 근처에서 회전  |  
-	 on the canvas to create one	 캔버스에서 만들기
+	 on the canvas to create one (	 캔버스에서 만들기 (
+	 selects several, or draws one inside an artboard)	 여러 개 선택 또는 아트보드 안에 만들기)
 	 over paths to roughen their outlines  |  	 패스 위에서 윤곽선 거칠게 만들기  |  
 	 over paths, and hold still to keep going  |  	 패스 위에서 멈춰 있으면 계속 진행  |  
 	 the art to add a pin  |  	 아트워크를 클릭하여 핀 추가  |  
@@ -817,7 +824,7 @@
 	Add Selected Artwork (Alt: as one asset)	선택한 아트워크 추가(Alt: 하나의 에셋으로)
 	Add Selected Artwork as Multiple Assets	선택한 아트워크를 여러 에셋으로 추가
 	Add Selected Artwork as One Asset	선택한 아트워크를 하나의 에셋으로 추가
-	Add Spine Point	중심선 점 추가
+	Add Spine Point	스파인 포인트 추가
 	Add Used Colors	사용한 색상 추가
 	Add to Graphic Styles	그래픽 스타일에 추가
 	Add to Profiles	프로필에 추가
@@ -1456,6 +1463,7 @@
 	Eyedropper Picks Up:	스포이드 추출 대상:
 	Eyedropper Tool	스포이드 도구
 	Eyedropper: click the art to sample the stop's colour	스포이드: 아트웍을 클릭해 정지점의 색상 추출
+	Eyedropper: click the art to sample the key color	스포이드: 아트웍을 클릭해 키 색상 추출
 	Feet	피트
 	Feet & Inches	피트 및 인치
 	Fewer <tspan> Elements	<tspan> 요소 줄이기
@@ -1479,6 +1487,14 @@
 	Alt key toggles to Smooth Tool	Alt 키로 매끄럽게 도구로 전환
 	Keep selected	선택 유지
 	Merge only with selection	선택 영역과만 병합
+	Consider Open Filled Paths as Closed	칠이 있는 열린 패스를 닫힌 패스로 처리
+	Pick Color From:	색상 출처:
+	Artwork	아트워크
+	Cursor Swatch Preview	포인터 옆 견본 미리 보기
+	Selection:	선택 방식:
+	Freeform	자유 형태
+	Straight Line	직선
+	Highlight:	강조:
 	Fill:	칠:
 	Find	찾기
 	Find Font	글꼴 찾기
@@ -1578,6 +1594,7 @@
 	Hand Tool	손 도구
 	Handles	핸들
 	Hard Light	하드 라이트
+	Hard Mix	하드 믹스
 	Harmony Rules:	하모니 규칙:
 	Height	높이
 	Height:	높이:
@@ -2003,6 +2020,7 @@
 	Move Slices	슬라이스 이동
 	Move Spine Point	스파인 포인트 이동
 	Reshape Spine Segment	스파인 세그먼트 모양 변경
+	Move Brush	브러시 이동
 	Move Swatch	견본 이동
 	Move Up	위로 이동
 	Move in Perspective	원근 이동
@@ -2053,6 +2071,13 @@
 	Tints and Shades	틴트와 셰이드
 	Hue Shift	색조 이동
 	Key Color:	키 색상:
+	Tips	팁
+	Colorization Tips	색상화 팁
+	The samples show this brush on a blue stroke.	샘플은 이 브러시를 파란색 선에 적용한 모습을 보여 줍니다.
+	The art keeps its own colors.	아트웍은 원래 색상을 유지합니다.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	검정은 선 색상이 되고 흰색은 흰색으로 남습니다. 다른 색상은 선 색상의 틴트가 되며, 색상이 밝을수록 틴트도 밝아집니다.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	검정은 검정으로 남고 흰색은 흰색으로 남습니다. 다른 색상은 어두우면 선 색상의 셰이드가 되고 밝으면 틴트가 됩니다.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	키 색상은 선 색상이 됩니다. 다른 색상은 키 색상과 같은 만큼 색상환에서 이동하며 채도와 밝기를 유지합니다.
 	Roundness:	원형률:
 	Fixed	고정
 	Pressure	필압
@@ -2073,6 +2098,14 @@
 	Round Fan	둥근 부채형
 	Flat Fan	평평한 부채형
 	New Brush…	새 브러시…
+	New Brush	새 브러시
+	Calligraphic Brush	캘리그래피 브러시
+	Scatter Brush	흩뿌리기 브러시
+	Art Brush	아트 브러시
+	Bristle Brush	강모 브러시
+	Pattern Brush	패턴 브러시
+	Select art to make a scatter, art or pattern brush.	흩뿌리기, 아트 또는 패턴 브러시를 만들려면 아트웍을 선택하세요.
+	Brush Art	브러시 아트
 	New Calligraphic Brush	새 캘리그래피 브러시
 	New Character Style	새 문자 스타일
 	New Color Group	새 색상 그룹
@@ -2654,6 +2687,7 @@ mark-style	Japanese	일본식
 	Scale Cursor Proportional to UI	UI에 비례해 커서 크기 조절
 	Scale Lineweights	선 두께 크기 조절
 	Scale Strokes & Effects	선 및 효과 크기 조절
+	Scale Text Attributes	텍스트 속성 크기 조절
 	Scale Tool	크기 조절 도구
 	Scale to Fit Artboard	아트보드에 맞게 크기 조절
 	Scale:	크기 조절:
@@ -2832,6 +2866,7 @@ mark-style	Japanese	일본식
 	Snap to Unit	단위에 스냅
 	Snapping Tolerance	스냅 허용 오차
 	Soft Light	소프트 라이트
+	Soft Mix	소프트 혼합
 	Solid	단색
 	Sort by Kind	종류별 정렬
 	Sort by Name	이름별 정렬
@@ -3218,6 +3253,7 @@ gradient-kind	Radial	방사형
 	Black and White Logo	흑백 로고
 	Bottom	아래쪽
 	Bottom in Front	아래쪽이 앞
+	Bottom-Justified Tab	아래쪽 정렬 탭
 	Bounds	경계
 	Bounds (Fill Proportionally)	경계(비율 유지하여 채우기)
 	Bounds (Fit Proportionally)	경계(비율 유지하여 맞추기)
@@ -3469,6 +3505,7 @@ file-filter	Templates	템플릿
 	Relinked {n} image(s)	이미지 {n}개를 다시 연결했습니다
 	Relinked {n} image(s); not in that folder: {}	이미지 {n}개를 다시 연결했습니다. 해당 폴더에 없음: {}
 	Relinked {} image(s)	이미지 {}개를 다시 연결했습니다
+	Repeat Objects	반복 개체
 	Repeat Options	반복 옵션
 	Reset with Mesh	메시로 재설정
 	Reset with Warp	왜곡으로 재설정
@@ -3542,6 +3579,7 @@ file-filter	Templates	템플릿
 	Tip on the end point	끝이 끝점에 위치
 	Top	위쪽
 	Top in Front	위쪽이 앞
+	Top-Justified Tab	위쪽 정렬 탭
 	Transforms	변형
 	Transparent (Default)	투명 (기본값)
 	Trim marks	재단 표시
@@ -3708,6 +3746,13 @@ theme	Appearance	외관
 	Channel 4	채널 4
 	Cell Size	셀 크기
 	Fine Dots	고운 점
+
+	Simple	단순
+	Light Rough	밝은 거칠기
+	Dark Rough	어두운 거칠기
+	Wide Sharp	넓고 선명
+	Wide Blurry	넓고 흐림
+	Sparkle	반짝임
 	Medium Dots	중간 점
 	Grainy Dots	거친 입자 점
 	Coarse Dots	굵은 점
@@ -3776,7 +3821,9 @@ theme	Appearance	외관
 @msg	Show All Hidden Attributes: nothing is hidden	모든 숨겨진 속성 표시: 숨겨진 항목이 없습니다
 @msg	Expand: no brush strokes selected	확장: 선택한 브러시 선이 없습니다
 @msg	no brush named `{name}`	`{name}` 브러시가 없습니다
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	강모 브러시 이름은 최대 {max}자까지 쓸 수 있습니다: `{name}`은(는) {count}자입니다
 @msg	no brush selected	선택한 브러시가 없습니다
+@msg	brushes move only within their type	브러시는 같은 유형 안에서만 이동할 수 있습니다
 @msg	no symbol instances selected	선택한 심볼 인스턴스가 없습니다
 @msg	select a symbol instance	심볼 인스턴스를 선택하세요
 @msg	the art has no bounds	아트웍에 경계가 없습니다
@@ -3817,11 +3864,13 @@ theme	Appearance	외관
 @msg	Make Guides: select paths	안내선 만들기: 패스를 선택하세요
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	variables are locked	변수가 잠겨 있습니다
+@msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
 @msg	guides are locked	안내선이 잠겨 있습니다
 @msg	handle must be in or out	handle은 in 또는 out이어야 합니다
 @msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
 @msg	no saved selections	저장된 선택 영역이 없습니다
 @msg	no such artboard	해당 아트보드가 없습니다
+@msg	the artboard is locked	아트보드가 잠겨 있습니다
 @msg	cannot split an open path at its end point	열린 패스는 끝점에서 나눌 수 없습니다
 @msg	closing needs three anchors	닫으려면 앵커가 세 개 필요합니다
 @msg	empty brush stroke	빈 브러시 선입니다
@@ -3968,6 +4017,10 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
+@msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
+@msg	a clipping path can't be attached to a path	클리핑 패스는 패스에 부착할 수 없습니다
 @msg	select the art to repeat	반복할 아트웍을 선택하세요
 @msg	the document has no patterns	문서에 패턴이 없습니다
 @msg	no artboard	아트보드가 없습니다
@@ -4064,6 +4117,25 @@ theme	Appearance	외관
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript 오류({name}, `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript 오류({name}, `{op}`: {at}), 위치: {procs}
 @msg	a PostScript error ({name})	PostScript 오류({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript 오류({name}, `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	PostScript 오류({name}, `{op}`; {meaning}), 위치: {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript 오류({name}, `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	PostScript 오류({name}, `{op}`: {at}; {meaning}), 위치: {procs}
+@msg	a PostScript error ({name}; {meaning})	PostScript 오류({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	프로그램이 시작하지 않은 딕셔너리를 끝내려고 합니다
+@msg	the program opens a file, which the reader can't do	프로그램이 파일을 열려고 하지만 PostScript 판독기는 파일을 열 수 없습니다
+@msg	the program restores a saved state that was already restored	프로그램이 이미 복원된 저장 상태를 다시 복원하려고 합니다
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	프로그램이 읽는 데이터가 손상되었거나 중간에 잘렸거나, 프로그램이 위치가 없는 파일에서 위치를 요청합니다
+@msg	the program goes past one of the reader's limits	프로그램이 PostScript 판독기의 한도를 넘었습니다
+@msg	the path has no point to continue from	패스에 이어서 그릴 기준점이 없습니다
+@msg	a value is outside the range the operator takes	값이 연산자가 받는 범위를 벗어났습니다
+@msg	the operator needs more values than the stack holds	연산자에 필요한 값이 스택에 부족합니다
+@msg	part of the program isn't valid PostScript text	프로그램 일부가 올바른 PostScript 텍스트가 아닙니다
+@msg	a value has the wrong type for the operator	값의 유형이 연산자에 맞지 않습니다
+@msg	the program runs, deletes or renames a file, which the reader can't do	프로그램이 파일을 실행, 삭제 또는 이름 변경하려고 하지만 PostScript 판독기는 이를 할 수 없습니다
+@msg	the program asks for a resource that isn't defined	프로그램이 정의되지 않은 리소스를 요청합니다
+@msg	a calculation has no result, as in a division by zero	0으로 나누기처럼 계산 결과가 없습니다
+@msg	the operator looks for a mark on the stack and finds none	연산자가 스택에서 마크를 찾지 못했습니다
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	`{at}`을(를) 사용하며, VectorCraft의 PostScript 판독기는 이를 알지 못합니다
 @msg	the file was read up to an error ({why}): what follows it was left out	오류({why})까지 파일을 읽었으며, 그 뒤의 내용은 제외했습니다
 @msg	this file's PostScript couldn't be read ({why}): {what}	이 파일의 PostScript를 읽을 수 없습니다({why}): {what}
@@ -4496,6 +4568,7 @@ effect	Vertical	세로
 	Activate Panel	패널 활성화
 	Change Panel Layout	패널 레이아웃 변경
 	Close Panel	패널 닫기
+	Collapse Panel Group	패널 그룹 접기
 	Move Panel	패널 이동
 	Group with	함께 그룹화
 	Resize panels	패널 크기 조절
@@ -4507,6 +4580,12 @@ effect	Vertical	세로
 @msg	before must name a panel	before는 패널을 지정해야 합니다
 @msg	docking action contains an unknown panel or an excessive split path	도킹 동작에 알 수 없는 패널이나 지나치게 많은 분할 경로가 있습니다
 @msg	group must be true or false	group은 true 또는 false여야 합니다
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	패널이 분리되어 있습니다. 그룹은 window.panel.float {panel, collapsed}로 접으세요
+@msg	panel is not in a dock group	패널이 도크 그룹에 없습니다
+@msg	only a dock group above or below others collapses, not one beside another	다른 그룹의 위나 아래에 있는 도크 그룹만 접을 수 있으며, 옆에 있는 그룹은 접을 수 없습니다
+@msg	icon must be true or false	icon은 true 또는 false여야 합니다
+@msg	icon only docks a panel in the icon column, with no anchor	icon은 anchor 없이 패널을 아이콘 열에만 도킹합니다
+@msg	column docks a set as a dock column, with no anchor or icon	column은 anchor나 icon 없이 세트를 도크 열로 도킹합니다
 @msg	move requires a destination panel	move에는 대상 패널이 필요합니다
 @msg	move requires an existing destination panel	move에는 존재하는 대상 패널이 필요합니다
 @msg	onto must name a floating panel	onto는 떠 있는 패널을 지정해야 합니다
@@ -4578,12 +4657,24 @@ lighting	Light	광원
 	X11 (XWayland)	X11 (XWayland)
 	Artistic	예술 효과
 	Film Grain…	필름 그레인…
+	Colored Pencil…	색연필…
+	Colored Pencil	색연필
 	Cutout…	오려내기…
 	Cutout	오려내기
+	Dry Brush…	드라이 브러시…
+	Dry Brush	드라이 브러시
 	Neon Glow…	네온 글로…
+	Palette Knife…	팔레트 나이프…
 	Neon Glow	네온 글로
+	Paint Daubs…	페인트 다브…
+	Paint Daubs	페인트 다브
+	Palette Knife	팔레트 나이프
 	Poster Edges…	포스터 가장자리…
+	Rough Pastels…	거친 파스텔…
 	Poster Edges	포스터 가장자리
+	Rough Pastels	거친 파스텔
+	Underpainting…	언더페인팅…
+	Underpainting	언더페인팅
 	Levels	레벨 수
 	Edge Simplicity	가장자리 단순화
 	Edge Fidelity	가장자리 충실도
@@ -4673,6 +4764,9 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	3D Lighting Preset	3D 조명 사전 설정
+	Standard	표준
+	Diffuse	확산
 # 3D light management.
 	Lights	광원 목록
 	Add Light	광원 추가
@@ -4719,6 +4813,7 @@ lighting	Light	광원
 @msg	Measured anchor no longer exists	측정한 고정점이 더 이상 없습니다
 @msg	Measured segment no longer exists	측정한 세그먼트가 더 이상 없습니다
 @msg	Non-finite dimension	유한하지 않은 치수
+@msg	Scale Text Attributes: selected type has no scale to bake	텍스트 속성 크기 조절: 선택한 텍스트에 적용할 크기 조절이 없습니다
 @msg	Scale must be drawing:real, for example 1:10	축척은 도면:실제 형식이어야 합니다(예: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	축척 비율은 1:1000000에서 1000000:1 사이여야 합니다
 @msg	Second measured segment no longer exists	두 번째 측정 세그먼트가 더 이상 없습니다
@@ -4737,6 +4832,7 @@ lighting	Light	광원
 	Make Image Dynamic	이미지를 동적으로 만들기
 	Import Data Sets…	데이터 세트 가져오기…
 	Export Data Sets…	데이터 세트 내보내기…
+	Load Variable Library…	변수 라이브러리 불러오기…
 	Make Graph Dynamic	그래프를 동적으로 만들기
 	Batch…	일괄 처리…
 	Source Folder:	소스 폴더:
@@ -4760,6 +4856,8 @@ lighting	Light	광원
 	Sketch	스케치
 	Halftone Pattern…	하프톤 패턴…
 	Halftone Pattern	하프톤 패턴
+	Torn Edges…	찢어진 가장자리…
+	Torn Edges	찢어진 가장자리
 	Pattern Type	패턴 유형
 	Dot	점
 # User Interface › Color Scheme
@@ -4778,6 +4876,7 @@ lighting	Light	광원
 	Watercolor…	수채화…
 	Watercolor	수채화
 	Brush Size	브러시 크기
+	Texture Coverage	텍스처 적용 범위
 	Definition	선명도
 	Brush Detail	브러시 세부 묘사
 	Shadow Intensity	그림자 강도
@@ -4806,24 +4905,14 @@ lighting	Light	광원
 @msg	the image's pixels can't be read	이미지의 픽셀을 읽을 수 없습니다
 	Persistent	지속
 	Library Panel Options	라이브러리 패널 옵션
+	Locate Library…	라이브러리 찾기…
 @msg	Persistent libraries not found: {files}	지속 라이브러리를 찾을 수 없습니다: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}`은(는) 라이브러리 패널이 아닙니다(window.swatchLibrary 참조)
 @msg	library panel `{given}` isn't open	라이브러리 패널 `{given}`이(가) 열려 있지 않습니다
 @msg	too many library panels were opened in this session	이 세션에서 라이브러리 패널을 너무 많이 열었습니다
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	이미지가 {_1} × {_2}픽셀로 한 변이 {LARGE_TRACE_SIDE}을 넘습니다. 추적은 되지만 더 느립니다. 충실도가 낮은 사전 설정이나 이미지의 작은 사본을 사용하면 더 빠릅니다.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	이미지를 {_3} × {_4}에서 축소한 {_1} × {_2}픽셀로 추적했습니다(최대 {_5}메가픽셀).
-	Lock Artboards	아트보드 잠그기
-	Unlock Artboards	아트보드 잠금 해제
-	Artboard Color	아트보드 색상
-	Lock Selected	선택 항목 잠그기
-	Lock All Except Selected	선택 항목 외 모두 잠그기
-	Lock All	모두 잠그기
-	Unlock Selected	선택 항목 잠금 해제
-	Lock Artboard	아트보드 잠그기
-	Unlock Artboard	아트보드 잠금 해제
-	Clear Artboard Color	아트보드 색상 지우기
-@msg	artboard {_1} is locked	아트보드 {_1}이(가) 잠겨 있습니다
-	Include Artboard Fill	아트보드 색상 포함
+	Gap Length:	간격 길이:
 	Artboard {n} of {total}	아트보드 {n} / {total}
 	Encoding and writing the file…	파일을 인코딩하고 쓰는 중…
 @plural	{n} more export waiting|{n} more exports waiting	대기 중인 내보내기 {n}개 더
@@ -4862,3 +4951,9 @@ lighting	Light	광원
 	Plaster	석고
 	Note Paper…	메모지…
 	Note Paper	메모지
+	Water Paper…	물 종이…
+	Water Paper	물 종이
+	Ruby…	루비…
+	Ruby	루비
+	Fresco…	프레스코…
+	Fresco	프레스코

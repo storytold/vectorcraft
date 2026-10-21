@@ -1,4 +1,5 @@
-//! #2143: a ruler guide selected with objects can be the key object Align lines them up on.
+//! #2143: a ruler guide selected with objects can be the key object Align lines them up on, and
+//! Distribute spaces ruler guides selected without objects.
 
 use serde_json::{Value, json};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
@@ -182,4 +183,209 @@ fn guides_align_to_a_key_object_among_others_and_parallel_ones_to_a_key_guide() 
     s.execute("select.key", &json!({"guide": 1})).unwrap();
     s.execute("object.align", &json!({"horizontal": "center"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>(), [700.0, 700.0]);
+}
+
+/// Objects 40 pt wide at `xs` (y 100) and a vertical guide at `pos` that is their key.
+fn key_guide_across(xs: &[f64], pos: f64) -> (Session, Vec<NodeId>) {
+    let mut s = session();
+    let ids: Vec<NodeId> = xs.iter().map(|&x| rect(&mut s, x, 100.0)).collect();
+    s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    s.execute("select.key", &json!({"guide": 0})).unwrap();
+    (s, ids)
+}
+
+fn lefts(s: &Session, ids: &[NodeId]) -> Vec<f64> {
+    ids.iter().map(|id| bounds(s, *id).x0).collect()
+}
+
+#[test]
+fn distribute_with_a_spacing_spaces_the_objects_from_a_key_guide() {
+    let (mut s, ids) = key_guide_across(&[100.0, 300.0, 500.0], 350.0);
+    // Two objects are before the guide and one after it: the guide is spaced from as a key object
+    // with no size would be.
+    for (h, want) in [("left", [330.0, 340.0, 360.0]), ("center", [310.0, 320.0, 340.0]), ("right", [290.0, 300.0, 320.0])] {
+        s.execute("object.distribute", &json!({"horizontal": h, "spacing": 10})).unwrap();
+        assert_eq!(lefts(&s, &ids), want, "{h}");
+        assert_eq!(s.doc().unwrap().doc.guides[0].pos, 350.0, "{h}: the guide stays put");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(lefts(&s, &ids), [100.0, 300.0, 500.0], "{h}: one undo step");
+    }
+    // `to: "key"` is what the Align panel sends; 0 puts every line on the guide.
+    s.execute("object.distribute", &json!({"horizontal": "left", "spacing": 0, "to": "key"})).unwrap();
+    assert_eq!(lefts(&s, &ids), [350.0; 3]);
+    // A guide before or after every object.
+    for (pos, want) in [(50.0, [60.0, 70.0, 80.0]), (600.0, [570.0, 580.0, 590.0])] {
+        let (mut s, ids) = key_guide_across(&[100.0, 300.0, 500.0], pos);
+        s.execute("object.distribute", &json!({"horizontal": "left", "spacing": 10})).unwrap();
+        assert_eq!(lefts(&s, &ids), want, "guide at {pos}");
+    }
+    // Two objects are enough, and a negative spacing reverses the order.
+    let (mut s, ids) = key_guide_across(&[100.0, 500.0], 300.0);
+    s.execute("object.distribute", &json!({"horizontal": "left", "spacing": -20})).unwrap();
+    assert_eq!(lefts(&s, &ids), [320.0, 280.0]);
+}
+
+#[test]
+fn distribute_from_a_horizontal_key_guide_and_along_a_guide() {
+    let mut s = session();
+    let ids: Vec<NodeId> = [100.0, 200.0, 400.0].iter().map(|&y| rect(&mut s, 50.0, y)).collect();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 300})).unwrap();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    s.execute("select.key", &json!({"guide": 0})).unwrap();
+    let tops = |s: &Session| ids.iter().map(|id| bounds(s, *id).y0).collect::<Vec<_>>();
+    s.execute("object.distribute", &json!({"vertical": "bottom", "spacing": 5})).unwrap();
+    // Bottoms 120 and 220 are above the guide, 420 below it.
+    assert_eq!(tops(&s), [270.0, 275.0, 285.0]);
+    // A horizontal guide gives no line across a horizontal distribution: the objects stay where
+    // they are, as Align leaves them, and no undo step is added.
+    let undo = s.doc().unwrap().history.undo.len();
+    let xs: Vec<f64> = ids.iter().map(|id| bounds(&s, *id).x0).collect();
+    s.execute("object.distribute", &json!({"horizontal": "center", "spacing": 5})).unwrap();
+    assert_eq!(ids.iter().map(|id| bounds(&s, *id).x0).collect::<Vec<_>>(), xs);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn distribute_without_a_spacing_spaces_the_key_guide_too() {
+    // Without a spacing, the key guide is spaced with the objects as an item with no size: lines
+    // 100, 150, 350 (the guide) and 400 go to 100, 200, 300 and 400.
+    let (mut s, ids) = key_guide_across(&[100.0, 150.0, 400.0], 350.0);
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![100.0, 200.0, 400.0], vec![300.0]));
+    // `to: "selection"` wins over the key guide, so a spacing isn't used either.
+    let (mut s, ids) = key_guide_across(&[100.0, 150.0, 400.0], 350.0);
+    s.execute("object.distribute", &json!({"horizontal": "left", "spacing": 10, "to": "selection"})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![100.0, 200.0, 400.0], vec![300.0]));
+}
+
+#[test]
+fn distribute_spacing_spaces_the_objects_from_a_key_guide() {
+    // Left edges 100, 300 and 500 of 40 pt objects with a vertical key guide at 350, 10 pt apart:
+    // the object before the guide ends 10 pt before it, the one after it starts 10 pt after it.
+    let (mut s, ids) = key_guide_across(&[100.0, 300.0, 500.0], 350.0);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 10})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![250.0, 300.0, 360.0], vec![350.0]));
+    // A guide along the axis leaves everything where it is.
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "spacing": 10})).unwrap();
+    assert_eq!(lefts(&s, &ids), [250.0, 300.0, 360.0]);
+    assert_eq!(bounds(&s, ids[0]).y0, 100.0);
+}
+
+#[test]
+fn other_selected_guides_are_spaced_from_a_key_guide() {
+    let (mut s, ids) = key_guide_across(&[100.0, 300.0, 500.0], 350.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [1, 2], "toggle": true})).unwrap();
+    s.execute("object.distribute", &json!({"horizontal": "left", "spacing": 10})).unwrap();
+    // The vertical guide at 600 is the last line, 10 pt after the last object's; the horizontal
+    // guide stays.
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![330.0, 340.0, 360.0], vec![350.0, 370.0, 50.0]));
+}
+
+/// Guides at `vertical` x positions and `horizontal` y positions, all selected without objects.
+fn guides_alone(vertical: &[f64], horizontal: &[f64]) -> Session {
+    let mut s = session();
+    for (v, pos) in vertical.iter().map(|p| (true, p)).chain(horizontal.iter().map(|p| (false, p))) {
+        s.execute("guide.add", &json!({"vertical": v, "pos": pos})).unwrap();
+    }
+    let all: Vec<usize> = (0..vertical.len() + horizontal.len()).collect();
+    s.execute("guide.select", &json!({"indexes": all})).unwrap();
+    s
+}
+
+/// Selects the objects `ids` and the ruler guides `guides`, and nothing else.
+fn select_with_guides(s: &mut Session, ids: &[NodeId], guides: &[usize]) {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let now = s.doc().unwrap().selection.guides.clone();
+    let flip: Vec<usize> = (0..s.doc().unwrap().doc.guides.len()).filter(|i| now.contains(i) != guides.contains(i)).collect();
+    s.execute("guide.select", &json!({"indexes": flip, "toggle": true})).unwrap();
+    assert_eq!((s.doc().unwrap().selection.objects.len(), s.doc().unwrap().selection.guides.len()), (ids.len(), guides.len()));
+}
+
+fn positions(s: &Session) -> Vec<f64> {
+    s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect()
+}
+
+#[test]
+fn distribute_spaces_guides_selected_without_objects() {
+    let mut s = guides_alone(&[100.0, 150.0, 500.0], &[50.0, 60.0, 400.0]);
+    // A guide has no width: the three options of an axis give the same result, and only the
+    // guides across the axis move.
+    for h in ["left", "center", "right"] {
+        s.execute("object.distribute", &json!({"horizontal": h})).unwrap();
+        assert_eq!(positions(&s), [100.0, 300.0, 500.0, 50.0, 60.0, 400.0], "{h}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(positions(&s), [100.0, 150.0, 500.0, 50.0, 60.0, 400.0], "{h}: one undo step");
+    }
+    s.execute("object.distribute", &json!({"vertical": "center"})).unwrap();
+    assert_eq!(positions(&s), [100.0, 150.0, 500.0, 50.0, 225.0, 400.0]);
+    // Align to Artboard: the outermost guides go to its edges (the document is 800 by 600).
+    s.execute("object.distribute", &json!({"horizontal": "center", "to": "artboard", "artboard": 0})).unwrap();
+    assert_eq!(&positions(&s)[..3], [0.0, 400.0, 800.0]);
+    // Distribute Spacing: equal gaps, or `spacing` apart from the first.
+    let mut s = guides_alone(&[100.0, 150.0, 500.0], &[]);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal"})).unwrap();
+    assert_eq!(positions(&s), [100.0, 300.0, 500.0]);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 10})).unwrap();
+    assert_eq!(positions(&s), [100.0, 110.0, 120.0]);
+    s.execute("object.distributeSpacing", &json!({"axis": "vertical", "spacing": 10})).unwrap();
+    assert_eq!(positions(&s), [100.0, 110.0, 120.0], "no horizontal guide to space");
+}
+
+#[test]
+fn distributing_guides_needs_two_items() {
+    // Two guides are the ends already; one guide can't be distributed.
+    let mut s = guides_alone(&[100.0, 500.0], &[]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.distribute", &json!({"horizontal": "center"})).unwrap();
+    assert_eq!((positions(&s), s.doc().unwrap().history.undo.len()), (vec![100.0, 500.0], undo));
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    assert!(s.execute("object.distribute", &json!({"horizontal": "center"})).is_err());
+    // One object and one guide are enough for Distribute Spacing.
+    let a = rect(&mut s, 300.0, 100.0);
+    select_with_guides(&mut s, &[a], &[0]);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 10})).unwrap();
+    assert_eq!((positions(&s), bounds(&s, a).x0), (vec![100.0, 500.0], 110.0));
+}
+
+#[test]
+fn guides_selected_with_objects_are_distributed_with_them() {
+    // 40 pt objects at 100 and 300, vertical guides at 150 and 400, and a horizontal guide.
+    let mut s = guides_alone(&[150.0, 400.0], &[50.0]);
+    let ids: Vec<NodeId> = [100.0, 300.0].iter().map(|&x| rect(&mut s, x, 100.0)).collect();
+    select_with_guides(&mut s, &ids, &[0, 1, 2]);
+    // Lines 100, 150 (a guide), 300 and 400 (a guide): the guide between the objects goes to
+    // 200, and the outermost items stay. The horizontal guide stays too.
+    s.execute("object.distribute", &json!({"horizontal": "left"})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![100.0, 300.0], vec![200.0, 400.0, 50.0]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(positions(&s), [150.0, 400.0, 50.0], "one undo step");
+    // Distribute Spacing: a guide has no width. From 100 to 360 there are 260 pt, 80 of them
+    // objects: three gaps of 60 pt.
+    s.execute("guide.move", &json!({"index": 1, "pos": 360})).unwrap();
+    select_with_guides(&mut s, &ids, &[0, 1, 2]);
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal"})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![100.0, 260.0], vec![200.0, 360.0, 50.0]));
+    // Align to Artboard: the outermost items go to its edges (the document is 800 wide).
+    s.execute("object.distribute", &json!({"horizontal": "left", "to": "artboard", "artboard": 0})).unwrap();
+    assert_eq!(lefts(&s, &ids)[0], 0.0);
+    assert_eq!(positions(&s)[1], 800.0);
+}
+
+#[test]
+fn selected_guides_are_spaced_from_a_key_object() {
+    // Lines 100, 150 (a guide) and 300 (the key object), 10 pt apart outward from the key.
+    let mut s = guides_alone(&[150.0], &[]);
+    let ids: Vec<NodeId> = [100.0, 300.0].iter().map(|&x| rect(&mut s, x, 100.0)).collect();
+    select_with_guides(&mut s, &ids, &[0]);
+    s.execute("select.key", &json!({"id": ids[1].0})).unwrap();
+    s.execute("object.distribute", &json!({"horizontal": "left", "spacing": 10})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![280.0, 300.0], vec![290.0]));
+    // Distribute Spacing: the object ends 10 pt before the guide, the guide 10 pt before the key.
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 10})).unwrap();
+    assert_eq!((lefts(&s, &ids), positions(&s)), (vec![240.0, 300.0], vec![290.0]));
 }

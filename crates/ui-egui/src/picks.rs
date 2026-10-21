@@ -66,6 +66,7 @@ const DOCUMENT_FREE: &[&str] = &[
     "ui.checkScript",
     "window.swatchLibrary.other",
     "window.graphicStyleLibrary.other",
+    "ui.libraryPanel.locate",
     "shortcuts.import",
     "shortcuts.export",
     "ui.shortcutImportDialog",

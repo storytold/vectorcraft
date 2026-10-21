@@ -468,6 +468,31 @@ fn text_on_path_options_svg_cannot_express_are_outlined() {
     }
 }
 
+/// Type on a path whose punctuation hangs outside its brackets (Optical Margin Alignment or Roman
+/// Hanging Punctuation) keeps its look as outlines; with the option on and nothing at its ends to
+/// hang, it stays a `<textPath>`.
+#[test]
+fn text_on_path_with_hanging_punctuation_is_outlined() {
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    for (text, optical, roman, live) in [
+        ("“On a curve", true, false, false),
+        ("“On a curve", false, true, false),
+        ("On a curve", true, true, true),
+        ("“On a curve", false, false, true),
+    ] {
+        let mut d = Document::new(200.0, 200.0);
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 14.0, ..CharStyle::default() });
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+        t.optical_margin = optical;
+        t.para.roman_hanging = roman;
+        let id = d.alloc_id();
+        let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+        assert_eq!(svg.contains("<textPath"), live, "{text} {optical} {roman}: {svg}");
+    }
+}
+
 #[test]
 fn styling_modes_roundtrip() {
     for styling in [Styling::PresentationAttributes, Styling::InlineStyle, Styling::StyleEntities, Styling::InternalCss] {

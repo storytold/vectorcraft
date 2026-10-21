@@ -25,7 +25,9 @@ fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // Long enough for the binary to start on a loaded machine (the workspace's other tests run
+    // meanwhile), short enough to catch a desktop that started instead of exiting.
+    let deadline = Instant::now() + Duration::from_secs(30);
     let timed_out = loop {
         if child.try_wait().unwrap().is_some() {
             break false;

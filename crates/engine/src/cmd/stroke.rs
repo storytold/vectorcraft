@@ -4,14 +4,14 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, SavedProfile, StrokeAlign, StrokeLayer, Unit, WidthProfile,
+    ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, SavedProfile, Scaling, StrokeAlign, StrokeLayer, Unit, WidthProfile,
 };
 
 use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::painted;
 use super::*;
 use crate::DocState;
-use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke};
+use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -171,6 +171,16 @@ impl StrokeChange {
         self.apply(&mut st);
         style.set_stroke_layer(&st);
     }
+
+    /// [`Self::apply_char`] to type drawn at mean scale `k` (its `xf`'s): the weight and dash
+    /// lengths are document-space, the character stroke is drawn in text space.
+    pub(crate) fn apply_char_scaled(&self, style: &mut CharStyle, k: f64) {
+        let mut st = style.stroke_layer();
+        scale_layer(&mut st, k);
+        self.apply(&mut st);
+        scale_layer(&mut st, 1.0 / k);
+        style.set_stroke_layer(&st);
+    }
 }
 
 /// Does a Stroke panel edit find nothing selected (and no `ids`)? It then sets up new art.
@@ -227,7 +237,9 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
-            t.runs.iter_mut().for_each(|r| change.apply_char(&mut r.style));
+            // Character strokes are drawn in text space, scaled by the type's transform.
+            let k = Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0);
+            t.runs.iter_mut().for_each(|r| change.apply_char_scaled(&mut r.style, k));
             return Ok(());
         }
         if index.is_none() && n.appearance.stroke().is_none() {

@@ -27,9 +27,9 @@ fn artboard(id: u32, x: f64) -> Artboard {
         id,
         name: format!("Artboard {id}"),
         rect: Rect::new(x, 0.0, x + 100.0, 100.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
-        locked: false,
         color: None,
     }
 }
@@ -100,6 +100,75 @@ fn defaults_and_json() {
         assert!(matches!(settings(bad.clone()).check(), Err(PdfError::BadSetting(_))), "{bad}");
     }
     assert_eq!(Media::A4.size().map(|(w, h)| (w.round(), h.round())), Some((595.0, 842.0)));
+}
+
+#[test]
+fn japanese_paper_sizes() {
+    // The Japanese papers: JIS B4, B5 and B6 are the sizes Japanese printing uses (JIS X 6310),
+    // a little larger than ISO's; the others are はがき, 往復はがき, 封筒 and 四六判.
+    let near = |m: Media, w: f64, h: f64| {
+        let (mw, mh) = m.size().unwrap();
+        assert!((mw - w).abs() < 0.01 && (mh - h).abs() < 0.01, "{m:?} is {mw} × {mh}, not {w} × {h}");
+    };
+    near(Media::B4Jis, 728.50, 1031.81);
+    near(Media::B5Jis, 515.91, 728.50);
+    near(Media::B6Jis, 362.83, 515.91);
+    near(Media::A6, 297.64, 419.53);
+    near(Media::JapanesePostcard, 283.46, 419.53);
+    near(Media::JapaneseDoublePostcard, 419.53, 566.93);
+    near(Media::JapaneseEnvelope3, 340.16, 666.14);
+    near(Media::JapaneseEnvelope4, 255.12, 637.80);
+    near(Media::Kaku2, 680.31, 941.10);
+    near(Media::Kaku3, 612.28, 785.20);
+    near(Media::YonrokuBan, 360.0, 532.91);
+    // The ISO B sizes keep the dimensions settings and presets saved before the Japanese papers
+    // existed: they are not the JIS sizes.
+    near(Media::B4, 708.66, 1000.63);
+    near(Media::B5, 498.90, 708.66);
+
+    // A paper is named by its JSON id or its dialog label, any case and spacing.
+    for (name, want) in [
+        ("b4 (jis)", Media::B4Jis),
+        ("B4 (JIS)", Media::B4Jis),
+        ("b4jis", Media::B4Jis),
+        ("b5", Media::B5),
+        ("B5 (ISO)", Media::B5),
+        ("b5 (jis)", Media::B5Jis),
+        ("japanese postcard", Media::JapanesePostcard),
+        ("Japanese Postcard", Media::JapanesePostcard),
+        ("Japanese Envelope #3", Media::JapaneseEnvelope3),
+        ("kaku #2", Media::Kaku2),
+        ("yonroku-ban", Media::YonrokuBan),
+    ] {
+        assert_eq!(Media::from_name(name), Some(want), "{name}");
+    }
+    assert_eq!(Media::from_name("b7"), None);
+    assert_eq!(Media::from_name("  "), None);
+    for m in Media::ALL {
+        assert_eq!(Media::from_name(m.id()), Some(*m), "id {:?}", m.id());
+        assert_eq!(Media::from_name(m.label()), Some(*m), "label {:?}", m.label());
+        assert_eq!(serde_json::to_value(m).unwrap(), json!(m.id()));
+        assert_eq!(serde_json::from_value::<Media>(json!(m.id())).unwrap(), *m);
+    }
+    assert!(serde_json::from_value::<Media>(json!("b7")).is_err(), "an unknown paper is refused");
+
+    // Every paper prints as a page of its own size, the added ones included.
+    let d = doc(50.0, 50.0, &[(Rect::new(0.0, 0.0, 50.0, 50.0), rgb(0.0, 0.0, 0.0))]);
+    for (media, w, h) in [
+        ("japanese postcard", 283.46, 419.53),
+        ("japanese double postcard", 419.53, 566.93),
+        ("B5 (JIS)", 515.91, 728.50),
+        ("kaku #2", 680.31, 941.10),
+        ("yonroku-ban", 360.0, 532.91),
+        // The ISO B sizes keep their page size.
+        ("b5", 498.90, 708.66),
+    ] {
+        let r = job(&d, json!({"media": media, "autoRotate": false}));
+        assert_eq!(r.pages, 1, "{media}");
+        let p = pages(&r.bytes);
+        assert_eq!(p.len(), 1, "{media}");
+        assert!((p[0].0.0 - w).abs() < 0.01 && (p[0].0.1 - h).abs() < 0.01, "{media}: {:?}, not {w} × {h}", p[0].0);
+    }
 }
 
 #[test]

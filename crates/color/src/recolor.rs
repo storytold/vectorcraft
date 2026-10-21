@@ -264,6 +264,8 @@ pub struct RowMap {
     mean_l: f32,
     /// Hue turn from the key colour to the new colour (Hue Shift).
     turn: f32,
+    /// Whether colours take the new colour in its own model, not in the model they had.
+    own_model: bool,
 }
 
 impl RowMap {
@@ -274,7 +276,20 @@ impl RowMap {
             Method::TintsShades => mean_l(&row.iter().map(|c| (*c, c.to_lab())).collect::<Vec<_>>()),
             _ => 0.0,
         };
-        Self { method, to, key, mean_l, turn: to.to_hsb()[0] - key.to_hsb()[0] }
+        Self { method, to, key, mean_l, turn: to.to_hsb()[0] - key.to_hsb()[0], own_model: false }
+    }
+
+    /// With `own`, current colours take the new colour in the new colour's model (an RGB colour
+    /// replaced by a CMYK one becomes CMYK) instead of keeping the model they had.
+    pub fn with_own_model(mut self, own: bool) -> Self {
+        self.own_model = own;
+        self
+    }
+
+    /// True when current colour `c` keeps a colour model other than the new colour's (so the new
+    /// colour is converted into `c`'s model and may look different from what was asked for).
+    pub fn converts(&self, c: Color) -> bool {
+        !self.own_model && c.model() != self.to.model()
     }
 
     /// The colour of the row the new colour stands for.
@@ -301,7 +316,7 @@ impl RowMap {
 
     /// The new colour of current colour `c`, in `c`'s model.
     pub fn map(&self, c: Color) -> Color {
-        let to = keep_model(c, self.to);
+        let to = if self.own_model { self.to } else { keep_model(c, self.to) };
         match self.method {
             Method::Exact => to,
             Method::PreserveTints if is_tint(c, self.key) => to.tinted(tint_of(c, self.key)),
@@ -314,7 +329,13 @@ impl RowMap {
             Method::HueShift if c == self.key => to,
             Method::HueShift => {
                 let [h, s, v] = c.to_hsb();
-                if s <= 0.0 { c } else { keep_model(c, Color::from_hsb(h + self.turn, s, v)) }
+                if s <= 0.0 {
+                    if self.own_model { c.in_model(self.to.model()) } else { c }
+                } else if self.own_model {
+                    Color::from_hsb(h + self.turn, s, v).in_model(self.to.model())
+                } else {
+                    keep_model(c, Color::from_hsb(h + self.turn, s, v))
+                }
             }
         }
     }
@@ -574,6 +595,16 @@ mod tests {
         assert_eq!(cluster(&colors, &[1.0; 5], 1), vec![vec![0, 1, 2, 3, 4]]);
         assert_eq!(cluster(&[Color::WHITE, Color::WHITE], &[1.0, 1.0], 2).len(), 1, "identical colours share a row");
         assert!(cluster(&[], &[], 3).is_empty());
+    }
+
+    #[test]
+    fn hue_shift_with_own_model_puts_every_colour_of_the_row_in_the_new_model() {
+        let to = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+        let row = [Color::rgb(0.2, 0.2, 0.9), Color::rgb(0.1, 0.1, 0.5), Color::rgb(0.3, 0.3, 0.3)];
+        let own = RowMap::new(Method::HueShift, &row, to).with_own_model(true);
+        assert!(row.iter().all(|c| own.map(*c).model() == to.model()), "key and other colours alike");
+        let kept = RowMap::new(Method::HueShift, &row, to);
+        assert!(row.iter().all(|c| kept.map(*c).model() == c.model()));
     }
 
     #[test]

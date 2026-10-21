@@ -547,7 +547,7 @@ fn style_move(s: &mut Session, p: &Value) -> Result<Value> {
     let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
     let d = &s.doc()?.doc;
     let from = style_index(d, name)?;
-    let to = (to as usize).min(d.graphic_styles.len() - 1);
+    let to = index(to).min(d.graphic_styles.len() - 1);
     if from == to {
         return ok();
     }

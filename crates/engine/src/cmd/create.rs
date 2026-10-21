@@ -214,6 +214,7 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
         h: r.height(),
         radii: [radius; 4],
         kinds: Default::default(),
+        radii_relative: false,
         xf: rect_transform(r, p, "shape.rectangle")?,
     };
     let label = if radius > 0.0 { "Rounded Rectangle" } else { "Rectangle" };
@@ -232,7 +233,7 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
     let xf = Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians());
-    let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![] };
+    let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![], radii_relative: false };
     add_art(s, "Polygon", path_kind(live.to_path(), Some(live)), None)
 }
 
@@ -493,6 +494,7 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
 fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let x = f64_req(p, "x", "text.create")?;
     let y = f64_req(p, "y", "text.create")?;
+    super::paint::check_keep_model(p, "text.create")?;
     let text = str_param(p, "text").unwrap_or("");
     let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
     t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
@@ -504,6 +506,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
         t.area.fit = new_area_fit(s, a, "text.create")?;
     }
+    t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
     } else {

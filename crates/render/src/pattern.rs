@@ -319,6 +319,11 @@ impl Renderer {
             });
         }
         self.draw_arc(ctx, f, layer);
+        // The tile edge and swatch bounds are editing aids: exports and thumbnails leave them out,
+        // as they do guides (#3261).
+        if f.opts.skip_templates {
+            return true;
+        }
         let [r, g, b] = f.opts.tile_edge;
         if def.show_tile_edge {
             self.hairline(ctx, f, &def.tile.to_path(0.1), [r, g, b, 255]);

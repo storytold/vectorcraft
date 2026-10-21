@@ -362,7 +362,12 @@ impl Texts {
             (rest.is_empty() && !chunks.is_empty() && chunks.len() <= MAX_SEGMENTS).then(|| chunks.to_vec())
         };
         match carries.get("0").and_then(Val::num).unwrap_or(0.0) as i64 {
-            0 => Some(FrameKind::Point(carries.get("2")?.nums()?.try_into().ok()?)),
+            // Point type that is neither turned nor scaled has no matrix (Illustrator 24 leaves it out):
+            // its layout is already where it goes on the canvas.
+            0 => Some(FrameKind::Point(match carries.get("2") {
+                None => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                Some(m) => m.nums()?.try_into().ok()?,
+            })),
             1 => Some(FrameKind::Area(segments()?)),
             2 => {
                 let range = carries.get("6").and_then(Val::nums).unwrap_or_default();

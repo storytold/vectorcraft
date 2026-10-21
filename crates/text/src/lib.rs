@@ -19,6 +19,7 @@ mod fontconfig;
 mod fontdb;
 pub mod hyphen;
 mod justify;
+mod kashida;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -35,7 +36,7 @@ pub use fontdb::{
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with};
+pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
@@ -179,6 +180,10 @@ pub struct TextLayout {
     /// turn clockwise for vertical type (point type also centres its first column on the anchor).
     pub line_xf: Affine,
     pub glyphs: Vec<PositionedGlyph>,
+    /// Ruby (furigana) glyphs, laid out over their base text: geometry like [`Self::glyphs`], but
+    /// they are not characters of the text (their `len` is 0 and their `run` is the base text's
+    /// run, for the fill and stroke). Empty when the type has no ruby.
+    pub ruby: Vec<PositionedGlyph>,
     pub lines: Vec<LineInfo>,
     /// Ink/advance bounds in text space.
     pub bounds: Rect,
@@ -202,6 +207,7 @@ impl Default for TextLayout {
             vertical: false,
             line_xf: Affine::IDENTITY,
             glyphs: Vec::new(),
+            ruby: Vec::new(),
             lines: Vec::new(),
             bounds: Rect::ZERO,
             overflow: false,
@@ -236,7 +242,7 @@ impl TextLayout {
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
-        for g in &self.glyphs {
+        for g in self.glyphs.iter().chain(&self.ruby) {
             p.extend(g.outline.iter());
         }
         p
@@ -286,15 +292,36 @@ fn dir(angle: f64) -> Vec2 {
     Vec2::new(angle.cos(), angle.sin())
 }
 
-/// Caret for byte offset `byte`, as a (top, bottom) segment in text space.
+/// The left and right x of the cluster of `glyphs[i]` (glyphs of one line of horizontal type
+/// that is not on a path): the glyphs next to it with its byte offset and length, and the
+/// tatweels of a kashida after it (length 0, the same byte offset). None for vertical type and
+/// type on a path.
+fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> Option<(f64, f64)> {
+    let g = glyphs.get(i).filter(|_| !layout.vertical && !layout.on_path)?;
+    let same = |o: &PositionedGlyph| o.byte == g.byte && (o.len == g.len || o.len == 0);
+    let start = glyphs.get(..i)?.iter().rposition(|o| !same(o)).map_or(0, |p| p + 1);
+    let end = glyphs.get(i..)?.iter().position(|o| !same(o)).map_or(glyphs.len(), |p| i + p);
+    let span = glyphs.get(start..end)?;
+    let left = span.iter().map(|o| o.origin.x).fold(f64::INFINITY, f64::min);
+    let right = span.iter().map(|o| o.origin.x + o.advance).fold(f64::NEG_INFINITY, f64::max);
+    (left.is_finite() && right.is_finite()).then_some((left, right))
+}
+
+/// Caret for byte offset `byte`, as a (top, bottom) segment in text space. In horizontal type, a
+/// cluster drawn with several glyphs is measured whole ([`cluster_extent`]).
 pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let Some(line) = layout.lines.get(layout.line_of(byte)) else {
         return (Point::ZERO, Point::ZERO);
     };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    let (pos, angle) = if let Some(g) = glyphs.iter().find(|g| g.byte <= byte && g.byte + g.len > byte) {
+    let (pos, angle) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+        let g = &glyphs[i];
         let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
-        (g.origin + dir(g.angle) * (g.advance * if g.rtl { 1.0 - frac } else { frac }), g.angle)
+        let (origin, advance) = match cluster_extent(layout, glyphs, i) {
+            Some((left, right)) => (Point::new(left, g.origin.y), right - left),
+            None => (g.origin, g.advance),
+        };
+        (origin + dir(g.angle) * (advance * if g.rtl { 1.0 - frac } else { frac }), g.angle)
     } else if let Some(g) = glyphs.iter().max_by_key(|g| g.byte + g.len) {
         (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle)
     } else {
@@ -359,13 +386,15 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     let Some(line) = layout.lines.get(li) else { return 0 };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     // A cluster drawn with several adjacent glyphs (a Devanagari pre-base matra and its consonant,
-    // a consonant and its reph) has one caret stop at each end of its glyphs taken together.
+    // a consonant and its reph) has one caret stop at each end of its glyphs taken together. The
+    // tatweels of a kashida have no source length and come after the glyphs of the letter after
+    // the kashida in the text; they belong to that letter's cluster.
     let mut clusters: Vec<(f64, f64, &PositionedGlyph)> = Vec::with_capacity(glyphs.len());
     for g in glyphs {
         let left = layout.logical_point(g.origin).x;
         let right = left + g.advance;
         match clusters.last_mut() {
-            Some((l, r, c)) if c.byte == g.byte && c.len == g.len => (*l, *r) = (l.min(left), r.max(right)),
+            Some((l, r, c)) if c.byte == g.byte && (c.len == g.len || g.len == 0) => (*l, *r) = (l.min(left), r.max(right)),
             _ => clusters.push((left, right, g)),
         }
     }
@@ -402,9 +431,11 @@ pub fn line_end_of(layout: &TextLayout, byte: usize) -> usize {
 fn x_in_line(layout: &TextLayout, li: usize, byte: usize) -> f64 {
     let line = &layout.lines[li];
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    if let Some(g) = glyphs.iter().find(|g| g.byte <= byte && g.byte + g.len > byte) {
+    if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+        let g = &glyphs[i];
         let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
-        return layout.logical_point(g.origin).x + g.advance * if g.rtl { 1.0 - frac } else { frac };
+        let (left, advance) = cluster_extent(layout, glyphs, i).map_or((layout.logical_point(g.origin).x, g.advance), |(l, r)| (l, r - l));
+        return left + advance * if g.rtl { 1.0 - frac } else { frac };
     }
     glyphs.iter().max_by_key(|g| g.byte + g.len).map_or(line.x0, |g| layout.logical_point(g.origin).x + if g.rtl { 0.0 } else { g.advance })
 }
@@ -578,6 +609,8 @@ mod tests_inline;
 mod tests_joiners;
 #[cfg(test)]
 mod tests_justify;
+#[cfg(test)]
+mod tests_ruby;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

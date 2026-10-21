@@ -34,7 +34,7 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&s
             json!({"color": color, "mode": mode_id(Mode::of(color)), "spot": spot, "global": spot || global, "group": group.unwrap_or_default()})
         }
         Paint::None => return Err("pick a colour, gradient or pattern to save as a swatch".into()),
-        other => json!({"__paint": crate::panels::paint_params(other)}),
+        other => json!({"__paint": crate::panels::swatch_paint_params(other)}),
     };
     fields["name"] = json!(name);
     fields["__auto"] = json!(name);

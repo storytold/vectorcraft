@@ -8,6 +8,13 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 [lints]
 workspace = true
 
+[features]
+default = ["bundled-fonts"]
+# The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`. Off, for
+# an embedder that supplies every document font at run time (`vectorcraft_text::FontDb::add_font`);
+# the interface's own faces are separate copies in theme.rs and stay either way.
+bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
+
 [dependencies]
 craft-ui = { workspace = true }
 vectorcraft-geom = { workspace = true }
@@ -26,7 +33,9 @@ vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
 vectorcraft-eps = { workspace = true }
 vectorcraft-format = { workspace = true }
-egui = { workspace = true }
+egui = { workspace = true, features = ["bytemuck"] }
+# With egui's `bytemuck`: copies rendered rasters into egui images whole (`canvas::color_image`).
+bytemuck = "1"
 egui_extras = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
@@ -37,6 +46,12 @@ log = { workspace = true }
 # `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
 # MIT OR Apache-2.0 and already in the build through eframe.
 web-time = "1"
+
+# The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
+# user owns it (src/dialogs/save_for_web.rs). Already in Cargo.lock (tempfile), so this adds no
+# new crate.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }

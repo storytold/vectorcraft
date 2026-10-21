@@ -635,7 +635,7 @@ fn import_picked(app: &mut VectorcraftApp) {
         f();
         return;
     }
-    let pick = crate::FilePick { filters: vec![("Libraries", LIBRARY_EXTS)], ..Default::default() };
+    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Libraries", LIBRARY_EXTS)], ..Default::default() };
     if let Some(path) = crate::picks::open(app, &pick) {
         let r = import(app, json!({ "path": path }));
         report(app, r);

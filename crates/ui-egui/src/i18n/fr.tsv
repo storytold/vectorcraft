@@ -38,6 +38,13 @@
 	Channel 4	Couche 4
 	Cell Size	Taille de cellule
 	Fine Dots	Points fins
+
+	Simple	Simple
+	Light Rough	Rugueux clair
+	Dark Rough	Rugueux foncé
+	Wide Sharp	Large net
+	Wide Blurry	Large flou
+	Sparkle	Scintillement
 	Medium Dots	Points moyens
 	Grainy Dots	Points granuleux
 	Coarse Dots	Gros points
@@ -308,6 +315,7 @@
 	Blur	Flou
 	Bottom	Bas
 	Bottom in Front	Bas au premier plan
+	Bottom-Justified Tab	Tabulation alignée en bas
 	Bottom:	Bas :
 	Bounds	Limites
 	Bounds (Fill Proportionally)	Limites (remplir proportionnellement)
@@ -1052,6 +1060,7 @@
 	Eyedropper Picks Up:	La pipette prélève :
 	Eyedropper Tool	Outil Pipette
 	Eyedropper: click the art to sample the stop's colour	Pipette : cliquez sur l’illustration pour prélever la couleur de l’étape de dégradé
+	Eyedropper: click the art to sample the key color	Pipette : cliquez sur l’illustration pour prélever la couleur clé
 	Favorites	Favoris
 	Feather…	Contour progressif…
 	Feet	Pieds
@@ -1081,6 +1090,13 @@
 	Alt key toggles to Smooth Tool	La touche Alt bascule sur l’outil Arrondi
 	Keep selected	Garder sélectionné
 	Merge only with selection	Fusionner uniquement avec la sélection
+	Consider Open Filled Paths as Closed	Traiter les tracés ouverts avec fond comme fermés
+	Pick Color From:	Prendre la couleur dans :
+	Artwork	Illustration
+	Cursor Swatch Preview	Aperçu des nuances près du pointeur
+	Selection:	Sélection :
+	Straight Line	Ligne droite
+	Highlight:	Mise en évidence :
 	Fill Color	Couleur de fond
 	Fill New Type Objects With Placeholder Text	Remplir les nouveaux objets texte avec un texte de substitution
 	Fill Rule	Règle de remplissage
@@ -1199,6 +1215,8 @@
 	Large Gaps	Grands espaces
 	Gap Preview Color:	Couleur d’aperçu des espaces :
 	Close Gaps With Paths	Fermer les espaces avec des tracés
+	Show Live Paint Gaps	Afficher les espaces de peinture dynamique
+	Hide Live Paint Gaps	Masquer les espaces de peinture dynamique
 	Select Fills	Sélectionner les fonds
 	Select Strokes	Sélectionner les contours
 	Gaussian Blur…	Flou gaussien…
@@ -1305,6 +1323,7 @@
 	Hand-Drawn	Dessiné à la main
 	Handles	Poignées
 	Hard Light	Lumière crue
+	Hard Mix	Mélange maximal
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -1826,6 +1845,9 @@
 	Modified:	Modifié :
 	Modify	Modifier
 	Mojikumi	Mojikumi
+	Insert Kashidas	Insérer des kashidas
+	Long	Longue
+	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
 	Kinsoku Set	Jeu de kinsoku
 	Hard	Fort
@@ -1860,6 +1882,7 @@
 	Move Slices	Déplacer les tranches
 	Move Spine Point	Déplacer le point de la dorsale
 	Reshape Spine Segment	Modeler le segment de la dorsale
+	Move Brush	Déplacer la forme
 	Move Swatch	Déplacer la nuance
 	Move Up	Monter
 	Move…	Déplacer…
@@ -1914,6 +1937,13 @@
 	Tints	Teintes
 	Tints and Shades	Teintes et ombres
 	Hue Shift	Décalage de teinte
+	Tips	Conseils
+	Colorization Tips	Conseils de colorisation
+	The samples show this brush on a blue stroke.	Les exemples montrent cette forme sur un contour bleu.
+	The art keeps its own colors.	L’illustration garde ses propres couleurs.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Le noir devient la couleur du contour et le blanc reste blanc. Les autres couleurs deviennent des teintes de la couleur du contour, et plus une couleur est claire, plus sa teinte est claire.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Le noir reste noir et le blanc reste blanc. Les autres couleurs deviennent des ombres de la couleur du contour quand elles sont foncées et des teintes de celle-ci quand elles sont claires.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	La couleur clé devient la couleur du contour. Les autres couleurs tournent sur le cercle chromatique autant que la couleur clé et gardent leur saturation et leur luminosité.
 	Key Color:	Couleur clé :
 	Roundness:	Arrondi :
 	Fixed	Fixe
@@ -1935,6 +1965,14 @@
 	Round Fan	Éventail rond
 	Flat Fan	Éventail plat
 	New Brush…	Nouvelle forme…
+	New Brush	Nouvelle forme
+	Calligraphic Brush	Forme calligraphique
+	Scatter Brush	Forme diffuse
+	Art Brush	Forme artistique
+	Bristle Brush	Forme Soies
+	Pattern Brush	Forme de motif
+	Select art to make a scatter, art or pattern brush.	Sélectionnez une illustration pour créer une forme diffuse, artistique ou de motif.
+	Brush Art	Illustration de la forme
 	New Calligraphic Brush	Nouvelle forme calligraphique
 	New Character Style	Nouveau style de caractère
 	New Color Group	Nouveau groupe de couleurs
@@ -1965,6 +2003,7 @@
 	New View	Nouvelle vue
 	New View…	Nouvelle vue…
 	New Window	Nouvelle fenêtre
+	New Without Dialog	Nouveau sans boîte de dialogue
 	New Workspace	Nouvel espace de travail
 	New Workspace…	Nouvel espace de travail…
 	New {kind} Style…	Nouveau style de {kind}…
@@ -2546,6 +2585,7 @@
 	Reorder	Réorganiser
 	Reorder Appearance Item	Réorganiser l’élément d’aspect
 	Repeat	Répétition
+	Repeat Objects	Objets de répétition
 	Repeat Options	Options de répétition
 	Repeat Pathfinder	Répéter Pathfinder
 	Repeat Tab	Répéter la tabulation
@@ -2754,6 +2794,7 @@
 	Scale Cursor Proportional to UI	Mettre le curseur à l’échelle de l’interface
 	Scale Lineweights	Mettre à l’échelle les épaisseurs de trait
 	Scale Strokes & Effects	Mettre à l’échelle les contours et les effets
+	Scale Text Attributes	Mettre à l’échelle les attributs de texte
 	Scale to Fit Artboard	Mettre à l’échelle pour ajuster au plan de travail
 	Scale Tool	Outil Mise à l’échelle
 	Scale:	Échelle :
@@ -3026,6 +3067,7 @@
 	Snapping Tolerance	Tolérance du magnétisme
 	Social Square Post 1080×1080	Publication carrée pour réseaux sociaux 1080×1080
 	Soft Light	Lumière tamisée
+	Soft Mix	Fusion douce
 	Solid	Plein
 	Sort by Kind	Trier par type
 	Sort by Name	Trier par nom
@@ -3266,6 +3308,7 @@
 	Tools	Outils
 	Top	Haut
 	Top in Front	Haut au premier plan
+	Top-Justified Tab	Tabulation alignée en haut
 	Top:	Haut :
 	Total Width:	Largeur totale :
 	Touch Type Tool	Outil Retouche de texte
@@ -3603,7 +3646,8 @@ imageTrace	Outline	Contour
 	 to sample a color	 pour prélever une couleur
 	 across a selected object to set the gradient direction	 sur un objet sélectionné pour définir la direction du dégradé
 	 to select an artboard  |  	 pour sélectionner un plan de travail  |  
-	 on the canvas to create one	 sur la zone de travail pour en créer un
+	 on the canvas to create one (	 sur la zone de travail pour en créer un (
+	 selects several, or draws one inside an artboard)	 en sélectionne plusieurs ou en crée un dans un plan de travail)
 	 a stroke to add a width point  |  	 sur un contour pour ajouter un point de largeur  |  
 	 to change one side  |  	 pour modifier un seul côté  |  
 	 to select more points  |  	 pour sélectionner d’autres points  |  
@@ -3840,6 +3884,25 @@ axis	Both	Les deux
 @msg	a PostScript error ({name} in `{op}`: {at})	une erreur PostScript ({name} dans `{op}` : {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	une erreur PostScript ({name} dans `{op}` : {at}), dans {procs}
 @msg	a PostScript error ({name})	une erreur PostScript ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	une erreur PostScript ({name} dans `{op}` ; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	une erreur PostScript ({name} dans `{op}` ; {meaning}), dans {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	une erreur PostScript ({name} dans `{op}` : {at} ; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	une erreur PostScript ({name} dans `{op}` : {at} ; {meaning}), dans {procs}
+@msg	a PostScript error ({name}; {meaning})	une erreur PostScript ({name} ; {meaning})
+@msg	the program ends a dictionary it didn't begin	le programme ferme un dictionnaire qu’il n’a pas ouvert
+@msg	the program opens a file, which the reader can't do	le programme ouvre un fichier, ce que le lecteur PostScript ne sait pas faire
+@msg	the program restores a saved state that was already restored	le programme restaure un état enregistré qui a déjà été restauré
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	les données que lit le programme sont endommagées ou tronquées, ou le programme demande une position dans un fichier qui n’en a pas
+@msg	the program goes past one of the reader's limits	le programme dépasse l’une des limites du lecteur PostScript
+@msg	the path has no point to continue from	le tracé n’a aucun point à partir duquel continuer
+@msg	a value is outside the range the operator takes	une valeur est hors de la plage acceptée par l’opérateur
+@msg	the operator needs more values than the stack holds	l’opérateur a besoin de plus de valeurs que la pile n’en contient
+@msg	part of the program isn't valid PostScript text	une partie du programme n’est pas du texte PostScript valide
+@msg	a value has the wrong type for the operator	une valeur est d’un type incorrect pour l’opérateur
+@msg	the program runs, deletes or renames a file, which the reader can't do	le programme exécute, supprime ou renomme un fichier, ce que le lecteur PostScript ne sait pas faire
+@msg	the program asks for a resource that isn't defined	le programme demande une ressource qui n’est pas définie
+@msg	a calculation has no result, as in a division by zero	un calcul n’a pas de résultat, comme dans une division par zéro
+@msg	the operator looks for a mark on the stack and finds none	l’opérateur cherche une marque sur la pile et n’en trouve aucune
 @msg	a bitmap is empty	une image bitmap est vide
 @msg	a bitmap is too large to read	une image bitmap est trop grande pour être lue
 @msg	a colour index is 0 to {_1}, not {n}	un indice de couleur va de 0 à {_1}, pas {n}
@@ -3967,7 +4030,9 @@ axis	Both	Les deux
 @msg	no blend options	aucune option de dégradé de formes
 @msg	no bounds	aucune limite
 @msg	no brush named `{name}`	aucune forme nommée `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	le nom d’une forme Soies peut compter au plus {max} caractères, et `{name}` en compte {count}
 @msg	no brush selected	aucune forme sélectionnée
+@msg	brushes move only within their type	les formes ne se déplacent qu’à l’intérieur de leur type
 @msg	no catalog	aucun catalogue
 @msg	no changes since the last save	aucune modification depuis le dernier enregistrement
 @msg	no clock to keep a heartbeat by	aucune horloge pour entretenir le signal d’activité
@@ -4021,6 +4086,7 @@ axis	Both	Les deux
 @msg	no such action	script inexistant
 @msg	no such anchor	point d’ancrage inexistant
 @msg	no such artboard	plan de travail inexistant
+@msg	the artboard is locked	le plan de travail est verrouillé
 @msg	no such document	document inexistant
 @msg	no such layer or object	calque ou objet inexistant
 @msg	no such object {0}	objet {0} inexistant
@@ -4112,6 +4178,10 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
+@msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé
+@msg	a clipping path can't be attached to a path	un tracé d’écrêtage ne peut pas être attaché à un tracé
 @msg	select a stroke with a variable width	sélectionnez un contour de largeur variable
 @msg	select a symbol instance	sélectionnez une instance de symbole
 @msg	select an Image Trace object	sélectionnez un objet de vectorisation de l’image
@@ -4231,6 +4301,7 @@ axis	Both	Les deux
 @msg	unknown workspace (one of {_1})	espace de travail inconnu (valeurs possibles : {_1})
 @msg	unsupported: {0}	non pris en charge : {0}
 @msg	variables are locked	les variables sont verrouillées
+@msg	variables that aren't text were left out: {kinds}	les variables qui ne sont pas du texte ({kinds}) ont été ignorées
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	les fichiers de version {0} ne peuvent pas être compressés : seules les versions {COMPRESSED_SINCE} et ultérieures ouvrent les fichiers compressés
 @msg	width and height are at least 1 pixel	la largeur et la hauteur valent au moins 1 pixel
 @msg	workspace name can't be empty	le nom de l’espace de travail ne peut pas être vide
@@ -4498,6 +4569,7 @@ effect	Soft	Doux
 	Activate Panel	Activer le panneau
 	Change Panel Layout	Modifier la disposition des panneaux
 	Close Panel	Fermer le panneau
+	Collapse Panel Group	Réduire le groupe de panneaux
 	Move Panel	Déplacer le panneau
 	Group with	Regrouper avec
 	Resize panels	Redimensionner les panneaux
@@ -4508,6 +4580,12 @@ effect	Soft	Doux
 @msg	before must name a panel	before doit désigner un panneau
 @msg	docking action contains an unknown panel or an excessive split path	L’action d’ancrage contient un panneau inconnu ou un chemin de divisions trop long
 @msg	group must be true or false	group doit être true ou false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	le panneau est flottant ; réduisez son groupe avec window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	le panneau n’est dans aucun groupe du dock
+@msg	only a dock group above or below others collapses, not one beside another	seul un groupe du dock situé au-dessus ou au-dessous d’autres se réduit, pas un groupe à côté
+@msg	icon must be true or false	icon doit être true ou false
+@msg	icon only docks a panel in the icon column, with no anchor	icon ne fait qu’ancrer un panneau dans la colonne d’icônes, sans anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column ancre un ensemble comme colonne du dock, sans anchor ni icon
 @msg	move requires a destination panel	Le déplacement nécessite un panneau de destination
 @msg	move requires an existing destination panel	Le déplacement nécessite un panneau de destination existant
 @msg	onto must name a floating panel	onto doit désigner un panneau flottant
@@ -4584,12 +4662,24 @@ lighting	Light	Lumière
 	Reset Ruler Origin	Réinitialiser l’origine des règles
 	Artistic	Artistique
 	Film Grain…	Grain photographique…
+	Colored Pencil…	Crayon de couleur…
+	Colored Pencil	Crayon de couleur
 	Cutout…	Découpage…
 	Cutout	Découpage
+	Dry Brush…	Pinceau sec…
+	Dry Brush	Pinceau sec
 	Neon Glow…	Néon…
+	Palette Knife…	Couteau à palette…
 	Neon Glow	Néon
+	Paint Daubs…	Empâtements…
+	Paint Daubs	Empâtements
+	Palette Knife	Couteau à palette
 	Poster Edges…	Bords d’affiche…
+	Rough Pastels…	Pastels secs…
 	Poster Edges	Bords d’affiche
+	Rough Pastels	Pastels secs
+	Underpainting…	Sous-peinture…
+	Underpainting	Sous-peinture
 	Levels	Niveaux
 	Edge Simplicity	Simplicité des contours
 	Edge Fidelity	Fidélité des contours
@@ -5101,6 +5191,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	3D Lighting Preset	Préréglage d’éclairage 3D
+	Standard	Standard
+	Diffuse	Diffus
 # 3D light management.
 	Lights	Lumières
 	Add Light	Ajouter une lumière
@@ -5144,6 +5237,7 @@ theme	Appearance	Apparence
 @msg	Measured anchor no longer exists	Le point d’ancrage mesuré n’existe plus
 @msg	Measured segment no longer exists	Le segment mesuré n’existe plus
 @msg	Non-finite dimension	Cote non finie
+@msg	Scale Text Attributes: selected type has no scale to bake	Mettre à l’échelle les attributs de texte : le texte sélectionné n’a pas d’échelle à intégrer
 @msg	Scale must be drawing:real, for example 1:10	L’échelle doit être dessin:réel, par exemple 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Le rapport d’échelle doit être compris entre 1:1000000 et 1000000:1
 @msg	Second measured segment no longer exists	Le second segment mesuré n’existe plus
@@ -5161,6 +5255,7 @@ theme	Appearance	Apparence
 	Make Image Dynamic	Rendre l'image dynamique
 	Import Data Sets…	Importer des jeux de données…
 	Export Data Sets…	Exporter des jeux de données…
+	Load Variable Library…	Charger une bibliothèque de variables…
 	Make Graph Dynamic	Rendre le graphe dynamique
 	Batch…	Traitement par lots…
 	Source Folder:	Dossier source :
@@ -5183,6 +5278,8 @@ theme	Appearance	Apparence
 	Sketch	Esquisse
 	Halftone Pattern…	Trame de demi-teintes…
 	Halftone Pattern	Trame de demi-teintes
+	Torn Edges…	Bords déchirés…
+	Torn Edges	Bords déchirés
 	Pattern Type	Type de motif
 	Dot	Point
 # User Interface › Color Scheme
@@ -5201,6 +5298,7 @@ theme	Appearance	Apparence
 	Watercolor…	Aquarelle…
 	Watercolor	Aquarelle
 	Brush Size	Taille du pinceau
+	Texture Coverage	Couverture de texture
 	Definition	Définition
 	Brush Detail	Détail du pinceau
 	Shadow Intensity	Intensité des ombres
@@ -5229,24 +5327,14 @@ theme	Appearance	Apparence
 @msg	the image's pixels can't be read	impossible de lire les pixels de l’image
 	Persistent	Persistante
 	Library Panel Options	Options du panneau de bibliothèque
+	Locate Library…	Localiser la bibliothèque…
 @msg	Persistent libraries not found: {files}	Bibliothèques persistantes introuvables : {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` n’est pas un panneau de bibliothèque (voir window.swatchLibrary)
 @msg	library panel `{given}` isn't open	le panneau de bibliothèque `{given}` n’est pas ouvert
 @msg	too many library panels were opened in this session	trop de panneaux de bibliothèque ont été ouverts dans cette session
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	L’image fait {_1} × {_2} pixels, plus de {LARGE_TRACE_SIDE} sur un côté : elle est vectorisée, mais plus lentement. Un paramètre prédéfini moins fidèle ou une copie plus petite de l’image se vectorise plus vite.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	L’image a été vectorisée à {_1} × {_2} pixels, réduite de {_3} × {_4} ({_5} mégapixels au plus).
-	Lock Artboards	Verrouiller les plans de travail
-	Unlock Artboards	Déverrouiller les plans de travail
-	Artboard Color	Couleur du plan de travail
-	Lock Selected	Verrouiller la sélection
-	Lock All Except Selected	Tout verrouiller sauf la sélection
-	Lock All	Tout verrouiller
-	Unlock Selected	Déverrouiller la sélection
-	Lock Artboard	Verrouiller le plan de travail
-	Unlock Artboard	Déverrouiller le plan de travail
-	Clear Artboard Color	Effacer la couleur du plan de travail
-@msg	artboard {_1} is locked	le plan de travail {_1} est verrouillé
-	Include Artboard Fill	Inclure la couleur du plan de travail
+	Gap Length:	Longueur de lacune :
 	Artboard {n} of {total}	Plan de travail {n} sur {total}
 	Encoding and writing the file…	Encodage et écriture du fichier…
 @plural	{n} more export waiting|{n} more exports waiting	{n} autre exportation en attente|{n} autres exportations en attente
@@ -5284,3 +5372,9 @@ theme	Appearance	Apparence
 	Plaster	Plâtre
 	Note Paper…	Papier gaufré…
 	Note Paper	Papier gaufré
+	Water Paper…	Papier humide…
+	Water Paper	Papier humide
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Fresque…
+	Fresco	Fresque

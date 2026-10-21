@@ -20,7 +20,7 @@ use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::blend::Spine;
 use crate::symbols::SymbolBoxes;
-use crate::{Node, NodeId, NodeKind};
+use crate::{Document, Node, NodeId, NodeKind};
 
 /// The center of the nine reference points.
 pub const CENTER: u8 = 4;
@@ -155,6 +155,47 @@ pub fn attachable_path(n: &Node) -> Option<&PathData> {
         NodeKind::Path { path, guide: false, .. } if Spine::new(path).is_some_and(|s| s.length() > 1e-9) => Some(path),
         _ => None,
     }
+}
+
+/// What keeps an object from going into an Objects on Path group, as its path or as one of its
+/// objects ([`held`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Held {
+    /// It is inside a compound path, blend, envelope, repeat or Intertwine group, as part of its art.
+    Live,
+    /// It is the clipping path of a clip group or of a layer with a clipping mask, or inside one.
+    Clipping,
+}
+
+/// What keeps the object `id` of `d` where it is ([`Held`]), if anything: in an Objects on Path
+/// group it would no longer be a part of the compound path, blend, envelope, repeat or Intertwine
+/// group it is in, or of the clipping path it is or is in. The innermost reason counts. `None` for
+/// an object that is neither a clipping path nor inside one and is in a layer directly or through
+/// plain groups and clip groups, and for an id not in `d`.
+pub fn held(d: &Document, id: NodeId) -> Option<Held> {
+    let path = d.index_path(id)?;
+    let mut chain: Vec<&Node> = Vec::with_capacity(path.len());
+    let mut nodes = &d.layers;
+    for &i in &path {
+        let n: &Node = nodes.get(i)?;
+        chain.push(n);
+        if let Some(children) = n.children() {
+            nodes = children;
+        }
+    }
+    for (depth, n) in chain.iter().enumerate().rev() {
+        let Some(parent) = depth.checked_sub(1).and_then(|up| chain.get(up)) else { break };
+        if matches!(n.kind, NodeKind::Path { clipping: true, .. }) || (parent.clips() && path.get(depth) == Some(&0)) {
+            return Some(Held::Clipping);
+        }
+        if matches!(
+            parent.kind,
+            NodeKind::Compound { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. }
+        ) {
+            return Some(Held::Live);
+        }
+    }
+    None
 }
 
 /// The frame `n` is drawn in when it is attached: the page's axes turned by its rotation

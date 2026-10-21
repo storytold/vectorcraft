@@ -205,6 +205,27 @@ fn words_set_ems_apart_keep_their_place() {
     assert!((at(6) - f64::from(x2)).abs() < 0.05, "the third word starts where the file has it: {} vs {x2}", at(6));
 }
 
+#[test]
+fn words_set_ems_apart_beside_the_spaces_the_file_draws_keep_their_place() {
+    // The same words, the file drawing each space (2 pt wide) after a word, before the next one,
+    // or alone with a gap on each side.
+    let (x1, x2) = (48.0, 84.0);
+    let drawings: [&[(f32, f32, f32, &str)]; 3] = [
+        &[(20.0, 50.0, 10.0, "ab "), (x1, 50.0, 10.0, "cd "), (x2, 50.0, 10.0, "ef")],
+        &[(20.0, 50.0, 10.0, "ab"), (x1 - 2.0, 50.0, 10.0, " cd"), (x2 - 2.0, 50.0, 10.0, " ef")],
+        &[(20.0, 50.0, 10.0, "ab"), (36.0, 50.0, 10.0, " "), (x1, 50.0, 10.0, "cd"), (70.0, 50.0, 10.0, " "), (x2, 50.0, 10.0, "ef")],
+    ];
+    for (k, lines) in drawings.iter().enumerate() {
+        let t = texts(&import(&source_sans(lines)).unwrap());
+        assert_eq!(t.len(), 1, "drawing {k}");
+        assert_eq!(t[0].plain_text(), "ab cd ef", "drawing {k}");
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t[0]);
+        let at = |byte: usize| (t[0].xf * laid.glyphs.iter().find(|g| g.byte == byte).unwrap().origin).x;
+        assert!((at(3) - f64::from(x1)).abs() < 0.05, "drawing {k}: the second word starts where the file has it: {} vs {x1}", at(3));
+        assert!((at(6) - f64::from(x2)).abs() < 0.05, "drawing {k}: the third word starts where the file has it: {} vs {x2}", at(6));
+    }
+}
+
 /// A document of area type `text` (Source Sans 3, 10 pt) `width` wide at (20, 30).
 fn area_doc(text: &str, justify: Justify, width: f64, space_before: f64) -> Document {
     let style = CharStyle { size: 10.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
@@ -245,6 +266,33 @@ fn lines_wrapped_in_a_frame_come_back_as_area_type() {
         let origin = t[0].xf * Point::ZERO;
         assert!((origin.x - 20.0).abs() < 0.05, "{origin:?}");
     }
+}
+
+#[test]
+fn justified_lines_come_back_as_area_type_only_with_their_word_gaps_alike() {
+    // "aa bb cc", "aa bb cc", "aa" with the file's spaces drawn, the wrapped lines 44 pt wide: "cc"
+    // ends at 64, and "bb" starts where both gaps are 4.87 pt wider than a space, or elsewhere.
+    let lines = |bb: f32| {
+        [
+            (20.0, 50.0, 10.0, "aa "),
+            (bb, 50.0, 10.0, "bb "),
+            (54.88, 50.0, 10.0, "cc "),
+            (20.0, 62.0, 10.0, "aa "),
+            (bb, 62.0, 10.0, "bb "),
+            (54.88, 62.0, 10.0, "cc "),
+            (20.0, 74.0, 10.0, "aa"),
+        ]
+    };
+    let t = texts(&import(&source_sans(&lines(36.95))).unwrap());
+    assert_eq!(t.len(), 1, "one object: {:?}", t.iter().map(TextObject::plain_text).collect::<Vec<_>>());
+    assert_eq!(t[0].plain_text(), "aa bb cc aa bb cc aa");
+    assert_eq!(t[0].para.justify, Justify::JustifyLeft);
+    // Gaps 1 and 8.74 pt wider than a space were set by hand: the lines keep their words in place.
+    let t = texts(&import(&source_sans(&lines(33.08))).unwrap());
+    assert_eq!(t.len(), 3, "{:?}", t.iter().map(TextObject::plain_text).collect::<Vec<_>>());
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t[0]);
+    let bb = (t[0].xf * laid.glyphs.iter().find(|g| g.byte == 3).unwrap().origin).x;
+    assert!((bb - 33.08).abs() < 0.05, "the second word starts where the file has it: {bb} vs 33.08");
 }
 
 #[test]

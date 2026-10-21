@@ -136,6 +136,46 @@ fn a_document_on_a_mapped_drive_is_on_the_share_behind_it() {
     }
 }
 
+/// The final path Windows gives a folder on a drive: `Z:` and `V:` are mapped to `\\server\share`,
+/// `Y:` is mapped to `\\server\other` and `W:` is mapped to `\\far\jobs`; `C:` and `D:` are volumes
+/// of this computer.
+fn mapped(folder: &str) -> Option<std::path::PathBuf> {
+    let root = match folder.get(..1)?.to_ascii_uppercase().as_str() {
+        "Z" | "V" => r"\\?\UNC\server\share",
+        "Y" => r"\\?\UNC\server\other",
+        "W" => r"\\?\UNC\far\jobs",
+        "C" => r"\\?\C:",
+        "D" => r"\\?\D:",
+        _ => return None,
+    };
+    let rest = folder.get(2..)?.trim_start_matches(['\\', '/']).replace('/', "\\");
+    Some(if rest.is_empty() { root.into() } else { format!(r"{root}\{rest}").into() })
+}
+
+#[test]
+fn a_path_on_a_mapped_drive_is_on_the_share_behind_it() {
+    use crate::cmd::fileio::drive_share_of;
+    // Only the drive's root folder is looked up, so a path in a folder that doesn't exist still gets
+    // its path on the share.
+    let mut asked = vec![];
+    let mut ask = |root: &str| {
+        asked.push(root.to_string());
+        mapped(root)
+    };
+    assert_eq!(drive_share_of(r"Y:\art\gone\x.png", &mut ask).as_deref(), Some(r"\\server\other\art\gone\x.png"));
+    assert_eq!(drive_share_of(r"Y:\x.png", &mut ask).as_deref(), Some(r"\\server\other\x.png"));
+    assert_eq!(drive_share_of(r"\\?\Y:\x.png", &mut ask).as_deref(), Some(r"\\server\other\x.png"));
+    assert_eq!(drive_share_of("y:/art/x.png", &mut ask).as_deref(), Some(r"\\server\other\art\x.png"));
+    assert_eq!(asked, [r"Y:\", r"Y:\", r"Y:\", "y:/"]);
+    // A volume of this computer, and a drive that can't be opened, give no path on a share.
+    assert_eq!(drive_share_of(r"D:\art\x.png", mapped), None);
+    assert_eq!(drive_share_of(r"Q:\art\x.png", mapped), None);
+    // UNC, root-relative, relative and drive-relative paths, and a drive's root, are not looked up.
+    for path in [r"\\server\other\x.png", r"\\?\UNC\server\other\x.png", "/Users/a/x.png", "x.png", "Y:x.png", r"Y:\"] {
+        assert_eq!(drive_share_of(path, |r: &str| panic!("{path}: looked up {r}")), None, "{path}");
+    }
+}
+
 #[cfg(windows)]
 #[test]
 fn links_on_a_mapped_drives_share_are_followed() {
@@ -155,16 +195,69 @@ fn links_on_a_mapped_drives_share_are_followed() {
     assert_eq!(document_path_with(r"D:\art\logo.png", doc, unasked).as_deref(), Ok(r"D:\art\logo.png"));
 }
 
+#[cfg(windows)]
+#[test]
+fn links_on_a_drive_mapped_to_another_share_are_not_followed() {
+    use crate::cmd::fileio::{document_path_on, drive_share_of, share_of};
+    let share = |d: &str| share_of(d, mapped);
+    let drive = |p: &str| drive_share_of(p, mapped);
+    let refused = Err(craft_docpath::Refused::Network);
+    // From a document on this computer, a drive mapped to any share is another computer.
+    let local = Some(r"C:\art\doc.vectorcraft");
+    for link in [r"Y:\img\logo.png", r"Z:\logo.png", r"\\?\Y:\logo.png", "file:///Y:/logo.png", r"Y:\gone\logo.png"] {
+        assert_eq!(document_path_on(link, local, share, drive), refused, "{link}");
+    }
+    // Links on a mapped drive are refused from a document on a third share, given by its drive or
+    // by its share, and from a document without a path.
+    for doc in [Some(r"W:\jobs\doc.vectorcraft"), Some(r"\\far\jobs\doc.vectorcraft"), None] {
+        assert_eq!(document_path_on(r"Y:\img\logo.png", doc, share, drive), refused, "{doc:?}");
+        assert_eq!(document_path_on(r"Z:\img\logo.png", doc, share, drive), refused, "{doc:?}");
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn links_on_the_documents_share_or_this_computer_are_followed() {
+    use crate::cmd::fileio::{document_path_on, drive_share_of, share_of};
+    let share = |d: &str| share_of(d, mapped);
+    let drive = |p: &str| drive_share_of(p, mapped);
+    // Links on the document's share are followed: through another drive mapped to it, by the share's
+    // own path, and from the document given by its share.
+    let doc = Some(r"Z:\jobs\doc.vectorcraft");
+    assert_eq!(document_path_on(r"V:\img\logo.png", doc, share, drive).as_deref(), Ok(r"V:\img\logo.png"));
+    let by_share = Some(r"\\server\share\jobs\doc.vectorcraft");
+    assert_eq!(document_path_on(r"Z:\img\logo.png", by_share, share, drive).as_deref(), Ok(r"Z:\img\logo.png"));
+    assert_eq!(document_path_on(r"\\server\share\logo.png", doc, share, drive).as_deref(), Ok(r"\\server\share\logo.png"));
+    // A document written `\\?\Z:\…` is on the same share.
+    let verbatim = Some(r"\\?\Z:\jobs\doc.vectorcraft");
+    assert_eq!(document_path_on(r"V:\img\logo.png", verbatim, share, drive).as_deref(), Ok(r"V:\img\logo.png"));
+    assert_eq!(document_path_on(r"\\server\share\logo.png", verbatim, share, drive).as_deref(), Ok(r"\\server\share\logo.png"));
+    assert_eq!(document_path_on(r"Y:\img\logo.png", verbatim, share, drive), Err(craft_docpath::Refused::Network));
+    // Links on this computer and on a drive that can't be opened are followed, from a document
+    // anywhere.
+    for doc in [Some(r"C:\art\doc.vectorcraft"), doc, Some(r"\\far\jobs\doc.vectorcraft"), None] {
+        assert_eq!(document_path_on(r"D:\art\logo.png", doc, share, drive).as_deref(), Ok(r"D:\art\logo.png"), "{doc:?}");
+        assert_eq!(document_path_on(r"Q:\art\logo.png", doc, share, drive).as_deref(), Ok(r"Q:\art\logo.png"), "{doc:?}");
+    }
+    // A path on the document's own drive is not looked up.
+    let unasked = |p: &str| -> Option<String> { panic!("looked up {p}") };
+    assert_eq!(document_path_on(r"img\logo.png", doc, share, unasked).as_deref(), Ok(r"Z:\jobs\img\logo.png"));
+    assert_eq!(document_path_on(r"z:\logo.png", doc, share, unasked).as_deref(), Ok(r"z:\logo.png"));
+    assert_eq!(document_path_on(r"C:\x\logo.png", Some(r"C:\art\doc.vectorcraft"), share, unasked).as_deref(), Ok(r"C:\x\logo.png"));
+}
+
 #[test]
 fn a_document_off_a_mapped_drive_keeps_its_path() {
-    use crate::cmd::fileio::share_path;
+    use crate::cmd::fileio::{drive_share_path, share_path};
     let dir = Folder::new("docpath-share");
     // A folder on this computer's own disk, and one that doesn't exist.
     assert_eq!(share_path(&dir.file("doc.vectorcraft")), None);
     assert_eq!(share_path(&dir.file("gone/doc.vectorcraft")), None);
-    // Elsewhere than Windows, no document is looked up.
+    assert_eq!(drive_share_path(&dir.file("gone/x.png")), None);
+    // Elsewhere than Windows, no document or link is looked up.
     if cfg!(not(windows)) {
         assert_eq!(share_path(r"Z:\jobs\doc.vectorcraft"), None);
+        assert_eq!(drive_share_path(r"Y:\img\logo.png"), None);
     }
 }
 

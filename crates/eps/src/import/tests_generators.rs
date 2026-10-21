@@ -733,11 +733,60 @@ fn masked_images_in_every_interleaving() {
 #[test]
 fn errors_name_the_operator_and_the_procedures() {
     let r = read("{ 1 (a) add } stopped pop 0 0 10 10 rectfill /inner { 1 (a) add } def /outer { inner } def outer");
-    assert!(r.warnings[0].contains("(typecheck in `add`), in `inner` in `outer`"), "{:?}", r.warnings);
+    assert!(r.warnings[0].contains("(typecheck in `add`; a value has the wrong type for the operator), in `inner` in `outer`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill /p { frobnicate } def p");
     assert!(r.warnings[0].contains("it uses `frobnicate`, which VectorCraft's PostScript reader doesn't know, in `p`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill 0 0 moveto (x) cvn moveto");
     assert!(r.warnings[0].contains("typecheck in `moveto`: a number"), "{:?}", r.warnings);
+}
+
+/// The warning for a file read only up to an error says what the error's name means in the
+/// reader, after the name, which stays as PostScript spells it.
+#[test]
+fn errors_say_what_the_postscript_error_means() {
+    for (program, want) in [
+        ("1 (a) add", "(typecheck in `add`; a value has the wrong type for the operator)"),
+        ("[1 2] 5 get", "(rangecheck in `get`; a value is outside the range the operator takes)"),
+        ("add", "(stackunderflow in `add`; the operator needs more values than the stack holds)"),
+        ("1 0 div", "(undefinedresult in `div`; a calculation has no result, as in a division by zero)"),
+        ("newpath 10 10 lineto", "(nocurrentpoint in `lineto`; the path has no point to continue from)"),
+        ("cleartomark", "(unmatchedmark in `cleartomark`; the operator looks for a mark on the stack and finds none)"),
+        ("save dup restore restore", "(invalidrestore in `restore`; the program restores a saved state that was already restored)"),
+        ("(x) (r) file", "(invalidfileaccess in `file`; the program opens a file, which the reader can't do)"),
+        ("(x) run", "(undefinedfilename in `run`; the program runs, deletes or renames a file, which the reader can't do)"),
+        ("/Nope /ProcSet findresource", "(undefinedresource in `findresource`: Nope; the program asks for a resource that isn't defined)"),
+        ("<12", "(syntaxerror in `<`; part of the program isn't valid PostScript text)"),
+    ] {
+        let r = read(&format!("0 0 10 10 rectfill {program}"));
+        assert!(r.warnings[0].contains(want), "{program}: {:?}", r.warnings);
+    }
+}
+
+/// Every PostScript error the reader raises has a meaning in [`crate::POSTSCRIPT_ERRORS`] but
+/// `undefined`, which the warning words on its own.
+#[test]
+fn every_postscript_error_the_reader_raises_has_a_meaning() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("import");
+    let mut raised = std::collections::BTreeSet::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        if !name.ends_with(".rs") || name.starts_with("tests") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        for marker in ["Ps(\"", "ps_err(\""] {
+            for (at, _) in text.match_indices(marker) {
+                let rest = &text[at + marker.len()..];
+                raised.insert(rest[..rest.find('"').unwrap()].to_string());
+            }
+        }
+    }
+    assert!(raised.len() >= 15 && raised.contains("typecheck"), "{raised:?}");
+    let missing: Vec<_> = raised.iter().filter(|n| *n != "undefined" && !crate::POSTSCRIPT_ERRORS.iter().any(|(e, _)| e == n)).collect();
+    assert!(missing.is_empty(), "no meaning for {missing:?}");
+    let unused: Vec<_> = crate::POSTSCRIPT_ERRORS.iter().filter(|(e, _)| !raised.contains(*e)).collect();
+    assert!(unused.is_empty(), "never raised: {unused:?}");
 }
 
 /// Operators programs use to probe the interpreter or measure things: file `status`, `token`,

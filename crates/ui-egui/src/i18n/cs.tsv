@@ -36,6 +36,7 @@
 	Quit VectorCraft	Ukončit VectorCraft
 	File	Soubor
 	New…	Nový…
+	New Without Dialog	Nový bez dialogového okna
 	New from Template…	Nový ze šablony…
 	Open…	Otevřít…
 	Open Recent Files	Otevřít nedávné soubory
@@ -264,6 +265,8 @@
 	Large Gaps	Velké mezery
 	Gap Preview Color:	Barva náhledu mezer:
 	Close Gaps With Paths	Uzavřít mezery cestami
+	Show Live Paint Gaps	Zobrazit mezery živé malby
+	Hide Live Paint Gaps	Skrýt mezery živé malby
 	Select Fills	Vybírat výplně
 	Select Strokes	Vybírat tahy
 	Image Trace	Vektorizace obrazu
@@ -826,6 +829,7 @@
 	Activate Panel	Aktivovat panel
 	Change Panel Layout	Změnit rozložení panelů
 	Close Panel	Zavřít panel
+	Collapse Panel Group	Sbalit skupinu panelů
 	Move Panel	Přesunout panel
 	Group with	Seskupit s
 	Resize panels	Změnit velikost panelů
@@ -1133,7 +1137,8 @@ lighting	Light	Světlo
 	 to sample a color	 nabere barvu
 	 across a selected object to set the gradient direction	 přes vybraný objekt nastaví směr přechodu
 	 to select an artboard  |  	 vybere pracovní plochu  |  
-	 on the canvas to create one	 na plátně vytvoří novou
+	 on the canvas to create one (	 na plátně vytvoří novou (
+	 selects several, or draws one inside an artboard)	 vybere více nebo vytvoří novou uvnitř pracovní plochy)
 	 a stroke to add a width point  |  	 tahu přidá bod šířky  |  
 	 to change one side  |  	 změní jednu stranu  |  
 	 to select more points  |  	 vybere další body  |  
@@ -1457,6 +1462,7 @@ lighting	Light	Světlo
 	{count} more rules: Export writes every one.	Další pravidla ({count}): Export zapíše všechna.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Vynecháno nepojmenovaných objektů: {count}. Pojmenujte je, nebo v nabídce panelu zapněte Nepojmenované objekty.
 	All Categories	Všechny kategorie
+	Repeat Objects	Objekty opakování
 	Save…	Uložit…
 	Selection Only	Pouze výběr
 	{title} (selection)	{title} (výběr)
@@ -1490,6 +1496,7 @@ lighting	Light	Světlo
 	Edit the selected point's colour in the Color panel	Upravit barvu vybraného bodu v panelu Barva
 	Edit the stop	Upravit zarážku
 	Eyedropper: click the art to sample the stop's colour	Kapátko: kliknutím na kresbu naberete barvu zarážky
+	Eyedropper: click the art to sample the key color	Kapátko: kliknutím na kresbu naberete klíčovou barvu
 	Gradient across stroke	Přechod napříč tahem
 	Gradient along stroke	Přechod podél tahu
 	Gradient Fill: click to apply, drag onto art	Přechodová výplň: kliknutím použijete, přetáhněte na kresbu
@@ -1753,6 +1760,9 @@ lighting	Light	Světlo
 	Left Indent	Odsazení zleva
 	Left-to-Right Paragraph Direction	Směr odstavce zleva doprava
 	Line-end Punctuation Half Width	Interpunkce na konci řádku poloviční šířky
+	Insert Kashidas	Vložit kašídy
+	Long	Dlouhý
+	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
 	Kinsoku Set	Sada Kinsoku
 	Hard	Pevné
@@ -1904,6 +1914,7 @@ lighting	Light	Světlo
 	Select art and click New Symbol to make one.	Vyberte kresbu a symbol vytvořte tlačítkem Nový symbol.
 	Symbol Libraries (on the roadmap)	Knihovny symbolů (v plánu)
 	Align On:	Zarovnat na:
+	Bottom-Justified Tab	Tabulátor zarovnaný dolů
 	Center-Justified Tab	Tabulátor zarovnaný na střed
 	Above Text	Nad textem
 	Position Panel Above Text	Umístit panel nad text
@@ -1915,6 +1926,7 @@ lighting	Light	Světlo
 	No text selected	Není vybrán žádný text
 	Repeat Tab	Opakovat tabulátor
 	Right-Justified Tab	Tabulátor zarovnaný doprava
+	Top-Justified Tab	Tabulátor zarovnaný nahoru
 	Select a text object to set its tab stops.	Vyberte textový objekt, abyste mohli nastavit jeho zarážky tabulátoru.
 	Select text	Vyberte text
 	Snap to Unit	Přichytávat k jednotkám
@@ -2032,6 +2044,13 @@ lighting	Light	Světlo
 	Tints and Shades	Světlé a tmavé tóny
 	Hue Shift	Posun odstínu
 	Key Color:	Klíčová barva:
+	Tips	Tipy
+	Colorization Tips	Tipy k obarvení
+	The samples show this brush on a blue stroke.	Ukázky zobrazují tento štětec na modrém tahu.
+	The art keeps its own colors.	Kresba si ponechá své vlastní barvy.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Černá se změní na barvu tahu a bílá zůstane bílá. Ostatní barvy se změní na světlé tóny barvy tahu, a čím je barva světlejší, tím světlejší je její tón.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Černá zůstane černá a bílá zůstane bílá. Ostatní barvy se změní na tmavé tóny barvy tahu, když jsou tmavé, a na její světlé tóny, když jsou světlé.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Klíčová barva se změní na barvu tahu. Ostatní barvy se posunou po barevném kruhu o stejný úhel jako klíčová barva a zachovají si sytost a jas.
 	Size:	Velikost:
 	Calligraphic Brush Options	Možnosti kaligrafického štětce
 	Bristle Brush Options	Možnosti štětinového štětce
@@ -2258,6 +2277,13 @@ lighting	Light	Světlo
 	Alt key toggles to Smooth Tool	Klávesa Alt přepíná na nástroj Vyhlazení
 	Keep selected	Ponechat vybrané
 	Merge only with selection	Sloučit jen s výběrem
+	Consider Open Filled Paths as Closed	Považovat otevřené vyplněné cesty za uzavřené
+	Pick Color From:	Brát barvu z:
+	Artwork	Kresba
+	Cursor Swatch Preview	Náhled vzorku u kurzoru
+	Selection:	Výběr:
+	Straight Line	Přímka
+	Highlight:	Zvýraznění:
 	The document has no colour swatches.	Dokument nemá ve vzorníku žádné barvy.
 	Style Name:	Název stylu:
 	Crop To	Oříznout na
@@ -2883,12 +2909,21 @@ lighting	Light	Světlo
 	Darken	Ztmavit
 	Exclusion	Vyloučit
 	Hard Light	Tvrdé světlo
+	Hard Mix	Tvrdé míchání
 	Lighten	Zesvětlit
 	Luminosity	Světlost
 	Overlay	Překrýt
 	Soft Light	Měkké světlo
+	Soft Mix	Měkké míchání
 	Crosshatch	Křížové šrafování
 	Fine Dots	Jemné tečky
+
+	Simple	Jednoduchý
+	Light Rough	Světle hrubý
+	Dark Rough	Tmavě hrubý
+	Wide Sharp	Široce ostrý
+	Wide Blurry	Široce rozmazaný
+	Sparkle	Jiskra
 	Medium Dots	Střední tečky
 	Grainy Dots	Zrnité tečky
 	Coarse Dots	Hrubé tečky
@@ -2966,6 +3001,14 @@ theme	Appearance	Motiv
 	Edit Symbol	Upravit symbol
 	Expand Brush Strokes	Rozložit tahy štětcem
 	New Brush…	Nový štětec…
+	New Brush	Nový štětec
+	Calligraphic Brush	Kaligrafický štětec
+	Scatter Brush	Rozptylový štětec
+	Art Brush	Obrazový štětec
+	Bristle Brush	Štětinový štětec
+	Pattern Brush	Vzorkový štětec
+	Select art to make a scatter, art or pattern brush.	Vyberte kresbu, abyste mohli vytvořit rozptylový, obrazový nebo vzorkový štětec.
+	Brush Art	Kresba štětce
 	New Symbol	Nový symbol
 	New Symbol…	Nový symbol…
 	Place Symbol Instance	Umístit instanci symbolu
@@ -3442,6 +3485,7 @@ theme	Appearance	Motiv
 	Scale Corners	Měnit velikost rohů
 	Scale Cursor Proportional to UI	Měnit velikost kurzoru úměrně rozhraní
 	Scale Strokes & Effects	Měnit velikost tahů a efektů
+	Scale Text Attributes	Měnit velikost atributů textu
 	Scratch Disks	Odkládací disky
 	Secondary	Sekundární
 	Select Same Tint %	Vybírat stejné % tónu
@@ -3542,6 +3586,7 @@ theme	Appearance	Motiv
 	Delete Swatch	Odstranit položku vzorníku
 	Duplicate Swatch	Duplikovat položku vzorníku
 	Merge Swatches	Sloučit položky vzorníku
+	Move Brush	Přesunout štětec
 	Move Swatch	Přesunout položku vzorníku
 	New Color Group	Nová skupina barev
 	New Swatch	Nová položka vzorníku
@@ -4145,6 +4190,25 @@ imageTrace	Outline	Obrys
 @msg	a PostScript error ({name} in `{op}`: {at})	chyba PostScriptu ({name} v `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	chyba PostScriptu ({name} v `{op}`: {at}), v {procs}
 @msg	a PostScript error ({name})	chyba PostScriptu ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	chyba PostScriptu ({name} v `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	chyba PostScriptu ({name} v `{op}`; {meaning}), v {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	chyba PostScriptu ({name} v `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	chyba PostScriptu ({name} v `{op}`: {at}; {meaning}), v {procs}
+@msg	a PostScript error ({name}; {meaning})	chyba PostScriptu ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	program ukončuje slovník, který nezačal
+@msg	the program opens a file, which the reader can't do	program otevírá soubor, což čtečka neumí
+@msg	the program restores a saved state that was already restored	program obnovuje uložený stav, který už byl obnoven
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	data, která program čte, jsou poškozená nebo zkrácená, nebo program žádá pozici v souboru, který žádnou nemá
+@msg	the program goes past one of the reader's limits	program překračuje jeden z limitů čtečky
+@msg	the path has no point to continue from	cesta nemá bod, ze kterého by mohla pokračovat
+@msg	a value is outside the range the operator takes	hodnota je mimo rozsah, který operátor přijímá
+@msg	the operator needs more values than the stack holds	operátor potřebuje více hodnot, než obsahuje zásobník
+@msg	part of the program isn't valid PostScript text	část programu není platný text PostScriptu
+@msg	a value has the wrong type for the operator	hodnota má pro operátor nesprávný typ
+@msg	the program runs, deletes or renames a file, which the reader can't do	program spouští, maže nebo přejmenovává soubor, což čtečka neumí
+@msg	the program asks for a resource that isn't defined	program požaduje prostředek, který není definován
+@msg	a calculation has no result, as in a division by zero	výpočet nemá výsledek, například při dělení nulou
+@msg	the operator looks for a mark on the stack and finds none	operátor hledá na zásobníku značku a žádnou nenachází
 @msg	a bitmap is empty	bitmapa je prázdná
 @msg	a bitmap is too large to read	bitmapa je příliš velká na načtení
 @msg	a colour index is 0 to {_1}, not {n}	index barvy je 0 až {_1}, ne {n}
@@ -4272,7 +4336,9 @@ imageTrace	Outline	Obrys
 @msg	no blend options	žádné možnosti prolnutí
 @msg	no bounds	žádné hranice
 @msg	no brush named `{name}`	štětec s názvem `{name}` neexistuje
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	název štětinového štětce může mít nejvýše {max} znaků: `{name}` jich má {count}
 @msg	no brush selected	není vybrán žádný štětec
+@msg	brushes move only within their type	štětce lze přesouvat jen v rámci jejich typu
 @msg	no catalog	chybí katalog
 @msg	no changes since the last save	od posledního uložení nejsou žádné změny
 @msg	no clock to keep a heartbeat by	chybí hodiny, podle kterých by šlo udržovat signál aktivity
@@ -4326,6 +4392,7 @@ imageTrace	Outline	Obrys
 @msg	no such action	taková akce neexistuje
 @msg	no such anchor	takový kotevní bod neexistuje
 @msg	no such artboard	taková pracovní plocha neexistuje
+@msg	the artboard is locked	pracovní plocha je zamčená
 @msg	no such document	takový dokument neexistuje
 @msg	no such layer or object	taková vrstva ani objekt neexistuje
 @msg	no such object {0}	objekt {0} neexistuje
@@ -4416,6 +4483,10 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
+@msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu
+@msg	a clipping path can't be attached to a path	ořezovou cestu nelze připojit na cestu
 @msg	select a stroke with a variable width	vyberte tah s proměnnou šířkou
 @msg	select a symbol instance	vyberte instanci symbolu
 @msg	select an Image Trace object	vyberte objekt vektorizace obrazu
@@ -4535,6 +4606,7 @@ imageTrace	Outline	Obrys
 @msg	unknown workspace (one of {_1})	neznámý pracovní prostor (jeden z {_1})
 @msg	unsupported: {0}	nepodporováno: {0}
 @msg	variables are locked	proměnné jsou zamčené
+@msg	variables that aren't text were left out: {kinds}	proměnné, které nejsou textové, byly vynechány: {kinds}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	soubory verze {0} nelze komprimovat: komprimované soubory otevírá až verze {COMPRESSED_SINCE} a novější
 @msg	width and height are at least 1 pixel	šířka i výška jsou alespoň 1 obrazový bod
 @msg	workspace name can't be empty	název pracovního prostoru nesmí být prázdný
@@ -4681,6 +4753,12 @@ imageTrace	Outline	Obrys
 @msg	before must name a panel	before musí určovat panel
 @msg	docking action contains an unknown panel or an excessive split path	akce ukotvení obsahuje neznámý panel nebo příliš dlouhou cestu rozdělení
 @msg	group must be true or false	group musí být true nebo false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel je plovoucí; jeho skupinu sbalíte pomocí window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	panel není ve skupině doku
+@msg	only a dock group above or below others collapses, not one beside another	sbalit lze jen skupinu doku nad nebo pod jinými, ne vedle jiné
+@msg	icon must be true or false	icon musí být true nebo false
+@msg	icon only docks a panel in the icon column, with no anchor	icon jen ukotví panel ve sloupci ikon, bez anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column ukotví sadu jako sloupec doku, bez anchor nebo icon
 @msg	move requires a destination panel	přesun vyžaduje cílový panel
 @msg	move requires an existing destination panel	přesun vyžaduje existující cílový panel
 @msg	onto must name a floating panel	onto musí určovat plovoucí panel
@@ -4986,12 +5064,24 @@ imageTrace	Outline	Obrys
 	DWG (use DXF)	DWG (použijte DXF)
 	Artistic	Umělecké
 	Film Grain…	Filmové zrno…
+	Colored Pencil…	Barevná tužka…
+	Colored Pencil	Barevná tužka
 	Cutout…	Výřez…
 	Cutout	Výřez
+	Dry Brush…	Suchý štětec…
+	Dry Brush	Suchý štětec
 	Neon Glow…	Neonová záře…
+	Palette Knife…	Špachtle…
 	Neon Glow	Neonová záře
+	Paint Daubs…	Malířské tahy…
+	Paint Daubs	Malířské tahy
+	Palette Knife	Špachtle
 	Poster Edges…	Plakátové okraje…
+	Rough Pastels…	Hrubé pastely…
 	Poster Edges	Plakátové okraje
+	Rough Pastels	Hrubé pastely
+	Underpainting…	Podmalba…
+	Underpainting	Podmalba
 	Levels	Úrovně
 	Edge Simplicity	Jednoduchost okrajů
 	Edge Fidelity	Věrnost okrajů
@@ -5101,6 +5191,9 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	3D Lighting Preset	Předvolba 3D osvětlení
+	Standard	Standardní
+	Diffuse	Rozptýlené
 # 3D light management.
 	Lights	Světla
 	Add Light	Přidat světlo
@@ -5145,6 +5238,7 @@ mark-style	Japanese	Japonské
 @msg	Measured anchor no longer exists	Měřený kotevní bod už neexistuje
 @msg	Measured segment no longer exists	Měřený segment už neexistuje
 @msg	Non-finite dimension	Kóta není konečné číslo
+@msg	Scale Text Attributes: selected type has no scale to bake	Měnit velikost atributů textu: vybraný text nemá žádnou skalaci, kterou lze použít
 @msg	Scale must be drawing:real, for example 1:10	Měřítko musí mít tvar výkres:skutečnost, například 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Poměr měřítka musí být mezi 1:1000000 a 1000000:1
 @msg	Second measured segment no longer exists	Druhý měřený segment už neexistuje
@@ -5162,6 +5256,7 @@ mark-style	Japanese	Japonské
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…
 	Export Data Sets…	Exportovat sady dat…
+	Load Variable Library…	Načíst knihovnu proměnných…
 	Make Graph Dynamic	Nastavit graf jako dynamický
 	Batch…	Dávka…
 	Source Folder:	Zdrojová složka:
@@ -5184,6 +5279,8 @@ mark-style	Japanese	Japonské
 	Sketch	Skica
 	Halftone Pattern…	Polotónový vzorek…
 	Halftone Pattern	Polotónový vzorek
+	Torn Edges…	Roztržené okraje…
+	Torn Edges	Roztržené okraje
 	Pattern Type	Typ vzorku
 	Dot	Tečka
 # User Interface › Color Scheme
@@ -5202,6 +5299,7 @@ mark-style	Japanese	Japonské
 	Watercolor…	Akvarel…
 	Watercolor	Akvarel
 	Brush Size	Velikost štětce
+	Texture Coverage	Krytí textury
 	Definition	Definice
 	Brush Detail	Detail štětce
 	Shadow Intensity	Intenzita stínů
@@ -5230,24 +5328,14 @@ mark-style	Japanese	Japonské
 @msg	the image's pixels can't be read	pixely obrazu nelze přečíst
 	Persistent	Trvalé
 	Library Panel Options	Možnosti panelu knihovny
+	Locate Library…	Najít knihovnu…
 @msg	Persistent libraries not found: {files}	Trvalé knihovny nebyly nalezeny: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` není panel knihovny (viz window.swatchLibrary)
 @msg	library panel `{given}` isn't open	panel knihovny `{given}` není otevřený
 @msg	too many library panels were opened in this session	v této relaci bylo otevřeno příliš mnoho panelů knihoven
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Obraz má {_1} × {_2} pixelů, na jedné straně více než {LARGE_TRACE_SIDE}: vektorizuje se, ale pomaleji. Rychleji se vektorizuje s předvolbou nižší věrnosti nebo menší kopie obrazu.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Obraz byl vektorizován v rozlišení {_1} × {_2} pixelů, zmenšený z {_3} × {_4} (nejvýše {_5} megapixelů).
-	Lock Artboards	Zamknout pracovní plochy
-	Unlock Artboards	Odemknout pracovní plochy
-	Artboard Color	Barva pracovní plochy
-	Lock Selected	Zamknout vybrané
-	Lock All Except Selected	Zamknout vše kromě vybraných
-	Lock All	Zamknout vše
-	Unlock Selected	Odemknout vybrané
-	Lock Artboard	Zamknout pracovní plochu
-	Unlock Artboard	Odemknout pracovní plochu
-	Clear Artboard Color	Smazat barvu pracovní plochy
-@msg	artboard {_1} is locked	pracovní plocha {_1} je zamknutá
-	Include Artboard Fill	Zahrnout barvu pracovní plochy
+	Gap Length:	Délka mezery:
 	Artboard {n} of {total}	Pracovní plocha {n} z {total}
 	Encoding and writing the file…	Kódování a zápis souboru…
 @plural	{n} more export waiting|{n} more exports waiting	Čeká ještě {n} export|Čekají ještě {n} exporty|Čeká ještě {n} exportů
@@ -5285,3 +5373,9 @@ mark-style	Japanese	Japonské
 	Plaster	Sádra
 	Note Paper…	Dopisní papír…
 	Note Paper	Dopisní papír
+	Water Paper…	Mokrý papír…
+	Water Paper	Mokrý papír
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Freska…
+	Fresco	Freska

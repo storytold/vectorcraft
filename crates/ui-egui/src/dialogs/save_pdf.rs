@@ -599,7 +599,12 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     // PDF/X-1a converts to CMYK even without a conversion.
     let converting = get(d, "output.conversion") != ColorConversion::None.id() || standard.cmyk_only();
-    row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), 1, converting));
+    // The document's own profile (blank), the CMYK profile in effect, then every profile.
+    let destinations: Vec<&str> = std::iter::once(DOCUMENT_PROFILE)
+        .chain(std::iter::once(vectorcraft_pdf::DOCUMENT_CMYK))
+        .chain(profiles.iter().map(|p| p.name.as_str()))
+        .collect();
+    row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &destinations, 2, converting));
     row(ui, tl!("Profile inclusion:"), |ui| {
         // A standard decides whether colours are tagged.
         ui.add_enabled_ui(standard == Standard::None, |ui| pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true));

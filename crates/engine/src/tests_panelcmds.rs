@@ -1,7 +1,7 @@
 //! Panel-support commands (`cmd/{panelcmds,gradient,appearance,stroke,swatch,style}.rs`).
 
 use serde_json::json;
-use vectorcraft_color::{GradientKind, Paint};
+use vectorcraft_color::{Color, GradientKind, Paint};
 use vectorcraft_doc::{AppearanceItem, NodeKind};
 
 use super::*;
@@ -81,6 +81,31 @@ fn appearance_duplicate_and_move() {
     assert!(s.execute("appearance.duplicateItem", &json!({"index": 99})).is_err());
 }
 
+/// The appearance and effect commands given an item index of 2^32 + k, where k names one of the
+/// object's items, leave the object's appearance and the undo history as they were, as for any index
+/// past the last item: `appearance.removeItem` removes nothing, and the others fail. A 32-bit build
+/// read the index as k.
+#[test]
+fn appearance_commands_leave_an_item_past_u32_alone() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = node(&s, id).appearance;
+    let undo = s.doc().unwrap().history.undo.len();
+    let past = |k: u64| (1u64 << 32) + k;
+    for (cmd, p, fails) in [
+        ("appearance.removeItem", json!({"index": past(0)}), false),
+        ("appearance.removeItem", json!({"indices": [past(0)]}), false),
+        ("appearance.duplicateItem", json!({"index": past(0)}), true),
+        ("appearance.moveItem", json!({"from": past(1), "to": 0}), true),
+        ("effect.apply", json!({"effect": "distort.roughen", "item": past(1)}), true),
+    ] {
+        assert_eq!(s.execute(cmd, &p).is_err(), fails, "{cmd} {p}");
+        assert_eq!(node(&s, id).appearance, before, "{cmd} {p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {p}");
+    }
+}
+
 #[test]
 fn artboards_reorder_and_duplicate() {
     let mut s = session();
@@ -92,6 +117,78 @@ fn artboards_reorder_and_duplicate() {
     assert!(d.artboards[2].rect.x0 >= d.artboards[1].rect.x1);
     s.execute("artboard.reorder", &json!({"index": 1, "to": 0})).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Second");
+}
+
+/// An artboard's background color (Properties › Artboards › Fill): `artboard.setProps {color}` sets
+/// it and `{color: null}` clears it, each in one undo step. A change without `color` leaves it, a
+/// duplicate keeps it, `inspect_document` reports it, `artboard.new {color}` starts with it, an
+/// `artboards` list gives each listed artboard its own color in one undo step, and a bad color is
+/// refused.
+#[test]
+fn artboard_color_is_set_and_cleared_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let color = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].color;
+    let blue = Color::from_hex("#336699");
+    let black = Some(Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    s.execute("artboard.setProps", &json!({"index": 1, "color": "#336699"})).unwrap();
+    assert_eq!((color(&s, 0), color(&s, 1)), (None, blue), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Dark"})).unwrap();
+    assert_eq!(color(&s, 1), blue, "a change without a color leaves it");
+    s.execute("artboard.setProps", &json!({"index": 1, "color": {"c": 0, "m": 0, "y": 0, "k": 100}})).unwrap();
+    assert_eq!(color(&s, 1), black);
+    s.execute("artboard.setProps", &json!({"index": 1, "color": null})).unwrap();
+    assert_eq!(color(&s, 1), None);
+    for was in [black, blue, blue, None] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(color(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    let doc = crate::inspect::document(&s);
+    assert_eq!(doc["artboards"][1]["color"], "#336699");
+    assert!(doc["artboards"][0].get("color").is_none(), "{doc}");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 1})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(color(&s, copy), blue, "a duplicate keeps the color");
+    let made = s.execute("artboard.new", &json!({"color": "#336699"})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(color(&s, made), blue, "a new artboard takes `color` too");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "color": "#336699"}, {"index": 1, "color": null}]})).unwrap();
+    assert_eq!((color(&s, 0), color(&s, 1)), (blue, None), "each listed artboard takes its own color");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "in one undo step");
+    let before = s.doc().unwrap().doc.clone();
+    assert!(s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "color": null}, {"index": 1, "color": "nope"}]})).is_err());
+    assert!(s.execute("artboard.setProps", &json!({"index": 1, "color": "nope"})).is_err());
+    assert!(s.execute("artboard.new", &json!({"color": "nope"})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad color changes nothing");
+}
+
+/// The native format writes an artboard's background color and reads it back. An artboard without
+/// one is written as before, with no `color` key.
+#[test]
+fn artboard_color_round_trips_through_the_native_format() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "color": {"c": 10, "m": 20, "y": 30, "k": 40}})).unwrap();
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let keys = |i: usize| saved["document"]["artboards"][i].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(keys(0), ["id", "name", "rect", "show_center_mark", "show_cross_hairs"]);
+    assert!(keys(1).contains(&"color".to_string()), "{:?}", keys(1));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards[0].color, None);
+    assert_eq!(back.artboards[1].color, Some(Color::cmyk(0.1, 0.2, 0.3, 0.4)));
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+}
+
+/// An artboard moved to place 2^32 goes last. A 32-bit build read the place as 0 and moved it to the
+/// front.
+#[test]
+fn artboard_reorder_past_u32_goes_last() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"name": "Second"})).unwrap();
+    s.execute("artboard.new", &json!({"name": "Third"})).unwrap();
+    s.execute("artboard.reorder", &json!({"index": 1, "to": 1u64 << 32})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.last().map(|a| a.name.as_str()), Some("Second"));
 }
 
 /// The artboards' left edges and names.
@@ -361,6 +458,306 @@ fn copied_artboards_take_a_free_id_and_keep_their_own_guides() {
             ("edit.paste", vec![u32::MAX, 1], vec![vec![max], vec![]]),
         ]
     );
+}
+
+/// `artboard.setProps {locked}` locks an artboard in one undo step and deselects the art on it.
+/// Select All, `select.set` and Select › Inverse then pass over that art, a command that takes the
+/// selection leaves it where it is, and the document summary reports `locked: true`. Unlocking
+/// gives the art back. The art of pattern editing mode is on no artboard.
+#[test]
+fn a_locked_artboard_protects_the_art_on_it() {
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let selected = |s: &Session| s.doc().unwrap().selection.objects.clone();
+    let locked = |s: &Session| s.doc().unwrap().doc.artboards[1].locked;
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    assert_eq!(selected(&s), [a], "locking deselects b");
+    let doc = crate::inspect::document(&s);
+    assert_eq!(doc["artboards"][1]["locked"], true);
+    assert!(doc["artboards"][0].get("locked").is_none(), "{doc}");
+    for (cmd, p) in [("select.all", json!({})), ("select.set", json!({"ids": [a.0, b.0]}))] {
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(selected(&s), [a], "{cmd}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.inverse", &json!({})).unwrap();
+    assert_eq!(selected(&s), [a]);
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!((left(&s, a.0), left(&s, b.0)), (15.0, 1010.0), "b stays");
+    // Art drawn on it stays selected until the selection leaves it; art moved onto it is
+    // deselected by the edit.
+    let drawn = NodeId(s.execute("shape.rectangle", &json!({"x": 1100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(selected(&s), [drawn], "drawn on it");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(selected(&s).is_empty(), "moved onto it");
+    s.execute("select.set", &json!({"ids": [drawn.0]})).unwrap();
+    assert!(selected(&s).is_empty(), "drawn on it, then left out of the selection");
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(selected(&s), [a, b, drawn]);
+    for was in [true, true, true, true, false] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(locked(&s), was);
+    }
+    // The art of pattern editing mode is on no artboard: Select All selects it on a locked one.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "P", "edit": false})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    s.execute("object.pattern.edit", &json!({"name": "P"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let tile = selected(&s);
+    assert!(!tile.is_empty() && !tile.contains(&a), "{tile:?}");
+}
+
+/// New art on a locked artboard stays selected and editable until the selection leaves it: a
+/// second Pen click goes on the path the first one started, and pasted art moves. Once another
+/// object is clicked, a click, a marquee, `select.set` and Select All pass over that art. Undo, in
+/// a batch too, and a failed batch bring back the selection the step had, and the new art with
+/// it. Isolation mode starts with nothing selected, so the art is protected in it, and leaving it
+/// doesn't select that art. Art drawn on an unlocked artboard, or
+/// new art that leaves the locked artboard, is deselected when it is moved onto one. Selection
+/// changes leave the document as it is, and once one has left the new art out, an unlocked
+/// artboard over it moves without it. A member of a new group can be selected, and ungrouping it
+/// keeps the members selected.
+#[test]
+fn new_art_on_a_locked_artboard_stays_editable_until_the_selection_leaves_it() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    // An unlocked artboard over part of the locked one.
+    s.execute("artboard.new", &json!({"x": 1100, "y": 200, "width": 200, "height": 200})).unwrap();
+    let selected = |s: &Session| s.doc().unwrap().selection.objects.iter().map(|id| id.0).collect::<Vec<_>>();
+    let v = ViewInfo { zoom: 1.0, smart_guides: false, snap_to_grid: false, snap_to_pixel: false, snap_to_point: false, ..Default::default() };
+    let click = |s: &mut Session, x, y| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+        }
+    };
+    // Art drawn on the unlocked artboard and moved onto the locked one isn't new art there.
+    let off = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(selected(&s), [off]);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(selected(&s).is_empty(), "moved onto it");
+    s.select_tool("pen", v).unwrap();
+    click(&mut s, 1050.0, 50.0);
+    click(&mut s, 1150.0, 50.0);
+    let [path] = selected(&s)[..] else { panic!("one path selected: {:?}", selected(&s)) };
+    assert_eq!(node(&s, NodeId(path)).path_data().unwrap().anchor_count(), 2, "the second click goes on the same path");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let pasted = ids(&s.execute("edit.paste", &json!({"center": [1200, 300]})).unwrap()["ids"]);
+    assert_eq!(selected(&s), pasted);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!((selected(&s), left(&s, pasted[0])), (pasted.clone(), 1160.0), "pasted art moves");
+    // Moved off the locked artboard and back, it is no longer new art.
+    s.execute("object.move", &json!({"dx": -1000, "dy": 0})).unwrap();
+    assert_eq!(selected(&s), pasted);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(selected(&s).is_empty(), "moved off and back");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(selected(&s), pasted, "undone twice");
+    s.select_tool("selection", v).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    click(&mut s, 10.0, 30.0);
+    assert_eq!(selected(&s), [a.0], "a click on other art");
+    assert!(Arc::ptr_eq(&doc, &s.doc().unwrap().doc), "a selection change leaves the document as it is");
+    let moved = s.execute("artboard.move", &json!({"index": 2, "dx": 0, "dy": 1000, "moveArt": true})).unwrap();
+    assert!(!ids(&moved["moved"]).contains(&pasted[0]), "the artboard over it moves without it");
+    s.execute("edit.undo", &json!({})).unwrap();
+    click(&mut s, 1160.0, 300.0);
+    assert!(selected(&s).is_empty(), "a click on the pasted art's edge");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 1010.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 1390.0, 390.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 1390.0, 390.0), v).unwrap();
+    assert!(selected(&s).is_empty(), "a marquee");
+    s.execute("select.set", &json!({"ids": [path, pasted[0]]})).unwrap();
+    assert!(selected(&s).is_empty(), "select.set");
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(selected(&s), [a.0], "Select All");
+    // Undoing the move brings back the pasted art selected, as it was before the move.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(selected(&s), pasted);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(left(&s, pasted[0]), 1160.0);
+    let editable = |s: &Session| s.doc().unwrap().doc.is_editable(NodeId(pasted[0]));
+    // A batch that deselects it and fails brings it back selected and editable, and so does
+    // undoing a batch that deselects it and draws.
+    let failed = json!({"commands": [{"command": "select.none"}, {"command": "no.such.command"}]});
+    assert!(s.execute("command.batch", &failed).is_err());
+    assert_eq!((selected(&s), editable(&s)), (pasted.clone(), true), "after a failed batch");
+    let drawn =
+        json!({"commands": [{"command": "select.none"}, {"command": "shape.rectangle", "params": {"x": 300, "y": 300, "width": 20, "height": 20}}]});
+    s.execute("command.batch", &drawn).unwrap();
+    assert!(!editable(&s), "deselected by the batch");
+    // Undo inside a later batch gives the document the new art of the selection it brings back:
+    // the unlocked artboard over that art then moves it along.
+    let up = json!({"command": "artboard.move", "params": {"index": 2, "dx": 0, "dy": 1000, "moveArt": true}});
+    let r = s.execute("command.batch", &json!({"commands": [{"command": "edit.undo"}, up.clone()]})).unwrap();
+    assert!(ids(&r["results"][1]["moved"]).contains(&pasted[0]), "undone inside a batch: {r}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((selected(&s), editable(&s)), (pasted.clone(), true), "the batch undone");
+    // Isolation mode inside a batch protects it before the next step.
+    let isolated = json!({"commands": [{"command": "object.isolate", "params": {"id": pasted[0]}}, up]});
+    let r = s.execute("command.batch", &isolated).unwrap();
+    assert!(!ids(&r["results"][1]["moved"]).contains(&pasted[0]), "isolated inside a batch: {r}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // Isolation mode starts with nothing selected, so leaving it doesn't select the art again,
+    // and the art, protected again, isn't isolated, as locked art isn't.
+    assert!(selected(&s).is_empty(), "after isolation mode");
+    assert!(!editable(&s), "after isolation mode");
+    assert!(s.execute("object.isolate", &json!({"id": pasted[0]})).is_err(), "isolating it again");
+    // A member of a new group can be selected while the group is new art.
+    let copy = ids(&s.execute("edit.paste", &json!({"center": [1200, 150]})).unwrap()["ids"]);
+    s.execute("object.group", &json!({})).unwrap();
+    let group = selected(&s);
+    s.execute("select.set", &json!({"ids": copy})).unwrap();
+    assert_eq!(selected(&s), copy, "a member of a new group");
+    s.execute("select.set", &json!({"ids": group})).unwrap();
+    assert_eq!(selected(&s), group, "from the member back to the group");
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert_eq!(selected(&s), copy, "ungrouped");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(selected(&s), copy, "the ungrouped art moves");
+}
+
+/// When an artboard moves, scales or is cut with its art, the art inside it that is also on a
+/// locked artboard stays where it is, unless prefs moveLockedWithArtboard is on, as locked art
+/// does; a copy of the artboard copies that art.
+#[test]
+fn art_also_on_a_locked_artboard_stays_when_another_artboard_moves() {
+    let mut s = session();
+    // A locked artboard over the right edge of artboard 1, and `held` inside artboard 1 and on it.
+    s.execute("artboard.new", &json!({"x": 700, "y": 0, "width": 300, "height": 300})).unwrap();
+    let free = rect(&mut s);
+    let held = NodeId(s.execute("shape.rectangle", &json!({"x": 710, "y": 10, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let undo = |s: &mut Session| s.execute("edit.undo", &json!({})).unwrap();
+    let moved = s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 1000, "moveArt": true})).unwrap();
+    assert_eq!(ids(&moved["moved"]), [free.0]);
+    undo(&mut s);
+    let scaled = s.execute("artboard.setProps", &json!({"index": 0, "width": 1600, "scaleArt": true})).unwrap();
+    assert_eq!(ids(&scaled["scaled"]), [free.0]);
+    undo(&mut s);
+    s.execute("artboard.cut", &json!({"index": 0, "art": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(held).is_some() && d.node(free).is_none(), "the cut leaves it");
+    undo(&mut s);
+    assert_eq!(ids(&s.execute("artboard.duplicate", &json!({"index": 0, "art": true})).unwrap()["ids"]).len(), 2, "a copy takes it");
+    undo(&mut s);
+    s.prefs.move_locked_with_artboard = true;
+    let moved = s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 1000, "moveArt": true})).unwrap();
+    assert_eq!(ids(&moved["moved"]), [free.0, held.0], "with the preference on, it moves");
+}
+
+/// A locked artboard keeps its place and size: `artboard.setProps` refuses a new rectangle but
+/// still renames it, `artboard.move`, `artboard.delete`, `artboard.cut` and `artboard.fitToArt`
+/// refuse it, and Rearrange leaves it and the art on it where they are. A copy of it starts
+/// unlocked, and unlocked it moves again.
+#[test]
+fn a_locked_artboard_keeps_its_place_and_size() {
+    let mut s = session();
+    // Three artboards in a row, 800 pt wide: at 0, 820 and 1640.
+    for _ in 0..2 {
+        s.execute("artboard.new", &json!({})).unwrap();
+    }
+    // On the second and third artboards, its center on the third.
+    let shape = |s: &mut Session, x: u32, y: u32| {
+        s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 80, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let c = shape(&mut s, 1610, 10);
+    // In a sublayer, one like it and one on the third artboard alone.
+    s.execute("layer.newSublayer", &json!({"name": "Sub"})).unwrap();
+    let (c2, d2) = (shape(&mut s, 1610, 100), shape(&mut s, 2000, 100));
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let rects = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let was = rects(&s);
+    let refused = |r: Result<serde_json::Value>| matches!(r, Err(EngineError::Other(m)) if m == "the artboard is locked");
+    assert!(refused(s.execute("artboard.setProps", &json!({"index": 1, "width": 300}))));
+    assert!(refused(s.execute("artboard.move", &json!({"index": 1, "dx": 5, "dy": 0}))));
+    assert!(refused(s.execute("artboard.delete", &json!({"index": 1}))));
+    assert!(refused(s.execute("artboard.cut", &json!({"index": 1}))));
+    assert!(refused(s.execute("artboard.fitToArt", &json!({"index": 1}))));
+    assert_eq!(rects(&s), was);
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Cover", "x": 820, "y": 0, "width": 800, "height": 600})).unwrap();
+    assert_eq!(boards(&s)[1], (820.0, "Cover".into()), "Artboard Options renames it");
+    // Its slot in the row is at 850; the third artboard's is at 1700.
+    s.execute("artboard.rearrange", &json!({"layout": "row", "spacing": 50})).unwrap();
+    assert_eq!(rects(&s)[1], was[1]);
+    assert_eq!(rects(&s)[2].x0, 1700.0, "the third artboard moves");
+    assert_eq!((left(&s, c), left(&s, c2)), (1610.0, 1610.0), "the art on the locked artboard stays, in a sublayer too");
+    assert_eq!(left(&s, d2), 2060.0, "the sublayer's other art moves with the third artboard");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 1, "art": false})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert!(!s.doc().unwrap().doc.artboards[copy].locked, "a copy starts unlocked");
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false, "x": 5})).unwrap();
+    assert_eq!(rects(&s)[1].x0, 5.0, "unlocking it lets the same change move it");
+}
+
+/// A locked artboard keeps its exact rectangle when `artboard.setProps` passes values within
+/// 1e-6 pt of it, as Artboard Options does when it renames the artboard: repeated calls don't
+/// move or resize it by small steps.
+#[test]
+fn a_locked_artboard_keeps_its_exact_rectangle() {
+    let mut s = session();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let rect = |s: &Session| s.doc().unwrap().doc.artboards[0].rect;
+    let was = rect(&s);
+    for i in 0..10 {
+        let r = rect(&s);
+        let p =
+            json!({"index": 0, "name": format!("Cover {i}"), "x": r.x0 + 5e-7, "y": r.y0 - 9e-7, "width": r.width() + 4e-7, "height": r.height()});
+        s.execute("artboard.setProps", &p).unwrap();
+    }
+    assert_eq!(rect(&s), was);
+    assert_eq!(boards(&s)[0].1, "Cover 9", "the name still changes");
+}
+
+/// `artboard.setProps {artboards}` takes `locked` from each entry, and a list that gives a locked
+/// artboard a new rectangle is refused and changes no artboard.
+#[test]
+fn a_list_of_artboards_takes_each_entrys_lock() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "locked": true}, {"index": 1, "name": "Back"}]})).unwrap();
+    let locks = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
+    let widths = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect::<Vec<_>>();
+    assert_eq!(locks(&s), [true, false]);
+    let was = widths(&s);
+    let r = s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "width": 300}, {"index": 0, "width": 300}]}));
+    assert!(matches!(r, Err(EngineError::Other(m)) if m == "the artboard is locked"));
+    assert_eq!(widths(&s), was, "neither artboard changes");
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "width": 300}, {"index": 0, "width": 300, "locked": false}]})).unwrap();
+    assert_eq!((locks(&s), widths(&s)), (vec![false, false], vec![300.0, 300.0]));
+}
+
+/// The native format writes an artboard's lock and reads it back. An unlocked artboard is written
+/// as before, with no `locked` key: unlocked again, the document saves to the bytes it had before.
+#[test]
+fn artboard_lock_round_trips_through_the_native_format() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let save = |s: &Session| vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let before = save(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let bytes = save(&s);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let keys = saved["document"]["artboards"][0].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(keys, ["id", "name", "rect", "show_center_mark", "show_cross_hairs"]);
+    assert_eq!(saved["document"]["artboards"][1]["locked"], true);
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert!(back.artboards[1].locked && !back.artboards[0].locked);
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    assert_eq!(save(&s), before);
 }
 
 #[test]

@@ -156,6 +156,8 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("small_caps", json!(v.small_caps)),
         ("charAlign", json!(v.char_align)),
         ("proportionalMetrics", json!(v.proportional_metrics)),
+        ("tateChuYoko", json!(v.tate_chu_yoko)),
+        ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
     ] {
         m.insert(k.into(), x);
@@ -179,6 +181,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
         ("roman_hanging", json!(v.roman_hanging)),
+        ("kashida", json!(v.kashida)),
     ] {
         m.insert(k.into(), x);
     }
@@ -341,10 +344,10 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
         None => text_targets(s, &json!({}), "").ok().and_then(|v| v.first().copied()),
     };
     let Some(NodeKind::Text(t)) = id.and_then(|i| d.node(i)).map(|n| &n.kind) else { return Ok(None) };
-    let at = p.get("start").and_then(Value::as_u64).map_or(0, |v| usize::try_from(v).unwrap_or(usize::MAX));
+    let at = p.get("start").and_then(Value::as_u64).map_or(0, index);
     Ok(Some(match kind {
         Kind::Char => {
-            let style = match p.get("end").and_then(Value::as_u64).map(|v| usize::try_from(v).unwrap_or(usize::MAX)) {
+            let style = match p.get("end").and_then(Value::as_u64).map(index) {
                 Some(end) => vectorcraft_text::edit::insertion_style(&t.runs, at.min(end), at.max(end)),
                 None => vectorcraft_text::edit::style_at(&t.runs, at),
             };
@@ -485,12 +488,9 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
             match kind {
                 Kind::Char => {
                     let len = vectorcraft_text::edit::runs_len(&t.runs);
-                    let (a, b) = match range {
-                        Some(_) => {
-                            let g = |k: &str, def: usize| p.get(k).and_then(Value::as_u64).map_or(def, |v| (v as usize).min(len));
-                            (g("start", 0), g("end", len))
-                        }
-                        None => (0, len),
+                    let (a, b) = match (range, text_range) {
+                        (Some(_), Some(r)) => r.bytes(t),
+                        _ => (0, len),
                     };
                     let mut err = None;
                     vectorcraft_text::edit::style_range(&mut t.runs, a.min(b), a.max(b), |st| match char_fn(st) {

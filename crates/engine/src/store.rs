@@ -204,6 +204,7 @@ impl Session {
     }
 
     /// Write the profile `name` (its file's `bytes`) to the store; `false` when it didn't go there.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn store_profile(&self, name: &str, bytes: &[u8]) -> bool {
         self.profile_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PROFILE_EXT}", file_stem(name)), bytes))
     }

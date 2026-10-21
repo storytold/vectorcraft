@@ -19,7 +19,9 @@
 //!   the color.
 //! - Paragraph formatting: alignment (`w:jc`), start and end indents (`w:start` or `w:left`,
 //!   `w:end` or `w:right`: the right and left indents of a right-to-left paragraph), first-line and
-//!   hanging indents, space before and after, and direction (`w:bidi`).
+//!   hanging indents, space before and after, and direction (`w:bidi`). A paragraph justified with
+//!   a low, medium or high kashida length (`lowKashida`, `mediumKashida`, `highKashida`) is
+//!   justified with Short, Medium or Long kashidas; `both` is justified without kashidas.
 //! - Styles (§17.7.2): the document defaults, then the paragraph style (else the default paragraph
 //!   style) and the styles it is based on, then the run's character style (else the default
 //!   character style) and the styles it is based on, then direct formatting. Bold, italic, caps,
@@ -37,6 +39,7 @@
 use std::collections::HashMap;
 
 use roxmltree::Node;
+use vectorcraft_doc::text::Kashida;
 use vectorcraft_doc::{CharPosition, CharStyle, Justify, ParaDirection, ParaStyle, ScriptMetrics, TextRun};
 
 use super::text::{self, Story};
@@ -162,7 +165,7 @@ fn parse<'a>(xml: &'a str, name: &str, cmd: &str) -> Result<roxmltree::Document<
 
 /// How deep the elements of `xml` nest: start tags less end tags, at most, outside comments,
 /// CDATA sections, processing instructions, declarations and quoted attribute values.
-fn nesting(xml: &str) -> usize {
+pub(crate) fn nesting(xml: &str) -> usize {
     let b = xml.as_bytes();
     let (mut depth, mut most, mut i) = (0usize, 0usize, 0usize);
     // The index just past the first `end` at or after `from` (the end of the text if none).
@@ -361,8 +364,9 @@ enum Align {
     Left,
     Center,
     Right,
-    /// Justified, the last line at the start (the right of a right-to-left paragraph).
-    Both,
+    /// Justified, the last line at the start (the right of a right-to-left paragraph), with the
+    /// kashida length of `lowKashida`, `mediumKashida` and `highKashida` (§17.18.44).
+    Both(Kashida),
     /// Justified, the last line too.
     Distribute,
     Start,
@@ -860,8 +864,8 @@ impl Reader {
                         Align::Left => Justify::Left,
                         Align::Center => Justify::Center,
                         Align::Right => Justify::Right,
-                        Align::Both if rtl => Justify::JustifyRight,
-                        Align::Both => Justify::JustifyLeft,
+                        Align::Both(_) if rtl => Justify::JustifyRight,
+                        Align::Both(_) => Justify::JustifyLeft,
                         Align::Distribute => Justify::JustifyAll,
                         Align::Start => Justify::Auto,
                         Align::End if rtl => Justify::Left,
@@ -873,6 +877,7 @@ impl Reader {
                     space_before: points(p.before),
                     space_after: points(p.after),
                     direction: p.rtl.map(|rtl| if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight }),
+                    kashida: if let Align::Both(k) = p.align { k } else { Kashida::None },
                     ..ParaStyle::default()
                 }
             })
@@ -898,7 +903,10 @@ fn para_props(ppr: Node) -> ParaProps {
                     Some("left") => Some(Align::Left),
                     Some("center") => Some(Align::Center),
                     Some("right") => Some(Align::Right),
-                    Some("both" | "lowKashida" | "mediumKashida" | "highKashida") => Some(Align::Both),
+                    Some("both") => Some(Align::Both(Kashida::None)),
+                    Some("lowKashida") => Some(Align::Both(Kashida::Short)),
+                    Some("mediumKashida") => Some(Align::Both(Kashida::Medium)),
+                    Some("highKashida") => Some(Align::Both(Kashida::Long)),
                     Some("distribute" | "thaiDistribute") => Some(Align::Distribute),
                     Some("start") => Some(Align::Start),
                     Some("end") => Some(Align::End),

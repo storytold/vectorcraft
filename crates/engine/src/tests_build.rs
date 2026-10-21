@@ -7,7 +7,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_testkit::pdf::{PdfPage, pdf};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
 
@@ -358,6 +358,55 @@ fn shape_builder_fills_an_area_lines_enclose() {
     assert_eq!(ids(&r).len(), 4, "the triangle + the three lines, which only bound it");
 }
 
+/// Two diagonals and a crossbar that stops about 3 pt short of each: the triangle they bound.
+fn lines_with_gaps(s: &mut Session) {
+    let l1 = line(s, (0.0, 0.0), (100.0, 100.0));
+    let l2 = line(s, (100.0, 0.0), (0.0, 100.0));
+    let l3 = line(s, (24.0, 80.0), (76.0, 80.0));
+    s.execute("select.set", &json!({"ids": [l1.0, l2.0, l3.0]})).unwrap();
+}
+
+#[test]
+fn shape_builder_gap_detection_closes_small_gaps_between_lines() {
+    let mut s = session();
+    lines_with_gaps(&mut s);
+    let regions = |s: &mut Session, p: Value| s.execute("shapeBuilder.regions", &p).unwrap()["regions"].as_array().unwrap().len();
+    assert_eq!(regions(&mut s, json!({})), 0, "off by default");
+    assert_eq!(regions(&mut s, json!({"gap": 2})), 0, "the gap is longer");
+    assert_eq!(regions(&mut s, json!({"gap": 3})), 1);
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[50, 70]]})).is_err(), "no gap, no region");
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 70]], "gap": 3})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    let a = area(&s, merged);
+    assert!(a > 850.0 && a < 900.0, "the triangle and its two bridges: {a}");
+    assert_eq!(ids(&r).len(), 4, "the bridges are no art: the merged shape and the three lines");
+    assert_eq!(open_paths(&s, &ids(&r)).len(), 3);
+}
+
+#[test]
+fn shape_builder_tool_gap_detection_option() {
+    let mut s = session();
+    lines_with_gaps(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    assert_eq!((s.tool_options()["gapDetection"].clone(), s.tool_options()["gapLength"].clone()), (json!(false), json!(3.0)));
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 70.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 70.0), v).unwrap();
+    };
+    click(&mut s);
+    assert_eq!(layer_children(&s), 3, "Gap Detection is off");
+    s.set_tool_option_cmd(&json!({"values": {"gapDetection": true, "gapLength": 6.0}})).unwrap();
+    click(&mut s);
+    assert_eq!(layer_children(&s), 4, "the triangle");
+    // The options are kept when another tool is chosen.
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(
+        (s.tool_options_of("shapeBuilder")["gapDetection"].clone(), s.tool_options_of("shapeBuilder")["gapLength"].clone()),
+        (json!(true), json!(6.0))
+    );
+}
+
 #[test]
 fn shape_builder_closes_filled_open_paths() {
     let mut s = session();
@@ -378,6 +427,142 @@ fn shape_builder_closes_filled_open_paths() {
     let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
     assert_eq!(r["regions"], json!([]));
     assert_eq!(r["lines"].as_array().unwrap().len(), 1);
+}
+
+/// Consider Open Filled Paths as Closed off: a filled open path is only an edge, as an unfilled
+/// one is, so it forms no region and a click inside it merges nothing.
+#[test]
+fn shape_builder_open_filled_paths_cut_without_open_filled_as_closed() {
+    let mut s = session();
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}]})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    set_fill(&mut s, p, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+    let r = s.execute("shapeBuilder.regions", &json!({"openFilledAsClosed": false})).unwrap();
+    assert_eq!(r["regions"], json!([]));
+    assert_eq!(r["lines"].as_array().unwrap().len(), 1);
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]], "openFilledAsClosed": false})).is_err());
+    // On (the default), the click makes the area the fill closes a shape.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]]})).unwrap();
+    assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6);
+}
+
+/// Pick Color From Color Swatches: the merged shape takes the current fill, not the fill of the
+/// object under the first point; setting the current fill without `ids` leaves the selection's.
+#[test]
+fn shape_builder_pick_color_from_swatches_fills_with_the_current_fill() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    let green = s.paint.fill.clone();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]], "pickColorFrom": "swatches"})).unwrap();
+    assert_eq!(node(&s, NodeId(r["merged"].as_u64().unwrap())).appearance.fill_paint(), green);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]], "pickColorFrom": "artwork"})).unwrap();
+    assert_eq!(node(&s, NodeId(r["merged"].as_u64().unwrap())).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]], "pickColorFrom": "layers"})).is_err());
+}
+
+/// The Shape Builder Tool Options reach what the tool does: Straight Line sends the drag's first
+/// and last points, and the other options go with them to `shapeBuilder.merge`.
+#[test]
+fn shape_builder_tool_options_reach_the_command() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let values = json!({"openFilledAsClosed": false, "pickColorFrom": "swatches", "selection": "straightLine"});
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": values})).unwrap();
+    // A drag that bends up through (60, 20) on its way.
+    for (kind, x, y) in
+        [(PointerKind::Down, 25.0, 50.0), (PointerKind::Drag, 60.0, 20.0), (PointerKind::Drag, 75.0, 50.0), (PointerKind::Up, 75.0, 50.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+    }
+    let (cmd, p) = s.journal.last().unwrap().clone();
+    assert_eq!(cmd, "shapeBuilder.merge");
+    assert_eq!(
+        (&p["points"], &p["openFilledAsClosed"], &p["pickColorFrom"]),
+        (&json!([[25.0, 50.0], [75.0, 50.0]]), &json!(false), &json!("swatches"))
+    );
+}
+
+/// Highlight Fill off: hovering a region in merge mode highlights nothing; erase mode still shows
+/// what a click would delete.
+#[test]
+fn shape_builder_highlight_fill_off_leaves_regions_unshaded() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty());
+    s.set_tool_option_cmd(&json!({"key": "highlightFill", "value": false})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 76.0, 50.0), v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0).with_mods(alt), v).unwrap();
+    assert!(!s.overlays(v).is_empty());
+}
+
+/// Pick Color From Color Swatches: Left and Right step the current fill through the document's
+/// color swatches (the selection keeps its fills), and Cursor Swatch Preview shows the current fill
+/// between the swatches before and after it.
+#[test]
+fn shape_builder_arrow_keys_step_the_current_fill_through_the_swatches() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let chips = |s: &mut Session| s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count();
+    assert!(!s.tool_claims_key(ToolKey::Right, v), "Artwork leaves the arrows to nudging");
+    let values = json!({"pickColorFrom": "swatches", "cursorSwatchPreview": true});
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": values})).unwrap();
+    assert!(s.tool_claims_key(ToolKey::Right, v));
+    let (first, swatches): (String, Vec<Paint>) = {
+        let list = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc);
+        (list[0].name.clone(), list.iter().take(3).map(|sw| sw.paint.clone()).collect())
+    };
+    assert_eq!(swatches.len(), 3);
+    s.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, swatches[2]);
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, swatches[1]);
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0), v).unwrap();
+    assert_eq!(chips(&mut s), 3);
+    s.set_tool_option_cmd(&json!({"key": "cursorSwatchPreview", "value": false})).unwrap();
+    assert_eq!(chips(&mut s), 0);
+}
+
+/// Two swatches of the same color next to each other: the arrow keys step through both and on to
+/// the swatch after them.
+#[test]
+fn shape_builder_arrow_keys_pass_swatches_of_the_same_color() {
+    let mut s = session();
+    two(&mut s);
+    for name in ["Twin A", "Twin B"] {
+        s.execute("swatch.new", &json!({"name": name, "color": "#123456"})).unwrap();
+    }
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "values": {"pickColorFrom": "swatches"}})).unwrap();
+    let names: Vec<String> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.name.clone()).collect();
+    let a = names.iter().position(|n| n == "Twin A").unwrap();
+    assert_eq!(names[a + 1], "Twin B");
+    s.execute("paint.setFill", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    let twin = s.paint.fill.clone();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, twin, "Twin B");
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
+    assert_eq!(s.paint.fill, after, "the swatch after Twin B");
 }
 
 #[test]
@@ -532,6 +717,54 @@ fn live_paint_stroke_edge() {
 }
 
 #[test]
+fn live_paint_stroke_edge_skips_hidden_edges() {
+    let mut s = session();
+    let g = live(&mut s);
+    // The vertical edge at x=100 is hidden on its own; the group stays visible.
+    let vertical_at = |s: &Session, x: f64| -> Vec<u64> {
+        vectorcraft_tools::builder::edges(&node(s, g))
+            .iter()
+            .filter(|e| e.geometric_bounds().is_some_and(|bb| (bb.x0 - x).abs() < 1e-6 && (bb.x1 - x).abs() < 1e-6))
+            .map(|e| e.id.0)
+            .collect()
+    };
+    let hidden = vertical_at(&s, 100.0);
+    assert!(!hidden.is_empty());
+    s.execute("object.setProps", &json!({"ids": hidden, "visible": false})).unwrap();
+    // 1 pt from the hidden edge, the nearest visible edge within the tolerance is the one at x=50.
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [99, 50], "tolerance": 60})).unwrap();
+    assert!(vertical_at(&s, 50.0).contains(&r["edge"].as_u64().unwrap()), "{r}");
+    // With only the hidden edge within the tolerance, no edge is stroked.
+    assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [99, 50]})).is_err());
+}
+
+#[test]
+fn live_paint_fill_skips_hidden_faces() {
+    let mut s = session();
+    let g = live(&mut s);
+    // The face from x=50 to x=100 is hidden on its own; the group stays visible.
+    let hidden = vectorcraft_tools::builder::face_at(&node(&s, g), vectorcraft_geom::Point::new(75.0, 50.0)).unwrap().id;
+    s.execute("object.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let children = node(&s, g).children().unwrap().len();
+    // livePaint.fill at a point on the hidden face returns an error and fills no face, with `group`
+    // and with the group in `ids`, and it does not rebuild the group.
+    for p in [json!({"group": g.0, "point": [75, 50], "color": "#00ff00"}), json!({"ids": [g.0], "point": [75, 50], "color": "#00ff00"})] {
+        assert!(s.execute("livePaint.fill", &p).is_err(), "{p}");
+        let face = node(&s, hidden);
+        assert!(!face.visible && face.appearance.fill_paint() != green, "{p}");
+        assert_eq!(node(&s, g).children().unwrap().len(), children, "{p}");
+    }
+    // Given another Live Paint group with a face at that point as well, that face is filled.
+    let other = rect(&mut s, 60.0, 40.0, 20.0, 20.0);
+    let other = NodeId(s.execute("livePaint.make", &json!({"ids": [other.0]})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("livePaint.fill", &json!({"ids": [g.0, other.0], "point": [75, 50], "color": "#00ff00"})).unwrap();
+    assert_eq!(r["group"], other.0);
+    assert_eq!(node(&s, NodeId(r["face"].as_u64().unwrap())).appearance.fill_paint(), green);
+    assert!(!node(&s, hidden).visible);
+}
+
+#[test]
 fn live_paint_release_and_expand() {
     let mut s = session();
     let g = live(&mut s);
@@ -575,6 +808,83 @@ fn live_paint_merge_keeps_paint_and_adds_faces() {
     assert_eq!(src.children().unwrap().len(), 3, "the rectangle joined the sources");
     assert_eq!(s.doc().unwrap().doc.parent_of(c), Some(src.id));
     assert_eq!(layer_children(&s), 1);
+}
+
+/// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
+/// graphic style link, and return it as it then is.
+fn dress_live_group(s: &mut Session, g: NodeId) -> Node {
+    use vectorcraft_doc::{Knockout, OpacityMask};
+    let mask = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Default::default());
+    s.edit("t", |d, _| {
+        let n = d.node_mut(g).unwrap();
+        n.locked = true;
+        n.visible = false;
+        n.isolate = true;
+        n.knockout = Knockout::On;
+        n.appearance.set_stroke(Paint::solid(Color::rgb(0.0, 0.5, 0.0)));
+        let mut e = n.extras_mut();
+        e.mask = Some(Box::new(OpacityMask::new(mask, true)));
+        e.graphic_style = Some(7);
+        Ok(())
+    })
+    .unwrap();
+    node(s, g)
+}
+
+/// Asserts that `after` is `before` with other children and Gap Options.
+fn same_group_but_children(before: &Node, after: &Node) {
+    assert_eq!((after.locked, after.visible, after.isolate), (true, false, true));
+    assert_eq!(after.appearance, before.appearance, "the group's own appearance");
+    assert_eq!(after.extras().mask, before.extras().mask, "the opacity mask");
+    assert_eq!(after.extras().graphic_style, Some(7), "the graphic style link");
+    let mut want = before.clone();
+    *want.children_mut().unwrap() = after.children().unwrap().clone();
+    want.extras_mut().live_paint_gaps = after.extras().live_paint_gaps.clone();
+    assert_eq!(after, &want);
+}
+
+#[test]
+fn live_paint_merge_keeps_the_groups_lock_visibility_mask_and_graphic_style() {
+    let mut s = session();
+    let g = live(&mut s);
+    let before = dress_live_group(&mut s, g);
+    let c = rect(&mut s, 120.0, 20.0, 100.0, 20.0);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    assert_eq!(NodeId(r["id"].as_u64().unwrap()), g);
+    let after = node(&s, g);
+    same_group_but_children(&before, &after);
+    assert_eq!(vectorcraft_tools::builder::sources(&after).unwrap().children().unwrap().len(), 3, "the rectangle joined the sources");
+    // One undo step brings back the group as it was, and the rectangle beside it.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, g), before);
+    assert_eq!(layer_children(&s), 2);
+}
+
+#[test]
+fn live_paint_make_and_fill_with_a_live_paint_group_selected_add_the_paths_to_it() {
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let fill_at = |s: &Session, g: NodeId, x: f64, y: f64| {
+        vectorcraft_tools::builder::face_at(&node(s, g), vectorcraft_geom::Point::new(x, y)).map(|f| f.appearance.fill_paint())
+    };
+    // Make, and the Live Paint Bucket on a path beside the group, each keep the group, its
+    // properties and the paint of its faces.
+    for (cmd, params) in [("livePaint.make", json!({})), ("livePaint.fill", json!({"point": [170, 30], "color": "#0000ff"}))] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "color": "#00ff00"})).unwrap();
+        let before = dress_live_group(&mut s, g);
+        let c = rect(&mut s, 120.0, 20.0, 100.0, 20.0);
+        let mut p = params;
+        p["ids"] = json!([g.0, c.0]);
+        let r = s.execute(cmd, &p).unwrap();
+        let id = r.get("id").or_else(|| r.get("group")).and_then(Value::as_u64);
+        assert_eq!(id, Some(g.0), "{cmd}");
+        same_group_but_children(&before, &node(&s, g));
+        assert_eq!(fill_at(&s, g, 25.0, 50.0), Some(green.clone()), "{cmd}");
+        assert_eq!(layer_children(&s), 1, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, g), before, "{cmd}");
+    }
 }
 
 /// A Live Paint group of one open path round the square 0..100, its end 2 pt short of its start.

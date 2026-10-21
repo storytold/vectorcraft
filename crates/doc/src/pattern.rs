@@ -572,6 +572,11 @@ impl RepeatSpec {
     fn kept(&self, nested: usize) -> usize {
         self.kind.count().min(MAX_REPEAT_INSTANCES / nested.max(1)).max(1)
     }
+    /// How many instances this Repeat draws ([`Self::transforms`]): as many as its options make,
+    /// fewer when the Repeats in its source would take it past [`MAX_REPEAT_INSTANCES`].
+    pub fn instances(&self) -> usize {
+        self.kept(nested_instances(&self.source))
+    }
     /// Instances made in all, those of the Repeats nested in the source included.
     fn instances_in_all(&self) -> usize {
         let nested = nested_instances(&self.source);

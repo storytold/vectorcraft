@@ -47,7 +47,8 @@ fn slice_paras(paras: &[ParaStyle], first: usize, runs: &[TextRun]) -> Vec<ParaS
 }
 
 /// How many bytes of `runs` fit in `frame` (whole lines; a following break space or paragraph
-/// break stays with the line that ends there).
+/// break stays with the line that ends there, but on a path, where a space with no room
+/// overflows as any character does, it starts the next frame).
 fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
     let mut probe = frame.clone();
     probe.runs = runs.to_vec();
@@ -57,6 +58,9 @@ fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
         return text.len();
     }
     let mut end = lay.lines.last().map_or(0, |l| l.end);
+    if lay.on_path {
+        return end;
+    }
     let bytes = text.as_bytes();
     while end < bytes.len() && bytes[end] == b' ' {
         end += 1;
@@ -112,13 +116,97 @@ pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: 
 mod tests {
     use super::*;
     use vectorcraft_doc::{CharStyle, Justify, TextKind};
-    use vectorcraft_geom::{Affine, Rect, shapes};
+    use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
     fn frame(x: f64) -> TextObject {
         let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", CharStyle::default());
         t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(x, 0.0, x + 120.0, 60.0)) };
         t.xf = Affine::IDENTITY;
         t
+    }
+
+    /// Type on a straight path `length` long.
+    fn path_frame(length: f64) -> TextObject {
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", CharStyle::default());
+        let line = kurbo::Line::new((0.0, 0.0), (length, 0.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Shape::to_path(&line, 0.1)), start: 0.0, end: None };
+        t.xf = Affine::IDENTITY;
+        t
+    }
+
+    /// Type on a path that overflows ends its line where its text stops fitting, as area type's
+    /// last line does, so a story flows on from there through area type and type on a path alike.
+    #[test]
+    fn story_flows_across_area_type_and_type_on_a_path() {
+        let db = FontDb::global();
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6);
+        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
+        let mut path = path_frame(100.0);
+        path.runs = story.clone();
+        let laid = layout(db, &path);
+        let end = laid.lines.first().map_or(0, |l| l.end);
+        assert!(laid.overflow && end > 0 && end < text.len(), "the path's line ends where its text stops: {end}");
+        let (a, b, c) = (frame(0.0), path_frame(100.0), frame(400.0));
+        let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b, &c], &story, &[]).into_iter().map(|s| s.runs).collect();
+        let lens: Vec<usize> = parts.iter().map(|p| runs_len(p)).collect();
+        assert!(lens.iter().all(|l| *l > 0), "each frame takes a share: {lens:?}");
+        let joined: String = parts.iter().flatten().map(|r| r.text.as_str()).collect();
+        assert_eq!(joined, text, "no character lost or duplicated");
+        let mut on_path = b.clone();
+        on_path.runs = parts[1].clone();
+        assert!(!layout(db, &on_path).overflow, "the path's share fits it");
+    }
+
+    /// A path that runs out of room at a space holds only what it shows: the space starts the
+    /// next frame, as a space with no room on a path overflows.
+    #[test]
+    fn a_path_that_runs_out_at_a_space_leaves_it_to_the_next_frame() {
+        let db = FontDb::global();
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6);
+        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
+        let mut at_space = 0;
+        for length in (60..160).step_by(3) {
+            let (a, b) = (path_frame(f64::from(length)), frame(400.0));
+            let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b], &story, &[]).into_iter().map(|s| s.runs).collect();
+            let joined: String = parts.iter().flatten().map(|r| r.text.as_str()).collect();
+            assert_eq!(joined, text, "no character lost or duplicated");
+            let mut on_path = a.clone();
+            on_path.runs = parts[0].clone();
+            assert!(!layout(db, &on_path).overflow, "the path's share fits it ({length})");
+            at_space += usize::from(parts[1].iter().map(|r| r.text.as_str()).collect::<String>().starts_with(' '));
+        }
+        assert!(at_space > 0, "some lengths end at a space");
+    }
+
+    /// A right-to-left story flows on from where its text stops fitting a path, in reading order.
+    #[test]
+    fn right_to_left_story_flows_on_from_a_path() {
+        let db = FontDb::global();
+        let text = "שלום עולם ".repeat(8);
+        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
+        let (a, b) = (path_frame(100.0), frame(400.0));
+        let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b], &story, &[]).into_iter().map(|s| s.runs).collect();
+        let lens: Vec<usize> = parts.iter().map(|p| runs_len(p)).collect();
+        assert!(lens.iter().all(|l| *l > 0), "each frame takes a share: {lens:?}");
+        let joined: String = parts.iter().flatten().map(|r| r.text.as_str()).collect();
+        assert_eq!(joined, text, "no character lost or duplicated");
+        let mut on_path = a.clone();
+        on_path.runs = parts[0].clone();
+        assert!(!layout(db, &on_path).overflow, "the path's share fits it");
+    }
+
+    /// A path with no length holds no text, so the story flows past it.
+    #[test]
+    fn story_flows_past_a_path_with_no_length() {
+        let db = FontDb::global();
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6);
+        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
+        let (a, b, c) = (frame(0.0), path_frame(0.0), frame(400.0));
+        let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b, &c], &story, &[]).into_iter().map(|s| s.runs).collect();
+        let lens: Vec<usize> = parts.iter().map(|p| runs_len(p)).collect();
+        assert!(lens[0] > 0 && lens[1] == 0 && lens[2] > 0, "{lens:?}");
+        let joined: String = parts.iter().flatten().map(|r| r.text.as_str()).collect();
+        assert_eq!(joined, text, "no character lost or duplicated");
     }
 
     #[test]

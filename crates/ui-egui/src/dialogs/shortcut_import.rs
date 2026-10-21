@@ -462,7 +462,8 @@ pub fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Some(path) => path,
         None if app.services.open_async.is_some() => return crate::io::open_dialog(app).map(|_| Value::Null),
         None => {
-            let pick = FilePick { filters: vec![("Shortcut sets", vectorcraft_engine::cmd::shortcutset::EXTS)], ..Default::default() };
+            let pick =
+                FilePick { filters: vec![FilePick::filter("Shortcut sets", vectorcraft_engine::cmd::shortcutset::EXTS)], ..Default::default() };
             crate::picks::open(app, &pick).ok_or("cancelled")?
         }
     };

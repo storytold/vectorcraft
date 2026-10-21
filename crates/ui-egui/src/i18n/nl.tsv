@@ -22,6 +22,7 @@
 	Quit VectorCraft	VectorCraft afsluiten
 	File	Bestand
 	New…	Nieuw…
+	New Without Dialog	Nieuw zonder dialoogvenster
 	New from Template…	Nieuw van sjabloon…
 	Open…	Openen…
 	Open Recent Files	Recente bestanden openen
@@ -774,6 +775,7 @@
 	Activate Panel	Paneel activeren
 	Change Panel Layout	Paneelindeling wijzigen
 	Close Panel	Paneel sluiten
+	Collapse Panel Group	Paneelgroep samenvouwen
 	Move Panel	Paneel verplaatsen
 	Group with	Groeperen met
 	Resize panels	Panelen van formaat wijzigen
@@ -1070,7 +1072,8 @@ lighting	Light	Licht
 	 to sample a color	 om een kleur over te nemen
 	 across a selected object to set the gradient direction	 over een geselecteerd object om de richting van het verloop in te stellen
 	 to select an artboard  |  	 om een tekengebied te selecteren  |  
-	 on the canvas to create one	 op het canvas om er een te maken
+	 on the canvas to create one (	 op het canvas om er een te maken (
+	 selects several, or draws one inside an artboard)	 selecteert er meerdere of maakt er een binnen een tekengebied)
 	 a stroke to add a width point  |  	 op een lijn om een breedtepunt toe te voegen  |  
 	 to change one side  |  	 om één kant te wijzigen  |  
 	 to select more points  |  	 om meer punten te selecteren  |  
@@ -1390,6 +1393,7 @@ lighting	Light	Licht
 	{count} more rules: Export writes every one.	{count} regels meer: Export schrijft ze allemaal.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} naamloze objecten weggelaten: geef ze een naam, of zet Naamloze objecten aan in het paneelmenu.
 	All Categories	Alle categorieën
+	Repeat Objects	Herhalingsobjecten
 	Save…	Opslaan…
 	Selection Only	Alleen selectie
 	{title} (selection)	{title} (selectie)
@@ -1423,6 +1427,7 @@ lighting	Light	Licht
 	Edit the selected point's colour in the Color panel	Bewerk de kleur van het geselecteerde punt in het Kleur-paneel
 	Edit the stop	Stoppunt bewerken
 	Eyedropper: click the art to sample the stop's colour	Pipet: klik op de illustratie om de kleur van het stoppunt over te nemen
+	Eyedropper: click the art to sample the key color	Pipet: klik op de illustratie om de sleutelkleur over te nemen
 	Gradient across stroke	Verloop over de lijn
 	Gradient along stroke	Verloop langs de lijn
 	Gradient Fill: click to apply, drag onto art	Verloopvulling: klik om toe te passen, sleep naar de illustratie
@@ -1586,6 +1591,9 @@ lighting	Light	Licht
 	Left Indent	Links inspringen
 	Left-to-Right Paragraph Direction	Alinearichting van links naar rechts
 	Line-end Punctuation Half Width	Leestekens op regeleinde op halve breedte
+	Insert Kashidas	Kashida's invoegen
+	Long	Lang
+	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
 	Kinsoku Set	Kinsoku-set
 	Hard	Hard
@@ -1737,6 +1745,7 @@ lighting	Light	Licht
 	Select art and click New Symbol to make one.	Selecteer artwork en klik op Nieuw symbool om er een te maken.
 	Symbol Libraries (on the roadmap)	Symboolbibliotheken (op de roadmap)
 	Align On:	Uitlijnen op:
+	Bottom-Justified Tab	Onder uitgelijnde tabstop
 	Center-Justified Tab	Midden uitgelijnde tabstop
 	Above Text	Boven tekst
 	Position Panel Above Text	Paneel boven tekst plaatsen
@@ -1748,6 +1757,7 @@ lighting	Light	Licht
 	No text selected	Geen tekst geselecteerd
 	Repeat Tab	Tabstop herhalen
 	Right-Justified Tab	Rechts uitgelijnde tabstop
+	Top-Justified Tab	Boven uitgelijnde tabstop
 	Select a text object to set its tab stops.	Selecteer een tekstobject om de tabstops in te stellen.
 	Select text	Selecteer tekst
 	Snap to Unit	Uitlijnen op eenheid
@@ -1863,6 +1873,13 @@ lighting	Light	Licht
 	Tints and Shades	Tinten en schakeringen
 	Hue Shift	Tintverschuiving
 	Key Color:	Sleutelkleur:
+	Tips	Tips
+	Colorization Tips	Tips voor inkleuring
+	The samples show this brush on a blue stroke.	De voorbeelden tonen dit penseel op een blauwe contour.
+	The art keeps its own colors.	De illustratie behoudt haar eigen kleuren.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Zwart wordt de contourkleur en wit blijft wit. Andere kleuren worden tinten van de contourkleur, en hoe lichter een kleur is, hoe lichter de tint is.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Zwart blijft zwart en wit blijft wit. Andere kleuren worden schakeringen van de contourkleur als ze donker zijn en tinten ervan als ze licht zijn.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	De sleutelkleur wordt de contourkleur. De andere kleuren draaien even ver over de kleurencirkel als de sleutelkleur en behouden hun verzadiging en helderheid.
 	Size:	Grootte:
 	Calligraphic Brush Options	Opties voor kalligrafisch penseel
 	Bristle Brush Options	Opties voor borstelpenseel
@@ -2679,12 +2696,21 @@ lighting	Light	Licht
 	Darken	Donkerder
 	Exclusion	Uitsluiting
 	Hard Light	Hard licht
+	Hard Mix	Hard mengen
 	Lighten	Lichter
 	Luminosity	Luminositeit
 	Overlay	Bedekken
 	Soft Light	Zacht licht
+	Soft Mix	Zachte menging
 	Crosshatch	Kruisarcering
 	Fine Dots	Fijne stippen
+
+	Simple	Eenvoudig
+	Light Rough	Licht ruw
+	Dark Rough	Donker ruw
+	Wide Sharp	Breed scherp
+	Wide Blurry	Breed wazig
+	Sparkle	Fonkel
 	Medium Dots	Middelgrote stippen
 	Grainy Dots	Korrelige stippen
 	Coarse Dots	Grove stippen
@@ -2756,6 +2782,14 @@ theme	Appearance	Vormgeving
 	Edit Symbol	Symbool bewerken
 	Expand Brush Strokes	Kwaststreken omzetten
 	New Brush…	Nieuwe kwast…
+	New Brush	Nieuwe kwast
+	Calligraphic Brush	Kalligrafisch penseel
+	Scatter Brush	Verspreidingspenseel
+	Art Brush	Artpenseel
+	Bristle Brush	Borstelpenseel
+	Pattern Brush	Patroonpenseel
+	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
+	Brush Art	Kwastillustratie
 	New Symbol	Nieuw symbool
 	New Symbol…	Nieuw symbool…
 	Place Symbol Instance	Symboolexemplaar plaatsen
@@ -3216,6 +3250,7 @@ theme	Appearance	Vormgeving
 	Scale Corners	Hoeken schalen
 	Scale Cursor Proportional to UI	Cursor proportioneel schalen met UI
 	Scale Strokes & Effects	Streken & effecten schalen
+	Scale Text Attributes	Tekstkenmerken schalen
 	Scratch Disks	Scratchschijven
 	Secondary	Secundair
 	Select Same Tint %	Zelfde tint % selecteren
@@ -3316,6 +3351,7 @@ theme	Appearance	Vormgeving
 	Delete Swatch	Kleurstaal verwijderen
 	Duplicate Swatch	Kleurstaal dupliceren
 	Merge Swatches	Kleurstalen samenvoegen
+	Move Brush	Kwast verplaatsen
 	Move Swatch	Kleurstaal verplaatsen
 	New Color Group	Nieuwe kleurgroep
 	New Swatch	Nieuw kleurstaal
@@ -3899,6 +3935,25 @@ imageTrace	Outline	Contour
 @msg	a PostScript error ({name} in `{op}`: {at})	een PostScript-fout ({name} in `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	een PostScript-fout ({name} in `{op}`: {at}), in {procs}
 @msg	a PostScript error ({name})	een PostScript-fout ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	een PostScript-fout ({name} in `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	een PostScript-fout ({name} in `{op}`; {meaning}), in {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	een PostScript-fout ({name} in `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	een PostScript-fout ({name} in `{op}`: {at}; {meaning}), in {procs}
+@msg	a PostScript error ({name}; {meaning})	een PostScript-fout ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	het programma beëindigt een woordenboek dat het niet heeft begonnen
+@msg	the program opens a file, which the reader can't do	het programma opent een bestand, wat de PostScript-lezer niet kan
+@msg	the program restores a saved state that was already restored	het programma herstelt een opgeslagen toestand die al is hersteld
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	gegevens die het programma leest zijn beschadigd of afgebroken, of het programma vraagt een positie in een bestand dat er geen heeft
+@msg	the program goes past one of the reader's limits	het programma overschrijdt een van de limieten van de PostScript-lezer
+@msg	the path has no point to continue from	het pad heeft geen punt om vanaf verder te gaan
+@msg	a value is outside the range the operator takes	een waarde ligt buiten het bereik dat de operator aanneemt
+@msg	the operator needs more values than the stack holds	de operator heeft meer waarden nodig dan de stapel bevat
+@msg	part of the program isn't valid PostScript text	een deel van het programma is geen geldige PostScript-tekst
+@msg	a value has the wrong type for the operator	een waarde heeft het verkeerde type voor de operator
+@msg	the program runs, deletes or renames a file, which the reader can't do	het programma voert een bestand uit, verwijdert het of wijzigt de naam ervan, wat de PostScript-lezer niet kan
+@msg	the program asks for a resource that isn't defined	het programma vraagt om een resource die niet is gedefinieerd
+@msg	a calculation has no result, as in a division by zero	een berekening heeft geen uitkomst, zoals bij een deling door nul
+@msg	the operator looks for a mark on the stack and finds none	de operator zoekt een markering op de stapel en vindt er geen
 @msg	a bitmap is empty	een bitmap is leeg
 @msg	a bitmap is too large to read	een bitmap is te groot om te lezen
 @msg	a colour index is 0 to {_1}, not {n}	een kleurindex is 0 tot {_1}, niet {n}
@@ -4015,6 +4070,7 @@ imageTrace	Outline	Contour
 @msg	no bounds	geen grenzen
 @msg	no brush named `{name}`	geen penseel met de naam `{name}`
 @msg	no brush selected	geen penseel geselecteerd
+@msg	brushes move only within their type	penselen kunnen alleen binnen hun eigen type worden verplaatst
 @msg	no catalog	geen catalogus
 @msg	no changes since the last save	geen wijzigingen sinds de laatste keer opslaan
 @msg	no clock to keep a heartbeat by	geen klok om een hartslag bij te houden
@@ -4407,6 +4463,12 @@ imageTrace	Outline	Contour
 @msg	before must name a panel	before moet een paneel benoemen
 @msg	docking action contains an unknown panel or an excessive split path	dokactie bevat een onbekend paneel of een overmatig splitspad
 @msg	group must be true or false	group moet true of false zijn
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	paneel zweeft; vouw de groep samen met window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	paneel staat niet in een dockgroep
+@msg	only a dock group above or below others collapses, not one beside another	alleen een dockgroep boven of onder andere vouwt samen, niet een ernaast
+@msg	icon must be true or false	icon moet true of false zijn
+@msg	icon only docks a panel in the icon column, with no anchor	icon dockt een paneel alleen in de pictogramkolom, zonder anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column dockt een set als dockkolom, zonder anchor of icon
 @msg	move requires a destination panel	move vereist een doelpaneel
 @msg	move requires an existing destination panel	move vereist een bestaand doelpaneel
 @msg	onto must name a floating panel	onto moet een zwevend paneel benoemen
@@ -4793,6 +4855,9 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	3D Lighting Preset	Voorinstelling 3D-belichting
+	Standard	Standaard
+	Diffuse	Diffuus
 # 3D light management.
 	Lights	Lichtbronnen
 	Add Light	Lichtbron toevoegen
@@ -4837,6 +4902,7 @@ mark-style	Japanese	Japans
 	Painting	Schilderen
 	Printing and Proofing	Afdrukken en proefdrukken
 	Tracing	Tracering
+	Touch	Touch
 	Typography	Typografie
 	VectorCraft	VectorCraft
 	Web	Web
@@ -4903,6 +4969,7 @@ mark-style	Japanese	Japans
 @msg	Measured anchor no longer exists	Gemeten ankerpunt bestaat niet meer
 @msg	Measured segment no longer exists	Gemeten segment bestaat niet meer
 @msg	Non-finite dimension	Niet-eindige maatlijn
+@msg	Scale Text Attributes: selected type has no scale to bake	Tekstkenmerken schalen: de geselecteerde tekst heeft geen schaling om toe te passen
 @msg	Scale must be drawing:real, for example 1:10	Schaal moet tekening:werkelijk zijn, bijvoorbeeld 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Schaalverhouding moet tussen 1:1000000 en 1000000:1 liggen
 @msg	Second measured segment no longer exists	Tweede gemeten segment bestaat niet meer
@@ -4929,6 +4996,7 @@ mark-style	Japanese	Japans
 	Make Image Dynamic	Afbeelding dynamisch maken
 	Import Data Sets…	Gegevenssets importeren…
 	Export Data Sets…	Gegevenssets exporteren…
+	Load Variable Library…	Variabelenbibliotheek laden…
 	Make Graph Dynamic	Grafiek dynamisch maken
 	Batch…	Batch…
 	Source Folder:	Bronmap:
@@ -5073,9 +5141,18 @@ swatch	Bright Violet	Felviolet
 @msg	select the art to export first	selecteer eerst de illustratie die je wilt exporteren
 @msg	no saved selection recalled	geen opgeslagen selectie opgeroepen
 	Merge only with selection	Alleen samenvoegen met selectie
+	Consider Open Filled Paths as Closed	Open gevulde paden als gesloten beschouwen
+	Pick Color From:	Kleur kiezen uit:
+	Artwork	Artwork
+	Cursor Swatch Preview	Staalvoorbeeld bij de cursor
+	Selection:	Selectie:
+	Straight Line	Rechte lijn
+	Highlight:	Markering:
 	Sketch	Schets
 	Halftone Pattern…	Rasterpatroon…
 	Halftone Pattern	Rasterpatroon
+	Torn Edges…	Gescheurde randen…
+	Torn Edges	Gescheurde randen
 	Pattern Type	Patroontype
 	Dot	Punt
 	Export Type:	Exporttype:
@@ -5104,6 +5181,8 @@ swatch	Bright Violet	Felviolet
 	Gap Detection	Openingen detecteren
 	Gap Options	Openingsopties
 	Gap Preview Color:	Voorbeeldkleur openingen:
+	Show Live Paint Gaps	Live Paint-openingen tonen
+	Hide Live Paint Gaps	Live Paint-openingen verbergen
 	Graph Column	Grafiekkolom
 	JavaScript Files	JavaScript-bestanden
 	JavaScript:	JavaScript:
@@ -5124,12 +5203,24 @@ swatch	Bright Violet	Felviolet
 	Lock Variables	Variabelen vergrendelen
 	Unlock Variables	Variabelen ontgrendelen
 	Change to Artboard Rulers	Wijzigen in tekenbordlinialen
+	Colored Pencil…	Gekleurd potlood…
+	Colored Pencil	Gekleurd potlood
 	Cutout…	Knipsel…
+	Dry Brush…	Droog penseel…
 	Neon Glow…	Neongloed…
+	Palette Knife…	Paletmes…
 	Poster Edges…	Posterranden…
+	Rough Pastels…	Ruwe pastels…
 	Cutout	Knipsel
+	Dry Brush	Droog penseel
 	Neon Glow	Neongloed
+	Paint Daubs…	Verfstipjes…
+	Paint Daubs	Verfstipjes
+	Palette Knife	Paletmes
 	Poster Edges	Posterranden
+	Rough Pastels	Ruwe pastels
+	Underpainting…	Onderlaag…
+	Underpainting	Onderlaag
 	Apply Data Set	Gegevensset toepassen
 	Cancel Pattern Editing	Patroon bewerken annuleren
 	Copy Appearance	Uiterlijk kopiëren
@@ -5207,18 +5298,8 @@ swatch	Bright Violet	Felviolet
 	Typing	Typen
 	Persistent	Permanent
 	Library Panel Options	Opties voor bibliotheekpaneel
-	Lock Artboards	Tekengebieden vergrendelen
-	Unlock Artboards	Tekengebieden ontgrendelen
-	Artboard Color	Kleur van tekengebied
-	Lock Selected	Selectie vergrendelen
-	Lock All Except Selected	Alles behalve selectie vergrendelen
-	Lock All	Alles vergrendelen
-	Unlock Selected	Selectie ontgrendelen
-	Lock Artboard	Tekengebied vergrendelen
-	Unlock Artboard	Tekengebied ontgrendelen
-	Clear Artboard Color	Kleur van tekengebied wissen
-@msg	artboard {_1} is locked	tekengebied {_1} is vergrendeld
-	Include Artboard Fill	Kleur van tekengebied opnemen
+	Gap Length:	Lengte van opening:
+	Locate Library…	Bibliotheek lokaliseren…
 
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Opslaan schrijft {_1}, niet {_2}: gebruik file.saveAsTemplate om het te schrijven
 @msg	`{key}` must be a #rrggbb color	`{key}` moet een #rrggbb-kleur zijn
@@ -5242,6 +5323,7 @@ swatch	Bright Violet	Felviolet
 @msg	the image's pixels can't be read	de pixels van de afbeelding kunnen niet worden gelezen
 @msg	the spine has no segments	de as heeft geen segmenten
 @msg	variables are locked	variabelen zijn vergrendeld
+@msg	variables that aren't text were left out: {kinds}	variabelen die geen tekst zijn, zijn weggelaten: {kinds}
 @msg	x and y must be finite	x en y moeten eindig zijn
 @msg	Persistent libraries not found: {files}	Permanente bibliotheken niet gevonden: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` is geen bibliotheekpaneel (zie window.swatchLibrary)
@@ -5274,6 +5356,7 @@ swatch	Bright Violet	Felviolet
 	Watercolor…	Aquarel…
 	Watercolor	Aquarel
 	Brush Size	Penseelgrootte
+	Texture Coverage	Textuurdekking
 	Definition	Definitie
 	Brush Detail	Penseeldetail
 	Shadow Intensity	Schaduwintensiteit
@@ -5305,3 +5388,9 @@ swatch	Bright Violet	Felviolet
 	Plaster	Gips
 	Note Paper…	Notitiepapier…
 	Note Paper	Notitiepapier
+	Water Paper…	Nat papier…
+	Water Paper	Nat papier
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Fresco…
+	Fresco	Fresco

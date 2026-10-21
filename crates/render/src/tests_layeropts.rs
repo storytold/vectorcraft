@@ -166,3 +166,71 @@ fn guides_draw_on_screen_only() {
     assert!(drawn(false) > 0, "on screen the guide shows");
     assert_eq!(drawn(true), 0, "exports leave it out");
 }
+
+/// #3219: View > Hide Guides hides paths made into guides without using the export/template
+/// filtering switch; Show Guides (the default) draws them again.
+#[test]
+fn hide_guides_hides_guide_paths_on_screen() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut g = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(70.0, 70.0, 90.0, 90.0)), Appearance::default());
+    if let NodeKind::Path { guide, .. } = &mut g.kind {
+        *guide = true;
+    }
+    d.insert(Some(l), 0, g).unwrap();
+    let pixels = |hide_guides: bool| {
+        let opts = RenderOptions { background: Some([255; 4]), hide_guides, ..Default::default() };
+        let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+        (60..100).flat_map(|y| (60..100).map(move |x| (x, y))).filter(|&(x, y)| r.pixel(x, y) != [255; 4]).count()
+    };
+    assert!(pixels(false) > 0, "Show Guides draws the guide path");
+    assert_eq!(pixels(true), 0, "Hide Guides leaves the guide path out");
+}
+
+/// #3219: hiding guides omits guide paths, including those inside cached group effects, without
+/// hiding ordinary artwork. The same renderer must show them again when the view is toggled back.
+#[test]
+fn hidden_guide_paths_leave_the_artwork_and_refresh_cached_effects() {
+    for effect in [false, true] {
+        let mut d = Document::new(120.0, 120.0);
+        let layer = d.layers[0].id;
+        let mut guide =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.5, 20.5, 60.5, 60.5)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { guide, .. } = &mut guide.kind {
+            *guide = true;
+        }
+        let id = guide.id;
+        let art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(80.0, 80.0, 100.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0),
+        );
+        let mut group = Node::group(d.alloc_id(), vec![Arc::new(guide), Arc::new(art)]);
+        if effect {
+            group.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "blur.gaussian".into(),
+                params: serde_json::json!({"radius":2}),
+                visible: true,
+            });
+        }
+        d.insert(Some(layer), 0, group).unwrap();
+        let mut without_guide = d.clone();
+        without_guide.remove(id).unwrap();
+        let mut renderer = Renderer::new();
+        for outline in [false, true] {
+            let opts = RenderOptions { outline, background: Some([255; 4]), ..Default::default() };
+            let shown = renderer.render(&d, 120, 120, Affine::IDENTITY, &opts);
+            let hidden = RenderOptions { hide_guides: true, ..opts.clone() };
+            let expected = Renderer::new().render(&without_guide, 120, 120, Affine::IDENTITY, &hidden);
+            assert_ne!(shown.pixels, expected.pixels, "the guide is initially visible, effect={effect}, outline={outline}");
+            assert!(
+                renderer.render(&d, 120, 120, Affine::IDENTITY, &hidden).pixels == expected.pixels,
+                "only guides hide, effect={effect}, outline={outline}"
+            );
+            assert!(
+                renderer.render(&d, 120, 120, Affine::IDENTITY, &opts).pixels == shown.pixels,
+                "guides show again, effect={effect}, outline={outline}"
+            );
+        }
+    }
+}

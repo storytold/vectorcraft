@@ -38,7 +38,8 @@
 	 from center  |  	 – rajzolás a középpontból  |  
 	 keeps its proportions)	 – arányok megtartása)
 	 near a selected pin to rotate  |  	 egy kijelölt tű közelében – forgatás  |  
-	 on the canvas to create one	 a vásznon – új rajztábla
+	 on the canvas to create one (	 a vásznon – új rajztábla (
+	 selects several, or draws one inside an artboard)	 – több kijelölése, vagy új rajztábla egy rajztáblán belül)
 	 over paths to roughen their outlines  |  	 útvonalakon – a körvonaluk eldurvítása  |  
 	 over paths, and hold still to keep going  |  	 útvonalakon – nyomva tartva folytatódik  |  
 	 right or left to zoom in or out  |  	 jobbra vagy balra – nagyítás vagy kicsinyítés  |  
@@ -322,6 +323,7 @@
 	Art	Grafikus
 	Art & Illustration	Grafika és illusztráció
 	Art and Bright Colors	Grafika és élénk színek
+	Art Brush	Grafikus ecset
 	Art Brush Options	Grafikus ecset beállításai
 	Art Optimized	Grafikára optimalizált
 	Art using a deleted global swatch keeps its colour.	A törölt globális színmintát használó grafika megtartja a színét.
@@ -432,6 +434,7 @@
 	Bottom Left	Bal alsó
 	Bottom Right	Jobb alsó
 	Bottom to Top	Lentről felfelé
+	Bottom-Justified Tab	Alulra igazító tabulátor
 	Bottom-to-Bottom Leading	Alulról alulra mért sorköz
 	Bottom:	Alsó:
 	Bounding Box	Befoglaló keret
@@ -455,6 +458,7 @@
 	Bring Forward	Eggyel előre
 	Bring to Front	Előre hozás
 	Bristle	Sörte
+	Bristle Brush	Sörteecset
 	Bristle Brush Options	Sörteecset beállításai
 	Bristle Brush Strokes	Sörteecset-vonások
 	Bristle Density:	Sörtesűrűség:
@@ -463,6 +467,7 @@
 	Brown	Barna
 	Browser	Böngésző
 	Brush Affects:	Az ecset ezekre hat:
+	Brush Art	Ecsetgrafika
 	Brush Definition	Ecsetdefiníció
 	Brush Libraries	Ecsetkönyvtárak
 	Brush Libraries (on the roadmap)	Ecsetkönyvtárak (tervezett funkció)
@@ -483,6 +488,7 @@
 	Butt Cap	Lapos vonalvég
 	Byte Order:	Bájtsorrend:
 	Calligraphic	Kalligrafikus
+	Calligraphic Brush	Kalligrafikus ecset
 	Calligraphic Brush Options	Kalligrafikus ecset beállításai
 	Can't open “{name}”.	Nem nyitható meg: „{name}”.
 	Can't save “{name}”.	Nem menthető: „{name}”.
@@ -635,6 +641,7 @@
 	Close All	Összes bezárása
 	Close Library	Könyvtár bezárása
 	Close Panel	Panel bezárása
+	Collapse Panel Group	Panelcsoport összecsukása
 	Close Path	Útvonal lezárása
 	Close paths when ends are within:	Útvonalak lezárása, ha a végek távolsága legfeljebb:
 	Clumped	Csomós
@@ -1336,6 +1343,7 @@
 	Eyedropper Picks Up:	A pipetta felveszi:
 	Eyedropper Tool	Pipetta
 	Eyedropper: click the art to sample the stop's colour	Pipetta: kattints a grafikára a pont színének mintavételéhez
+	Eyedropper: click the art to sample the key color	Pipetta: kattints a grafikára a kulcsszín mintavételéhez
 	Farsi	Perzsa
 	Favorites	Kedvencek
 	Feather	Tollazat
@@ -1368,6 +1376,13 @@
 	Alt key toggles to Smooth Tool	Az Alt billentyű a Simítás eszközre vált
 	Keep selected	Kijelölés megtartása
 	Merge only with selection	Összeolvasztás csak a kijelöléssel
+	Consider Open Filled Paths as Closed	A nyitott kitöltött útvonalak zártnak számítanak
+	Pick Color From:	Szín forrása:
+	Artwork	Grafika
+	Cursor Swatch Preview	Színminta-előnézet a mutató mellett
+	Selection:	Kijelölés:
+	Straight Line	Egyenes vonal
+	Highlight:	Kiemelés:
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
 	Fill Rule	Kitöltési szabály
 	Fill with Placeholder Text	Kitöltés helykitöltő szöveggel
@@ -1387,6 +1402,13 @@
 	Find Next	Következő keresése
 	Find Objects	Objektumok keresése
 	Fine Dots	Finom pontok
+
+	Simple	Egyszerű
+	Light Rough	Világos durva
+	Dark Rough	Sötét durva
+	Wide Sharp	Széles éles
+	Wide Blurry	Széles elmosott
+	Sparkle	Csillogás
 	First	Első
 	First Baseline	Első alapvonal
 	First commit	Első commit
@@ -1505,6 +1527,8 @@ file-filter	Templates	Sablonok
 	Large Gaps	Nagy hézagok
 	Gap Preview Color:	Hézagok előnézeti színe:
 	Close Gaps With Paths	Hézagok lezárása útvonalakkal
+	Show Live Paint Gaps	Élő festés hézagainak megjelenítése
+	Hide Live Paint Gaps	Élő festés hézagainak elrejtése
 	Select Fills	Kitöltések kijelölése
 	Select Strokes	Körvonalak kijelölése
 	Gaussian Blur	Gauss-elmosás
@@ -1564,12 +1588,24 @@ file-filter	Templates	Sablonok
 	Select Segments	Szakaszok kijelölése
 	Artistic	Művészi
 	Film Grain…	Filmszemcse…
+	Colored Pencil…	Színes ceruza…
+	Colored Pencil	Színes ceruza
 	Cutout…	Kivágás…
 	Cutout	Kivágás
+	Dry Brush…	Száraz ecset…
+	Dry Brush	Száraz ecset
 	Neon Glow…	Neonfény…
+	Palette Knife…	Palettakés…
 	Neon Glow	Neonfény
+	Paint Daubs…	Festékpaca…
+	Paint Daubs	Festékpaca
+	Palette Knife	Palettakés
 	Poster Edges…	Poszterszélek…
+	Rough Pastels…	Durva pasztell…
 	Poster Edges	Poszterszélek
+	Rough Pastels	Durva pasztell
+	Underpainting…	Alapozás…
+	Underpainting	Alapozás
 	Levels	Szintek
 	Edge Simplicity	Élek egyszerűsége
 	Edge Fidelity	Élek hűsége
@@ -1667,6 +1703,7 @@ file-filter	Templates	Sablonok
 	Handles	Fogantyúk
 	Hard	Szigorú
 	Hard Light	Kemény fény
+	Hard Mix	Kemény keverés
 	Harmony Rules	Harmóniaszabályok
 	Harmony Rules:	Harmóniaszabályok:
 	Harmony Sets	Harmóniakészletek
@@ -2313,6 +2350,9 @@ file-filter	Templates	Sablonok
 	Modified:	Módosítva:
 	Modify	Módosítás
 	Mojikumi	Mojikumi
+	Insert Kashidas	Kasidák beszúrása
+	Long	Hosszú
+	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
 	Monitor RGB	Monitor-RGB
 	Mono	Egyszínű
@@ -2352,6 +2392,7 @@ file-filter	Templates	Sablonok
 	Move Rows	Sorok áthelyezése
 	Move Slices	Szeletek áthelyezése
 	Move Spine Point	Gerincpont áthelyezése
+	Move Brush	Ecset áthelyezése
 	Move Swatch	Színminta áthelyezése
 	Move to Group	Áthelyezés csoportba
 	Move Up	Feljebb
@@ -2379,6 +2420,7 @@ file-filter	Templates	Sablonok
 	New Art Has Basic Appearance	Új grafika alapmegjelenéssel
 	New Artboard	Új rajztábla
 	New Bristle Brush	Új sörteecset
+	New Brush	Új ecset
 	New Brush…	Új ecset…
 	New Calligraphic Brush	Új kalligrafikus ecset
 	New Character Style	Új karakterstílus
@@ -2418,6 +2460,7 @@ file-filter	Templates	Sablonok
 	New View	Új nézet
 	New View…	Új nézet…
 	New Window	Új ablak
+	New Without Dialog	Új párbeszédablak nélkül
 	New Workspace	Új munkaterület
 	New Workspace…	Új munkaterület…
 	New {kind} Style…	Új stílus: {kind}…
@@ -2708,6 +2751,7 @@ file-filter	Templates	Sablonok
 	Path Length	Útvonalak hossza
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
+	Pattern Brush	Mintázatecset
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -3078,6 +3122,7 @@ mark-style	Japanese	Japán
 	Reorder	Átrendezés
 	Reorder Appearance Item	Megjelenési elem átrendezése
 	Repeat	Ismétlés
+	Repeat Objects	Ismétlésobjektumok
 	Repeat Options	Ismétlés beállításai
 	Repeat Pathfinder	Útvonalkezelő-művelet ismétlése
 	Repeat Tab	Tabulátor ismétlése
@@ -3338,6 +3383,7 @@ mark-style	Japanese	Japán
 	Scale Lineweights	Vonalvastagságok méretezése
 	Scale Proportionately	Arányos méretezés
 	Scale Strokes & Effects	Körvonalak és effektusok méretezése
+	Scale Text Attributes	Szövegattribútumok méretezése
 	Scale Tints	Tónusok skálázása
 	Scale to Fit Artboard	Méretezés a rajztáblához
 	Scale Tool	Méretezés
@@ -3351,6 +3397,7 @@ mark-style	Japanese	Japán
 	Scallop Tool	Csipkézés
 	Scans:	Letapogatások:
 	Scatter	Szóró
+	Scatter Brush	Szóróecset
 	Scatter Brush Options	Szóróecset beállításai
 	Scatter Graph Tool	Pontdiagram
 	Scatter:	Szóródás:
@@ -3407,6 +3454,7 @@ mark-style	Japanese	Japán
 	Select art and choose Object › Pattern › Make.	Jelölj ki egy grafikát, és válaszd az Objektum › Mintázat › Létrehozás parancsot.
 	Select art and click New Symbol to make one.	Jelölj ki egy grafikát, és kattints az Új szimbólum gombra.
 	Select art and use New Brush to make one.	Jelölj ki egy grafikát, és hozz létre belőle ecsetet az Új ecset paranccsal.
+	Select art to make a scatter, art or pattern brush.	Jelölj ki egy grafikát szóró-, grafikus vagy mintázatecset létrehozásához.
 	Select Bound Object	Kötött objektum kijelölése
 	Select Data Set	Adatkészlet kiválasztása
 	Select Freeform Point	Szabad formájú pont kijelölése
@@ -3655,6 +3703,7 @@ mark-style	Japanese	Japán
 	Social Tall Post 1000×1500	Magas közösségimédia-bejegyzés 1000×1500
 	Soft	Lágy
 	Soft Light	Lágy fény
+	Soft Mix	Lágy keverés
 	Solid	Kitöltött
 	Sort	Rendezés
 	Sort by Hue	Rendezés színárnyalat szerint
@@ -3917,6 +3966,13 @@ mark-style	Japanese	Japán
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
+	Tips	Tippek
+	Colorization Tips	Színezési tippek
+	The samples show this brush on a blue stroke.	A minták ezt az ecsetet kék körvonalon mutatják.
+	The art keeps its own colors.	A grafika megtartja a saját színeit.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	A fekete a körvonal színévé válik, a fehér pedig fehér marad. A többi szín a körvonalszín tónusává válik, és minél világosabb egy szín, annál világosabb a tónusa.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	A fekete fekete marad, a fehér pedig fehér marad. A többi szín a körvonalszín sötét árnyalatává válik, ha sötét, és a tónusává, ha világos.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	A kulcsszín a körvonal színévé válik. A többi szín ugyanannyit fordul el a színkörön, mint a kulcsszín, és megtartja a telítettségét és a fényességét.
 	Tiny Lens	Apró lencsék
 	Tip extends past the end point	A hegy túlnyúlik a végponton
 	Tip on the end point	A hegy a végponton van
@@ -3942,6 +3998,7 @@ mark-style	Japanese	Japán
 	Top Left	Bal felső
 	Top Right	Jobb felső
 	Top to Bottom	Fentről lefelé
+	Top-Justified Tab	Felülre igazító tabulátor
 	Top-to-Top Leading	Felülről felülre mért sorköz
 	Top:	Felső:
 	Total Width:	Teljes szélesség:
@@ -4386,6 +4443,25 @@ imageTrace	Outline	Körvonal
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript-hiba ({name}, itt: `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript-hiba ({name}, itt: `{op}`: {at}), eljárás: {procs}
 @msg	a PostScript error ({name})	PostScript-hiba ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript-hiba ({name}, itt: `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	PostScript-hiba ({name}, itt: `{op}`; {meaning}), eljárás: {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript-hiba ({name}, itt: `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	PostScript-hiba ({name}, itt: `{op}`: {at}; {meaning}), eljárás: {procs}
+@msg	a PostScript error ({name}; {meaning})	PostScript-hiba ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	a program lezár egy szótárt, amelyet nem nyitott meg
+@msg	the program opens a file, which the reader can't do	a program fájlt nyit meg, amire a PostScript-olvasó nem képes
+@msg	the program restores a saved state that was already restored	a program egy már visszaállított mentett állapotot állít vissza
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	a program által olvasott adatok sérültek vagy csonkák, vagy a program pozíciót kér egy olyan fájlban, amelynek nincs pozíciója
+@msg	the program goes past one of the reader's limits	a program túllépi a PostScript-olvasó egyik korlátját
+@msg	the path has no point to continue from	az útvonalnak nincs pontja, ahonnan folytatódhatna
+@msg	a value is outside the range the operator takes	egy érték kívül esik az operátor által elfogadott tartományon
+@msg	the operator needs more values than the stack holds	az operátornak több értékre van szüksége, mint amennyi a veremben van
+@msg	part of the program isn't valid PostScript text	a program egy része nem érvényes PostScript-szöveg
+@msg	a value has the wrong type for the operator	egy érték típusa nem megfelelő az operátorhoz
+@msg	the program runs, deletes or renames a file, which the reader can't do	a program fájlt futtat, töröl vagy nevez át, amire a PostScript-olvasó nem képes
+@msg	the program asks for a resource that isn't defined	a program olyan erőforrást kér, amely nincs definiálva
+@msg	a calculation has no result, as in a division by zero	egy számításnak nincs eredménye, például nullával való osztáskor
+@msg	the operator looks for a mark on the stack and finds none	az operátor jelölőt keres a veremben, de nem talál
 @msg	a preset named `{_1}` exists	már van ilyen nevű előbeállítás: `{_1}`
 @msg	a swatch or color group named `{n}` exists	már van ilyen nevű színminta vagy színcsoport: `{n}`
 @msg	a slice size must be a positive number of points	a szelet mérete pozitív pontérték kell legyen
@@ -4520,6 +4596,12 @@ imageTrace	Outline	Körvonal
 @msg	give the path `id` and the width point `index`	add meg az útvonal `id` és a szélességi pont `index` értékét
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	a színátmenet nincs megadva a fájlban: „{name}”; helyette egyszínű kitöltés áll
 @msg	group must be true or false	a group értéke true vagy false lehet
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	a panel lebeg; a csoportját a window.panel.float {panel, collapsed} paranccsal csukhatja össze
+@msg	panel is not in a dock group	a panel nincs dokkolt csoportban
+@msg	only a dock group above or below others collapses, not one beside another	csak a többi fölötti vagy alatti dokkolt csoport csukható össze, a mellettük lévő nem
+@msg	icon must be true or false	az icon értéke true vagy false lehet
+@msg	icon only docks a panel in the icon column, with no anchor	az icon csak az ikonoszlopba dokkol egy panelt, anchor nélkül
+@msg	column docks a set as a dock column, with no anchor or icon	a column egy készletet dokkoszlopként dokkol, anchor és icon nélkül
 @msg	guides are locked	a segédvonalak zárolva vannak
 @msg	handle must be in or out	handle: in vagy out kell
 @msg	image '{key}' has no pixels and was left out	a kép kimaradt, mert nincsenek pixelei: '{key}'
@@ -4607,7 +4689,9 @@ imageTrace	Outline	Körvonal
 @msg	no blend options	nincsenek összemosási beállítások
 @msg	no bounds	nincsenek határok
 @msg	no brush named `{name}`	nincs ilyen nevű ecset: `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	a sörteecset neve legfeljebb {max} karakter hosszú lehet: `{name}` hossza {count} karakter
 @msg	no brush selected	nincs kijelölt ecset
+@msg	brushes move only within their type	az ecsetek csak a saját típusukon belül helyezhetők át
 @msg	no catalog	nincs katalógus
 @msg	no changes since the last save	a legutóbbi mentés óta nincs módosítás
 @msg	no clock to keep a heartbeat by	nincs óra az életjel időzítéséhez
@@ -4669,6 +4753,7 @@ imageTrace	Outline	Körvonal
 @msg	no such action	nincs ilyen művelet
 @msg	no such anchor	nincs ilyen horgonypont
 @msg	no such artboard	nincs ilyen rajztábla
+@msg	the artboard is locked	a rajztábla zárolt
 @msg	no such document	nincs ilyen dokumentum
 @msg	no such layer or object	nincs ilyen réteg vagy objektum
 @msg	no such object {0}	nincs ilyen objektum: {0}
@@ -4804,6 +4889,10 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
+@msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz
+@msg	a clipping path can't be attached to a path	vágóútvonal nem csatolható útvonalhoz
 @msg	select a stroke with a variable width	jelölj ki egy változó szélességű körvonalat
 @msg	select a symbol instance	jelölj ki egy szimbólumpéldányt
 @msg	select an envelope	jelölj ki egy burkolót
@@ -4959,6 +5048,7 @@ imageTrace	Outline	Körvonal
 @msg	Updated {_1} image(s)	Frissített képek: {_1}
 @msg	Updated {_1} linked file(s) changed on disk	Frissített, a lemezen módosult csatolt fájlok: {_1}
 @msg	variables are locked	a változók zárolva vannak
+@msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	a VectorCraft nem keres más alkalmazások és a rendszer mappáiban: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	a VectorCraft nem keres a Users alatti Shared és Public mappában: {path}
 @msg	VectorCraft failed to start: {e}	A VectorCraft nem tudott elindulni: {e}
@@ -5087,6 +5177,9 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+	3D Lighting Preset	3D világítási készlet
+	Standard	Normál
+	Diffuse	Szórt
 # 3D light management.
 	Lights	Fények
 	Add Light	Fény hozzáadása
@@ -5130,6 +5223,7 @@ imageTrace	Outline	Körvonal
 @msg	Measured anchor no longer exists	A mért horgonypont már nem létezik
 @msg	Measured segment no longer exists	A mért szakasz már nem létezik
 @msg	Non-finite dimension	Nem véges méret
+@msg	Scale Text Attributes: selected type has no scale to bake	Szövegattribútumok méretezése: a kijelölt szövegnek nincs alkalmazható méretezése
 @msg	Scale must be drawing:real, for example 1:10	A léptéknek rajz:valós alakúnak kell lennie, például 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	A lépték aránya 1:1000000 és 1000000:1 között lehet
 @msg	Second measured segment no longer exists	A második mért szakasz már nem létezik
@@ -5148,6 +5242,7 @@ imageTrace	Outline	Körvonal
 	Make Image Dynamic	Kép dinamikussá tétele
 	Import Data Sets…	Adatkészletek importálása…
 	Export Data Sets…	Adatkészletek exportálása…
+	Load Variable Library…	Változókönyvtár betöltése…
 	Make Graph Dynamic	Diagram dinamikussá tétele
 	Batch…	Kötegelt feldolgozás…
 	Source Folder:	Forrásmappa:
@@ -5170,6 +5265,8 @@ imageTrace	Outline	Körvonal
 	Sketch	Vázlat
 	Halftone Pattern…	Féltónus minta…
 	Halftone Pattern	Féltónus minta
+	Torn Edges…	Szaggatott szélek…
+	Torn Edges	Szaggatott szélek
 	Pattern Type	Mintatípus
 	Dot	Pont
 # User Interface › Color Scheme
@@ -5188,6 +5285,7 @@ imageTrace	Outline	Körvonal
 	Watercolor…	Akvarell…
 	Watercolor	Akvarell
 	Brush Size	Ecsetméret
+	Texture Coverage	Textúra fedettség
 	Definition	Kidolgozottság
 	Brush Detail	Ecsetrészletesség
 	Shadow Intensity	Árnyék intenzitása
@@ -5216,24 +5314,14 @@ imageTrace	Outline	Körvonal
 @msg	the image's pixels can't be read	a kép képpontjai nem olvashatók
 	Persistent	Állandó
 	Library Panel Options	Könyvtárpanel beállításai
+	Locate Library…	Könyvtár megkeresése…
 @msg	Persistent libraries not found: {files}	Nem találhatók állandó könyvtárak: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	A(z) `{given}` nem könyvtárpanel (lásd: window.swatchLibrary)
 @msg	library panel `{given}` isn't open	a(z) `{given}` könyvtárpanel nincs megnyitva
 @msg	too many library panels were opened in this session	ebben a munkamenetben túl sok könyvtárpanel nyílt meg
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A kép {_1} × {_2} képpont, egyik oldalán több mint {LARGE_TRACE_SIDE}: a vektorizálás megtörténik, de lassabban. Kisebb hűségű előbeállítással vagy a kép kisebb másolatával gyorsabb.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A kép vektorizálása {_1} × {_2} képponton történt, {_3} × {_4} méretről kicsinyítve (legfeljebb {_5} megapixel).
-	Lock Artboards	Rajztáblák zárolása
-	Unlock Artboards	Rajztáblák zárolásának feloldása
-	Artboard Color	Rajztábla színe
-	Lock Selected	Kijelöltek zárolása
-	Lock All Except Selected	Összes zárolása a kijelölteken kívül
-	Lock All	Összes zárolása
-	Unlock Selected	Kijelöltek zárolásának feloldása
-	Lock Artboard	Rajztábla zárolása
-	Unlock Artboard	Rajztábla zárolásának feloldása
-	Clear Artboard Color	Rajztábla színének törlése
-@msg	artboard {_1} is locked	a(z) {_1}. rajztábla zárolva van
-	Include Artboard Fill	A rajztábla színének belefoglalása
+	Gap Length:	Rés hossza:
 	Artboard {n} of {total}	Rajztábla: {n} / {total}
 	Encoding and writing the file…	A fájl kódolása és írása…
 @plural	{n} more export waiting|{n} more exports waiting	Még {n} exportálás várakozik
@@ -5271,3 +5359,9 @@ imageTrace	Outline	Körvonal
 	Plaster	Gipsz
 	Note Paper…	Jegyzetpapír…
 	Note Paper	Jegyzetpapír
+	Water Paper…	Nedves papír…
+	Water Paper	Nedves papír
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Freskó…
+	Fresco	Freskó

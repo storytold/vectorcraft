@@ -293,6 +293,7 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
         }
     });
     ui.add_enabled_ui(d.bool("shade"), |ui| {
+        lighting_presets(ui, d);
         light_list(ui, d);
         let mut selected = selected_light(d);
         let before = light_record(&selected);
@@ -308,6 +309,26 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
             store_selected(d, &selected);
         }
     });
+}
+
+fn lighting_presets(ui: &mut egui::Ui, d: &mut Dialog) {
+    let names = [tl!("Standard"), tl!("Diffuse"), tl!("Top Left"), tl!("Right")];
+    let current = vectorcraft_effects::matching_lighting_preset(&super::form::params(d));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        label(ui, tl!("Presets"));
+        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("Custom"));
+        if let Some(preset) = widgets::dropdown(ui, "three-d-lighting-presets", shown, &names, VALUE_W + rail_width(ui) + 6.0)
+            .and_then(|i| vectorcraft_effects::LIGHTING_PRESETS.get(i))
+            && let Some(patch) = preset.params().as_object()
+        {
+            d.fields.extend(patch.clone());
+            d.fields.insert("__light".into(), json!(0));
+            ui.memory_mut(|m| m.stop_text_input());
+            super::revolve_gizmo::clear(ui.ctx());
+        }
+    });
+    ui.add_space(4.0);
 }
 
 const LIGHT_KEYS: [(&str, &str); 6] = [
@@ -515,7 +536,7 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64,
         let places = ((f64::from(ui.input(|i| i.aim_radius())) / speed).log10().ceil().clamp(0.0, 15.0) as usize).min(decimals);
         let number = ui.style().number_formatter.format(value, places..=decimals);
         let shown = widgets::SliderValue::text(number.parse().unwrap_or(value), rail_min..=rail_max, format!("{number}{suffix}"));
-        let slider = widgets::color_slider_valued(
+        let slider = widgets::color_slider_stepped(
             ui,
             ("revolve-slider", key),
             name,
@@ -524,8 +545,8 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64,
             rail,
             &|_| t.input_border,
         );
-        if let (Some(n), _) = slider {
-            next = Some(rail_min + f64::from(n) * (rail_max - rail_min));
+        if let Some(n) = slider.0.map(|n| rail_min + f64::from(n) * (rail_max - rail_min)).or(slider.2) {
+            next = Some(n);
         }
         if reset_dot(ui, key, (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
             next = Some(from(default));

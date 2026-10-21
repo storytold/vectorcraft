@@ -262,6 +262,74 @@ fn stroke_width_test_effect() {
     std::fs::write(std::path::Path::new(&dir).join("stroke-width-test-effect.wasm"), wat::parse_str(src).unwrap()).unwrap();
 }
 
+/// A filter is given its objects' effect records and their strokes' join, cap and miter limit, and
+/// may return them. The records are admitted as effect.apply would admit them; one that isn't
+/// refuses the whole output, and nothing changes.
+#[test]
+fn filters_set_effects_and_stroke_styles() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    install_wat(
+        &mut s,
+        &tpl::module(&tpl::manifest("test.engine.fx", "effect", r#"{"n":{"type":"int","min":0,"max":3,"default":1}}"#), tpl::ECHO, "", 1),
+    );
+    let black = json!({"type": "solid", "color": {"model": "gray", "k": 1.0}});
+    let out = |fx: Value| json!({"objects": [{"id": id.0, "strokes": [{"paint": black, "width": 4, "join": "round", "cap": "square", "miterLimit": 4}], "effects": fx}]});
+    let filter = |s: &mut Session, name: &str, fx: Value| {
+        install_wat(s, &tpl::returning(&tpl::manifest(name, "filter", "{}"), &out(fx).to_string()));
+        s.execute("plugin.run", &json!({"id": name, "ids": [id.0]}))
+    };
+    let fx = json!([{"id": "distort.roughen", "params": {"size": 3}}, {"id": "plugin.test.engine.fx", "params": {"n": 2}, "visible": false}]);
+    filter(&mut s, "test.engine.setfx", fx).unwrap();
+    let n = node(&s, id);
+    let st = n.appearance.stroke().unwrap();
+    assert_eq!((st.width, st.join, st.cap, st.miter_limit), (4.0, vectorcraft_doc::LineJoin::Round, vectorcraft_doc::LineCap::Square, 4.0));
+    let effects = &n.appearance.effects;
+    assert_eq!(effects.iter().map(|e| (e.id.as_str(), e.visible)).collect::<Vec<_>>(), [("distort.roughen", true), ("plugin.test.engine.fx", false)]);
+    assert_eq!(effects[0].params, vectorcraft_render::effects::merged_params("distort.roughen", &json!({"size": 3})), "filled in");
+    assert_eq!(effects[1].params, json!({"n": 2}));
+    // Handed back unchanged (an echo), nothing changes, not even the records' parameters.
+    install_wat(&mut s, &tpl::module(&tpl::manifest("test.engine.same", "filter", "{}"), tpl::ECHO, "", 1));
+    let before = s.doc().unwrap().doc.clone();
+    run(&mut s, "plugin.run", json!({"id": "test.engine.same", "ids": [id.0]}));
+    assert_eq!(s.doc().unwrap().doc, before);
+    // Refused: what effect.apply refuses, a live effect that isn't installed, parameters its
+    // manifest refuses, a texture to read from a file, two 3D effects.
+    for (name, fx, why) in [
+        ("test.engine.unknown", json!([{"id": "distort.nothing"}]), "no such effect"),
+        ("test.engine.key", json!([{"id": "distort.roughen", "params": {"bogus": 1}}]), "bogus"),
+        ("test.engine.gone", json!([{"id": "plugin.test.engine.gone"}]), "no such effect"),
+        ("test.engine.badn", json!([{"id": "plugin.test.engine.fx", "params": {"n": "two"}}]), "`n`"),
+        ("test.engine.file", json!([{"id": "distort.glass", "params": {"textureImage": {"path": "/etc/hosts"}}}]), "textureImage"),
+        ("test.engine.file2", json!([{"id": "texture.texturizer", "params": {"textureImage": {"path": "/etc/hosts"}}}]), "textureImage"),
+        ("test.engine.two3d", json!([{"id": "threeD.extrude"}, {"id": "threeD.extrude"}]), "one 3D effect"),
+    ] {
+        let e = filter(&mut s, name, fx).unwrap_err().to_string();
+        assert!(e.contains("objects[0].effects") && e.contains(why), "{name}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before, "{name}");
+    }
+}
+
+/// `CRAFT_PLUGIN_FRAME_WASM=<folder>` saves a test filter to try in the app
+/// (`rough-frame-test-filter.wasm`): it adds a frame around 60,40–340,260 with a 6 pt stroke with
+/// round joins and caps, roughened by the Roughen effect.
+#[test]
+fn rough_frame_test_filter() {
+    let Some(dir) = std::env::var_os("CRAFT_PLUGIN_FRAME_WASM") else { return };
+    let frame = PathData::single(SubPath::polyline(
+        &[Point::new(60.0, 40.0), Point::new(340.0, 40.0), Point::new(340.0, 260.0), Point::new(60.0, 260.0)],
+        true,
+    ));
+    let ink = json!({"type": "solid", "color": {"model": "rgb", "r": 0.15, "g": 0.2, "b": 0.45}});
+    let out = json!({"objects": [{"name": "Frame", "path": frame, "fills": [],
+        "strokes": [{"paint": ink, "width": 6, "join": "round", "cap": "round"}],
+        "effects": [{"id": "distort.roughen", "params": {"size": 2, "detail": 8, "points": "smooth"}}]}]});
+    let manifest = r#"{"id":"org.example.frame","name":"Rough Frame (test plug-in)","version":"1","kind":"filter",
+        "description":"Adds a frame whose stroke is roughened by the Roughen effect.","params":{}}"#;
+    let src = tpl::returning(manifest, &out.to_string());
+    std::fs::write(std::path::Path::new(&dir).join("rough-frame-test-filter.wasm"), wat::parse_str(src).unwrap()).unwrap();
+}
+
 #[test]
 fn plugin_management_commands() {
     let mut s = session();

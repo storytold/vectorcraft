@@ -113,7 +113,9 @@ impl TransformTool {
             return Some(*p);
         }
         // Anchors selected with Direct Selection transform alone, about their own centre.
-        cx.selection.anchor_bounds(cx.doc, cx.preview_bounds).map(|b| b.center()).or_else(|| selection_box(cx).map(|b| b.center()))
+        vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)
+            .map(|b| b.center())
+            .or_else(|| selection_box(cx).map(|b| b.center()))
     }
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.

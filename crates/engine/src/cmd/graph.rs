@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Column…",
             ["Object", "Graph"],
             None,
-            "{id?, seriesIndexes?: [index], design?: name|null, columnType?: vertical|uniform|repeating|sliding, each?: value (more than 0), fractions?: chop|scale} draw the columns or bars and the legend swatch of the series selected with Group Selection (or listed, or every series) with a graph design, its backmost object as its frame and its guides left out: vertical stretches it along the value axis to each column's length at the column's width, uniform scales it both ways to that length, centered on the column, repeating stacks copies out from the zero line that each stand for `each` and cuts off the last one where the value ends (chop) or scales it down to fit (scale) (vertical when one copy would be longer than the canvas), and sliding scales the part above its horizontal guide line (in bar graphs, right of a vertical one) in proportion to the column's width and stretches the part below to fill the rest (vertical without a guide, or in a column too short for the part above); the design keeps its own orientation for negative values, and columns drawn with a design cast no drop shadow; null = plain columns; options left out keep the series' shared ones, else vertical, 10 and chop. Column, stacked column, bar and stacked bar series. No design → {designs: [names], design: the selected series' design or null, columnType, each, fractions}",
+            "{id?, seriesIndexes?: [index], design?: name|null, columnType?: vertical|uniform|repeating|sliding, each?: value (more than 0), fractions?: chop|scale} draw the columns or bars and the legend swatch of the series selected with Group Selection (or listed, or every series) with a graph design, its backmost object as its frame and its guides left out: vertical stretches it along the value axis to each column's length at the column's width, uniform scales it both ways to that length, centered on the column, repeating stacks copies out from the zero line that each stand for `each` and cuts off the last one where the value ends (chop) or scales it down to fit (scale) (vertical when one copy would be longer than the canvas), and sliding scales the part above its horizontal guide line (in bar graphs, right of a vertical one) in proportion to the column's width and stretches the part below to fill the rest (vertical without a guide, or in a column too short for the part above); type in the design that holds a `%` followed by two digits shows each column's value in place of the `%` and the digits, the first digit giving the least number of places before the decimal point (zeros added in front; 0 = as many as the value needs) and the second digit giving the places after it (rounded half away from zero), at the type's own size where the design's copy puts it (a repeating design shows it once, where a whole copy ending at the value end puts it; type inside a group that clips, is hidden or has its own opacity, blend mode, isolation, knockout, appearance or opacity mask, or inside a blend, compound shape, envelope, repeat or intertwine, stays there and is filled in each copy, drawn with the design; type inside a symbol stays as typed), and is left out of the legend swatch (a design of such type alone gets the default swatch); the design keeps its own orientation for negative values, and columns drawn with a design cast no drop shadow; null = plain columns; options left out keep the series' shared ones, else vertical, 10 and chop. Column, stacked column, bar and stacked bar series. No design → {designs: [names], design: the selected series' design or null, columnType, each, fractions}",
             has_selection,
             set_column
         ),
@@ -373,6 +373,7 @@ impl Gen<'_> {
         let style = label_style(self.styles, role);
         let mut t = TextObject::point(at, s, style);
         t.para.justify = justify;
+        t.system_layout = self.d.setup.system_layout;
         refresh_bounds(&mut t);
         Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
     }
@@ -413,10 +414,11 @@ impl Gen<'_> {
             None => self.path(shapes::rectangle(cell), fill, stroke, w),
         }
     }
-    /// A legend swatch filling `cell`: the series' column design, else its [`Self::marker`].
+    /// A legend swatch filling `cell`: the series' column design with its totals left out, else, and when the design
+    /// draws nothing else, its [`Self::marker`].
     fn swatch(&mut self, column: Option<&ColumnArt>, marker: Option<&Arc<Node>>, cell: Rect, paint: (Paint, Paint, f64)) -> Arc<Node> {
-        let fitted = match column {
-            Some(c) if self.columns.take(c.art.count()) => fit_design(self.d, &c.art, cell),
+        let fitted = match column.and_then(|c| Some((c, c.legend.as_ref()?))) {
+            Some((c, legend)) if self.columns.take(legend.count()) => c.fit(self.d, legend, cell),
             _ => None,
         };
         match fitted {
@@ -552,12 +554,164 @@ fn fit_affine(frame: Rect, cell: Rect) -> Affine {
 /// Most objects a graph's column designs may add (each column, repeated copy and legend swatch draws a copy).
 const COLUMN_BUDGET: usize = 200_000;
 
-/// A series' column design (Object › Graph › Column): its options, its art without guide lines, and the bounds of
-/// those guides.
+/// A series' column design (Object › Graph › Column): its options; its art without guide lines and without the totals
+/// taken out of it ([`without_totals`]); the bounds of those guides; those totals; its frame (the art's without guides,
+/// totals included, [`design_frame`]); whether its art still holds totals (inside groups that do more than group, or
+/// inside other objects that hold objects), which are filled where they are; and its art without any total for the
+/// legend swatch, `None` when that draws nothing.
 struct ColumnArt {
     options: ColumnDesign,
     art: Node,
     guides: Vec<Rect>,
+    totals: Vec<Node>,
+    frame: Option<Rect>,
+    in_place: bool,
+    legend: Option<Node>,
+}
+
+impl ColumnArt {
+    /// A copy of `art` with the design's frame fitted to `cell`, as [`fit_design`] fits it. Fresh ids.
+    fn fit(&self, d: &mut Document, art: &Node, cell: Rect) -> Option<Arc<Node>> {
+        let art = super::place::transformed(art.clone(), fit_affine(self.frame?, cell));
+        Some(Arc::new(d.reid(&art)))
+    }
+}
+
+/// The column design totals in `s` (Add totals to a column design): each `%` followed by two digits, as its byte offset,
+/// the places before the decimal point (the first digit) and the places after it (the second), left to right. A `%` not
+/// followed by two digits is plain text.
+fn total_spans(s: &str) -> Vec<(usize, usize, usize)> {
+    let b = s.as_bytes();
+    let mut out = vec![];
+    let mut i = 0;
+    while let Some(w) = b.get(i..i + 3) {
+        match *w {
+            [b'%', x, y] if x.is_ascii_digit() && y.is_ascii_digit() => {
+                out.push((i, usize::from(x - b'0'), usize::from(y - b'0')));
+                i += 3;
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+/// Value `v` as a column design total shows it: rounded half away from zero, from its shortest decimal form, to `after`
+/// places after the decimal point, zeros added as needed; and with at least `before` places before the point, zeros
+/// added in front (0: as many as the value needs). The places before the point are never cut, and a value that rounds
+/// to 0 has no minus sign.
+fn total_text(v: f64, before: usize, after: usize) -> String {
+    if !v.is_finite() {
+        return fmt_value(v);
+    }
+    let s = format!("{}", v.abs());
+    let (int, frac) = s.split_once('.').unwrap_or((s.as_str(), ""));
+    // The digits kept, the point `after` places from the end.
+    let mut digits: Vec<u8> = int.bytes().chain(frac.bytes().chain(std::iter::repeat(b'0')).take(after)).collect();
+    if frac.as_bytes().get(after).is_some_and(|d| *d >= b'5') {
+        let mut carry = true;
+        for d in digits.iter_mut().rev() {
+            if *d == b'9' {
+                *d = b'0';
+            } else {
+                *d += 1;
+                carry = false;
+                break;
+            }
+        }
+        if carry {
+            digits.insert(0, b'1');
+        }
+    }
+    let (whole, places) = digits.split_at(digits.len().saturating_sub(after));
+    let mut out = String::new();
+    if v < 0.0 && digits.iter().any(|d| *d != b'0') {
+        out.push('-');
+    }
+    out.extend(std::iter::repeat_n('0', before.saturating_sub(whole.len())));
+    out.extend(whole.iter().map(|d| char::from(*d)));
+    if after > 0 {
+        out.push('.');
+        out.extend(places.iter().map(|d| char::from(*d)));
+    }
+    out
+}
+
+/// Type `t` with each total in it ([`total_spans`]) replaced by value `v` ([`total_text`]), styled as its `%` was; true
+/// when it held one.
+fn fill_totals(t: &mut TextObject, v: f64) -> bool {
+    let spans = total_spans(&t.plain_text());
+    // Last first, so the offsets of earlier ones stay valid.
+    for &(at, before, after) in spans.iter().rev() {
+        let s = total_text(v, before, after);
+        t.splice_paras(at, at + 3, &s);
+        vectorcraft_text::edit::replace_range(&mut t.runs, at, at + 3, &s);
+    }
+    if !spans.is_empty() {
+        refresh_bounds(t);
+    }
+    !spans.is_empty()
+}
+
+/// Is `n` type that holds a total ([`total_spans`])?
+fn holds_total(n: &Node) -> bool {
+    matches!(&n.kind, NodeKind::Text(t) if !total_spans(&t.plain_text()).is_empty())
+}
+
+/// Does group `n` only group its children: no clipping, hiding, opacity, blend mode, isolation, knockout, appearance of
+/// its own or opacity mask, so that type taken out of it draws as it did inside it?
+fn only_groups(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { clip: false, .. })
+        && n.visible
+        && n.opacity == 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.knockout == vectorcraft_doc::Knockout::default()
+        && n.appearance.items.is_empty()
+        && n.appearance.effects.is_empty()
+        && n.extras().mask.is_none()
+}
+
+/// Is `n` a clipping group whose clipping path is type that holds a total?
+fn clipped_by_total(n: &Node) -> bool {
+    matches!(&n.kind, NodeKind::Group { clip: true, children } if children.first().is_some_and(|c| holds_total(c)))
+}
+
+/// `art` without the type in it that holds a total, inside groups at any depth that only group ([`only_groups`]), and
+/// that type, pushed to `totals` in paint order (Add totals to a column design); with `all`, without every total inside
+/// any group or other object that holds objects (a blend, compound shape, envelope, repeat or intertwine), and with
+/// each group that such type clips left empty. A design that is such type alone leaves an empty group.
+fn without_totals(art: &Node, all: bool, totals: &mut Vec<Node>) -> Node {
+    if holds_total(art) || (all && clipped_by_total(art)) {
+        totals.push(art.clone());
+        return Node::group(art.id, vec![]);
+    }
+    let mut n = art.clone();
+    let take = all || only_groups(&n);
+    if take && let Some(children) = n.children_mut() {
+        for c in std::mem::take(children) {
+            if holds_total(&c) {
+                totals.push((*c).clone());
+            } else if c.children().is_some() {
+                children.push(Arc::new(without_totals(&c, all, totals)));
+            } else {
+                children.push(c);
+            }
+        }
+    }
+    n
+}
+
+/// `n` with the totals in it at any depth, in groups and the other objects that hold objects, showing value `v` where
+/// they are ([`fill_totals`]).
+fn fill_in_place(n: &mut Node, v: f64) {
+    if let NodeKind::Text(t) = &mut n.kind {
+        fill_totals(t, v);
+    } else if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            fill_in_place(Arc::make_mut(c), v);
+        }
+    }
 }
 
 /// `art` without the paths made into guides, at any depth.
@@ -585,7 +739,16 @@ fn column_designs(d: &Document, g: &GraphSpec) -> Vec<Option<ColumnArt>> {
                     guides.push(b);
                 }
             });
-            Some(ColumnArt { options: options.clone(), art: without_guides(art), guides })
+            let art = without_guides(art);
+            let frame = design_frame(&art);
+            let legend = without_totals(&art, true, &mut vec![]);
+            let mut draws = false;
+            legend.walk(&mut |n| draws |= n.children().is_none());
+            let mut totals = vec![];
+            let art = without_totals(&art, false, &mut totals);
+            let mut in_place = false;
+            art.walk(&mut |n| in_place |= holds_total(n));
+            Some(ColumnArt { options: options.clone(), art, guides, totals, frame, in_place, legend: draws.then_some(legend) })
         })
         .collect()
 }
@@ -621,30 +784,42 @@ impl Allowance {
     }
 }
 
-/// Column or bar `rect` drawn with column design `c` (Object › Graph › Column), as a group of fresh art, its copies
-/// spent from `left`. `far_low`: the value end of the column is at the rect's lower coordinate (the top of a column above
-/// zero, the left end of a bar below zero), so repeating copies stack from the other end. `per_unit`: plot points per
-/// unit of value. `None` for art with no area, for a column of no length and when `left` runs out, which are drawn plain.
+/// Column or bar `rect` of value `value` drawn with column design `c` (Object › Graph › Column), as a group of fresh art,
+/// its copies spent from `left`. `far_low`: the value end of the column is at the rect's lower coordinate (the top of a
+/// column above zero, the left end of a bar below zero), so repeating copies stack from the other end. `per_unit`: plot
+/// points per unit of value. The design's totals show `value` and come last: each keeps its size and is moved to where
+/// the design's copy puts the point it is set from; in a repeating design they are drawn once, where a whole copy ending
+/// at the value end puts them, and a sliding design moves each with the part of the design on its side of the guide.
+/// Totals left in the art ([`ColumnArt`]) show `value` in each copy, drawn with it. `None` for art with no area, for a
+/// column of no length and when `left` runs out, which are drawn plain.
 fn column_art(
     d: &mut Document,
     c: &ColumnArt,
-    rect: Rect,
+    (rect, value): (Rect, f64),
     (horizontal, far_low): (bool, bool),
     per_unit: f64,
     left: &mut Allowance,
 ) -> Option<Arc<Node>> {
-    let frame = design_frame(&c.art)?;
+    let frame = c.frame?;
     let length = |r: Rect| if horizontal { r.width() } else { r.height() };
     let thickness = |r: Rect| if horizontal { r.height() } else { r.width() };
     if length(rect) <= 1e-9 || !length(rect).is_finite() {
         return None;
     }
     let cost = c.art.count();
-    // A copy of the design fitted to `cell`; and a copy moved by `a` and clipped to what it paints, cut at `at` (an x when
-    // `along_x`, else a y) with the side below `at` kept when `keep_low` (two objects more).
-    let fit = |d: &mut Document, cell: Rect, left: &mut Allowance| if left.take(cost) { fit_design(d, &c.art, cell) } else { None };
+    // A copy of the design moved by `a`, the totals left in it showing `value`; a copy fitted to `cell`; and a copy moved
+    // by `a` and clipped to what it paints, cut at `at` (an x when `along_x`, else a y) with the side below `at` kept when
+    // `keep_low` (two objects more).
+    let copy = |d: &mut Document, a: Affine| {
+        let mut art = d.reid(&super::place::transformed(c.art.clone(), a));
+        if c.in_place {
+            fill_in_place(&mut art, value);
+        }
+        art
+    };
+    let fit = |d: &mut Document, cell: Rect, left: &mut Allowance| left.take(cost).then(|| Arc::new(copy(d, fit_affine(frame, cell))));
     let clipped = |d: &mut Document, a: Affine, (along_x, keep_low, at): (bool, bool, f64), left: &mut Allowance| {
-        let art = left.take(cost + 2).then(|| d.reid(&super::place::transformed(c.art.clone(), a)))?;
+        let art = left.take(cost + 2).then(|| copy(d, a))?;
         // The box of the copy and of each object in it that isn't a group or layer, as the brush art past a brushed
         // stroke counts only in its own object's box.
         let mut b = vectorcraft_render::painted_bounds(d, &art);
@@ -653,7 +828,8 @@ fn column_art(
                 b = vectorcraft_geom::union_opt(b, vectorcraft_render::painted_bounds(d, n));
             }
         });
-        let b = b.or_else(|| art.geometric_bounds())?;
+        // A copy that draws nothing (a design of totals alone) needs no clip.
+        let Some(b) = b.or_else(|| art.geometric_bounds()) else { return Some(Arc::new(art)) };
         let keep = match (along_x, keep_low) {
             (true, true) => Rect::new(b.x0, b.y0, at.max(b.x0), b.y1),
             (true, false) => Rect::new(at.min(b.x1), b.y0, b.x1, b.y1),
@@ -669,7 +845,35 @@ fn column_art(
         (false, true) => Rect::new(rect.x0, rect.y1 - b, rect.x1, rect.y1 - a),
         (false, false) => Rect::new(rect.x0, rect.y0 + a, rect.x1, rect.y0 + b),
     };
+    // The column's group: `parts`, then the totals, each showing `value` at its own size, moved as `a` moves the point it
+    // is set from; with `sliding` (the kept part's map, the stretched part's map and the guide, as [`slide`] gives them),
+    // as the map of the part on its side of the guide moves it. One object each.
+    let group = |d: &mut Document, mut parts: Vec<Arc<Node>>, a: Affine, sliding: Option<(Affine, Affine, f64)>, left: &mut Allowance| {
+        for t in &c.totals {
+            if !left.take(1) {
+                return None;
+            }
+            let mut n = t.clone();
+            let mut by = Affine::IDENTITY;
+            if let NodeKind::Text(text) = &mut n.kind {
+                // A move only, so the type keeps its size; pattern paints move with it.
+                let p = text.xf * Point::ZERO;
+                let a = match sliding {
+                    Some((kept, stretched, at)) => {
+                        let q = kept * p;
+                        if (horizontal && q.x >= at) || (!horizontal && q.y <= at) { kept } else { stretched }
+                    }
+                    None => a,
+                };
+                fill_totals(text, value);
+                by = Affine::translate(a * p - p);
+            }
+            parts.push(Arc::new(d.reid(&super::place::transformed(n, by))));
+        }
+        Some(Arc::new(Node::group(d.alloc_id(), parts)))
+    };
     let mut parts = vec![];
+    let (mut label, mut sliding) = (fit_affine(frame, rect), None);
     match c.options.column_type {
         ColumnType::Uniform => {
             // Scaled both ways to the column's length, centered across it.
@@ -680,14 +884,17 @@ fn column_art(
                 Rect::new(rect.center().x - t, rect.y0, rect.center().x + t, rect.y1)
             };
             parts.push(fit(d, cell, left)?);
+            label = fit_affine(frame, cell);
         }
         ColumnType::Repeating => {
             // When the value per copy is unusable, too small to draw or makes one copy longer than the canvas, the design
             // is drawn vertically scaled.
             let Some(unit) = repeat_each(&c.options).map(|e| e * per_unit).filter(|u| u.is_finite() && *u > 1e-9 && *u <= crate::MAX_COORD) else {
                 parts.push(fit(d, rect, left)?);
-                return Some(Arc::new(Node::group(d.alloc_id(), parts)));
+                return group(d, parts, label, None, left);
             };
+            // The totals go where a whole copy ending at the value end puts them.
+            label = fit_affine(frame, piece(length(rect) - unit, length(rect)));
             // The whole copies, and the points of the column left for the last one (none under a millionth of a point).
             let whole = ((length(rect) + 1e-6) / unit).floor();
             let rest = length(rect) - whole * unit;
@@ -717,12 +924,13 @@ fn column_art(
                 // Each copy cut at the guide, on its own side.
                 parts.push(clipped(d, kept, (horizontal, !horizontal, at), left)?);
                 parts.push(clipped(d, stretched, (horizontal, horizontal, at), left)?);
+                sliding = Some((kept, stretched, at));
             }
             None => parts.push(fit(d, rect, left)?),
         },
         ColumnType::Vertical => parts.push(fit(d, rect, left)?),
     }
-    Some(Arc::new(Node::group(d.alloc_id(), parts)))
+    group(d, parts, label, sliding, left)
 }
 
 /// Sliding design with frame `frame` in column `rect`, at the column's width: the map of the part above the first
@@ -1240,7 +1448,8 @@ fn generate_with(d: &mut Document, g: &GraphSpec, column_looks: &[Option<ColumnA
                     let rect = bar_rect(a, bar, v0, v1);
                     bars_reach = Some(bars_reach.map_or(rect, |r| r.union(rect)));
                     // A column drawn with a design casts no shadow.
-                    let n = match column_look(s).and_then(|c| column_art(b.d, c, rect, (horizontal, v1 < v0), per_unit(axis(s)), &mut b.columns)) {
+                    let n = match column_look(s).and_then(|c| column_art(b.d, c, (rect, v), (horizontal, v1 < v0), per_unit(axis(s)), &mut b.columns))
+                    {
                         Some(n) => {
                             // A design can reach past its column (Uniformly Scaled), so the legend keeps clear of it too.
                             if let Some(art) = n.geometric_bounds() {
@@ -1281,7 +1490,7 @@ fn generate_with(d: &mut Document, g: &GraphSpec, column_looks: &[Option<ColumnA
                     let (fill, stroke, sw) = mark(s, true, Paint::solid(Color::WHITE), 0.25);
                     let rect = bar_rect(a, w, v0, v1);
                     bars_reach = Some(bars_reach.map_or(rect, |r| r.union(rect)));
-                    let n = match column_look(s).and_then(|c| column_art(b.d, c, rect, (horizontal, v1 < v0), per_unit(ax), &mut b.columns)) {
+                    let n = match column_look(s).and_then(|c| column_art(b.d, c, (rect, v), (horizontal, v1 < v0), per_unit(ax), &mut b.columns)) {
                         Some(n) => {
                             if let Some(art) = n.geometric_bounds() {
                                 bars_reach = Some(bars_reach.map_or(art, |r| r.union(art)));
@@ -4098,6 +4307,315 @@ mod tests {
             assert!((frames(&column)[0].height() - 140.0).abs() < 1e-6, "{each} {fractions:?}");
             assert!(!matches!(column.children().unwrap()[0].kind, NodeKind::Group { clip: true, .. }), "{each} {fractions:?}: not clipped");
         }
+    }
+
+    /// A column design with totals: a 10 × 10 rectangle at the back, type "%31" set from 2 points above its top, and a
+    /// group of type "Votes" inside it and type "%02 and %00" set from 4 points below it, with a horizontal guide line 5
+    /// points from the top when `guide`, saved as `name`. Returns the points the two totals are set from.
+    fn save_totals_design(s: &mut Session, name: &str, guide: bool) -> [vectorcraft_geom::Point; 2] {
+        let id_of = |v: serde_json::Value| v["id"].as_u64().unwrap();
+        let frame = id_of(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap());
+        let above = id_of(s.execute("text.create", &json!({"x": 600, "y": 598, "text": "%31", "size": 4})).unwrap());
+        let votes = id_of(s.execute("text.create", &json!({"x": 601, "y": 606, "text": "Votes", "size": 3})).unwrap());
+        let below = id_of(s.execute("text.create", &json!({"x": 600, "y": 614, "text": "%02 and %00", "size": 4})).unwrap());
+        let origin = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.xf * vectorcraft_geom::Point::ZERO,
+            k => panic!("type: {k:?}"),
+        };
+        let points = [origin(s, above), origin(s, below)];
+        s.execute("select.set", &json!({"ids": [votes, below]})).unwrap();
+        let inner = id_of(s.execute("object.group", &json!({})).unwrap());
+        let mut ids = vec![frame, above, inner];
+        if guide {
+            let line = id_of(s.execute("shape.line", &json!({"x1": 600, "y1": 605, "x2": 610, "y2": 605})).unwrap());
+            s.execute("select.set", &json!({"ids": [line]})).unwrap();
+            s.execute("view.guides.make", &json!({})).unwrap();
+            ids.push(line);
+        }
+        s.execute("select.set", &json!({"ids": ids})).unwrap();
+        s.execute("graph.design", &json!({"new": name})).unwrap();
+        points
+    }
+
+    /// The text of each piece of type inside `n`, in paint order.
+    fn texts_in(n: &vectorcraft_doc::Node) -> Vec<String> {
+        let mut out = vec![];
+        n.walk(&mut |c| {
+            if let NodeKind::Text(t) = &c.kind {
+                out.push(t.plain_text());
+            }
+        });
+        out
+    }
+
+    /// The type among `nodes`, each as its text and the point it is set from; each must be type at its own size.
+    fn totals_of(nodes: &[std::sync::Arc<vectorcraft_doc::Node>]) -> Vec<(String, vectorcraft_geom::Point)> {
+        nodes
+            .iter()
+            .map(|n| match &n.kind {
+                NodeKind::Text(t) => {
+                    let [a, b, c, d, x, y] = t.xf.as_coeffs();
+                    assert_eq!([a, b, c, d], [1.0, 0.0, 0.0, 1.0], "a total keeps its size: {:?}", t.xf);
+                    (t.plain_text(), vectorcraft_geom::Point::new(x, y))
+                }
+                k => panic!("a total: {k:?}"),
+            })
+            .collect()
+    }
+
+    fn close(a: vectorcraft_geom::Point, b: vectorcraft_geom::Point) -> bool {
+        (a - b).hypot() < 1e-6
+    }
+
+    #[test]
+    fn column_design_totals_show_each_columns_value_at_their_own_size() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let [above, below] = save_totals_design(&mut s, "Ballot", false);
+        let id = one_series(&mut s, "column", &[35.0, 7.256]);
+        s.execute("graph.column", &json!({"id": id.0, "design": "Ballot"})).unwrap();
+        let check = |s: &Session, want: [[&str; 2]; 2]| {
+            let parts = series_parts(s, id, 0);
+            for (column, want) in parts.iter().zip(want) {
+                let children = column.children().unwrap();
+                // The design's copy keeps the type without a total, stretched with the design, and leaves the totals out.
+                assert_eq!(texts_in(&children[0]), ["Votes"]);
+                let frame = frames(column)[0];
+                let (sx, sy) = (frame.width() / 10.0, frame.height() / 10.0);
+                let at = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(frame.x0 + (p.x - 600.0) * sx, frame.y0 + (p.y - 600.0) * sy);
+                let totals = totals_of(&children[1..]);
+                assert_eq!(totals.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), want);
+                // Each set from where the design's copy puts the point it was set from.
+                assert!(close(totals[0].1, at(above)) && close(totals[1].1, at(below)), "{totals:?} {frame:?}");
+            }
+            // The legend swatch keeps the type without a total and leaves the totals out.
+            assert_eq!(texts_in(parts.last().unwrap()), ["Votes"]);
+        };
+        check(&s, [["035.0", "35.00 and 35"], ["007.3", "7.26 and 7"]]);
+        // New data draws the new values.
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[20], [0.004]]})).unwrap();
+        check(&s, [["020.0", "20.00 and 20"], ["000.0", "0.00 and 0"]]);
+        // The design in the Graph Design list is left as it was.
+        assert_eq!(texts_in(&s.doc().unwrap().doc.graph_designs[0].art), ["%31", "Votes", "%02 and %00"]);
+        // A bar below zero shows its minus sign, its totals moved with the design along the bar.
+        let bars = one_series(&mut s, "bar", &[-15.0]);
+        s.execute("graph.setType", &json!({"id": bars.0, "axisMin": -50, "axisMax": 50})).unwrap();
+        s.execute("graph.column", &json!({"id": bars.0, "design": "Ballot"})).unwrap();
+        let bar = series_parts(&s, bars, 0)[0].clone();
+        let frame = frames(&bar)[0];
+        let (sx, sy) = (frame.width() / 10.0, frame.height() / 10.0);
+        let at = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(frame.x0 + (p.x - 600.0) * sx, frame.y0 + (p.y - 600.0) * sy);
+        let totals = totals_of(&bar.children().unwrap()[1..]);
+        assert_eq!(totals.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["-015.0", "-15.00 and -15"]);
+        assert!((frame.x1 - 250.0).abs() < 1e-6 && close(totals[0].1, at(above)) && close(totals[1].1, at(below)), "{totals:?} {frame:?}");
+        // A design that is a single piece of type with a total shows the value alone, and its legend swatch is the
+        // default square.
+        let one = s.execute("text.create", &json!({"x": 600, "y": 700, "text": "%00", "size": 4})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [one]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Count"})).unwrap();
+        let count = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": count.0, "design": "Count"})).unwrap();
+        let parts = series_parts(&s, count, 0);
+        assert_eq!(texts_in(&parts[0]), ["35"]);
+        assert_eq!(totals_of(&parts[0].children().unwrap()[1..]).len(), 1);
+        assert!(matches!(parts.last().unwrap().kind, NodeKind::Path { .. }), "the default swatch: {:?}", parts.last().unwrap().kind);
+        // Repeating, with a last copy to chop, it still shows the value.
+        s.execute("graph.column", &json!({"id": count.0, "design": "Count", "columnType": "repeating", "each": 10})).unwrap();
+        let column = series_parts(&s, count, 0)[0].clone();
+        assert!(matches!(column.kind, NodeKind::Group { .. }) && texts_in(&column) == ["35"], "{:?}", column.kind);
+    }
+
+    #[test]
+    fn a_repeating_design_shows_its_totals_once_at_the_value_end_and_a_sliding_one_beside_its_part() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let [above, below] = save_totals_design(&mut s, "Ballot", true);
+        let id = one_series(&mut s, "column", &[35.0]);
+        let plain = series_parts(&s, id, 0)[0].geometric_bounds().unwrap();
+        s.execute("graph.column", &json!({"id": id.0, "design": "Ballot", "columnType": "repeating", "each": 10})).unwrap();
+        let column = series_parts(&s, id, 0)[0].clone();
+        let children = column.children().unwrap();
+        // Three whole copies and the one cut off at the value, none with a total; then the two totals, not cut.
+        assert_eq!(children.len(), 6, "{children:?}");
+        assert!(matches!(children[3].kind, NodeKind::Group { clip: true, .. }), "the last copy is clipped");
+        assert!(children[..4].iter().all(|c| texts_in(c) == ["Votes"]));
+        // Set as in a whole copy that ends at the value: 40 points tall from y 160, as wide as the column.
+        let sx = plain.width() / 10.0;
+        let at = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(plain.x0 + (p.x - 600.0) * sx, 160.0 + (p.y - 600.0) * 4.0);
+        let totals = totals_of(&children[4..]);
+        assert_eq!(totals.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["035.0", "35.00 and 35"]);
+        assert!(close(totals[0].1, at(above)) && close(totals[1].1, at(below)), "{totals:?}");
+        // Sliding: the total above the guide moves with the part kept in proportion at the value end, the one below the
+        // design with the part stretched down to the zero line.
+        s.execute("graph.column", &json!({"id": id.0, "design": "Ballot", "columnType": "sliding"})).unwrap();
+        let column = series_parts(&s, id, 0)[0].clone();
+        let children = column.children().unwrap();
+        assert_eq!(children.len(), 4, "two halves and two totals: {children:?}");
+        let k = (140.0 - 5.0 * sx) / 5.0;
+        let totals = totals_of(&children[2..]);
+        let kept = vectorcraft_geom::Point::new(plain.x0 + (above.x - 600.0) * sx, 160.0 + (above.y - 600.0) * sx);
+        let stretched = vectorcraft_geom::Point::new(plain.x0 + (below.x - 600.0) * sx, 300.0 + (below.y - 610.0) * k);
+        assert!(close(totals[0].1, kept) && close(totals[1].1, stretched), "{totals:?} {kept:?} {stretched:?}");
+        // A total's pattern fill moves with it.
+        let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+        let frame = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0));
+        let origin = vectorcraft_geom::Point::new(0.0, -2.0);
+        let t = vectorcraft_doc::TextObject::point(origin, "%00", CharStyle::default());
+        let mut total = vectorcraft_doc::Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let dots = Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+        total.appearance = vectorcraft_doc::Appearance::basic(dots, Paint::None, 0.0).into();
+        let art = vectorcraft_doc::Node::group(d.alloc_id(), vec![std::sync::Arc::new(frame), std::sync::Arc::new(total)]);
+        d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Dotted".into(), art: std::sync::Arc::new(art) });
+        let options = ColumnDesign { design: "Dotted".into(), ..ColumnDesign::default() };
+        let g = GraphSpec {
+            rows: vec![vec![35.0]],
+            axis_min: Some(0.0),
+            axis_max: Some(50.0),
+            series_columns: vec![Some(options)],
+            ..GraphSpec::default()
+        };
+        let out = super::generate(&mut d, &g);
+        let column = out.iter().find(|n| n.extras().series_index == Some(0)).unwrap().children().unwrap()[0].clone();
+        let (text, at) = totals_of(&column.children().unwrap()[1..]).remove(0);
+        assert_eq!(text, "35");
+        let Paint::Pattern { xf, .. } = column.children().unwrap()[1].appearance.fill_paint() else { panic!("a pattern fill") };
+        assert!((xf * origin - at).hypot() < 1e-6 && (at - origin).hypot() > 1.0, "{xf:?} {at:?}");
+    }
+
+    #[test]
+    fn totals_inside_a_group_with_a_look_of_its_own_show_the_value_where_they_are() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id_of = |v: serde_json::Value| v["id"].as_u64().unwrap();
+        let frame = id_of(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap());
+        let total = id_of(s.execute("text.create", &json!({"x": 600, "y": 605, "text": "%00", "size": 4})).unwrap());
+        s.execute("select.set", &json!({"ids": [total]})).unwrap();
+        let faded = id_of(s.execute("object.group", &json!({})).unwrap());
+        s.execute("select.set", &json!({"ids": [faded]})).unwrap();
+        s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+        s.execute("select.set", &json!({"ids": [frame, faded]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Faded"})).unwrap();
+        let id = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": id.0, "design": "Faded", "columnType": "repeating", "each": 10})).unwrap();
+        // The total stays in its half-opaque group: each of the four copies shows the value there.
+        let parts = series_parts(&s, id, 0);
+        let copies = parts[0].children().unwrap();
+        assert_eq!(copies.len(), 4, "{copies:?}");
+        let mut faded_groups = 0;
+        for c in copies {
+            assert_eq!(texts_in(c), ["35"]);
+            c.walk(&mut |n| faded_groups += usize::from(matches!(n.kind, NodeKind::Group { .. }) && (n.opacity - 0.5).abs() < 1e-6));
+        }
+        assert_eq!(faded_groups, 4);
+        // The legend swatch shows the design without it.
+        let swatch = parts.last().unwrap();
+        assert!(matches!(swatch.kind, NodeKind::Group { .. }) && texts_in(swatch).is_empty(), "{:?}", swatch.kind);
+        // Type with a total that clips other art clips it with the value in each copy, and the legend swatch leaves out
+        // what it clips.
+        let frame = id_of(s.execute("shape.rectangle", &json!({"x": 600, "y": 650, "width": 10, "height": 10})).unwrap());
+        let inside = id_of(s.execute("shape.rectangle", &json!({"x": 600, "y": 650, "width": 10, "height": 10})).unwrap());
+        let mask = id_of(s.execute("text.create", &json!({"x": 600, "y": 658, "text": "%00", "size": 8})).unwrap());
+        s.execute("select.set", &json!({"ids": [inside, mask]})).unwrap();
+        let clipped = id_of(s.execute("object.clippingMask.make", &json!({})).unwrap());
+        s.execute("select.set", &json!({"ids": [frame, clipped]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Masked"})).unwrap();
+        let masked = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": masked.0, "design": "Masked"})).unwrap();
+        let parts = series_parts(&s, masked, 0);
+        let clip_groups = |n: &vectorcraft_doc::Node| {
+            let mut out = vec![];
+            n.walk(&mut |c| {
+                if let NodeKind::Group { clip: true, children } = &c.kind {
+                    out.push(children.first().map(|m| texts_in(m)).unwrap_or_default());
+                }
+            });
+            out
+        };
+        assert_eq!(clip_groups(&parts[0]), [["35"]], "the copy's clipping type shows the value");
+        let swatch = parts.last().unwrap();
+        let mut drawn = 0;
+        swatch.walk(&mut |n| drawn += usize::from(!matches!(n.kind, NodeKind::Group { .. })));
+        assert!(clip_groups(swatch).is_empty() && drawn == 1, "only the frame: {swatch:?}");
+        // Totals that are a blend's key objects stay in the blend and show the value there, and the legend swatch leaves
+        // them out.
+        let frame = id_of(s.execute("shape.rectangle", &json!({"x": 600, "y": 680, "width": 10, "height": 10})).unwrap());
+        let first = id_of(s.execute("text.create", &json!({"x": 600, "y": 685, "text": "%00", "size": 4})).unwrap());
+        let second = id_of(s.execute("text.create", &json!({"x": 606, "y": 685, "text": "%00", "size": 4})).unwrap());
+        s.execute("select.set", &json!({"ids": [first, second]})).unwrap();
+        let blend = id_of(s.execute("object.blend.make", &json!({})).unwrap());
+        s.execute("select.set", &json!({"ids": [frame, blend]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Blended"})).unwrap();
+        let blended = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": blended.0, "design": "Blended"})).unwrap();
+        let parts = series_parts(&s, blended, 0);
+        let mut blends = vec![];
+        parts[0].walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Blend { .. }) {
+                blends.push(texts_in(n));
+            }
+        });
+        assert_eq!(blends, [["35", "35"]], "{:?}", parts[0]);
+        assert!(texts_in(parts.last().unwrap()).is_empty(), "{:?}", parts.last().unwrap());
+        // A design that is that blend alone gets the default legend swatch.
+        s.execute("select.set", &json!({"ids": [blend]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Keys"})).unwrap();
+        let keys = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": keys.0, "design": "Keys"})).unwrap();
+        let parts = series_parts(&s, keys, 0);
+        assert_eq!(texts_in(&parts[0]), ["35", "35"]);
+        assert!(matches!(parts.last().unwrap().kind, NodeKind::Path { .. }), "the default swatch: {:?}", parts.last().unwrap().kind);
+        // A design of a total inside two plain groups shows the value, and its legend swatch is the default square.
+        let total = id_of(s.execute("text.create", &json!({"x": 700, "y": 700, "text": "%00", "size": 4})).unwrap());
+        s.execute("select.set", &json!({"ids": [total]})).unwrap();
+        let inner = id_of(s.execute("object.group", &json!({})).unwrap());
+        s.execute("select.set", &json!({"ids": [inner]})).unwrap();
+        let outer = id_of(s.execute("object.group", &json!({})).unwrap());
+        s.execute("select.set", &json!({"ids": [outer]})).unwrap();
+        s.execute("graph.design", &json!({"new": "Nested"})).unwrap();
+        let nested = one_series(&mut s, "column", &[35.0]);
+        s.execute("graph.column", &json!({"id": nested.0, "design": "Nested"})).unwrap();
+        let parts = series_parts(&s, nested, 0);
+        assert_eq!(texts_in(&parts[0]), ["35"]);
+        assert!(matches!(parts.last().unwrap().kind, NodeKind::Path { .. }), "the default swatch: {:?}", parts.last().unwrap().kind);
+    }
+
+    #[test]
+    fn totals_take_their_places_from_the_two_digits_after_the_percent_sign() {
+        for (v, before, after, want) in [
+            (122.0, 3, 0, "122"),
+            (122.0, 0, 0, "122"),
+            (5.0, 3, 1, "005.0"),
+            (1234.0, 2, 0, "1234"),
+            (2.5, 0, 0, "3"),
+            (-2.5, 0, 0, "-3"),
+            (0.25, 0, 0, "0"),
+            (0.25, 0, 2, "0.25"),
+            (1.005, 0, 2, "1.01"),
+            (0.1 + 0.2, 0, 2, "0.30"),
+            (9.995, 0, 2, "10.00"),
+            (99.96, 0, 1, "100.0"),
+            (-0.004, 0, 2, "0.00"),
+            (-7.25, 2, 1, "-07.3"),
+            (7.0, 0, 9, "7.000000000"),
+            (1e21, 0, 0, "1000000000000000000000"),
+        ] {
+            assert_eq!(super::total_text(v, before, after), want, "{v} %{before}{after}");
+        }
+        // Each `%` and two digits, left to right; any other `%` stays.
+        let style = CharStyle::default;
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "%31 and %%12, %1x, 50%", style());
+        assert!(super::fill_totals(&mut t, 7.25));
+        assert_eq!(t.plain_text(), "007.3 and %7.25, %1x, 50%");
+        // A total split between two runs takes the style of its `%`.
+        let (small, big) = (CharStyle { size: 10.0, ..style() }, CharStyle { size: 20.0, ..style() });
+        t.runs = vec![vectorcraft_doc::TextRun::new("a %3", small), vectorcraft_doc::TextRun::new("1 b", big)];
+        assert!(super::fill_totals(&mut t, 7.25));
+        assert_eq!(t.runs.iter().map(|r| (r.text.as_str(), r.style.size)).collect::<Vec<_>>(), [("a 007.3", 10.0), (" b", 20.0)]);
+        // Type without a total is left as it is.
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Votes: 50%", style());
+        assert!(!super::fill_totals(&mut t, 7.25));
+        assert_eq!(t.plain_text(), "Votes: 50%");
     }
 
     fn make(s: &mut Session, ty: &str, csv: &str) -> NodeId {

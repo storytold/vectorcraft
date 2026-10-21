@@ -188,7 +188,7 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
                 Paint::Solid { color, .. } => css_color(color, 1.0),
                 Paint::Gradient(g) if g.gradient.kind != GradientKind::Freeform => {
                     let stops: Vec<String> =
-                        g.gradient.stops.iter().map(|s| format!("{} {}%", css_color(&s.color, s.opacity), (s.offset * 100.0).round())).collect();
+                        g.gradient.stops.iter().map(|s| format!("{} {}%", css_color(&s.color, s.opacity), s.offset * 100.0)).collect();
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
                         _ => format!("linear-gradient({}deg, {})", (90.0 - g.angle).rem_euclid(360.0).round(), stops.join(", ")),
@@ -371,7 +371,9 @@ fn read_gpl(text: &str, fallback: &str) -> SwatchLibrary {
             continue;
         }
         if let Some(n) = line.strip_prefix("Name:") {
-            lib.name = n.trim().to_string();
+            if !n.trim().is_empty() {
+                lib.name = n.trim().to_string();
+            }
             continue;
         }
         // Comments, headers (`Columns: 4`) and anything else that isn't a colour are skipped.
@@ -648,6 +650,14 @@ mod tests {
     use crate::{Gradient, GradientPaint, GradientStop};
     use proptest::prelude::*;
 
+    #[test]
+    fn gpl_blank_name_keeps_fallback() {
+        let blank = "GIMP Palette\nName: \nColumns: 0\n#\n  1   2   3\tx\n";
+        assert_eq!(read(blank, "fallback").unwrap().name, "fallback");
+        let named = "GIMP Palette\nName: Warm\n  1   2   3\tx\n";
+        assert_eq!(read(named, "fallback").unwrap().name, "Warm");
+    }
+
     /// A color book's string: a `u32` count of UTF-16 code units, then the units.
     fn acb_str(out: &mut Vec<u8>, s: &str) {
         let units: Vec<u16> = s.encode_utf16().collect();
@@ -803,6 +813,32 @@ mod tests {
         let text = written(&lib, PaletteFormat::Css);
         assert!(text.contains("--red: #000000;") && text.contains("--red-2: #000000;"));
         assert!(read(&text, "x").is_err(), "CSS is written only");
+    }
+
+    #[test]
+    fn css_preserves_fractional_gradient_stop_positions() {
+        for kind in [GradientKind::Linear, GradientKind::Radial] {
+            let lib = SwatchLibrary {
+                name: "Positions".into(),
+                swatches: vec![Swatch {
+                    name: "Ramp".into(),
+                    paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient {
+                        kind,
+                        stops: vec![
+                            GradientStop::new(0.0, Color::BLACK),
+                            GradientStop::new(0.125, Color::rgb8(255, 0, 0)),
+                            GradientStop::new(0.12890625, Color::WHITE),
+                            GradientStop::new(1.0, Color::rgb8(0, 0, 255)),
+                        ],
+                    }))),
+                    global: false,
+                    spot: false,
+                }],
+                groups: vec![],
+            };
+            let text = written(&lib, PaletteFormat::Css);
+            assert!(text.contains("#000000 0%, #ff0000 12.5%, #ffffff 12.890625%, #0000ff 100%"), "{kind:?}: {text}");
+        }
     }
 
     #[test]

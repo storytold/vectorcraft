@@ -374,6 +374,50 @@ fn what_cannot_be_attached_is_refused_with_a_reason() {
 }
 
 #[test]
+fn paths_and_objects_that_are_part_of_live_art_or_a_clipping_path_stay_where_they_are() {
+    let mut s = session();
+    let ([left, middle, _], path) = squares_and_line(&mut s);
+    let err = |s: &mut Session, p: Value| s.execute("object.objectsOnPath.attach", &p).unwrap_err().to_string();
+    let parent = |s: &Session, id: NodeId| s.doc().unwrap().doc.parent_of(id);
+    // A compound path's member as the path; as an object, the whole compound attaches.
+    let member = rect(&mut s, 20.0, 150.0, 40.0, 40.0);
+    let hole = rect(&mut s, 30.0, 160.0, 10.0, 10.0);
+    select(&mut s, &[member, hole]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    let why = err(&mut s, json!({"path": member.0, "ids": [left.0]}));
+    assert!(why.contains("a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects"), "{why}");
+    assert_eq!(parent(&s, member), Some(compound));
+    // A blend's key path, as the path and as an object.
+    let key = line(&mut s, (50.0, 200.0), (350.0, 200.0));
+    let other_key = line(&mut s, (50.0, 250.0), (350.0, 250.0));
+    select(&mut s, &[key, other_key]);
+    let blend = id_of(&s.execute("object.blend.make", &json!({"steps": 2})).unwrap());
+    assert!(err(&mut s, json!({"path": key.0, "ids": [left.0]})).contains("can't take objects"));
+    let why = err(&mut s, json!({"path": path.0, "ids": [key.0]}));
+    assert!(why.contains("objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path"), "{why}");
+    assert_eq!((parent(&s, key), parent(&s, other_key)), (Some(blend), Some(blend)));
+    // A repeat's source art as an object.
+    let source = rect(&mut s, 300.0, 340.0, 10.0, 10.0);
+    select(&mut s, &[source]);
+    let repeat = id_of(&s.execute("object.repeat.grid", &json!({})).unwrap());
+    assert!(err(&mut s, json!({"path": path.0, "ids": [source.0]})).contains("can't be attached to a path"));
+    assert_eq!(parent(&s, source), Some(repeat));
+    // A clipping path, as the path and as an object.
+    let art = rect(&mut s, 200.0, 100.0, 60.0, 60.0);
+    let mask = rect(&mut s, 210.0, 110.0, 40.0, 40.0);
+    select(&mut s, &[art, mask]);
+    let clip = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert!(err(&mut s, json!({"path": mask.0, "ids": [left.0]})).contains("a clipping path can't take objects"));
+    assert!(err(&mut s, json!({"path": path.0, "ids": [mask.0]})).contains("a clipping path can't be attached to a path"));
+    assert_eq!(s.doc().unwrap().doc.node(clip).unwrap().children().unwrap().first().map(|c| c.id), Some(mask));
+    // The art the clipping path clips, and a compound path's member as an object, still attach.
+    let g = attach(&mut s, path, &[left, middle, member, art], json!({}));
+    let rec = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().cloned().unwrap();
+    assert!(rec.members.iter().any(|m| m.id == compound), "the compound attaches whole");
+    assert_eq!(parent(&s, member), Some(compound));
+}
+
+#[test]
 fn options_and_expand_take_ids_without_a_selection() {
     let mut s = session();
     let ([left, middle, right], path) = squares_and_line(&mut s);

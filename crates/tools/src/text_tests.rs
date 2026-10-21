@@ -560,6 +560,20 @@ fn new_type_snaps_to_smart_guides() {
 }
 
 #[test]
+fn area_type_drag_measure_labels_honor_preference() {
+    let (d, _) = crate::testutil::doc_with_rect();
+    let (sel, p) = (Selection::default(), paint());
+    let on = ToolContext { measurement_labels: true, ..cx(&d, &sel, &p) };
+    let off = ToolContext { measurement_labels: false, ..cx(&d, &sel, &p) };
+    let mut tool = TypeTool::new("type");
+    tool.pointer(&on, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    tool.pointer(&on, &PointerEvent::new(PointerKind::Drag, 200.0, 150.0));
+    let want = on.size_label(100.0, 50.0);
+    assert!(tool.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
+    assert!(!tool.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
+}
+
+#[test]
 fn layout_cache_follows_fonts_added_later() {
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]

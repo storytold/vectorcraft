@@ -3,10 +3,12 @@
 //! A dock tab, an icon of the icon column or a popped-out panel's title dragged out of the dock
 //! floats that panel; the strip right of the dock's tabs floats the whole tabbed group. A floating
 //! group moves by its title bar (or the strip right of its tabs, or the tab of a lone panel), and a
-//! tab dragged out of a group floats on its own. Dropped on the dock, which lights up while the
-//! pointer is over it, a group's panels go back to where they live in the dock (the tabbed group or
-//! the icon column); dropped on another group's title bar or tabs, they stack with that group. The
-//! × of a group puts its panels back in the dock too. The Tools panel floats the same way by its
+//! tab dragged out of a group floats on its own. Dropped on the tabs of one of the dock's groups
+//! (lit up), a group's panels join that group as tabs; dropped on the upper or lower half of it,
+//! they make a new group above or below it in the dock. Dropped on the icon column, which lights
+//! up, they become icons there, the tabbed group's panels too; dropped anywhere else on the dock,
+//! they go back to where they live in it. Dropped on another floating group's title bar or tabs,
+//! they stack with that group. The × of a group puts its panels back in the dock too. The Tools panel floats the same way by its
 //! title bar ([`crate::toolbar`]) and docks again on the window's left edge.
 //!
 //! Dropped on the upper or lower half of another group (a line shows where), a group joins it in
@@ -80,6 +82,47 @@ pub(crate) enum Drop {
     Above(&'static str),
     /// In the dock as a new column at this place (1: next to the icon column, counting left).
     Column(u32),
+    /// In the dock's group showing this panel: as tabs, or as a new group above or below it.
+    Root(&'static str, RootZone),
+    /// In the icon column, as icons (`window.panel.dock {icon: true}`).
+    Icons,
+}
+
+/// Where a drop on one of the dock's groups puts the moved panels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RootZone {
+    /// With the group, as tabs.
+    Tab,
+    /// In a new group right above it.
+    Top,
+    /// In a new group right below it.
+    Bottom,
+}
+
+impl RootZone {
+    /// The `zone` of `window.panel.dock` / `window.panel.move`.
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            RootZone::Tab => "tab",
+            RootZone::Top => "top",
+            RootZone::Bottom => "bottom",
+        }
+    }
+}
+
+/// One of the dock's groups as last drawn (egui temp memory under [`root_groups_id`]): its panels,
+/// the one it shows, its bounds and its tab strip. A group dropped on it joins it ([`Drop::Root`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RootGroup {
+    pub panels: Vec<&'static str>,
+    pub shown: &'static str,
+    pub rect: Rect,
+    pub strip: Rect,
+}
+
+/// The dock's groups as last drawn, top to bottom.
+pub(crate) fn root_groups_id() -> Id {
+    Id::new("floating-root-groups")
 }
 
 fn move_id() -> Id {
@@ -136,6 +179,16 @@ fn label(app: &VectorcraftApp, id: &str) -> String {
 /// The floating group holding panel `id`.
 pub fn group_of(ui: &UiState, id: &str) -> Option<usize> {
     ui.floating_panels.iter().position(|g| g.panels.iter().any(|p| p == id))
+}
+
+/// Reorder tabs in a floating group by index, keeping the active tab on the same panel.
+pub(crate) fn reorder_group_tab_indices(g: &mut FloatingPanels, from: usize, to: usize) {
+    if from != to && from < g.panels.len() && to < g.panels.len() {
+        let active = g.panels.get(g.active).cloned();
+        let moved = g.panels.remove(from);
+        g.panels.insert(to, moved);
+        g.active = active.and_then(|id| g.panels.iter().position(|p| *p == id)).unwrap_or(0);
+    }
 }
 
 /// The floating groups drawn with group `gi`, top to bottom: the groups of its set, or it alone.
@@ -209,9 +262,30 @@ fn ids_of(g: &FloatingPanels) -> Vec<&'static str> {
     g.panels.iter().filter_map(|p| panel(p)).map(|(id, _)| id).collect()
 }
 
+/// Saved dock tab order, appending any tabs missing from older preferences.
+pub(crate) fn resolved_dock_tab_order(ui: &UiState) -> Vec<DockTab> {
+    if ui.dock_tab_order.is_empty() {
+        DockTab::ALL.to_vec()
+    } else {
+        let mut order = ui.dock_tab_order.clone();
+        for tab in DockTab::ALL {
+            if !order.contains(&tab) {
+                order.push(tab);
+            }
+        }
+        order
+    }
+}
+
+/// Persist dock tab order when it differs from the default visible strip.
+pub(crate) fn set_dock_tab_order(ui: &mut UiState, visible: Vec<DockTab>) {
+    let default = DockTab::ALL.iter().copied().filter(|t| group_of(ui, t.info().0).is_none()).collect::<Vec<_>>();
+    ui.dock_tab_order = if visible == default { Vec::new() } else { visible };
+}
+
 /// The dock tabs left in the dock, in tab order.
 pub fn docked_tabs(ui: &UiState) -> impl Iterator<Item = DockTab> + '_ {
-    DockTab::ALL.into_iter().filter(|t| group_of(ui, t.info().0).is_none())
+    resolved_dock_tab_order(ui).into_iter().filter(|t| group_of(ui, t.info().0).is_none())
 }
 
 /// The dock tab the tabbed group shows: the chosen one, or the first left when it floats.
@@ -428,7 +502,31 @@ pub(crate) fn drop_target(app: &VectorcraftApp, ctx: &egui::Context, what: Movin
         let y = ctx.data(|d| d.get_temp::<Rect>(group_rect_id(last.0))).map_or(col.bottom(), |r| r.bottom()).min(col.bottom() - 2.0);
         return Some((Drop::Below(last.0), Rect::from_x_y_ranges(col.x_range(), (y - 2.0)..=(y + 2.0))));
     }
-    let dock = zone(dock_rect_id()).filter(|_| app.ui.dock && app.ui.screen_mode < 3)?;
+    let shown = app.ui.dock && app.ui.screen_mode < 3;
+    // The icon column takes the panels as icons. (Mid-frame the dock's rect may not take it in yet.)
+    if let Some(icons) = zone(icons_rect_id()).filter(|_| shown) {
+        return Some((Drop::Icons, icons));
+    }
+    let dock = zone(dock_rect_id()).filter(|_| shown)?;
+    // One of the dock's groups: its tabs take the panels as tabs, its upper or lower half puts them
+    // in a new group above or below it. The group they came from (being dragged by a tab) takes
+    // nothing: the shared dock handles a tab moved within it.
+    let moved: Vec<&str> = std::iter::once(id).chain(ids_in(&app.ui, &moving)).collect();
+    let groups = ctx.data(|d| d.get_temp::<Vec<RootGroup>>(root_groups_id())).unwrap_or_default();
+    if let Some(group) = groups.iter().find(|g| g.rect.contains(at)) {
+        let anchor = Some(group.shown).filter(|p| !moved.contains(p)).or_else(|| group.panels.iter().copied().find(|p| !moved.contains(p)));
+        if let Some(anchor) = anchor {
+            if group.strip.contains(at) {
+                return Some((Drop::Root(anchor, RootZone::Tab), group.strip));
+            }
+            let mid = group.rect.center().y;
+            return Some(if at.y < mid {
+                (Drop::Root(anchor, RootZone::Top), Rect::from_x_y_ranges(group.rect.x_range(), group.rect.top()..=mid))
+            } else {
+                (Drop::Root(anchor, RootZone::Bottom), Rect::from_x_y_ranges(group.rect.x_range(), mid..=group.rect.bottom()))
+            });
+        }
+    }
     // Panels that aren't tabs of the tabbed group (or all of them, with it collapsed) go back to
     // their icons: light up the icon column, where they land, rather than the tabs.
     let tabbed = !app.ui.dock_collapsed
@@ -461,8 +559,8 @@ fn insertion_line(ctx: &egui::Context, line: Rect) {
 pub(crate) fn preview(ctx: &egui::Context, target: Drop, rect: Rect) {
     match target {
         Drop::Below(_) | Drop::Above(_) | Drop::Column(_) => insertion_line(ctx, rect),
-        Drop::Stack(_) => tab_zone(ctx, rect),
-        Drop::Dock => highlight(ctx, rect),
+        Drop::Stack(_) | Drop::Root(..) => tab_zone(ctx, rect),
+        Drop::Dock | Drop::Icons => highlight(ctx, rect),
     }
 }
 
@@ -485,6 +583,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.docking = m.original.docking;
         app.ui.docking_hidden = m.original.docking_hidden;
         app.ui.docking_icons = m.original.docking_icons;
+        app.ui.docking_collapsed = m.original.docking_collapsed;
         app.ui.floating_panels = m.original.floating_panels;
         app.ui.open_panel = m.original.open_panel;
         app.ui.dock_tab = m.original.dock_tab;
@@ -517,7 +616,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         match target {
             Some((Drop::Below(_) | Drop::Above(_) | Drop::Column(_), line)) => insertion_line(ctx, line),
-            Some((Drop::Stack(_), tabs)) => tab_zone(ctx, tabs),
+            Some((Drop::Stack(_) | Drop::Root(..), tabs)) => tab_zone(ctx, tabs),
             Some((_, zone)) => highlight(ctx, zone),
             None => {}
         }
@@ -534,7 +633,30 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let set = set_of(&app.ui, gi);
     let ids = ids_in(&app.ui, &set);
     let active = set.first().and_then(|&i| shown(&app.ui, i)).unwrap_or(id);
+    // Icon panels dropped on the icon column go back to their icons, as on the rest of the dock.
+    let drop = match drop {
+        Drop::Icons if ids.iter().all(|p| crate::state::ICON_PANELS.iter().any(|entry| entry.0 == *p)) => Drop::Dock,
+        drop => drop,
+    };
+    if matches!(drop, Drop::Root(..) | Drop::Icons) {
+        // The shared layout puts them in the dock's tree, group by group: the first where it was
+        // dropped, the others with it as tabs.
+        let leads: Vec<&'static str> = set.iter().filter_map(|&i| shown(&app.ui, i)).collect();
+        for (k, lead) in leads.iter().enumerate() {
+            let params = match (drop, leads.first()) {
+                (Drop::Root(anchor, zone), _) if k == 0 => json!({"panel": lead, "group": true, "anchor": anchor, "zone": zone.id()}),
+                (Drop::Root(..), Some(first)) => json!({"panel": lead, "group": true, "anchor": first, "zone": "tab"}),
+                _ => json!({"panel": lead, "group": true, "icon": true}),
+            };
+            if let Err(error) = app.run("window.panel.dock", params) {
+                app.ui.status = error;
+                break;
+            }
+        }
+        return;
+    }
     match drop {
+        Drop::Root(..) | Drop::Icons => {}
         Drop::Dock => {
             dock(&mut app.ui, &ids, active);
             // One that went back to its icon pops out of it, so it doesn't seem to vanish.
@@ -566,6 +688,8 @@ enum Action {
     Detach(usize, f32),
     /// Float this panel out of its group; its tab began this far right.
     Tear(&'static str, f32),
+    /// Reorder tabs in floating group `gi` from index `from` to `to`.
+    Reorder(usize, usize, usize),
     /// Float the docked column of this group, its top-left corner this far from the pointer.
     Undock(usize, Vec2),
 }
@@ -624,6 +748,7 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, action: Option<Action>) 
         return;
     }
     let before = app.ui.clone();
+    let skip_reconcile = matches!(action, Some(Action::Reorder(_, _, _)));
     match action {
         Some(Action::Activate(gi, k)) => {
             if let Some(g) = app.ui.floating_panels.get_mut(gi)
@@ -654,6 +779,19 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, action: Option<Action>) 
         }
         Some(Action::Detach(gi, left)) => detach(app, ctx, gi, left),
         Some(Action::Tear(id, left)) => tear(app, ctx, &[id], id, strip_grab(ctx, left)),
+        Some(Action::Reorder(gi, from, to)) => {
+            let ids = app.ui.floating_panels.get(gi).and_then(|g| {
+                let panel = g.panels.get(from)?;
+                let before = g.panels.get(to)?;
+                Some((panel.clone(), before.clone()))
+            });
+            if let Some((panel, before)) = ids
+                && let Err(error) = crate::panel_docking::strip_tab_reorder(app, &panel, &before)
+            {
+                app.ui.status = error;
+            }
+            return;
+        }
         Some(Action::Undock(gi, grab)) => {
             let Some(at) = ctx.input(|i| i.pointer.interact_pos()) else { return };
             let Some(id) = set_of(&app.ui, gi).first().and_then(|&i| shown(&app.ui, i)) else { return };
@@ -669,7 +807,7 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, action: Option<Action>) 
         }
         None => {}
     }
-    if let Err(error) = crate::panel_docking::reconcile_native(app, before.clone()) {
+    if !skip_reconcile && let Err(error) = crate::panel_docking::reconcile_native(app, before.clone()) {
         app.ui.status = error;
     }
     ctx.data_mut(|data| {
@@ -889,12 +1027,14 @@ fn draw_groups(
         let names: Vec<_> = g.ids.iter().zip(&labels).map(|(&id, label)| (id, label.as_str())).collect();
         let selected = g.ids.iter().position(|&id| id == g.active).unwrap_or(0);
         let out = dock::panel_tabs(ui, &format!("native-set-tabs-{}", g.gi), tab_area, &names, selected, theme::semibold(12.0), false);
-        for (j, resp) in out.responses {
-            let Some(&id) = g.ids.get(j) else { continue };
-            if resp.double_clicked() {
+        for (j, resp) in &out.responses {
+            let Some(&id) = g.ids.get(*j) else { continue };
+            if let Some((from, to)) = dock::tab_reorder_on_release(strip, pointer, resp, &out.responses) {
+                *action = Some(Action::Reorder(g.gi, from, to));
+            } else if resp.double_clicked() {
                 *action = Some(Action::Collapse(g.gi));
             } else if resp.clicked() {
-                *action = Some(Action::Activate(g.gi, j));
+                *action = Some(Action::Activate(g.gi, *j));
             } else if lone && resp.drag_started() {
                 *action = Some(match alone {
                     Some(pos) => Action::Move(id, pos),
@@ -1241,6 +1381,16 @@ mod tests {
     }
 
     #[test]
+    fn floating_group_tabs_reorder_horizontally_within_the_strip() {
+        let mut h = Harness::new();
+        h.drag(h.icons()[2].center(), pos2(500.0, 250.0));
+        h.drag(h.icons()[0].center(), h.shared_tab("swatches").center());
+        assert_eq!(h.groups(), [["swatches", "color"]]);
+        h.app.run("window.panel.move", json!({ "panel": "color", "anchor": "swatches", "before": "swatches" })).unwrap();
+        assert_eq!(h.groups(), [["color", "swatches"]]);
+    }
+
+    #[test]
     fn a_dock_tab_dragged_out_floats_and_dropped_on_the_dock_docks_again() {
         let mut h = Harness::new();
         let tabs = h.dock_tabs();
@@ -1325,22 +1475,53 @@ mod tests {
         assert_eq!(h.dock_tabs().len(), 4);
     }
 
+    /// A floating icon panel dropped on the icon column lights it up, goes back and pops out of its icon.
     #[test]
-    fn a_panel_dropped_on_the_dock_lights_up_and_pops_out_of_its_icon() {
+    fn a_panel_dropped_on_the_icon_column_lights_it_up_and_pops_out_of_its_icon() {
         let mut h = Harness::new();
         let count = h.icons().len();
         h.drag(h.icons()[0].center(), pos2(500.0, 400.0));
         assert_eq!(h.groups(), [["color"]]);
-        // Over the tabbed group: Color has no tab there, so the icon column lights up, not the tabs.
         let (dock, column) = (h.temp_rect(dock_rect_id()), h.temp_rect(icons_rect_id()));
-        let over = h.dock_tabs()[1].center();
+        let over = column.center();
         h.hold(h.title("color"), over);
-        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("color"), over), Some((Drop::Dock, column)));
+        assert_eq!(drop_target(&h.app, &h.ctx, Moving::Panel("color"), over), Some((Drop::Icons, column)));
         assert!(column.width() < dock.width(), "the column, not the whole dock: {column:?} {dock:?}");
         // Dropped, it's back in the column and pops out of its icon rather than vanishing.
         h.release(over);
-        assert!(h.groups().is_empty());
+        assert!(h.groups().is_empty(), "{}", h.app.ui.status);
         assert_eq!((h.icons().len(), h.app.ui.open_panel.as_deref()), (count, Some("color")));
+    }
+
+    /// A floating panel dropped on the dock's tabs joins them; on the group's lower half it makes a group below.
+    #[test]
+    fn a_panel_dropped_on_the_dock_tabs_joins_them_and_on_its_lower_half_makes_a_group_below() {
+        let mut h = Harness::new();
+        h.drag(h.icons()[0].center(), pos2(500.0, 400.0));
+        assert_eq!(h.groups(), [["color"]]);
+        // Over the tabbed group's tabs: they light up, and Color joins them.
+        let over = h.dock_tabs()[1].center();
+        h.hold(h.title("color"), over);
+        assert!(matches!(drop_target(&h.app, &h.ctx, Moving::Panel("color"), over), Some((Drop::Root(_, RootZone::Tab), _))));
+        h.release(over);
+        assert!(h.groups().is_empty());
+        assert_eq!(h.dock_tabs().len(), 4);
+        assert!(h.app.ui.open_panel.is_none());
+        // Color Guide on the group's lower half: a group of its own below the tabbed group.
+        h.drag(h.icons()[0].center(), pos2(500.0, 400.0));
+        assert_eq!(h.groups(), [["colorGuide"]]);
+        let dock = h.ctx.data(|d| d.get_temp::<Vec<RootGroup>>(root_groups_id())).unwrap()[0].rect;
+        let lower = pos2(dock.center().x, dock.bottom() - 60.0);
+        h.hold(h.title("colorGuide"), lower);
+        assert!(matches!(drop_target(&h.app, &h.ctx, Moving::Panel("colorGuide"), lower), Some((Drop::Root(_, RootZone::Bottom), _))));
+        h.release(lower);
+        assert!(h.groups().is_empty());
+        let groups = h.ctx.data(|d| d.get_temp::<Vec<RootGroup>>(root_groups_id())).unwrap();
+        assert_eq!(
+            groups.iter().map(|g| g.panels.clone()).collect::<Vec<_>>(),
+            [vec!["properties", "layers", "libraries", "color"], vec!["colorGuide"]]
+        );
+        assert!(groups[0].rect.bottom() <= groups[1].rect.top() + 1.0);
     }
 
     #[test]

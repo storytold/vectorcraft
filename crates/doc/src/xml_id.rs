@@ -31,8 +31,12 @@ pub fn to_object_name(id: &str) -> String {
 /// since a bare `_` would read back as a space.
 pub fn from_object_name(name: &str) -> String {
     let mut out = String::with_capacity(name.len().saturating_mul(2));
+    let last = name.chars().count().saturating_sub(1);
     for (i, c) in name.chars().enumerate() {
-        if c == ' ' {
+        if c == ' ' && i == last {
+            // A trailing bare `_` could read back as the end of a uniqueness suffix.
+            out.push_str("_x20_");
+        } else if c == ' ' {
             out.push('_');
         } else if c == '_' {
             out.push_str("_x5F_");
@@ -115,6 +119,10 @@ mod tests {
             let id = from_object_name(name);
             assert_eq!(to_object_name(&id), name, "name {name:?} -> id {id:?}");
         }
+        let name = "Scan 12345678901234567890 ";
+        let id = from_object_name(name);
+        assert!(id.ends_with("_x20_"), "{id:?}");
+        assert_eq!(to_object_name(&id), name);
         assert_eq!(from_object_name("-abc"), "_x2D_abc");
         assert_eq!(from_object_name(".5 mm"), "_x2E_5_mm");
         assert_eq!(from_object_name("²x"), "_xB2_x");

@@ -447,7 +447,8 @@ fn a_placed_document_brings_its_links_with_the_files_pixels() {
 }
 
 /// The placed (linked) files of a `.ai` file come in with the preview the file keeps of them: one
-/// not found shows it, one found is read at once into the same bounds, which isn't a change.
+/// not found shows it, one found is read at once into the same bounds, which isn't a change. A copy
+/// saved without PDF compatibility, placed, reads the found file too.
 #[test]
 fn links_of_an_imported_file_are_read_where_they_are_found() {
     use vectorcraft_testkit::ai;
@@ -459,7 +460,8 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
         "%AI5_BeginPlace\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n({pic})`\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n"
     );
     let doc_path = dir.file("poster.ai");
-    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place)).as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
     let placed = |s: &Session| {
         let mut found = vec![];
         s.doc().unwrap().doc.visit_images(|n, im| found.push((n.geometric_bounds().unwrap(), im.clone())));
@@ -481,4 +483,11 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     let (b, im) = placed(&s);
     assert!(in_place(b) && (im.width, im.height) == (600, 300) && im.link.as_ref().is_some_and(|l| l.hash.is_some()), "{b:?} {im:?}");
     assert!(!s.doc().unwrap().doc.images[&im.key].is_proxy());
+
+    let alone = dir.file("alone.ai");
+    write(&alone, &ai::ai(data.as_bytes(), "BT /F1 12 Tf 10 50 Td (Saved without its PDF part) Tj ET"));
+    let mut s = session();
+    s.execute("file.place", &json!({"path": alone})).unwrap();
+    let (_, im) = placed(&s);
+    assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
 }

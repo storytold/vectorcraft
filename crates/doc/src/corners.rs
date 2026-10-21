@@ -7,10 +7,67 @@ use std::collections::BTreeSet;
 
 use vectorcraft_geom::corners::{Corner, cut_corners, fitted_radii, path_corners};
 use vectorcraft_geom::shapes::{self, CornerKind};
-use vectorcraft_geom::{Affine, PathData, Rect};
+use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 use crate::node::{LiveShape, Node, NodeKind};
 use crate::selection::AnchorRef;
+
+/// Stored corner radii as document lengths for cutting and display (fractions when `relative`).
+pub fn resolve_stored_radii(base: &PathData, stored: &[f64], relative: bool) -> Vec<f64> {
+    if !relative {
+        return stored.to_vec();
+    }
+    let corners = path_corners(base);
+    let mut out = stored.to_vec();
+    out.resize(base.anchor_count(), 0.0);
+    for c in corners {
+        if let Some(r) = out.get_mut(c.index) {
+            *r = (*r).clamp(0.0, 1.0) * c.max_radius();
+        }
+    }
+    out
+}
+
+/// Turn stored absolute radii into fractions of each corner's maximum, or the other way.
+pub fn convert_radii_relative(live: &mut LiveShape, relative: bool) {
+    if live.radii_relative() == relative {
+        return;
+    }
+    let was_relative = live.radii_relative();
+    let base = match live {
+        LiveShape::Rectangle { w, h, .. } => shapes::rectangle(Rect::new(0.0, 0.0, *w, *h)),
+        LiveShape::Polygon { .. } => live.polygon_outline(),
+        LiveShape::Path { base, .. } => base.clone(),
+        LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
+    };
+    let corners = path_corners(&base);
+    let radii: &mut [f64] = match live {
+        LiveShape::Rectangle { radii, .. } => radii,
+        LiveShape::Polygon { radii, .. } => radii,
+        LiveShape::Path { radii, .. } => radii,
+        LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
+    };
+    for c in corners {
+        if let Some(r) = radii.get(c.index) {
+            let max = c.max_radius();
+            radii[c.index] = if relative {
+                if max > 1e-12 && !was_relative { (*r / max).clamp(0.0, 1.0) } else { *r }
+            } else if was_relative {
+                (*r).clamp(0.0, 1.0) * max
+            } else {
+                *r
+            };
+        }
+    }
+    match live {
+        LiveShape::Rectangle { radii_relative: rel, .. }
+        | LiveShape::Polygon { radii_relative: rel, .. }
+        | LiveShape::Path { radii_relative: rel, .. } => {
+            *rel = relative;
+        }
+        LiveShape::Ellipse { .. } | LiveShape::Line { .. } => {}
+    }
+}
 
 /// The Live Corners of a path.
 #[derive(Clone, Debug)]
@@ -26,6 +83,8 @@ pub struct LiveCorners<'a> {
     /// The radius each of `corners` is drawn with ([`fitted_radii`]).
     drawn: Vec<f64>,
     kinds: Vec<CornerKind>,
+    /// Stored radii are fractions of each corner's maximum, not document lengths.
+    relative: bool,
     /// For each anchor of the path as drawn (per subpath), the anchor of `base` it comes from.
     sources: Vec<Vec<usize>>,
 }
@@ -34,16 +93,21 @@ impl<'a> LiveCorners<'a> {
     /// The Live Corners of `path` and its live shape; `None` for shapes without corners (ellipses,
     /// lines).
     pub fn new(path: &'a PathData, live: Option<&'a LiveShape>) -> Option<Self> {
-        let (base, xf, radii, kinds) = match live {
-            None => (Cow::Borrowed(path), Affine::IDENTITY, vec![], vec![]),
+        let (base, xf, stored, kinds, relative) = match live {
+            None => (Cow::Borrowed(path), Affine::IDENTITY, vec![], vec![], false),
             Some(l @ LiveShape::Rectangle { .. }) => {
-                let LiveShape::Rectangle { w, h, radii, kinds, xf } = l.folded() else { return None };
-                (Cow::Owned(shapes::rectangle(Rect::new(0.0, 0.0, w, h))), xf, radii.to_vec(), kinds.to_vec())
+                let LiveShape::Rectangle { w, h, radii, kinds, radii_relative, xf } = l.folded() else { return None };
+                (Cow::Owned(shapes::rectangle(Rect::new(0.0, 0.0, w, h))), xf, radii.to_vec(), kinds.to_vec(), radii_relative)
             }
-            Some(l @ LiveShape::Polygon { radii, kinds, .. }) => (Cow::Owned(l.polygon_outline()), Affine::IDENTITY, radii.clone(), kinds.clone()),
-            Some(LiveShape::Path { base, radii, kinds }) => (Cow::Borrowed(base), Affine::IDENTITY, radii.clone(), kinds.clone()),
+            Some(l @ LiveShape::Polygon { radii, kinds, radii_relative, .. }) => {
+                (Cow::Owned(l.polygon_outline()), Affine::IDENTITY, radii.clone(), kinds.clone(), *radii_relative)
+            }
+            Some(LiveShape::Path { base, radii, kinds, radii_relative }) => {
+                (Cow::Borrowed(base), Affine::IDENTITY, radii.clone(), kinds.clone(), *radii_relative)
+            }
             Some(LiveShape::Ellipse { .. } | LiveShape::Line { .. }) => return None,
         };
+        let radii = resolve_stored_radii(&base, &stored, relative);
         let sources = if radii.iter().any(|r| *r > 0.0) {
             cut_corners(&base, &radii, &kinds).1
         } else {
@@ -58,7 +122,7 @@ impl<'a> LiveCorners<'a> {
         };
         let corners = path_corners(&base);
         let drawn = fitted_radii(&corners, &radii);
-        Some(Self { corners, base, xf, radii, drawn, kinds, sources })
+        Some(Self { corners, base, xf, radii: stored, drawn, kinds, relative, sources })
     }
 
     /// The Live Corners of a path object.
@@ -72,7 +136,13 @@ impl<'a> LiveCorners<'a> {
         self.corners.binary_search_by_key(&index, |c| c.index).ok().and_then(|i| self.corners.get(i))
     }
 
-    /// The radius corner `index` is set to, in document units (drawn no larger than fits).
+    /// Whether corner radii are stored as fractions of each corner's maximum.
+    pub fn radii_relative(&self) -> bool {
+        self.relative
+    }
+
+    /// The radius corner `index` is stored at: document lengths, or a fraction in 0..1 when
+    /// [`LiveCorners::radii_relative`].
     pub fn radius(&self, index: usize) -> f64 {
         self.radii.get(index).copied().unwrap_or(0.0)
     }
@@ -119,8 +189,9 @@ impl<'a> LiveCorners<'a> {
         &self.sources
     }
 
-    /// The radius (document units) and kind `corners` share (each `None` when they differ, or
-    /// for no corners).
+    /// The radius and kind `corners` share (each `None` when they differ, or for no corners).
+    /// Radius is what was set ([`LiveCorners::radius`]: document lengths, or a fraction in 0..1
+    /// when [`LiveCorners::radii_relative`]), not the fitted draw size ([`LiveCorners::drawn_radius`]).
     pub fn style(&self, corners: &BTreeSet<usize>) -> (Option<f64>, Option<CornerKind>) {
         fn shared<T: Copy>(mut it: impl Iterator<Item = T>, same: impl Fn(T, T) -> bool) -> Option<T> {
             let first = it.next()?;
@@ -137,29 +208,31 @@ impl<'a> LiveCorners<'a> {
 /// plain path again once no corner is cut. Ellipses and lines have no corners: they stay as they
 /// are.
 pub fn set_corners(path: &mut PathData, live: &mut Option<Box<LiveShape>>, corners: &BTreeSet<usize>, radius: Option<f64>, kind: Option<CornerKind>) {
-    fn edit(radii: &mut [f64], kinds: &mut [CornerKind], corners: &BTreeSet<usize>, radius: Option<f64>, kind: Option<CornerKind>) {
+    fn edit(
+        base: &PathData,
+        relative: bool,
+        radii: &mut [f64],
+        kinds: &mut [CornerKind],
+        corners: &BTreeSet<usize>,
+        radius: Option<f64>,
+        kind: Option<CornerKind>,
+    ) {
+        let corners_on_base = path_corners(base);
         for k in corners {
             if let (Some(r), Some(slot)) = (radius, radii.get_mut(*k)) {
-                *slot = r.max(0.0);
+                *slot = if relative {
+                    let max = corners_on_base.iter().find(|c| c.index == *k).map(|c| c.max_radius()).unwrap_or(0.0);
+                    if max > 1e-12 { (r / max).clamp(0.0, 1.0) } else { 0.0 }
+                } else {
+                    r.max(0.0)
+                };
             }
             if let (Some(kind), Some(slot)) = (kind, kinds.get_mut(*k)) {
                 *slot = kind;
             }
         }
     }
-    /// One radius and kind per corner of an outline of `n` anchors while editing; none saved
-    /// when all are sharp or round.
-    fn edit_vec(
-        n: usize,
-        radii: &mut Vec<f64>,
-        kinds: &mut Vec<CornerKind>,
-        corners: &BTreeSet<usize>,
-        radius: Option<f64>,
-        kind: Option<CornerKind>,
-    ) {
-        radii.resize(n, 0.0);
-        kinds.resize(n, CornerKind::Round);
-        edit(radii, kinds, corners, radius, kind);
+    fn trim_vec_radii(radii: &mut Vec<f64>, kinds: &mut Vec<CornerKind>) {
         if radii.iter().all(|r| *r <= 0.0) {
             radii.clear();
         }
@@ -167,18 +240,35 @@ pub fn set_corners(path: &mut PathData, live: &mut Option<Box<LiveShape>>, corne
             kinds.clear();
         }
     }
-    let l = live.get_or_insert_with(|| Box::new(LiveShape::Path { base: path.clone(), radii: vec![], kinds: vec![] }));
+    let l = live.get_or_insert_with(|| Box::new(LiveShape::Path { base: path.clone(), radii: vec![], kinds: vec![], radii_relative: false }));
     // Radii are document lengths and corners circular, also on a rectangle from a file that kept
     // an uneven scale in its transform (#442).
     l.fold_scale();
+    let relative = l.radii_relative();
     match &mut **l {
-        LiveShape::Rectangle { radii, kinds, .. } => edit(radii, kinds, corners, radius, kind),
-        LiveShape::Polygon { sides, radii, kinds, .. } => edit_vec(*sides as usize, radii, kinds, corners, radius, kind),
-        LiveShape::Path { base, radii, kinds } => edit_vec(base.anchor_count(), radii, kinds, corners, radius, kind),
+        LiveShape::Rectangle { w, h, radii, kinds, .. } => {
+            let base = shapes::rectangle(Rect::new(0.0, 0.0, *w, *h));
+            edit(&base, relative, radii, kinds, corners, radius, kind);
+        }
+        LiveShape::Polygon { radius: poly_r, sides, xf, radii, kinds, .. } => {
+            let outline = shapes::polygon(Point::ZERO, *poly_r, *sides, 0.0).transformed(*xf);
+            let n = *sides as usize;
+            radii.resize(n, 0.0);
+            kinds.resize(n, CornerKind::Round);
+            edit(&outline, relative, radii, kinds, corners, radius, kind);
+            trim_vec_radii(radii, kinds);
+        }
+        LiveShape::Path { base, radii, kinds, .. } => {
+            let n = base.anchor_count();
+            radii.resize(n, 0.0);
+            kinds.resize(n, CornerKind::Round);
+            edit(base, relative, radii, kinds, corners, radius, kind);
+            trim_vec_radii(radii, kinds);
+        }
         LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
     }
     match live.as_deref_mut() {
-        Some(LiveShape::Path { base, radii, kinds }) if radii.is_empty() && kinds.is_empty() => {
+        Some(LiveShape::Path { base, radii, kinds, .. }) if radii.is_empty() && kinds.is_empty() => {
             *path = std::mem::take(base);
             *live = None;
         }
@@ -202,7 +292,14 @@ mod tests {
 
     #[test]
     fn rectangle_corners_map_to_their_anchors() {
-        let l = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0, 10.0, 0.0, 0.0], kinds: Default::default(), xf: Affine::IDENTITY };
+        let l = LiveShape::Rectangle {
+            w: 100.0,
+            h: 50.0,
+            radii: [0.0, 10.0, 0.0, 0.0],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::IDENTITY,
+        };
         let path = l.to_path();
         let c = LiveCorners::new(&path, Some(&l)).unwrap();
         // Anchors: top-left, the top-right corner's two, bottom-right, bottom-left.
@@ -229,7 +326,7 @@ mod tests {
         let star = shapes::star(Point::new(100.0, 100.0), 50.0, 25.0, 5, 0.0);
         let (mut path, mut live) = (star.clone(), None);
         set_corners(&mut path, &mut live, &set(&[0, 2]), Some(5.0), None);
-        let Some(LiveShape::Path { base, radii, kinds }) = live.as_deref() else { panic!("live corners: {live:?}") };
+        let Some(LiveShape::Path { base, radii, kinds, .. }) = live.as_deref() else { panic!("live corners: {live:?}") };
         assert_eq!((base, radii.len(), kinds.len()), (&star, 10, 0));
         assert_eq!(path.anchor_count(), 12, "two corners cut");
         let c = LiveCorners::new(&path, live.as_deref()).unwrap();
@@ -245,7 +342,8 @@ mod tests {
     /// A polygon's corners are cut in the document and survive a change of sides when shared.
     #[test]
     fn polygon_corners_follow_their_sides() {
-        let mut l = LiveShape::Polygon { radius: 50.0, sides: 6, xf: Affine::translate((100.0, 100.0)), radii: vec![], kinds: vec![] };
+        let mut l =
+            LiveShape::Polygon { radius: 50.0, sides: 6, xf: Affine::translate((100.0, 100.0)), radii: vec![], kinds: vec![], radii_relative: false };
         let (mut path, mut live) = (l.to_path(), Some(Box::new(l.clone())));
         set_corners(&mut path, &mut live, &set(&[0, 1, 2, 3, 4, 5]), Some(8.0), None);
         assert_eq!(path.anchor_count(), 12);
@@ -263,6 +361,53 @@ mod tests {
         assert!(p.transform(Affine::scale_non_uniform(4.0, 1.0)));
         assert!(matches!(&p, LiveShape::Polygon { radii, .. } if (radii[0] - 16.0).abs() < 1e-9));
         assert!(!p.transform(Affine::translate((5.0, 0.0))), "a move needs no new cuts");
+    }
+
+    #[test]
+    fn relative_radii_scale_with_rectangle_size() {
+        let l = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.25, 0.25, 0.25, 0.25],
+            kinds: Default::default(),
+            radii_relative: true,
+            xf: Affine::IDENTITY,
+        };
+        let path = l.to_path();
+        let c = LiveCorners::new(&path, Some(&l)).unwrap();
+        let r0 = c.drawn_radius(0);
+        let l2 = LiveShape::Rectangle {
+            w: 200.0,
+            h: 200.0,
+            radii: [0.25, 0.25, 0.25, 0.25],
+            kinds: Default::default(),
+            radii_relative: true,
+            xf: Affine::IDENTITY,
+        };
+        let path2 = l2.to_path();
+        let c2 = LiveCorners::new(&path2, Some(&l2)).unwrap();
+        assert!((c2.drawn_radius(0) / r0 - 2.0).abs() < 0.05, "{r0} → {}", c2.drawn_radius(0));
+    }
+
+    #[test]
+    fn convert_between_relative_and_absolute_radii() {
+        let mut l = LiveShape::Rectangle {
+            w: 100.0,
+            h: 50.0,
+            radii: [10.0, 0.0, 0.0, 0.0],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::IDENTITY,
+        };
+        let before = LiveCorners::new(&l.to_path(), Some(&l)).unwrap().drawn_radius(0);
+        convert_radii_relative(&mut l, true);
+        assert!(l.radii_relative());
+        let mid = LiveCorners::new(&l.to_path(), Some(&l)).unwrap().drawn_radius(0);
+        assert!((mid - before).abs() < 0.5);
+        convert_radii_relative(&mut l, false);
+        assert!(!l.radii_relative());
+        let after = LiveCorners::new(&l.to_path(), Some(&l)).unwrap().drawn_radius(0);
+        assert!((after - before).abs() < 0.5);
     }
 
     #[test]

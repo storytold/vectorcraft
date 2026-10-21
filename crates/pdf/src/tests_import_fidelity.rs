@@ -309,6 +309,19 @@ fn text_becomes_point_type() {
     assert!(all(&r.document).iter().any(|n| n.name.as_deref() == Some("<Text Outlines>")));
 }
 
+#[test]
+fn character_spacing_does_not_become_spaces() {
+    for size in [12.0, 13.0, 14.0, 15.0] {
+        for tracking in [150.0, 180.0, 200.0, 220.0, 250.0] {
+            let spacing = size * tracking / 1000.0;
+            let content = format!("BT /F1 {size} Tf {spacing} Tc 10 40 Td (OPEN DAILY) Tj ET");
+            let t = texts(&open(&one_page(&content, HELVETICA, &[])));
+            assert_eq!(t.len(), 1, "size {size}, tracking {tracking}: {t:?}");
+            assert_eq!(t[0].plain_text(), "OPEN DAILY", "size {size}, tracking {tracking}");
+        }
+    }
+}
+
 /// Invisible text (rendering mode 3: a scanned page's recognized text, laid over the scan) is
 /// type with neither fill nor stroke, and the visible text keeps its paint. On a line with
 /// stroked text it is a run of its own, not stroked. As outlines it would draw nothing: it is left

@@ -170,3 +170,47 @@ fn imported_multi_shape_and_even_odd_clip_paths_clip() {
     assert!(!opaque(&r, 70, 75), "the even-odd centre");
     assert_outputs_agree(&mut s, &[(15, 20), (75, 20), (45, 20), (15, 43), (70, 56), (70, 75)]);
 }
+
+/// The children of node `g`, bottom first.
+fn child_ids(s: &Session, g: NodeId) -> Vec<NodeId> {
+    s.doc().unwrap().doc.children(Some(g)).unwrap().iter().map(|n| n.id).collect()
+}
+
+#[test]
+fn arranging_inside_a_clip_group_keeps_the_clipping_path_at_the_bottom() {
+    // #3188: Send to Back on clipped art made it the clipping path, and the group showed nothing.
+    let mut s = session();
+    let rect =
+        |s: &mut Session, x: f64, y: f64, w: f64| id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": w})).unwrap());
+    let a = rect(&mut s, 0.0, 0.0, 50.0);
+    let b = rect(&mut s, 50.0, 50.0, 50.0);
+    let clip = ellipse(&mut s, 20.0, 60.0);
+    select(&mut s, &[a, b, clip]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert_eq!(child_ids(&s, g), [clip, a, b]);
+    let send = |s: &mut Session, ids: &[NodeId], cmd: &str| {
+        select(s, ids);
+        s.execute(cmd, &json!({})).unwrap();
+    };
+
+    send(&mut s, &[b], "object.arrange.sendToBack");
+    assert_eq!(child_ids(&s, g), [clip, b, a], "the art goes just above the clipping path");
+    let r = render(&s);
+    assert!(opaque(&r, 40, 40) && opaque(&r, 60, 60), "both pieces of art still show inside the clip");
+    assert!(!opaque(&r, 5, 5), "and are still clipped");
+
+    send(&mut s, &[a], "object.arrange.sendBackward");
+    assert_eq!(child_ids(&s, g), [clip, a, b]);
+    send(&mut s, &[a], "object.arrange.sendBackward");
+    assert_eq!(child_ids(&s, g), [clip, a, b], "the lowest art stays above the clipping path");
+    send(&mut s, &[a, b], "object.arrange.sendToBack");
+    assert_eq!(child_ids(&s, g), [clip, a, b], "several pieces of art keep their order");
+
+    // The clipping path itself stays where it is: moving it up would make art the clip.
+    for cmd in ["object.arrange.bringForward", "object.arrange.bringToFront"] {
+        send(&mut s, &[clip], cmd);
+        assert_eq!(child_ids(&s, g), [clip, a, b], "{cmd}");
+    }
+    send(&mut s, &[clip, a], "object.arrange.bringToFront");
+    assert_eq!(child_ids(&s, g), [clip, b, a], "the art selected with it still moves");
+}

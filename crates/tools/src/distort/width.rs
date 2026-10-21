@@ -137,8 +137,9 @@ pub fn sides_at(st: &StrokeLayer, t: f64) -> (f64, f64) {
 impl WidthTool {
     /// The stroked path nearest to `p` within reach (stroke half-width + a few pixels).
     fn spot_at(cx: &ToolContext, p: Point) -> Option<Spot> {
+        let editable = cx.doc.editable();
         let consider = |id: NodeId| -> Option<(f64, Spot)> {
-            if !cx.doc.is_editable(id) {
+            if !editable(id) {
                 return None;
             }
             let n = cx.doc.node(id)?;

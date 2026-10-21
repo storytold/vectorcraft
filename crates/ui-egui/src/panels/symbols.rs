@@ -38,7 +38,7 @@ fn thumb(ui: &Ui, doc: &Document, name: &str, size: f32) -> Option<egui::Texture
     let l = d.layers[0].id;
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf })).ok()?;
     let img = RENDERER.with(|r| r.borrow_mut().render_thumbnail(&d, id, px))?;
-    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+    let color = crate::canvas::color_image(&img);
     let tex = ui.ctx().load_texture(format!("sym-{name}-{px}"), color, egui::TextureOptions::LINEAR);
     CACHE.with(|c| {
         let mut c = c.borrow_mut();
@@ -305,6 +305,97 @@ mod tests {
         app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
         assert!(app.ui.dialog.as_ref().unwrap().bool("nineSlice"));
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("sliceLeft", 0.0), 20.0);
+    }
+
+    /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
+    /// are still the Transform and Info panels' keys, and Cmd+Shift+F8 is still Edit Pattern's. No
+    /// other command, tool or panel has F8 by default.
+    #[test]
+    fn f8_is_symbol_options() {
+        use crate::shortcut_editor::{PANEL_SHORTCUTS, command_for_key, default_command_shortcut};
+        assert_eq!(default_command_shortcut("ui.symbolOptions"), Some("F8"));
+        assert_eq!(command_for_key("F8"), Some("ui.symbolOptions"));
+        assert_eq!(command_for_key("Cmd+Shift+F8"), Some("object.pattern.edit"));
+        let panel = |key: &str| PANEL_SHORTCUTS.iter().find(|(_, sc)| *sc == key).map(|(p, _)| *p);
+        assert_eq!((panel("Shift+F8"), panel("Cmd+F8"), panel("F8")), (Some("transform"), Some("info"), None));
+        let chord = crate::shortcuts::parse("F8").expect("parses");
+        assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::NONE, egui::Key::F8));
+        assert_eq!(crate::menus::pretty_shortcut("F8"), "F8");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let listed = app.run("shortcuts.list", json!({"query": "ui.symbolOptions"})).unwrap();
+        let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["default"].clone())).collect();
+        assert_eq!(rows, [(json!("Symbol Options…"), json!("F8"))], "Keyboard Shortcuts lists it");
+        assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    }
+
+    /// F8, pressed through the shortcut handler, opens Symbol Options for a new symbol from the
+    /// selection, as the panel menu's New Symbol… does, and no symbol is made until OK. OK makes the
+    /// symbol and puts an instance of it in the art's place, and Cancel makes none. With nothing
+    /// selected, neither F8 nor New Symbol… opens a dialog or makes a symbol, and after F8 the
+    /// status bar says that nothing is selected.
+    #[test]
+    fn f8_opens_symbol_options_for_a_new_symbol_as_new_symbol_does() {
+        fn press(app: &mut VectorcraftApp) {
+            let ctx = egui::Context::default();
+            let ev = egui::Event::Key { key: egui::Key::F8, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+            let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        /// A document with one selected rectangle.
+        fn one_rect() -> VectorcraftApp {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+            app
+        }
+        /// Click the panel menu's New Symbol… item.
+        fn click_new_symbol(app: &mut VectorcraftApp) {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let labels = menu_frame(&ctx, app, vec![]);
+            let item = labels.iter().find(|(t, _)| t.trim() == "New Symbol…").map(|(_, r)| r.center()).expect("New Symbol… in the menu");
+            menu_frame(&ctx, app, vec![egui::Event::PointerMoved(item), button(item, true)]);
+            menu_frame(&ctx, app, vec![button(item, false)]);
+        }
+        let dialog = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone()));
+        let mut keyed = one_rect();
+        press(&mut keyed);
+        let mut clicked = one_rect();
+        click_new_symbol(&mut clicked);
+        let opened = dialog(&keyed).expect("the key opens a dialog");
+        assert_eq!(
+            (opened.0.as_str(), opened.1.get("__edit"), opened.1.get("name")),
+            ("symbolOptions", Some(&json!(false)), Some(&json!("New Symbol")))
+        );
+        assert_eq!(dialog(&clicked), Some(opened), "the key opens what New Symbol… opens");
+        assert!(symbols(&mut keyed).is_empty(), "no symbol until OK");
+        for app in [&mut keyed, &mut clicked] {
+            crate::dialogs::confirm(app).unwrap();
+        }
+        assert_eq!(symbols(&mut keyed), ["New Symbol"]);
+        assert_eq!(symbols(&mut clicked), ["New Symbol"]);
+        let doc = &keyed.session.active().unwrap().doc;
+        let art = doc.layers[0].children().unwrap();
+        assert_eq!(art.len(), 1);
+        assert!(matches!(&art[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "New Symbol"), "the rectangle became an instance");
+        // Cancel makes no symbol.
+        keyed.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 30, "height": 20})).unwrap();
+        press(&mut keyed);
+        assert!(keyed.ui.dialog.is_some());
+        crate::dialogs::cancel(&mut keyed);
+        assert!(keyed.ui.dialog.is_none());
+        assert_eq!(symbols(&mut keyed), ["New Symbol"]);
+        // With nothing selected, neither the key nor New Symbol… opens a dialog.
+        for app in [&mut keyed, &mut clicked] {
+            app.run("select.none", json!({})).unwrap();
+        }
+        press(&mut keyed);
+        click_new_symbol(&mut clicked);
+        for app in [&mut keyed, &mut clicked] {
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(symbols(app), ["New Symbol"]);
+        }
+        assert_eq!(keyed.ui.status, "nothing selected");
     }
 
     #[test]

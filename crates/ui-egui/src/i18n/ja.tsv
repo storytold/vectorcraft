@@ -48,6 +48,9 @@
 	Japanese	日本語
 	Join Our Discord	Discord に参加
 	Line-end Punctuation Half Width	行末約物半角
+	Insert Kashidas	カシーダを挿入
+	Long	長い
+	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
 	Hard	強い禁則
@@ -73,6 +76,7 @@
 	Quit VectorCraft	VectorCraft を終了
 	File	ファイル
 	New…	新規…
+	New Without Dialog	ダイアログなしで新規
 	New from Template…	テンプレートから新規…
 	Open…	開く…
 	Open Recent Files	最近使用したファイルを開く
@@ -235,8 +239,8 @@
 	Blend	ブレンド
 	Blend Options…	ブレンドオプション…
 	Expand	拡張
-	Replace Spine	ブレンド軸を置き換え
-	Reverse Spine	ブレンド軸を反転
+	Replace Spine	スパインを置き換え
+	Reverse Spine	スパインを反転
 	Reverse Front to Back	前後を反転
 	Envelope Distort	エンベロープ
 	Make with Warp…	ワープで作成…
@@ -262,6 +266,8 @@
 	Large Gaps	大きい間隔
 	Gap Preview Color:	間隔のプレビューカラー:
 	Close Gaps With Paths	パスで間隔を閉じる
+	Show Live Paint Gaps	ライブペイントの間隔を表示
+	Hide Live Paint Gaps	ライブペイントの間隔を隠す
 	Select Fills	塗りを選択
 	Select Strokes	線を選択
 	Image Trace	画像トレース
@@ -741,7 +747,8 @@
 	 from center  |  	：中心から描画  |  
 	 keeps its proportions)	：縦横比を固定）
 	 near a selected pin to rotate  |  	：選択したピンの近くで回転  |  
-	 on the canvas to create one	：アートボードを作成
+	 on the canvas to create one (	：アートボードを作成（
+	 selects several, or draws one inside an artboard)	：複数を選択、またはアートボード内に作成）
 	 over paths to roughen their outlines  |  	：パスの輪郭を粗くする  |  
 	 over paths, and hold still to keep going  |  	：パス上で押し続けると効果が続く  |  
 	 the art to add a pin  |  	：アートにピンを追加  |  
@@ -1461,6 +1468,7 @@
 	Eyedropper Picks Up:	スポイトの抽出:
 	Eyedropper Tool	スポイトツール
 	Eyedropper: click the art to sample the stop's colour	スポイト: アートをクリックして分岐点のカラーをサンプル
+	Eyedropper: click the art to sample the key color	スポイト: アートをクリックしてキーカラーをサンプル
 	Feet	フィート
 	Feet & Inches	フィート・インチ
 	Fewer <tspan> Elements	<tspan>要素を減らす
@@ -1484,6 +1492,14 @@
 	Alt key toggles to Smooth Tool	Alt キーでスムーズツールに切り替え
 	Keep selected	選択を保持
 	Merge only with selection	選択範囲とのみ結合
+	Consider Open Filled Paths as Closed	塗りのある開いたパスを閉じたパスとみなす
+	Pick Color From:	色の取得元:
+	Artwork	アートワーク
+	Cursor Swatch Preview	ポインター横のスウォッチプレビュー
+	Selection:	選択方法:
+	Freeform	自由形状
+	Straight Line	直線
+	Highlight:	強調表示:
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索
@@ -1583,6 +1599,7 @@
 	Hand Tool	手のひらツール
 	Handles	ハンドル
 	Hard Light	ハードライト
+	Hard Mix	ハードミックス
 	Harmony Rules:	ハーモニールール:
 	Height	高さ
 	Height:	高さ:
@@ -2008,6 +2025,7 @@
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
 	Reshape Spine Segment	スパインセグメントをシェイプ変形
+	Move Brush	ブラシを移動
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動
 	Move in Perspective	遠近で移動
@@ -2058,6 +2076,13 @@
 	Tints and Shades	淡彩と陰影
 	Hue Shift	色相シフト
 	Key Color:	キーカラー:
+	Tips	ヒント
+	Colorization Tips	着色のヒント
+	The samples show this brush on a blue stroke.	サンプルは、このブラシを青い線に適用した状態を表示します。
+	The art keeps its own colors.	アートは元のカラーのままです。
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黒は線のカラーになり、白は白のままです。その他のカラーは線のカラーの淡彩になり、明るいカラーほど明るい淡彩になります。
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黒は黒のまま、白は白のままです。その他のカラーは、暗い場合は線のカラーの陰影に、明るい場合は淡彩になります。
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	キーカラーが線のカラーになります。その他のカラーはキーカラーと同じだけカラーホイール上を移動し、彩度と明るさは保たれます。
 	Roundness:	真円率:
 	Fixed	固定
 	Pressure	筆圧
@@ -2078,6 +2103,14 @@
 	Round Fan	丸・扇形
 	Flat Fan	平・扇形
 	New Brush…	新規ブラシ…
+	New Brush	新規ブラシ
+	Calligraphic Brush	絵筆ブラシ
+	Scatter Brush	散布ブラシ
+	Art Brush	アートブラシ
+	Bristle Brush	剛毛ブラシ
+	Pattern Brush	パターンブラシ
+	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
+	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ
 	New Character Style	新規文字スタイル
 	New Color Group	新規カラーグループ
@@ -2660,6 +2693,7 @@ mark-style	Japanese	日本式
 	Scale Cursor Proportional to UI	カーソルを UI の拡大率に合わせる
 	Scale Lineweights	線の太さを拡大・縮小
 	Scale Strokes & Effects	線幅と効果を拡大・縮小
+	Scale Text Attributes	テキスト属性を拡大・縮小
 	Scale Tool	拡大・縮小ツール
 	Scale to Fit Artboard	アートボードに合わせて拡大・縮小
 	Scale:	拡大・縮小:
@@ -2838,6 +2872,7 @@ mark-style	Japanese	日本式
 	Snap to Unit	単位にスナップ
 	Snapping Tolerance	スナップ許容値
 	Soft Light	ソフトライト
+	Soft Mix	ソフトミックス
 	Solid	実線
 	Sort by Kind	種類順に並べ替え
 	Sort by Name	名前順に並べ替え
@@ -3225,6 +3260,7 @@ gradient-kind	Radial	円形
 	Black and White Logo	白黒ロゴ
 	Bottom	下
 	Bottom in Front	下が前面
+	Bottom-Justified Tab	下揃えタブ
 	Bounds	境界
 	Bounds (Fill Proportionally)	境界 (縦横比を保って全体を覆う)
 	Bounds (Fit Proportionally)	境界 (縦横比を保って収める)
@@ -3476,6 +3512,7 @@ file-filter	Templates	テンプレート
 	Relinked {n} image(s)	{n} 個の画像を再リンクしました
 	Relinked {n} image(s); not in that folder: {}	{n} 個の画像を再リンクしました。そのフォルダーに無いもの：{}
 	Relinked {} image(s)	{} 個の画像を再リンクしました
+	Repeat Objects	リピートオブジェクト
 	Repeat Options	リピートオプション
 	Reset with Mesh	メッシュでリセット
 	Reset with Warp	ワープでリセット
@@ -3549,6 +3586,7 @@ file-filter	Templates	テンプレート
 	Tip on the end point	先端をパスの端点に合わせる
 	Top	上
 	Top in Front	上が前面
+	Top-Justified Tab	上揃えタブ
 	Transforms	変形
 	Transparent (Default)	透明 (デフォルト)
 	Trim marks	トリムマーク
@@ -3723,6 +3761,13 @@ theme	Appearance	外観
 	Channel 4	チャンネル 4
 	Cell Size	セルの大きさ
 	Fine Dots	細かい点
+
+	Simple	シンプル
+	Light Rough	ライトラフ
+	Dark Rough	ダークラフ
+	Wide Sharp	ワイドシャープ
+	Wide Blurry	ワイドブラー
+	Sparkle	スパークル
 	Medium Dots	中程度の点
 	Grainy Dots	粒状の点
 	Coarse Dots	粗い点
@@ -3844,7 +3889,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Show All Hidden Attributes: nothing is hidden	非表示の属性をすべて表示: 非表示の属性はありません
 @msg	Expand: no brush strokes selected	拡張: ブラシストロークが選択されていません
 @msg	no brush named `{name}`	`{name}` という名前のブラシが見つかりません
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	剛毛ブラシの名前は最大 {max} 文字です: `{name}` は {count} 文字あります
 @msg	no brush selected	ブラシが選択されていません
+@msg	brushes move only within their type	ブラシは同じ種類の中でのみ移動できます
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
 @msg	the art has no bounds	アートに境界がありません
@@ -3885,11 +3932,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Make Guides: select paths	ガイドを作成: パスを選択してください
 @msg	Release Guides: no guides	ガイドを解除: ガイドがありません
 @msg	variables are locked	変数がロックされています
+@msg	variables that aren't text were left out: {kinds}	テキスト以外の変数は除外されました: {kinds}
 @msg	guides are locked	ガイドがロックされています
 @msg	handle must be in or out	handle には in または out を指定してください
 @msg	no saved selection recalled	保存した選択範囲を呼び出していません
 @msg	no saved selections	保存した選択範囲はありません
 @msg	no such artboard	指定されたアートボードが見つかりません
+@msg	the artboard is locked	アートボードがロックされています
 @msg	cannot split an open path at its end point	オープンパスは端点で分割できません
 @msg	closing needs three anchors	閉じるには 3 つのアンカーポイントが必要です
 @msg	empty brush stroke	ブラシストロークが空です
@@ -3981,7 +4030,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
-@msg	Replace Spine: select a blend and a path	ブレンド軸を置き換え: ブレンドとパスを選択してください
+@msg	Replace Spine: select a blend and a path	スパインを置き換え: ブレンドとパスを選択してください
 @msg	nothing to wrap	まとめるものがありません
 @msg	select a blend	ブレンドを選択してください
 @msg	select a blend or give `id`	ブレンドを選択するか、`id` を指定してください
@@ -4036,6 +4085,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a repeat	リピートを選択してください
 @msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select an Objects on Path group	パス上のオブジェクトグループを選択してください
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合パス、ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のパスにはオブジェクトをアタッチできません
+@msg	a clipping path can't take objects	クリッピングパスにはオブジェクトをアタッチできません
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のオブジェクトはパスにアタッチできません
+@msg	a clipping path can't be attached to a path	クリッピングパスはパスにアタッチできません
 @msg	select the art to repeat	リピートするアートを選択してください
 @msg	the document has no patterns	ドキュメントにパターンがありません
 @msg	no artboard	アートボードがありません
@@ -4132,6 +4185,25 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name}: {at})
 @msg	a PostScript error ({name})	PostScript エラー ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript エラー (`{op}` での {name}、{meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name}、{meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript エラー (`{op}` での {name}: {at}、{meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	{procs} 内の PostScript エラー (`{op}` での {name}: {at}、{meaning})
+@msg	a PostScript error ({name}; {meaning})	PostScript エラー ({name}、{meaning})
+@msg	the program ends a dictionary it didn't begin	プログラムが、開始していない辞書を終了しようとしています
+@msg	the program opens a file, which the reader can't do	プログラムがファイルを開こうとしていますが、PostScript 読み込み機能はファイルを開けません
+@msg	the program restores a saved state that was already restored	プログラムが、すでに復元された保存状態を復元しようとしています
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	プログラムが読み込むデータが壊れているか途中で切れているか、プログラムが位置を持たないファイルの位置を求めています
+@msg	the program goes past one of the reader's limits	プログラムが PostScript 読み込み機能の制限を超えています
+@msg	the path has no point to continue from	パスに続きを描く起点がありません
+@msg	a value is outside the range the operator takes	値がオペレーターの受け付ける範囲外です
+@msg	the operator needs more values than the stack holds	オペレーターに必要な値がスタックに足りません
+@msg	part of the program isn't valid PostScript text	プログラムの一部が有効な PostScript テキストではありません
+@msg	a value has the wrong type for the operator	値の型がオペレーターに合っていません
+@msg	the program runs, deletes or renames a file, which the reader can't do	プログラムがファイルの実行、削除、名前の変更をしようとしていますが、PostScript 読み込み機能はこれを行えません
+@msg	the program asks for a resource that isn't defined	プログラムが定義されていないリソースを要求しています
+@msg	a calculation has no result, as in a division by zero	ゼロによる除算などで、計算の結果が得られません
+@msg	the operator looks for a mark on the stack and finds none	オペレーターがスタック上のマークを探しましたが、見つかりません
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	VectorCraft の PostScript 読み込み機能が対応していない `{at}` を使用しています
 @msg	the file was read up to an error ({why}): what follows it was left out	ファイルはエラーが発生した箇所まで読み込まれました ({why}): それ以降の内容は除外されました
 @msg	this file's PostScript couldn't be read ({why}): {what}	このファイルの PostScript を読み込めませんでした ({why}): {what}
@@ -4566,6 +4638,7 @@ effect	Vertical	垂直
 	Activate Panel	パネルをアクティブにする
 	Change Panel Layout	パネルの配置を変更
 	Close Panel	パネルを閉じる
+	Collapse Panel Group	パネルグループを折りたたむ
 	Move Panel	パネルを移動
 	Group with	グループ化先
 	Resize panels	パネルのサイズを変更
@@ -4577,6 +4650,12 @@ effect	Vertical	垂直
 @msg	before must name a panel	before にパネルを指定してください
 @msg	docking action contains an unknown panel or an excessive split path	ドッキング操作に不明なパネルまたは長すぎる分割パスが含まれています
 @msg	group must be true or false	group は true または false にしてください
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	パネルはフローティング中です。グループは window.panel.float {panel, collapsed} で折りたたんでください
+@msg	panel is not in a dock group	パネルはドックのグループにありません
+@msg	only a dock group above or below others collapses, not one beside another	折りたためるのは他のグループの上下にあるドックのグループだけで、横に並んだグループは折りたためません
+@msg	icon must be true or false	icon は true または false である必要があります
+@msg	icon only docks a panel in the icon column, with no anchor	icon はパネルをアイコン列にのみドッキングします（anchor なし）
+@msg	column docks a set as a dock column, with no anchor or icon	column はセットをドック列としてドッキングします（anchor・icon なし）
 @msg	move requires a destination panel	移動先のパネルを指定してください
 @msg	move requires an existing destination panel	移動先には既存のパネルを指定してください
 @msg	onto must name a floating panel	onto にフローティングパネルを指定してください
@@ -4654,12 +4733,24 @@ lighting	Light	ライト
 	Reset Ruler Origin	定規の原点をリセット
 	Artistic	アーティスティック
 	Film Grain…	フィルム粒子…
+	Colored Pencil…	色鉛筆…
+	Colored Pencil	色鉛筆
 	Cutout…	カットアウト…
 	Cutout	カットアウト
+	Dry Brush…	ドライブラシ…
+	Dry Brush	ドライブラシ
 	Neon Glow…	ネオングロー…
+	Palette Knife…	パレットナイフ…
 	Neon Glow	ネオングロー
+	Paint Daubs…	ペイントダブ…
+	Paint Daubs	ペイントダブ
+	Palette Knife	パレットナイフ
 	Poster Edges…	ポスターエッジ…
+	Rough Pastels…	ラフパステル…
 	Poster Edges	ポスターエッジ
+	Rough Pastels	ラフパステル
+	Underpainting…	アンダーペインティング…
+	Underpainting	アンダーペインティング
 	Levels	レベル数
 	Edge Simplicity	エッジの単純さ
 	Edge Fidelity	エッジの正確さ
@@ -4749,6 +4840,9 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	3D Lighting Preset	3D ライティングプリセット
+	Standard	標準
+	Diffuse	拡散
 # 3D light management.
 	Lights	ライト一覧
 	Add Light	ライトを追加
@@ -4796,6 +4890,7 @@ lighting	Light	ライト
 @msg	Measured anchor no longer exists	測定したアンカーポイントはもう存在しません
 @msg	Measured segment no longer exists	測定したセグメントはもう存在しません
 @msg	Non-finite dimension	寸法が有限ではありません
+@msg	Scale Text Attributes: selected type has no scale to bake	テキスト属性を拡大・縮小: 選択したテキストに取り込むスケールがありません
 @msg	Scale must be drawing:real, for example 1:10	縮尺は 図面:実寸 の形式にしてください (例: 1:10)
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	縮尺の比率は 1:1000000 から 1000000:1 の間にしてください
 @msg	Second measured segment no longer exists	2 番目の測定セグメントはもう存在しません
@@ -4814,6 +4909,7 @@ lighting	Light	ライト
 	Make Image Dynamic	画像を動的にする
 	Import Data Sets…	データセットを読み込み…
 	Export Data Sets…	データセットを書き出し…
+	Load Variable Library…	変数ライブラリを読み込み…
 	Make Graph Dynamic	グラフを動的にする
 	Batch…	バッチ…
 	Source Folder:	ソースフォルダー:
@@ -4837,6 +4933,8 @@ lighting	Light	ライト
 	Sketch	スケッチ
 	Halftone Pattern…	ハーフトーンパターン…
 	Halftone Pattern	ハーフトーンパターン
+	Torn Edges…	破れたエッジ…
+	Torn Edges	破れたエッジ
 	Pattern Type	パターンタイプ
 	Dot	ドット
 # User Interface › Color Scheme
@@ -4855,6 +4953,7 @@ lighting	Light	ライト
 	Watercolor…	水彩…
 	Watercolor	水彩
 	Brush Size	ブラシサイズ
+	Texture Coverage	テクスチャのかかり具合
 	Definition	精細度
 	Brush Detail	ブラシの細かさ
 	Shadow Intensity	シャドウの強さ
@@ -4883,24 +4982,14 @@ lighting	Light	ライト
 @msg	the image's pixels can't be read	画像のピクセルを読み取れません
 	Persistent	永続
 	Library Panel Options	ライブラリパネルオプション
+	Locate Library…	ライブラリを検索…
 @msg	Persistent libraries not found: {files}	永続ライブラリが見つかりません: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` はライブラリパネルではありません (window.swatchLibrary を参照)
 @msg	library panel `{given}` isn't open	ライブラリパネル `{given}` は開いていません
 @msg	too many library panels were opened in this session	このセッションで開いたライブラリパネルが多すぎます
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	画像は {_1} × {_2} ピクセルで、一辺が {LARGE_TRACE_SIDE} を超えています。トレースはできますが、時間がかかります。忠実度の低いプリセットや画像の小さいコピーを使うと速くなります。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	画像は {_3} × {_4} から縮小した {_1} × {_2} ピクセルでトレースされました (最大 {_5} メガピクセル)。
-	Lock Artboards	アートボードをロック
-	Unlock Artboards	アートボードのロックを解除
-	Artboard Color	アートボードカラー
-	Lock Selected	選択をロック
-	Lock All Except Selected	選択以外をすべてロック
-	Lock All	すべてをロック
-	Unlock Selected	選択のロックを解除
-	Lock Artboard	アートボードをロック
-	Unlock Artboard	アートボードのロックを解除
-	Clear Artboard Color	アートボードカラーを消去
-@msg	artboard {_1} is locked	アートボード {_1} はロックされています
-	Include Artboard Fill	アートボードカラーを含める
+	Gap Length:	ギャップの長さ:
 	Artboard {n} of {total}	アートボード {n} / {total}
 	Encoding and writing the file…	ファイルをエンコードして書き込み中…
 @plural	{n} more export waiting|{n} more exports waiting	待機中の書き出し: あと {n} 件
@@ -4939,3 +5028,16 @@ lighting	Light	ライト
 	Plaster	石膏
 	Note Paper…	ノート用紙…
 	Note Paper	ノート用紙
+	Water Paper…	ぬれた紙…
+	Water Paper	ぬれた紙
+	Japanese Postcard	はがき
+	Japanese Double Postcard	往復はがき
+	Japanese Envelope #3	長形3号
+	Japanese Envelope #4	長形4号
+	Kaku #2	角形2号
+	Kaku #3	角形3号
+	Yonroku-ban	四六判
+	Ruby…	ルビ…
+	Ruby	ルビ
+	Fresco…	フレスコ…
+	Fresco	フレスコ

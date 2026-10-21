@@ -308,6 +308,63 @@ fn tints_colorization_uses_stroke_colour() {
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
 }
 
+/// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
+fn type_art(fill: Paint, stroke: Paint) -> Node {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let style = CharStyle { fill, stroke, stroke_width: 1.0, ..CharStyle::default() };
+    Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(0.0, 0.0), "Ag", style))))
+}
+
+/// The characters' fills and strokes of every piece of type in `nodes`.
+fn run_paints(nodes: &[Node]) -> Vec<(Paint, Paint)> {
+    let mut out = vec![];
+    for n in nodes {
+        n.walk(&mut |c| {
+            if let NodeKind::Text(t) = &c.kind {
+                out.extend(t.runs.iter().map(|r| (r.style.fill.clone(), r.style.stroke.clone())));
+            }
+        });
+    }
+    out
+}
+
+/// A scatter brush's colorization recolors the type in its art as it recolors the art's paths.
+#[test]
+fn scatter_colorization_recolors_type() {
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 1.0);
+    let mut path = rect_art(10.0, 4.0);
+    path.appearance.set_fill(red.clone());
+    let art = Node::group(NodeId(0), vec![Arc::new(path), Arc::new(type_art(red.clone(), red.clone()))]);
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::Tints, ..Default::default() }) };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 100.0, 0.0), &blue);
+    assert!(!out.is_empty());
+    let path_fill = out[0].children().unwrap()[0].appearance.fill_paint();
+    assert_ne!(path_fill, red);
+    let paints = run_paints(&out);
+    assert_eq!(paints.len(), out.len());
+    assert!(paints.iter().all(|p| *p == (path_fill.clone(), path_fill.clone())), "{paints:?}");
+    // Black type takes the stroke color itself.
+    let black = Paint::solid(Color::BLACK);
+    let b = Brush {
+        name: "s".into(),
+        kind: BrushKind::Scatter(Scatter { art: type_art(black.clone(), black), colorization: Colorization::Tints, ..Default::default() }),
+    };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 100.0, 0.0), &blue);
+    assert!(!out.is_empty());
+    assert!(run_paints(&out).iter().all(|p| *p == (blue.paint.clone(), blue.paint.clone())));
+}
+
+/// The Symbol Stainer mixes the characters' strokes of type toward the stain, as it mixes their fills.
+#[test]
+fn stain_mixes_type_strokes_too() {
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let mut art = type_art(red.clone(), red);
+    tint_node(&mut art, &blue, 1.0);
+    assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
+}
+
 #[test]
 fn library_defaults_store_and_find() {
     let mut d = Document::new(100.0, 100.0);
@@ -557,9 +614,44 @@ fn art_colors_list_the_most_used_first() {
         |c: Color| Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(Paint::solid(c), Paint::None, 0.0));
     let g = Node::group(NodeId(0), vec![Arc::new(path(red)), Arc::new(path(blue)), Arc::new(path(blue))]);
     assert_eq!(art_colors([&g]), vec![blue, red]);
+    // Type counts its characters' fills and drawn strokes.
+    let text = type_art(Paint::solid(red), Paint::solid(red));
+    let g = Node::group(NodeId(0), vec![Arc::new(path(blue)), Arc::new(text.clone())]);
+    assert_eq!(art_colors([&g]), vec![red, blue]);
+    let NodeKind::Text(mut t) = text.kind else { panic!("not type") };
+    t.runs[0].style.stroke_width = 0.0;
+    let text = Node::new(NodeId(0), NodeKind::Text(t));
+    let g = Node::group(NodeId(0), vec![Arc::new(text), Arc::new(path(blue)), Arc::new(path(blue))]);
+    assert_eq!(art_colors([&g]), vec![blue, red], "a stroke 0 wide is not counted");
     let b = defaults().iter().find(|b| b.name == "Chain").unwrap();
     assert_eq!(b.art().len(), 3, "the side and both corner tiles");
     assert!(calli(0.0, 100.0, 3.0).art().is_empty());
+}
+
+/// A Hue Shift definition without a key color takes the art's most used color, or black when the
+/// art has no solid color; a key that is given is kept.
+#[test]
+fn hue_shift_without_a_key_takes_the_most_used_art_color() {
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let path = |fill: Paint| Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(fill, Paint::None, 0.0));
+    let art = Node::group(NodeId(0), vec![Arc::new(path(Paint::solid(red))), Arc::new(path(Paint::solid(blue))), Arc::new(path(Paint::solid(blue)))]);
+    let lib = parse_library(&serde_json::json!([
+        {"name": "s", "type": "scatter", "art": art, "colorization": {"method": "hueShift"}},
+        {"name": "a", "type": "art", "art": art, "colorization": {"method": "hueShift", "key": null}},
+        {"name": "p", "type": "pattern", "side": art, "colorization": {"method": "hueShift", "key": red}},
+        {"name": "n", "type": "art", "art": path(Paint::None), "colorization": {"method": "hueShift"}},
+    ]));
+    let keys: Vec<(&str, Colorization)> = lib.iter().map(|b| (b.name.as_str(), b.kind.colorization())).collect();
+    assert_eq!(
+        keys,
+        vec![
+            ("s", Colorization::HueShift { key: blue }),
+            ("a", Colorization::HueShift { key: blue }),
+            ("p", Colorization::HueShift { key: red }),
+            ("n", Colorization::HueShift { key: Color::BLACK }),
+        ]
+    );
 }
 
 /// Brush pieces draw no brushed stroke, also not by name: a symbol instance whose art is brushed

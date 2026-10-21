@@ -84,6 +84,115 @@ fn two_fills_and_an_offset_stroke_become_three_paths_that_look_the_same() {
     assert_eq!(node(&s, id).appearance.items.len(), 3);
 }
 
+/// The objects [`random_transforms`] makes.
+pub(super) const RANDOM_CASES: [&str; 5] = ["copies", "group copies", "nested group copies", "crop marks", "group crop marks"];
+
+/// Selected art with Random in Transform effects, from 50 pt squares at y 60 with an 8 pt black
+/// stroke, as `case` says. "copies": a square at x 20 filled with a gradient, a random Transform
+/// effect on its stroke and a Transform effect that copies it 80 pt right. "group copies": the
+/// same square without the second effect, in a group that has it. "nested group copies": the same
+/// square in a group with a random Transform effect, in a group with the second effect. "crop
+/// marks": a red square at x 20 with a random Transform effect and crop marks. "group crop marks":
+/// red squares at x 20 and x 110 in a group with a random Transform effect and crop marks. Returns
+/// the object's id.
+pub(super) fn random_transforms(s: &mut Session, case: &str) -> NodeId {
+    let random = json!({"moveH": 15, "moveV": 15, "rotate": 40, "random": true});
+    let square = |s: &mut Session, x: f64, fill: Value| {
+        let id = run(s, "shape.rectangle", json!({"x": x, "y": 60, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(s, "paint.setFill", fill);
+        run(s, "paint.setStroke", json!({"color": "#000000"}));
+        run(s, "stroke.set", json!({"weight": 8}));
+        id
+    };
+    let red = json!({"color": "#ff0000"});
+    let id = match case {
+        "copies" | "group copies" | "nested group copies" => {
+            let a = square(s, 20.0, json!({"gradient": {"kind": "linear"}}));
+            run(s, "effect.apply", json!({"effect": "distort.transform", "params": random, "item": 1}));
+            if case == "nested group copies" {
+                run(s, "object.group", json!({}));
+                run(s, "effect.apply", json!({"effect": "distort.transform", "params": random, "item": null}));
+            }
+            if case == "copies" { a } else { run(s, "object.group", json!({}))["id"].as_u64().unwrap() }
+        }
+        "crop marks" => square(s, 20.0, red),
+        _ => {
+            let a = square(s, 20.0, red.clone());
+            let b = square(s, 110.0, red);
+            run(s, "select.set", json!({"ids": [a, b]}));
+            run(s, "object.group", json!({}))["id"].as_u64().unwrap()
+        }
+    };
+    if case.ends_with("copies") {
+        run(s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveH": 80, "copies": 1}, "item": null}));
+    } else {
+        run(s, "effect.apply", json!({"effect": "distort.transform", "params": random, "item": null}));
+        run(s, "effect.apply", json!({"effect": "cropMarks", "item": null}));
+    }
+    NodeId(id)
+}
+
+/// Random in a Transform effect takes its seed from the object's id. The expanded art draws as the
+/// canvas drew each of [`random_transforms`]' objects.
+#[test]
+fn expanded_art_keeps_the_random_transforms_the_canvas_drew() {
+    let mut differ = vec![];
+    for case in RANDOM_CASES {
+        let mut s = session();
+        let id = random_transforms(&mut s, case);
+        let before = render(&s);
+        let r = run(&mut s, "effect.expandAppearance", json!({}));
+        differ.push((case, differing(&before, &render(&s), 64)));
+        let mut art = node(&s, id);
+        // Crop marks: the reply names the group of the object and its marks, then the object.
+        if case.ends_with("crop marks") {
+            art = (*art.children().unwrap()[0]).clone();
+            assert_eq!((&r["ids"][0], &r["ids"][1]), (&json!(id.0), &json!(art.id.0)), "{case}");
+        }
+        // No object keeps an effect, and in the copies cases no object keeps a stroke: every copy
+        // is expanded.
+        art.walk(&mut |n| {
+            let stroked = case.ends_with("copies") && n.appearance.stroke().is_some_and(|st| !st.paint.is_none());
+            assert!(n.appearance.effects.is_empty() && !stroked, "{case}: {n:?}");
+        });
+    }
+    assert_eq!(differ, RANDOM_CASES.map(|case| (case, 0)));
+}
+
+/// The reply lists each object whose appearance expanded once, by the id it has in the document.
+/// In "group copies" the two copies of the square share an id until Expand Appearance gives them
+/// ids of their own, and the reply names the group, then each copy by its new id.
+#[test]
+fn the_reply_names_each_expanded_copy_by_its_own_id() {
+    for case in RANDOM_CASES {
+        let mut s = session();
+        let id = random_transforms(&mut s, case);
+        let r = run(&mut s, "effect.expandAppearance", json!({}));
+        let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        assert_eq!(unique.len(), ids.len(), "{case}: {ids:?}");
+        assert!(ids.iter().all(|&i| s.doc().unwrap().doc.node(NodeId(i)).is_some()), "{case}: {ids:?}");
+        if case == "group copies" {
+            let art = node(&s, id);
+            let copies: Vec<u64> = art.children().unwrap()[0].children().unwrap().iter().map(|c| c.id.0).collect();
+            assert_eq!(ids, [vec![id.0], copies].concat(), "{case}");
+        }
+    }
+}
+
+/// A square with a color adjustment and crop marks: the reply names the group of the square and its
+/// marks once. The adjusted square has a basic appearance, so the reply does not name it.
+#[test]
+fn the_reply_names_an_adjusted_object_with_crop_marks_once() {
+    let mut s = session();
+    let id = square(&mut s);
+    run(&mut s, "effect.apply", json!({"effect": "adjust.hueSaturation", "params": {"hue": 120}}));
+    run(&mut s, "effect.apply", json!({"effect": "cropMarks", "item": null}));
+    let r = run(&mut s, "effect.expandAppearance", json!({}));
+    assert!(node(&s, id).children().is_some_and(|c| c.len() > 1));
+    assert_eq!(r["ids"], json!([id.0]));
+}
+
 #[test]
 fn a_shadow_becomes_an_image_under_the_art_and_transparency_stays_on_the_group() {
     let mut s = session();

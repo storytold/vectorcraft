@@ -213,7 +213,7 @@ fn load_profile_asks_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     click(&mut app, "Load Profile…", crate::panels::separations::show);
-    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(p)] if p.filters.iter().any(|(_, e)| e.contains(&"icc"))));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(p)] if p.filters.iter().any(|(_, e)| e.iter().any(|e| e == "icc"))));
     poll(&mut app);
     assert!(app.ui.status.is_empty(), "{}", app.ui.status);
     shown.answer(&["/no/such/profile.icc"]);
@@ -222,13 +222,14 @@ fn load_profile_asks_off_the_ui_thread() {
 }
 
 /// The Variables panel menu's Import Data Sets… and Export Data Sets… ask off the UI thread: the
-/// data sets in the file picked are loaded, and the data sets are written to the path the dialog
-/// answers.
+/// data sets in the file picked are loaded, and the header and data set `B` are written to the
+/// path the dialog answers.
 #[test]
 fn variables_panel_data_sets_ask_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    let dir = std::env::temp_dir().join(format!("vc-picks-data-sets-{}", std::process::id()));
+    let dir = vectorcraft_testkit::temp_dir("picks-data-sets");
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let (csv, out) = (dir.join("sets.csv"), dir.join("out.csv"));
     std::fs::write(&csv, "name,Name\nB,y\n").unwrap();
@@ -244,7 +245,7 @@ fn variables_panel_data_sets_ask_off_the_ui_thread() {
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
     shown.answer(&[&out.to_string_lossy()]);
     poll(&mut app);
-    assert!(std::fs::read_to_string(&out).is_ok_and(|text| text.starts_with("name,Name\n")), "{}", app.ui.status);
+    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("name,Name\nB,y\n"), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -286,6 +287,29 @@ fn other_graphic_style_library_asks_off_the_ui_thread() {
     assert_eq!(open.kind, "graphicStyles");
     let (_, lib) = vectorcraft_engine::cmd::stylelib::library(&app.session, &open.id).unwrap();
     assert!(lib.style("Poster Look").is_some(), "{}", open.id);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The Variables panel menu's Load Variable Library… asks off the UI thread: the library picked
+/// loads when the dialog answers.
+#[test]
+fn load_variable_library_asks_off_the_ui_thread() {
+    let (mut app, shown, _) = app();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-picks-variables-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let library = dir.join("library.xml");
+    let xml = r#"<variableSets><variableSet><variables><variable varName="Name" trait="textcontent"/></variables>
+        <sampleDataSets><sampleDataSet dataSetName="A"><Name><p>x</p></Name></sampleDataSet></sampleDataSets></variableSet></variableSets>"#;
+    std::fs::write(&library, xml).unwrap();
+    let sets = |app: &VectorcraftApp| app.session.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
+
+    click(&mut app, "Load Variable Library…", crate::panels::variables::menu);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]));
+    assert!(sets(&app).is_empty(), "nothing loads before the dialog answers");
+    shown.answer(&[&library.to_string_lossy()]);
+    poll(&mut app);
+    assert_eq!(sets(&app), ["A"], "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -622,6 +646,33 @@ fn an_import_shortcut_set_answer_goes_on_after_the_active_document_closes() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Locate Library… acts on no document either: its answer shows the picked file's library in the
+/// missing library's panel even when the document active at the time closed meanwhile (Linux).
+#[test]
+fn a_locate_library_answer_goes_on_after_the_active_document_closes() {
+    let (mut app, shown, _) = with_dialogs(false);
+    let dir = std::env::temp_dir().join(format!("vc-picks-locate-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (gone, found) = (dir.join("Gone.gpl"), dir.join("Found.gpl"));
+    std::fs::write(&found, "GIMP Palette\nName: Found\n#\n255   0   0\tRed\n").unwrap();
+    let id = format!("loaded/{}", gone.to_string_lossy());
+    let path = Some(gone.to_string_lossy().into_owned());
+    let missing = library_panel::LibraryPanel { kind: "swatches".into(), id: id.clone(), path, view: None, hide_find: false, persistent: true };
+    app.ui.library_panels.push(missing);
+    let panel = library_panel::panel_id("swatches", &id);
+    app.run("window.panel", json!({"panel": panel})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    assert!(app.run("ui.libraryPanel.locate", json!({"panel": panel})).is_err());
+    app.run("file.close", json!({})).unwrap();
+    assert!(app.session.documents().is_empty());
+    shown.answer(&[&found.to_string_lossy()]);
+    poll(&mut app);
+    let located = library_panel::panel_id("swatches", &format!("loaded/{}", found.to_string_lossy()));
+    assert!(library_panel::is_open(&app.ui, &located) && !library_panel::is_open(&app.ui, &panel), "{}", app.ui.status);
+    assert_ne!(app.ui.status, CLOSED);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// Save Changes' Save, answered by its Save dialog, saves and closes the document it asked about,
 /// even when an earlier document closed meanwhile (Linux), then asks about the next one.
 #[test]
@@ -897,7 +948,7 @@ fn only_picks_shows_the_hosts_dialogs() {
                 .services
                 .pick_open
                 .as_mut()
-                .and_then(|f| f(&crate::FilePick { filters: vec![("ICC Profiles", &["icc", "icm"])], ..Default::default() }))
+                .and_then(|f| f(&crate::FilePick { filters: vec![FilePick::filter("ICC Profiles", &["icc", "icm"])], ..Default::default() }))
         {"#;
     assert_eq!(in_line_dialogs(&code_only(before)).len(), 1);
     assert_eq!(in_line_dialogs(&code_only("let s = &mut app.services; let p = (s.pick_save.as_mut()?)(&pick);")).len(), 1);

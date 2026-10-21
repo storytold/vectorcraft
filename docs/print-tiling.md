@@ -15,7 +15,7 @@ Overlap repeats part of the drawing on adjacent sheets to help you align them af
 3. In **General**, under **Artboards**, choose **All** or **Range:** to select the artboards to print.
    For example, use **Range:** `1` for the first artboard. Choose **Ignore Artboards (all the art as
    one page)** only if you want to tile the bounds of all the artwork instead of individual artboards.
-4. Under **Media**, set **Size** to the paper loaded in the printer, such as **A4** or **Letter**.
+4. Under **Media**, set **Size** to the paper loaded in the printer, such as **A4**, **Letter** or a Japanese paper (**B5 (JIS)**, **Japanese Postcard**, **Japanese Envelope #3**).
    Choose **Custom** to enter **Width** and **Height**. **Auto-Rotate (turn the paper to each artboard)**
    is on by default; turn it off to choose a fixed **Orientation**, such as **Portrait** or **Landscape**.
 5. In **Advanced**, set **Unprintable margin** to allow for the edges your printer cannot print.

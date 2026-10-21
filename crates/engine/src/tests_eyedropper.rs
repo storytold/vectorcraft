@@ -257,6 +257,50 @@ fn cmyk_session() -> Session {
     s
 }
 
+/// `cmd` with `p` fails with "`keepModel` must be true or false".
+fn refuses_keep_model(s: &mut Session, cmd: &str, p: &Value) {
+    let r = s.execute(cmd, p);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "`keepModel` must be true or false"), "{cmd} {p}: {r:?}");
+}
+
+/// How many steps there are to undo.
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// In a CMYK document, `paint.setFill`, `paint.setStroke`, `appearance.setItem`, `livePaint.fill`,
+/// `livePaint.strokeEdge` and a `shapeBuilder.merge` fill refuse a `keepModel` given as text or as
+/// another value that is not true or false. The objects, the defaults for new art and the undo
+/// history stay as they were. Null is read as `keepModel` left out.
+#[test]
+fn the_paint_commands_refuse_a_keep_model_given_as_text() {
+    let mut s = cmyk_session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 40.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().doc.clone(), s.paint.clone(), undo_len(s));
+    let before = state(&s);
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#ff0000"}]);
+    let calls = [
+        ("paint.setFill", json!({"color": "#ff0000", "keepModel": "true"})),
+        ("paint.setStroke", json!({"color": "#ff0000", "keepModel": 1})),
+        ("paint.setFill", json!({"gradient": {"stops": stops}, "keepModel": "false"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000", "keepModel": "true"})),
+        ("livePaint.fill", json!({"ids": [a.0, b.0], "point": [20, 30], "color": "#ff0000", "keepModel": [true]})),
+        ("shapeBuilder.merge", json!({"ids": [a.0, b.0], "points": [[20, 30], [80, 30]], "fill": {"color": "#ff0000", "keepModel": "true"}})),
+    ];
+    for (cmd, p) in &calls {
+        refuses_keep_model(&mut s, cmd, p);
+        assert_eq!(state(&s), before, "{cmd} {p}");
+    }
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000", "keepModel": null})).unwrap();
+    assert_eq!(node(&s, a).appearance.fill_paint().color(), Some(managed_cmyk(Color::rgb8(255, 0, 0))));
+    let r = s.execute("livePaint.fill", &json!({"ids": [a.0, b.0], "point": [20, 30], "color": "#ff0000"})).unwrap();
+    let g = NodeId(r["group"].as_u64().unwrap());
+    let before = state(&s);
+    refuses_keep_model(&mut s, "livePaint.strokeEdge", &json!({"group": g.0, "point": [10, 30], "color": "#ff0000", "keepModel": "true"}));
+    assert_eq!(state(&s), before, "livePaint.strokeEdge");
+}
+
 /// RGB colors given to the type commands in a CMYK document separate through the color settings,
 /// as `paint.setFill` stores them: `text.create {color}`, `text.setStyle {fill}` and
 /// `text.setRangeStyle {fill, stroke}`. CMYK colors are stored as given.
@@ -278,6 +322,30 @@ fn rgb_type_colors_given_to_a_cmyk_document_separate_through_the_color_settings(
     assert!(runs(&s).iter().all(|r| r.0 == Some(Color::cmyk(0.1, 0.2, 0.3, 0.4))), "{:?}", runs(&s));
     s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 0, "end": 2, "stroke": "#53aadf", "keepModel": true})).unwrap();
     assert_eq!(runs(&s)[0].1, Some(Color::rgb8(83, 170, 223)), "keepModel keeps RGB");
+}
+
+/// In a CMYK document, `text.create`, `text.createInPath`, `text.setStyle` and `text.setRangeStyle`
+/// refuse a `keepModel` given as text or as another value that is not true or false: no type is made,
+/// and the type, the path and the undo history stay as they were. Null is read as `keepModel` left out.
+#[test]
+fn the_type_commands_refuse_a_keep_model_given_as_text() {
+    let mut s = cmyk_session();
+    let t = id_of(s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hello"})).unwrap());
+    let path = rect(&mut s, 200.0);
+    let before = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let calls = [
+        ("text.create", json!({"x": 10, "y": 90, "text": "Hi", "color": "#ff0000", "keepModel": "true"})),
+        ("text.createInPath", json!({"path": path.0, "mode": "area", "text": "Hi", "color": "#ff0000", "keepModel": 1})),
+        ("text.setStyle", json!({"ids": [t.0], "fill": "#ff0000", "keepModel": "false"})),
+        ("text.setRangeStyle", json!({"id": t.0, "start": 0, "end": 2, "fill": "#ff0000", "keepModel": [true]})),
+    ];
+    for (cmd, p) in &calls {
+        refuses_keep_model(&mut s, cmd, p);
+        assert_eq!((s.doc().unwrap().doc.clone(), undo_len(&s)), before, "{cmd} {p}");
+    }
+    s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 0, "end": 2, "fill": "#ff0000", "keepModel": null})).unwrap();
+    let NodeKind::Text(o) = node(&s, t).kind else { panic!("not type") };
+    assert_eq!(o.runs[0].style.fill.color(), Some(managed_cmyk(Color::rgb8(255, 0, 0))));
 }
 
 /// `shapeBuilder.merge {fill: "#rrggbb"}` in a CMYK document fills the merged shape as
@@ -375,6 +443,38 @@ fn rgb_gradient_and_mesh_colors_given_to_a_cmyk_document_separate_through_the_co
     assert!(mesh(&s).contains(&orange), "{:?}", mesh(&s));
 }
 
+/// In a CMYK document, `paint.editGradient`, `paint.freeform.addPoint` and `setPoint`, and
+/// `object.mesh.setPointColor` and `addLine` refuse a `keepModel` given as text or as another value
+/// that is not true or false. The gradient, the mesh and the undo history stay as they were. Null is
+/// read as `keepModel` left out.
+#[test]
+fn the_gradient_and_mesh_commands_refuse_a_keep_model_given_as_text() {
+    let mut s = cmyk_session();
+    let a = rect(&mut s, 10.0);
+    let (cyan, magenta) = (json!({"c": 100, "m": 0, "y": 0, "k": 0}), json!({"c": 0, "m": 100, "y": 0, "k": 0}));
+    let points = json!([{"at": [20, 20], "color": cyan}, {"at": [50, 50], "color": magenta}]);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "freeform", "freeform": {"points": points}}})).unwrap();
+    let m = rect(&mut s, 300.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#53aadf"}]);
+    let calls = [
+        ("paint.editGradient", json!({"stops": stops, "keepModel": "true"})),
+        ("paint.freeform.addPoint", json!({"at": [40, 20], "color": "#ff0000", "keepModel": "true"})),
+        ("paint.freeform.setPoint", json!({"index": 1, "color": "#ff0000", "keepModel": 1})),
+        ("object.mesh.setPointColor", json!({"id": m.0, "index": 1, "color": "#ff0000", "keepModel": "false"})),
+        ("object.mesh.addLine", json!({"id": m.0, "x": 320, "y": 30, "color": "#ff0000", "keepModel": [true]})),
+    ];
+    for (cmd, p) in &calls {
+        refuses_keep_model(&mut s, cmd, p);
+        assert_eq!((s.doc().unwrap().doc.clone(), undo_len(&s)), before, "{cmd} {p}");
+    }
+    s.execute("object.mesh.setPointColor", &json!({"id": m.0, "index": 1, "color": "#ff0000", "keepModel": null})).unwrap();
+    let NodeKind::Mesh(g) = node(&s, m).kind else { panic!("not a mesh") };
+    assert_eq!(g.points[1].color, managed_cmyk(Color::rgb8(255, 0, 0)));
+}
+
 #[test]
 fn the_options_are_a_preference() {
     let mut s = Session::new();
@@ -408,4 +508,163 @@ fn type_takes_the_stroke_options_it_has() {
     let st = t.first_style();
     assert_eq!((st.stroke.color().unwrap().to_hex(), st.stroke_width, st.stroke_cap), ("#0000ff".into(), 5.0, LineCap::Round));
     assert!(st.stroke_dash.is_none(), "the dash pattern isn't applied");
+}
+
+/// Unsupported object transparency must fail atomically; opting out still samples the range.
+#[test]
+fn eyedropper_text_range_rejects_object_transparency_without_changes() {
+    for transparency in [json!({"opacity": 50}), json!({"blend": "multiply"})] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let src = rect(&mut s, 300.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        s.execute("transparency.set", &transparency).unwrap();
+        let view = ViewInfo::default();
+        s.select_tool("type", view).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+        }
+        s.tool_text("MAMA NA KAZI", view).unwrap();
+        s.set_tool_option("select", &json!({"start": 0, "end": 4}));
+        s.select_tool("eyedropper", view).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#b00000"})).unwrap();
+        let doc = s.doc().unwrap().doc.clone();
+        let paint = s.paint.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let selection = s.tool_options();
+        let err = s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap_err();
+        assert!(err.to_string().contains("object transparency"), "{err}");
+        assert_eq!(s.doc().unwrap().doc, doc);
+        assert_eq!(s.paint, paint);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+        assert_eq!(s.tool_options(), selection);
+        // Disabling transparency still copies the paint to just the highlighted characters.
+        s.execute("appearance.copyFrom", &json!({"source": src.0, "apply": {"appearance": {"transparency": false}}})).unwrap();
+        let dst = s.doc().unwrap().selection.objects[0];
+        let NodeKind::Text(t) = node(&s, dst).kind else { panic!() };
+        assert_eq!(t.runs[0].text, "MAMA");
+        assert_eq!(t.runs[0].style.fill.color().unwrap().to_hex(), "#00ff00");
+        assert_eq!(t.runs[1].text, " NA KAZI");
+        let NodeKind::Text(before) = &doc.node(dst).unwrap().kind else { panic!() };
+        assert_eq!(t.runs[1].style, before.runs.last().unwrap().style);
+    }
+}
+
+/// An opaque sample cannot replace only a range's inherited object transparency.
+#[test]
+fn eyedropper_text_range_rejects_target_transparency_without_changes() {
+    for transparency in [json!({"opacity": 50}), json!({"blend": "multiply"})] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let src = rect(&mut s, 300.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        let view = ViewInfo::default();
+        s.select_tool("type", view).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+        }
+        s.tool_text("MAMA NA KAZI", view).unwrap();
+        let dst = s.doc().unwrap().selection.objects[0];
+        s.execute("transparency.set", &transparency).unwrap();
+        s.set_tool_option("select", &json!({"start": 0, "end": 4}));
+        s.select_tool("eyedropper", view).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#b00000"})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let paint = s.paint.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let selection = s.tool_options();
+        let err = s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap_err();
+        assert!(err.to_string().contains("object transparency"), "{err}");
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.paint, paint);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+        assert_eq!(s.tool_options(), selection);
+        // An explicit opt-out samples the range while retaining the object's transparency.
+        s.execute("appearance.copyFrom", &json!({"source": src.0, "apply": {"appearance": {"transparency": false}}})).unwrap();
+        let n = node(&s, dst);
+        assert_eq!((n.opacity, n.blend), (before.node(dst).unwrap().opacity, before.node(dst).unwrap().blend));
+        let NodeKind::Text(t) = n.kind else { panic!("not text") };
+        assert_eq!(t.runs[0].text, "MAMA");
+        assert_eq!(t.runs[0].style.fill.color().unwrap().to_hex(), "#00ff00");
+        let NodeKind::Text(old) = &before.node(dst).unwrap().kind else { panic!("not text") };
+        assert_eq!(t.runs[1].text, " NA KAZI");
+        assert_eq!(t.runs[1].style, old.runs.last().unwrap().style);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+/// Choosing the Eyedropper from highlighted type must preserve the character target.
+#[test]
+fn eyedropper_styles_only_highlighted_characters() {
+    let mut s = session();
+    s.prefs.placeholder_text = false;
+    let src = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Source"})).unwrap());
+    s.execute("text.setStyle", &json!({"font": "Inter", "size": 30, "fill": "#00ff00"})).unwrap();
+    let view = ViewInfo::default();
+    s.select_tool("type", view).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+    }
+    let dst = s.doc().unwrap().selection.objects[0];
+    s.tool_text("MAMA NA KAZI", view).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 4}));
+    let before = match node(&s, dst).kind {
+        NodeKind::Text(t) => t.first_style(),
+        _ => panic!(),
+    };
+    s.select_tool("eyedropper", view).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let NodeKind::Text(t) = node(&s, dst).kind else { panic!() };
+    assert_eq!(t.runs.len(), 2, "only MAMA takes the sampled style");
+    assert_eq!(t.runs[0].text, "MAMA");
+    assert_eq!(t.runs[0].style.size, 30.0);
+    assert_eq!(t.runs[0].style.fill.color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(t.runs[1].text, " NA KAZI");
+    assert_eq!(t.runs[1].style, before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let NodeKind::Text(t) = node(&s, dst).kind else { panic!() };
+    assert_eq!(t.plain_text(), "MAMA NA KAZI", "undo keeps the separate typing step");
+    assert_eq!(t.runs[0].style, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.select_tool("type", view).unwrap();
+    assert_eq!(s.tool_options()["editing"], dst.0);
+    assert_eq!((s.tool_options()["start"].as_u64(), s.tool_options()["end"].as_u64()), (Some(0), Some(4)));
+}
+
+/// Color-only sampling preserves multibyte ranges and clears stale targets on deselection.
+#[test]
+fn eyedropper_shift_color_preserves_other_characters_and_clears_on_deselect() {
+    let mut s = session();
+    s.prefs.placeholder_text = false;
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#b00000"})).unwrap();
+    let view = ViewInfo::default();
+    s.select_tool("type", view).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+    }
+    let dst = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Aé中Z", view).unwrap();
+    s.set_tool_option("select", &json!({"start": 1, "end": 6}));
+    let NodeKind::Text(before) = node(&s, dst).kind else { panic!() };
+    click(&mut s, 325.0, 35.0, Mods { shift: true, ..Default::default() });
+    let NodeKind::Text(t) = node(&s, dst).kind else { panic!() };
+    assert_eq!(t.runs.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["A", "é中", "Z"]);
+    assert_eq!(t.runs[0].style, before.first_style());
+    assert_eq!(t.runs[2].style, before.first_style());
+    assert_eq!(t.runs[1].style.fill.color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(t.runs[1].style.size, before.first_style().size);
+    assert!(s.overlays(view).iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Highlight { .. })), "the highlighted range remains visible");
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.tool_options().get("editing").is_none_or(Value::is_null));
+    s.execute("select.set", &json!({"ids": [dst.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let NodeKind::Text(t) = node(&s, dst).kind else { panic!() };
+    assert!(
+        t.runs.iter().all(|r| r.style.fill.color().unwrap().to_hex() == "#00ff00"),
+        "after deselecting, ordinary object sampling styles the whole object"
+    );
 }

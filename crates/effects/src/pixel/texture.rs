@@ -7,9 +7,11 @@
 //! whose slopes, taken in document units, are lit from one side.
 
 use std::f64::consts::{FRAC_1_SQRT_2, PI};
+use std::sync::Arc;
 
 use vectorcraft_geom::{Point, Vec2};
 
+use super::loaded::{LOADED, LoadedTexture, texture};
 use super::pixelate::{AROUND, Around, Place, Soft, cell, gap, point_in, rand, value_noise};
 use super::{PixelSpace, blur_plane, pick};
 
@@ -65,13 +67,19 @@ impl Grain {
 /// Texturizer's textures, in its Texture menu's order: (label, parameter value).
 pub const TEXTURES: [(&str, &str); 4] = [("Brick", "brick"), ("Burlap", "burlap"), ("Canvas", "canvas"), ("Sandstone", "sandstone")];
 
-/// A Texturizer surface ([`TEXTURES`]), made in code.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Texturizer's Texture menu once a texture is loaded: [`TEXTURES`], then the loaded one.
+pub const TEXTURES_LOADED: [(&str, &str); 5] =
+    [("Brick", "brick"), ("Burlap", "burlap"), ("Canvas", "canvas"), ("Sandstone", "sandstone"), ("Loaded Texture", LOADED)];
+
+/// A Texturizer surface ([`TEXTURES`]), made in code or loaded from an image.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Texture {
     Brick,
     Burlap,
     Canvas,
     Sandstone,
+    /// An image the user loaded ([`LoadedTexture`]).
+    Loaded(Arc<LoadedTexture>),
 }
 
 impl Texture {
@@ -82,13 +90,23 @@ impl Texture {
         pick(&TEXTURES, &Self::ALL, value, Texture::Canvas)
     }
 
+    /// The texture of `value` with `stored` the effect's `textureImage`: the loaded texture for
+    /// [`LOADED`] (any case) when `stored` holds one, else as [`Texture::parse`].
+    pub fn parse_with(value: &str, stored: Option<&str>) -> Self {
+        match stored.filter(|_| value.eq_ignore_ascii_case(LOADED)).and_then(texture) {
+            Some(t) => Texture::Loaded(t),
+            None => Self::parse(value),
+        }
+    }
+
     /// The surface's height at `p` (points at 100 %), in points: slopes of about 1 at most.
-    pub(super) fn height(self, p: Point) -> f64 {
+    pub(super) fn height(&self, p: Point) -> f64 {
         match self {
             Texture::Brick => brick(p),
             Texture::Burlap => weave(p, 7.0, true),
             Texture::Canvas => weave(p, 4.0, false),
             Texture::Sandstone => sandstone(p),
+            Texture::Loaded(t) => t.height(p),
         }
     }
 }
@@ -556,7 +574,7 @@ pub(super) fn texturizer(
     w: usize,
     h: usize,
     space: &PixelSpace,
-    texture: Texture,
+    texture: &Texture,
     scaling: f64,
     relief: f64,
     light: Light,

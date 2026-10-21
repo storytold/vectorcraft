@@ -1,13 +1,17 @@
 //! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
-//! panel's options icon or menu): the artboard's fields, sizes parsed with units, and its position
-//! from a reference point. A new size also goes to the other selected artboards.
+//! panel's options icon or menu): the artboard's fields, sizes parsed with units, its position
+//! from a reference point, and its background color (`color`: a color as the paint commands take
+//! it, or null for none). A new size also goes to the other selected artboards.
 
 use serde_json::{Value, json};
+use vectorcraft_color::Color;
 use vectorcraft_doc::Unit;
+use vectorcraft_engine::cmd::color_value;
 use vectorcraft_geom::{Point, Rect};
 
 use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
+use crate::panels::artboards::{FILLS, fill_colors, fill_name};
 use crate::panels::transform::{artboard_rect, reference_index, reference_locator};
 use crate::state::Dialog;
 
@@ -25,6 +29,8 @@ fn placed(d: &Dialog) -> Rect {
 /// share, and X and Y are where its point lies on the rulers, counted from the ruler origin (#1212),
 /// as the Transform panel and the Control bar show an artboard's. A new Width or Height keeps the
 /// reference point where it was, as their sizes do.
+/// Then Background Color: the Fill list (None, White, Black; Custom for another color) and a swatch
+/// that picks a color of its own.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (unit, origin, refi) = (app.session.general_unit(), app.ruler_origin(), reference_index(ui));
     let (was, w0, h0) = (placed(d), d.f64("width", 0.0), d.f64("height", 0.0));
@@ -41,6 +47,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         position_rows(ui, d, refi, unit, origin);
     });
+    ui.add_space(8.0);
+    let color = d.fields.get("color").and_then(color_value);
+    let fills = fill_colors(app);
+    let mut set = None;
+    ui.horizontal(|ui| {
+        form::row_label(ui, tl!("Background Color:"));
+        if let Some(k) = crate::widgets::dropdown(ui, "ab-options-fill", fill_name(app, color), &FILLS, 110.0) {
+            set = fills.get(k).copied();
+        }
+        let [r, g, b, _] = color.unwrap_or(Color::WHITE).to_rgba8(1.0);
+        let mut rgb = [r, g, b];
+        if ui.color_edit_button_srgb(&mut rgb).changed() {
+            set = Some(Some(Color::rgb(f32::from(rgb[0]) / 255.0, f32::from(rgb[1]) / 255.0, f32::from(rgb[2]) / 255.0)));
+        }
+    });
+    if let Some(c) = set {
+        d.fields.insert("color".into(), c.as_ref().map_or(Value::Null, crate::panels::color_json));
+    }
     false
 }
 
@@ -89,7 +113,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let a = st.doc.artboards.get(index).ok_or("no artboard")?;
     let r = a.rect;
-    let fields = json!({"index": index, "name": a.name, "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height()});
+    let color = a.color.as_ref().map(crate::panels::color_json);
+    let fields = json!({"index": index, "name": a.name, "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "color": color});
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(json!({ "dialog": KIND }))
 }
@@ -147,8 +172,8 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(json!({ "dialog": KIND }))
 }
 
-/// OK for a new artboard: `artboard.new` with the fields (an empty name gives the default one),
-/// and the new artboard becomes the active one.
+/// OK for a new artboard: `artboard.new` with the fields (an empty name gives the default one) and
+/// the background color picked, and the new artboard becomes the active one.
 fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = json!({});
     for k in ["x", "y", "width", "height"] {
@@ -157,6 +182,9 @@ fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let name = d.str("name");
     if !name.trim().is_empty() {
         p["name"] = json!(name);
+    }
+    if let Some(c) = d.fields.get("color") {
+        p["color"] = c.clone();
     }
     let r = run_and_close(app, "artboard.new", p)?;
     if let Some(i) = r["index"].as_u64().and_then(|i| usize::try_from(i).ok()) {

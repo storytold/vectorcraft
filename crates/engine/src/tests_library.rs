@@ -143,6 +143,66 @@ fn text_styles_come_from_the_selected_type_and_apply_in_one_step() {
     assert_eq!(r["style"], format!("{name} 2"));
 }
 
+/// A library with the character and paragraph styles of 31 pt type, an undo group opened in the
+/// first document with a rectangle drawn in it, and a second document, active, with type
+/// selected → (session, library, character style, paragraph style).
+fn group_open_in_another_document() -> (Session, String, String, String) {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Heading", "size": 31}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let char_style = run(&mut s, "library.add", json!({"library": lib, "kind": "charStyle"}))["name"].as_str().unwrap().to_string();
+    let para_style = run(&mut s, "library.add", json!({"library": lib, "kind": "paraStyle"}))["name"].as_str().unwrap().to_string();
+    run(&mut s, "edit.undoGroup.begin", json!({}));
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let u = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [u]}));
+    (s, lib, char_style, para_style)
+}
+
+/// A library style used in one document does not close an undo group that is open in another
+/// document, so that document's next edit still joins the group's undo step.
+#[test]
+fn a_library_style_leaves_another_documents_undo_group_open() {
+    let (mut s, lib, name, _) = group_open_in_another_document();
+    run(&mut s, "library.use", json!({"library": lib, "kind": "charStyle", "item": name}));
+    assert!(s.documents()[0].undo_group.is_some(), "the first document's undo group stays open");
+    s.set_active(0);
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the edit joins the group's step");
+}
+
+/// A library style that fails to apply takes back only the edits it made in its own document: an
+/// undo group open in another document stays open, and the edits made in it stay.
+#[test]
+fn a_library_style_that_fails_takes_back_only_its_own_edits() {
+    let (mut s, lib, _, name) = group_open_in_another_document();
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("library.use", &json!({"library": lib, "kind": "paraStyle", "item": name})).is_err(), "no type selected");
+    assert!(s.doc().unwrap().doc.para_styles.iter().all(|p| p.name != name), "the style it added is taken back");
+    let first = &s.documents()[0];
+    assert_eq!(first.doc.layers[0].children().map_or(0, |c| c.len()), 2, "the type and the rectangle drawn in the group stay");
+    assert!(first.undo_group.is_some(), "the first document's undo group stays open");
+}
+
+/// A library style that fails to apply inside an undo group open in its own document takes back
+/// the style it added, and the group stays open with the edits made in it before.
+#[test]
+fn a_library_style_that_fails_in_an_open_group_takes_back_its_own_edits() {
+    let (mut s, lib, _, name) = group_open_in_another_document();
+    s.set_active(0);
+    run(&mut s, "select.none", json!({}));
+    let undo = s.doc().unwrap().history.undo.len();
+    assert!(s.execute("library.use", &json!({"library": lib, "kind": "paraStyle", "item": name})).is_err(), "no type selected");
+    let d = s.doc().unwrap();
+    assert!(d.doc.para_styles.iter().all(|p| p.name != name), "the style it added is taken back");
+    assert_eq!(d.doc.layers[0].children().map_or(0, |c| c.len()), 2, "the type and the rectangle drawn in the group stay");
+    assert_eq!(d.history.undo.len(), undo, "still the group's one step");
+    assert!(d.undo_group.is_some(), "the group stays open");
+}
+
 /// A text style that a library file names with spaces around it comes into the document with the
 /// name trimmed, as New Character Style and New Paragraph Style trim a name, and applies.
 #[test]

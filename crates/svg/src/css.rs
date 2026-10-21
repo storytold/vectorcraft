@@ -109,11 +109,10 @@ fn generic_fallback(family: &str) -> &'static str {
 pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     let mut p = Props::new();
     // A quoted family escapes `\` and `'`, which would otherwise end the string early.
-    let fam = if st.font_family.contains(|c: char| c.is_whitespace() || matches!(c, ',' | '\'' | '\\')) {
-        format!("'{}'", st.font_family.replace('\\', "\\\\").replace('\'', "\\'"))
-    } else {
-        st.font_family.clone()
-    };
+    // Only a plain identifier (no leading digit) can be written bare; anything else is quoted.
+    let bare = st.font_family.chars().next().is_some_and(|c| !c.is_ascii_digit() && c != '-')
+        && st.font_family.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_'));
+    let fam = if !bare { format!("'{}'", st.font_family.replace('\\', "\\\\").replace('\'', "\\'")) } else { st.font_family.clone() };
     p.push(("font-family", format!("{fam}{}", generic_fallback(&st.font_family))));
     p.push(("font-size", len(st.size * st.v_scale / 100.0)));
     let (weight, italic) = font_descriptor(st);
@@ -573,6 +572,12 @@ impl Rules<'_> {
         if n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
             art.unsupported("fills or strokes on the type object");
         }
+        // Area type that Shrink Text to Fit scales down is written in the styles it draws in.
+        let fitted = matches!((&t.kind, t.area.fit), (TextKind::Area { .. }, vectorcraft_doc::AreaFit::ShrinkText { .. }))
+            .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale)
+            .filter(|f| *f != 1.0)
+            .map(|f| vectorcraft_text::scaled(t, f));
+        let t = fitted.as_ref().unwrap_or(t);
         let st = t.first_style();
         if t.runs.iter().any(|r| r.style != st) {
             self.warn("type with several character styles is written in its first one");
@@ -659,12 +664,15 @@ fn corners(path: &PathData, live: Option<&LiveShape>) -> Option<Corners> {
     // Sizes and radii in document units.
     match live.map(LiveShape::folded).as_ref() {
         // CSS rounds corners only: an inverted round or chamfered corner has no border radius.
-        Some(LiveShape::Rectangle { w, h, radii, kinds, xf })
+        Some(LiveShape::Rectangle { w, h, radii, kinds, radii_relative, xf })
             if upright(xf) && radii.iter().zip(kinds).all(|(r, k)| *r <= 0.0 || *k == CornerKind::Round) =>
         {
             // The radii as drawn: no two neighbours' cuts add up to more than their side, so CSS
             // draws them as they are.
-            let radii = shapes::fitted_corner_radii(*w, *h, *radii);
+            let base = shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, *w, *h));
+            let resolved = vectorcraft_doc::corners::resolve_stored_radii(&base, radii, *radii_relative);
+            let stored = std::array::from_fn(|i| resolved.get(i).copied().unwrap_or(0.0));
+            let radii = shapes::fitted_corner_radii(*w, *h, stored);
             if radii.iter().all(|r| *r <= 0.0) {
                 Some(Corners::Square)
             } else if radii.iter().all(|r| (r - radii[0]).abs() < 1e-9) {
@@ -694,4 +702,24 @@ fn is_upright_rectangle(path: &PathData) -> bool {
         && sp.anchors.iter().all(|a| corner(a.p))
         && b.width() > 0.0
         && b.height() > 0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn family(name: &str) -> String {
+        let st = CharStyle { font_family: name.into(), ..CharStyle::default() };
+        let p = font_props(&st, &|v| format!("{v}px"));
+        p.into_iter().find(|(k, _)| *k == "font-family").unwrap().1
+    }
+
+    #[test]
+    fn font_family_quoted_unless_plain_identifier() {
+        assert!(family("04b03").starts_with("'04b03'"), "{}", family("04b03"));
+        assert!(family("a;b").starts_with("'a;b'"));
+        assert!(family("a\"b").starts_with("'a\"b'"));
+        assert!(family("a(b").starts_with("'a(b'"));
+        assert!(family("Arial").starts_with("Arial,"));
+    }
 }

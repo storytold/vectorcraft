@@ -238,6 +238,11 @@ pub struct DocSetup {
     pub export_text: ExportText,
     /// Background Contents chosen in New Document.
     pub background: Background,
+    /// Character panel menu › System Layout: every text object advances by whole points. Off by
+    /// default and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+    #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
+    pub system_layout: bool,
 }
 
 impl Default for DocSetup {
@@ -260,6 +265,7 @@ impl Default for DocSetup {
             small_caps_size: 70.0,
             export_text: ExportText::Editable,
             background: Background::Transparent,
+            system_layout: false,
         }
     }
 }

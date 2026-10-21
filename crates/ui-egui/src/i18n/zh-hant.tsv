@@ -273,6 +273,7 @@
 	Blur	模糊
 	Bottom	下
 	Bottom in Front	下方置前
+	Bottom-Justified Tab	靠下定位點
 	Bottom-to-Bottom Leading	基線至基線行距
 	Burasagari	標點懸掛
 	Force	強制
@@ -1023,6 +1024,7 @@
 	Eyedropper Picks Up:	滴管擷取：
 	Eyedropper Tool	滴管工具
 	Eyedropper: click the art to sample the stop's colour	滴管：點擊圖稿以取樣色標的顏色
+	Eyedropper: click the art to sample the key color	滴管：點擊圖稿以取樣主要顏色
 	Favorites	我的最愛
 	Feather…	羽化…
 	Feet	英呎
@@ -1053,6 +1055,14 @@
 	Alt key toggles to Smooth Tool	Alt 鍵切換為平滑工具
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
+	Consider Open Filled Paths as Closed	將有填色的開放路徑視為封閉路徑
+	Pick Color From:	顏色來源：
+	Artwork	圖稿
+	Cursor Swatch Preview	在指標旁預覽色票
+	Selection:	選取方式：
+	Freeform	自由
+	Straight Line	直線
+	Highlight:	強調顯示：
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
@@ -1180,6 +1190,8 @@ file-filter	Templates	範本
 	Large Gaps	大間隙
 	Gap Preview Color:	間隙預覽顏色：
 	Close Gaps With Paths	以路徑封閉間隙
+	Show Live Paint Gaps	顯示即時上色間隙
+	Hide Live Paint Gaps	隱藏即時上色間隙
 	Select Fills	選取填色
 	Select Strokes	選取筆畫
 	Gaussian Blur…	高斯模糊…
@@ -1287,6 +1299,7 @@ file-filter	Templates	範本
 	Hand-Drawn	手繪
 	Handles	控制把手
 	Hard Light	實光
+	Hard Mix	實色混合
 	Harmony Rules:	色彩調和規則：
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -1610,7 +1623,9 @@ file-filter	Templates	範本
 @msg	Show All Hidden Attributes: nothing is hidden	顯示所有隱藏屬性：沒有隱藏的項目
 @msg	Expand: no brush strokes selected	展開：未選取筆刷筆畫
 @msg	no brush named `{name}`	沒有名為 `{name}` 的筆刷
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	鬃毛筆刷的名稱最多 {max} 個字元：`{name}` 有 {count} 個字元
 @msg	no brush selected	未選取筆刷
+@msg	brushes move only within their type	筆刷只能在同一類型內移動
 @msg	no symbol instances selected	未選取符號實體
 @msg	select a symbol instance	請選取符號實體
 @msg	the art has no bounds	圖稿沒有邊界
@@ -1653,6 +1668,7 @@ file-filter	Templates	範本
 @msg	no saved selection recalled	未叫出任何已儲存的選取範圍
 @msg	no saved selections	沒有已儲存的選取範圍
 @msg	no such artboard	沒有這個工作區域
+@msg	the artboard is locked	工作區域已鎖定
 @msg	cannot split an open path at its end point	無法在開放路徑的端點處分割路徑
 @msg	closing needs three anchors	封閉需要三個錨點
 @msg	empty brush stroke	筆刷筆畫是空的
@@ -1792,6 +1808,10 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
+@msg	a clipping path can't take objects	剪裁路徑無法附加物件
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑
+@msg	a clipping path can't be attached to a path	剪裁路徑無法附加到路徑
 @msg	select the art to repeat	請選取要重複的圖稿
 @msg	the document has no patterns	文件中沒有圖樣
 @msg	no artboard	沒有工作區域
@@ -1883,6 +1903,25 @@ file-filter	Templates	範本
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript 錯誤 ({name}，位於 `{op}`：{at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript 錯誤 ({name}，位於 `{op}`：{at})，在 {procs} 中
 @msg	a PostScript error ({name})	PostScript 錯誤 ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript 錯誤 ({name}，位於 `{op}`；{meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	PostScript 錯誤 ({name}，位於 `{op}`；{meaning})，在 {procs} 中
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript 錯誤 ({name}，位於 `{op}`：{at}；{meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	PostScript 錯誤 ({name}，位於 `{op}`：{at}；{meaning})，在 {procs} 中
+@msg	a PostScript error ({name}; {meaning})	PostScript 錯誤 ({name}；{meaning})
+@msg	the program ends a dictionary it didn't begin	程式要結束一個它沒有開始的字典
+@msg	the program opens a file, which the reader can't do	程式要開啟檔案，而 PostScript 讀取器無法開啟檔案
+@msg	the program restores a saved state that was already restored	程式要還原一個已經還原過的儲存狀態
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	程式讀取的資料已損壞或不完整，或者程式要在沒有位置的檔案中取得位置
+@msg	the program goes past one of the reader's limits	程式超出了 PostScript 讀取器的一項限制
+@msg	the path has no point to continue from	路徑沒有可以接著繪製的點
+@msg	a value is outside the range the operator takes	某個值超出了運算子接受的範圍
+@msg	the operator needs more values than the stack holds	運算子需要的值多於堆疊中的值
+@msg	part of the program isn't valid PostScript text	程式的一部分不是有效的 PostScript 文字
+@msg	a value has the wrong type for the operator	某個值的類型不適用於該運算子
+@msg	the program runs, deletes or renames a file, which the reader can't do	程式要執行、刪除或重新命名檔案，而 PostScript 讀取器無法執行這些操作
+@msg	the program asks for a resource that isn't defined	程式要求了未定義的資源
+@msg	a calculation has no result, as in a division by zero	計算沒有結果，例如除以零
+@msg	the operator looks for a mark on the stack and finds none	運算子在堆疊中找不到標記
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	它使用了 `{at}`，VectorCraft 的 PostScript 讀取器無法辨識
 @msg	the file was read up to an error ({why}): what follows it was left out	檔案已讀取到發生錯誤處 ({why})：之後的內容已略過
 @msg	this file's PostScript couldn't be read ({why}): {what}	無法讀取此檔案的 PostScript ({why})：{what}
@@ -2219,6 +2258,12 @@ file-filter	Templates	範本
 @msg	before must name a panel	before 必須指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停駐動作包含未知的面板或過長的分割路徑
 @msg	group must be true or false	group 必須是 true 或 false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	面板處於浮動狀態；請使用 window.panel.float {panel, collapsed} 摺疊其面板群組
+@msg	panel is not in a dock group	面板不在停駐群組中
+@msg	only a dock group above or below others collapses, not one beside another	只有位於其他群組上方或下方的停駐群組可以摺疊，並排的不行
+@msg	icon must be true or false	icon 必須為 true 或 false
+@msg	icon only docks a panel in the icon column, with no anchor	icon 只會將面板停駐到圖示欄中，不能帶 anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column 會將一組面板停駐為停駐欄，不能帶 anchor 或 icon
 @msg	move requires a destination panel	移動需要目的地面板
 @msg	move requires an existing destination panel	移動需要現有的目的地面板
 @msg	onto must name a floating panel	onto 必須指定浮動面板
@@ -2254,6 +2299,7 @@ file-filter	Templates	範本
 @msg	Measured anchor no longer exists	測量的錨點已不存在
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
+@msg	Scale Text Attributes: selected type has no scale to bake	縮放文字屬性：所選文字沒有可套用的縮放
 @msg	Scale must be drawing:real, for example 1:10	比例必須為 圖紙:實際，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必須介於 1:1000000 和 1000000:1 之間
 @msg	Second measured segment no longer exists	第二條測量線段已不存在
@@ -2557,6 +2603,9 @@ file-filter	Templates	範本
 	Modified since it was read: {path}	讀取後已被修改：{path}
 	Modified:	修改時間：
 	Modify	修改
+	Insert Kashidas	插入卡希達
+	Long	長
+	Stylistic	風格化
 	Mojikumi Set	標點間距
 	Kinsoku Set	Kinsoku 集
 	Hard	強
@@ -2604,6 +2653,7 @@ file-filter	Templates	範本
 @msg	x and y must be finite	x 和 y 必須是有限值
 @msg	t, dx and dy must be finite	t、dx 和 dy 必須是有限值
 @msg	handle must be in or out	handle 必須是 in 或 out
+	Move Brush	移動筆刷
 	Move Swatch	移動色票
 	Move Up	上移
 	Move…	移動…
@@ -2661,6 +2711,13 @@ file-filter	Templates	範本
 	Tints and Shades	淺色與暗色
 	Hue Shift	色相偏移
 	Key Color:	主要顏色：
+	Tips	提示
+	Colorization Tips	上色提示
+	The samples show this brush on a blue stroke.	範例顯示此筆刷在藍色筆畫上的效果。
+	The art keeps its own colors.	圖稿保留自己的顏色。
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黑色變為筆畫顏色，白色維持白色。其他顏色變為筆畫顏色的淺色，顏色越淺，淺色就越淺。
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黑色維持黑色，白色維持白色。其他顏色較暗時變為筆畫顏色的暗色，較亮時變為筆畫顏色的淺色。
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	主要顏色變為筆畫顏色。其他顏色在色輪上移動與主要顏色相同的距離，並保留其飽和度和亮度。
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
@@ -2681,6 +2738,14 @@ file-filter	Templates	範本
 	Round Fan	圓扇頭
 	Flat Fan	扁扇頭
 	New Brush…	新增筆刷…
+	New Brush	新增筆刷
+	Calligraphic Brush	書法筆刷
+	Scatter Brush	散佈筆刷
+	Art Brush	藝術筆刷
+	Bristle Brush	鬃毛筆刷
+	Pattern Brush	圖樣筆刷
+	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
+	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
 	New Character Style	新增字元樣式
 	New Color Group	新增顏色群組
@@ -2711,6 +2776,7 @@ file-filter	Templates	範本
 	New View	新增檢視
 	New View…	新增檢視…
 	New Window	新增視窗
+	New Without Dialog	新增但不開啟對話方塊
 	New Workspace	新增工作區
 	New Workspace…	新增工作區…
 	New {kind} Style…	新增{kind}樣式…
@@ -3300,6 +3366,7 @@ font-script	Japanese	漢字
 	Reorder	重新排序
 	Reorder Appearance Item	重新排序外觀項目
 	Repeat	重複
+	Repeat Objects	重複物件
 	Repeat Options	重複選項
 	Repeat Pathfinder	重複路徑管理員
 	Repeat Tab	重複定位點
@@ -3307,7 +3374,7 @@ font-script	Japanese	漢字
 	Replace	取代
 	Replace Font	取代字體
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
-	Replace Spine	取代軸線
+	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
@@ -3354,7 +3421,7 @@ font-script	Japanese	漢字
 	Reverse Path Direction	反轉路徑方向
 	Reverse Path Direction Off	關閉反轉路徑方向
 	Reverse Path Direction On	開啟反轉路徑方向
-	Reverse Spine	反轉軸線
+	Reverse Spine	反轉脊線
 	Revert	回復
 	Revert to the saved version of “{name}”?	要回復為「{name}」已儲存的版本嗎？
 	Replace “{name}”, the file this document was opened from?	要取代「{name}」（開啟此文件的來源檔案）嗎？
@@ -3511,6 +3578,7 @@ font-script	Japanese	漢字
 	Scale Cursor Proportional to UI	游標依介面比例縮放
 	Scale Lineweights	縮放線條寬度
 	Scale Strokes & Effects	縮放筆畫與效果
+	Scale Text Attributes	縮放文字屬性
 	Scale to Fit Artboard	縮放至符合工作區域
 	Scale Tool	縮放工具
 	Scale:	縮放比例：
@@ -3782,6 +3850,7 @@ font-script	Japanese	漢字
 	Snapping Tolerance	靠齊容許度
 	Social Square Post 1080×1080	社群正方形貼文 1080×1080
 	Soft Light	柔光
+	Soft Mix	柔和混合
 	Solid	實心
 	Sort by Kind	依類型排序
 	Sort by Name	依名稱排序
@@ -4022,9 +4091,11 @@ font-script	Japanese	漢字
 	Tools	工具
 	Top	上
 	Top in Front	上方在前
+	Top-Justified Tab	靠上定位點
 	Top-to-Top Leading	上緣至上緣行距
 	Top:	上：
 	Total Width:	總寬度：
+	Touch	觸控
 	Touch Type	觸控文字
 	Touch Type Tool	觸控文字工具
 	Trace	描圖
@@ -4185,6 +4256,7 @@ font-script	Japanese	漢字
 	Lock Variables	鎖定變數
 	Unlock Variables	解除鎖定變數
 @msg	variables are locked	變數已鎖定
+@msg	variables that aren't text were left out: {kinds}	已略過非文字變數：{kinds}
 	List Variables	列出變數
 	Bind Variable	綁定變數
 	Unbind Variable	解除變數綁定
@@ -4370,7 +4442,8 @@ imageTrace	Outline	輪廓
 	 to sample a color	可取樣顏色
 	 across a selected object to set the gradient direction	橫越所選物件可設定漸層方向
 	 to select an artboard  |  	可選取工作區域  |  
-	 on the canvas to create one	畫布可建立工作區域
+	 on the canvas to create one (	畫布可建立工作區域 (
+	 selects several, or draws one inside an artboard)	可選取多個，或在工作區域內建立工作區域)
 	 a stroke to add a width point  |  	筆畫可新增寬度點  |  
 	 to change one side  |  	可只變更單側  |  
 	 to select more points  |  	可選取更多點  |  
@@ -4501,6 +4574,13 @@ axis	Both	兩者
 	Channel 4	色版 4
 	Cell Size	單元大小
 	Fine Dots	細點
+
+	Simple	簡單
+	Light Rough	淺色粗糙
+	Dark Rough	深色粗糙
+	Wide Sharp	寬銳
+	Wide Blurry	寬模糊
+	Sparkle	閃光
 	Medium Dots	中等點
 	Grainy Dots	顆粒點
 	Coarse Dots	粗點
@@ -4615,6 +4695,7 @@ effect	Soft	柔和
 	Activate Panel	啟用面板
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
+	Collapse Panel Group	摺疊面板群組
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -4683,12 +4764,24 @@ lighting	Light	光源
 	Reset Ruler Origin	重設尺標原點
 	Artistic	藝術效果
 	Film Grain…	底片顆粒…
+	Colored Pencil…	彩色鉛筆…
+	Colored Pencil	彩色鉛筆
 	Cutout…	剪紙…
+	Dry Brush…	乾畫筆…
 	Cutout	剪紙
+	Dry Brush	乾畫筆
 	Neon Glow…	霓虹光…
+	Palette Knife…	調色刀…
 	Neon Glow	霓虹光
+	Paint Daubs…	繪畫塗抹…
+	Paint Daubs	繪畫塗抹
+	Palette Knife	調色刀
 	Poster Edges…	海報邊緣…
+	Rough Pastels…	粗糙粉彩…
 	Poster Edges	海報邊緣
+	Rough Pastels	粗糙粉彩
+	Underpainting…	底紋效果…
+	Underpainting	底紋效果
 	Levels	色階數
 	Edge Simplicity	邊緣簡化度
 	Edge Fidelity	邊緣逼真度
@@ -4770,6 +4863,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	3D Lighting Preset	3D 光照預設
+	Standard	標準
+	Diffuse	漫射
 # 3D light management.
 	Lights	光源清單
 	Add Light	新增光源
@@ -4809,6 +4905,7 @@ lighting	Light	光源
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…
 	Export Data Sets…	匯出資料集…
+	Load Variable Library…	載入變數資料庫…
 	Make Graph Dynamic	使圖表動態化
 	Batch…	批次處理…
 	Source Folder:	來源資料夾：
@@ -4827,6 +4924,8 @@ lighting	Light	光源
 	Sketch	素描
 	Halftone Pattern…	半色調圖樣…
 	Halftone Pattern	半色調圖樣
+	Torn Edges…	撕裂邊緣…
+	Torn Edges	撕裂邊緣
 	Pattern Type	圖樣類型
 	Dot	網點
 # User Interface › Color Scheme
@@ -4845,6 +4944,7 @@ lighting	Light	光源
 	Watercolor…	水彩…
 	Watercolor	水彩
 	Brush Size	筆刷大小
+	Texture Coverage	紋理覆蓋
 	Definition	清晰度
 	Brush Detail	筆刷細節
 	Shadow Intensity	陰影強度
@@ -4861,19 +4961,9 @@ lighting	Light	光源
 	Light/Dark Balance	明暗平衡
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
+	Locate Library…	尋找資料庫…
 	Library Panel Options	資料庫面板選項
-	Lock Artboards	鎖定工作區域
-	Unlock Artboards	解除鎖定工作區域
-	Artboard Color	工作區域顏色
-	Lock Selected	鎖定所選
-	Lock All Except Selected	鎖定所選以外的全部
-	Lock All	全部鎖定
-	Unlock Selected	解除鎖定所選
-	Lock Artboard	鎖定工作區域
-	Unlock Artboard	解除鎖定工作區域
-	Clear Artboard Color	清除工作區域顏色
-@msg	artboard {_1} is locked	工作區域 {_1} 已鎖定
-	Include Artboard Fill	包含工作區域顏色
+	Gap Length:	間隙長度：
 	Artboard {n} of {total}	工作區域 {n} / {total}
 	Encoding and writing the file…	正在編碼並寫入檔案…
 @plural	{n} more export waiting|{n} more exports waiting	另有 {n} 個匯出等待中
@@ -4917,3 +5007,9 @@ lighting	Light	光源
 	Plaster	塑膠效果
 	Note Paper…	便條紙…
 	Note Paper	便條紙
+	Water Paper…	水彩畫紙…
+	Water Paper	水彩畫紙
+	Ruby…	注音…
+	Ruby	注音
+	Fresco…	壁畫…
+	Fresco	壁畫

@@ -139,6 +139,8 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         Some(modified) => crate::post::modification_date(bytes, modified)?,
         None => bytes,
     };
+    // The writer's metadata has no copyright: it is added to the XMP packet.
+    let bytes = crate::post::rights(bytes, &doc.metadata)?;
     warnings.extend(more);
     let bytes = crate::post::user_units(bytes, &units)?;
     let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
@@ -1531,11 +1533,13 @@ impl Exporter<'_> {
         // pushed for each fill and stroke of the characters, inside its form when the fill or
         // stroke overprints.
         let text_space = xf(t.xf);
-        let plain = (!self.outline_text).then(|| t.plain_text());
+        // Ruby can't be real text in one run (it isn't characters of the base text): the type's
+        // characters go out as outlines where ruby is present, ruby included.
+        let plain = (!self.outline_text && t.ruby.is_empty()).then(|| t.plain_text());
         let bars = vectorcraft_text::decorations(&layout, vectorcraft_text::FontDb::global(), t);
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
-            for g in layout.glyphs.iter().filter(|g| g.run == i) {
+            for g in layout.glyphs.iter().filter(|g| g.run == i).chain(layout.ruby.iter().filter(|g| g.run == i)) {
                 bp.extend(g.outline.iter());
             }
             // Underline and strikethrough bars are paths, with real text too (#847).

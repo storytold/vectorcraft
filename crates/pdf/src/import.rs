@@ -389,9 +389,9 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             id: i as u32 + 1,
             name: format!("Artboard {}", i + 1),
             rect: ab,
+            locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
-            locked: false,
             color: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {

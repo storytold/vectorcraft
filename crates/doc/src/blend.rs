@@ -44,13 +44,43 @@ fn lerp_f64(x: f64, y: f64, t: f64) -> f64 {
     x + (y - x) * t
 }
 
-fn solid_gradient(c: Color, like: &Gradient) -> Gradient {
+/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`).
+fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) -> Gradient {
     let mut g = like.clone();
     for s in &mut g.stops {
         s.color = c;
         s.opacity = 1.0;
+        s.swatch = swatch.map(str::to_string);
+        s.tint = tint;
     }
     g
+}
+
+/// The swatch and tint `g` paints at `t`: a stop's own link, or the shared swatch of the two stops
+/// around `t` at the tint between theirs (unlinked when they differ), as [`Gradient::sample_with`] walks.
+fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
+    let stops = &g.stops;
+    let link = |s: &GradientStop| (s.swatch.clone(), s.tint);
+    let Some(first) = stops.first() else { return (None, 1.0) };
+    if t <= first.offset {
+        return link(first);
+    }
+    for w in stops.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if t <= b.offset {
+            let span = (b.offset - a.offset).max(1e-6);
+            let u = (t - a.offset) / span;
+            let m = a.midpoint.clamp(0.01, 0.99);
+            let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
+            return match (&a.swatch, &b.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v)),
+                _ if v <= 0.0 => link(a),
+                _ if v >= 1.0 => link(b),
+                _ => (None, 1.0),
+            };
+        }
+    }
+    stops.last().map_or((None, 1.0), link)
 }
 
 /// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
@@ -60,7 +90,8 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
         .iter()
         .map(|&o| {
             let (color, opacity) = g.sample_with(o, lerp_color);
-            GradientStop { opacity, ..GradientStop::new(o, color) }
+            let (swatch, tint) = link_at(g, o);
+            GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
         })
         .collect();
     out
@@ -106,10 +137,19 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
         .stops
         .iter()
         .zip(&gb.stops)
-        .map(|(sa, sb)| GradientStop {
-            opacity: lerp_f32(sa.opacity, sb.opacity, t),
-            midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
-            ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
+        .map(|(sa, sb)| {
+            // Stops on two tints of one swatch stay linked to it, as solids do (#3234).
+            let (swatch, tint) = match (&sa.swatch, &sb.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t)),
+                _ => (None, 1.0),
+            };
+            GradientStop {
+                opacity: lerp_f32(sa.opacity, sb.opacity, t),
+                midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
+                swatch,
+                tint,
+                ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
+            }
         })
         .collect();
     out.angle = a.angle + (b.angle - a.angle) * t as f64;
@@ -131,17 +171,21 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
 /// solid↔gradient; otherwise switch halfway.
 pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
     match (a, b) {
+        // Two tints of one swatch blend into tints of that swatch (a spot stays a spot on export).
+        (Paint::Solid { color: x, swatch: Some(sa), tint: ta }, Paint::Solid { color: y, swatch: Some(sb), tint: tb }) if sa == sb => {
+            Paint::Solid { color: lerp_color(x, y, t), swatch: Some(sa.clone()), tint: lerp_f32(*ta, *tb, t) }
+        }
         (Paint::Solid { color: x, .. }, Paint::Solid { color: y, .. }) => Paint::solid(lerp_color(x, y, t)),
         (Paint::Gradient(ga), Paint::Gradient(gb)) => match lerp_gradient(ga, gb, t) {
             Some(g) => Paint::Gradient(Box::new(g)),
             None => (if t < 0.5 { a } else { b }).clone(),
         },
-        (Paint::Solid { color, .. }, Paint::Gradient(g)) => {
-            let ga = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
+        (Paint::Solid { color, swatch, tint }, Paint::Gradient(g)) => {
+            let ga = GradientPaint { gradient: solid_gradient(*color, swatch.as_deref(), *tint, &g.gradient), ..(**g).clone() };
             Paint::Gradient(Box::new(lerp_gradient(&ga, g, t).unwrap_or_else(|| (**g).clone())))
         }
-        (Paint::Gradient(g), Paint::Solid { color, .. }) => {
-            let gb = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
+        (Paint::Gradient(g), Paint::Solid { color, swatch, tint }) => {
+            let gb = GradientPaint { gradient: solid_gradient(*color, swatch.as_deref(), *tint, &g.gradient), ..(**g).clone() };
             Paint::Gradient(Box::new(lerp_gradient(g, &gb, t).unwrap_or_else(|| (**g).clone())))
         }
         _ => (if t < 0.5 { a } else { b }).clone(),
@@ -1112,6 +1156,56 @@ mod tests {
         // Clicked start points win over the automatic match.
         let pair = PathPair::new(&a, &b, (Some(0), Some(0)));
         assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
+    }
+
+    #[test]
+    fn blend_between_tints_of_one_swatch_keeps_the_link() {
+        let tinted = |tint: f32| Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint), swatch: Some("Spot".into()), tint };
+        let Paint::Solid { swatch, tint, .. } = lerp_paint(&tinted(0.2), &tinted(1.0), 0.5) else { panic!() };
+        assert_eq!(swatch.as_deref(), Some("Spot"));
+        assert!((tint - 0.6).abs() < 1e-6, "{tint}");
+        let other = Paint::Solid { color: Color::BLACK, swatch: Some("Other".into()), tint: 1.0 };
+        assert!(matches!(lerp_paint(&tinted(0.2), &other, 0.5), Paint::Solid { swatch: None, .. }));
+
+        // Gradient stops on tints of one swatch stay linked too; a process solid unlinks them.
+        let spot_gradient = |tint: f32| {
+            let mut stop = GradientStop::new(0.0, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+            stop.swatch = Some("Spot".into());
+            stop.tint = tint;
+            let stops = vec![stop.clone(), GradientStop { offset: 1.0, ..stop }];
+            Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })))
+        };
+        let Paint::Gradient(m) = lerp_paint(&spot_gradient(0.2), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot") && (s.tint - 0.6).abs() < 1e-6), "{:?}", m.gradient.stops);
+        let Paint::Gradient(m) = lerp_paint(&tinted(0.2), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot") && (s.tint - 0.6).abs() < 1e-6), "{:?}", m.gradient.stops);
+        let Paint::Gradient(m) = lerp_paint(&Paint::solid(Color::BLACK), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    #[test]
+    fn resampled_gradient_stops_keep_the_swatch_link() {
+        let spot = |offset: f32, tint: f32| {
+            let mut stop = GradientStop::new(offset, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+            stop.swatch = Some("Spot".into());
+            stop.tint = tint;
+            stop
+        };
+        let paint = |stops: Vec<GradientStop>| Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })));
+        let two = paint(vec![spot(0.0, 0.2), spot(1.0, 1.0)]);
+        let three = paint(vec![spot(0.0, 0.2), spot(0.5, 0.6), spot(1.0, 1.0)]);
+        let Paint::Gradient(m) = lerp_paint(&two, &three, 0.5) else { panic!() };
+        assert_eq!(m.gradient.stops.len(), 3);
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        let tints: Vec<f32> = m.gradient.stops.iter().map(|s| s.tint).collect();
+        assert!((tints[1] - 0.6).abs() < 1e-6 && (tints[2] - 1.0).abs() < 1e-6, "{tints:?}");
+
+        // Spot on one side, process on the other: the stops are unlinked.
+        let mut plain = spot(0.5, 1.0);
+        plain.swatch = None;
+        let mixed = paint(vec![spot(0.0, 1.0), plain, spot(1.0, 1.0)]);
+        let Paint::Gradient(m) = lerp_paint(&two, &mixed, 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().any(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
     }
 
     #[test]

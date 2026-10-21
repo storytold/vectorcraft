@@ -16,9 +16,9 @@ const MAX_NESTING: usize = 256;
 
 const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const XML: &str = "http://www.w3.org/XML/1998/namespace";
-const DC: &str = "http://purl.org/dc/elements/1.1/";
+pub(crate) const DC: &str = "http://purl.org/dc/elements/1.1/";
 const XMP: &str = "http://ns.adobe.com/xap/1.0/"; // brand-ok: the XMP namespace the files use
-const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
+pub(crate) const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace the files use
 
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).

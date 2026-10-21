@@ -88,6 +88,9 @@ pub enum LiveShape {
         /// Corner kinds, in the same order (Live Corners' corner types).
         #[serde(default, skip_serializing_if = "all_round")]
         kinds: [CornerKind; 4],
+        /// When true, `radii` are fractions in 0..1 of each corner's largest possible radius.
+        #[serde(default, skip_serializing_if = "is_false")]
+        radii_relative: bool,
         /// Maps the untransformed shape (origin at its top-left) into the document. A rotation
         /// or reflection plus a move, unless a shear (or a file saved before transforms folded
         /// their scale into `w`/`h`) put more in it.
@@ -112,6 +115,8 @@ pub enum LiveShape {
         /// Corner kinds, in the same order (none: round).
         #[serde(default, skip_serializing_if = "all_round")]
         kinds: Vec<CornerKind>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        radii_relative: bool,
     },
     Line {
         a: Point,
@@ -129,10 +134,24 @@ pub enum LiveShape {
         /// Corner kinds, in the same order (missing: round).
         #[serde(default, skip_serializing_if = "all_round")]
         kinds: Vec<CornerKind>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        radii_relative: bool,
     },
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 impl LiveShape {
+    pub fn radii_relative(&self) -> bool {
+        match self {
+            LiveShape::Rectangle { radii_relative, .. } | LiveShape::Polygon { radii_relative, .. } | LiveShape::Path { radii_relative, .. } => {
+                *radii_relative
+            }
+            LiveShape::Ellipse { .. } | LiveShape::Line { .. } => false,
+        }
+    }
     pub fn label(&self) -> &'static str {
         match self {
             LiveShape::Rectangle { radii, .. } if radii.iter().any(|r| *r > 0.0) => "Rounded Rectangle",
@@ -146,13 +165,23 @@ impl LiveShape {
     /// Regenerate the path.
     pub fn to_path(&self) -> PathData {
         match self {
-            LiveShape::Rectangle { w, h, radii, kinds, xf } => {
-                shapes::rectangle_with_corners(Rect::new(0.0, 0.0, *w, *h), *radii, *kinds).transformed(*xf)
+            LiveShape::Rectangle { w, h, radii, kinds, radii_relative, xf } => {
+                let base = shapes::rectangle(Rect::new(0.0, 0.0, *w, *h));
+                let resolved = crate::corners::resolve_stored_radii(&base, radii, *radii_relative);
+                let radii = std::array::from_fn(|i| resolved.get(i).copied().unwrap_or(0.0));
+                shapes::rectangle_with_corners(Rect::new(0.0, 0.0, *w, *h), radii, *kinds).transformed(*xf)
             }
             LiveShape::Ellipse { w, h, pie, xf } => shapes::ellipse_pie(Rect::new(0.0, 0.0, *w, *h), pie.0, pie.1).transformed(*xf),
-            LiveShape::Polygon { radii, kinds, .. } => cut_corners(&self.polygon_outline(), radii, kinds).0,
+            LiveShape::Polygon { radii, kinds, radii_relative, .. } => {
+                let outline = self.polygon_outline();
+                let radii = crate::corners::resolve_stored_radii(&outline, radii, *radii_relative);
+                cut_corners(&outline, &radii, kinds).0
+            }
             LiveShape::Line { a, b } => shapes::line(*a, *b),
-            LiveShape::Path { base, radii, kinds } => cut_corners(base, radii, kinds).0,
+            LiveShape::Path { base, radii, kinds, radii_relative } => {
+                let radii = crate::corners::resolve_stored_radii(base, radii, *radii_relative);
+                cut_corners(base, &radii, kinds).0
+            }
         }
     }
     /// A polygon's outline with its corners uncut, in the document (empty for other shapes).
@@ -253,13 +282,13 @@ impl LiveShape {
                 *xf = a * *xf;
                 false
             }
-            LiveShape::Polygon { xf, radii, .. } => {
+            LiveShape::Polygon { xf, radii, radii_relative, .. } => {
                 *xf = a * *xf;
-                scale_radii(radii, a)
+                scale_radii(radii, a, *radii_relative)
             }
-            LiveShape::Path { base, radii, .. } => {
+            LiveShape::Path { base, radii, radii_relative, .. } => {
                 base.transform(a);
-                scale_radii(radii, a)
+                scale_radii(radii, a, *radii_relative)
             }
             LiveShape::Line { a: p, b } => {
                 *p = a * *p;
@@ -274,7 +303,7 @@ impl LiveShape {
     /// isn't finite, and for other shapes. Files saved before transforms did this (#291) carry an
     /// uneven scale in `xf`: their corners are elliptical until this runs.
     pub fn fold_scale(&mut self) -> bool {
-        let LiveShape::Rectangle { w, h, radii, xf, .. } = self else { return false };
+        let LiveShape::Rectangle { w, h, radii, radii_relative, xf, .. } = self else { return false };
         let [m0, m1, m2, m3, m4, m5] = xf.as_coeffs();
         let (sx, sy) = (m0.hypot(m1), m2.hypot(m3));
         let orthogonal = sx > 1e-12 && sy > 1e-12 && (m0 * m2 + m1 * m3).abs() <= 1e-9 * sx * sy;
@@ -284,7 +313,9 @@ impl LiveShape {
             return false;
         }
         let k = (sx * sy).sqrt();
-        radii.iter_mut().for_each(|r| *r *= k);
+        if !*radii_relative {
+            radii.iter_mut().for_each(|r| *r *= k);
+        }
         *w *= sx;
         *h *= sy;
         *xf = Affine::new([m0 / sx, m1 / sx, m2 / sy, m3 / sy, m4, m5]);
@@ -300,12 +331,13 @@ impl LiveShape {
     /// Divide live corner radii by `k`, the mean scale of a transform just applied, so the corners
     /// keep their size (Scale Corners off). False when nothing changed.
     pub fn keep_corners(&mut self, k: f64) -> bool {
+        let relative = self.radii_relative();
         let radii: &mut [f64] = match self {
             LiveShape::Rectangle { radii, .. } => radii,
             LiveShape::Polygon { radii, .. } | LiveShape::Path { radii, .. } => radii,
             LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return false,
         };
-        if !radii.iter().any(|r| *r > 0.0) || k <= 1e-12 {
+        if relative || !radii.iter().any(|r| *r > 0.0) || k <= 1e-12 {
             return false;
         }
         radii.iter_mut().for_each(|r| *r /= k);
@@ -343,8 +375,8 @@ fn moves_only(a: Affine) -> bool {
 /// Scale corner radii in document units by the mean scale of `a`, applied to their path. True
 /// when the path must be cut again: some corner is cut and `a` does more than move it (an
 /// uneven scale would otherwise make the cuts elliptical).
-fn scale_radii(radii: &mut [f64], a: Affine) -> bool {
-    if moves_only(a) || !radii.iter().any(|r| *r > 0.0) {
+fn scale_radii(radii: &mut [f64], a: Affine, relative: bool) -> bool {
+    if relative || moves_only(a) || !radii.iter().any(|r| *r > 0.0) {
         return false;
     }
     let k = a.determinant().abs().sqrt();
@@ -1159,6 +1191,17 @@ impl Node {
     pub fn geometric_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
         self.geometric(Some(symbols))
     }
+    /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
+    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
+    pub fn editing_children(&self) -> &[Arc<Node>] {
+        let children = self.children().map(Vec::as_slice).unwrap_or_default();
+        let trace_source = self.extras().trace.is_some()
+            && !self.trace_view().shows_source()
+            && children.first().is_some_and(|n| !n.visible && matches!(n.kind, NodeKind::Image(_)));
+        let skip = usize::from(self.extras().shaper.is_some() || trace_source);
+        children.get(skip..).unwrap_or_default()
+    }
+
     /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`
     /// is given.
     pub(crate) fn geometric(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
@@ -1168,9 +1211,9 @@ impl Node {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 children.first().and_then(|c| c.geometric(symbols))
             }
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
+            NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. } => self
+                .editing_children()
                 .iter()
-                .skip(usize::from(self.extras().shaper.is_some()))
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
@@ -1223,14 +1266,10 @@ impl Node {
                 }
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))),
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+            NodeKind::Layer { .. } | NodeKind::Group { .. } => {
                 // The container's own strokes paint around its members.
                 let o = self.appearance.outset();
-                children
-                    .iter()
-                    .skip(usize::from(self.extras().shaper.is_some()))
-                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)))
-                    .map(|b| b.inflate(o, o))
+                self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))).map(|b| b.inflate(o, o))
             }
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)));
@@ -2168,14 +2207,28 @@ mod tests {
 
     #[test]
     fn rect_live_shape_roundtrip() {
-        let l = LiveShape::Rectangle { w: 10.0, h: 20.0, radii: [0.0; 4], kinds: Default::default(), xf: Affine::translate((5.0, 5.0)) };
+        let l = LiveShape::Rectangle {
+            w: 10.0,
+            h: 20.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::translate((5.0, 5.0)),
+        };
         assert_eq!(l.to_path().bounds(), Some(Rect::new(5.0, 5.0, 15.0, 25.0)));
         assert_eq!(l.label(), "Rectangle");
     }
 
     #[test]
     fn corner_kinds_save_only_when_some_corner_isnt_round() {
-        let mut l = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0, 10.0, 0.0, 0.0], kinds: Default::default(), xf: Affine::IDENTITY };
+        let mut l = LiveShape::Rectangle {
+            w: 100.0,
+            h: 50.0,
+            radii: [0.0, 10.0, 0.0, 0.0],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: Affine::IDENTITY,
+        };
         // Older files read as round.
         let json = serde_json::to_value(&l).unwrap();
         assert!(json.get("kinds").is_none(), "{json}");
@@ -2189,9 +2242,9 @@ mod tests {
         // Polygons saved before Live Corners cut theirs read as sharp; a live path round-trips.
         let p: LiveShape =
             serde_json::from_value(serde_json::json!({"shape": "polygon", "radius": 10.0, "sides": 5, "xf": [1, 0, 0, 1, 0, 0]})).unwrap();
-        assert_eq!(p, LiveShape::Polygon { radius: 10.0, sides: 5, xf: Affine::IDENTITY, radii: vec![], kinds: vec![] });
+        assert_eq!(p, LiveShape::Polygon { radius: 10.0, sides: 5, xf: Affine::IDENTITY, radii: vec![], kinds: vec![], radii_relative: false });
         let star = shapes::star(Point::new(0.0, 0.0), 20.0, 10.0, 5, 0.0);
-        let path = LiveShape::Path { base: star, radii: vec![2.0; 10], kinds: vec![] };
+        let path = LiveShape::Path { base: star, radii: vec![2.0; 10], kinds: vec![], radii_relative: false };
         let json = serde_json::to_value(&path).unwrap();
         assert_eq!((json["shape"].as_str(), json.get("kinds")), (Some("path"), None));
         assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), path);
@@ -2221,7 +2274,7 @@ mod tests {
         let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
         // A hexagon of radius 10 at (50, 50), drawn 2× and turned 30° clockwise on the page.
         let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale(2.0);
-        let mut p = LiveShape::Polygon { radius: 10.0, sides: 6, xf, radii: vec![], kinds: vec![] };
+        let mut p = LiveShape::Polygon { radius: 10.0, sides: 6, xf, radii: vec![], kinds: vec![], radii_relative: false };
         assert!(close(p.polygon_radius().unwrap(), 20.0) && close(p.polygon_angle().unwrap(), 330.0) && p.polygon_sides_equal());
         p.set_polygon_angle(45.0);
         assert!(close(p.polygon_angle().unwrap(), 45.0));
@@ -2246,7 +2299,7 @@ mod tests {
 
     /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
     fn live_rect(w: f64, h: f64, r: f64, xf: Affine) -> Node {
-        let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), xf };
+        let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), radii_relative: false, xf };
         let mut n = Node::path(NodeId(1), live.to_path(), Appearance::default_art());
         if let NodeKind::Path { live: slot, .. } = &mut n.kind {
             *slot = Some(Box::new(live));

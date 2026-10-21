@@ -1,5 +1,6 @@
 //! Align panel: Align Objects, Distribute Objects and Distribute Spacing (both with the spacing
-//! value when aligning to a key object) and Align To (selection / key object / artboard).
+//! value when aligning to a key object or a key guide) and Align To (selection / key object /
+//! artboard).
 
 use egui::Ui;
 use serde::Serialize;
@@ -51,9 +52,9 @@ pub fn align_params(base: Value, to: AlignTo, n_selected: usize) -> Value {
 }
 
 /// `object.align` params `base` with the `to` that the align buttons of the Align panel, the Control
-/// bar and the Properties panel send: the artboard for a single selected object, else the key object
-/// while there is one, else the Align To choice. Object → Align sends it too while every selected
-/// object is selected whole ([`crate::menus::invoke`]).
+/// bar and the Properties panel send: the key while there is one (a key object, or a key guide:
+/// #2143), else the artboard for a single selected object, else the Align To choice. Object → Align
+/// sends it too while every selected object is selected whole ([`crate::menus::invoke`]).
 pub fn with_align_to(app: &VectorcraftApp, base: Value) -> Value {
     align_params(base, align_to(app), objects_aligned(app))
 }
@@ -87,6 +88,85 @@ pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
     ("dc-dist-hcenter", "Horizontal Distribute Center", "horizontal", "center"),
     ("dc-dist-right", "Horizontal Distribute Right", "horizontal", "right"),
 ];
+
+/// What a button of the Align panel's Align Objects, Distribute Objects and Distribute Spacing
+/// rows runs ([`run_button`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Button {
+    /// An Align Objects button: `object.align {axis: value}`.
+    Align(&'static str, &'static str),
+    /// Horizontal & Vertical Align Center: `object.align {horizontal: "center", vertical: "center"}`.
+    AlignCenters,
+    /// A Distribute Objects button: `object.distribute {axis: value}`.
+    Distribute(&'static str, &'static str),
+    /// A Distribute Spacing button: `object.distributeSpacing {axis}`.
+    Spacing(&'static str),
+}
+
+impl Button {
+    /// The engine command the button runs.
+    pub(crate) fn command(self) -> &'static str {
+        match self {
+            Button::Align(..) | Button::AlignCenters => "object.align",
+            Button::Distribute(..) => "object.distribute",
+            Button::Spacing(_) => "object.distributeSpacing",
+        }
+    }
+}
+
+/// The Align panel's buttons as UI commands ([`crate::menus::UI_COMMANDS`]), in the panel's order:
+/// (command id, button). Edit › Keyboard Shortcuts lists each under Align with its button's label,
+/// with no default shortcut, and a shortcut runs what a click on the button runs.
+pub const COMMANDS: [(&str, Button); 15] = [
+    ("align.horizontalLeft", Button::Align("horizontal", "left")),
+    ("align.horizontalCenter", Button::Align("horizontal", "center")),
+    ("align.horizontalRight", Button::Align("horizontal", "right")),
+    ("align.horizontalVerticalCenter", Button::AlignCenters),
+    ("align.verticalTop", Button::Align("vertical", "top")),
+    ("align.verticalCenter", Button::Align("vertical", "center")),
+    ("align.verticalBottom", Button::Align("vertical", "bottom")),
+    ("align.distributeVerticalTop", Button::Distribute("vertical", "top")),
+    ("align.distributeVerticalCenter", Button::Distribute("vertical", "center")),
+    ("align.distributeVerticalBottom", Button::Distribute("vertical", "bottom")),
+    ("align.distributeHorizontalLeft", Button::Distribute("horizontal", "left")),
+    ("align.distributeHorizontalCenter", Button::Distribute("horizontal", "center")),
+    ("align.distributeHorizontalRight", Button::Distribute("horizontal", "right")),
+    ("align.distributeVerticalSpace", Button::Spacing("vertical")),
+    ("align.distributeHorizontalSpace", Button::Spacing("horizontal")),
+];
+
+/// The button of Align panel command `id` ([`COMMANDS`]), which [`run_button`] runs and which is
+/// enabled while the engine command it runs is. `None`: `id` is not one of them.
+pub(crate) fn button(id: &str) -> Option<Button> {
+    COMMANDS.iter().find(|c| c.0 == id).map(|c| c.1)
+}
+
+/// Runs what a click on button `b` runs. An Align Objects button sends the `to` of
+/// [`with_align_to`]. A Distribute Objects or Distribute Spacing button sends the key while there
+/// is one, else the Align To choice, and the Distribute Spacing value while there is a key.
+pub fn run_button(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> {
+    let to = align_to(app).param();
+    let p = match b {
+        Button::Align(axis, v) => with_align_to(app, json!({axis: v})),
+        Button::AlignCenters => with_align_to(app, json!({"horizontal": "center", "vertical": "center"})),
+        Button::Distribute(axis, v) => {
+            let mut p = json!({axis: v, "to": to});
+            if let Some(g) = spacing_sent(app) {
+                p["spacing"] = json!(g);
+            }
+            p
+        }
+        Button::Spacing(axis) => json!({"axis": axis, "spacing": spacing_sent(app), "to": to}),
+    };
+    app.run(b.command(), p)
+}
+
+/// The Distribute Spacing value ([`crate::UiState::align_spacing`]) while there is a key object
+/// or a key guide (#2143), which the Distribute Objects and Distribute Spacing buttons then send;
+/// else none.
+fn spacing_sent(app: &VectorcraftApp) -> Option<f64> {
+    (align_to(app) == AlignTo::Key).then_some(app.ui.align_spacing)
+}
 
 /// The six align buttons of the Control bar and the Properties panel, `size` points square.
 /// They align to what the Align panel's Align To says (the key object while there is one), as
@@ -123,9 +203,9 @@ fn guide_for_key(app: &VectorcraftApp) -> Option<usize> {
     app.session.active().filter(|st| !st.selection.is_empty()).and_then(|st| st.selection.guides.first().copied())
 }
 
-/// Whether the key is an object, which Distribute Spacing spaces from (not a guide).
-fn has_key_object(app: &VectorcraftApp) -> bool {
-    app.session.active().is_some_and(|st| st.selection.key.is_some())
+/// The number of selected ruler guides, which Distribute spaces with the objects (#1597).
+fn selected_guides(app: &VectorcraftApp) -> usize {
+    app.session.active().map_or(0, |st| st.selection.guides.len())
 }
 
 /// The topmost selected object, the last in paint order.
@@ -133,10 +213,10 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
     app.session.active().and_then(|st| st.selection.in_paint_order(&st.doc).last().copied())
 }
 
-/// What Align aligns to: the key object while there is one (a click on an object of the
-/// selection makes it the key, and Align to Key Object makes the topmost one the key), else the
-/// stored Align To choice, Selection or Artboard. The Distribute Objects and Distribute Spacing
-/// buttons send it as their `to`.
+/// What Align aligns to: the key object or the key guide (#2143) while there is one (a click on
+/// an object of the selection makes it the key, and Align to Key Object makes the topmost one the
+/// key, or a guide selected with a single object), else the stored Align To choice, Selection or
+/// Artboard. The Distribute Objects and Distribute Spacing buttons send it as their `to`.
 fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
@@ -145,12 +225,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
     let to = align_to(app);
     // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
-    // buttons send it while there is a key object.
-    let spacing: f64 = pstate::<Option<f64>>(ui.ctx(), "align-spacing").unwrap_or(0.0);
-    let key = to == AlignTo::Key && has_key_object(app);
-    let sp = if key { Some(spacing) } else { None };
-    // Two or more objects, or anchor points, which may all be on one path.
-    let distributes = n >= 2 || has_anchors(app);
+    // buttons send it while there is a key object or a key guide (#2143).
+    let spacing = app.ui.align_spacing;
+    let key = spacing_sent(app).is_some();
+    // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one path.
+    let distributes = n + selected_guides(app) >= 2 || has_anchors(app);
     widgets::subheader(ui, tl!("Align Objects:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
@@ -158,12 +237,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if i == 3 {
                 ui.add_space(6.0);
                 if widgets::icon_button_enabled(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, n >= 1, 32.0).clicked() {
-                    app.run("object.align", with_align_to(app, json!({"horizontal": "center", "vertical": "center"}))).ok();
+                    run_button(app, Button::AlignCenters).ok();
                 }
                 ui.add_space(6.0);
             }
             if widgets::icon_button_enabled(ui, icon, tl!(tip), false, n >= 1, 32.0).clicked() {
-                app.run("object.align", with_align_to(app, json!({*axis: v}))).ok();
+                run_button(app, Button::Align(axis, v)).ok();
             }
         }
     });
@@ -176,11 +255,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.add_space(6.0);
             }
             if widgets::icon_button_enabled(ui, icon, tl!(tip), false, distributes, 32.0).clicked() {
-                let mut p = json!({*axis: v, "to": to.param()});
-                if let Some(g) = sp {
-                    p["spacing"] = json!(g);
-                }
-                app.run("object.distribute", p).ok();
+                run_button(app, Button::Distribute(axis, v)).ok();
             }
         }
     });
@@ -194,14 +269,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 let on = distributes;
                 if widgets::icon_button_enabled(ui, "dc-dist-vspace", tl!("Vertical Distribute Space"), false, on, 28.0).clicked() {
-                    app.run("object.distributeSpacing", json!({"axis": "vertical", "spacing": sp, "to": to.param()})).ok();
+                    run_button(app, Button::Spacing("vertical")).ok();
                 }
                 if widgets::icon_button_enabled(ui, "dc-dist-hspace", tl!("Horizontal Distribute Space"), false, on, 28.0).clicked() {
-                    app.run("object.distributeSpacing", json!({"axis": "horizontal", "spacing": sp, "to": to.param()})).ok();
+                    run_button(app, Button::Spacing("horizontal")).ok();
                 }
                 ui.add_enabled_ui(key, |ui| {
                     if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), app.session.general_unit(), 70.0, 1.0, 0.0, &[]) {
-                        set_pstate(ui.ctx(), "align-spacing", Some(v));
+                        app.ui.align_spacing = v;
                     }
                 });
             });
@@ -550,6 +625,144 @@ mod tests {
         assert_eq!((x1(&a), x1(&b)), (200.0, 200.0), "both to the artboard's right edge");
     }
 
+    /// The Align panel's buttons, in the panel's order: (command id, label).
+    const BUTTON_ENTRIES: [(&str, &str); 15] = [
+        ("align.horizontalLeft", "Horizontal Align Left"),
+        ("align.horizontalCenter", "Horizontal Align Center"),
+        ("align.horizontalRight", "Horizontal Align Right"),
+        ("align.horizontalVerticalCenter", "Horizontal & Vertical Align Center"),
+        ("align.verticalTop", "Vertical Align Top"),
+        ("align.verticalCenter", "Vertical Align Center"),
+        ("align.verticalBottom", "Vertical Align Bottom"),
+        ("align.distributeVerticalTop", "Vertical Distribute Top"),
+        ("align.distributeVerticalCenter", "Vertical Distribute Center"),
+        ("align.distributeVerticalBottom", "Vertical Distribute Bottom"),
+        ("align.distributeHorizontalLeft", "Horizontal Distribute Left"),
+        ("align.distributeHorizontalCenter", "Horizontal Distribute Center"),
+        ("align.distributeHorizontalRight", "Horizontal Distribute Right"),
+        ("align.distributeVerticalSpace", "Vertical Distribute Space"),
+        ("align.distributeHorizontalSpace", "Horizontal Distribute Space"),
+    ];
+
+    /// The chord the tests below give an Align panel button.
+    const CHORD: &str = "Cmd+Alt+Shift+F2";
+
+    /// One frame pressing [`CHORD`] through the shortcut handler.
+    fn press_chord(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
+        let ev = egui::Event::Key { key: egui::Key::F2, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+
+    /// Edit › Keyboard Shortcuts lists each of the Align panel's Align Objects, Distribute Objects
+    /// and Distribute Spacing buttons under Align, with the button's label and no default shortcut,
+    /// and each can be given one.
+    #[test]
+    fn keyboard_shortcuts_lists_each_align_panel_button() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let panel = {
+            let (mut app, _, _) = back_and_front();
+            tree(|ui| show(&mut app, ui))
+        };
+        let list = app.run("shortcuts.list", json!({})).unwrap();
+        for (id, label) in BUTTON_ENTRIES {
+            assert_eq!(role_and_state(&panel, label), (Role::Button, None), "the panel's {label} button");
+            let e = list.as_array().unwrap().iter().find(|e| e["id"] == id).unwrap_or_else(|| panic!("{id} is not listed"));
+            assert_eq!(
+                (e["label"].as_str(), e["group"].as_str(), &e["default"], &e["shortcut"]),
+                (Some(label), Some("Align"), &Value::Null, &Value::Null),
+                "{id}"
+            );
+            let set = app.run("shortcuts.set", json!({"id": id, "shortcut": CHORD, "force": true})).unwrap();
+            assert_eq!(set["shortcut"], CHORD, "{id}");
+        }
+    }
+
+    /// A shortcut on an Align panel button's entry runs what a click on the button runs: Horizontal
+    /// Align Right aligns to the selection, to the active artboard with Align to Artboard, and to
+    /// the key object while there is one. Horizontal Distribute Left sends the key and the
+    /// Distribute Spacing value, and Horizontal Distribute Space makes the gaps equal.
+    #[test]
+    fn a_shortcut_runs_its_align_panel_button() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let ids: Vec<Value> = [(10, 20), (50, 40), (120, 20)]
+            .into_iter()
+            .map(|(x, w)| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": w, "height": 10})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        let edges = |app: &VectorcraftApp, right: bool| {
+            let st = app.session.active().unwrap();
+            ids.iter()
+                .map(|id| {
+                    let b = st.doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+                    if right { b.x1 } else { b.x0 }
+                })
+                .collect::<Vec<_>>()
+        };
+        let sent = |app: &VectorcraftApp| {
+            let (id, p) = app.session.journal.last().unwrap();
+            (id.clone(), p["to"].clone(), p.get("spacing").cloned())
+        };
+        app.run("shortcuts.set", json!({"id": "align.horizontalRight", "shortcut": CHORD})).unwrap();
+        press_chord(&mut app);
+        assert_eq!(edges(&app, true), [140.0; 3], "Align to Selection: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        app.ui.align_to = AlignTo::Artboard;
+        press_chord(&mut app);
+        assert_eq!(edges(&app, true), [200.0; 3], "Align to Artboard: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("select.key", json!({"id": ids[1]})).unwrap();
+        press_chord(&mut app);
+        assert_eq!(edges(&app, true), [90.0; 3], "the key object's right edge: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        // Distribute Objects with the key object and a Distribute Spacing value of 15 pt.
+        app.run("shortcuts.set", json!({"id": "align.distributeHorizontalLeft", "shortcut": CHORD, "force": true})).unwrap();
+        app.ui.align_spacing = 15.0;
+        press_chord(&mut app);
+        assert_eq!(sent(&app), ("object.distribute".to_string(), json!("key"), Some(json!(15.0))));
+        assert_eq!(edges(&app, false), [35.0, 50.0, 65.0], "15 pt apart: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        // Distribute Spacing with Align to Selection: the outer objects stay, and the gaps are equal.
+        app.run("select.key", json!({})).unwrap();
+        app.ui.align_to = AlignTo::Selection;
+        app.run("shortcuts.set", json!({"id": "align.distributeHorizontalSpace", "shortcut": CHORD, "force": true})).unwrap();
+        press_chord(&mut app);
+        assert_eq!(sent(&app), ("object.distributeSpacing".to_string(), json!("selection"), Some(Value::Null)));
+        assert_eq!(edges(&app, false), [10.0, 55.0, 120.0], "25 pt gaps: {}", app.ui.status);
+    }
+
+    /// A shortcut on an Align panel button's entry is kept in the set Export… writes, and Import…
+    /// of that set gives it back after a reset; it is kept in the saved preferences too.
+    #[test]
+    fn an_align_panel_button_shortcut_is_kept_in_a_saved_set() {
+        let (mut app, back, front) = back_and_front();
+        let written: std::rc::Rc<std::cell::RefCell<Vec<u8>>> = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            *w.borrow_mut() = b.to_vec();
+            Ok(())
+        }));
+        let top = |app: &VectorcraftApp, id: &Value| {
+            app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().y0
+        };
+        app.run("shortcuts.set", json!({"id": "align.verticalTop", "shortcut": CHORD})).unwrap();
+        app.run("shortcuts.export", json!({"path": "/sets/Align.json"})).unwrap();
+        // The preferences save the UI state, and the next launch reads it back.
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let loaded: crate::UiState = serde_json::from_value(saved).unwrap();
+        assert_eq!(serde_json::to_value(&loaded).unwrap()["shortcut_overrides"]["align.verticalTop"], CHORD, "the saved preferences");
+        app.run("shortcuts.reset", json!({})).unwrap();
+        press_chord(&mut app);
+        assert_eq!(top(&app, &front), 50.0, "no shortcut after the reset: {}", app.ui.status);
+        let set: Value = serde_json::from_slice(&written.borrow()).unwrap();
+        app.run("shortcuts.import", json!({"data": set})).unwrap();
+        press_chord(&mut app);
+        assert_eq!((top(&app, &back), top(&app, &front)), (10.0, 10.0), "the imported shortcut: {}", app.ui.status);
+    }
+
     /// One frame of the Align panel → its Horizontal Distribute Left and Horizontal Distribute
     /// Space buttons.
     fn distribute_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> (egui::Rect, egui::Rect) {
@@ -628,9 +841,77 @@ mod tests {
         assert_eq!(sent(&app), ("object.distribute".to_string(), json!("key"), Some(json!(0.0))));
         assert_eq!(lefts(&app), [50.0; 3], "on the key's left edge: {}", app.ui.status);
         app.run("edit.undo", json!({})).unwrap();
-        set_pstate(&ctx, "align-spacing", Some(15.0));
+        app.ui.align_spacing = 15.0;
         click(&ctx, &mut app, left.center(), show);
         assert_eq!(lefts(&app), [35.0, 50.0, 65.0], "15 pt apart: {}", app.ui.status);
+    }
+
+    /// #2143: with a key guide, the Distribute Objects and Distribute Spacing buttons send the
+    /// Distribute Spacing value too, and the objects are spaced from the guide, which stays put.
+    #[test]
+    fn the_distribute_buttons_send_the_spacing_with_a_key_guide() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let ids: Vec<Value> = [(10, 20), (50, 40), (120, 20)]
+            .into_iter()
+            .map(|(x, w)| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": w, "height": 10})).unwrap()["id"].clone())
+            .collect();
+        app.run("guide.add", json!({"vertical": true, "pos": 100})).unwrap();
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        app.run("guide.select", json!({"indexes": [0], "toggle": true})).unwrap();
+        app.run("select.key", json!({"guide": 0})).unwrap();
+        let lefts = |app: &VectorcraftApp| ids.iter().map(|id| left_edge(app, id)).collect::<Vec<_>>();
+        let sent = |app: &VectorcraftApp| {
+            let (id, p) = app.session.journal.last().unwrap();
+            (id.clone(), p["to"].clone(), p.get("spacing").cloned())
+        };
+        let ctx = egui::Context::default();
+        let (left, space) = distribute_buttons(&mut app, &ctx);
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(sent(&app), ("object.distribute".to_string(), json!("key"), Some(json!(0.0))));
+        assert_eq!(lefts(&app), [100.0; 3], "on the guide: {}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        app.ui.align_spacing = 15.0;
+        click(&ctx, &mut app, left.center(), show);
+        assert_eq!(lefts(&app), [70.0, 85.0, 115.0], "15 pt apart, outward from the guide: {}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 100.0, "the guide stays put");
+        // Horizontal Distribute Space with 15: the object before the guide ends 15 pt before it,
+        // the one after it starts 15 pt after it.
+        click(&ctx, &mut app, space.center(), show);
+        assert_eq!(sent(&app), ("object.distributeSpacing".to_string(), json!("key"), Some(json!(15.0))));
+        assert_eq!(lefts(&app), [10.0, 45.0, 115.0], "{}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 100.0, "the guide stays put");
+    }
+
+    /// Three vertical ruler guides selected without objects: the Distribute buttons are on, and
+    /// Horizontal Distribute Center puts the middle guide halfway between the other two, or with
+    /// Align to Artboard spaces them from its left edge to its right edge, as a public forum answer
+    /// describes for equal columns (https://community.adobe.com/questions-652/illustrator-equal-guides-822924).
+    #[test]
+    fn the_distribute_buttons_space_guides_selected_alone() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        for pos in [20, 50, 180] {
+            app.run("guide.add", json!({"vertical": true, "pos": pos})).unwrap();
+        }
+        app.run("guide.select", json!({"indexes": [0, 1, 2]})).unwrap();
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let row = widget_rects(&ctx, egui::vec2(32.0, 32.0));
+        let bottom = row.iter().map(|r| r.top()).fold(f32::MIN, f32::max);
+        let mut row: Vec<egui::Rect> = row.into_iter().filter(|r| r.top() == bottom).collect();
+        row.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        assert_eq!(row.len(), 6, "the Distribute row");
+        // Its fifth button is Horizontal Distribute Center.
+        click(&ctx, &mut app, row[4].center(), show);
+        let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>();
+        assert_eq!(pos(&app), [20.0, 100.0, 180.0], "{}", app.ui.status);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(pos(&app), [20.0, 50.0, 180.0], "one undo step");
+        // With Align to Artboard, the outermost guides go to its edges: equal columns across it.
+        app.ui.align_to = AlignTo::Artboard;
+        click(&ctx, &mut app, row[4].center(), show);
+        assert_eq!(pos(&app), [0.0, 100.0, 200.0], "{}", app.ui.status);
     }
 
     /// Runs the Object → Align item `label` as a click on it does.

@@ -139,6 +139,41 @@ fn distribute_with_a_huge_spacing_from_the_key_object() {
 }
 
 #[test]
+fn distribute_with_a_huge_spacing_from_a_key_guide() {
+    for (vertical, pos) in [(true, 50.0), (true, 10000.0), (false, -10000.0)] {
+        for p in [json!({"horizontal": "left", "spacing": 1e308}), json!({"vertical": "bottom", "spacing": -1e308})] {
+            let mut s = Fixture::Multi.session();
+            s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+            s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+            s.execute("select.key", &json!({"guide": 0})).unwrap();
+            if no_panic(s.execute("object.distribute", &p)).is_ok() {
+                check_session(&s).unwrap_or_else(|e| panic!("guide at {pos}, {p}: {e}"));
+                vectorcraft_testkit::invariants::check_native_roundtrip(&s.doc().unwrap().doc).unwrap_or_else(|e| panic!("guide at {pos}, {p}: {e}"));
+            }
+        }
+    }
+}
+
+#[test]
+fn distribute_guides_selected_alone_with_a_huge_spacing() {
+    for (cmd, p) in [
+        ("object.distributeSpacing", json!({"axis": "horizontal", "spacing": 1e308})),
+        ("object.distributeSpacing", json!({"axis": "vertical", "spacing": -1e308})),
+        ("object.distribute", json!({"horizontal": "center", "to": "artboard", "artboard": 99})),
+    ] {
+        let mut s = Fixture::Empty.session();
+        for (v, pos) in [(true, 10.0), (true, 20.0), (true, 9000.0), (false, -9000.0), (false, 0.0)] {
+            s.execute("guide.add", &json!({"vertical": v, "pos": pos})).unwrap();
+        }
+        s.execute("guide.select", &json!({"indexes": [0, 1, 2, 3, 4]})).unwrap();
+        if no_panic(s.execute(cmd, &p)).is_ok() {
+            check_session(&s).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+            vectorcraft_testkit::invariants::check_native_roundtrip(&s.doc().unwrap().doc).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        }
+    }
+}
+
+#[test]
 fn bug_artboard_huge_props_break_svg() {
     for key in ["x", "y", "width", "height"] {
         let mut s = Fixture::Single.session();
@@ -335,8 +370,13 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "artistic.sponge", "params": {"brushSize": -1e308, "definition": 1e308, "smoothness": null}})),
         ("effect.apply", json!({"effect": "artistic.watercolor", "params": {"brushDetail": "1e999", "shadowIntensity": -1, "texture": 1e308}})),
         ("effect.apply", json!({"effect": "artistic.cutout", "params": {"levels": 1e308, "edgeSimplicity": "NaN", "edgeFidelity": -1e308}})),
+        ("effect.apply", json!({"effect": "artistic.dryBrush", "params": {"brushSize": -1e308, "brushDetail": "NaN", "texture": 1e308}})),
         ("effect.apply", json!({"effect": "artistic.neonGlow", "params": {"glowSize": -1e308, "glowBrightness": "1e999", "color": [1]}})),
         ("effect.apply", json!({"effect": "artistic.posterEdges", "params": {"edgeThickness": 1e308, "edgeIntensity": [], "posterization": -7}})),
+        (
+            "effect.apply",
+            json!({"effect": "artistic.roughPastels", "params": {"strokeLength": 1e308, "strokeDetail": "NaN", "texture": -1e308, "scaling": "bad", "lightDirection": "nope"}}),
+        ),
         ("effect.apply", json!({"effect": "sketch.chrome", "params": {"detail": -1e308, "smoothness": "NaN"}})),
         ("effect.apply", json!({"effect": "sketch.graphicPen", "params": {"strokeLength": -1e308, "lightDarkBalance": "NaN", "strokeDirection": 3}})),
         ("effect.apply", json!({"effect": "sketch.halftonePattern", "params": {"size": -1e308, "contrast": "NaN", "patternType": 3}})),
@@ -395,14 +435,6 @@ fn structured_junk() {
         ("artboard.setProps", json!({"index": 0, "width": 1e300, "height": 1e-300, "scaleArt": true, "strokes": true, "corners": true})),
         ("artboard.setProps", json!({"index": 0, "x": -1e308, "width": 0, "height": 1, "scaleArt": true, "patterns": true})),
         ("artboard.new", json!({"width": 0, "height": -1})),
-        ("artboard.lock", json!({"index": 0})),
-        ("artboard.lock", json!({"index": 99, "mode": "exceptSelected", "locked": false})),
-        ("artboard.lock", json!({"mode": "all"})),
-        ("artboard.lock", json!({"mode": 7, "indices": [u64::MAX, -1, null]})),
-        ("artboard.setColor", json!({"index": 0, "color": "#336699"})),
-        ("artboard.setColor", json!({"indices": [0, 0], "color": null})),
-        ("artboard.setColor", json!({"index": u64::MAX, "color": [1e308, -1e308, 0]})),
-        ("artboard.setColor", json!({"index": 0, "color": {"model": "cmyk", "c": 9, "m": -1, "y": 0, "k": 1e30}})),
         ("artboard.delete", json!({"index": 0})),
         ("artboard.move", json!({"index": 0, "dx": 1e308, "dy": 0, "moveArt": true})),
         ("node.move", json!({"id": 1, "parent": 2, "index": 0})),
@@ -457,12 +489,65 @@ fn structured_junk() {
         ("symbol.options", json!({"name": "Dot", "nineSlice": true, "nineSliceGuides": [1e308, -1e308, 0, 0]})),
         ("symbol.options", json!({"nineSlice": 7, "nineSliceGuides": []})),
         ("symbol.options", json!({"nineSlice": false, "nineSliceGuides": null})),
+        // Shape Builder Gap Detection: the `gap` param and the tool options.
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": 1e308})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80], [120, 90]], "gap": -1e308})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": f64::MAX})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": "NaN"})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": "1e999"})),
+        ("shapeBuilder.merge", json!({"ids": [2, 3], "points": [[100, 80]], "gap": null})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": [1, 2]})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": {"a": 1}, "erase": true})),
+        ("shapeBuilder.merge", json!({"points": [[100, 80]], "gap": 1e-300, "erase": true, "tolerance": 1e308})),
+        ("shapeBuilder.regions", json!({"gap": 1e308})),
+        ("shapeBuilder.regions", json!({"ids": [0, 1, 2, 3], "gap": -1})),
+        ("shapeBuilder.regions", json!({"ids": [2, 3], "gap": "x"})),
+        ("shapeBuilder.regions", json!({"gap": true})),
+        ("shapeBuilder.regions", json!({"gap": 12, "ids": [u64::MAX]})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {
         for (id, p) in &cases {
             if let Some(f) = probe(fx, id, p) {
                 failures.push(f);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// Shape Builder Tool Options (Gap Detection) with junk values: never a panic, and the tool still
+/// answers with options and works on a drag afterwards.
+#[test]
+fn shape_builder_options_junk() {
+    let cases = [
+        json!({"values": {"gapDetection": true, "gapLength": 1e308}}),
+        json!({"values": {"gapDetection": "yes", "gapLength": -1e308}}),
+        json!({"values": {"gapDetection": null, "gapLength": "NaN"}}),
+        json!({"values": {"gapDetection": [true], "gapLength": [1, 2]}}),
+        json!({"values": {"gapDetection": true, "gapLength": "1e999"}}),
+        json!({"values": {"gapLength": {"a": 1}, "bogus": 1}}),
+        json!({"key": "gapLength", "value": f64::MAX}),
+        json!({"key": "gapLength", "value": f64::MIN_POSITIVE}),
+        json!({"key": "gapDetection"}),
+        json!({"key": "gapDetection", "value": 1}),
+        json!({"values": [1, 2]}),
+        json!({"values": "x"}),
+    ];
+    let mut failures = vec![];
+    for fx in Fixture::ALL {
+        for p in &cases {
+            let mut s = fx.session();
+            let r = catch_quiet(|| {
+                let _ = s.select_tool("shapeBuilder", Default::default());
+                let _ = s.set_tool_option_cmd(p);
+                let _ = s.set_tool_option_cmd(&json!({"values": {"gapDetection": true}}));
+                no_panic(s.execute("shapeBuilder.regions", &json!({})))
+            });
+            if let Err(msg) = r {
+                failures.push(format!("PANIC {p} [{fx:?}]: {msg}"));
+            } else if let Err(e) = check_session(&s) {
+                failures.push(format!("{p} [{fx:?}]: {e}"));
             }
         }
     }

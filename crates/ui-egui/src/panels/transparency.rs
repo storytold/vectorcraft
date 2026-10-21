@@ -263,7 +263,7 @@ fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::No
     let tex = match cached {
         Some((k, rev, tex)) if k == key && (rev == st.revision || busy) => Some(tex),
         _ => RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail_with(&st.doc, n, px, bg, &super::layers::thumb_options())).map(|img| {
-            let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+            let color = crate::canvas::color_image(&img);
             let tex = ui.ctx().load_texture(slot, color, egui::TextureOptions::LINEAR);
             ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, st.revision, tex.clone())));
             tex

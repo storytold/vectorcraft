@@ -551,3 +551,63 @@ fn digits_draw_every_digit_in_the_styles_numeral_system() {
     // Default leaves each digit as typed.
     assert_ne!(gids(&lay("3 ٣ ۳", Digits::Default)), gids(&lay("3 ٣ ۳", Digits::Hindi)));
 }
+
+/// Right-to-left type on a path that overflows shows the start of its text, as a line of area
+/// type does, not whatever comes first in visual order.
+#[test]
+fn overflowing_rtl_type_on_a_path_keeps_the_start_of_its_text() {
+    let s = "שלום עולם ".repeat(8);
+    let mut t = TextObject::point(Point::ZERO, &s, CharStyle::default());
+    let line = kurbo::Line::new((0.0, 0.0), (100.0, 0.0)).to_path(0.1);
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&line), start: 0.0, end: None };
+    let l = layout(FontDb::global(), &t);
+    assert!(l.overflow && !l.glyphs.is_empty());
+    let shown: Vec<_> = source_clusters(&l).into_iter().map(|(byte, _)| byte).collect();
+    let last = shown.last().copied().unwrap_or(0);
+    let start: Vec<_> = s.char_indices().map(|(i, _)| i).take_while(|i| *i <= last).collect();
+    assert_eq!(shown, start, "the glyphs shown are the text's start");
+    let x = |byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.origin.x).unwrap();
+    assert!(x(0) > x(last), "the text runs right to left along the path");
+}
+
+/// On a curve with spacing, where a glyph's step depends on where it sits, what fits is measured
+/// where the glyphs are placed: the start of the text shows, and every glyph of it.
+#[test]
+fn overflowing_rtl_type_on_a_spaced_curve_keeps_the_start_of_its_text() {
+    let s = "שלום, עולם! אבג ".repeat(6);
+    // Straight, then tightly curved: glyphs take other steps there.
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((60.0, 0.0));
+    path.extend(kurbo::Arc::new((60.0, 12.0), (12.0, 12.0), -std::f64::consts::FRAC_PI_2, std::f64::consts::PI, 0.0).append_iter(0.1));
+    let mut t = TextObject::point(Point::ZERO, &s, CharStyle::default());
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
+    for spacing in (-12..=12).map(|i| f64::from(i) * 5.0) {
+        t.path_spacing = spacing;
+        let l = layout(FontDb::global(), &t);
+        assert!(l.overflow && !l.glyphs.is_empty());
+        let shown: Vec<_> = source_clusters(&l).into_iter().map(|(byte, _)| byte).collect();
+        let last = shown.last().copied().unwrap_or(0);
+        let start: Vec<_> = s.char_indices().map(|(i, _)| i).take_while(|i| *i <= last).collect();
+        assert_eq!(shown, start, "the glyphs shown are the text's start ({spacing})");
+    }
+}
+
+/// A left-to-right line with right-to-left text in it fits as it is laid out: a period that
+/// hangs past the end bracket (Roman Hanging Punctuation) stays, and nothing overflows.
+#[test]
+fn mixed_type_on_a_path_hangs_its_final_period() {
+    let s = "bא.";
+    let line = kurbo::Line::new((0.0, 0.0), (400.0, 0.0)).to_path(0.1);
+    let mut t = TextObject::point(Point::ZERO, s, CharStyle::default());
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.para.roman_hanging = true;
+    let advances: Vec<f64> = layout(FontDb::global(), &t).glyphs.iter().map(|g| g.advance).collect();
+    assert_eq!(advances.len(), 3);
+    // The end bracket halfway through the period, with path beyond it.
+    let end = advances[0] + advances[1] + advances[2] * 0.5;
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&line), start: 0.0, end: Some(end / 400.0) };
+    let l = layout(FontDb::global(), &t);
+    assert!(l.glyphs.iter().any(|g| g.byte == s.len() - 1), "the period shows");
+    assert!(!l.overflow, "all of it fits");
+}

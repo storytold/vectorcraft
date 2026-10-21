@@ -262,6 +262,7 @@
 	Blur	模糊
 	Bottom	下
 	Bottom in Front	下方置前
+	Bottom-Justified Tab	底对齐制表位
 	Bottom-to-Bottom Leading	基线至基线行距
 	Burasagari	标点悬挂
 	Force	强制
@@ -1001,6 +1002,7 @@
 	Eyedropper Picks Up:	吸管拾取：
 	Eyedropper Tool	吸管工具
 	Eyedropper: click the art to sample the stop's colour	吸管：点击图稿以取样色标的颜色
+	Eyedropper: click the art to sample the key color	吸管：点击图稿以取样主色
 	Feather…	羽化…
 	Feet	英尺
 	Feet & Inches	英尺和英寸
@@ -1029,6 +1031,14 @@
 	Alt key toggles to Smooth Tool	Alt 键切换为平滑工具
 	Keep selected	保持选择状态
 	Merge only with selection	仅与所选对象合并
+	Consider Open Filled Paths as Closed	将有填色的开放路径视为闭合路径
+	Pick Color From:	颜色来源：
+	Artwork	图稿
+	Cursor Swatch Preview	在指针旁预览色板
+	Selection:	选择方式：
+	Freeform	自由
+	Straight Line	直线
+	Highlight:	突出显示：
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
 	Fill Rule	填充规则
@@ -1156,6 +1166,8 @@ file-filter	Templates	模板
 	Large Gaps	大间隙
 	Gap Preview Color:	间隙预览颜色：
 	Close Gaps With Paths	用路径封闭间隙
+	Show Live Paint Gaps	显示实时上色间隙
+	Hide Live Paint Gaps	隐藏实时上色间隙
 	Select Fills	选择填色
 	Select Strokes	选择描边
 	Gaussian Blur…	高斯模糊…
@@ -1261,6 +1273,7 @@ file-filter	Templates	模板
 	Hand-Drawn	手绘
 	Handles	手柄
 	Hard Light	强光
+	Hard Mix	实色混合
 	Harmony Rules:	协调规则：
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -1783,6 +1796,7 @@ file-filter	Templates	模板
 @msg	x and y must be finite	x 和 y 必须是有限值
 @msg	t, dx and dy must be finite	t、dx 和 dy 必须是有限值
 @msg	handle must be in or out	handle 必须是 in 或 out
+	Move Brush	移动画笔
 	Move Swatch	移动色板
 	Move Up	上移
 	Move…	移动…
@@ -1856,6 +1870,14 @@ file-filter	Templates	模板
 	Round Fan	圆扇头
 	Flat Fan	扁扇头
 	New Brush…	新建画笔…
+	New Brush	新建画笔
+	Calligraphic Brush	书法画笔
+	Scatter Brush	散布画笔
+	Art Brush	艺术画笔
+	Bristle Brush	鬃毛画笔
+	Pattern Brush	图案画笔
+	Select art to make a scatter, art or pattern brush.	选择图稿以创建散布画笔、艺术画笔或图案画笔。
+	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
 	New Character Style	新建字符样式
 	New Color Group	新建颜色组
@@ -1884,6 +1906,7 @@ file-filter	Templates	模板
 	New View	新建视图
 	New View…	新建视图…
 	New Window	新建窗口
+	New Without Dialog	无对话框新建
 	New Workspace	新建工作区
 	New Workspace…	新建工作区…
 	New {kind} Style…	新建{kind}样式…
@@ -2467,6 +2490,7 @@ font-script	Japanese	汉字
 	Reorder	重新排序
 	Reorder Appearance Item	重新排序外观项目
 	Repeat	重复
+	Repeat Objects	重复对象
 	Repeat Options	重复选项
 	Repeat Pathfinder	重复路径查找器
 	Repeat Tab	重复制表位
@@ -2474,7 +2498,7 @@ font-script	Japanese	汉字
 	Replace	替换
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
-	Replace Spine	替换路径
+	Replace Spine	替换脊线
 	Replace Symbol	替换符号
 	Replace With Font	替换为字体
 	Replaces the saved preset of that name.	替换同名已存预设。
@@ -2520,7 +2544,7 @@ font-script	Japanese	汉字
 	Reverse Path Direction	反转路径方向
 	Reverse Path Direction Off	关闭反转路径方向
 	Reverse Path Direction On	开启反转路径方向
-	Reverse Spine	反转路径
+	Reverse Spine	反转脊线
 	Revert	恢复
 	Revert to the saved version of “{name}”?	要恢复为“{name}”已存储的版本吗？
 	Replace “{name}”, the file this document was opened from?	要替换“{name}”（打开此文档的源文件）吗？
@@ -2648,6 +2672,7 @@ font-script	Japanese	汉字
 	Scale Cursor Proportional to UI	光标随界面等比缩放
 	Scale Lineweights	缩放线宽
 	Scale Strokes & Effects	缩放描边和效果
+	Scale Text Attributes	缩放文本属性
 	Scale to Fit Artboard	缩放以适合画板
 	Scale Tool	比例缩放工具
 	Scale:	缩放：
@@ -2913,6 +2938,7 @@ font-script	Japanese	汉字
 	Snapping Tolerance	吸附容差
 	Social Square Post 1080×1080	社交方形帖子 1080×1080
 	Soft Light	柔光
+	Soft Mix	柔和混合
 	Solid	实心
 	Sort by Kind	按类型排序
 	Sort by Name	按名称排序
@@ -3152,9 +3178,11 @@ font-script	Japanese	汉字
 	Tools	工具
 	Top	上
 	Top in Front	上方在前
+	Top-Justified Tab	顶对齐制表位
 	Top-to-Top Leading	上缘至上缘行距
 	Top:	上：
 	Total Width:	总宽度：
+	Touch	触控
 	Touch Type Tool	修饰文字工具
 	Trace	描摹
 	Trace the image with the Default preset	使用“默认”预设描摹图像
@@ -3313,6 +3341,7 @@ font-script	Japanese	汉字
 	Lock Variables	锁定变量
 	Unlock Variables	解锁变量
 @msg	variables are locked	变量已锁定
+@msg	variables that aren't text were left out: {kinds}	已省略非文本变量：{kinds}
 	List Variables	列出变量
 	Bind Variable	绑定变量
 	Unbind Variable	解除变量绑定
@@ -3498,7 +3527,8 @@ imageTrace	Outline	轮廓
 	 to sample a color	以取样颜色
 	 across a selected object to set the gradient direction	横跨所选对象以设置渐变方向
 	 to select an artboard  |  	以选择画板  |  
-	 on the canvas to create one	在画布上以创建画板
+	 on the canvas to create one (	在画布上以创建画板 (
+	 selects several, or draws one inside an artboard)	可选择多个，或在画板内创建画板)
 	 a stroke to add a width point  |  	描边可添加宽度点  |  
 	 to change one side  |  	可只更改单侧  |  
 	 to select more points  |  	可选择更多点  |  
@@ -3604,7 +3634,9 @@ imageTrace	Outline	轮廓
 @msg	Show All Hidden Attributes: nothing is hidden	显示所有隐藏属性：没有隐藏任何内容
 @msg	Expand: no brush strokes selected	扩展：未选择画笔描边
 @msg	no brush named `{name}`	没有名为 `{name}` 的画笔
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	鬃毛画笔的名称最多 {max} 个字符：`{name}` 有 {count} 个字符
 @msg	no brush selected	未选择画笔
+@msg	brushes move only within their type	画笔只能在同一类型内移动
 @msg	no symbol instances selected	未选择符号实例
 @msg	select a symbol instance	请选择一个符号实例
 @msg	the art has no bounds	图稿没有边界
@@ -3647,6 +3679,7 @@ imageTrace	Outline	轮廓
 @msg	no saved selection recalled	未调出任何已保存的选区
 @msg	no saved selections	没有已保存的选区
 @msg	no such artboard	没有此画板
+@msg	the artboard is locked	该画板已锁定
 @msg	cannot split an open path at its end point	无法在开放路径的端点处拆分该路径
 @msg	closing needs three anchors	闭合需要三个锚点
 @msg	empty brush stroke	画笔描边为空
@@ -3734,7 +3767,7 @@ imageTrace	Outline	轮廓
 @msg	{path}: not a file	{path}：不是文件
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	无法写入 .{ext} 图像
-@msg	Replace Spine: select a blend and a path	替换混合轴：请选择一个混合对象和一条路径
+@msg	Replace Spine: select a blend and a path	替换脊线：请选择一个混合对象和一条路径
 @msg	nothing to wrap	没有可绕排的内容
 @msg	select a blend	请选择一个混合对象
 @msg	select a gradient mesh	请选择一个渐变网格
@@ -3788,6 +3821,10 @@ imageTrace	Outline	轮廓
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
 @msg	select an Objects on Path group	请选择一个路径上的对象组
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	复合路径、混合对象、封套、重复对象或交织组中的路径无法附加对象
+@msg	a clipping path can't take objects	剪切路径无法附加对象
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	混合对象、封套、重复对象或交织组中的对象无法附加到路径
+@msg	a clipping path can't be attached to a path	剪切路径无法附加到路径
 @msg	select the art to repeat	请选择要重复的图稿
 @msg	the document has no patterns	文档中没有图案
 @msg	no artboard	没有画板
@@ -3879,6 +3916,25 @@ imageTrace	Outline	轮廓
 @msg	a PostScript error ({name} in `{op}`: {at})	PostScript 错误 ({name}，位于 `{op}`：{at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	PostScript 错误 ({name}，位于 `{op}`：{at})，在 {procs} 中
 @msg	a PostScript error ({name})	PostScript 错误 ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	PostScript 错误 ({name}，位于 `{op}`；{meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	PostScript 错误 ({name}，位于 `{op}`；{meaning})，在 {procs} 中
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	PostScript 错误 ({name}，位于 `{op}`：{at}；{meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	PostScript 错误 ({name}，位于 `{op}`：{at}；{meaning})，在 {procs} 中
+@msg	a PostScript error ({name}; {meaning})	PostScript 错误 ({name}；{meaning})
+@msg	the program ends a dictionary it didn't begin	程序要结束一个它没有开始的字典
+@msg	the program opens a file, which the reader can't do	程序要打开文件，而 PostScript 读取器无法打开文件
+@msg	the program restores a saved state that was already restored	程序要恢复一个已经恢复过的保存状态
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	程序读取的数据已损坏或不完整，或者程序要在没有位置的文件中获取位置
+@msg	the program goes past one of the reader's limits	程序超出了 PostScript 读取器的一项限制
+@msg	the path has no point to continue from	路径没有可以接着绘制的点
+@msg	a value is outside the range the operator takes	某个值超出了运算符接受的范围
+@msg	the operator needs more values than the stack holds	运算符需要的值多于栈中的值
+@msg	part of the program isn't valid PostScript text	程序的一部分不是有效的 PostScript 文本
+@msg	a value has the wrong type for the operator	某个值的类型不适用于该运算符
+@msg	the program runs, deletes or renames a file, which the reader can't do	程序要运行、删除或重命名文件，而 PostScript 读取器无法执行这些操作
+@msg	the program asks for a resource that isn't defined	程序请求了未定义的资源
+@msg	a calculation has no result, as in a division by zero	计算没有结果，例如除以零
+@msg	the operator looks for a mark on the stack and finds none	运算符在栈中找不到标记
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	它使用了 `{at}`，VectorCraft 的 PostScript 读取器无法识别
 @msg	the file was read up to an error ({why}): what follows it was left out	文件已读取到出错处 ({why})：其后的内容已略去
 @msg	this file's PostScript couldn't be read ({why}): {what}	无法读取此文件的 PostScript ({why})：{what}
@@ -4218,6 +4274,12 @@ imageTrace	Outline	轮廓
 @msg	before must name a panel	before 必须指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停靠操作包含未知面板或过长的拆分路径
 @msg	group must be true or false	group 必须是 true 或 false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	面板处于浮动状态；请使用 window.panel.float {panel, collapsed} 折叠其面板组
+@msg	panel is not in a dock group	面板不在停放组中
+@msg	only a dock group above or below others collapses, not one beside another	只有位于其他组上方或下方的停放组可以折叠，并排的不行
+@msg	icon must be true or false	icon 必须为 true 或 false
+@msg	icon only docks a panel in the icon column, with no anchor	icon 只会把面板停放到图标栏中，不能带 anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column 将一组面板停放为停放栏，不能带 anchor 或 icon
 @msg	move requires a destination panel	移动需要目标面板
 @msg	move requires an existing destination panel	移动需要现有的目标面板
 @msg	onto must name a floating panel	onto 必须指定浮动面板
@@ -4253,6 +4315,7 @@ imageTrace	Outline	轮廓
 @msg	Measured anchor no longer exists	测量锚点已不存在
 @msg	Measured segment no longer exists	测量线段已不存在
 @msg	Non-finite dimension	尺寸标注不是有限值
+@msg	Scale Text Attributes: selected type has no scale to bake	缩放文本属性：所选文本没有可应用的缩放
 @msg	Scale must be drawing:real, for example 1:10	比例必须为 图纸:实际，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必须介于 1:1000000 和 1000000:1 之间
 @msg	Second measured segment no longer exists	第二条测量线段已不存在
@@ -4513,6 +4576,13 @@ imageTrace	Outline	轮廓
 	Scale Tints	缩放淡色
 	Tints and Shades	淡色和阴影
 	Hue Shift	色相偏移
+	Tips	提示
+	Colorization Tips	着色提示
+	The samples show this brush on a blue stroke.	示例显示此画笔在蓝色描边上的效果。
+	The art keeps its own colors.	图稿保留自己的颜色。
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黑色变为描边颜色，白色保持白色。其他颜色变为描边颜色的淡色，颜色越浅，淡色越浅。
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黑色保持黑色，白色保持白色。其他颜色较暗时变为描边颜色的阴影，较亮时变为描边颜色的淡色。
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	主色变为描边颜色。其他颜色在色轮上移动与主色相同的距离，并保持其饱和度和亮度。
 	Harmony Rules	协调规则
 	Variation	变化
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	将图稿、颜色和文字样式拖到这里，即可在不同文档中复用。库保存在本机，无需账户。
@@ -4571,6 +4641,9 @@ imageTrace	Outline	轮廓
 	Left-to-Right Paragraph Direction	从左到右段落方向
 	Right-to-Left Paragraph Direction	从右到左段落方向
 	Line-end Punctuation Half Width	行尾标点半角
+	Insert Kashidas	插入卡希达
+	Long	长
+	Stylistic	风格化
 	Mojikumi Set	标点挤压集
 	Kinsoku Set	Kinsoku 集
 	Hard	强
@@ -4695,6 +4768,13 @@ axis	Both	两者
 	Channel 4	色版 4
 	Cell Size	单元格大小
 	Fine Dots	细点
+
+	Simple	简单
+	Light Rough	浅色粗糙
+	Dark Rough	深色粗糙
+	Wide Sharp	宽锐
+	Wide Blurry	宽模糊
+	Sparkle	闪光
 	Medium Dots	中等点
 	Grainy Dots	颗粒点
 	Coarse Dots	粗点
@@ -4809,6 +4889,7 @@ effect	Vertical	垂直
 	Activate Panel	激活面板
 	Change Panel Layout	更改面板布局
 	Close Panel	关闭面板
+	Collapse Panel Group	折叠面板组
 	Move Panel	移动面板
 	Group with	组合到
 	Resize panels	调整面板大小
@@ -4877,12 +4958,24 @@ lighting	Light	光源
 	Reset Ruler Origin	重置标尺原点
 	Artistic	艺术效果
 	Film Grain…	胶片颗粒…
+	Colored Pencil…	彩色铅笔…
+	Colored Pencil	彩色铅笔
 	Cutout…	剪纸…
+	Dry Brush…	干画笔…
 	Cutout	剪纸
+	Dry Brush	干画笔
 	Neon Glow…	霓虹灯光…
+	Palette Knife…	调色刀…
 	Neon Glow	霓虹灯光
+	Paint Daubs…	绘画涂抹…
+	Paint Daubs	绘画涂抹
+	Palette Knife	调色刀
 	Poster Edges…	海报边缘…
+	Rough Pastels…	粗糙蜡笔…
 	Poster Edges	海报边缘
+	Rough Pastels	粗糙蜡笔
+	Underpainting…	底纹效果…
+	Underpainting	底纹效果
 	Levels	色阶数
 	Edge Simplicity	边缘简化度
 	Edge Fidelity	边缘逼真度
@@ -4963,6 +5056,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	3D Lighting Preset	3D 光照预设
+	Standard	标准
+	Diffuse	漫射
 # 3D light management.
 	Lights	光源列表
 	Add Light	添加光源
@@ -5000,6 +5096,7 @@ lighting	Light	光源
 	Make Image Dynamic	使图像动态化
 	Import Data Sets…	导入数据集…
 	Export Data Sets…	导出数据集…
+	Load Variable Library…	载入变量库…
 	Make Graph Dynamic	使图表动态化
 	Batch…	批处理…
 	Source Folder:	源文件夹：
@@ -5017,6 +5114,8 @@ lighting	Light	光源
 	Sketch	素描
 	Halftone Pattern…	半调图案…
 	Halftone Pattern	半调图案
+	Torn Edges…	撕边…
+	Torn Edges	撕边
 	Pattern Type	图案类型
 	Dot	网点
 # User Interface › Color Scheme
@@ -5035,6 +5134,7 @@ lighting	Light	光源
 	Watercolor…	水彩…
 	Watercolor	水彩
 	Brush Size	画笔大小
+	Texture Coverage	纹理覆盖
 	Definition	清晰度
 	Brush Detail	画笔细节
 	Shadow Intensity	阴影强度
@@ -5061,24 +5161,14 @@ lighting	Light	光源
 @msg	the image's pixels can't be read	无法读取图像的像素
 	Persistent	持久
 	Library Panel Options	库面板选项
+	Locate Library…	查找库…
 @msg	Persistent libraries not found: {files}	找不到持久库：{files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` 不是库面板 (请参阅 window.swatchLibrary)
 @msg	library panel `{given}` isn't open	库面板 `{given}` 未打开
 @msg	too many library panels were opened in this session	本次会话中打开的库面板过多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	图像为 {_1} × {_2} 像素，某一边超过 {LARGE_TRACE_SIDE}：会进行描摹，但速度较慢。使用保真度较低的预设或图像的较小副本会更快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	图像已按 {_1} × {_2} 像素描摹，由 {_3} × {_4} 缩小而来（最多 {_5} 百万像素）。
-	Lock Artboards	锁定画板
-	Unlock Artboards	解锁画板
-	Artboard Color	画板颜色
-	Lock Selected	锁定所选
-	Lock All Except Selected	锁定除所选以外的全部
-	Lock All	全部锁定
-	Unlock Selected	解锁所选
-	Lock Artboard	锁定画板
-	Unlock Artboard	解锁画板
-	Clear Artboard Color	清除画板颜色
-@msg	artboard {_1} is locked	画板 {_1} 已锁定
-	Include Artboard Fill	包含画板颜色
+	Gap Length:	间隙长度：
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	编辑原稿只能打开图像和文档文件；“{name}” 不是其中之一
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	浏览器中只会打开 http、https 和 mailto 的 URL，不会打开 “{url}”
@@ -5122,3 +5212,9 @@ lighting	Light	光源
 	Plaster	塑料效果
 	Note Paper…	便条纸…
 	Note Paper	便条纸
+	Water Paper…	水彩画纸…
+	Water Paper	水彩画纸
+	Ruby…	注音…
+	Ruby	注音
+	Fresco…	壁画…
+	Fresco	壁画

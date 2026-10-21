@@ -24,7 +24,8 @@
 	 from center  |  	 từ tâm  |  
 	 keeps its proportions)	 giữ nguyên tỷ lệ)
 	 near a selected pin to rotate  |  	 gần ghim đã chọn để xoay  |  
-	 on the canvas to create one	 trên vùng vẽ để tạo một cái
+	 on the canvas to create one (	 trên vùng vẽ để tạo một cái (
+	 selects several, or draws one inside an artboard)	 chọn nhiều cái hoặc tạo cái mới bên trong bảng vẽ)
 	 over paths to roughen their outlines  |  	 qua đường dẫn để làm thô đường bao  |  
 	 over paths, and hold still to keep going  |  	 qua đường dẫn và giữ yên để tiếp tục  |  
 	 right or left to zoom in or out  |  	 sang phải hoặc trái để phóng to hoặc thu nhỏ  |  
@@ -252,6 +253,7 @@
 	Arrange: Bring to Front	Sắp xếp: Đưa lên trên cùng
 	Arrowheads:	Đầu mũi tên:
 	Art	Tác phẩm
+	Art Brush	Cọ bản vẽ
 	Art Brush Options	Tùy chọn cọ bản vẽ
 	Art using a deleted global swatch keeps its colour.	Tác phẩm dùng mẫu màu toàn cục đã xóa vẫn giữ màu của nó.
 	Artboard	Bảng vẽ
@@ -354,6 +356,7 @@
 	Bottom Left	Dưới trái
 	Bottom Right	Dưới phải
 	Bottom to Top	Dưới lên trên
+	Bottom-Justified Tab	Tab căn dưới
 	Bottom-to-Bottom Leading	Giãn dòng đáy đến đáy
 	Bottom:	Dưới:
 	Bounds	Giới hạn
@@ -374,6 +377,7 @@
 	Bring Forward	Đưa lên trước
 	Bring to Front	Đưa lên trên cùng
 	Bristle	Lông cứng
+	Bristle Brush	Cọ lông
 	Bristle Brush Options	Tùy chọn cọ lông
 	Bristle Brush Strokes	Nét cọ lông cứng
 	Bristle Density:	Mật độ lông cọ:
@@ -381,6 +385,7 @@
 	Bristle Thickness:	Độ dày lông cọ:
 	Browser	Trình duyệt
 	Brush Affects:	Cọ tác động:
+	Brush Art	Đối tượng của cọ
 	Brush Definition	Định nghĩa cọ
 	Brush Libraries	Thư viện cọ
 	Brush Libraries (on the roadmap)	Thư viện cọ (trong lộ trình)
@@ -399,6 +404,7 @@
 	Butt Cap	Đầu nét vuông
 	Byte Order:	Thứ tự byte:
 	Calligraphic	Thư pháp
+	Calligraphic Brush	Cọ thư pháp
 	Calligraphic Brush Options	Tùy chọn cọ thư pháp
 	Can't open “{name}”.	Không thể mở “{name}”.
 	Can't save “{name}”.	Không thể lưu “{name}”.
@@ -548,6 +554,7 @@
 	Close All	Đóng tất cả
 	Close Library	Đóng thư viện
 	Close Panel	Đóng bảng
+	Collapse Panel Group	Thu gọn nhóm bảng
 	Close Path	Đóng đường dẫn
 	Close paths when ends are within:	Đóng đường dẫn khi hai đầu cách nhau trong:
 	Clumped	Dạng cụm
@@ -1214,6 +1221,7 @@
 	Eyedropper Picks Up:	Ống hút màu lấy mẫu:
 	Eyedropper Tool	Công cụ Ống hút màu
 	Eyedropper: click the art to sample the stop's colour	Ống hút màu: bấm vào tác phẩm để lấy mẫu màu điểm dừng
+	Eyedropper: click the art to sample the key color	Ống hút màu: bấm vào tác phẩm để lấy mẫu màu chủ
 	Farsi	Farsi
 	Favorites	Yêu thích
 	Feather…	Làm mờ dần…
@@ -1246,6 +1254,14 @@
 	Alt key toggles to Smooth Tool	Phím Alt chuyển sang công cụ Làm mượt
 	Keep selected	Giữ trạng thái đã chọn
 	Merge only with selection	Chỉ hợp nhất với vùng chọn
+	Consider Open Filled Paths as Closed	Coi đường dẫn mở có tô là đường dẫn đóng
+	Pick Color From:	Lấy màu từ:
+	Artwork	Tác phẩm
+	Cursor Swatch Preview	Xem trước mẫu màu cạnh con trỏ
+	Selection:	Cách chọn:
+	Freeform	Tự do
+	Straight Line	Đường thẳng
+	Highlight:	Làm nổi bật:
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
 	Fill Rule	Quy tắc tô
 	Fill with Placeholder Text	Tô bằng văn bản giữ chỗ
@@ -1253,12 +1269,24 @@
 	Fill: click for swatches, Shift-click for the color mixer	Tô: bấm để xem mẫu màu, Shift-bấm để trộn màu
 	Fills	Vùng tô
 	Film Grain…	Hạt phim…
+	Colored Pencil…	Bút chì màu…
+	Colored Pencil	Bút chì màu
 	Cutout…	Cắt dán…
 	Cutout	Cắt dán
+	Dry Brush…	Cọ khô…
+	Dry Brush	Cọ khô
 	Neon Glow…	Ánh neon…
+	Palette Knife…	Dao palette…
 	Neon Glow	Ánh neon
+	Paint Daubs…	Vệt sơn…
+	Paint Daubs	Vệt sơn
+	Palette Knife	Dao palette
 	Poster Edges…	Viền áp phích…
+	Rough Pastels…	Pastel thô…
 	Poster Edges	Viền áp phích
+	Rough Pastels	Pastel thô
+	Underpainting…	Lớp sơn nền…
+	Underpainting	Lớp sơn nền
 	Levels	Số mức
 	Edge Simplicity	Độ đơn giản của cạnh
 	Edge Fidelity	Độ trung thực của cạnh
@@ -1280,6 +1308,13 @@
 	Find Next	Tìm tiếp
 	Find Objects	Tìm đối tượng
 	Fine Dots	Chấm mịn
+
+	Simple	Đơn giản
+	Light Rough	Thô sáng
+	Dark Rough	Thô tối
+	Wide Sharp	Rộng sắc
+	Wide Blurry	Rộng mờ
+	Sparkle	Lấp lánh
 	First	Đầu tiên
 	First commit	Commit đầu tiên
 	First Page	Trang đầu
@@ -1395,6 +1430,8 @@ file-filter	Templates	Mẫu
 	Large Gaps	Khoảng cách lớn
 	Gap Preview Color:	Màu xem trước khoảng cách:
 	Close Gaps With Paths	Đóng khoảng cách bằng đường dẫn
+	Show Live Paint Gaps	Hiện khoảng cách tô trực tiếp
+	Hide Live Paint Gaps	Ẩn khoảng cách tô trực tiếp
 	Select Fills	Chọn vùng tô
 	Select Strokes	Chọn nét
 	Gaussian Blur	Mờ Gaussian
@@ -1507,6 +1544,7 @@ file-filter	Templates	Mẫu
 	Handles	Tay nắm
 	Hard	Cứng
 	Hard Light	Ánh sáng mạnh
+	Hard Mix	Trộn cứng
 	Harmony Rules:	Quy tắc hài hòa màu:
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
@@ -2124,6 +2162,9 @@ file-filter	Templates	Mẫu
 	Modified:	Đã sửa đổi:
 	Modify	Sửa đổi
 	Mojikumi	Mojikumi
+	Insert Kashidas	Chèn kashida
+	Long	Dài
+	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
 	Monitor RGB	RGB màn hình
 	Mono	Đơn sắc
@@ -2161,6 +2202,7 @@ file-filter	Templates	Mẫu
 	Move Rows	Di chuyển hàng
 	Move Slices	Di chuyển lát cắt
 	Move Spine Point	Di chuyển điểm trục
+	Move Brush	Di chuyển cọ
 	Move Swatch	Di chuyển mẫu màu
 	Move to Group	Di chuyển vào nhóm
 	Move Up	Di chuyển lên
@@ -2186,6 +2228,7 @@ file-filter	Templates	Mẫu
 	New Art Has Basic Appearance	Bản vẽ mới có diện mạo cơ bản
 	New Artboard	Bảng vẽ mới
 	New Bristle Brush	Cọ lông mới
+	New Brush	Cọ mới
 	New Brush…	Cọ mới…
 	New Calligraphic Brush	Cọ thư pháp mới
 	New Character Style	Kiểu ký tự mới
@@ -2226,6 +2269,7 @@ file-filter	Templates	Mẫu
 	New View	Chế độ xem mới
 	New View…	Chế độ xem mới…
 	New Window	Cửa sổ mới
+	New Without Dialog	Mới không qua hộp thoại
 	New Workspace	Không gian làm việc mới
 	New Workspace…	Không gian làm việc mới…
 	New {kind} Style…	Kiểu {kind} mới…
@@ -2515,6 +2559,7 @@ file-filter	Templates	Mẫu
 	Path Length	Độ dài đường dẫn
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
+	Pattern Brush	Cọ họa tiết
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết
@@ -2844,6 +2889,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reorder	Sắp xếp lại
 	Reorder Appearance Item	Sắp xếp lại mục diện mạo
 	Repeat	Lặp lại
+	Repeat Objects	Đối tượng lặp lại
 	Repeat Options	Tùy chọn lặp lại
 	Repeat Pathfinder	Lặp lại Pathfinder
 	Repeat Tab	Tab lặp lại
@@ -3092,6 +3138,7 @@ mark-style	Japanese	Kiểu Nhật
 	Scale Lineweights	Tỷ lệ độ dày nét
 	Scale Proportionately	Phóng to/thu nhỏ đều
 	Scale Strokes & Effects	Tỷ lệ nét & hiệu ứng
+	Scale Text Attributes	Tỷ lệ thuộc tính văn bản
 	Scale to Fit Artboard	Tỷ lệ vừa bảng vẽ
 	Scale Tool	Công cụ Tỷ lệ
 	Scale:	Tỷ lệ:
@@ -3101,6 +3148,7 @@ mark-style	Japanese	Kiểu Nhật
 	Scallop Tool	Công cụ Vỏ sò
 	Scans:	Lần quét:
 	Scatter	Phân tán
+	Scatter Brush	Cọ phân tán
 	Scatter Brush Options	Tùy chọn cọ phân tán
 	Scatter Graph Tool	Công cụ Biểu đồ phân tán
 	Scatter:	Phân tán:
@@ -3156,6 +3204,7 @@ mark-style	Japanese	Kiểu Nhật
 	Select art and choose Object › Pattern › Make.	Chọn đối tượng và chọn Đối tượng › Họa tiết › Tạo.
 	Select art and click New Symbol to make one.	Chọn đối tượng và bấm Ký hiệu mới để tạo.
 	Select art and use New Brush to make one.	Chọn đối tượng và dùng Cọ mới để tạo.
+	Select art to make a scatter, art or pattern brush.	Chọn đối tượng để tạo cọ phân tán, cọ bản vẽ hoặc cọ họa tiết.
 	Select Bound Object	Chọn đối tượng gắn
 	Select Data Set	Chọn tập dữ liệu
 	Select Freeform Point	Chọn điểm tự do
@@ -3384,6 +3433,7 @@ mark-style	Japanese	Kiểu Nhật
 	Social Square Post 1080×1080	Bài đăng vuông mạng xã hội 1080×1080
 	Soft	Mềm
 	Soft Light	Ánh sáng mềm
+	Soft Mix	Trộn mềm
 	Solid	Đặc
 	Sort	Sắp xếp
 	Sort by Kind	Sắp xếp theo loại
@@ -3617,6 +3667,13 @@ mark-style	Japanese	Kiểu Nhật
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
+	Tips	Mẹo
+	Colorization Tips	Mẹo tô màu
+	The samples show this brush on a blue stroke.	Các mẫu hiển thị cọ này trên một nét màu xanh lam.
+	The art keeps its own colors.	Hình vẽ giữ nguyên màu của nó.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Màu đen trở thành màu nét và màu trắng vẫn là màu trắng. Các màu khác trở thành sắc pha của màu nét, và màu càng sáng thì sắc pha càng sáng.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Màu đen vẫn là màu đen và màu trắng vẫn là màu trắng. Các màu khác trở thành bóng của màu nét khi chúng tối và sắc pha của màu nét khi chúng sáng.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Màu chủ trở thành màu nét. Các màu khác dịch chuyển trên bánh xe màu một khoảng bằng màu chủ và giữ nguyên độ bão hòa và độ sáng.
 	Tiny Lens	Thấu kính nhỏ
 	Tip extends past the end point	Đầu mũi tên vượt qua điểm cuối
 	Tip on the end point	Đầu mũi tên tại điểm cuối
@@ -3641,6 +3698,7 @@ mark-style	Japanese	Kiểu Nhật
 	Top Left	Trên trái
 	Top Right	Trên phải
 	Top to Bottom	Trên xuống dưới
+	Top-Justified Tab	Tab căn trên
 	Top-to-Top Leading	Giãn dòng đỉnh đến đỉnh
 	Top:	Trên:
 	Total Width:	Tổng chiều rộng:
@@ -4034,6 +4092,25 @@ theme	Appearance	Giao diện
 @msg	a PostScript error ({name} in `{op}`: {at})	lỗi PostScript ({name} trong `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	lỗi PostScript ({name} trong `{op}`: {at}), trong {procs}
 @msg	a PostScript error ({name})	lỗi PostScript ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	lỗi PostScript ({name} trong `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	lỗi PostScript ({name} trong `{op}`; {meaning}), trong {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	lỗi PostScript ({name} trong `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	lỗi PostScript ({name} trong `{op}`: {at}; {meaning}), trong {procs}
+@msg	a PostScript error ({name}; {meaning})	lỗi PostScript ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	chương trình kết thúc một từ điển mà nó chưa bắt đầu
+@msg	the program opens a file, which the reader can't do	chương trình mở một tệp, việc mà trình đọc PostScript không làm được
+@msg	the program restores a saved state that was already restored	chương trình khôi phục một trạng thái đã lưu vốn đã được khôi phục
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	dữ liệu chương trình đọc bị hỏng hoặc bị cắt cụt, hoặc chương trình yêu cầu vị trí trong một tệp không có vị trí
+@msg	the program goes past one of the reader's limits	chương trình vượt quá một giới hạn của trình đọc PostScript
+@msg	the path has no point to continue from	đường dẫn không có điểm để tiếp tục
+@msg	a value is outside the range the operator takes	một giá trị nằm ngoài phạm vi mà toán tử chấp nhận
+@msg	the operator needs more values than the stack holds	toán tử cần nhiều giá trị hơn số có trong ngăn xếp
+@msg	part of the program isn't valid PostScript text	một phần chương trình không phải là văn bản PostScript hợp lệ
+@msg	a value has the wrong type for the operator	một giá trị có kiểu không phù hợp với toán tử
+@msg	the program runs, deletes or renames a file, which the reader can't do	chương trình chạy, xóa hoặc đổi tên một tệp, việc mà trình đọc PostScript không làm được
+@msg	the program asks for a resource that isn't defined	chương trình yêu cầu một tài nguyên chưa được định nghĩa
+@msg	a calculation has no result, as in a division by zero	một phép tính không có kết quả, như khi chia cho không
+@msg	the operator looks for a mark on the stack and finds none	toán tử tìm một dấu mốc trên ngăn xếp nhưng không thấy
 @msg	a preset named `{_1}` exists	đã có thiết lập sẵn tên `{_1}`
 @msg	a swatch or color group named `{n}` exists	đã có mẫu màu hoặc nhóm màu tên `{n}`
 @msg	a slice size must be a positive number of points	kích thước lát cắt phải là số điểm dương
@@ -4165,6 +4242,12 @@ theme	Appearance	Giao diện
 @msg	give the path `id` and the width point `index`	hãy cung cấp `id` đường dẫn và `index` điểm chiều rộng
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	chuyển sắc “{name}” không được định nghĩa trong tệp: một màu đơn thay thế
 @msg	group must be true or false	group phải là true hoặc false
+@msg	icon must be true or false	icon phải là true hoặc false
+@msg	icon only docks a panel in the icon column, with no anchor	icon chỉ neo bảng vào cột biểu tượng, không có anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column neo một bộ thành cột neo, không có anchor hay icon
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	bảng đang nổi; hãy thu gọn nhóm của nó bằng window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	bảng không thuộc nhóm nào của dock
+@msg	only a dock group above or below others collapses, not one beside another	chỉ thu gọn được nhóm dock nằm trên hoặc dưới các nhóm khác, không phải nhóm nằm cạnh
 @msg	guides are locked	đường căn bị khóa
 @msg	handle must be in or out	handle phải là in hoặc out
 @msg	image '{key}' has no pixels and was left out	ảnh '{key}' không có pixel và bị bỏ qua
@@ -4253,7 +4336,9 @@ theme	Appearance	Giao diện
 @msg	no blend options	không có tùy chọn hòa trộn
 @msg	no bounds	không có giới hạn
 @msg	no brush named `{name}`	không có cọ tên `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	tên cọ lông có tối đa {max} ký tự: `{name}` có {count} ký tự
 @msg	no brush selected	chưa chọn cọ
+@msg	brushes move only within their type	chỉ có thể di chuyển cọ trong cùng loại của nó
 @msg	no catalog	không có danh mục
 @msg	no changes since the last save	không có thay đổi nào kể từ lần lưu cuối
 @msg	no clock to keep a heartbeat by	không có đồng hồ để duy trì nhịp tim
@@ -4316,6 +4401,7 @@ theme	Appearance	Giao diện
 @msg	no such action	không có hành động như vậy
 @msg	no such anchor	không có điểm neo như vậy
 @msg	no such artboard	không có bảng vẽ như vậy
+@msg	the artboard is locked	bảng vẽ bị khóa
 @msg	no such document	không có tài liệu như vậy
 @msg	no such layer or object	không có lớp hoặc đối tượng như vậy
 @msg	no such object {0}	không có đối tượng như vậy: {0}
@@ -4454,6 +4540,10 @@ theme	Appearance	Giao diện
 @msg	select a repeat	hãy chọn một đối tượng lặp
 @msg	select an Intertwine group	hãy chọn một nhóm đan xen
 @msg	select an Objects on Path group	hãy chọn một nhóm đối tượng trên đường dẫn
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	không thể gắn đối tượng lên một đường dẫn nằm trong đường dẫn phức, đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen
+@msg	a clipping path can't take objects	không thể gắn đối tượng lên đường dẫn cắt
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	không thể gắn các đối tượng nằm trong đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen lên đường dẫn
+@msg	a clipping path can't be attached to a path	không thể gắn đường dẫn cắt lên đường dẫn
 @msg	select a stroke with a variable width	hãy chọn nét có chiều rộng biến đổi
 @msg	select a symbol instance	hãy chọn đối tượng ký hiệu
 @msg	select an envelope	hãy chọn một Envelope
@@ -4617,6 +4707,7 @@ theme	Appearance	Giao diện
 @msg	Updated {_1} image(s)	Đã cập nhật {_1} ảnh
 @msg	Updated {_1} linked file(s) changed on disk	Đã cập nhật {_1} tệp liên kết đã thay đổi trên đĩa
 @msg	variables are locked	biến số bị khóa
+@msg	variables that aren't text were left out: {kinds}	các biến số không phải văn bản đã bị bỏ qua: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft không tìm kiếm trong thư mục của ứng dụng khác hoặc hệ thống: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft không tìm kiếm thư mục Shared hoặc Public trong Users: {path}
 @msg	VectorCraft failed to start: {e}	VectorCraft khởi động thất bại: {e}
@@ -4692,6 +4783,9 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	3D Lighting Preset	Thiết lập sẵn ánh sáng 3D
+	Standard	Tiêu chuẩn
+	Diffuse	Khuếch tán
 # 3D light management.
 	Lights	Danh sách đèn
 	Add Light	Thêm đèn
@@ -4736,6 +4830,7 @@ theme	Appearance	Giao diện
 @msg	Measured anchor no longer exists	Điểm neo được đo không còn tồn tại
 @msg	Measured segment no longer exists	Đoạn được đo không còn tồn tại
 @msg	Non-finite dimension	Kích thước không phải là số hữu hạn
+@msg	Scale Text Attributes: selected type has no scale to bake	Tỷ lệ thuộc tính văn bản: văn bản được chọn không có tỷ lệ để áp dụng
 @msg	Scale must be drawing:real, for example 1:10	Tỷ lệ phải có dạng bản vẽ:thực tế, ví dụ 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Tỷ lệ phải nằm trong khoảng 1:1000000 đến 1000000:1
 @msg	Second measured segment no longer exists	Đoạn được đo thứ hai không còn tồn tại
@@ -4754,6 +4849,7 @@ theme	Appearance	Giao diện
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
 	Export Data Sets…	Xuất tập dữ liệu…
+	Load Variable Library…	Tải thư viện biến số…
 	Make Graph Dynamic	Tạo biểu đồ động
 	Batch…	Hàng loạt…
 	Source Folder:	Thư mục nguồn:
@@ -4777,6 +4873,8 @@ theme	Appearance	Giao diện
 	Sketch	Phác thảo
 	Halftone Pattern…	Mẫu bán sắc…
 	Halftone Pattern	Mẫu bán sắc
+	Torn Edges…	Cạnh rách…
+	Torn Edges	Cạnh rách
 	Pattern Type	Loại mẫu
 	Dot	Chấm
 # User Interface › Color Scheme
@@ -4795,6 +4893,7 @@ theme	Appearance	Giao diện
 	Watercolor…	Màu nước…
 	Watercolor	Màu nước
 	Brush Size	Kích thước cọ
+	Texture Coverage	Độ phủ kết cấu
 	Definition	Độ nét
 	Brush Detail	Chi tiết cọ
 	Shadow Intensity	Cường độ bóng
@@ -4823,24 +4922,14 @@ theme	Appearance	Giao diện
 @msg	the image's pixels can't be read	không đọc được các điểm ảnh của ảnh
 	Persistent	Lưu giữ
 	Library Panel Options	Tùy chọn bảng thư viện
+	Locate Library…	Xác định vị trí thư viện…
 @msg	Persistent libraries not found: {files}	Không tìm thấy thư viện lưu giữ: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` không phải là bảng thư viện (xem window.swatchLibrary)
 @msg	library panel `{given}` isn't open	bảng thư viện `{given}` chưa được mở
 @msg	too many library panels were opened in this session	đã mở quá nhiều bảng thư viện trong phiên này
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Ảnh có kích thước {_1} × {_2} điểm ảnh, hơn {LARGE_TRACE_SIDE} ở một cạnh: ảnh vẫn được dò, nhưng chậm hơn. Một thiết lập sẵn có độ trung thực thấp hơn hoặc một bản sao nhỏ hơn của ảnh sẽ dò nhanh hơn.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Ảnh đã được dò ở {_1} × {_2} điểm ảnh, thu nhỏ từ {_3} × {_4} (tối đa {_5} megapixel).
-	Lock Artboards	Khóa các bảng vẽ
-	Unlock Artboards	Mở khóa các bảng vẽ
-	Artboard Color	Màu bảng vẽ
-	Lock Selected	Khóa mục đã chọn
-	Lock All Except Selected	Khóa tất cả trừ mục đã chọn
-	Lock All	Khóa tất cả
-	Unlock Selected	Mở khóa mục đã chọn
-	Lock Artboard	Khóa bảng vẽ
-	Unlock Artboard	Mở khóa bảng vẽ
-	Clear Artboard Color	Xóa màu bảng vẽ
-@msg	artboard {_1} is locked	bảng vẽ {_1} đã bị khóa
-	Include Artboard Fill	Bao gồm màu bảng vẽ
+	Gap Length:	Độ dài khoảng hở:
 	Artboard {n} of {total}	Bảng vẽ {n} / {total}
 	Encoding and writing the file…	Đang mã hóa và ghi tệp…
 @plural	{n} more export waiting|{n} more exports waiting	Còn {n} lượt xuất đang chờ
@@ -4879,3 +4968,9 @@ theme	Appearance	Giao diện
 	Plaster	Thạch cao
 	Note Paper…	Giấy ghi chú…
 	Note Paper	Giấy ghi chú
+	Water Paper…	Giấy ướt…
+	Water Paper	Giấy ướt
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Bích họa…
+	Fresco	Bích họa

@@ -300,3 +300,24 @@ fn imported_type_with_sizes_outside_the_panels_range_opens_unchanged() {
     s.execute("document.open", &json!({"name": "sizes.vectorcraft", "dataBase64": saved})).unwrap();
     assert_eq!(texts(&s), imported);
 }
+
+#[test]
+fn scale_text_attributes_bakes_group_scale_and_undoes() {
+    let mut s = session();
+    let id = create(&mut s, 12.0);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200})).unwrap();
+    near(em(&text(&s, id), 0).1, 24.0);
+    assert_eq!(text(&s, id).runs[0].style.size, 12.0);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(em(&text(&s, id), 0).1, 24.0);
+    near(text(&s, id).runs[0].style.size, 24.0);
+    assert!(text(&s, id).style_scale().is_none_or(|sc| (sc.points - 1.0).abs() <= 1e-9 && (sc.horizontal - 1.0).abs() <= 1e-9));
+    s.execute("text.setStyle", &json!({"size": 10})).unwrap();
+    near(em(&text(&s, id), 0).1, 10.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    near(em(&text(&s, id), 0).1, 24.0);
+    near(text(&s, id).runs[0].style.size, 24.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.size, 12.0);
+}

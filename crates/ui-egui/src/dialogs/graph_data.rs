@@ -327,7 +327,7 @@ fn revert(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
 
 /// Import Data: a tab-separated text file's rows into the sheet.
 fn import(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let pick = crate::FilePick { filters: vec![("Text", &["txt", "tsv", "csv"])], ..Default::default() };
+    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt", "tsv", "csv"])], ..Default::default() };
     let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
     // The button is off where files can't be read.
     let Some(read) = app.services.read.as_ref() else { return Ok(()) };

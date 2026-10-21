@@ -429,3 +429,47 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     assert_eq!(smasks, [None]);
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
 }
+
+/// #2950: Press Quality converts to the document's profile with its numbers kept, so in a CMYK
+/// document an RGB image comes out CMYK, as the press needs; with no conversion (the default
+/// preset) it stays RGB, as before.
+#[test]
+fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
+    let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
+    let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    let d = image_doc(blob, 4, 4);
+    let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
+    assert_eq!(press.output.conversion, ColorConversion::PreserveNumbers);
+    let options = PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() };
+    let w = written(&export_with_report(&d, &options).unwrap().bytes);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!((w[0].space.as_str(), w[0].icc_n), ("DeviceCMYK", None), "Press Quality");
+    let w = written(&export_with_report(&d, &opts(json!({}))).unwrap().bytes);
+    assert_eq!(w[0].space, "DeviceRGB", "no conversion");
+}
+
+/// #3012 review: in an RGB document Press Quality converts to Document CMYK too, the CMYK
+/// profile in effect: a CMYK image keeps its inks (not converted to RGB), and an RGB image comes
+/// out CMYK.
+#[test]
+fn press_quality_writes_cmyk_in_an_rgb_document_too() {
+    let press = || PdfOptions { settings: builtin_preset("Press Quality").unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
+    assert_eq!(press().settings.output.destination, DOCUMENT_CMYK);
+    let ink = [0u8, 102, 255, 0];
+    let tiff = ImageBlob::cmyk_tiff(&Inks::new(4, 4, flat(ink, 16)).unwrap()).unwrap();
+    let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
+    let png_blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    for (what, blob) in [("CMYK image", tiff), ("RGB image", png_blob)] {
+        let mut d = image_doc(blob, 4, 4);
+        d.color_mode = ColorMode::Rgb;
+        let out = export_with_report(&d, &press()).unwrap();
+        let w = written(&out.bytes);
+        assert_eq!(w.len(), 1, "{what}: {w:?}");
+        assert_eq!(w[0].space, "DeviceCMYK", "{what} in an RGB document");
+        // Preserve Numbers: the CMYK image comes back with the inks it had.
+        if what == "CMYK image" {
+            let back = import(&out.bytes).unwrap();
+            assert_eq!(all_images(&back)[0].cmyk().unwrap().data, flat(ink, 16), "{what} inks");
+        }
+    }
+}

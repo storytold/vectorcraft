@@ -438,3 +438,63 @@ fn light_list_stops_at_ten_and_cancel_restores_the_source() {
     dialogs::cancel(&mut h.app);
     assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
+
+#[test]
+fn lighting_presets_preview_custom_edits_reset_and_commit_as_one_undo_step() {
+    for effect in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
+        let before = h.app.session.doc().unwrap().doc.clone();
+        h.settle();
+        h.click(h.rect("Lighting").center());
+        let view = h.app.ui.dialog.as_ref().unwrap().fields["rotationX"].clone();
+        h.click(h.rect("Standard").center());
+        h.click(h.rect("Right").center());
+        assert_eq!(h.value("lightRotation"), 0.0);
+        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["rotationX"], view);
+        h.drag(h.rect("Height").center(), vec2(20.0, 0.0));
+        assert!(!h.rect("Custom").is_negative());
+        h.click(h.rect("Custom").center());
+        h.click(h.rect("Diffuse").center());
+        assert_eq!(h.value("lightSoftness"), 100.0);
+        assert_eq!(h.value("ambient"), 35.0);
+        h.click(h.rect("Add Light").center());
+        assert!(!h.rect("Custom").is_negative());
+        h.click(h.rect("Custom").center());
+        h.click(h.rect("Top Left").center());
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert!(d.fields["lights"].is_null());
+        assert_eq!(d.fields["__light"], 0);
+        assert_eq!(d.f64("lightRotation", 0.0), 135.0);
+        h.click(h.response("revolve-reset-all").center());
+        assert!(!h.rect("Standard").is_negative());
+        h.click(h.rect("Standard").center());
+        h.click(h.rect("Right").center());
+        dialogs::confirm(&mut h.app).unwrap();
+        h.app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(h.app.session.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
+fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
+    let mut h = Harness::new(vec2(1280.0, 900.0));
+    h.settle();
+    dialogs::confirm(&mut h.app).unwrap();
+    h.app
+        .run(
+            "effect.setParams",
+            json!({"index":0,"item":null,"params":{
+                "ambient":19,"lights":[{"color":"#ff8040"},{"color":"#4080ff"}]
+            }}),
+        )
+        .unwrap();
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.app.run("effect.dialog", json!({"effect":REVOLVE,"index":0,"item":null})).unwrap();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    h.click(h.rect("Custom").center());
+    h.click(h.rect("Right").center());
+    assert_ne!(h.app.session.doc().unwrap().doc, before);
+    dialogs::cancel(&mut h.app);
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}

@@ -476,7 +476,10 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
         "shortcuts.export" => {
             let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
-            let pick = crate::FilePick { filters: vec![("Shortcut sets", &["json"])], ..crate::FilePick::named("VectorCraft Shortcuts.json") };
+            let pick = crate::FilePick {
+                filters: vec![crate::FilePick::filter("Shortcut sets", &["json"])],
+                ..crate::FilePick::named("VectorCraft Shortcuts.json")
+            };
             let path = s("path").or_else(|| crate::picks::save(app, &pick));
             match path {
                 Some(path) => match app.services.write.as_mut() {
@@ -495,7 +498,10 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
-                let pick = crate::FilePick { filters: vec![("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)], ..Default::default() };
+                let pick = crate::FilePick {
+                    filters: vec![crate::FilePick::filter("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)],
+                    ..Default::default()
+                };
                 let path = s("path").or_else(|| crate::picks::open(app, &pick));
                 // A `.kys` file is read by Import Shortcut Set, up to its reader's cap.
                 if let Some(path) = path.as_deref().filter(|p| crate::dialogs::shortcut_import::is_kys(p)) {

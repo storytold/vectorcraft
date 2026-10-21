@@ -528,6 +528,33 @@ fn glyphs_spaced_each_their_own_way_keep_their_place() {
     });
 }
 
+/// Words set apart by spaces tracked past an em (#2384) come back with each glyph in its place:
+/// the file draws each space and leaves the gap after it. Evenly tracked words keep one run.
+#[test]
+fn words_set_apart_by_spaces_tracked_past_an_em_keep_their_place() {
+    let runs = [("Hooks", 0.0), (" ", 1800.0), ("and", 0.0), (" ", 2400.0), ("leads", 0.0)];
+    let mut t = TextObject::point(Point::new(20.0, 100.0), "", style(12.0));
+    t.runs = runs.iter().map(|(s, tr)| TextRun { text: s.to_string(), style: CharStyle { tracking: *tr, ..style(12.0) }, inline: None }).collect();
+    let d = doc(vec![t]);
+    let want = origins(&d);
+    let back = import_as(&pdf(&d, false).bytes, TextAs::default());
+    assert_eq!(texts(&back), ["Hooks and leads"]);
+    let got = origins(&back);
+    assert_eq!(got.len(), want.len());
+    for (g, w) in got.iter().zip(&want) {
+        assert!((g.x - w.x).abs() < 0.1 && (g.y - w.y).abs() < 0.1, "{got:?}\nvs {want:?}");
+    }
+    // Evenly tracked, the spaces too: one run.
+    let even = doc(vec![TextObject::point(Point::new(20.0, 100.0), "Hooks and leads", CharStyle { tracking: 150.0, ..style(12.0) })]);
+    let back = import_as(&pdf(&even, false).bytes, TextAs::default());
+    assert_eq!(texts(&back), ["Hooks and leads"]);
+    back.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            assert_eq!(t.runs.len(), 1, "{:?}", t.runs.iter().map(|r| r.style.tracking).collect::<Vec<_>>());
+        }
+    });
+}
+
 /// Evenly tracked type on a path comes back with its tracking: each glyph where it was along the
 /// curve, not closed up to the font's advances.
 #[test]

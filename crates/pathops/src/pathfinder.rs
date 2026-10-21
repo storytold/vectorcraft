@@ -26,7 +26,7 @@ impl Shape {
     }
 }
 
-/// The ten Pathfinder panel operations.
+/// Pathfinder panel and effect operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PathfinderOp {
     /// Shape mode: union of everything; result keeps the front-most key.
@@ -50,6 +50,12 @@ pub enum PathfinderOp {
     Outline,
     /// Front-most minus everything behind; keeps the front-most key.
     MinusBack,
+    /// Effect only: split into faces like Divide; overlapping faces take the highest of each CMYK
+    /// channel from every shape covering them (Illustrator Effect → Pathfinder → Hard Mix).
+    HardMix,
+    /// Effect only: split into faces like Divide; overlapping faces blend fills in CMYK bottom to
+    /// top by a mixing rate (Illustrator Effect → Pathfinder → Soft Mix).
+    SoftMix,
 }
 
 /// One face of the planar arrangement of a set of shapes (Shape Builder / Live Paint face).
@@ -172,6 +178,13 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
                 .collect()
         }
         PathfinderOp::Outline => outline_edges(&arr, shapes),
+        PathfinderOp::HardMix | PathfinderOp::SoftMix => regions_of(&arr)
+            .into_iter()
+            .filter_map(|r| {
+                let key = shapes.get(r.top()?)?.key;
+                Some(Shape::new(r.path, FillRule::NonZero, key))
+            })
+            .collect(),
     }
 }
 
@@ -336,6 +349,12 @@ impl FaceMerger {
         let segments: usize = shapes.iter().flat_map(|s| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
         let lines = (segments <= crate::SHAPE_BUILDER_MAX_SEGMENTS).then(|| (shapes.to_vec(), std::cell::OnceCell::new()));
         Self { arr: if has_open { None } else { arrangement(shapes) }, shapes: shapes.len(), lines, snap: std::cell::OnceCell::new() }
+    }
+
+    /// Merge faces found with Gap Detection using the same temporary bridges as Live Paint.
+    /// Source indices stay those of the original inputs; bridges have no fill and are never art.
+    pub fn with_gap(shapes: &[Shape], gap: f64) -> Self {
+        Self::new(&crate::planar::gap_inputs(shapes, gap))
     }
 
     /// The union of `faces`.

@@ -7,7 +7,7 @@
 //! Glyphs each turned a little further along a curve (type set on a path: apps write each glyph
 //! with its own placement) make one type-on-a-path object, its path through the glyphs' baseline.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
@@ -117,6 +117,32 @@ impl Look {
     }
 }
 
+/// A gap between adjacent glyphs on a line.
+#[derive(Clone, Copy, Debug)]
+struct Gap {
+    /// Byte offset in the line's text of the glyph after the gap.
+    at: usize,
+    /// From the end of the glyph before to the start of the next (points).
+    width: f64,
+    /// The larger of the two glyphs' sizes (points).
+    em: f64,
+    /// Along the line, not turned along a curve.
+    on_line: bool,
+}
+
+/// The spacing a line's letters share (letter-spaced type), in ems: the gap a third of the way up
+/// from the narrowest, of three or more along the line. Never below zero, and none at all past
+/// half an em: glyphs set wider apart than that are words or columns, not tracked letters.
+fn common_gap(gaps: &[Gap]) -> f64 {
+    let mut widths: Vec<f64> = gaps.iter().filter(|g| g.on_line).map(|g| g.width / g.em).filter(|w| w.is_finite()).collect();
+    if widths.len() < 3 {
+        return 0.0;
+    }
+    let pivot = widths.len() / 3;
+    let (_, common, _) = widths.select_nth_unstable_by(pivot, f64::total_cmp);
+    if *common > 0.5 { 0.0 } else { common.max(0.0) }
+}
+
 /// A line of type being gathered: runs of glyphs on one baseline.
 pub(crate) struct TextLine {
     /// The first glyph's placement.
@@ -140,9 +166,16 @@ pub(crate) struct TextLine {
     /// Each glyph's ink box as drawn (document space), in drawing order; glyphs without ink are
     /// left out.
     pub ink: Vec<Rect>,
-    /// The spaces read from gaps between glyphs: their byte offset in the text, and the gap from
-    /// the end of the glyph before to the start of the next (points).
-    gaps: Vec<(usize, f64)>,
+    /// The gaps between adjacent glyphs that may read as spaces ([`finish`](Self::finish)
+    /// decides).
+    gaps: Vec<Gap>,
+    /// The spaces the file draws between two glyphs that aren't spaces: their byte offset in the
+    /// text before the spaces read from gaps go in, and the gaps on both sides of it plus its
+    /// advance (points).
+    drawn_spaces: Vec<(usize, f64)>,
+    /// A space the file drew after a glyph that isn't one, until the next glyph comes: its byte
+    /// offset, and the gap before it plus its advance (points).
+    drawn_space: Option<(usize, f64)>,
     /// Each glyph's advance in the file's font (points), with [`Self::baseline`].
     advances: Vec<f64>,
     /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
@@ -180,6 +213,8 @@ impl TextLine {
             column: false,
             ink: vec![],
             gaps: vec![],
+            drawn_spaces: vec![],
+            drawn_space: None,
             advances: vec![],
             held: vec![],
         }
@@ -261,11 +296,16 @@ impl TextLine {
             if !on_line && !on_curve {
                 return false;
             }
-            // A gap wider than a fifth of an em reads as a space.
-            if gap > size * 0.2 && !run.ends_with(' ') && !text.starts_with(' ') {
-                run.push(' ');
-                if on_line {
-                    self.gaps.push((bytes, gap));
+            if !run.ends_with(' ') && !text.starts_with(' ') {
+                self.gaps.push(Gap { at: bytes, width: gap, em: size, on_line });
+            }
+            // A space the file draws between two glyphs spans the gaps on both sides of it.
+            let drawn = self.drawn_space.take();
+            if on_line {
+                if text == " " && !run.ends_with(' ') {
+                    self.drawn_space = Some((bytes, gap + advance));
+                } else if let Some((b, before)) = drawn.filter(|_| !text.starts_with(' ')) {
+                    self.drawn_spaces.push((b, before + gap));
                 }
             }
             if last.takes(look) {
@@ -344,6 +384,43 @@ impl TextLine {
         let first = runs.next()?;
         let mut t = TextObject::point(Point::ORIGIN, &first.text, first.style);
         t.runs.extend(runs);
+        // A gap wider than a fifth of an em, past the spacing the line's letters share, reads as a
+        // space (one set at exactly a fifth still counts, whatever the rounding). Letter spacing is
+        // read only in text left in the file's order.
+        let space = |gap: &Gap, common: f64| gap.width / gap.em - common > 0.199;
+        let directed = vectorcraft_text::logical_order(&t.plain_text()).is_some();
+        let mut common = if directed { 0.0 } else { common_gap(&self.gaps) };
+        // Evenly spaced glyphs alone could be letters set apart or words of one letter each: the
+        // shared spacing is letter spacing only on a line that also shows where its words break,
+        // with spaces it draws or with gaps wider than the rest.
+        if self.drawn_spaces.is_empty() && !self.gaps.iter().any(|gap| space(gap, common)) {
+            common = 0.0;
+        }
+        let mut spaces = vec![];
+        for gap in &self.gaps {
+            if !space(gap, common) {
+                continue;
+            }
+            // After the earlier spaces, at the end of the run before it (the run it follows).
+            let at = gap.at + spaces.len();
+            let mut offset = 0;
+            let Some(run) = t.runs.iter_mut().find(|run| {
+                offset += run.text.len();
+                at <= offset
+            }) else {
+                break;
+            };
+            let at = at - (offset - run.text.len());
+            if !run.text.is_char_boundary(at) {
+                continue;
+            }
+            run.text.insert(at, ' ');
+            spaces.push((gap.at, gap.width, gap.on_line));
+        }
+        // Each by its offset in the text with the spaces in.
+        let mut gaps: Vec<(usize, f64)> = spaces.iter().enumerate().filter(|(_, s)| s.2).map(|(i, s)| (s.0 + i, s.1)).collect();
+        gaps.extend(self.drawn_spaces.iter().map(|&(b, width)| (b + spaces.iter().filter(|s| s.0 < b).count(), width)));
+        gaps.sort_by_key(|&(b, _)| b);
         if self.upright.is_none() {
             to_logical(&mut t);
         }
@@ -403,10 +480,10 @@ impl TextLine {
         let size = self.at.size;
         let mut bounds = laid.bounds;
         if own.is_none() && chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-            // The spaces read from gaps keep their own place only in text left in the file's order.
+            // The spaces read from gaps or drawn between glyphs keep their own place only in text
+            // left in the file's order.
             let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
-            let gaps: Vec<(usize, f64)> =
-                if t.para.direction.is_none() { self.gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
+            let gaps: Vec<(usize, f64)> = if t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
             let (tracking, spaces) = spacing(&laid, &gaps, length - natural, chars, size);
             t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
             // Tracked: laid out again for its bounds.
@@ -472,24 +549,27 @@ fn tracked_each(runs: Vec<TextRun>, own: &[f64], size: f64) -> Vec<TextRun> {
 
 /// The tracking (thousandths of an em) that sets a line of `chars` characters, laid out untracked
 /// as `laid`, `extra` points longer, as the file set it: the same after every character, except
-/// the spaces read from gaps (`gaps`: byte offset, gap in points) where that would put the glyphs
-/// after them more than a tenth of an em off (a barcode's digits, set in groups apart). Those take
-/// their own tracking, given with their byte offsets.
+/// the spaces read from gaps or drawn between glyphs (`gaps`: byte offset, gap in points) where
+/// that would put the glyphs after them more than a tenth of an em off (a barcode's digits, set in
+/// groups apart). Those take their own tracking, given with their byte offsets.
 fn spacing(laid: &TextLayout, gaps: &[(usize, f64)], extra: f64, chars: usize, size: f64) -> (f64, Vec<(usize, f64)>) {
     let pairs = chars.saturating_sub(1).max(1) as f64;
+    // The advance of the first glyph laid out at each byte offset.
+    let space: HashMap<usize, f64> = laid.glyphs.iter().rev().map(|g| (g.byte, g.advance)).collect();
     // The space and the character before it take `need` (the gap less the space) between them;
     // tracking gives them twice its share.
-    let space = |b: usize| laid.glyphs.iter().find(|g| g.byte == b).map(|g| g.advance);
-    let needs: Vec<(usize, f64)> = gaps.iter().filter_map(|&(b, gap)| Some((b, gap - space(b)?))).collect();
+    let needs: Vec<(usize, f64)> = gaps.iter().filter_map(|&(b, gap)| Some((b, gap - space.get(&b)?))).collect();
     let mut own: Vec<(usize, f64)> = vec![];
+    let mut taken: HashSet<usize> = HashSet::new();
     let mut tracking = extra / pairs;
     // Each space taken apart changes the others' share: until no more are.
     loop {
         let more: Vec<(usize, f64)> =
-            needs.iter().filter(|(b, need)| !own.iter().any(|(o, _)| o == b) && (need - 2.0 * tracking).abs() > size * 0.1).copied().collect();
+            needs.iter().filter(|(b, need)| !taken.contains(b) && (need - 2.0 * tracking).abs() > size * 0.1).copied().collect();
         if more.is_empty() {
             break;
         }
+        taken.extend(more.iter().map(|(b, _)| *b));
         own.extend(more);
         let rest = pairs - 2.0 * own.len() as f64;
         tracking = if rest >= 1.0 { (extra - own.iter().map(|(_, need)| need).sum::<f64>()) / rest } else { 0.0 };

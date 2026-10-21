@@ -80,23 +80,28 @@ pub(crate) fn phase(ctx: &Context) -> Phase {
     }
 }
 
-/// Before the panels draw: while a field is scrubbed, the edits its values make are one undo step.
-/// (The drag's first frame applies nothing, so the group is open before its first value.)
+/// Before the panels draw: while a field is scrubbed, the edits its values make are one undo step,
+/// or part of the step of an undo group open in the active document
+/// ([`vectorcraft_engine::Session::begin_undo_scope`]). (The drag's first frame applies nothing, so
+/// the step begins before its first value.)
 pub(crate) fn begin_frame(app: &mut VectorcraftApp, ctx: &Context) {
     if !app.scrub_group && matches!(phase(ctx), Phase::Dragging | Phase::Released) {
-        app.session.begin_undo_group();
+        app.scrub_scope = app.session.begin_undo_scope();
         app.scrub_group = true;
     }
 }
 
-/// After the panels: a finished drag closes its undo group; Escape undoes it.
+/// After the panels: a finished drag ends its undo step in the document it began in, even when
+/// another document is active by then; Escape undoes the drag's edits.
 pub(crate) fn end_frame(app: &mut VectorcraftApp, ctx: &Context) {
     let phase = phase(ctx);
     if !app.scrub_group || phase == Phase::Dragging {
         return;
     }
     app.scrub_group = false;
-    app.session.end_undo_group(phase == Phase::Cancelled);
+    if let Some(scope) = app.scrub_scope.take() {
+        app.session.end_undo_scope(scope, phase == Phase::Cancelled);
+    }
     app.sync_views();
 }
 

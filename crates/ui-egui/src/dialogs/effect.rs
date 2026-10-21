@@ -156,7 +156,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(app, ui, d, plugin.manifest()),
         None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
-        None if id == GLASS => glass_fields(app, ui, d),
+        None if id == GLASS => glass_fields(app, ui, d, GLASS),
+        None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
         None if id == ZIG_ZAG => zig_zag_fields(ui, d, app.session.general_unit()),
         None if id == DROP_SHADOW => drop_shadow_fields(ui, d, app.session.general_unit()),
@@ -200,6 +201,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 pub(crate) const FILM_GRAIN_FIELDS: [(&str, &str, f64); 3] =
     [("grain", "Grain", 20.0), ("highlightArea", "Highlight Area", 20.0), ("intensity", "Intensity", 10.0)];
 
+/// Paint Daubs › Brush Type labels ([`vectorcraft_effects::pixel::PAINT_DAUB_BRUSH_TYPES`]); extend
+/// [`crate::menus::menu_strings`] with these like [`FILM_GRAIN_FIELDS`].
+pub(crate) const PAINT_DAUB_BRUSH_TYPE_LABELS: [&str; 6] = ["Simple", "Light Rough", "Dark Rough", "Wide Sharp", "Wide Blurry", "Sparkle"];
+
 fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let before = d.fields.clone();
     // Use one column wide enough for this language's longest label, keeping every rail aligned.
@@ -219,20 +224,22 @@ fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// The Glass effect (Effect › Distort › Glass…).
 const GLASS: &str = "distort.glass";
+/// The Texturizer effect (Effect › Texture › Texturizer…).
+const TEXTURIZER: &str = "texture.texturizer";
 
-/// Glass's dialog: its parameters, the Texture menu ending with Loaded Texture once a texture is
+/// Glass and Texturizer: parameters, the Texture menu ending with Loaded Texture once a texture is
 /// loaded, and Load Texture… with the loaded texture's size. Returns whether the values differ from
 /// those last previewed.
-fn glass_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+fn glass_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) -> bool {
     use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
     // The stored texture is shown as its size, not as a text field.
     let stored = d.fields.remove(TEXTURE_IMAGE);
     let size = stored.as_ref().and_then(Value::as_str).and_then(texture).map(|t| t.size());
-    let menu = glass_textures(size.is_some());
-    let doc = vectorcraft_effects::effect_info(GLASS).map(|e| e.params).unwrap_or_default();
+    let menu = if id == TEXTURIZER { texturizer_textures(size.is_some()) } else { glass_textures(size.is_some()) };
+    let doc = vectorcraft_effects::effect_info(id).map(|e| e.params).unwrap_or_default();
     let unit = app.session.general_unit();
-    let pick = |k: &str| if k == "texture" { Some(menu) } else { choices(GLASS, k) };
-    form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(GLASS, k, false), &pick, &|k| doc_rank(doc, k), unit);
+    let pick = |k: &str| if k == "texture" { Some(menu) } else { choices(id, k) };
+    form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(id, k, false), &pick, &|k| doc_rank(doc, k), unit);
     if let Some(v) = stored {
         d.fields.insert(TEXTURE_IMAGE.into(), v);
     }
@@ -259,11 +266,17 @@ fn glass_textures(loaded: bool) -> form::Choices {
     if loaded { &GLASS_TEXTURES_LOADED } else { &GLASS_TEXTURES }
 }
 
+/// Texturizer's Texture menu, ending with Loaded Texture once a texture is `loaded`.
+fn texturizer_textures(loaded: bool) -> form::Choices {
+    use vectorcraft_effects::pixel::{TEXTURES, TEXTURES_LOADED};
+    if loaded { &TEXTURES_LOADED } else { &TEXTURES }
+}
+
 /// Glass's Load Texture…: an image file the user picks, read into `textureImage` as Glass stores
 /// it and picked in the Texture menu.
 fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     use vectorcraft_engine::cmd::fileio;
-    let filters = fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, f.extensions)).collect();
+    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, f.extensions)));
     let path = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }).ok_or("cancelled")?;
     // The button is off where files can't be read.
     let Some(read) = app.services.read.as_ref() else { return Ok(()) };
@@ -283,12 +296,15 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("brushStrokes.sprayedStrokes", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("distort.glass", "texture") => Some(&vectorcraft_effects::pixel::GLASS_TEXTURES),
         ("pixelate.mezzotint", "type") => Some(&vectorcraft_effects::pixel::MEZZOTINT_TYPES),
+        ("artistic.paintDaubs", "brushType") => Some(&vectorcraft_effects::pixel::PAINT_DAUB_BRUSH_TYPES),
         ("sketch.graphicPen", "strokeDirection") => Some(&vectorcraft_effects::pixel::STROKE_DIRECTIONS),
         ("sketch.halftonePattern", "patternType") => Some(&vectorcraft_effects::pixel::HALFTONE_TYPES),
         ("sketch.plaster", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
         ("texture.grain", "grainType") => Some(&vectorcraft_effects::pixel::GRAIN_TYPES),
-        ("texture.texturizer", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
-        ("sketch.basRelief" | "texture.texturizer", "lightDirection") => Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS),
+        ("texture.texturizer" | "artistic.underpainting", "texture") => Some(&vectorcraft_effects::pixel::TEXTURES),
+        ("sketch.basRelief" | "texture.texturizer" | "artistic.underpainting", "lightDirection") => {
+            Some(&vectorcraft_effects::pixel::LIGHT_DIRECTIONS)
+        }
         ("video.deinterlace", "eliminate") => Some(&[("Odd Fields", "odd"), ("Even Fields", "even")]),
         ("video.deinterlace", "create") => Some(&[("Duplication", "duplication"), ("Interpolation", "interpolation")]),
         ("stylize.innerGlow", "source") => Some(&[("Center", "center"), ("Edge", "edge")]),
@@ -344,9 +360,10 @@ pub(crate) fn shown_choices(effect: &str, key: &str, params: &Map<String, Value>
     if let Some(own) = own_choices(effect, key, cmyk) {
         return Some(own.into_iter().map(|(label, value)| (tl!(label).to_string(), value.to_string())).collect());
     }
-    let options = if effect == GLASS && key == "texture" {
+    let options = if (effect == GLASS || effect == TEXTURIZER) && key == "texture" {
         use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
-        glass_textures(params.get(TEXTURE_IMAGE).and_then(Value::as_str).and_then(texture).is_some())
+        let loaded = params.get(TEXTURE_IMAGE).and_then(Value::as_str).and_then(texture).is_some();
+        if effect == GLASS { glass_textures(loaded) } else { texturizer_textures(loaded) }
     } else {
         choices(effect, key)?
     };
@@ -704,6 +721,7 @@ mod tests {
             ("distort.roughen", "points"),
             ("stylize.innerGlow", "source"),
             (DROP_SHADOW, "shade"),
+            ("artistic.paintDaubs", "brushType"),
         ] {
             let doc = vectorcraft_effects::effect_info(effect).unwrap().params;
             let listed = doc.split(&format!("{key}: ")).nth(1).unwrap().split([',', '}', ' ']).next().unwrap().to_string();
@@ -766,6 +784,36 @@ mod tests {
         let text = paint(&mut app);
         assert!(text.lines().any(|l| l == "Loaded Texture") && text.lines().any(|l| l == "6 × 4 px"), "{text}");
         assert!(!text.contains(&stored[..24]), "the stored text isn't shown");
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let params = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&params["texture"], &params["textureImage"]), (&json!("loaded"), &json!(stored)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Texturizer's Load Texture… matches Glass: pick, Loaded Texture in the menu, OK applies.
+    #[test]
+    fn texturizer_load_texture_reads_the_picked_image_into_the_effect() {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-texturizer-dialog-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("texture.png");
+        image::RgbaImage::from_fn(6, 4, |x, y| image::Rgba([(x * 40) as u8, (y * 60) as u8, 90, 255])).save(&path).unwrap();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let picked = path.to_string_lossy().into_owned();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": TEXTURIZER})).unwrap();
+        let paint = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()));
+        let text = paint(&mut app);
+        assert!(text.lines().any(|l| l == "Load Texture…") && text.lines().any(|l| l == "Canvas"), "{text}");
+        let mut d = app.ui.dialog.take().unwrap();
+        load_texture(&mut app, &mut d).unwrap();
+        let stored = d.str(vectorcraft_effects::pixel::TEXTURE_IMAGE);
+        assert_eq!((d.str("texture"), vectorcraft_effects::pixel::texture(&stored).map(|t| t.size())), ("loaded".to_string(), Some((6, 4))));
+        app.ui.dialog = Some(d);
         super::super::confirm(&mut app).unwrap();
         let st = app.session.doc().unwrap();
         let params = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;

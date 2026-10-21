@@ -72,6 +72,8 @@ fn five_colours_reduce_to_two() {
     assert_eq!(run(&mut s, "recolor.colors", json!({}))["colors"].as_array().unwrap().len(), 5);
     // Without a count every colour is its own row.
     assert_eq!(run(&mut s, "recolor.reduce", json!({}))["map"].as_array().unwrap().len(), 5);
+    // A count larger than the number of colors also keeps every color in its own row. A 32-bit build read 2^32 + 2 as 2.
+    assert_eq!(run(&mut s, "recolor.reduce", json!({"colors": (1u64 << 32) + 2}))["map"].as_array().unwrap().len(), 5);
 }
 
 #[test]
@@ -366,4 +368,55 @@ fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
     select_all(&mut s);
     let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "limitTo": lib}));
     assert_eq!(r["swatches"], json!(["Leaf"]));
+}
+
+#[test]
+fn model_param_chooses_the_model_of_the_new_colour() {
+    // RGB art in a CMYK document: by default a CMYK replacement comes out RGB (#2170).
+    let mut s = session();
+    run(&mut s, "file.new", json!({"width": 400, "height": 200, "colorMode": "cmyk"}));
+    let art = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 15, "height": 15}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"ids": [art.0], "color": "#1a1a1a", "keepModel": true}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb);
+    select_all(&mut s);
+    let map = json!({"#1a1a1a": {"c": 0, "m": 0, "y": 0, "k": 100}});
+    let r = run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Rgb, "kept RGB");
+    assert!(r["note"].as_str().is_some_and(|n| n.contains("model")), "warns the model was kept: {r}");
+    run(&mut s, "edit.undo", json!({}));
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "model": "new"}));
+    assert_eq!(fill(&s, art), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    assert!(r.get("note").is_none(), "no note when the model follows the new colour: {r}");
+    run(&mut s, "edit.undo", json!({}));
+    // "document" converts a new RGB colour into the document's CMYK.
+    run(&mut s, "recolor.apply", json!({"map": {"#1a1a1a": "#ff0000"}, "model": "document"}));
+    assert_eq!(fill(&s, art).model(), vectorcraft_color::cms::Model::Cmyk);
+    assert!(s.execute("recolor.apply", &json!({"map": map, "model": "nope"})).is_err());
+}
+
+#[test]
+fn model_param_must_be_a_string_when_given() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#1a1a1a"));
+    select_all(&mut s);
+    for bad in [json!(42), json!(null), json!(true)] {
+        assert!(s.execute("recolor.apply", &json!({"map": {"#1a1a1a": "#ff0000"}, "model": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
+}
+
+#[test]
+fn document_model_converts_the_colours_of_a_group_too() {
+    let mut s = session();
+    run(&mut s, "file.new", json!({"width": 400, "height": 200, "colorMode": "cmyk"}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["cmyk 0 0 0 50"]}));
+    let group = |s: &Session| -> Vec<Color> {
+        let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap();
+        g.swatches.iter().filter_map(|w| w.paint.color()).collect()
+    };
+    // Group-only edit from the rows, and with explicit group colours.
+    run(&mut s, "recolor.apply", json!({"map": {"cmyk 0 0 0 50": "#ff0000"}, "group": "Theme", "model": "document"}));
+    assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#00ff00"], "model": "document"}));
+    assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
 }

@@ -734,10 +734,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Create New Swatch…"), color.is_some(), false)
         && let Some(c) = color
     {
-        // A tint saves a tint swatch ("Name 40%").
+        // A tint saves a tint swatch ("Name 40%"); a color keeps its model.
         let p = match tgt.tint() {
             Some(t) => json!({"swatch": t.swatch, "tint": t.tint * 100.0}),
-            None => json!({"color": color_json(&c)}),
+            None => json!({"color": color_json(&c), "keepModel": true}),
         };
         app.run("swatch.new", p).ok();
     }
@@ -837,6 +837,53 @@ mod tests {
         apply(&mut app, &tgt, orange, Live::Released, false);
         let Paint::Gradient(g) = crate::panels::current_paints(&app).0 else { panic!("still a gradient") };
         assert_eq!(g.freeform.map(|f| f.points[0].color), Some(orange));
+    }
+
+    /// One headless frame of the panel menu; returns its painted labels.
+    fn menu_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, Rect)> {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(236.0, 400.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    }
+
+    /// Click the panel menu's item `label`.
+    fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+        let labels = menu_frame(app, ctx, vec![]);
+        let at = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label} in the menu"));
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        menu_frame(app, ctx, vec![egui::Event::PointerMoved(at), button(true)]);
+        menu_frame(app, ctx, vec![button(false)]);
+    }
+
+    /// In a CMYK document the panel menu's Create New Swatch saves the color the panel shows in
+    /// that color's model: an RGB object gives an RGB swatch, and CMYK, gray and spot colors give
+    /// swatches of their own colors.
+    #[test]
+    fn create_new_swatch_keeps_the_shown_colors_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 60, "y": 90, "k": 0}, "spot": true})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let newest = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
+        let ink = app.session.doc().unwrap().doc.swatch("Ink").and_then(|w| w.paint.color()).unwrap();
+        for (fill, model) in [
+            (json!({"color": "#336699", "keepModel": true}), vectorcraft_color::cms::Model::Rgb),
+            (json!({"color": {"c": 10, "m": 20, "y": 30, "k": 5}}), vectorcraft_color::cms::Model::Cmyk),
+            (json!({"color": {"gray": 0.4}}), vectorcraft_color::cms::Model::Gray),
+            (json!({"swatch": "Ink"}), ink.model()),
+        ] {
+            app.run("paint.setFill", fill.clone()).unwrap();
+            let shown = crate::panels::current_paints(&app).0.color().expect("a solid fill");
+            assert_eq!(shown.model(), model, "{fill}");
+            let count = app.session.doc().unwrap().doc.swatches.len();
+            click_menu_item(&mut app, &ctx, "Create New Swatch…");
+            assert_eq!(app.session.doc().unwrap().doc.swatches.len(), count + 1, "{fill}: one new swatch");
+            let w = newest(&app);
+            assert_eq!(w.paint.color(), Some(shown), "{fill}: the swatch has the shown color, {}", w.name);
+        }
     }
 
     fn paints_hex(app: &VectorcraftApp) -> (String, String) {

@@ -33,7 +33,14 @@ pub(crate) fn num(v: f64) -> String {
 
 /// Append [`num`]`(v)` to `s`.
 pub(crate) fn push_num(s: &mut String, v: f64) {
-    let v = if v.is_finite() { (v * 10_000.0).round() / 10_000.0 } else { 0.0 };
+    // Beyond ~1.8e304 the scaling overflows; such values have no fractional digits to round.
+    let v = if !v.is_finite() {
+        0.0
+    } else if (v * 10_000.0).is_finite() {
+        (v * 10_000.0).round() / 10_000.0
+    } else {
+        v
+    };
     if v == v.trunc() && v.abs() < 1e15 {
         let _ = write!(s, "{}", v as i64);
         return;
@@ -276,4 +283,17 @@ pub(crate) fn inflate(data: &[u8], max: u64) -> Option<Vec<u8>> {
     let mut out = vec![];
     flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).ok()?;
     (out.len() as u64 <= max).then_some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::num;
+
+    #[test]
+    fn huge_finite_numbers_are_valid_postscript() {
+        for v in [1.5e305, -1.5e305, f64::MAX, f64::MIN] {
+            let s = num(v);
+            assert!(!s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'), "{v}: got {s:?}");
+        }
+    }
 }

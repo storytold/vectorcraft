@@ -49,12 +49,20 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         return Err("give corners of the path: anchors where its sides meet at an angle".into());
     }
     let (radius, kind) = live.style(&corners);
-    let mut fields = json!({"id": id.0, "corners": corners});
+    let relative = st.doc.node(id).and_then(|n| n.live_shape()).map(|l| l.radii_relative()).unwrap_or(false);
+    let mut fields = json!({"id": id.0, "corners": corners, "relativeRadii": relative});
     if let Some(k) = kind {
         fields["kind"] = json!(k);
     }
     if let Some(r) = radius {
-        fields["radius"] = json!(r);
+        if relative {
+            let pct = corners.iter().find_map(|k| live.corner(*k).map(|_| live.radius(*k) * 100.0));
+            if let Some(pct) = pct {
+                fields["radius"] = json!(pct);
+            }
+        } else {
+            fields["radius"] = json!(r);
+        }
     }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
@@ -73,8 +81,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
         ui.end_row();
+        ui.horizontal(|ui| {
+            for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
+                let cur = d.fields.get("relativeRadii").and_then(|v| v.as_bool()).unwrap_or(false);
+                if widgets::radio(ui, label, cur == on, true) {
+                    d.fields.insert("relativeRadii".into(), json!(on));
+                }
+            }
+        });
+        ui.end_row();
         label(ui, tl!("Radius:"));
-        form::length(ui, d, "radius", unit, 120.0);
+        let relative = d.fields.get("relativeRadii").and_then(|v| v.as_bool()).unwrap_or(false);
+        if relative {
+            if let Some(n) = widgets::range_field(ui, ("corners", "radius"), d.f64("radius", 0.0), 0.0..=100.0, "%", 1, 120.0) {
+                d.fields.insert("radius".into(), json!(n));
+            }
+        } else {
+            form::length(ui, d, "radius", unit, 120.0);
+        }
         ui.end_row();
     });
     false
@@ -94,8 +118,24 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(k) = d.fields.get("kind") {
         p["kind"] = k.clone();
     }
+    if let Some(v) = d.fields.get("relativeRadii") {
+        p["relativeRadii"] = v.clone();
+    }
     if d.fields.contains_key("radius") {
-        p["radius"] = json!(d.f64("radius", 0.0));
+        let relative = d.fields.get("relativeRadii").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut r = d.f64("radius", 0.0);
+        if relative {
+            let id = NodeId(d.fields.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
+            let st = app.session.active().ok_or("no document")?;
+            if let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) {
+                let corners: BTreeSet<usize> = serde_json::from_value(d.fields.get("corners").cloned().unwrap_or(json!([]))).unwrap_or_default();
+                if let Some(k) = corners.iter().next() {
+                    let max = lc.corner(*k).map(|c| c.max_radius()).unwrap_or(0.0);
+                    r = (r / 100.0).clamp(0.0, 1.0) * max;
+                }
+            }
+        }
+        p["radius"] = json!(r);
     }
     run_and_close(app, "object.setLiveShape", p)
 }

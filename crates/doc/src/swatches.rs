@@ -297,7 +297,7 @@ fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
 
 /// Visit `n` and its subtree, the art of opacity masks included (mask art after the masked
 /// object, before its children).
-fn walk_with_masks<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
+pub fn walk_with_masks<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
     f(n);
     if let Some(mask) = n.extras().mask.as_deref() {
         walk_with_masks(&mask.art, f);

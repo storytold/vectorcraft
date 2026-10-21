@@ -288,6 +288,8 @@ fn select_stop_is_validated_and_shared() {
     assert_eq!(s.execute("gradient.selectStop", &json!({"index": 1})).unwrap(), json!({"index": 1}));
     assert_eq!(s.selected_stop(), Some(1));
     assert!(s.execute("gradient.selectStop", &json!({"index": 2})).is_err(), "two stops");
+    // A 32-bit build read 2^32 + 1 as stop 1.
+    assert!(s.execute("gradient.selectStop", &json!({"index": (1u64 << 32) + 1})).is_err(), "past u32");
     assert!(s.execute("gradient.selectStop", &json!({"index": "a"})).is_err());
     assert!(s.execute("gradient.selectStop", &json!({})).is_err());
     s.execute("gradient.selectStop", &json!({"index": null})).unwrap();

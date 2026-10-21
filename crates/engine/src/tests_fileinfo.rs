@@ -139,6 +139,25 @@ fn an_exported_pdf_opens_with_its_file_info() {
     assert_eq!(back["keywords"], json!(["fair", "Poster", "print"]));
     assert!(back["created"].as_str().is_some_and(|c| c.ends_with('Z')), "the file's creation date: {}", back["created"]);
     assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
+    assert_eq!(back["copyrightStatus"], "copyrighted");
+    assert_eq!(back["copyrightNotice"], "(c) 2026 Ada");
+    assert_eq!(back["copyrightUrl"], "https://example.com/rights");
+}
+
+#[test]
+fn a_pdf_compatible_ai_carries_the_copyright() {
+    let mut s = session();
+    let rights = json!({"copyrightStatus": "publicDomain", "copyrightNotice": "No rights reserved", "copyrightUrl": "https://example.com/cc0"});
+    s.execute("file.info", &rights).unwrap();
+    let path = std::env::temp_dir().join(format!("vc-fileinfo-rights-{}.ai", std::process::id()));
+    let saved = s.execute("document.save", &json!({"path": path.to_string_lossy()}));
+    let ai = std::fs::read(&path);
+    let _ = std::fs::remove_file(&path);
+    saved.unwrap();
+    let f = vectorcraft_pdf::file_info(&ai.unwrap(), None).expect("a PDF-compatible .ai");
+    assert_eq!(f.copyrighted, Some(false));
+    assert_eq!(f.copyright_notice.as_deref(), Some("No rights reserved"));
+    assert_eq!(f.copyright_url.as_deref(), Some("https://example.com/cc0"));
 }
 
 /// Unix seconds of 2020-01-01 00:00:00 UTC.

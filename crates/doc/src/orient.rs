@@ -90,8 +90,8 @@ impl Node {
     /// ([`Node::geometric_bounds_with`]).
     pub fn bounds_in(&self, symbols: &SymbolBoxes, a: Affine, visual: bool) -> Option<Rect> {
         match &self.kind {
-            NodeKind::Group { children, clip: false } => {
-                let b = children.iter().fold(None, |acc, c| union_opt(acc, c.bounds_in(symbols, a, visual)));
+            NodeKind::Group { clip: false, .. } => {
+                let b = self.editing_children().iter().fold(None, |acc, c| union_opt(acc, c.bounds_in(symbols, a, visual)));
                 // The group's own strokes paint around its members (as in `visual_bounds`).
                 let o = if visual { self.appearance.outset() } else { 0.0 };
                 b.map(|b| b.inflate(o, o))

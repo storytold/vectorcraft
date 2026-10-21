@@ -162,7 +162,7 @@ fn a_later_browser_preview_leaves_an_earlier_one_alone() {
     }
 }
 
-/// Making a preview's folder removes the folders and files in its root that are `keep` old or
+/// Making a preview's folder removes the preview folders in its root that are `keep` old or
 /// older, and keeps younger ones.
 #[test]
 fn a_browser_preview_removes_old_previews() {
@@ -175,11 +175,190 @@ fn a_browser_preview_removes_old_previews() {
     // The folder and the page are younger than an hour, so both stay.
     let kept = save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
     assert!(std::path::Path::new(&earlier).exists() && root.join("Untitled-1.html").exists());
-    // With a `keep` of zero every entry is old enough: all three go, and only the new folder is left.
+    // With a `keep` of zero every entry is old enough: both preview folders go, and the page, which
+    // no preview made, stays beside the new folder.
     let next = save_for_web::preview_folder(&root, std::time::Duration::ZERO).unwrap();
-    assert!(!std::path::Path::new(&earlier).exists() && !std::path::Path::new(&kept).exists() && !root.join("Untitled-1.html").exists());
+    assert!(!std::path::Path::new(&earlier).exists() && !std::path::Path::new(&kept).exists() && root.join("Untitled-1.html").exists());
     assert!(std::path::Path::new(&next).is_dir());
-    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+}
+
+/// Old entries of the root that aren't preview folders stay: a file, folders whose names aren't
+/// `<digits>-<digits>`, and a file with a preview folder's name.
+#[test]
+fn a_browser_preview_removes_only_preview_folders() {
+    let root = vectorcraft_testkit::temp_dir("sfw-browser-filter").join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let earlier = save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
+    let folders = ["notes", "12-", "-3", "12-3a", "a12-3", "12_3"];
+    for name in folders {
+        std::fs::create_dir(root.join(name)).unwrap();
+    }
+    let files = ["Untitled-1.html", "12-3"];
+    for name in files {
+        std::fs::write(root.join(name), b"kept").unwrap();
+    }
+    let next = save_for_web::preview_folder(&root, std::time::Duration::ZERO).unwrap();
+    assert!(!std::path::Path::new(&earlier).exists() && std::path::Path::new(&next).is_dir());
+    for name in folders {
+        assert!(root.join(name).is_dir(), "{name}");
+    }
+    for name in files {
+        assert_eq!(std::fs::read(root.join(name)).unwrap(), b"kept", "{name}");
+    }
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), folders.len() + files.len() + 1);
+}
+
+/// When `VectorCraft Save for Web` in the temporary folder is a file, the preview goes to a new
+/// folder of its own in the temporary folder, and the file stays as it was.
+#[test]
+fn a_browser_preview_goes_beside_a_root_that_is_not_a_folder() {
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-file-root");
+    let root = tmp.join("VectorCraft Save for Web");
+    std::fs::write(&root, b"a file").unwrap();
+    let keep = std::time::Duration::ZERO;
+    let e = save_for_web::preview_folder(&root, keep).unwrap_err();
+    assert!(e.ends_with(": it is not a folder"), "{e}");
+    let dir = save_for_web::preview_folder_in(&tmp, keep).unwrap();
+    let dir = std::path::Path::new(&dir);
+    assert!(dir.is_dir() && dir.parent() == Some(tmp.as_path()), "{}", dir.display());
+    assert!(dir.file_name().unwrap().to_string_lossy().starts_with("VectorCraft Save for Web "), "{}", dir.display());
+    assert_eq!(std::fs::read(&root).unwrap(), b"a file");
+}
+
+/// The folders that previews made beside a root they couldn't use are removed once they are
+/// `keep` old, both while the root still can't be used and once it can be used again; younger
+/// ones and other entries stay.
+#[test]
+fn a_browser_preview_removes_old_folders_made_beside_the_root() {
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-beside-old");
+    let root = tmp.join("VectorCraft Save for Web");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::write(&root, b"a file").unwrap();
+    let hour = std::time::Duration::from_secs(3600);
+    let first = save_for_web::preview_folder_in(&tmp, hour).unwrap();
+    let second = save_for_web::preview_folder_in(&tmp, hour).unwrap();
+    assert!(std::path::Path::new(&first).is_dir() && std::path::Path::new(&second).is_dir(), "{first} {second}");
+    let others = ["VectorCraft Save for Web 7-7", "VectorCraft Save for Web 7-7.html", "VectorCraft Save for Web notes"];
+    std::fs::write(tmp.join(others[0]), b"kept").unwrap();
+    std::fs::write(tmp.join(others[1]), b"kept").unwrap();
+    std::fs::create_dir_all(tmp.join(others[2])).unwrap();
+    let third = save_for_web::preview_folder_in(&tmp, std::time::Duration::ZERO).unwrap();
+    assert_eq!(std::path::Path::new(&third).parent(), Some(tmp.as_path()), "{third}");
+    assert!(!std::path::Path::new(&first).exists() && !std::path::Path::new(&second).exists(), "{first} {second}");
+    std::fs::remove_file(&root).unwrap();
+    let dir = save_for_web::preview_folder_in(&tmp, std::time::Duration::ZERO).unwrap();
+    assert_eq!(std::path::Path::new(&dir).parent(), Some(root.as_path()), "{dir}");
+    assert!(!std::path::Path::new(&third).exists(), "{third}");
+    for name in others {
+        assert!(tmp.join(name).exists(), "{name}");
+    }
+}
+
+/// The unix mode bits of `path`, not following a link.
+#[cfg(unix)]
+fn mode(path: impl AsRef<std::path::Path>) -> u32 {
+    std::os::unix::fs::MetadataExt::mode(&std::fs::symlink_metadata(path).unwrap()) & 0o777
+}
+
+/// A root and a preview folder that a preview makes are open to their owner only (0o700).
+#[cfg(unix)]
+#[test]
+fn a_browser_preview_makes_private_folders() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-private");
+    let root = tmp.join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let dir = save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
+    assert_eq!((mode(&root), mode(&dir)), (0o700, 0o700));
+    // Beside a root it can't use, too.
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o777)).unwrap();
+    let shared = tmp.join("VectorCraft Save for Web");
+    let _ = std::fs::remove_dir_all(&shared);
+    std::fs::rename(&root, &shared).unwrap();
+    let own = save_for_web::preview_folder_in(&tmp, std::time::Duration::from_secs(3600)).unwrap();
+    assert_eq!(std::path::Path::new(&own).parent(), Some(tmp.as_path()), "{own}");
+    assert_eq!(mode(&own), 0o700);
+}
+
+/// A root that is a link is refused: nothing in the folder it points to is removed or added, and
+/// the preview goes to a new folder of its own in the temporary folder.
+#[cfg(unix)]
+#[test]
+fn a_browser_preview_refuses_a_linked_root() {
+    use std::os::unix::fs::symlink;
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-linked-root");
+    let elsewhere = tmp.join("elsewhere");
+    std::fs::create_dir_all(elsewhere.join("5-1")).unwrap();
+    let root = tmp.join("VectorCraft Save for Web");
+    let _ = std::fs::remove_file(&root);
+    symlink(&elsewhere, &root).unwrap();
+    let keep = std::time::Duration::ZERO;
+    let e = save_for_web::preview_folder(&root, keep).unwrap_err();
+    assert!(e.ends_with(": it is a link"), "{e}");
+    let dir = save_for_web::preview_folder_in(&tmp, keep).unwrap();
+    assert_eq!(std::path::Path::new(&dir).parent(), Some(tmp.as_path()));
+    let left: Vec<String> = std::fs::read_dir(&elsewhere).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(left, ["5-1"]);
+}
+
+/// A root that users other than its owner can write to is refused, and the old preview folder in
+/// it stays.
+#[cfg(unix)]
+#[test]
+fn a_browser_preview_refuses_a_root_others_can_write_to() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = vectorcraft_testkit::temp_dir("sfw-browser-shared-root").join("previews");
+    let keep = std::time::Duration::ZERO;
+    for bits in [0o777, 0o770, 0o703] {
+        let _ = std::fs::remove_dir_all(&root);
+        let earlier = save_for_web::preview_folder(&root, keep).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(bits)).unwrap();
+        let e = save_for_web::preview_folder(&root, keep).unwrap_err();
+        assert!(e.ends_with(": other users can write to it"), "{bits:o}: {e}");
+        assert!(std::path::Path::new(&earlier).is_dir(), "{bits:o}");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1, "{bits:o}");
+    }
+}
+
+/// An old link named like a preview folder stays, and so does the folder it points to, with what
+/// it holds.
+#[cfg(unix)]
+#[test]
+fn a_browser_preview_leaves_a_link_named_like_a_preview_folder() {
+    use std::os::unix::fs::symlink;
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-link-entry");
+    let root = tmp.join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let outside = tmp.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("page.html"), b"kept").unwrap();
+    save_for_web::preview_folder(&root, std::time::Duration::from_secs(3600)).unwrap();
+    symlink(&outside, root.join("9-9")).unwrap();
+    save_for_web::preview_folder(&root, std::time::Duration::ZERO).unwrap();
+    assert!(std::fs::symlink_metadata(root.join("9-9")).unwrap().file_type().is_symlink());
+    assert_eq!(std::fs::read(outside.join("page.html")).unwrap(), b"kept");
+}
+
+/// A root and a preview folder that another user owns are refused and left alone. Only root can
+/// give a folder to another user, so the test skips itself for other users.
+#[cfg(unix)]
+#[test]
+fn a_browser_preview_leaves_what_another_user_owns() {
+    let root = vectorcraft_testkit::temp_dir("sfw-browser-other-user").join("previews");
+    let _ = std::fs::remove_dir_all(&root);
+    let keep = std::time::Duration::ZERO;
+    let theirs = save_for_web::preview_folder(&root, keep).unwrap();
+    let other = std::os::unix::fs::MetadataExt::uid(&std::fs::metadata(&root).unwrap()) + 1;
+    if std::os::unix::fs::chown(&theirs, Some(other), None).is_err() {
+        eprintln!("skipped: only root can give a folder to another user");
+        return;
+    }
+    save_for_web::preview_folder(&root, keep).unwrap();
+    assert!(std::path::Path::new(&theirs).is_dir());
+    std::os::unix::fs::chown(&root, Some(other), None).unwrap();
+    let e = save_for_web::preview_folder(&root, keep).unwrap_err();
+    assert!(e.ends_with(": it belongs to another user"), "{e}");
 }
 
 /// A folder that an earlier process with the same id left, younger than `keep`, is not reused:

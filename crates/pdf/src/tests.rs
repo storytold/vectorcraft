@@ -79,18 +79,18 @@ fn one_page_per_artboard_with_sizes() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
-        locked: false,
         color: None,
     });
     d.artboards.push(Artboard {
         id: 3,
         name: "C".into(),
         rect: Rect::new(0.0, 500.0, 612.0, 1292.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
-        locked: false,
         color: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
@@ -106,9 +106,9 @@ fn artboard_range_and_bad_index() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
-        locked: false,
         color: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
@@ -729,9 +729,9 @@ fn import_max_pages_and_multi_page() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
-        locked: false,
         color: None,
     });
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));

@@ -1,9 +1,10 @@
 //! Brush Options (double-click a brush in the Brushes panel, or the panel menu's Brush Options…).
 //! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random or
 //! Pressure with its Variation, over live previews of the nib and of a stroke (light, heavy, light
-//! pressure). Bristle Brush Options: Name, Shape and the bristle sliders. Scatter, Art and Pattern
-//! Brush Options: see [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with
-//! the brush update); a name another brush has keeps the dialog open.
+//! pressure). Bristle Brush Options: Name (typing stops at [`Bristle::MAX_NAME_CHARS`]
+//! characters), Shape and the bristle sliders. Scatter, Art and Pattern Brush Options: see
+//! [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with the brush update);
+//! a name another brush has, or a new bristle brush name that is too long, keeps the dialog open.
 //!
 //! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle` | `scatter` | `art` |
 //! `pattern`), `name`.
@@ -11,6 +12,10 @@
 //! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure`) and
 //! `angleVariation`, `roundnessVariation`, `sizeVariation`. Bristle: `shape` (`roundPoint`…),
 //! `size` (pt), `length` (25..300 %), `density`, `thickness`, `opacity`, `stiffness` (1..100 %).
+//!
+//! New Brush opens the dialog for a brush that does not exist yet ([`open_new`]), with `__create`
+//! and, for dropped art, `__ids`: OK runs `brush.new` instead, which gives a name another brush has
+//! a number, and Cancel adds nothing.
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
@@ -25,7 +30,13 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Brush Options.
 pub const KIND: &str = "brushOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 440.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm: ok, min_width: 440.0, ..DialogSpec::FORM };
+
+/// The field of a Brush Options dialog that New Brush opened.
+const CREATE: &str = "__create";
+
+/// The field of such a dialog holding the ids of the art dropped on the Brushes panel.
+const IDS: &str = "__ids";
 
 /// Calligraphic values: (field, label, suffix, decimals), in [`Calligraphic::RANGES`] order.
 const CALLI: [(&str, &str, &str, usize); 3] = [("angle", "Angle:", "°", 0), ("roundness", "Roundness:", "%", 0), ("size", "Size:", " pt", 1)];
@@ -84,8 +95,15 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
     };
     let def = app.run("brush.get", json!({ "name": name }))?;
     let b: Brush = serde_json::from_value(def.clone()).map_err(|e| e.to_string())?;
-    let mut f = Map::new();
+    let mut f = fields(&b, def)?;
     f.insert("__brush".into(), json!(b.name));
+    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
+    Ok(Value::Null)
+}
+
+/// The fields of brush `b`, whose definition is `def`.
+fn fields(b: &Brush, def: Value) -> Result<Map<String, Value>, String> {
+    let mut f = Map::new();
     f.insert("name".into(), json!(b.name));
     f.insert("__type".into(), json!(b.kind.type_id()));
     match &b.kind {
@@ -105,10 +123,9 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
             }
         }
         // The definition goes along, for the preview (and the art it carries).
-        BrushKind::Scatter(_) | BrushKind::Art(_) | BrushKind::Pattern(_) => brush_art_options::fields(&b, def, &mut f),
+        BrushKind::Scatter(_) | BrushKind::Art(_) | BrushKind::Pattern(_) => brush_art_options::fields(b, def, &mut f),
     }
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
-    Ok(Value::Null)
+    Ok(f)
 }
 
 /// Can Brush Options open without a name (the selected path's brush, else the current one, exists)?
@@ -124,9 +141,70 @@ fn target(app: &VectorcraftApp) -> Option<String> {
     selected.or_else(|| vectorcraft_brush::current(&st.doc))
 }
 
+/// Open the Brush Options of a new brush of type `ty` (`calligraphic` | `scatter` | `art` |
+/// `bristle` | `pattern`), the second step of New Brush. The fields start from the type's default
+/// values and the name "New <Type> Brush", numbered when another brush has it. A scatter or art
+/// brush takes the art `brush.selectionArt` gives for `ids` (else for the selection) as its art,
+/// and a pattern brush takes it as its side tile; the preview draws it. Without that art nothing
+/// opens.
+pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -> Result<Value, String> {
+    let st = app.session.active().ok_or("no document open")?;
+    let title: String = ty.chars().take(1).flat_map(char::to_uppercase).chain(ty.chars().skip(1)).collect();
+    let name = vectorcraft_brush::unique_name(&vectorcraft_brush::library(&st.doc), &format!("New {title} Brush"));
+    let mut def = json!({ "name": name, "type": ty });
+    let art_key = match ty {
+        "scatter" | "art" => Some("art"),
+        "pattern" => Some("side"),
+        _ => None,
+    };
+    if let Some(key) = art_key {
+        let mut r = app.run("brush.selectionArt", ids.clone().map_or_else(|| json!({}), |ids| json!({ "ids": ids })))?;
+        let art = r["art"].take();
+        if art.is_null() {
+            return Err("nothing selected".into());
+        }
+        def[key] = art;
+    }
+    let mut b: Brush = serde_json::from_value(def).map_err(|e| e.to_string())?;
+    b.sanitize();
+    let def = serde_json::to_value(&b).map_err(|e| e.to_string())?;
+    let mut f = fields(&b, def)?;
+    f.insert(CREATE.into(), json!(true));
+    if let Some(ids) = ids {
+        f.insert(IDS.into(), ids);
+    }
+    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
+    Ok(Value::Null)
+}
+
+/// OK of a new brush's Brush Options: `brush.new` with the type, the name, the values set and the
+/// dropped art's ids. The dialog closes once the brush is made.
+fn create(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut p = json!({ "type": d.str("__type"), "name": d.str("name").trim(), "params": params(d) });
+    if let Some(ids) = d.fields.get(IDS) {
+        p["ids"] = ids.clone();
+    }
+    let r = app.run("brush.new", p);
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
+}
+
+/// OK: make the new brush when New Brush opened the dialog, else edit the brush.
+fn ok(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.bool(CREATE) { create(app, d) } else { confirm(app, d) }
+}
+
 /// The value of field `key` within `range`.
 pub(super) fn clamped(d: &Dialog, key: &str, (lo, hi): (f64, f64)) -> f64 {
     d.f64(key, lo).clamp(lo, hi)
+}
+
+/// Is `d` Scatter, Art or Pattern Brush Options with Colorization Tips open? Escape then closes
+/// Tips, not the dialog.
+pub(crate) fn tips_open(d: &Dialog) -> bool {
+    d.kind == KIND && d.bool("tips") && !matches!(d.str("__type").as_str(), "bristle" | "calligraphic")
 }
 
 /// The Calligraphic brush the fields describe.
@@ -156,14 +234,15 @@ fn params(d: &Dialog) -> Value {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     grid(ui, |ui| {
         label(ui, tl!("Name:"));
-        form::text(ui, d, "name", 240.0);
+        let max = if d.str("__type") == "bristle" { Bristle::MAX_NAME_CHARS } else { usize::MAX };
+        form::text_edit_limited(ui, d, "name", 240.0, max);
         ui.end_row();
     });
     ui.add_space(10.0);
     match d.str("__type").as_str() {
         "bristle" => bristle_body(app, ui, d),
         "calligraphic" => calligraphic_body(ui, d),
-        _ => brush_art_options::body(ui, d),
+        _ => brush_art_options::body(app, ui, d),
     }
     false
 }
@@ -215,11 +294,15 @@ fn bristle_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// A stroke painted with the brush the fields describe (type `ty`, definition fields `def`).
-pub(super) fn stroke_preview(ui: &mut egui::Ui, ty: &str, mut def: Value, size: egui::Vec2) {
-    def["name"] = json!("preview");
-    def["type"] = json!(ty);
+pub(super) fn stroke_preview(ui: &mut egui::Ui, ty: &str, def: Value, size: egui::Vec2) {
+    let mut def = match def {
+        Value::Object(o) => o,
+        _ => Map::new(),
+    };
+    def.insert("name".into(), json!("preview"));
+    def.insert("type".into(), json!(ty));
     let (r, _) = ui.allocate_exact_size(size, Sense::hover());
-    crate::panels::brushes::chip(ui, r, &def);
+    crate::panels::brushes::chip(ui, r, &Value::Object(def));
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, Tokens::get(ui.ctx()).input_border), egui::StrokeKind::Inside);
 }
 
@@ -263,7 +346,8 @@ fn nib_preview(ui: &mut egui::Ui, c: &Calligraphic, size: egui::Vec2) {
     p.rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
 }
 
-/// OK: edit the brush (and rename it). A name another brush has keeps the dialog open.
+/// OK: edit the brush (and rename it). A name another brush has, or a new bristle brush name that
+/// is too long, keeps the dialog open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let name = d.str("name").trim().to_string();
     let r = app.run("brush.options", json!({ "name": d.str("__brush"), "newName": name, "params": params(d) }));
@@ -345,6 +429,36 @@ mod tests {
         assert!(app.ui.dialog.is_none());
     }
 
+    /// Bristle Brush Options' Name field takes at most 31 characters as they are typed; the
+    /// Calligraphic Brush Options' Name field takes more.
+    #[test]
+    fn bristle_brush_options_name_field_takes_at_most_31_characters() {
+        let mut app = app();
+        let typed = "é".repeat(40);
+        for (brush, kept) in [("Bristle Round", 31), ("6 pt. Flat", 40)] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+                let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+                out.textures_delta.clear();
+            };
+            app.run("ui.brushOptions", json!({ "name": brush })).unwrap();
+            // The Name field takes the focus with its text selected; typing replaces it.
+            frame(&mut app, vec![]);
+            frame(&mut app, vec![]);
+            frame(&mut app, vec![egui::Event::Text(typed.clone())]);
+            assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "é".repeat(kept), "{brush}");
+            super::super::confirm(&mut app).unwrap();
+            assert!(app.run("brush.get", json!({ "name": "é".repeat(kept) })).is_ok(), "{brush}");
+        }
+        // A new name of more than 31 characters in the field (a longer saved name with some of its
+        // characters deleted) is refused, and the dialog stays open.
+        app.run("ui.brushOptions", json!({ "name": "é".repeat(31) })).unwrap();
+        set(&mut app, json!({ "name": "é".repeat(35) }));
+        assert!(super::super::confirm(&mut app).is_err());
+        assert!(app.ui.dialog.is_some());
+    }
+
     /// A path painted with brush `name`, and the height of the art its stroke draws.
     fn brushed(app: &mut VectorcraftApp, name: &str) -> (vectorcraft_doc::NodeId, f64) {
         let id = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 280, "y2": 100})).unwrap()["id"].as_u64().unwrap();
@@ -408,6 +522,25 @@ mod tests {
     }
 
     #[test]
+    fn brush_key_color_eyedropper_updates_the_open_dialog() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = app();
+        app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap();
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        set(&mut app, json!({"colorization": "hueShift"}));
+        let back = app.session.tool_id();
+        app.select_tool("eyedropper");
+        app.session.set_tool_option("brushKeyColor", &json!(true));
+        app.session.set_tool_option("stop", &json!(back));
+        let view = app.view_info();
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Down, 80.0, 70.0), view);
+        let key = app.ui.dialog.as_ref().unwrap().fields.get("keyColor").cloned().unwrap();
+        assert_eq!(vectorcraft_engine::cmd::color_value(&key).unwrap().to_hex(), "#336699");
+        assert_eq!(app.session.tool_id(), back);
+    }
+
+    #[test]
     fn art_options_set_width_scale_direction_flips_and_colorization() {
         let mut app = app();
         let (id, before) = brushed(&mut app, "Arrow");
@@ -453,6 +586,161 @@ mod tests {
         assert_eq!(app.run("brush.get", json!({"name": "Arrow"})).unwrap()["scale"], json!({"mode": "stretch"}));
     }
 
+    /// A context with the app's fonts and theme, for [`frame`].
+    fn ctx() -> egui::Context {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        ctx
+    }
+
+    /// Runs one 1200 × 900 frame with `events` through the app's key handling and the dialogs, and
+    /// returns the center of the text `label` if the frame shows it.
+    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>, label: &str) -> Option<egui::Pos2> {
+        use egui::{Pos2, Rect};
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 900.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            super::super::show(app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == label => Some(egui::Rect::from_min_size(t.pos, t.galley.size()).center()),
+            _ => None,
+        })
+    }
+
+    /// Clicks the text `label` the open dialog shows.
+    fn click_text(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
+        use egui::{Event, PointerButton};
+        frame(ctx, app, vec![], label);
+        let at = frame(ctx, app, vec![], label).unwrap_or_else(|| panic!("no {label:?} shown"));
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(ctx, app, vec![Event::PointerMoved(at), button(true)], label);
+        frame(ctx, app, vec![button(false)], label);
+        frame(ctx, app, vec![], label);
+    }
+
+    /// Presses Escape.
+    fn escape(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(ctx, app, vec![key], "");
+        frame(ctx, app, vec![], "");
+    }
+
+    /// Scatter, Art and Pattern Brush Options have a Tips button beside Method. A click on it opens
+    /// Colorization Tips, which names each method and what it does beside a sample of the brush,
+    /// and a second click closes it. Screen readers name the button, the popover and each sample.
+    #[test]
+    fn tips_names_each_colorization_method_beside_a_sample() {
+        use crate::widgets::accessibility_tests::{role_and_state, tree};
+        use egui::accesskit::Role;
+        let mut app = app();
+        for name in ["Confetti", "Arrow", "Chain"] {
+            app.run("ui.brushOptions", json!({ "name": name })).unwrap();
+            let text = shown(&mut app);
+            assert!(text.lines().any(|l| l == "Tips") && !text.contains("Colorization Tips"), "{name}: {text}");
+        }
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        let ctx = ctx();
+        click_text(&ctx, &mut app, "Tips");
+        assert!(app.ui.dialog.as_ref().unwrap().bool("tips"), "Tips opens Colorization Tips");
+        let text = shown(&mut app);
+        for label in [
+            "Colorization Tips",
+            "The samples show this brush on a blue stroke.",
+            "None",
+            "The art keeps its own colors.",
+            "Tints",
+            "Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.",
+            "Tints and Shades",
+            "Hue Shift",
+            "The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.",
+            "Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.",
+        ] {
+            assert!(text.contains(label), "{label} in {text}");
+        }
+        let nodes = tree(|ui| super::super::show(&mut app, ui.ctx()));
+        assert_eq!(role_and_state(&nodes, "Tips").0, Role::Button);
+        assert_eq!(role_and_state(&nodes, "Colorization Tips").0, Role::Dialog);
+        for method in ["None", "Tints", "Tints and Shades", "Hue Shift"] {
+            assert!(nodes.iter().any(|n| n.role() == Role::Image && n.label() == Some(method)), "a sample named {method}");
+        }
+        click_text(&ctx, &mut app, "Tips");
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("tips"), "a second click closes it");
+        assert!(!shown(&mut app).contains("Colorization Tips"));
+        // `ui.dialog.set {field: "tips", value: true}` opens it too.
+        set(&mut app, json!({"tips": true}));
+        assert!(shown(&mut app).contains("Colorization Tips"));
+    }
+
+    /// Escape with Colorization Tips or the Method list open closes only that: Brush Options stays
+    /// open with its edits, and the next Escape cancels it.
+    #[test]
+    fn escape_closes_tips_or_the_method_list_and_leaves_the_dialog_open() {
+        let (mut app, ctx) = (app(), ctx());
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        set(&mut app, json!({"colorization": "tints"}));
+        click_text(&ctx, &mut app, "Tips");
+        assert!(app.ui.dialog.as_ref().unwrap().bool("tips"));
+        escape(&ctx, &mut app);
+        let d = app.ui.dialog.as_ref().expect("Escape closes Tips, not Brush Options");
+        assert!(!d.bool("tips") && d.str("colorization") == "tints");
+        assert!(frame(&ctx, &mut app, vec![], "Colorization Tips").is_none());
+        click_text(&ctx, &mut app, "Tints");
+        assert!(egui::Popup::is_any_open(&ctx), "the Method list is open");
+        escape(&ctx, &mut app);
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.str("colorization") == "tints"), "Escape closes the list, not Brush Options");
+        assert!(!egui::Popup::is_any_open(&ctx));
+        escape(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "the next Escape cancels Brush Options");
+        // Calligraphic Brush Options has no Tips: with `tips` set, Escape still cancels it.
+        app.run("ui.brushOptions", json!({"name": "6 pt. Flat"})).unwrap();
+        set(&mut app, json!({"tips": true}));
+        escape(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "Escape cancels Calligraphic Brush Options");
+    }
+
+    /// Each Colorization Tips sample paints the brush with its own method on the blue stroke:
+    /// Confetti's black and gray art keeps its colors with None, its black becomes the stroke color
+    /// with Tints and with Hue Shift (black is its key color), and stays black with Tints and Shades.
+    #[test]
+    fn each_tips_sample_paints_the_brush_with_its_method() {
+        let mut app = app();
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        let key: vectorcraft_color::Color = serde_json::from_value(d.fields["keyColor"].clone()).unwrap();
+        let colors = |id: &str| -> Vec<String> {
+            let method = vectorcraft_brush::Colorization::parse(id, key).unwrap();
+            let doc = brush_art_options::tip_doc(&brush_art_options::edited_def(d), "scatter", method, 120.0, 44.0).unwrap();
+            let mut hex: Vec<String> = vectorcraft_brush::art_colors(doc.layers.iter().map(|l| l.as_ref())).iter().map(|c| c.to_hex()).collect();
+            hex.sort();
+            hex
+        };
+        let (black, blue) = ("#000000".to_string(), brush_art_options::TIP_STROKE.to_hex());
+        let confetti = vectorcraft_brush::defaults().iter().find(|b| b.name == "Confetti").unwrap();
+        let art: Vec<String> = vectorcraft_brush::art_colors(confetti.art()).iter().map(|c| c.to_hex()).collect();
+        let none = colors("none");
+        assert!(none.len() == 2 && art.iter().all(|c| none.contains(c)), "None keeps the art's colors {art:?}: {none:?}");
+        let (tints, shades, hue) = (colors("tints"), colors("tintsAndShades"), colors("hueShift"));
+        assert!(tints.contains(&blue) && !tints.contains(&black), "{tints:?}");
+        assert!(shades.contains(&black) && !shades.contains(&blue), "{shades:?}");
+        assert!(hue.contains(&blue) && !hue.contains(&black), "{hue:?}");
+        assert!(tints != hue && tints != shades && none != shades, "four different samples");
+    }
+
+    /// `ui.dialog.set` writes any field, `__def` included. With a brush definition that is not
+    /// an object, Brush Options and Colorization Tips still draw.
+    #[test]
+    fn a_brush_definition_that_is_not_an_object_still_draws() {
+        let (mut app, ctx) = (app(), ctx());
+        app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "__def", "value": 5}));
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "tips", "value": true}));
+        let text = shown(&mut app);
+        assert!(text.contains("Scatter Brush Options") && text.contains("Colorization Tips"), "{text}");
+    }
+
     #[test]
     fn pattern_options_show_the_tiles_and_set_scale_spacing_fit() {
         let mut app = app();
@@ -492,5 +780,22 @@ mod tests {
             (&json!(200.0), &json!(30.0), &json!("approximate"), &json!(true))
         );
         assert!((drawn_height(&app, id) / before - 2.0).abs() < 1e-6, "tiles twice the size");
+    }
+
+    /// Art Brush Options' Width and Pattern Brush Options' Scale each have a slider beside their
+    /// field, which screen readers name as the row, with the field's number and text over the
+    /// value's whole range.
+    #[test]
+    fn art_width_and_pattern_scale_have_sliders() {
+        use crate::widgets::accessibility_tests::{slider_value, tree};
+        let mut app = app();
+        app.run("ui.brushOptions", json!({"name": "Arrow"})).unwrap();
+        set(&mut app, json!({"width": 250}));
+        let shown = tree(|ui| super::super::show(&mut app, ui.ctx()));
+        assert_eq!(slider_value(&shown, "Width:"), (Some(250.0), Some(1.0), Some(1000.0), Some("250%".into())));
+        app.ui.dialog = None;
+        app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+        let shown = tree(|ui| super::super::show(&mut app, ui.ctx()));
+        assert_eq!(slider_value(&shown, "Scale:"), (Some(100.0), Some(1.0), Some(10000.0), Some("100%".into())));
     }
 }

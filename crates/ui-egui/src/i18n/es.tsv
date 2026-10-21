@@ -37,6 +37,13 @@
 	Channel 4	Canal 4
 	Cell Size	Tamaño de celda
 	Fine Dots	Puntos finos
+
+	Simple	Simple
+	Light Rough	Rugoso claro
+	Dark Rough	Rugoso oscuro
+	Wide Sharp	Ancho nítido
+	Wide Blurry	Ancho borroso
+	Sparkle	Destello
 	Medium Dots	Puntos medios
 	Grainy Dots	Puntos granulados
 	Coarse Dots	Puntos gruesos
@@ -307,6 +314,7 @@
 	Blur	Desenfocar
 	Bottom	Abajo
 	Bottom in Front	Inferior delante
+	Bottom-Justified Tab	Tabulación inferior
 	Bottom:	Abajo:
 	Bounds	Límites
 	Bounds (Fill Proportionally)	Límites (rellenar proporcionalmente)
@@ -1052,6 +1060,7 @@
 	Eyedropper Picks Up:	El cuentagotas toma:
 	Eyedropper Tool	Herramienta Cuentagotas
 	Eyedropper: click the art to sample the stop's colour	Cuentagotas: haz clic en la ilustración para tomar el color de la parada
+	Eyedropper: click the art to sample the key color	Cuentagotas: haz clic en la ilustración para tomar el color clave
 	Favorites	Favoritos
 	Feather…	Desvanecer…
 	Feet	Pies
@@ -1081,6 +1090,13 @@
 	Alt key toggles to Smooth Tool	La tecla Alt cambia a la herramienta Suavizar
 	Keep selected	Mantener seleccionado
 	Merge only with selection	Combinar solo con la selección
+	Consider Open Filled Paths as Closed	Tratar los trazados abiertos con relleno como cerrados
+	Pick Color From:	Tomar el color de:
+	Artwork	Ilustración
+	Cursor Swatch Preview	Vista previa de muestras junto al cursor
+	Selection:	Selección:
+	Straight Line	Línea recta
+	Highlight:	Resaltado:
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
 	Fill Rule	Regla de relleno
@@ -1200,6 +1216,8 @@
 	Large Gaps	Huecos grandes
 	Gap Preview Color:	Color de previsualización de huecos:
 	Close Gaps With Paths	Cerrar huecos con trazados
+	Show Live Paint Gaps	Mostrar huecos de pintura interactiva
+	Hide Live Paint Gaps	Ocultar huecos de pintura interactiva
 	Select Fills	Seleccionar rellenos
 	Select Strokes	Seleccionar trazos
 	Gaussian Blur…	Desenfoque gaussiano…
@@ -1306,6 +1324,7 @@
 	Hand-Drawn	Dibujado a mano
 	Handles	Manejadores
 	Hard Light	Luz fuerte
+	Hard Mix	Mezcla definida
 	Harmony Rules:	Reglas de armonía:
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
@@ -1827,6 +1846,9 @@
 	Modified:	Modificado:
 	Modify	Modificar
 	Mojikumi	Mojikumi
+	Insert Kashidas	Insertar kashidas
+	Long	Larga
+	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
 	Kinsoku Set	Conjunto de kinsoku
 	Hard	Fuerte
@@ -1861,6 +1883,7 @@
 	Move Slices	Mover sectores
 	Move Spine Point	Mover punto del eje
 	Reshape Spine Segment	Remodelar segmento del eje
+	Move Brush	Mover pincel
 	Move Swatch	Mover muestra
 	Move Up	Subir
 	Move…	Mover…
@@ -1918,6 +1941,13 @@
 	Tints and Shades	Matices y sombras
 	Hue Shift	Cambio de tono
 	Key Color:	Color clave:
+	Tips	Consejos
+	Colorization Tips	Consejos de coloración
+	The samples show this brush on a blue stroke.	Las muestras presentan este pincel sobre un trazo azul.
+	The art keeps its own colors.	La ilustración conserva sus propios colores.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	El negro pasa a ser el color del trazo y el blanco sigue siendo blanco. Los demás colores pasan a ser matices del color del trazo, y cuanto más claro es un color, más claro es su matiz.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	El negro sigue siendo negro y el blanco sigue siendo blanco. Los demás colores pasan a ser sombras del color del trazo cuando son oscuros y matices de él cuando son claros.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	El color clave pasa a ser el color del trazo. Los demás colores giran en la rueda de colores lo mismo que el color clave y conservan su saturación y su brillo.
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión
@@ -1938,6 +1968,14 @@
 	Round Fan	Abanico redondo
 	Flat Fan	Abanico plano
 	New Brush…	Nuevo pincel…
+	New Brush	Nuevo pincel
+	Calligraphic Brush	Pincel caligráfico
+	Scatter Brush	Pincel de dispersión
+	Art Brush	Pincel de arte
+	Bristle Brush	Pincel de cerdas
+	Pattern Brush	Pincel de motivo
+	Select art to make a scatter, art or pattern brush.	Selecciona una ilustración para crear un pincel de dispersión, de arte o de motivo.
+	Brush Art	Ilustración del pincel
 	New Calligraphic Brush	Nuevo pincel caligráfico
 	New Character Style	Nuevo estilo de carácter
 	New Color Group	Nuevo grupo de colores
@@ -1968,6 +2006,7 @@
 	New View	Nueva vista
 	New View…	Nueva vista…
 	New Window	Nueva ventana
+	New Without Dialog	Nuevo sin cuadro de diálogo
 	New Workspace	Nuevo espacio de trabajo
 	New Workspace…	Nuevo espacio de trabajo…
 	New {kind} Style…	Nuevo estilo de {kind}…
@@ -2549,6 +2588,7 @@
 	Reorder	Reordenar
 	Reorder Appearance Item	Reordenar elemento de apariencia
 	Repeat	Repetir
+	Repeat Objects	Objetos de repetición
 	Repeat Options	Opciones de repetición
 	Repeat Pathfinder	Repetir Buscatrazos
 	Repeat Tab	Repetir tabulación
@@ -2757,6 +2797,7 @@
 	Scale Cursor Proportional to UI	Escalar el cursor en proporción a la interfaz
 	Scale Lineweights	Escalar grosores de línea
 	Scale Strokes & Effects	Escalar trazos y efectos
+	Scale Text Attributes	Escalar atributos de texto
 	Scale to Fit Artboard	Escalar para encajar en la mesa de trabajo
 	Scale Tool	Herramienta Escalar
 	Scale:	Escala:
@@ -3029,6 +3070,7 @@
 	Snapping Tolerance	Tolerancia de ajuste
 	Social Square Post 1080×1080	Publicación cuadrada para redes 1080×1080
 	Soft Light	Luz suave
+	Soft Mix	Mezcla suave
 	Solid	Sólido
 	Sort by Kind	Ordenar por tipo
 	Sort by Name	Ordenar por nombre
@@ -3269,6 +3311,7 @@
 	Tools	Herramientas
 	Top	Arriba
 	Top in Front	Superior delante
+	Top-Justified Tab	Tabulación superior
 	Top:	Arriba:
 	Total Width:	Anchura total:
 	Touch Type Tool	Herramienta Retocar texto
@@ -3606,7 +3649,8 @@ imageTrace	Outline	Contorno
 	 to sample a color	 para muestrear un color
 	 across a selected object to set the gradient direction	 sobre un objeto seleccionado para definir la dirección del degradado
 	 to select an artboard  |  	 para seleccionar una mesa de trabajo  |  
-	 on the canvas to create one	 en el lienzo para crear una
+	 on the canvas to create one (	 en el lienzo para crear una (
+	 selects several, or draws one inside an artboard)	 selecciona varias o crea una dentro de una mesa de trabajo)
 	 a stroke to add a width point  |  	 un trazo para agregar un punto de anchura  |  
 	 to change one side  |  	 para cambiar un solo lado  |  
 	 to select more points  |  	 para seleccionar más puntos  |  
@@ -3843,6 +3887,25 @@ axis	Both	Ambos
 @msg	a PostScript error ({name} in `{op}`: {at})	un error de PostScript ({name} en `{op}`: {at})
 @msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	un error de PostScript ({name} en `{op}`: {at}), en {procs}
 @msg	a PostScript error ({name})	un error de PostScript ({name})
+@msg	a PostScript error ({name} in `{op}`; {meaning})	un error de PostScript ({name} en `{op}`; {meaning})
+@msg	a PostScript error ({name} in `{op}`; {meaning}), in {procs}	un error de PostScript ({name} en `{op}`; {meaning}), en {procs}
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning})	un error de PostScript ({name} en `{op}`: {at}; {meaning})
+@msg	a PostScript error ({name} in `{op}`: {at}; {meaning}), in {procs}	un error de PostScript ({name} en `{op}`: {at}; {meaning}), en {procs}
+@msg	a PostScript error ({name}; {meaning})	un error de PostScript ({name}; {meaning})
+@msg	the program ends a dictionary it didn't begin	el programa cierra un diccionario que no abrió
+@msg	the program opens a file, which the reader can't do	el programa abre un archivo, algo que el lector no puede hacer
+@msg	the program restores a saved state that was already restored	el programa restaura un estado guardado que ya se había restaurado
+@msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	los datos que lee el programa están dañados o cortados, o el programa pide una posición en un archivo que no la tiene
+@msg	the program goes past one of the reader's limits	el programa supera uno de los límites del lector
+@msg	the path has no point to continue from	el trazado no tiene un punto desde el que continuar
+@msg	a value is outside the range the operator takes	un valor está fuera del intervalo que admite el operador
+@msg	the operator needs more values than the stack holds	el operador necesita más valores de los que tiene la pila
+@msg	part of the program isn't valid PostScript text	una parte del programa no es texto PostScript válido
+@msg	a value has the wrong type for the operator	un valor tiene un tipo incorrecto para el operador
+@msg	the program runs, deletes or renames a file, which the reader can't do	el programa ejecuta, elimina o cambia el nombre de un archivo, algo que el lector no puede hacer
+@msg	the program asks for a resource that isn't defined	el programa pide un recurso que no está definido
+@msg	a calculation has no result, as in a division by zero	un cálculo no tiene resultado, como en una división por cero
+@msg	the operator looks for a mark on the stack and finds none	el operador busca una marca en la pila y no encuentra ninguna
 @msg	a bitmap is empty	un mapa de bits está vacío
 @msg	a bitmap is too large to read	un mapa de bits es demasiado grande para leerlo
 @msg	a colour index is 0 to {_1}, not {n}	un índice de color va de 0 a {_1}, no {n}
@@ -3970,7 +4033,9 @@ axis	Both	Ambos
 @msg	no blend options	no hay opciones de fusión
 @msg	no bounds	sin límites
 @msg	no brush named `{name}`	no hay ningún pincel llamado `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	el nombre de un pincel de cerdas puede tener como máximo {max} caracteres: `{name}` tiene {count}
 @msg	no brush selected	no hay ningún pincel seleccionado
+@msg	brushes move only within their type	los pinceles solo se pueden mover dentro de su tipo
 @msg	no catalog	no hay catálogo
 @msg	no changes since the last save	no hay cambios desde la última vez que se guardó
 @msg	no clock to keep a heartbeat by	no hay reloj para mantener la señal de actividad
@@ -4024,6 +4089,7 @@ axis	Both	Ambos
 @msg	no such action	no existe esa acción
 @msg	no such anchor	no existe ese punto de ancla
 @msg	no such artboard	no existe esa mesa de trabajo
+@msg	the artboard is locked	la mesa de trabajo está bloqueada
 @msg	no such document	no existe ese documento
 @msg	no such layer or object	no existe esa capa u objeto
 @msg	no such object {0}	no existe el objeto {0}
@@ -4115,6 +4181,10 @@ axis	Both	Ambos
 @msg	select a repeat	selecciona una repetición
 @msg	select an Intertwine group	selecciona un grupo entrelazado
 @msg	select an Objects on Path group	selecciona un grupo de objetos en trazado
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un trazado dentro de un trazado compuesto, una fusión, una envolvente, una repetición o un grupo entrelazado no puede recibir objetos
+@msg	a clipping path can't take objects	un trazado de recorte no puede recibir objetos
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	los objetos dentro de una fusión, una envolvente, una repetición o un grupo entrelazado no se pueden adjuntar a un trazado
+@msg	a clipping path can't be attached to a path	un trazado de recorte no se puede adjuntar a un trazado
 @msg	select a stroke with a variable width	selecciona un trazo con anchura variable
 @msg	select a symbol instance	selecciona una instancia de símbolo
 @msg	select an Image Trace object	selecciona un objeto de calco de imagen
@@ -4234,6 +4304,7 @@ axis	Both	Ambos
 @msg	unknown workspace (one of {_1})	espacio de trabajo desconocido (uno de estos: {_1})
 @msg	unsupported: {0}	no compatible: {0}
 @msg	variables are locked	las variables están bloqueadas
+@msg	variables that aren't text were left out: {kinds}	se omitieron las variables que no son de texto: {kinds}
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	los archivos de la versión {0} no se pueden comprimir: solo la versión {COMPRESSED_SINCE} y posteriores abren archivos comprimidos
 @msg	width and height are at least 1 pixel	el ancho y el alto son de al menos 1 píxel
 @msg	workspace name can't be empty	el nombre del espacio de trabajo no puede estar vacío
@@ -4486,6 +4557,7 @@ axis	Both	Ambos
 	Activate Panel	Activar panel
 	Change Panel Layout	Cambiar distribución de paneles
 	Close Panel	Cerrar panel
+	Collapse Panel Group	Contraer grupo de paneles
 	Move Panel	Mover panel
 	Group with	Agrupar con
 	Resize panels	Cambiar tamaño de los paneles
@@ -4496,6 +4568,12 @@ axis	Both	Ambos
 @msg	before must name a panel	before debe indicar un panel
 @msg	docking action contains an unknown panel or an excessive split path	La acción de anclaje contiene un panel desconocido o una ruta de divisiones demasiado larga
 @msg	group must be true or false	group debe ser true o false
+@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	el panel flota; contraiga su grupo con window.panel.float {panel, collapsed}
+@msg	panel is not in a dock group	el panel no está en un grupo del acoplamiento
+@msg	only a dock group above or below others collapses, not one beside another	solo se contrae un grupo del acoplamiento situado encima o debajo de otros, no al lado
+@msg	icon must be true or false	icon debe ser true o false
+@msg	icon only docks a panel in the icon column, with no anchor	icon solo acopla un panel en la columna de iconos, sin anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column acopla un conjunto como columna del acoplamiento, sin anchor ni icon
 @msg	move requires a destination panel	Para mover se requiere un panel de destino
 @msg	move requires an existing destination panel	Para mover se requiere un panel de destino existente
 @msg	onto must name a floating panel	onto debe indicar un panel flotante
@@ -4574,12 +4652,24 @@ lighting	Light	Luz
 	Reset Ruler Origin	Restablecer el origen de las reglas
 	Artistic	Artístico
 	Film Grain…	Granulado de película…
+	Colored Pencil…	Lápiz de color…
+	Colored Pencil	Lápiz de color
 	Cutout…	Recorte…
 	Cutout	Recorte
+	Dry Brush…	Pincel seco…
+	Dry Brush	Pincel seco
 	Neon Glow…	Resplandor de neón…
+	Palette Knife…	Espátula…
 	Neon Glow	Resplandor de neón
+	Paint Daubs…	Pinceladas…
+	Paint Daubs	Pinceladas
+	Palette Knife	Espátula
 	Poster Edges…	Bordes de póster…
+	Rough Pastels…	Pastel rudo…
 	Poster Edges	Bordes de póster
+	Rough Pastels	Pastel rudo
+	Underpainting…	Subpintura…
+	Underpainting	Subpintura
 	Levels	Niveles
 	Edge Simplicity	Simplicidad de bordes
 	Edge Fidelity	Fidelidad de bordes
@@ -5042,6 +5132,9 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	3D Lighting Preset	Ajuste preestablecido de iluminación 3D
+	Standard	Estándar
+	Diffuse	Difusa
 # 3D light management.
 	Lights	Luces
 	Add Light	Añadir luz
@@ -5086,6 +5179,7 @@ mark-style	Japanese	Japonesas
 @msg	Measured anchor no longer exists	El punto de ancla medido ya no existe
 @msg	Measured segment no longer exists	El segmento medido ya no existe
 @msg	Non-finite dimension	Cota no finita
+@msg	Scale Text Attributes: selected type has no scale to bake	Escalar atributos de texto: el texto seleccionado no tiene escala que aplicar
 @msg	Scale must be drawing:real, for example 1:10	La escala debe ser dibujo:real, por ejemplo 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	La relación de escala debe estar entre 1:1000000 y 1000000:1
 @msg	Second measured segment no longer exists	El segundo segmento medido ya no existe
@@ -5104,6 +5198,7 @@ mark-style	Japanese	Japonesas
 	Make Image Dynamic	Hacer imagen dinámica
 	Import Data Sets…	Importar conjuntos de datos…
 	Export Data Sets…	Exportar conjuntos de datos…
+	Load Variable Library…	Cargar biblioteca de variables…
 	Make Graph Dynamic	Hacer gráfico dinámico
 	Batch…	Lote…
 	Source Folder:	Carpeta de origen:
@@ -5126,6 +5221,8 @@ mark-style	Japanese	Japonesas
 	Sketch	Bosquejar
 	Halftone Pattern…	Trama de semitonos…
 	Halftone Pattern	Trama de semitonos
+	Torn Edges…	Bordes desgarrados…
+	Torn Edges	Bordes desgarrados
 	Pattern Type	Tipo de trama
 	Dot	Punto
 # User Interface › Color Scheme
@@ -5144,6 +5241,7 @@ mark-style	Japanese	Japonesas
 	Watercolor…	Acuarela…
 	Watercolor	Acuarela
 	Brush Size	Tamaño del pincel
+	Texture Coverage	Cobertura de textura
 	Definition	Definición
 	Brush Detail	Detalle del pincel
 	Shadow Intensity	Intensidad de sombras
@@ -5172,24 +5270,14 @@ mark-style	Japanese	Japonesas
 @msg	the image's pixels can't be read	no se pueden leer los píxeles de la imagen
 	Persistent	Persistente
 	Library Panel Options	Opciones del panel de biblioteca
+	Locate Library…	Localizar biblioteca…
 @msg	Persistent libraries not found: {files}	No se encontraron bibliotecas persistentes: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` no es un panel de biblioteca (consulte window.swatchLibrary)
 @msg	library panel `{given}` isn't open	el panel de biblioteca `{given}` no está abierto
 @msg	too many library panels were opened in this session	se abrieron demasiados paneles de biblioteca en esta sesión
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	La imagen tiene {_1} × {_2} píxeles, más de {LARGE_TRACE_SIDE} en un lado: se calcará, pero más despacio. Un ajuste preestablecido de menor fidelidad o una copia más pequeña de la imagen se calcan más rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	La imagen se calcó a {_1} × {_2} píxeles, reducida desde {_3} × {_4} ({_5} megapíxeles como máximo).
-	Lock Artboards	Bloquear mesas de trabajo
-	Unlock Artboards	Desbloquear mesas de trabajo
-	Artboard Color	Color de la mesa de trabajo
-	Lock Selected	Bloquear selección
-	Lock All Except Selected	Bloquear todo excepto la selección
-	Lock All	Bloquear todo
-	Unlock Selected	Desbloquear selección
-	Lock Artboard	Bloquear mesa de trabajo
-	Unlock Artboard	Desbloquear mesa de trabajo
-	Clear Artboard Color	Borrar color de la mesa de trabajo
-@msg	artboard {_1} is locked	la mesa de trabajo {_1} está bloqueada
-	Include Artboard Fill	Incluir color de la mesa de trabajo
+	Gap Length:	Longitud del hueco:
 	Artboard {n} of {total}	Mesa de trabajo {n} de {total}
 	Encoding and writing the file…	Codificando y escribiendo el archivo…
 @plural	{n} more export waiting|{n} more exports waiting	{n} exportación más en espera|{n} exportaciones más en espera
@@ -5227,3 +5315,9 @@ mark-style	Japanese	Japonesas
 	Plaster	Yeso
 	Note Paper…	Papel con relieve…
 	Note Paper	Papel con relieve
+	Water Paper…	Papel mojado…
+	Water Paper	Papel mojado
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Fresco…	Fresco…
+	Fresco	Fresco

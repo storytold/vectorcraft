@@ -17,10 +17,14 @@
 //! scaling its type: the text reflows at its size.
 //! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
 //! E pressed again makes it take the objects it touches.
-//! A click on the red out port of selected area type whose text overflows loads the pointer with
-//! that text ([`Cursor::LoadedText`]): the next click threads it into the closed path or area type
-//! under the pointer, or into a new frame of the same shape and size at the click on empty canvas,
+//! A click on the red out port of selected area type or type on a path whose text overflows loads
+//! the pointer with that text ([`Cursor::LoadedText`]): the next click threads it into the closed
+//! path, area type or type on a path under the pointer, or into a new frame of the same kind, shape
+//! and size at the click on empty canvas,
 //! and a drag draws a rectangle for the new frame (`text.thread.add`). Escape drops the loaded text.
+
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{hit_test, marquee, objects_at};
@@ -80,8 +84,8 @@ enum State {
     Mirror(crate::mirror::MirrorDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
-    /// Loaded with the text of area type `from` by a click on its out port; `press`: where the
-    /// next press went down and where the pointer is now.
+    /// Loaded with the text of area type or type on a path `from` by a click on its out port;
+    /// `press`: where the next press went down and where the pointer is now.
     Loaded {
         from: NodeId,
         press: Option<(Point, Point)>,
@@ -104,7 +108,7 @@ pub struct SelectionTool {
 }
 
 /// Snapping for the selection moved as a whole, its targets gathered when the move begins: View →
-/// Snap to Grid lands its bounds on the grid (#740), taking over from the rest; otherwise Smart
+/// Snap to Grid lands its edges on the grid (#740), taking over from the rest; otherwise Smart
 /// Guides line its bounds up with the other art, and with them off, View → Snap to Point lands the
 /// point it was grabbed by (an anchor pressed near, else the pressed point) on an anchor or a ruler
 /// guide. Snap to Pixel puts its top-left on whole pixels. A copy (Alt, which can go down or up at
@@ -246,12 +250,12 @@ impl MoveSnap {
 }
 
 /// The shift that lands `r` on the grid (a gridline every `step`), on each axis by whichever of its
-/// two edges and its centre is nearest a gridline, however far that is.
+/// two edges is nearest a gridline, however far that is. The center does not snap (#1816).
 fn grid_pull(r: Rect, step: f64) -> Vec2 {
-    let pull = |vs: [f64; 3]| {
+    let pull = |vs: [f64; 2]| {
         vs.iter().map(|v| vectorcraft_geom::snap::snap_to_grid(*v, step, 0.0) - v).min_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or(0.0)
     };
-    Vec2::new(pull([r.x0, r.center().x, r.x1]), pull([r.y0, r.center().y, r.y1]))
+    Vec2::new(pull([r.x0, r.x1]), pull([r.y0, r.y1]))
 }
 
 pub fn matrix_json(a: Affine) -> Value {
@@ -259,16 +263,103 @@ pub fn matrix_json(a: Affine) -> Value {
     json!([c[0], c[1], c[2], c[3], c[4], c[5]])
 }
 
-/// Selection bounds used for the bounding box: visual bounds with Use Preview Bounds, else
-/// geometric bounds.
+/// The bounds the selection tools measured for one state of an open document: [`selection_bounds`],
+/// [`selection_box`] and the objects' bounds that Smart Guides find centers in while hovering
+/// ([`object_bounds`]). With Use Preview Bounds on, each measurement evaluates the geometry effects
+/// of the objects (Offset Path, Pathfinder, Outline Object, blends), and the canvas asks for the
+/// cursor on every hover frame. The session keeps one memo ([`ToolContext::preview_memo`]), as the
+/// UI keeps one for `VectorcraftApp::selection_box`. The memo holds the measurements for one key
+/// (the document's uid and revision, the selected objects and Use Preview Bounds), and a new key
+/// replaces them.
+#[derive(Default)]
+pub struct PreviewMemo(RefCell<MemoState>);
+
+#[derive(Default)]
+struct MemoState {
+    entry: Option<Measured>,
+    /// How many measurements the memo has made.
+    measurements: u64,
+}
+
+/// The measurements for one key; a slot holds `None` until it is measured.
+struct Measured {
+    revision: (u64, u64),
+    objects: Vec<NodeId>,
+    preview: bool,
+    bounds: Option<Option<Rect>>,
+    oriented: Option<Option<OrientedBox>>,
+    by_object: HashMap<NodeId, Option<Option<Rect>>>,
+}
+
+impl Measured {
+    fn is_for(&self, cx: &ToolContext) -> bool {
+        self.revision == cx.revision && self.preview == cx.preview_bounds && self.objects == cx.selection.objects
+    }
+}
+
+impl PreviewMemo {
+    /// How many measurements the memo has made: each one it could not answer from the measurements
+    /// for the document as it is.
+    pub fn measurements(&self) -> u64 {
+        self.0.try_borrow().map_or(0, |st| st.measurements)
+    }
+
+    /// The measurements for the state `cx` shows, after the ones for any other state are dropped.
+    fn current<'m>(st: &'m mut MemoState, cx: &ToolContext) -> &'m mut Measured {
+        let fresh = || Measured {
+            revision: cx.revision,
+            objects: cx.selection.objects.clone(),
+            preview: cx.preview_bounds,
+            bounds: None,
+            oriented: None,
+            by_object: HashMap::new(),
+        };
+        if !st.entry.as_ref().is_some_and(|m| m.is_for(cx)) {
+            st.entry = Some(fresh());
+        }
+        st.entry.get_or_insert_with(fresh)
+    }
+
+    /// The value `slot` holds for the state `cx` shows, else `measure`'s, which `slot` then holds.
+    fn remember<T: Clone>(&self, cx: &ToolContext, slot: impl Fn(&mut Measured) -> &mut Option<T>, measure: impl FnOnce() -> T) -> T {
+        if let Ok(mut st) = self.0.try_borrow_mut()
+            && let Some(v) = slot(Self::current(&mut st, cx)).clone()
+        {
+            return v;
+        }
+        let v = measure();
+        if let Ok(mut st) = self.0.try_borrow_mut() {
+            st.measurements += 1;
+            *slot(Self::current(&mut st, cx)) = Some(v.clone());
+        }
+        v
+    }
+}
+
+/// `measure`'s value, kept in the session's [`PreviewMemo`] in the slot `slot` picks; measured
+/// every time without a memo.
+fn remembered<T: Clone>(cx: &ToolContext, slot: impl Fn(&mut Measured) -> &mut Option<T>, measure: impl FnOnce() -> T) -> T {
+    match cx.preview_memo {
+        Some(memo) => memo.remember(cx, slot, measure),
+        None => measure(),
+    }
+}
+
+/// Selection bounds used for the bounding box: visual bounds as drawn with Use Preview Bounds
+/// ([`vectorcraft_effects::preview`]), else geometric bounds.
 pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
-    cx.doc.bounds_of(&cx.selection.objects, cx.preview_bounds)
+    remembered(cx, |m| &mut m.bounds, || vectorcraft_effects::preview::bounds_of(cx.doc, &cx.selection.objects, cx.preview_bounds))
 }
 
 /// [`selection_bounds`] square to the selection's own angle: the bounding box the Selection tool
 /// shows and drags (rotated after a rotation).
 pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
-    cx.doc.oriented_bounds(&cx.selection.objects, cx.preview_bounds)
+    remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds(cx.doc, &cx.selection.objects, cx.preview_bounds))
+}
+
+/// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
+fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
+    remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
 }
 
 /// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
@@ -321,7 +412,7 @@ impl SelectionTool {
             return None;
         }
         let reach = cx.tol(HOVER_REACH);
-        let under = hit_test(cx.doc, p, cx.hit_options()).map(|h| h.top_object(cx.isolation));
+        let under = hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation));
         let nearest = |points: &mut dyn Iterator<Item = Point>| {
             points.filter(|q| q.distance(p) <= reach).min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
         };
@@ -334,19 +425,19 @@ impl SelectionTool {
                 if !cx.smart_guides {
                     return None;
                 }
-                let c = cx.doc.bounds_of(&[id], cx.preview_bounds)?.center();
+                let c = object_bounds(cx, id)?.center();
                 (c.distance(p) <= reach).then_some((c, "center"))
             })
         })
     }
 
-    /// The pointer loaded with the text of area type `from` ([`State::Loaded`]): a press starts
-    /// placing it, and its release threads it (`text.thread.add`). None when `from` is no longer
-    /// area type: the press is an ordinary one.
+    /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
+    /// a press starts placing it, and its release threads it (`text.thread.add`). None when `from`
+    /// can no longer thread: the press is an ordinary one.
     fn loaded(&mut self, cx: &ToolContext, ev: &PointerEvent, from: NodeId, press: Option<(Point, Point)>) -> Option<Vec<Action>> {
         let p = ev.pos;
         match (ev.kind, press) {
-            (PointerKind::Down, _) if !cx.doc.node(from).is_some_and(is_area_type) => {
+            (PointerKind::Down, _) if !cx.doc.node(from).is_some_and(is_threadable) => {
                 self.state = State::Idle;
                 return None;
             }
@@ -363,15 +454,17 @@ impl SelectionTool {
 }
 
 /// Where the text of `from` goes for a press at `start` released at `end`: a dragged rectangle,
-/// else the closed path or area type pressed on, else a new frame with its top-left at `start`.
+/// else the closed path, area type or type on a path pressed on, else a new frame with its
+/// top-left at `start`.
 fn thread_params(cx: &ToolContext, from: NodeId, start: Point, end: Point) -> Value {
     let r = Rect::from_points(start, end);
     if r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0) {
         return json!({ "from": from.0, "rect": [r.x0, r.y0, r.width(), r.height()] });
     }
     let frame = |n: &vectorcraft_doc::Node| {
-        is_area_type(n) || matches!(&n.kind, vectorcraft_doc::NodeKind::Path { path, .. } if path.subpaths.first().is_some_and(|s| s.closed))
+        is_threadable(n) || matches!(&n.kind, vectorcraft_doc::NodeKind::Path { path, .. } if path.subpaths.first().is_some_and(|s| s.closed))
     };
+    // The art the text flows into: what is drawn, not a clipping path's outline.
     let to =
         hit_test(cx.doc, start, cx.hit_options()).map(|h| h.top_object(cx.isolation)).filter(|id| *id != from && cx.doc.node(*id).is_some_and(frame));
     match to {
@@ -488,6 +581,7 @@ impl Tool for SelectionTool {
                 if crate::rulerguide::guide_at(cx, p).is_some() {
                     return vec![];
                 }
+                // A double-click edits what is drawn: not a clipping path's outline.
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
@@ -567,7 +661,7 @@ impl Tool for SelectionTool {
                     self.state = State::Moving { start: p, began: false, deselect: None, key: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
-                match hit_test(cx.doc, p, cx.hit_options()) {
+                match hit_test(cx.doc, p, cx.selection_hit_options()) {
                     Some(h) => {
                         let top = h.top_object(cx.isolation);
                         let mut out = vec![];
@@ -624,11 +718,21 @@ impl Tool for SelectionTool {
                 }
                 let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
-                let mut params = json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false });
+                // With Use Preview Bounds the box is the visual box, whose margins around the art
+                // (strokes, geometry effects) scale with it or stay. `object.setBounds` then gives the
+                // visual box the dragged size and keeps its opposite handle (with Alt, its center)
+                // where it is. A drag that flips the box scales by the matrix.
+                let [sx, _, _, sy, _, _] = a.as_coeffs();
+                let (cmd, mut params) = if cx.preview_bounds && cx.selection.anchors.is_empty() && sx > 0.0 && sy > 0.0 {
+                    let reference = if m.alt { 4 } else { handle.opposite().reference() };
+                    ("object.setBounds", json!({ "width": nr.width(), "height": nr.height(), "reference": reference, "copy": false }))
+                } else {
+                    ("object.transform", json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false }))
+                };
                 if areas {
                     params["typeAreas"] = json!(true);
                 }
-                vec![Action::Preview("object.transform".into(), params)]
+                vec![Action::Preview(cmd.into(), params)]
             }
             (PointerKind::Drag, State::Rotating { center, start, .. }) => {
                 let (a, deg) = rotate_for_drag(center, start, p, m.shift);
@@ -789,7 +893,7 @@ impl Tool for SelectionTool {
         if cx.snap_to_point && matches!(Self::hover_point(cx, p), Some((_, "anchor"))) {
             return Cursor::ArrowHollow;
         }
-        if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
+        if let Some(h) = hit_test(cx.doc, p, cx.selection_hit_options()) {
             if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
                 return Cursor::Move;
             }
@@ -802,7 +906,7 @@ impl Tool for SelectionTool {
 /// Select Behind: of the objects under `p` (topmost first), the one below the lowest selected
 /// one, back to the topmost after the bottom one; the topmost when none is selected.
 fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
-    let stack = objects_at(cx.doc, p, cx.hit_options(), cx.isolation);
+    let stack = objects_at(cx.doc, p, cx.selection_hit_options(), cx.isolation);
     let next = stack.iter().rposition(|id| cx.selection.contains(*id)).map_or(0, |i| i + 1);
     stack.get(next).or(stack.first()).copied()
 }
@@ -823,6 +927,11 @@ fn can_be_key(cx: &ToolContext, id: NodeId) -> bool {
 pub(crate) fn is_area_type(n: &vectorcraft_doc::Node) -> bool {
     n.extras().perspective.is_none()
         && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
+}
+
+/// Can `n` be a frame of a thread: area type or type on a path, outside perspective?
+pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
+    n.extras().perspective.is_none() && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if !matches!(t.kind, vectorcraft_doc::TextKind::Point))
 }
 
 /// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
@@ -873,6 +982,21 @@ mod tests {
         PointerEvent::new(kind, x, y)
     }
 
+    /// A Selection tool press on a clip group's mask edge, where the art it clips lies over it,
+    /// selects the clip group, as a press on the art inside does.
+    #[test]
+    fn a_press_on_a_masks_edge_selects_its_clip_group() {
+        let (d, g, _, _) = doc_with_masked_square();
+        let (s, p) = (Selection::default(), paint());
+        for x in [500.0, 501.5, 450.0] {
+            let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, x, 450.0));
+            assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([g.0]))), "at {x}: {a:?}");
+        }
+        // Just outside the mask, beyond the tolerance, the clipped-away art isn't there.
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 520.0, 450.0));
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "{a:?}");
+    }
+
     /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
     /// exactly on it with Smart Guides, even where lining the bounds up would leave it beside it.
     #[test]
@@ -907,6 +1031,7 @@ mod tests {
             h: 100.0,
             radii: [0.0; 4],
             kinds: Default::default(),
+            radii_relative: false,
             xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
         };
         let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
@@ -1215,10 +1340,10 @@ mod tests {
         assert_eq!(t.cursor(&c, Point::new(377.0, 371.0), alt), Cursor::SelectionCopy);
     }
 
-    /// #740: with Snap to Grid on, a moved object lands on the grid (every 9 pt by default) by
-    /// whichever of its edges or its centre is nearest a gridline, on each axis.
+    /// #740, #1816: with Snap to Grid on, a moved object lands on the grid (every 9 pt by default)
+    /// by whichever of its edges is nearest a gridline, on each axis.
     #[test]
-    fn a_move_lands_the_nearest_edge_or_centre_on_the_grid() {
+    fn a_move_lands_the_nearest_edge_on_the_grid() {
         let (d, id) = doc_with_rect();
         let mut s = Selection::default();
         s.add(id);
@@ -1233,9 +1358,10 @@ mod tests {
                 other => panic!("{other:?}"),
             }
         };
-        // Bounds 100–200 moved by (13, 4): the centres (163, 154) are nearest gridlines (162, 153).
+        // Bounds 100–200 moved by (13, 4): the right and bottom edges (213, 204) are nearest
+        // gridlines (216, 207).
         let (x, y) = moved((163.0, 154.0));
-        assert!((x - 12.0).abs() < 1e-9 && (y - 3.0).abs() < 1e-9, "{x} {y}");
+        assert!((x - 16.0).abs() < 1e-9 && (y - 7.0).abs() < 1e-9, "{x} {y}");
         // Moved by (7, 0): the right edge is on a gridline (207) and the top goes up to one (99).
         let (x, y) = moved((157.0, 150.0));
         assert!((x - 7.0).abs() < 1e-9 && (y + 1.0).abs() < 1e-9, "{x} {y}");
@@ -1260,7 +1386,7 @@ mod tests {
 
     /// A Shift-constrained move snapped to the grid stays on its line: a level or upright one lands
     /// on the grid along its own axis only, and a diagonal one slides along the diagonal until an
-    /// edge or the center is on a gridline on the axis that needs the shorter way there.
+    /// edge is on a gridline on the axis that needs the shorter way there.
     #[test]
     fn a_shift_move_snapped_to_the_grid_stays_on_its_line() {
         let (d, id) = doc_with_rect();
@@ -1268,16 +1394,47 @@ mod tests {
         s.add(id);
         let p = paint();
         let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
-        // Level by 13.04: the center (163.04) lands on the gridline 162, and the top stays at 100,
-        // between the gridlines 99 and 108.
+        // Level by 13.04: the right edge (213.04) lands on the gridline 216, and the top stays at
+        // 100, between the gridlines 99 and 108.
         let (m, _) = shift_moved(&cx, (163.0, 151.0));
-        assert!(moved_by(m, (12.0, 0.0)), "{m:?}");
+        assert!(moved_by(m, (16.0, 0.0)), "{m:?}");
         let (m, _) = shift_moved(&cx, (151.0, 163.0));
-        assert!(moved_by(m, (0.0, 12.0)), "{m:?}");
-        // Up and to the right by 13 on each axis: the center (163, 137) is 1 from the gridline 162
-        // and 2 from 135, so the move goes back along the diagonal by 1 on each axis.
+        assert!(moved_by(m, (0.0, 16.0)), "{m:?}");
+        // Up and to the right by 13 on each axis: the bottom edge (187) is 2 from the gridline 189,
+        // and the right edge (213) is 3 from 216, so the move goes back along the diagonal by 2 on
+        // each axis.
         let (m, _) = shift_moved(&cx, (163.0, 137.0));
-        assert!(moved_by(m, (12.0, -12.0)), "{m:?}");
+        assert!(moved_by(m, (11.0, -11.0)), "{m:?}");
+    }
+
+    /// #1816: on a 20 pt grid (gridlines every 100, 5 subdivisions), the 100 pt square at 100–200
+    /// sits on the grid with its center half a step off. A move by (8, 8) brings the left and top
+    /// edges back onto the gridlines at 100, so the square stays where it was; a move by (31, 29)
+    /// lands its edges on the nearest gridlines (140, 120). The center does not snap.
+    #[test]
+    fn a_move_keeps_an_object_on_the_grid_when_its_center_is_off_it() {
+        let (mut d, id) = doc_with_rect();
+        d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 5 };
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        let moved = |to: (f64, f64)| {
+            let mut t = SelectionTool::default();
+            t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+            let a = t.pointer(&cx, &ev(PointerKind::Drag, to.0, to.1));
+            let Some(Action::Preview(_, v)) = a.get(1) else { panic!("{a:?}") };
+            Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap())
+        };
+        let m = moved((158.0, 158.0));
+        assert!(moved_by(m, (0.0, 0.0)), "{m:?}");
+        let m = moved((181.0, 179.0));
+        assert!(moved_by(m, (40.0, 20.0)), "{m:?}");
+        // With Shift, level and diagonal moves by 8 come back to where they started too.
+        let (m, _) = shift_moved(&cx, (158.0, 150.0));
+        assert!(moved_by(m, (0.0, 0.0)), "{m:?}");
+        let (m, _) = shift_moved(&cx, (158.0, 158.0));
+        assert!(moved_by(m, (0.0, 0.0)), "{m:?}");
     }
 
     /// A Shift-constrained move with Snap to Pixel on puts the top-left on a whole pixel on the
@@ -2038,6 +2195,37 @@ mod tests {
         (d, id, rect, port)
     }
 
+    /// Type on a path whose text overflows has its out port just past its end bracket, along the
+    /// path: a click there loads the pointer with its text, as area type's does.
+    #[test]
+    fn the_out_port_of_type_on_a_path_loads_its_text() {
+        let (mut d, id) = doc_with_area_type();
+        let Some(vectorcraft_doc::NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("not text") };
+        let line = vectorcraft_geom::kurbo::Line::new((0.0, 200.0), (100.0, 200.0));
+        t.kind = vectorcraft_doc::TextKind::OnPath {
+            path: vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::kurbo::Shape::to_path(&line, 0.1)),
+            start: 0.0,
+            end: Some(0.8),
+        };
+        t.xf = vectorcraft_geom::Affine::IDENTITY;
+        t.runs = vec![vectorcraft_doc::TextRun::new("Words that run past the end of the path. ".repeat(5), vectorcraft_doc::CharStyle::default())];
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        // The end bracket stands at 80, 200; the port past it, along the path.
+        let port = Point::new(80.0 + crate::text::PORT_RISE_PX, 200.0);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y)).is_empty());
+        assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0)).is_empty());
+        assert_eq!(
+            t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)),
+            vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [30.0, 420.0]}))]
+        );
+    }
+
     /// #2572: a click on the out port loads the pointer with the text; a click on empty canvas then
     /// threads it into a new frame there, a click on a closed path into the path, a drag into the
     /// rectangle it draws.
@@ -2072,6 +2260,62 @@ mod tests {
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Resize Type Area".into())]);
     }
 
+    /// Loaded text clicked just inside a layer's clipping mask, where art is drawn over the mask's
+    /// edge, threads into that art, not into the unpainted mask: placing text acts on what is drawn,
+    /// so it takes the ordinary hit, not the selection tools' clipping-path outline.
+    #[test]
+    fn loaded_text_threads_into_the_art_on_a_layer_masks_edge() {
+        let (mut d, id, _, port) = overflowing_area_type();
+        let art = d.alloc_id();
+        let picture = vectorcraft_doc::Node::path(
+            art,
+            vectorcraft_geom::shapes::rectangle(Rect::new(350.0, 350.0, 550.0, 550.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        );
+        add_masked_layer(&mut d, Rect::new(400.0, 400.0, 500.0, 500.0), picture);
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        assert!(cx.selection_hit_options().clip_outlines, "the selection tools would take the mask here");
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+        t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+        t.pointer(&cx, &ev(PointerKind::Down, 498.5, 450.0));
+        assert_eq!(
+            t.pointer(&cx, &ev(PointerKind::Up, 498.5, 450.0)),
+            vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "to": art.0}))]
+        );
+    }
+
+    /// A double-click on type where a layer's clipping mask edge runs through it edits the type,
+    /// though a press there selects the mask: what a double-click edits is what is drawn.
+    #[test]
+    fn a_double_click_on_type_at_a_layer_masks_edge_edits_it() {
+        let (d, _, at) = doc_with_type_on_a_layer_masks_edge();
+        let (s, p) = (Selection::default(), paint());
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::DoubleClick, at.x, at.y));
+        assert_eq!(a, vec![Action::SwitchTool("type".into())]);
+    }
+
+    /// A Cmd/Ctrl+Shift double-click releases a guide path where it crosses a layer's clipping
+    /// mask edge (its left side, x = 450, just inside the mask's bottom): the mask, unpainted and
+    /// never a guide, doesn't stand in front of it.
+    #[test]
+    fn a_guide_on_a_layer_masks_edge_is_released() {
+        let (mut d, _) = doc_with_rect();
+        let id = d.alloc_id();
+        let mut guide_path =
+            vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(450.0, 350.0, 550.0, 550.0)), Default::default());
+        let vectorcraft_doc::NodeKind::Path { guide, .. } = &mut guide_path.kind else { panic!("a path") };
+        *guide = true;
+        add_masked_layer(&mut d, Rect::new(400.0, 400.0, 500.0, 500.0), guide_path);
+        let (s, p) = (Selection::default(), paint());
+        let both = Mods { cmd: true, shift: true, ..Mods::default() };
+        let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::DoubleClick, 450.0, 498.5).with_mods(both));
+        assert_eq!(a, vec![Action::Exec("view.guides.release".into(), json!({"ids": [id.0]}))]);
+    }
+
     /// Escape drops the loaded text, and the next click is an ordinary one; type that fits its
     /// frame shows no out port to click.
     #[test]
@@ -2099,5 +2343,37 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
         t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
         assert_ne!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+    }
+
+    /// The memo answers for the revision, the selected objects and Use Preview Bounds it measured
+    /// for, and measures again when any of them changes.
+    #[test]
+    fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
+        let (d, id) = doc_with_rect();
+        let mut moved = d.clone();
+        if let Some(n) = moved.node_mut(id) {
+            n.transform(Affine::translate((50.0, 0.0)), false);
+        }
+        let (mut s, p, memo) = (Selection::default(), paint(), PreviewMemo::default());
+        s.set([id]);
+        let at = |d, s, revision, preview_bounds| {
+            let c = ToolContext { revision, preview_bounds, preview_memo: Some(&memo), ..cx(d, s, &p) };
+            (selection_bounds(&c).map(|r| r.x1), object_bounds(&c, id).map(|r| r.x1))
+        };
+        assert_eq!(at(&d, &s, (1, 1), false), (Some(200.0), Some(200.0)));
+        assert_eq!(memo.measurements(), 2);
+        // The same revision with the moved square: the memo answers with what it measured.
+        assert_eq!(at(&moved, &s, (1, 1), false), (Some(200.0), Some(200.0)));
+        assert_eq!(memo.measurements(), 2);
+        assert_eq!(at(&moved, &s, (1, 2), false), (Some(250.0), Some(250.0)), "a new revision");
+        assert_eq!(memo.measurements(), 4);
+        assert_eq!(at(&moved, &s, (1, 2), true), (Some(250.5), Some(250.5)), "Use Preview Bounds counts the stroke");
+        assert_eq!(memo.measurements(), 6);
+        let none = Selection::default();
+        assert_eq!(at(&moved, &none, (1, 2), true), (None, Some(250.5)), "another selection");
+        assert_eq!(memo.measurements(), 8);
+        // Without a memo, every call measures.
+        let c = cx(&moved, &s, &p);
+        assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
     }
 }

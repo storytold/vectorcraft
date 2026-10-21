@@ -798,7 +798,8 @@ fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         for (id, width, text) in [
             ("render", render_width, format!("{render} {:.1} ms", app.perf.render_ms)),
             ("ui", ui_width, format!("{ui_name} {:.1} ms", app.perf.frame_ms)),
-            ("fps", fps_width, format!("{:.0} fps", app.perf.fps)),
+            // No rate until the window has drawn continuously for a moment (`frame_rate`).
+            ("fps", fps_width, if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "– fps".into() }),
         ] {
             let rect = egui::Rect::from_min_size(egui::pos2(x, area.top()), vec2(width, area.height()));
             status_field(ui, id, rect, text, proportional.clone(), t.text_disabled);
@@ -971,7 +972,14 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             (" to sample a color", false),
         ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
-        "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
+        "artboard" => &[
+            ("Click", true),
+            (" to select an artboard  |  ", false),
+            ("Drag", true),
+            (" on the canvas to create one (", false),
+            ("Shift", true),
+            (" selects several, or draws one inside an artboard)", false),
+        ],
         "width" => &[
             ("Drag", true),
             (" a stroke to add a width point  |  ", false),

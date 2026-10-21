@@ -366,7 +366,7 @@ fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
     let base = GridDefinition::default();
     let check = |v: &Value| base.merged(v).map_err(|e| bad(C, format!("`{}`: {e}", v["name"].as_str().unwrap_or("?"))));
     let presets = file.presets.iter().map(check).collect::<Result<Vec<_>>>()?;
-    let replace = bool_or(p, "replace", false);
+    let replace = switch_or(p, "replace", false, C)?;
     let mut imported = vec![];
     for mut preset in presets {
         // A built-in view comes in as a saved copy ("2P-Normal View"…): the built-in one stays.
@@ -390,9 +390,13 @@ fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "imported": imported }))
 }
 
-/// Toggle (or set, with `on`) a view option of the grid.
-fn view_option(s: &mut Session, p: &Value, field: fn(&mut PerspectiveGrid) -> &mut bool) -> Result<Value> {
-    let want = p.get("on").and_then(Value::as_bool);
+/// Toggle (or set, with `on`) a view option of the grid for the command `cmd`.
+fn view_option(s: &mut Session, p: &Value, cmd: &str, field: fn(&mut PerspectiveGrid) -> &mut bool) -> Result<Value> {
+    // A missing or null `on` toggles the option.
+    let want = match p.get("on") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(switch_or(p, "on", false, cmd)?),
+    };
     let mut g = silent(s, |g| {
         let f = field(g);
         *f = want.unwrap_or(!*f);
@@ -401,19 +405,19 @@ fn view_option(s: &mut Session, p: &Value, field: fn(&mut PerspectiveGrid) -> &m
 }
 
 fn lock(s: &mut Session, p: &Value) -> Result<Value> {
-    view_option(s, p, |g| &mut g.locked)
+    view_option(s, p, "perspective.grid.lock", |g| &mut g.locked)
 }
 
 fn lock_station(s: &mut Session, p: &Value) -> Result<Value> {
-    view_option(s, p, |g| &mut g.lock_station)
+    view_option(s, p, "perspective.grid.lockStation", |g| &mut g.lock_station)
 }
 
 fn snap(s: &mut Session, p: &Value) -> Result<Value> {
-    view_option(s, p, |g| &mut g.snap)
+    view_option(s, p, "perspective.grid.snap", |g| &mut g.snap)
 }
 
 fn rulers(s: &mut Session, p: &Value) -> Result<Value> {
-    view_option(s, p, |g| &mut g.rulers)
+    view_option(s, p, "perspective.grid.rulers", |g| &mut g.rulers)
 }
 
 /// Snap to Grid for a move of `ids` from page point `from` to `to` (unless `p` says `snap: false`):

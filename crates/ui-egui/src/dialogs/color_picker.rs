@@ -4,10 +4,12 @@
 //! button that samples a color anywhere on the screen ([`crate::screen_color`]); and a Color
 //! Swatches list. With art selected the colour shows on it live as it is picked; OK keeps it as one
 //! undo step through `paint.setFill` / `paint.setStroke`, Cancel puts the art back.
+//! Opened for an artboard (Properties › Artboards › Fill), it shows the color on the artboard's
+//! paper live, and OK keeps it as one undo step through `artboard.setProps {index, color}`.
 //!
 //! Fields agents set with `ui.dialog.set`: `hex` (`"00FF00"`) or `color` (any colour the paint
 //! commands take), `channel` (`hue`, `saturation`, `brightness`, `red`, `green`, `blue`), `webOnly`
-//! and `swatches`. `stroke` and `original` come from the opener.
+//! and `swatches`. `stroke`, `artboard`, `keep` and `original` come from the opener.
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
@@ -201,18 +203,37 @@ fn proxy_color(app: &VectorcraftApp, stroke: bool) -> Color {
     }
 }
 
-/// `ui.colorPicker {stroke?, color?}`: open the picker for the fill (or stroke) proxy, starting
-/// from `color` or the proxy's colour.
+/// `ui.colorPicker {stroke?, artboard?, color?}`: open the picker for the fill (or stroke) proxy,
+/// or for artboard `artboard`'s background color, starting from `color`, else the proxy's color
+/// or the artboard's color (white when it has none).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!app.session.fill_active);
-    let color = match p.get("color") {
-        Some(v) => color_value(v).ok_or_else(|| format!("bad color {v}"))?,
-        None => proxy_color(app, stroke),
+    let artboard = match p.get("artboard") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let index = v.as_u64().and_then(|i| usize::try_from(i).ok());
+            let found = index.and_then(|i| Some((i, app.session.active()?.doc.artboards.get(i)?.color)));
+            let (i, color) = found.ok_or("no such artboard")?;
+            Some((i, color.unwrap_or(Color::WHITE)))
+        }
+    };
+    let color = match (p.get("color"), artboard) {
+        (Some(v), _) => color_value(v).ok_or_else(|| format!("bad color {v}"))?,
+        (None, Some((_, c))) => c,
+        (None, None) => proxy_color(app, stroke),
     };
     let mut d = Dialog::new(
         KIND,
         json!({"stroke": stroke, "original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false}),
     );
+    if let Some((i, _)) = artboard {
+        d.fields.insert("artboard".into(), json!(i));
+        // OK with the artboard's color (or the white that stands in for none) unchanged keeps the
+        // artboard as it is.
+        if p.get("color").is_none() {
+            d.fields.insert("keep".into(), json!(true));
+        }
+    }
     store(&mut d, &Picked::of(color));
     d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     app.ui.dialog = Some(d);
@@ -382,15 +403,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
 /// Show the picked colour on the selected art while the picker is open: each new colour replaces
 /// the last preview. Nothing previews until the colour first changes, nor without a selection
 /// (the colour then only becomes the default paint, on OK).
+/// Opened for an artboard, the picker shows the color on that artboard's paper, with or without a
+/// selection.
 fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
     let (cmd, params) = paint_command(app, d);
     let first = !app.session.in_interaction();
     let unchanged = d.fields.get(PREVIEWED) == Some(&params) || first && d.fields.get("original").and_then(color_value) == Some(picked(d).color);
-    let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
+    let artboard = d.fields.contains_key("artboard");
+    let selected = artboard || app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
     if unchanged || !selected {
         return;
     }
-    let _ = app.session.begin_interaction(if d.bool("stroke") { "Stroke Color" } else { "Fill Color" });
+    let _ = app.session.begin_interaction(if artboard {
+        "Artboard Options"
+    } else if d.bool("stroke") {
+        "Stroke Color"
+    } else {
+        "Fill Color"
+    });
     if let Err(e) = app.session.preview(cmd, &params) {
         app.status(e.to_string());
     }
@@ -398,12 +428,15 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
 }
 
 /// The command that applies the picked colour to the proxy, and its params (as CMYK in a CMYK
-/// document).
+/// document). Opened for an artboard, the command sets that artboard's background color.
 fn paint_command(app: &VectorcraftApp, d: &Dialog) -> (&'static str, Value) {
     let mut c = picked(d).color;
     if matches!(c, Color::Rgb { .. }) && app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk) {
         let [cy, m, y, k] = c.to_cmyk_managed(cms::active().settings().intent);
         c = Color::cmyk(cy, m, y, k);
+    }
+    if let Some(i) = d.fields.get("artboard").and_then(Value::as_u64) {
+        return ("artboard.setProps", json!({ "index": i, "color": color_json(&c) }));
     }
     (if d.bool("stroke") { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": color_json(&c) }))
 }
@@ -556,8 +589,14 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) ->
     chosen
 }
 
-/// OK: apply the colour to the proxy, keeping the live preview as one undo step.
+/// OK: apply the colour to the proxy, keeping the live preview as one undo step. For an artboard,
+/// OK with the starting color unchanged and nothing previewed closes the picker and leaves the
+/// artboard as it was: without a background color, or with its color in its own color model.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.bool("keep") && !app.session.in_interaction() && d.fields.get("original").and_then(color_value) == Some(picked(d).color) {
+        app.ui.dialog = None;
+        return Ok(Value::Null);
+    }
     let (cmd, params) = paint_command(app, d);
     super::form::commit_preview(app, cmd, params)
 }
@@ -698,6 +737,112 @@ mod tests {
         super::super::cancel(&mut app);
         assert_eq!(fill_hex(&app), "#00ff00");
         assert_eq!(undo(&app), before + 1);
+    }
+
+    /// Opened for an artboard (Properties › Artboards › Fill), the picker starts from the artboard's
+    /// background color (white without one) and shows each color on its paper live, with nothing
+    /// selected. OK keeps the last as one undo step, the art's fill unchanged, and Cancel puts the
+    /// artboard back.
+    #[test]
+    fn an_artboard_shows_its_background_color_live() {
+        let mut app = app();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        app.run("artboard.new", json!({})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[1].color.map(|c| c.to_hex());
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let art = app.session.doc().unwrap().doc.layers.clone();
+        let before = undo(&app);
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("hex"), "FFFFFF", "starts from white paper");
+        frame(&mut app);
+        assert!(!app.session.in_interaction(), "nothing previews before the color changes");
+        for hex in ["ff0000", "00ff00"] {
+            app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!(hex));
+            frame(&mut app);
+            assert_eq!(color(&app), Some(format!("#{hex}")), "live, before OK");
+        }
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(color(&app).as_deref(), Some("#00ff00"));
+        assert_eq!(undo(&app), before + 1, "one step");
+        assert_eq!(app.session.doc().unwrap().doc.layers, art, "the art keeps its fill");
+        // Cancel: back to the color it had, which the picker starts from.
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("hex"), "00FF00");
+        app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("0000ff"));
+        frame(&mut app);
+        assert_eq!(color(&app).as_deref(), Some("#0000ff"));
+        super::super::cancel(&mut app);
+        assert_eq!(color(&app).as_deref(), Some("#00ff00"));
+        assert_eq!(undo(&app), before + 1);
+        assert!(app.run("ui.colorPicker", json!({"artboard": 9})).is_err());
+    }
+
+    /// OK on a picker opened for an artboard without a background color, with the color left at the
+    /// white it starts from, leaves the artboard without one and adds no undo step. A white the
+    /// opener passes as `color` is set.
+    #[test]
+    fn an_untouched_picker_leaves_an_artboard_without_a_color() {
+        let mut app = app();
+        app.run("artboard.new", json!({})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[1].color.map(|c| c.to_hex());
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let before = undo(&app);
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "OK closes the picker");
+        assert_eq!(color(&app), None, "no color");
+        assert_eq!(undo(&app), before, "no undo step");
+        app.run("ui.colorPicker", json!({"artboard": 1, "color": "#ffffff"})).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(color(&app).as_deref(), Some("#ffffff"));
+        assert_eq!(undo(&app), before + 1);
+    }
+
+    /// OK on an untouched picker opened for an artboard with an RGB background color in a CMYK
+    /// document keeps the RGB color and adds no undo step. A color picked in it is set as CMYK.
+    #[test]
+    fn an_untouched_picker_keeps_an_artboards_rgb_color_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("artboard.new", json!({})).unwrap();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#ff0000"})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[1].color;
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let start = color(&app);
+        assert!(matches!(start, Some(Color::Rgb { .. })), "set as RGB");
+        let before = undo(&app);
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "OK closes the picker");
+        assert_eq!(color(&app), start, "the RGB color is kept");
+        assert_eq!(undo(&app), before, "no undo step");
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("00ff00"));
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert!(matches!(color(&app), Some(Color::Cmyk { .. })), "a picked color is set as CMYK");
+        assert_eq!(undo(&app), before + 1);
+    }
+
+    /// OK on an untouched picker opened for an artboard with a background color in an RGB
+    /// document keeps the color and adds no undo step.
+    #[test]
+    fn an_untouched_picker_adds_no_undo_step_for_an_artboards_color() {
+        let mut app = app();
+        app.run("artboard.new", json!({})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#ff0000"})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[1].color.map(|c| c.to_hex());
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let before = undo(&app);
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "OK closes the picker");
+        assert_eq!(color(&app).as_deref(), Some("#ff0000"));
+        assert_eq!(undo(&app), before, "no undo step");
     }
 
     #[test]

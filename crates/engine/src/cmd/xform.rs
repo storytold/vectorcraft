@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} move artboards (and the art fully inside them; locked and hidden art only with prefs moveLockedWithArtboard), several in one step; `copy` (Alt-drag) leaves them and moves copies → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
+            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} move artboards (and the art fully inside them; locked and hidden art, and art also on another locked artboard, only with prefs moveLockedWithArtboard), several in one step (an error when one is locked); `copy` (Alt-drag) leaves them and moves copies, which start unlocked → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
             has_doc,
             artboard_move
         ),
@@ -345,7 +345,7 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     let (id, mut q) = match p.get("stop") {
         None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
         Some(v) => {
-            let i = v.as_u64().ok_or_else(|| bad(C, "`stop` must be a stop index"))? as usize;
+            let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`stop` must be a stop index"))?;
             let color = super::paint::new_color(s, p, color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?);
             let (fill, stroke_paint) = s.proxy_paints();
             let Paint::Gradient(g) = (if stroke { stroke_paint } else { fill }) else {
@@ -369,21 +369,20 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
 fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.move")?;
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
-    // A copy leaves the locked original where it is.
-    if !bool_or(p, "copy", false) {
-        super::layer::ensure_unlocked(&s.doc()?.doc, &indices)?;
-    }
     let move_art = bool_or(p, "moveArt", false);
+    let copy = bool_or(p, "copy", false);
+    if !copy {
+        super::panelcmds::refuse_locked(&s.doc()?.doc, &indices)?;
+    }
     // Each artboard's art, an object counted once (artboards can overlap).
     let mut arts: Vec<(usize, Vec<NodeId>)> = vec![];
     for &i in &indices {
-        let art = super::panelcmds::artboard_art(s, i, move_art)?;
+        let art = super::panelcmds::artboard_art(s, i, move_art, !copy)?;
         let art = art.into_iter().filter(|id| !arts.iter().any(|(_, a)| a.contains(id))).collect();
         arts.push((i, art));
     }
     let ids: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &ids)?, ..Scaling::default() };
-    let copy = bool_or(p, "copy", false);
     let (index, moved) = s.edit(if copy { "Duplicate Artboard" } else { "Move Artboard" }, |d, _| {
         let (mut index, mut moved) = (vec![], vec![]);
         for (i, art) in &arts {

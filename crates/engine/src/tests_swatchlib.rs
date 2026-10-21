@@ -189,6 +189,38 @@ fn libraries_saved_in_the_user_folder_are_user_defined() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A library kind whose reader panics on a file that holds `trap`, as a parser bug would.
+#[derive(Default)]
+struct Trap(String);
+
+impl cmd::swatchlib::LibraryFile for Trap {
+    const EXTS: &'static [&'static str] = &["trap"];
+    fn read(bytes: &[u8], stem: &str) -> std::result::Result<Self, String> {
+        if bytes == b"trap" {
+            panic!("a parser bug");
+        }
+        Ok(Self(stem.to_string()))
+    }
+    fn name(&self) -> &str {
+        &self.0
+    }
+}
+
+/// When reading one file of the user library folder panics, `set_user_dir` (as the desktop app
+/// calls it at launch) skips that file and lists the other one.
+#[test]
+fn a_user_library_file_whose_reading_panics_is_skipped() {
+    let dir = temp_dir("user-panic");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Calm.trap"), "calm").unwrap();
+    std::fs::write(dir.join("Loud.trap"), "trap").unwrap();
+    let mut libraries = cmd::swatchlib::Libraries::<Trap>::default();
+    libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let names: Vec<&str> = libraries.infos().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, ["Calm"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn another_documents_swatches_load_as_a_library() {
     let mut s = session();

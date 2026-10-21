@@ -91,6 +91,62 @@ fn cmd_n_opens_the_new_document_dialog() {
     assert_eq!(app.session.documents().len(), 1, "no document is made until the dialog's OK");
 }
 
+/// Cmd+Alt+N is New Without Dialog by default: Ctrl+Alt+N on Windows and Linux, Option+Command+N
+/// on macOS. No other command, tool or panel has that key by default.
+#[test]
+fn cmd_alt_n_is_new_without_dialog() {
+    assert_eq!(crate::shortcut_editor::default_command_shortcut("file.newWithoutDialog"), Some("Cmd+Alt+N"));
+    assert_eq!(crate::shortcut_editor::command_for_key("Cmd+Alt+N"), Some("file.newWithoutDialog"));
+    let chord = crate::shortcuts::parse("Cmd+Alt+N").expect("parses");
+    assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::COMMAND | egui::Modifiers::ALT, egui::Key::N));
+    let shown = crate::menus::pretty_shortcut("Cmd+Alt+N");
+    assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⌘N" } else { "Ctrl+Alt+N" });
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let listed = app.run("shortcuts.list", json!({"query": "file.newWithoutDialog"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
+    assert_eq!(rows, [(json!("New Without Dialog"), json!("File"), json!("Cmd+Alt+N"))], "Keyboard Shortcuts lists it under File");
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+}
+
+/// Cmd+Alt+N, pressed through the shortcut handler, makes a document with the settings New
+/// Document opens on (the Print category's Letter while Recent is empty, then the first Recent
+/// entry), named as the dialog names it, and does not open the dialog.
+#[test]
+fn cmd_alt_n_makes_a_document_without_the_new_document_dialog() {
+    use vectorcraft_doc::ColorMode;
+    fn press(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT;
+        let ev = egui::Event::Key { key: egui::Key::N, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let made = |app: &VectorcraftApp| {
+        let d = &app.session.active().expect("a document").doc;
+        let r = d.artboards[0].rect;
+        (d.title.clone(), r.width(), r.height(), d.color_mode, d.raster_effects_ppi)
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.session.active().is_none());
+    let name = app.session.peek_untitled();
+    press(&mut app);
+    assert_eq!(app.session.documents().len(), 1);
+    assert!(app.ui.dialog.is_none(), "the New Document dialog does not open");
+    assert_eq!(made(&app), (name, 612.0, 792.0, ColorMode::Cmyk, 300.0), "Letter from the Print category, as New Document opens on");
+    // Then the first Recent entry, the 400 × 300 pt document's settings.
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let name = app.session.peek_untitled();
+    press(&mut app);
+    assert_eq!(app.session.documents().len(), 3);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(made(&app), (name, 400.0, 300.0, ColorMode::Rgb, 72.0));
+    // Run as a command while a dialog is open, it leaves that dialog open.
+    app.run("file.newDialog", json!({})).unwrap();
+    app.run("file.newWithoutDialog", json!({})).unwrap();
+    assert_eq!(app.session.documents().len(), 4);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("newDocument"));
+}
+
 /// One Home screen frame (no document open) with `events`: the texts drawn and where.
 fn home_texts(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
     fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {

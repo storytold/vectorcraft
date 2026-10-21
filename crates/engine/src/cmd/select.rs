@@ -266,7 +266,7 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let i = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
     // Symbol instances are measured by their art.
     let symbols = st.doc.symbol_boxes();
@@ -644,7 +644,7 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
     let ap = &refn.appearance;
-    let item = p.get("item").and_then(Value::as_u64).map(|i| i as usize).or(s.appearance_item());
+    let item = p.get("item").and_then(Value::as_u64).map(index).or(s.appearance_item());
     let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
         (Some(it), _) => Attribute::Item(it.clone()),
         (None, Some(e)) => Attribute::Effect(e.clone()),

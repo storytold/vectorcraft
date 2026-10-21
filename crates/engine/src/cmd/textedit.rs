@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -174,8 +174,9 @@ pub(crate) fn set_plain_text(d: &mut vectorcraft_doc::Document, id: NodeId, text
     Ok(())
 }
 
+/// The byte offset that `k` holds, read with [`index`].
 fn byte_param(p: &Value, k: &str) -> Option<usize> {
-    p.get(k).and_then(Value::as_u64).map(|v| v as usize)
+    p.get(k).and_then(Value::as_u64).map(index)
 }
 
 fn range_of(p: &Value, len: usize) -> (usize, usize) {
@@ -208,6 +209,8 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
             Some(r) => edit::replace_range_styled(&mut t.runs, a, b, r),
             None => edit::replace_range(&mut t.runs, a, b, &insert),
         };
+        // Ruby over the edited text moves with it (its ranges are plain-text bytes).
+        t.ruby_after_replace(a, b, inserted.len());
         refresh_bounds(t);
         Ok(caret)
     })?;
@@ -254,6 +257,8 @@ pub(crate) struct CharChange {
     small_caps: Option<Option<f64>>,
     char_align: Option<vectorcraft_doc::CharAlign>,
     proportional_metrics: Option<bool>,
+    tate_chu_yoko: Option<bool>,
+    no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
     font_axes: Option<AxisChange>,
 }
@@ -412,6 +417,8 @@ impl CharChange {
             small_caps,
             char_align: char_align_param(p, cmd)?,
             proportional_metrics: flag("proportionalMetrics"),
+            tate_chu_yoko: flag("tateChuYoko"),
+            no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
         };
@@ -453,6 +460,8 @@ impl CharChange {
             && self.small_caps.is_none()
             && self.char_align.is_none()
             && self.proportional_metrics.is_none()
+            && self.tate_chu_yoko.is_none()
+            && self.no_break.is_none()
             && self.digits.is_none()
             && self.font_axes.is_none()
     }
@@ -548,6 +557,12 @@ impl CharChange {
         if let Some(v) = self.proportional_metrics {
             st.proportional_metrics = v;
         }
+        if let Some(v) = self.tate_chu_yoko {
+            st.tate_chu_yoko = v;
+        }
+        if let Some(v) = self.no_break {
+            st.no_break = v;
+        }
         if let Some(v) = self.digits {
             st.digits = v;
         }
@@ -610,6 +625,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
         },
     };
     let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
+    super::paint::check_keep_model(p, C)?;
     change.store_colors(s, p);
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
@@ -830,6 +846,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path && !path.is_closed() && path.bounds().is_none_or(|b| b.width() < 1.0 || b.height() < 1.0) {
         return Err(bad(C, "area type needs a path that encloses an area"));
     }
+    super::paint::check_keep_model(p, C)?;
     let style = super::create::new_type_style(s, p);
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {
@@ -842,6 +859,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         kind,
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style, inline: None }],
+        ruby: Vec::new(),
         para: super::create::new_type_para(),
         paras: Vec::new(),
         area: Default::default(),
@@ -850,6 +868,8 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         path_spacing: 0.0,
         wrap: Vec::new(),
         optical_margin: false,
+        system_layout: false,
+        fractional_widths: true,
         cached_bounds: None,
         cached_baselines: Vec::new(),
     };
@@ -857,6 +877,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path {
         t.area.fit = super::create::new_area_fit(s, p, C)?;
     }
+    t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
     } else {
@@ -1062,6 +1083,8 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             kind: TextKind::Point,
             xf: Affine::IDENTITY,
             runs: head.clone(),
+            // Ruby over the counted part; the layout clamps it to `head`.
+            ruby: t.ruby.clone(),
             para: Default::default(),
             paras: Vec::new(),
             area: Default::default(),
@@ -1070,6 +1093,8 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             path_spacing: 0.0,
             wrap: Vec::new(),
             optical_margin: false,
+            system_layout: t.system_layout,
+            fractional_widths: t.fractional_widths,
             cached_bounds: None,
             cached_baselines: Vec::new(),
         };

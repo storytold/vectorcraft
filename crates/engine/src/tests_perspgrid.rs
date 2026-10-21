@@ -28,6 +28,18 @@ fn near(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-6
 }
 
+/// `cmd` with `p` fails with the error for `key`, which `p` gives as something other than true or false.
+fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &Value, key: &str) {
+    let r = s.execute(cmd, p);
+    let want = format!("`{key}` must be true or false");
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// Values for an on/off param that are not true, false or null.
+fn not_booleans() -> [Value; 4] {
+    [json!("true"), json!(1), json!("false"), json!([true])]
+}
+
 // ---------- M8.8: Define Grid ----------
 
 #[test]
@@ -209,6 +221,24 @@ fn presets_export_import_and_live_in_the_preferences() {
     assert!(serde_json::from_value::<Prefs>(json!({})).unwrap().perspective_presets.is_empty());
 }
 
+/// Import Perspective Grid Presets refuses a `replace` given as text or as another value that is not
+/// true or false: the saved presets stay as they were. Null is read as the key left out, so the
+/// imported presets whose names are taken get a number.
+#[test]
+fn presets_import_refuses_replace_given_as_text() {
+    let mut s = session();
+    run(&mut s, "perspective.presets.save", json!({"name": "Street", "gridline": 1}));
+    let text = run(&mut s, "perspective.presets.export", json!({}))["data"].as_str().unwrap().to_string();
+    let before = s.prefs.perspective_presets.clone();
+    for v in not_booleans() {
+        refuses_non_boolean(&mut s, "perspective.presets.import", &json!({"data": text, "replace": v}), "replace");
+        assert_eq!(s.prefs.perspective_presets, before, "{v}");
+    }
+    assert_eq!(run(&mut s, "perspective.presets.import", json!({"data": text, "replace": null}))["imported"], json!(["Street 2"]));
+    assert_eq!(run(&mut s, "perspective.presets.import", json!({"data": text, "replace": true}))["imported"], json!(["Street"]));
+    assert_eq!(s.prefs.perspective_presets.len(), 2);
+}
+
 // ---------- M8.10: view options ----------
 
 use vectorcraft_geom::Point;
@@ -244,6 +274,33 @@ fn view_options_toggle_without_undo_steps_and_survive_presets() {
     let doc = s.doc().unwrap().doc.clone();
     let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
     assert_eq!(PerspectiveGrid::from_doc(&back), Some(g));
+}
+
+/// Lock Grid, Lock Station Point, Snap to Grid and Show Rulers refuse an `on` given as text or as
+/// another value that is not true or false: the grid and the undo history stay as they were. Null is
+/// read as the key left out, so it toggles the option.
+#[test]
+fn view_options_refuse_on_given_as_text() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.lock", json!({"on": true}));
+    let before = (grid(&s), undo_len(&s));
+    for id in ["perspective.grid.lock", "perspective.grid.lockStation", "perspective.grid.snap", "perspective.grid.rulers"] {
+        for v in not_booleans() {
+            refuses_non_boolean(&mut s, id, &json!({"on": v}), "on");
+            assert_eq!((grid(&s), undo_len(&s)), before, "{id} {v}");
+        }
+    }
+    for (id, on) in [
+        ("perspective.grid.lock", false),
+        ("perspective.grid.lockStation", true),
+        ("perspective.grid.snap", false),
+        ("perspective.grid.rulers", true),
+    ] {
+        assert_eq!(run(&mut s, id, json!({"on": null})), json!({"on": on}), "{id} toggles");
+        assert_eq!(run(&mut s, id, json!({"on": on})), json!({"on": on}), "{id} is set");
+    }
+    assert_eq!(undo_len(&s), before.1);
 }
 
 #[test]

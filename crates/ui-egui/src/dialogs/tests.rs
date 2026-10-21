@@ -1040,6 +1040,50 @@ fn artboard_options_position_follows_the_tool_option_with_another_tool() {
     }
 }
 
+/// Artboard Options shows the artboard's background color on its Background Color: row (None,
+/// White, Black, or Custom for another color) and not as a text field. OK keeps the color while it
+/// applies another field, and a null `color` clears it.
+#[test]
+fn artboard_options_shows_keeps_and_clears_the_background_color() {
+    let mut app = app();
+    let color = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[0].color.map(|c| c.to_hex());
+    let lines = |app: &mut VectorcraftApp| {
+        let text = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
+        text.lines().map(str::trim).map(str::to_string).collect::<Vec<_>>()
+    };
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Background Color:") && shown.iter().any(|l| l == "None"), "{shown:?}");
+    app.ui.dialog = None;
+    app.run("artboard.setProps", json!({"index": 0, "color": "#336699"})).unwrap();
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let shown = lines(&mut app);
+    assert!(shown.iter().any(|l| l == "Custom") && !shown.iter().any(|l| l == "Color:" || l.starts_with('[')), "{shown:?}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Card"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!((app.session.doc().unwrap().doc.artboards[0].name.as_str(), color(&app).as_deref()), ("Card", Some("#336699")));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(null));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(color(&app), None);
+}
+
+/// Artboard Options for a new artboard (`ui.newArtboard`) gives the new artboard the background
+/// color picked on its Background Color: row, and none when nothing was picked.
+#[test]
+fn new_artboard_options_give_the_new_artboard_its_background_color() {
+    let mut app = app();
+    for (picked, want) in [(Some(json!("#336699")), Some("#336699")), (None, None)] {
+        app.run("ui.newArtboard", json!({})).unwrap();
+        if let Some(c) = picked {
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), c);
+        }
+        super::confirm(&mut app).unwrap();
+        let ab = app.session.doc().unwrap().doc.artboards.last().cloned().unwrap();
+        assert_eq!(ab.color.map(|c| c.to_hex()).as_deref(), want);
+    }
+}
+
 /// #1482: with Artboards 1 and 3 selected with the Artboard tool, a new Width in Artboard Options
 /// goes to both, each keeping its top-left corner and its height, in one undo step. The new name
 /// goes only to the artboard the dialog shows, and Artboard 2 keeps its size. A name alone resizes
@@ -1317,6 +1361,24 @@ fn dialog_sliders_report_the_numbers_their_fields_show() {
     assert_eq!(slider_value(&shown, "Raster/Vector Balance:"), v(30.0, (0.0, 100.0), "30"));
 }
 
+/// Dragging Pattern Brush Options' Scale slider past its right end sets Scale to 10000%, and
+/// dragging Art Brush Options' Width slider past its left end sets Width to 1%; OK gives each
+/// brush its new value.
+#[test]
+fn brush_options_sliders_set_pattern_scale_and_art_width() {
+    use egui::accesskit::Role::Slider;
+    let mut app = app();
+    for (brush, label, key, by, want) in [("Diamonds", "Scale:", "scale", 400.0, 10000.0), ("Arrow", "Width:", "width", -400.0, 1.0)] {
+        app.run("ui.brushOptions", json!({ "name": brush })).unwrap();
+        let mut f = Frames::new();
+        let at = f.control(&mut app, label, Slider);
+        f.drag(&mut app, at, egui::vec2(by, 0.0));
+        assert_eq!(app.ui.dialog.as_ref().expect("Brush Options is open").f64(key, 0.0), want, "{brush}");
+        confirm(&mut app).unwrap();
+        assert_eq!(app.run("brush.get", json!({ "name": brush })).unwrap()[key], json!(want), "{brush}");
+    }
+}
+
 /// Frames of the dialog layer on one context (so a drag and the keyboard focus last from frame to
 /// frame), with the screen-reader tree turned on.
 struct Frames {
@@ -1448,6 +1510,170 @@ fn free_distort_reset_puts_the_corners_back() {
     let s = app.session.active().unwrap();
     let effects = &s.doc.node(s.selection.objects[0]).unwrap().appearance.effects;
     assert_eq!((effects.len(), effects[0].params["corners"].clone()), (1, rest));
+}
+
+/// The slider that screen readers name `label` in `out`'s tree: its node id, number and text.
+fn slider_node(out: &egui::FullOutput, label: &str) -> (egui::accesskit::NodeId, Option<f64>, Option<String>) {
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let (id, node) = nodes
+        .iter()
+        .find(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label() == Some(label))
+        .unwrap_or_else(|| panic!("no slider named {label:?}"));
+    (*id, node.numeric_value(), node.value().map(str::to_string))
+}
+
+/// A form slider that a click gave the keyboard focus (Vector Halftone's Frequency, 1 to 150 lpi)
+/// steps the number of the field beside it with the arrow keys: one with → and ↑, back with ← and
+/// ↓, ten with Shift, and ten with Page Up and Page Down. Home and End take it to the ends of its
+/// range, a step stops there, and screen readers read each new number.
+#[test]
+fn a_focused_dialog_slider_steps_with_the_arrow_keys() {
+    use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, End, Home, PageDown, PageUp};
+    use egui::Modifiers as M;
+    let mut app = app();
+    open(&mut app, halftone::KIND, halftone::fields());
+    let mut f = Frames::new();
+    let at = f.control(&mut app, "Frequency", egui::accesskit::Role::Slider);
+    f.press(&mut app, at, true);
+    f.press(&mut app, at, false);
+    let frequency = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Vector Halftone is open").f64("frequency", 0.0);
+    let start = frequency(&app);
+    assert!((2.0..=139.0).contains(&start), "the click set {start}");
+    let mut seen = vec![];
+    for (key, mods, want) in [
+        (ArrowRight, M::NONE, start + 1.0),
+        (ArrowUp, M::NONE, start + 2.0),
+        (ArrowLeft, M::NONE, start + 1.0),
+        (ArrowDown, M::NONE, start),
+        (ArrowRight, M::SHIFT, start + 10.0),
+        (ArrowLeft, M::SHIFT, start),
+        (Home, M::NONE, 1.0),
+        (ArrowLeft, M::NONE, 1.0),
+        (PageUp, M::NONE, 11.0),
+        (End, M::NONE, 150.0),
+        (ArrowUp, M::SHIFT, 150.0),
+        (PageDown, M::NONE, 140.0),
+        (PageUp, M::NONE, 150.0),
+    ] {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, frequency(&app)));
+        assert_eq!(frequency(&app), want, "{seen:?}");
+    }
+    f.key(&mut app, ArrowLeft, M::NONE);
+    let out = f.run(&mut app, vec![]);
+    assert_eq!((frequency(&app), slider_node(&out, "Frequency").1), (149.0, Some(149.0)));
+    assert_eq!(slider_node(&out, "Frequency").2.as_deref(), Some("149 lpi"));
+}
+
+/// Tab leaves a focused dialog slider for its field and Shift+Tab comes back to it, whose arrow
+/// keys then step the number again: the Perspective Grid's Opacity. OK gives the grid the new
+/// opacity.
+#[test]
+fn tab_and_shift_tab_reach_a_dialog_slider_for_the_arrow_keys() {
+    use egui::Key::{ArrowRight, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    let opacity = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Define Grid is open").f64("opacity", 0.0);
+    let mut f = Frames::new();
+    let at = f.control(&mut app, "Opacity:", egui::accesskit::Role::Slider);
+    f.press(&mut app, at, true);
+    f.press(&mut app, at, false);
+    let start = opacity(&app);
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(opacity(&app), start, "the field has the focus, and → moves its caret");
+    f.key(&mut app, Tab, M::SHIFT);
+    f.key(&mut app, ArrowRight, M::NONE);
+    f.key(&mut app, ArrowRight, M::SHIFT);
+    assert_eq!(opacity(&app), start + 11.0);
+    confirm(&mut app).unwrap();
+    assert_eq!(app.run("perspective.grid.get", json!({})).unwrap()["define"]["opacity"].as_f64(), Some(start + 11.0));
+}
+
+/// Screen readers can step a dialog slider: the Pencil's Fidelity, a field with tenths, goes to
+/// the next whole number on a decrement or an increment, as the slider's ← and → do.
+#[test]
+fn screen_readers_step_a_dialog_slider() {
+    use egui::accesskit::{Action, ActionRequest, TreeId};
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
+    app.ui.dialog.as_mut().expect("Pencil Tool Options is open").fields.insert("fidelity".into(), json!(2.5));
+    let fidelity = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Pencil Tool Options is open").f64("fidelity", 0.0);
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Fidelity:");
+    let request = |action| egui::Event::AccessKitActionRequest(ActionRequest { action, target_node: node, target_tree: TreeId::ROOT, data: None });
+    f.run(&mut app, vec![request(Action::Decrement)]);
+    assert_eq!(fidelity(&app), 2.0, "from 2.5");
+    f.run(&mut app, vec![request(Action::Increment)]);
+    f.run(&mut app, vec![request(Action::Increment)]);
+    assert_eq!(fidelity(&app), 4.0);
+}
+
+/// Transform Each's sliders step the numbers of their fields: a Scale past the rail's 200% steps
+/// down from 200% and End sets 200%, → at the end leaves it as it is, and a Move slider steps one
+/// millimeter in a millimeter document.
+#[test]
+fn transform_each_sliders_step_the_numbers_their_fields_show() {
+    use egui::Key::{ArrowLeft, ArrowRight, End, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    let set =
+        |app: &mut VectorcraftApp, k: &str, v: serde_json::Value| app.ui.dialog.as_mut().expect("Transform Each is open").fields.insert(k.into(), v);
+    let get = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().expect("Transform Each is open").f64(k, f64::NAN);
+    let mut f = Frames::new();
+    let at = f.control(&mut app, "Horizontal:", egui::accesskit::Role::Slider);
+    f.press(&mut app, at, true);
+    f.press(&mut app, at, false);
+    set(&mut app, "scaleH", json!(300));
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(get(&app, "scaleH"), 300.0, "→ at the rail's end");
+    f.key(&mut app, End, M::NONE);
+    assert_eq!(get(&app, "scaleH"), 200.0);
+    set(&mut app, "scaleH", json!(300));
+    f.key(&mut app, ArrowLeft, M::NONE);
+    assert_eq!(get(&app, "scaleH"), 199.0);
+    // Tab goes through the Scale fields and sliders to the Move slider.
+    set(&mut app, "moveH", json!(0));
+    for _ in 0..4 {
+        f.key(&mut app, Tab, M::NONE);
+    }
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert!((get(&app, "moveH") - 72.0 / 25.4).abs() < 1e-9, "1 mm: {} pt", get(&app, "moveH"));
+}
+
+/// The sliders the flattener options and the 3D dialogs draw take the arrow keys as well: Flatten
+/// Transparency's Raster/Vector Balance and 3D Revolve's angle each step by ten with Shift, and
+/// down to the next whole number with ↓.
+#[test]
+fn the_flattener_and_3d_sliders_step_with_the_arrow_keys() {
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("path.create", json!({"d": "M150 40 L180 60 L180 140 L150 160"})).unwrap();
+    for (open, label, key) in [("flatten", "Raster/Vector Balance:", "balance"), ("revolve", "Revolve angle", "angle")] {
+        if open == "flatten" {
+            app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        } else {
+            app.run("effect.dialog", json!({"effect": vectorcraft_effects::REVOLVE, "item": null})).unwrap();
+        }
+        let value = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("the dialog is open").f64(key, -1.0);
+        let mut f = Frames::new();
+        let at = f.control(&mut app, label, egui::accesskit::Role::Slider);
+        f.press(&mut app, at, true);
+        f.press(&mut app, at, false);
+        let start = value(&app);
+        f.key(&mut app, egui::Key::ArrowRight, M::SHIFT);
+        assert_eq!(value(&app), start + 10.0, "{label}");
+        // A plain step goes to the next whole number below.
+        f.key(&mut app, egui::Key::ArrowDown, M::NONE);
+        assert_eq!(value(&app), (start + 10.0).ceil() - 1.0, "{label} from {start}");
+        app.ui.dialog = None;
+    }
 }
 
 #[test]

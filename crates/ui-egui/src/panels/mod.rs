@@ -505,6 +505,16 @@ pub(crate) fn paint_params(p: &Paint) -> Value {
     }
 }
 
+/// [`paint_params`] for a swatch made from paint the app shows: a color and a gradient's stops
+/// and points keep their color models (`keepModel`), in a CMYK document too.
+pub(crate) fn swatch_paint_params(p: &Paint) -> Value {
+    let mut v = paint_params(p);
+    if matches!(p, Paint::Solid { swatch: None, .. } | Paint::Gradient(_)) {
+        v["keepModel"] = json!(true);
+    }
+    v
+}
+
 /// Egui colour of a document colour.
 pub(crate) fn c32(c: &Color) -> egui::Color32 {
     let [r, g, b, _] = c.to_rgba8(1.0);

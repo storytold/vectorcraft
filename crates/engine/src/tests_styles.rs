@@ -250,6 +250,10 @@ fn select_same_appearance_attribute() {
     run(&mut s, "select.set", json!({"ids": [a.0]}));
     run(&mut s, "select.same.appearanceAttribute", json!({"item": 1}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, b, c]);
+    // An item past the last one leaves the shared effect. A 32-bit build read 2^32 + 1 as item 1.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": (1u64 << 32) + 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
 }
 
 #[test]

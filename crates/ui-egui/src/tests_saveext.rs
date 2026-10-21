@@ -35,7 +35,7 @@ fn last(w: &Written) -> String {
 }
 
 /// The file types each save panel was asked to show.
-type Shown = Rc<RefCell<Vec<Vec<(&'static str, &'static [&'static str])>>>>;
+type Shown = Rc<RefCell<Vec<Vec<crate::FileFilter>>>>;
 
 /// An app with a document whose save panel records the file types it shows and answers the
 /// suggested name in `/tmp`.
@@ -57,7 +57,7 @@ fn panel_app() -> (VectorcraftApp, Shown) {
 }
 
 /// The file types the last save panel showed.
-fn last_shown(s: &Shown) -> Vec<(&'static str, &'static [&'static str])> {
+fn last_shown(s: &Shown) -> Vec<crate::FileFilter> {
     s.borrow().last().cloned().unwrap_or_default()
 }
 
@@ -68,26 +68,26 @@ fn save_panels_show_the_file_type_they_write() {
     use vectorcraft_engine::cmd::{flatten, pdfcmds, perspgrid, printpresets};
     let (mut app, shown) = panel_app();
     app.run("docInfo.save", json!({})).unwrap();
-    assert_eq!(last_shown(&shown), [("Text", &["txt"][..])], "Document Info › Save");
+    assert_eq!(last_shown(&shown), FilePick::filters([("Text", &["txt"][..])]), "Document Info › Save");
     for format in ["vcswatches", "gpl", "ase", "css"] {
         app.run("ui.saveSwatchLibrary", json!({})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("format".into(), json!(format));
         crate::dialogs::confirm(&mut app).unwrap();
         let label = if format == "css" { "CSS" } else { "Swatch libraries" };
-        assert_eq!(last_shown(&shown), [(label, &[format][..])], "Save Swatch Library as .{format}");
+        assert_eq!(last_shown(&shown), FilePick::filters([(label, &[format][..])]), "Save Swatch Library as .{format}");
     }
     app.run("ui.saveGraphicStyleLibrary", json!({})).unwrap();
     crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(last_shown(&shown), [("Graphic Style Libraries", &["vcstyles"][..])], "Save Graphic Style Library");
+    assert_eq!(last_shown(&shown), FilePick::filters([("Graphic Style Libraries", &["vcstyles"][..])]), "Save Graphic Style Library");
     let id = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
     io::save_command_output_named(&mut app, "library.export", "Brand.vclibrary", json!({"library": id})).unwrap();
-    assert_eq!(last_shown(&shown), [("Libraries", &["vclibrary"][..])], "Libraries panel › Export Library…");
+    assert_eq!(last_shown(&shown), FilePick::filters([("Libraries", &["vclibrary"][..])]), "Libraries panel › Export Library…");
     app.run("css.exportFile", json!({"scope": "all"})).unwrap();
-    assert_eq!(last_shown(&shown), [("CSS", &["css"][..])], "CSS Properties › Export All…");
+    assert_eq!(last_shown(&shown), FilePick::filters([("CSS", &["css"][..])]), "CSS Properties › Export All…");
     app.run("file.print", json!({"format": "postscript"})).unwrap();
-    assert_eq!(last_shown(&shown), [("PostScript", &["ps"][..])], "Print to a PostScript file");
+    assert_eq!(last_shown(&shown), FilePick::filters([("PostScript", &["ps"][..])]), "Print to a PostScript file");
     app.run("shortcuts.export", json!({})).unwrap();
-    assert_eq!(last_shown(&shown), [("Shortcut sets", &["json"][..])], "Keyboard Shortcuts › Export…");
+    assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sets", &["json"][..])]), "Keyboard Shortcuts › Export…");
     let presets = [
         ("pdf.preset.save", json!({"name": "Mine"}), "pdf.preset.export", "PDF presets", pdfcmds::PRESET_EXTS),
         ("print.presets.save", json!({"name": "Mine"}), "print.presets.export", "Print presets", printpresets::PRESET_EXTS),
@@ -97,7 +97,7 @@ fn save_panels_show_the_file_type_they_write() {
     for (save, params, export, label, exts) in presets {
         app.run(save, params).unwrap();
         io::save_command_output(&mut app, export, exts[0], json!({"names": ["Mine"]})).unwrap();
-        assert_eq!(last_shown(&shown), [(label, exts)], "{export}: the presets dialog's Export…");
+        assert_eq!(last_shown(&shown), FilePick::filters([(label, exts)]), "{export}: the presets dialog's Export…");
     }
 }
 
@@ -142,7 +142,8 @@ fn saved_from(app: &mut VectorcraftApp, shown: &crate::tests_picks::Shown, writt
 
 /// The file type picked in a save dialog that reports it decides the format (#2679): a bare name, or
 /// one with the suggested name's extension, gets the picked type's extension; an extension typed for
-/// another save format stays as typed, and any other gets the picked type's added.
+/// another save format stays as typed, another format's extension is replaced with the picked
+/// type's, and any other gets the picked type's added.
 #[test]
 fn the_file_type_picked_in_the_save_dialog_decides_the_format() {
     for (answer, expected) in [
@@ -158,6 +159,40 @@ fn the_file_type_picked_in_the_save_dialog_decides_the_format() {
         let (mut app, shown, written) = portal_app();
         assert_eq!(saved_from(&mut app, &shown, &written, "file.save", answer), expected, "{answer:?}");
     }
+}
+
+/// A name typed with the extension of a format the save does not write has it replaced, with or
+/// without a picked type: `card.ait` and `card.png` are saved as `card.vectorcraft`, not
+/// `card.ait.vectorcraft`. An extension that names no format stays part of the name.
+#[test]
+fn a_typed_extension_of_a_format_the_save_does_not_write_is_replaced() {
+    for (cmd, answer, expected) in [
+        ("file.save", &["/art/card.ait"][..], "/art/card.vectorcraft"),
+        ("file.save", &["/art/card.png"], "/art/card.vectorcraft"),
+        ("file.save", &["/art/My.Card.PNG"], "/art/My.Card.vectorcraft"),
+        ("file.save", &["/art/notes.v2"], "/art/notes.v2.vectorcraft"),
+        ("file.save", &["/art/card.png", "ai"], "/art/card.ai"),
+        ("file.saveCopy", &["/art/card.tif", "svg"], "/art/card.svg"),
+        ("file.saveAsTemplate", &["/art/card.ai"], "/art/card.vctemplate"),
+        ("file.saveAsTemplate", &["/art/card.pdf", "ait"], "/art/card.ait"),
+        ("file.saveAsTemplate", &["/art/card.ait"], "/art/card.ait"),
+    ] {
+        let (mut app, shown, written) = portal_app();
+        assert_eq!(saved_from(&mut app, &shown, &written, cmd, answer), expected, "{cmd} {answer:?}");
+    }
+}
+
+/// The name with its extension replaced names a file that is there, which the dialog did not ask
+/// about: the save asks first, and the question's OK writes that file.
+#[test]
+fn a_replaced_extension_asks_before_replacing_a_file_there() {
+    let (mut app, shown, written) = portal_app();
+    app.services.exists = Some(Box::new(|p: &str| p == "/art/card.vectorcraft"));
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.save", &["/art/card.png"]), "/art/card.vectorcraft");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::REPLACE));
+    assert!(written.borrow().is_empty());
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(*written.borrow(), ["/art/card.vectorcraft"]);
 }
 
 /// Save As to the type picked asks for that format's options: the .ai options (Version first),

@@ -17,9 +17,12 @@ accessibility = ["eframe/accesskit"]
 windows7 = ["eframe/glow"]
 
 [dependencies]
-vectorcraft-engine = { workspace = true }
+vectorcraft-engine = { workspace = true, features = ["bundled-fonts"] }
 vectorcraft-ui-egui = { workspace = true }
 vectorcraft-text = { workspace = true }
+# Shared across the Craft suite: decides who draws the window frame per desktop (compositor vs app)
+# so VectorCraft matches the rest on Linux. `egui` adds `craft_window::decorate`. See #217.
+craft-window = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 serde_json = { workspace = true }

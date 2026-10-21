@@ -311,6 +311,23 @@ fn shaper_construction_taps_stay_in_the_isolated_group() {
     assert_eq!(s.doc().unwrap().isolation, Some(sources));
 }
 
+/// `object.isolate` on a Shaper Group whose source group is locked or hidden is refused, and
+/// isolation mode stays off.
+#[test]
+fn shaper_isolate_refuses_a_locked_or_hidden_source_group() {
+    for (key, on) in [("locked", true), ("visible", false)] {
+        let mut s = session();
+        rectangle(&mut s, 0.0, "#ff0000");
+        rectangle(&mut s, 50.0, "#0000ff");
+        let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+        let sources = node(&s, g).children().unwrap()[0].id;
+        s.execute("object.setProps", &json!({"ids": [sources.0], key: on})).unwrap();
+        let r = s.execute("object.isolate", &json!({"id": g.0})).map_err(|e| e.to_string());
+        assert_eq!(r, Err("invalid parameters for `object.isolate`: the object is hidden or locked".into()), "{key}");
+        assert_eq!(s.doc().unwrap().isolation, None, "{key}");
+    }
+}
+
 #[test]
 fn shaper_lines_keep_free_angles_with_or_without_shift() {
     for shift in [false, true] {

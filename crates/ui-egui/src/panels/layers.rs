@@ -1408,7 +1408,7 @@ fn small_node(n: &Node, limit: usize) -> bool {
 impl Thumbs {
     /// Keep `img` (None: nothing drawn) as the thumbnail of row `key` showing `node`.
     fn upload(&mut self, ctx: &egui::Context, key: (u64, NodeId), node: Weak<Node>, px: u32, img: Option<&vectorcraft_render::Rendered>, ms: f64) {
-        let color = img.map(|img| egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels));
+        let color = img.map(crate::canvas::color_image);
         let used = ctx.cumulative_pass_nr();
         let name = format!("layer-thumb-{}", key.1.0);
         match self.entries.get_mut(&key) {
@@ -2683,6 +2683,73 @@ mod tests {
         // The other bottom-bar buttons are no drop targets.
         drag_row(&mut app, &ctx, egui::pos2(150.0, c[0].y), buttons[2], "Top");
         assert_eq!(layers(&app), vec![first, second]);
+    }
+
+    /// Cmd+Alt+L is New Layer Options… by default. On Windows and Linux the key is Ctrl+Alt+L, and on
+    /// macOS it is Option+Command+L. Cmd+L is still New Layer. No other command, tool or panel has
+    /// Cmd+Alt+L by default.
+    #[test]
+    fn cmd_alt_l_is_new_layer_options() {
+        use crate::shortcut_editor::{command_for_key, default_command_shortcut};
+        assert_eq!(default_command_shortcut("ui.newLayer"), Some("Cmd+Alt+L"));
+        assert_eq!(command_for_key("Cmd+Alt+L"), Some("ui.newLayer"));
+        assert_eq!(command_for_key("Cmd+L"), Some("layer.new"));
+        let chord = crate::shortcuts::parse("Cmd+Alt+L").expect("parses");
+        assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::COMMAND | egui::Modifiers::ALT, egui::Key::L));
+        let shown = crate::menus::pretty_shortcut("Cmd+Alt+L");
+        assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⌘L" } else { "Ctrl+Alt+L" });
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let listed = app.run("shortcuts.list", json!({"query": "ui.newLayer"})).unwrap();
+        let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["default"].clone())).collect();
+        assert_eq!(rows, [(json!("New Layer Options…"), json!("Cmd+Alt+L"))], "Keyboard Shortcuts lists it");
+        assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    }
+
+    /// Cmd+Alt+L, pressed through the shortcut handler, opens Layer Options for a new layer as an
+    /// Alt-click on the panel's New Layer button does, and no layer is added until OK. OK adds the
+    /// layer above the current layer, as after the Alt-click, and Cancel adds none. Cmd+L still adds
+    /// a layer without the dialog.
+    #[test]
+    fn cmd_alt_l_opens_new_layer_options_as_alt_clicking_new_layer_does() {
+        fn press(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+            let ctx = egui::Context::default();
+            let ev = egui::Event::Key { key: egui::Key::L, physical_key: None, pressed: true, repeat: false, modifiers };
+            let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        /// Layer 1 with two rectangles under a layer named Top, with Layer 1 current.
+        fn two_layers() -> VectorcraftApp {
+            let (mut app, first, _) = two_rects();
+            app.session.execute("layer.new", &json!({"name": "Top"})).unwrap();
+            app.session.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+            app
+        }
+        let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.display_name()).collect::<Vec<_>>();
+        let dialog = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone()));
+        let mut keyed = two_layers();
+        press(&mut keyed, egui::Modifiers::COMMAND | egui::Modifiers::ALT);
+        let mut clicked = two_layers();
+        let ctx = egui::Context::default();
+        let new_layer = bar_buttons(&mut clicked, &ctx)[1];
+        click_with(&mut clicked, &ctx, new_layer, egui::Modifiers::ALT);
+        let opened = dialog(&keyed).expect("the key opens a dialog");
+        assert_eq!((opened.0.as_str(), opened.1.get("mode")), ("layerOptions", Some(&json!("new"))));
+        assert_eq!(dialog(&clicked), Some(opened), "the key opens what the Alt-click opens");
+        assert_eq!(names(&keyed), ["Layer 1", "Top"], "no layer is added until OK");
+        for app in [&mut keyed, &mut clicked] {
+            crate::dialogs::confirm(app).unwrap();
+        }
+        assert_eq!(names(&keyed), ["Layer 1", "Layer 3", "Top"]);
+        assert_eq!(names(&clicked), names(&keyed));
+        // Cancel adds no layer.
+        press(&mut keyed, egui::Modifiers::COMMAND | egui::Modifiers::ALT);
+        assert!(keyed.ui.dialog.is_some());
+        crate::dialogs::cancel(&mut keyed);
+        assert!(keyed.ui.dialog.is_none());
+        assert_eq!(names(&keyed), ["Layer 1", "Layer 3", "Top"]);
+        press(&mut keyed, egui::Modifiers::COMMAND);
+        assert!(keyed.ui.dialog.is_none(), "Cmd+L opens no dialog");
+        assert_eq!(names(&keyed).len(), 4);
     }
 
     #[test]

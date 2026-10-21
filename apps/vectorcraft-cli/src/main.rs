@@ -96,8 +96,9 @@ USAGE:
       SVG's data-* attributes; --outline-text writes SVG text as paths, --decimals sets SVG's coordinate
       precision (1–7, default 3). OUT may not be IN when reading
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
-      --replace-lossy is given. --editing-data opens a .ai from its editing copy even where that
-      draws differently from its PDF part (which can be older), as long as it can be read. The
+      --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
+      even where that draws differently from its PDF part or page (which can be older), as long as
+      it can be read. The
       result has the export's warnings, and importWarnings for what reading IN left out.
       --ai-version 7 writes a .ai as the legacy version 7 (layers, groups and type kept; one file
       per artboard, OUT-<artboard>.ai when there are several; default pdf, PDF-compatible), with

@@ -65,7 +65,8 @@ impl MeshEdit {
         {
             return Some(MeshGrab { id, index, handle: Some(h) });
         }
-        ids.iter().filter(|id| cx.doc.is_editable(**id)).find_map(|id| {
+        let editable = cx.doc.editable();
+        ids.iter().filter(|id| editable(**id)).find_map(|id| {
             let index = grid_of(cx.doc.node(*id)?)?.point_near(p, tol)?;
             Some(MeshGrab { id: *id, index, handle: None })
         })

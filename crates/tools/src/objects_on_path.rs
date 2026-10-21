@@ -15,12 +15,17 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 const HIGHLIGHT: [u8; 3] = [0x4f, 0x9d, 0xff];
 
 /// The path a click at `p` attaches the selected objects to: the path object hit there, when it can
-/// take objects, is in no Objects on Path group, and something else is selected.
+/// take objects, is in no Objects on Path group, is not a clipping path or part of a compound path,
+/// blend, envelope, repeat or Intertwine group ([`vectorcraft_doc::objects_on_path::held`]), and
+/// something else is selected.
 pub fn target(cx: &ToolContext, p: Point) -> Option<(NodeId, BezPath)> {
     let h = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())?;
     let n = cx.doc.node(h.leaf)?;
     let path = attachable_path(n)?;
     if h.ancestry.iter().filter(|a| **a != h.leaf).any(|a| cx.doc.node(*a).is_some_and(is_objects_on_path)) {
+        return None;
+    }
+    if vectorcraft_doc::objects_on_path::held(cx.doc, h.leaf).is_some() {
         return None;
     }
     cx.selection.objects.iter().any(|id| *id != h.leaf).then(|| (h.leaf, path.to_bezpath()))
@@ -155,5 +160,39 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Down, 200.0, 300.0));
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 200.0, 300.0)).is_empty());
         assert!(matches!(d.node(line).map(|n| &n.kind), Some(NodeKind::Path { .. })));
+    }
+
+    #[test]
+    fn a_clipping_path_or_a_blend_key_is_not_a_target() {
+        let (mut d, line, square) = doc();
+        let l = d.layers[0].id;
+        let key = d.alloc_id();
+        d.insert(Some(l), 2, Node::path(key, shapes::line(Point::new(0.0, 100.0), Point::new(400.0, 100.0)), Appearance::default_art())).unwrap();
+        let blend = d.alloc_id();
+        d.wrap(&[line, key], |children| Node::new(blend, NodeKind::Blend { children, spec: Default::default() })).unwrap();
+        let mask = d.alloc_id();
+        let art = d.alloc_id();
+        d.insert(Some(l), 2, Node::path(mask, shapes::rectangle(Rect::new(100.0, 380.0, 300.0, 430.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), 3, Node::path(art, shapes::rectangle(Rect::new(250.0, 390.0, 290.0, 420.0)), Appearance::default_art())).unwrap();
+        let clip = d.alloc_id();
+        d.wrap(&[mask, art], |children| {
+            let mut g = Node::group(clip, children);
+            g.set_clips(true);
+            g
+        })
+        .unwrap();
+        assert_eq!(d.node(clip).and_then(|g| g.children()).and_then(|c| c.first()).map(|c| c.id), Some(mask));
+        let mut sel = Selection::default();
+        sel.set([square]);
+        let paint = paint();
+        let cx = cx(&d, &sel, &paint);
+        let mut t = ObjectsOnPathTool::default();
+        for (p, what) in [((150.0, 400.0), "a clipping path"), ((200.0, 300.0), "a blend's key path"), ((200.0, 100.0), "a blend's other key path")] {
+            assert_eq!(t.cursor(&cx, Point::new(p.0, p.1), Mods::default()), Cursor::Arrow, "{what}");
+            t.pointer(&cx, &ev(PointerKind::Move, p.0, p.1));
+            assert!(t.overlays(&cx).is_empty(), "{what} is not highlighted");
+            t.pointer(&cx, &ev(PointerKind::Down, p.0, p.1));
+            assert!(t.pointer(&cx, &ev(PointerKind::Up, p.0, p.1)).is_empty(), "a click on {what} attaches nothing");
+        }
     }
 }

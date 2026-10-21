@@ -70,6 +70,18 @@ fn close(a: Point, b: Point, tol: f64) -> bool {
     a.distance(b) <= tol
 }
 
+/// `cmd` with `p` fails with the error for `key`, which `p` gives as something other than true or false.
+fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &serde_json::Value, key: &str) {
+    let r = s.execute(cmd, p);
+    let want = format!("`{key}` must be true or false");
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// Values for an on/off param that are not true, false or null.
+fn not_booleans() -> [serde_json::Value; 4] {
+    [json!("true"), json!(1), json!("false"), json!([true])]
+}
+
 // ---------- width ----------
 
 #[test]
@@ -108,6 +120,22 @@ fn width_profile_set_and_clear() {
     assert_eq!(profile(&s, id).unwrap(), vec![(0.0, 0.5, 0.5), (1.0, 0.0, 0.0)]);
     s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": null})).unwrap();
     assert_eq!(profile(&s, id), None);
+}
+
+/// Width Profile refuses a point with a place or width given as text, null or another value that is
+/// not a number, such as `[0.5, "1", 2, 2]`, and leaves the profile and the undo history as they were.
+#[test]
+fn width_profile_set_refuses_a_width_given_as_text() {
+    let mut s = session();
+    let id = line(&mut s);
+    s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": [[0, 1, 1], [1, 1, 1]]})).unwrap();
+    let before = (profile(&s, id), undo_len(&s));
+    for points in [json!([[0.5, "1", 2, 2]]), json!([[0.5, 1, 2, "3"]]), json!([[0.5, null, 2, 2]]), json!([[true, 0.5, 2, 2]])] {
+        let r = s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": points}));
+        let want = "points must be [t, left, right] with non-negative widths";
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{points}: {r:?}");
+        assert_eq!((profile(&s, id), undo_len(&s)), before, "{points}");
+    }
 }
 
 #[test]
@@ -178,6 +206,26 @@ fn width_commands_that_change_nothing_record_no_undo_step() {
     assert_eq!(history(&s), (before.0 + 1, 0, true));
 }
 
+/// Width Point refuses an `adjustAdjoining` given as text or as another value that is not true or
+/// false, for a new point and for a point given by its index: the profile and the undo history stay
+/// as they were. Null is read as the key left out, and the points either side keep their widths.
+#[test]
+fn width_point_set_refuses_adjust_adjoining_given_as_text() {
+    let mut s = session();
+    let id = line(&mut s);
+    s.execute("stroke.widthPoint.set", &json!({"id": id.0, "t": 0.5, "left": 10, "right": 10})).unwrap();
+    let before = (profile(&s, id), undo_len(&s));
+    for v in not_booleans() {
+        let added = json!({"id": id.0, "t": 0.25, "left": 4, "right": 4, "adjustAdjoining": v});
+        refuses_non_boolean(&mut s, "stroke.widthPoint.set", &added, "adjustAdjoining");
+        let moved = json!({"id": id.0, "index": 1, "t": 0.5, "left": 4, "right": 4, "adjustAdjoining": v});
+        refuses_non_boolean(&mut s, "stroke.widthPoint.set", &moved, "adjustAdjoining");
+        assert_eq!((profile(&s, id), undo_len(&s)), before, "{v}");
+    }
+    s.execute("stroke.widthPoint.set", &json!({"id": id.0, "t": 0.25, "left": 4, "right": 4, "adjustAdjoining": null})).unwrap();
+    assert_eq!(profile(&s, id).unwrap(), vec![(0.0, 1.0, 1.0), (0.25, 0.8, 0.8), (0.5, 2.0, 2.0), (1.0, 1.0, 1.0)]);
+}
+
 // ---------- liquify ----------
 
 fn warp_params() -> serde_json::Value {
@@ -217,6 +265,22 @@ fn liquify_without_selection_hits_paths_under_the_brush() {
     assert!(path(&s, b).bounds().unwrap().width() < 100.0);
 }
 
+/// With nothing selected, a stroke leaves the art on a locked artboard as it is.
+#[test]
+fn liquify_without_selection_leaves_the_art_on_a_locked_artboard() {
+    let mut s = session();
+    let b = rect(&mut s, 500.0, 400.0, 100.0, 100.0);
+    s.execute("artboard.new", &json!({"x": 450, "y": 350, "width": 300, "height": 300})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let pucker = json!({"tool": "pucker", "points": [[550, 450]], "diameter": 150, "intensity": 1});
+    let r = s.execute("object.liquify", &pucker);
+    assert_eq!(path(&s, b).bounds().unwrap(), Rect::new(500.0, 400.0, 600.0, 500.0), "{r:?}");
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    s.execute("object.liquify", &pucker).unwrap();
+    assert!(path(&s, b).bounds().unwrap().width() < 100.0, "unlocked");
+}
+
 #[test]
 fn liquify_tool_replays_from_the_journal() {
     let mut s = session();
@@ -237,6 +301,54 @@ fn liquify_tool_replays_from_the_journal() {
     assert_eq!(path(&t, a), after);
 }
 
+/// `cmd` with `p` fails with the error for `key`, which `p` gives as something other than a number.
+fn refuses_non_number(s: &mut Session, cmd: &str, p: &serde_json::Value, key: &str) {
+    let r = s.execute(cmd, p);
+    let want = format!("`{key}` must be a number, not {}", p[key]);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// Liquify refuses a brush size, angle, intensity, detail, simplify, rate, complexity or wrinkle
+/// amount given as text or as another value that is not a number, with the tool that uses the key and
+/// with one that does not: the path and the undo history stay as they were. Null is read as the key
+/// left out.
+#[test]
+fn liquify_refuses_a_number_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = (path(&s, a), undo_len(&s));
+    let with = |tool: &str, key: &str, v: serde_json::Value| {
+        let mut p = warp_params();
+        p["tool"] = json!(tool);
+        p[key] = v;
+        (key.to_string(), p)
+    };
+    let calls = [
+        with("warp", "diameter", json!("40")),
+        with("warp", "width", json!("80")),
+        with("pucker", "height", json!([80])),
+        with("twirl", "angle", json!("45")),
+        with("bloat", "intensity", json!("80%")),
+        with("warp", "detail", json!(true)),
+        with("warp", "simplify", json!("50")),
+        with("twirl", "rate", json!("90")),
+        with("crystallize", "complexity", json!("3")),
+        with("wrinkle", "horizontal", json!("50")),
+        with("wrinkle", "vertical", json!({"value": 50})),
+        with("warp", "complexity", json!("3")),
+    ];
+    for (key, p) in calls {
+        refuses_non_number(&mut s, "object.liquify", &p, &key);
+        assert_eq!((path(&s, a), undo_len(&s)), before, "{p}");
+    }
+    let mut p = warp_params();
+    p["diameter"] = json!(null);
+    p["intensity"] = json!(null);
+    assert_eq!(s.execute("object.liquify", &p).unwrap()["ids"], json!([a.0]));
+    assert_eq!(undo_len(&s), before.1 + 1);
+}
+
 /// A Liquify stroke that reshapes no path (the brush reaches none) records no undo step, run as a
 /// command or dragged with the tool, and the command replies with no ids.
 #[test]
@@ -252,6 +364,32 @@ fn liquify_that_reshapes_no_path_records_no_undo_step() {
     assert_eq!(s.journal.last().unwrap().0, "object.liquify");
     assert_eq!(history(&s), before, "a Warp tool drag");
     assert_eq!(path(&s, a).bounds().unwrap(), Rect::new(100.0, 100.0, 300.0, 300.0));
+}
+
+/// Liquify refuses a `usePressure`, `simplifyOn`, `affectAnchors`, `affectIn` or `affectOut` given as
+/// text or as another value that is not true or false, whichever tool it is given with: the path and
+/// the undo history stay as they were. Null is read as the key left out.
+#[test]
+fn liquify_refuses_a_boolean_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = (path(&s, a), undo_len(&s));
+    let crystallize = json!({"tool": "crystallize", "points": [[300, 150]], "diameter": 100, "intensity": 100});
+    let keys = [("usePressure", warp_params()), ("simplifyOn", warp_params()), ("affectAnchors", crystallize.clone())];
+    let keys = keys.into_iter().chain([("affectIn", crystallize.clone()), ("affectOut", crystallize), ("affectOut", warp_params())]);
+    for (key, mut p) in keys {
+        for v in not_booleans() {
+            p[key] = v;
+            refuses_non_boolean(&mut s, "object.liquify", &p, key);
+        }
+    }
+    assert_eq!((path(&s, a), undo_len(&s)), before, "nothing changed");
+    let mut p = warp_params();
+    p["usePressure"] = json!(null);
+    p["simplifyOn"] = json!(null);
+    assert_eq!(s.execute("object.liquify", &p).unwrap()["ids"], json!([a.0]));
+    assert_eq!(undo_len(&s), before.1 + 1);
 }
 
 fn session_with_rect() -> Session {
@@ -281,6 +419,32 @@ fn puppet_warp_satisfies_pins_and_keeps_area() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s, a).bounds().unwrap(), Rect::new(100.0, 100.0, 400.0, 200.0));
     assert!(s.execute("object.puppetWarp", &json!({"id": a.0, "pins": [[1, 1]], "moved": []})).is_err());
+}
+
+/// Puppet Warp and Puppet Warp Pins refuse an `expand` given as text or as another value that is not
+/// a number, and Puppet Warp refuses an angle that is not a number or null, such as "90": the art and
+/// the undo history stay as they were. A null `expand` is read as the key left out.
+#[test]
+fn puppet_warp_refuses_a_number_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 300.0, 100.0);
+    let before = (path(&s, a), undo_len(&s));
+    let with = |key: &str, v: serde_json::Value| {
+        let mut p = json!({"id": a.0, "pins": [[120, 150], [380, 150]], "moved": [[120, 150], [370, 90]]});
+        p[key] = v;
+        p
+    };
+    refuses_non_number(&mut s, "object.puppetWarp", &with("expand", json!("5")), "expand");
+    refuses_non_number(&mut s, "object.puppetWarp", &with("expand", json!([5])), "expand");
+    refuses_non_number(&mut s, "object.puppetWarp.pins", &json!({"id": a.0, "expand": "5"}), "expand");
+    for angles in [json!(["90", null]), json!([null, true])] {
+        let r = s.execute("object.puppetWarp", &with("angles", angles.clone()));
+        let want = "angles must be a list as long as pins (degrees or null)";
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{angles}: {r:?}");
+    }
+    assert_eq!((path(&s, a), undo_len(&s)), before);
+    s.execute("object.puppetWarp", &with("expand", json!(null))).unwrap();
+    assert_eq!(undo_len(&s), before.1 + 1);
 }
 
 #[test]
@@ -340,6 +504,23 @@ fn puppet_warp_that_moves_nothing_records_no_undo_step() {
         assert_eq!(history(&s), before, "{p}");
         assert_eq!(path(&s, a), warped, "{p}");
     }
+}
+
+/// Puppet Warp refuses a `rest` given as text or as another value that is not true or false: the art
+/// and the undo history stay as they were. Null is read as the key left out.
+#[test]
+fn puppet_warp_refuses_rest_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 300.0, 100.0);
+    let before = (path(&s, a), undo_len(&s));
+    let warp = |rest| json!({"id": a.0, "pins": [[120, 150], [250, 150], [380, 150]], "moved": [[120, 150], [250, 150], [370, 90]], "rest": rest});
+    for v in not_booleans() {
+        refuses_non_boolean(&mut s, "object.puppetWarp", &warp(v), "rest");
+    }
+    assert_eq!((path(&s, a), undo_len(&s)), before, "nothing changed");
+    s.execute("object.puppetWarp", &warp(json!(null))).unwrap();
+    assert_eq!(undo_len(&s), before.1 + 1);
+    assert!(path(&s, a).bounds().unwrap().y0 < 80.0);
 }
 
 // ---------- perspective ----------
@@ -468,6 +649,24 @@ fn rectangle_tool_draws_in_perspective_on_the_active_plane() {
     assert!(s.doc().unwrap().doc.node(id).is_none());
 }
 
+/// Draw in Perspective refuses a `snap` given as text or as another value that is not true or false
+/// before it draws: no shape is made and the undo history stays as it was. Null is read as the key
+/// left out.
+#[test]
+fn perspective_draw_refuses_snap_given_as_text() {
+    let mut s = session();
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    let before = (history(&s), s.doc().unwrap().selection.objects.clone());
+    let draw = |snap| json!({"command": "shape.rectangle", "params": {"x": 300, "y": 320, "width": 50, "height": 80}, "snap": snap});
+    for v in not_booleans() {
+        refuses_non_boolean(&mut s, "perspective.draw", &draw(v), "snap");
+    }
+    assert_eq!((history(&s), s.doc().unwrap().selection.objects.clone()), before, "nothing drawn");
+    let r = s.execute("perspective.draw", &draw(json!(null))).unwrap();
+    assert_eq!((r["plane"].clone(), history(&s).0), (json!("left"), before.0.0 + 1));
+}
+
 #[test]
 fn perspective_selection_moves_within_the_plane() {
     let mut s = session();
@@ -498,6 +697,43 @@ fn perspective_move_attaches_loose_objects_to_the_given_plane() {
     s.execute("perspective.move", &json!({"ids": [a.0], "from": [260, 390], "to": [270, 390], "plane": "ground"})).unwrap();
     assert_eq!(grid(&s).attached_plane(a), Some(Plane::Ground));
     assert!(s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "none"})).is_err());
+}
+
+/// Transform in Perspective refuses a `depth`, Nudge in Perspective refuses a `dx` or `dy`, and Move Plane
+/// refuses an `offset` or `by` given as text or as another value that is not a number, such as "10". Draw in
+/// Perspective refuses an `at` that is not two numbers. The object, the grid and the undo history stay as they
+/// were. A null `depth` or `at` is read as the key left out.
+#[test]
+fn perspective_commands_refuse_a_number_given_as_text() {
+    let mut s = session();
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
+    let a = rect(&mut s, 450.0, 380.0, 60.0, 60.0);
+    s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "right"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = (path(&s, a), grid(&s).definition_json(), undo_len(&s));
+    let calls = [
+        ("perspective.transform", json!({"matrix": [1, 0, 0, 1, 0, 0], "depth": "10"}), "depth"),
+        ("perspective.nudge", json!({"dx": "1", "dy": 0}), "dx"),
+        ("perspective.nudge", json!({"dx": 0, "dy": [1]}), "dy"),
+        ("perspective.plane.move", json!({"plane": "right", "offset": "10"}), "offset"),
+        ("perspective.plane.move", json!({"plane": "right", "offset": "10", "by": 5}), "offset"),
+        ("perspective.plane.move", json!({"plane": "right", "by": true}), "by"),
+    ];
+    for (c, p, key) in calls {
+        refuses_non_number(&mut s, c, &p, key);
+        assert_eq!((path(&s, a), grid(&s).definition_json(), undo_len(&s)), before, "{c} {p}");
+    }
+    let draw = |at: serde_json::Value| json!({"command": "shape.rectangle", "params": {"x": 450, "y": 380, "width": 20, "height": 20}, "plane": "right", "at": at});
+    for at in [json!(["450", 380]), json!("450, 380"), json!([450]), json!([450, 380, 0])] {
+        let r = s.execute("perspective.draw", &draw(at.clone()));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "`at` must be [x, y]"), "at {at}: {r:?}");
+        assert_eq!((path(&s, a), grid(&s).definition_json(), undo_len(&s)), before, "at {at}");
+    }
+    s.execute("perspective.transform", &json!({"matrix": [1, 0, 0, 1, 10, 0], "depth": null})).unwrap();
+    assert_eq!(undo_len(&s), before.2 + 1);
+    s.execute("perspective.draw", &draw(json!(null))).unwrap();
+    assert_eq!(undo_len(&s), before.2 + 2);
 }
 
 /// With the grid defined, Define Perspective Grid with the values the grid has (Reproject or not),
@@ -534,6 +770,28 @@ fn perspective_grid_commands_that_change_nothing_record_no_undo_step() {
     // Moving the plane by 0 with copies of its objects is one undo step.
     s.execute("perspective.plane.move", &json!({"by": 0, "objects": "copy"})).unwrap();
     assert_eq!(history(&s), (before.0 + 1, 0, true));
+}
+
+/// Define Perspective Grid refuses a `reproject`, and Show Perspective Grid a `visible`, given as text
+/// or as another value that is not true or false: the grid, the object on it and the undo history
+/// stay as they were. A null `reproject` leaves the object where it is, and a null `visible` toggles
+/// the grid, as the keys left out do.
+#[test]
+fn perspective_grid_commands_refuse_a_boolean_given_as_text() {
+    let mut s = session();
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    let a = rect(&mut s, 450.0, 380.0, 60.0, 60.0);
+    s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "right"})).unwrap();
+    let state = |s: &Session| (grid(s).definition_json(), grid(s).visible, path(s, a), history(s));
+    let before = state(&s);
+    for v in not_booleans() {
+        refuses_non_boolean(&mut s, "perspective.grid.set", &json!({"horizon": 250, "reproject": v}), "reproject");
+        refuses_non_boolean(&mut s, "perspective.grid.show", &json!({"visible": v}), "visible");
+        assert_eq!(state(&s), before, "{v}");
+    }
+    s.execute("perspective.grid.set", &json!({"horizon": 250, "reproject": null})).unwrap();
+    assert_eq!((grid(&s).horizon, path(&s, a)), (250.0, before.2));
+    assert_eq!(s.execute("perspective.grid.show", &json!({"visible": null})).unwrap(), json!({"visible": !before.1}));
 }
 
 /// For an object in perspective, Move in Perspective by 0 (along its plane or its normal),
@@ -598,4 +856,39 @@ fn perspective_moves_that_move_nothing_record_no_undo_step() {
     let r = s.execute("perspective.transform", &json!({"matrix": [1, 0, 0, 1, 0, 0], "copy": true})).unwrap();
     assert_ne!(r, json!({"ids": [a.0]}));
     assert_eq!(history(&s), (before.0 + 1, 0, true));
+}
+
+/// Move in Perspective refuses a `copy`, `perpendicular` or `snap`, Transform in Perspective a `copy`,
+/// and Nudge in Perspective a `big` or `copy`, given as text or as another value that is not true or
+/// false: the object stays where it is, nothing is copied, and the undo history stays as it was. Null
+/// is read as the key left out.
+#[test]
+fn perspective_moves_refuse_a_boolean_given_as_text() {
+    let mut s = session();
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    let a = rect(&mut s, 450.0, 380.0, 60.0, 60.0);
+    s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "right"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let state = |s: &Session| (path(s, a), history(s), s.doc().unwrap().selection.objects.clone());
+    let before = state(&s);
+    let (from, to) = (json!([480, 410]), json!([500, 420]));
+    for v in not_booleans() {
+        for key in ["copy", "perpendicular", "snap"] {
+            refuses_non_boolean(&mut s, "perspective.move", &json!({"from": from, "to": to, key: v}), key);
+        }
+        refuses_non_boolean(&mut s, "perspective.transform", &json!({"matrix": [1.5, 0, 0, 1.5, 0, 0], "copy": v}), "copy");
+        for key in ["big", "copy"] {
+            refuses_non_boolean(&mut s, "perspective.nudge", &json!({"dx": 1, "dy": 0, key: v}), key);
+        }
+        assert_eq!(state(&s), before, "{v}");
+    }
+    let calls = [
+        ("perspective.move", json!({"from": from, "to": to, "copy": null, "perpendicular": null, "snap": null})),
+        ("perspective.transform", json!({"matrix": [1.5, 0, 0, 1.5, 0, 0], "copy": null})),
+        ("perspective.nudge", json!({"dx": 1, "dy": 0, "big": null, "copy": null})),
+    ];
+    for (i, (c, p)) in calls.into_iter().enumerate() {
+        assert_eq!(s.execute(c, &p).unwrap(), json!({"ids": [a.0]}), "{c} {p}");
+        assert_eq!(history(&s).0, before.1.0 + i + 1, "{c} {p}");
+    }
 }

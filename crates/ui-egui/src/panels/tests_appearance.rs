@@ -102,6 +102,106 @@ fn stroke_panel_shows_the_active_rows_weight() {
     assert!(!frame_texts(&mut app, stroke::show).contains(&six));
 }
 
+/// Cmd+/ is Add New Fill and Cmd+Alt+/ is Add New Stroke by default. On Windows and Linux the keys
+/// are Ctrl+/ and Ctrl+Alt+/, and on macOS they are Command+/ and Option+Command+/. No other
+/// command, tool or panel has either key by default.
+#[test]
+fn cmd_slash_is_add_new_fill_and_cmd_alt_slash_add_new_stroke() {
+    use crate::shortcut_editor::{command_for_key, default_command_shortcut};
+    let mac = cfg!(target_os = "macos");
+    let (cmd, alt) = (egui::Modifiers::COMMAND, egui::Modifiers::ALT);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for (id, key, label, mods, shown) in [
+        ("appearance.addFill", "Cmd+/", "Add New Fill", cmd, if mac { "⌘/" } else { "Ctrl+/" }),
+        ("appearance.addStroke", "Cmd+Alt+/", "Add New Stroke", cmd | alt, if mac { "⌥⌘/" } else { "Ctrl+Alt+/" }),
+    ] {
+        assert_eq!(default_command_shortcut(id), Some(key));
+        assert_eq!(command_for_key(key), Some(id));
+        let chord = crate::shortcuts::parse(key).expect("parses");
+        assert_eq!((chord.modifiers, chord.logical_key), (mods, egui::Key::Slash));
+        assert_eq!(crate::menus::pretty_shortcut(key), shown);
+        let listed = app.run("shortcuts.list", json!({ "query": id })).unwrap();
+        let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
+        assert_eq!(rows, [(json!(label), json!("Window › Appearance"), json!(key))], "Keyboard Shortcuts lists {id}");
+    }
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has either key");
+}
+
+/// Cmd+/ and Cmd+Alt+/, pressed through the shortcut handler, add a fill and a stroke to the
+/// selected objects as the Appearance panel's Add New Fill and Add New Stroke buttons do, on a path
+/// and on type. With nothing selected the buttons are off, and the keys leave the objects as they are.
+#[test]
+fn cmd_slash_adds_a_fill_and_cmd_alt_slash_a_stroke_as_the_panel_buttons_do() {
+    fn press(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        let ev = egui::Event::Key { key: egui::Key::Slash, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    /// The Appearance panel's button named `label`: the center of its rect and whether it is on.
+    fn button(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) -> (egui::Pos2, bool) {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| appearance::show(app, ui));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let (_, n) = nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some(label) && n.role() == egui::accesskit::Role::Button)
+            .unwrap_or_else(|| panic!("no button named {label:?}"));
+        let b = n.bounds().expect("bounds");
+        (egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5), !n.is_disabled())
+    }
+    /// A rectangle and a line of type, with the rectangle (`type_too`: both) selected.
+    fn two_objects(type_too: bool) -> (VectorcraftApp, Vec<Value>) {
+        let mut app = app_with_rect();
+        let rect = first_selected(&app).expect("the rectangle").id.0;
+        let text = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi"}))["id"].clone();
+        let ids = if type_too { vec![json!(rect), text.clone()] } else { vec![json!(rect)] };
+        run(&mut app, "select.set", json!({ "ids": ids }));
+        (app, vec![json!(rect), text])
+    }
+    let stacks = |app: &VectorcraftApp, ids: &[Value]| -> Vec<vectorcraft_doc::Appearance> {
+        let d = &app.session.active().expect("a document").doc;
+        ids.iter().map(|id| (*d.node(vectorcraft_doc::NodeId(id.as_u64().expect("an id"))).expect("the object").appearance).clone()).collect()
+    };
+    let cmd = egui::Modifiers::COMMAND;
+    for (type_too, mods, label, fill) in [
+        (false, cmd, "Add New Fill", true),
+        (false, cmd | egui::Modifiers::ALT, "Add New Stroke", false),
+        (true, cmd, "Add New Fill", true),
+        (true, cmd | egui::Modifiers::ALT, "Add New Stroke", false),
+    ] {
+        let (mut keyed, ids) = two_objects(type_too);
+        let before = stacks(&keyed, &ids);
+        press(&mut keyed, mods);
+        let (mut clicked, _) = two_objects(type_too);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (at, on) = button(&ctx, &mut clicked, label);
+        assert!(on, "{label} is on with a selection");
+        click(&ctx, &mut clicked, at, appearance::show);
+        let after = stacks(&keyed, &ids);
+        assert_eq!(after, stacks(&clicked, &ids), "{label}: the key adds what the button adds");
+        let selected = if type_too { 2 } else { 1 };
+        for (i, (a, b)) in after.iter().zip(&before).enumerate() {
+            let added = if i < selected { 1 } else { 0 };
+            assert_eq!(a.items.len(), b.items.len() + added, "{label}, object {i}: {a:?}");
+            if added == 1 {
+                assert_eq!(a.items.last().map(|it| it.is_fill()), Some(fill), "{label}: on top of the stack");
+            }
+        }
+    }
+    // With nothing selected, both buttons are off and neither key changes the objects.
+    let (mut app, ids) = two_objects(true);
+    run(&mut app, "select.none", json!({}));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    assert!(!button(&ctx, &mut app, "Add New Fill").1 && !button(&ctx, &mut app, "Add New Stroke").1);
+    let before = stacks(&app, &ids);
+    press(&mut app, cmd);
+    press(&mut app, cmd | egui::Modifiers::ALT);
+    assert_eq!(stacks(&app, &ids), before);
+}
+
 #[test]
 fn transparency_panel_reads_the_active_item() {
     let mut app = app_with_rect();

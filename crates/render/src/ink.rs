@@ -311,18 +311,33 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
     inks_pixmap(&blob.cmyk()?, lut)
 }
 
+/// The separation tables of placed images ([`Ink::Cmy`], [`Ink::K`]) and their generation.
+fn separation() -> (Arc<[ProofLut; 2]>, u64) {
+    cached(&SEPARATE, |cms| {
+        let intent = cms.settings().intent;
+        [Ink::Cmy, Ink::K].map(|ink| ProofLut::build(|rgb| ink.plane(cms.srgb_to_cmyk(rgb, intent))))
+    })
+}
+
+/// The key of image pixels `key` painted as `plane` with the separation tables of `generation`.
+fn plane_key(key: &ImageKey, plane: Ink, generation: u64) -> ImageKey {
+    ImageKey { ink: plane, luts: (key.luts.0, generation), ..key.clone() }
+}
+
+/// The key [`ink_image`] gives image pixels `key` painted with `ink`.
+pub(crate) fn ink_key(key: &ImageKey, ink: Ink) -> ImageKey {
+    if matches!(ink, Ink::Display | Ink::RichBlack) { key.clone() } else { plane_key(key, ink, separation().1) }
+}
+
 /// Image pixels `pm` (cached as `key`, from `blob` when it is a document's image as it is) as
 /// painted with `ink`, cached with the images, and their key.
 pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option<&ImageBlob>, touch: bool) -> (ImageKey, Arc<Pixmap>) {
     if matches!(ink, Ink::Display | Ink::RichBlack) {
         return (key.clone(), pm.clone());
     }
-    let (luts, generation) = cached(&SEPARATE, |cms| {
-        let intent = cms.settings().intent;
-        [Ink::Cmy, Ink::K].map(|ink| ProofLut::build(|rgb| ink.plane(cms.srgb_to_cmyk(rgb, intent))))
-    });
-    let plane_key = |plane: Ink| ImageKey { ink: plane, luts: (key.luts.0, generation), ..key.clone() };
-    let want = plane_key(ink);
+    let (luts, generation) = separation();
+    let keyed = |plane: Ink| plane_key(key, plane, generation);
+    let want = keyed(ink);
     let hit = {
         let mut s = images::store();
         if touch { s.get(&want) } else { s.peek(&want) }
@@ -357,8 +372,8 @@ pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option
     });
     let [cmy, k] = planes;
     let mut s = images::store();
-    let cmy = s.insert(plane_key(Ink::Cmy), cmy);
-    let k = s.insert(plane_key(Ink::K), k);
+    let cmy = s.insert(keyed(Ink::Cmy), cmy);
+    let k = s.insert(keyed(Ink::K), k);
     (want, if ink == Ink::K { k } else { cmy })
 }
 

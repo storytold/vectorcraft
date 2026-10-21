@@ -17,7 +17,7 @@ pub struct MeasureTool {
 /// (distance, angle in degrees counter-clockwise, dx, dy)
 pub fn measure(a: Point, b: Point) -> (f64, f64, f64, f64) {
     let d = b - a;
-    (d.hypot(), (-d.y).atan2(d.x).to_degrees(), d.x, d.y)
+    (d.hypot(), (-d.y).atan2(d.x).to_degrees() + 0.0, d.x, d.y)
 }
 
 impl Tool for MeasureTool {
@@ -89,6 +89,23 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    #[test]
+    fn horizontal_drag_reports_positive_zero_angle() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let mut t = MeasureTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 40.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 40.0, 10.0));
+        let ang = t.options()["angle"].as_f64().unwrap();
+        assert!(ang == 0.0 && ang.is_sign_positive(), "angle was {ang:?}");
+        let ov = t.overlays(&cx);
+        assert!(matches!(&ov[1], Overlay::Measure { text, .. } if text.contains("Angle: 0.0°")));
+    }
 
     #[test]
     fn drag_reports_distance_and_angle() {

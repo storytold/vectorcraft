@@ -55,6 +55,9 @@ fn edit_range_replaces_and_undoes() {
     assert_eq!(obj(&s, id).plain_text(), "Hello!");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "Hello there");
+    // An offset of 2^32 is past the end too. A 32-bit build read it as 0 and inserted at the start.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 1u64 << 32, "end": 1u64 << 32, "insert": "!"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello there!");
     assert!(s.execute("text.editRange", &json!({"start": 0})).is_err(), "id required");
     let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     assert!(s.execute("text.editRange", &json!({"id": rect["id"], "insert": "x"})).is_err(), "not text");
@@ -82,6 +85,17 @@ fn set_range_style_splits_runs() {
     assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Character").count(), 2);
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0})).is_err(), "nothing to change");
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
+}
+
+/// A character style applied from byte 2^32 to 2^32 + 5 styles no character, as a range past the
+/// end does. A 32-bit build read the range as bytes 0 to 5 and styled "Hello".
+#[test]
+fn char_style_range_past_u32_styles_nothing() {
+    let mut s = session();
+    let id = text(&mut s, "Hello world");
+    s.execute("charStyle.new", &json!({"name": "Big", "attrs": {"size": 40.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Big", "id": id.0, "start": 1u64 << 32, "end": (1u64 << 32) + 5})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.size == 20.0 && r.style.style_name.is_none()), "{:?}", obj(&s, id).runs);
 }
 
 #[test]
@@ -147,6 +161,8 @@ fn touch_type_moves_one_character_and_leaves_the_others_where_they_are() {
     assert!(near(moved_by(&before, &glyph_pens(&s, id), 0), (0.0, 2.0)));
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 1})).is_err(), "nothing to change");
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 9, "dy": 1})).is_err(), "no character there");
+    // A 32-bit build read 2^32 + 1 as character 1.
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": (1u64 << 32) + 1, "dy": 1})).is_err(), "no character there");
 }
 
 /// Raising, scaling or rotating a character leaves it and the characters after it where they

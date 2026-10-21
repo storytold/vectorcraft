@@ -125,6 +125,9 @@ pub struct RenderOptions {
     pub skip_templates: bool,
     /// View › Hide Template: template layers left out of the screen view (guides stay).
     pub hide_templates: bool,
+    /// View › Hide Guides: paths made into guides left out of the screen view. Exports use
+    /// `skip_templates`, which independently leaves both templates and guides out.
+    pub hide_guides: bool,
     /// Pattern editing mode's tile edge and swatch bounds colour (Object → Pattern → Tile Edge
     /// Color), RGB.
     pub tile_edge: [u8; 3],
@@ -246,6 +249,7 @@ impl Default for RenderOptions {
             trim: false,
             skip_templates: false,
             hide_templates: false,
+            hide_guides: false,
             tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
             guide: ([0x4a, 0xd8, 0xff], false),
             mask_view: None,
@@ -1036,9 +1040,9 @@ impl Renderer {
 
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
-        let skipped_template = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
-            || f.opts.skip_templates && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
+        let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
+            || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
+        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {
@@ -1382,7 +1386,7 @@ impl Renderer {
     /// Outline view, culled by its cached bounds ([`Self::bounds_of`]) and drawn with `c` as
     /// `fx_owner`, so its path and live-effect geometry come from the caches.
     fn draw_outline_member(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>) {
-        if !c.visible || f.opts.hidden.contains(&c.id) {
+        if !c.visible || f.opts.hidden.contains(&c.id) || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
             return;
         }
         match self.bounds_of(f.symbols, c) {
@@ -1908,12 +1912,21 @@ impl Renderer {
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
         let outline = f.opts.outline;
-        // With mips the full pixels are only looked at (not marked used) until they're drawn.
+        // With mips the full pixels are only looked at (not marked used) until they're drawn, and
+        // a mip the store holds is drawn without them: they may have been dropped (#2820).
         let mips = f.opts.image_mips;
-        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, outline, !mips) };
-        if let Some((key, pm)) = pixels {
-            let (key, pm) = if outline { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.images.get(&im.key), !mips) };
-            let pm = if mips { image_mip(&key, pm, f.view * im.xf * Affine::scale_non_uniform(im.width as f64, im.height as f64)) } else { pm };
+        let unit = f.view * im.xf * Affine::scale_non_uniform(im.width as f64, im.height as f64);
+        let shown = if outline && !f.doc.setup.outline_images {
+            None
+        } else if let Some(pm) = mips.then(|| self.kept_mip(f, &im.key, outline, unit)).flatten() {
+            Some(pm)
+        } else {
+            self.image_pixmap(f.doc, &im.key, outline, !mips).map(|(key, pm)| {
+                let (key, pm) = if outline { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.images.get(&im.key), !mips) };
+                if mips { image_mip(&key, pm, unit) } else { pm }
+            })
+        };
+        if let Some(pm) = shown {
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
             let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
@@ -2017,6 +2030,36 @@ impl Renderer {
         let pm = images::store().insert(key.clone(), Arc::new(pm));
         Some((key, pm))
     }
+
+    /// The key [`Self::image_pixmap`] gives the pixels of image `key` and their size, without
+    /// making or looking at them: `None` until the image has been decoded.
+    fn image_key(&self, doc: &Document, key: &str, grey: bool) -> Option<(images::ImageKey, (u16, u16))> {
+        let (key, size) = match doc.images.get(key) {
+            Some(blob) => {
+                let (key, _, size) = blob_key(blob);
+                (key, size?)
+            }
+            None => {
+                let (src, hash, _) = self.adjusts.get(key)?;
+                let (src_key, size) = self.image_key(doc, src, false)?;
+                (images::ImageKey { adjust: Some(*hash), ..src_key }, size)
+            }
+        };
+        Some((if grey { images::ImageKey { grey: true, ..key } } else { key }, size))
+    }
+
+    /// The mip [`image_mip`] draws image `key` (in greyscale with `grey`, the outline view's) with
+    /// through `m` when the store holds it, marked used there; `None` when it draws the full pixels
+    /// or the mip is yet to be made.
+    fn kept_mip(&self, f: &Frame, key: &str, grey: bool, m: Affine) -> Option<Arc<Pixmap>> {
+        let (key, (w, h)) = self.image_key(f.doc, key, grey)?;
+        let key = if grey { key } else { ink::ink_key(&key, f.ink) };
+        let level = mip_level(m, w, h);
+        if level == 0 {
+            return None;
+        }
+        images::store().get(&images::ImageKey { mip: level, ..key })
+    }
 }
 
 /// `key`'s pixels in the shared image store; `touch` marks them used.
@@ -2025,31 +2068,49 @@ fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>> {
     if touch { s.get(key) } else { s.peek(key) }
 }
 
-/// The decoded pixels of `blob` (a CMYK image's inks shown through the working CMYK profile, again
-/// when the colour settings change), from the shared store, and their key there.
-fn blob_pixmap(blob: &vectorcraft_doc::ImageBlob, touch: bool) -> Option<(images::ImageKey, Arc<Pixmap>)> {
+/// The key of `blob`'s decoded pixels in the shared store, the display table a CMYK image's inks
+/// show through (its generation is in the key), and the pixels' size once decoded.
+fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, Option<Arc<ink::InkLut>>, Option<(u16, u16)>) {
     let id = images::blob_id(blob);
     let lut = id.cmyk.then(ink::display_lut);
     let key =
         images::ImageKey { content: id.content, adjust: None, grey: false, ink: Ink::Display, luts: (lut.as_ref().map_or(0, |l| l.1), 0), mip: 0 };
-    if let Some(pm) = lookup(&key, touch) {
-        return Some((key, pm));
-    }
-    // Decoded outside the lock: other renderers carry on meanwhile.
-    let pm = match lut.and_then(|(lut, _)| ink::cmyk_pixmap(blob, &lut)) {
+    (key, lut.map(|l| l.0), id.size)
+}
+
+/// The decoded pixels of `blob` (a CMYK image's inks shown through the working CMYK profile, again
+/// when the colour settings change), from the shared store, and their key there.
+fn blob_pixmap(blob: &vectorcraft_doc::ImageBlob, touch: bool) -> Option<(images::ImageKey, Arc<Pixmap>)> {
+    let (key, lut, size) = blob_key(blob);
+    let pm = match lookup(&key, touch) {
         Some(pm) => pm,
-        None => paint::decode_pixmap(&blob.bytes)?,
+        None => {
+            // Decoded outside the lock: other renderers carry on meanwhile.
+            let pm = match lut.and_then(|lut| ink::cmyk_pixmap(blob, &lut)) {
+                Some(pm) => pm,
+                None => paint::decode_pixmap(&blob.bytes)?,
+            };
+            images::store().insert(key.clone(), Arc::new(pm))
+        }
     };
-    let pm = images::store().insert(key.clone(), Arc::new(pm));
+    let decoded = (pm.width(), pm.height());
+    if size != Some(decoded) {
+        images::remember_size(blob, decoded);
+    }
     Some((key, pm))
+}
+
+/// How many times to halve image pixels of `w`×`h` drawn through `m` (unit square → device
+/// pixels): [`images::mip_level`].
+fn mip_level(m: Affine, w: u16, h: u16) -> u8 {
+    images::mip_level(m * Affine::scale_non_uniform(1.0 / w.max(1) as f64, 1.0 / h.max(1) as f64), w, h)
 }
 
 /// Image pixels `pm` (stored as `key`) to draw through `m` (unit square → device pixels), shrunk
 /// by halves while still at least as fine as the device pixels ([`images::mip_level`]); the
 /// pixels drawn are marked used in the store.
 fn image_mip(key: &images::ImageKey, pm: Arc<Pixmap>, m: Affine) -> Arc<Pixmap> {
-    let (w, h) = (pm.width(), pm.height());
-    let level = images::mip_level(m * Affine::scale_non_uniform(1.0 / w.max(1) as f64, 1.0 / h.max(1) as f64), w, h);
+    let level = mip_level(m, pm.width(), pm.height());
     let mut s = images::store();
     if level == 0 {
         let _ = s.get(key); // Marks the full pixels used (they were only looked at).
@@ -2418,6 +2479,10 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
         if is_opentype_alternate(nominal, g.gid, cluster_chars) {
             alternate_candidates.push(AlternateCandidate { byte: g.byte, len: g.len, font_id: g.font_id, gid: g.gid, cell });
         }
+    }
+    // Ruby (furigana) glyphs: painted with their base text's run.
+    for g in &layout.ruby {
+        push(&mut all, g.run, &g.outline);
     }
     // Underline and strikethrough bars, painted as their run's type is (#847).
     for (run, bar) in vectorcraft_text::decorations(&layout, db, t) {

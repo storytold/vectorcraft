@@ -252,6 +252,18 @@ impl FolderStore {
         }
     }
 
+    /// Create area folder `dir`, and the store's folder when it is missing. On Unix every folder
+    /// made here is owner-only (`0o700`): the copies are unsaved documents, and with the default
+    /// mode other accounts on the machine could read them. A store folder that already exists
+    /// keeps its mode, since it can be one the user picked in Preferences.
+    fn create_area(dir: &std::path::Path) -> std::result::Result<(), String> {
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder.create(dir).map_err(|e| format!("{}: {e}", dir.display()))
+    }
+
     /// The plain names of the files (or, `dirs`, folders) in `dir`; none when it doesn't exist.
     fn names(dir: &std::path::Path, dirs: bool) -> std::result::Result<Vec<String>, String> {
         let entries = match std::fs::read_dir(dir) {
@@ -285,7 +297,7 @@ impl RecoveryStore for FolderStore {
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
         let f = self.file(name)?;
         if let Some(dir) = f.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            Self::create_area(dir)?;
         }
         vectorcraft_format::write_atomic(&f, bytes).map_err(|e| format!("{}: {e}", f.display()))
     }
@@ -304,7 +316,7 @@ impl RecoveryStore for FolderStore {
     }
     fn lock(&self, area: &str) -> std::result::Result<Lock, String> {
         let dir = self.area(area)?;
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        Self::create_area(&dir)?;
         let path = dir.join(LOCK_FILE);
         let file = std::fs::OpenOptions::new()
             .read(true)

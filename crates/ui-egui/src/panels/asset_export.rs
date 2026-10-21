@@ -77,7 +77,7 @@ pub(crate) fn paint_thumb(ui: &Ui, st: &DocState, a: &ExportAsset, r: Rect) {
                 rr.borrow_mut().render_node_thumbnail_with(&st.doc, &group, px, None, &opts)
             }
         })?;
-        let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+        let color = crate::canvas::color_image(&img);
         let tex = ui.ctx().load_texture(format!("asset-thumb-{}", a.id), color, egui::TextureOptions::LINEAR);
         CACHE.with(|c| {
             let mut c = c.borrow_mut();

@@ -113,11 +113,11 @@ fn black_point_compensation_maps_the_darkest_ink_to_rgb_black() {
     assert_eq!(abs(true), abs(false));
 }
 
-/// #1584: the profiles written here (built-in RGB spaces) have every tag on a 4-byte boundary and
-/// a size that is a multiple of 4 (ICC.1 §7.1.2), and still read back as the same space.
+/// #1584: every built-in profile (RGB, CMYK and gray) has each tag on a 4-byte boundary and a size
+/// that is a multiple of 4 (ICC.1 §7.1.2), and still reads back as the same space.
 #[test]
-fn written_profiles_align_their_tags() {
-    for name in [super::SRGB, super::DISPLAY_P3, super::WIDE_GAMUT_RGB, super::PROPHOTO_RGB] {
+fn builtin_profiles_align_their_sizes_and_tags() {
+    for name in BUILTIN_RGB.into_iter().chain(BUILTIN_CMYK).chain([GRAY]) {
         let icc = super::icc_bytes(name).unwrap();
         let be = |at: usize| u32::from_be_bytes([icc[at], icc[at + 1], icc[at + 2], icc[at + 3]]) as usize;
         assert_eq!(be(0), icc.len(), "{name}: header size");

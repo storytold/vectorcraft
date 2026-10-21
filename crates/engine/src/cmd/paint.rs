@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "{fill?: bool (true: bring the Fill proxy forward, false: the Stroke proxy; omitted: swap which is in front)} → {fillActive}",
             always,
             |s, p| {
-                s.fill_active = p.get("fill").and_then(Value::as_bool).unwrap_or(!s.fill_active);
+                s.fill_active = switch_or(p, "fill", !s.fill_active, "paint.toggleActive")?;
                 Ok(json!({ "fillActive": s.fill_active }))
             }
         ),
@@ -105,7 +105,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             has_doc,
             |s, p| {
                 let paint = Paint::solid(s.last_solid);
-                apply_to_proxy(s, p, paint)
+                apply_to_proxy(s, p, paint, "paint.lastColor")
             }
         ),
         cmd!(
@@ -117,7 +117,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             has_doc,
             |s, p| {
                 let paint = super::gradient::unplaced(&Paint::Gradient(Box::new(s.last_gradient.clone())));
-                apply_to_proxy(s, p, paint)
+                apply_to_proxy(s, p, paint, "paint.lastGradient")
             }
         ),
         cmd!(
@@ -287,8 +287,15 @@ fn proxies(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// `stroke` param, defaulting to the proxy that is in front.
-fn stroke_param(s: &Session, p: &Value) -> bool {
-    p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active)
+fn stroke_param(s: &Session, p: &Value, cmd: &str) -> Result<bool> {
+    switch_or(p, "stroke", !s.fill_active, cmd)
+}
+
+/// Error unless `p` gives `keepModel` as true, false or null, or leaves it out ("`keepModel` must
+/// be true or false"). [`paint_from`] calls it first, and each command whose params text lists
+/// `keepModel` calls it before it changes anything.
+pub(crate) fn check_keep_model(p: &Value, cmd: &str) -> Result<()> {
+    check_switches(p, &["keepModel"], cmd)
 }
 
 /// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
@@ -319,11 +326,13 @@ pub(crate) fn new_color(s: &Session, p: &Value, c: Color) -> Color {
 
 /// Parse a paint from params (color / none / swatch / gradient). None = no paint keys given. A
 /// color or gradient (its stops and freeform points) given in RGB takes the document's color
-/// model ([`new_color_model`]), converted through the color settings.
+/// model ([`new_color_model`]), converted through the color settings. A `none` or `keepModel`
+/// other than true, false or null is an error.
 pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
+    check_keep_model(p, "paint")?;
     let model = new_color_model(s, p);
     let new_color = |c: Color| stored_color(model, c);
-    if bool_or(p, "none", false) {
+    if switch_or(p, "none", false, "paint")? {
         return Ok(Some(Paint::None));
     }
     if let Some(name) = str_param(p, "swatch") {
@@ -391,13 +400,14 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     if p.get("tint").is_some() && p.get("swatch").is_none() {
         return Err(bad(cmd, "`tint` goes with a global or spot `swatch`"));
     }
+    check_keep_model(p, cmd)?;
     let paint = paint_from(s, p)?.ok_or_else(|| bad(cmd, "give color, none, swatch or gradient"))?;
     apply_paint(s, p, paint, fill)
 }
 
 /// [`apply_paint`] on the proxy named by `stroke` (default: the active one), focusing it.
-fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint) -> Result<Value> {
-    let fill = !stroke_param(s, p);
+fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint, cmd: &str) -> Result<Value> {
+    let fill = !stroke_param(s, p, cmd)?;
     apply_paint(s, p, paint, fill)
 }
 
@@ -406,6 +416,7 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint) -> Result<Value> {
 /// remember the paint.
 fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let focus = switch_or(p, "focus", true, cmd)?;
     let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
     if p.get("ids").is_none()
@@ -431,7 +442,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             super::typecmd::refresh_bounds(t);
             Ok(super::appearance::count_changed(d, &before, &[id]))
         })?;
-        if bool_or(p, "focus", true) {
+        if focus {
             s.fill_active = fill;
         }
         s.remember_paint(&paint);
@@ -514,7 +525,7 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
         }
         s.paint.stroke = unplaced(&paint);
     }
-    if bool_or(p, "focus", true) {
+    if focus {
         s.fill_active = fill;
     }
     s.remember_paint(&paint);
@@ -666,7 +677,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
 /// default when there are none) and remember the first target's new paint. The Appearance panel's
 /// active item of the proxy's kind is recoloured in each selected object's own stack instead.
 fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
-    let stroke = stroke_param(s, p);
+    let stroke = stroke_param(s, p, cmd)?;
     let ids = match ids_param(p, "ids") {
         Some(ids) => ids,
         None => super::edit::selected_roots(s)?,

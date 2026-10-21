@@ -89,6 +89,8 @@ pub struct AnchorTool {
     /// Smart guides of the handle being dragged, and what it snaps to.
     guides: Vec<Overlay>,
     snap: HandleSnap,
+    /// Move offset while Shift-dragging an anchor or spine point (pointer, delta).
+    measure: Option<(Point, f64, f64)>,
 }
 
 impl AnchorTool {
@@ -99,7 +101,7 @@ impl AnchorTool {
             "scissors" => "scissors",
             _ => "addAnchor",
         };
-        Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default() }
+        Self { id, state: State::Idle, guides: vec![], snap: HandleSnap::default(), measure: None }
     }
 
     /// Nearest point of this eligible spine, in document coordinates.
@@ -315,11 +317,15 @@ impl Tool for AnchorTool {
                         json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
                     ),
                     State::Move { id, si, ai, from, start, .. } => {
-                        let q = from + Self::move_delta(cx, start, p, ev.mods.shift);
+                        let d = Self::move_delta(cx, start, p, ev.mods.shift);
+                        self.measure = Some((p, d.x, d.y));
+                        let q = from + d;
                         Action::Preview("path.moveAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai, "x": q.x, "y": q.y}))
                     }
                     State::SpineMove { id, ai, from, start, .. } => {
-                        let q = from + Self::move_delta(cx, start, p, ev.mods.shift);
+                        let d = Self::move_delta(cx, start, p, ev.mods.shift);
+                        self.measure = Some((p, d.x, d.y));
+                        let q = from + d;
                         Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": id.0, "anchor": ai, "x": q.x, "y": q.y}))
                     }
                     State::SpineConvert { id, ai, .. } => Action::Preview(
@@ -369,6 +375,7 @@ impl Tool for AnchorTool {
             }
             ("anchorPoint", PointerKind::Up) => {
                 self.guides.clear();
+                self.measure = None;
                 let st = std::mem::replace(&mut self.state, State::Idle);
                 match st {
                     State::Convert { began: true, .. }
@@ -434,6 +441,7 @@ impl Tool for AnchorTool {
         }
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.measure = None;
         let st = std::mem::replace(&mut self.state, State::Idle);
         match st {
             State::Convert { began: true, .. }
@@ -450,6 +458,11 @@ impl Tool for AnchorTool {
         let mut out = if self.id == "anchorPoint" { Self::spine_overlays(cx) } else { vec![] };
         if matches!(self.state, State::Handle { .. }) {
             out.extend(self.guides.iter().cloned());
+        }
+        if cx.measurement_labels
+            && let Some((p, dx, dy)) = self.measure
+        {
+            out.push(Overlay::Measure { p, text: cx.offset_label(dx, dy) });
         }
         out
     }
@@ -969,5 +982,27 @@ mod tests {
         // A Shift-click that doesn't move does nothing (no conversion to a corner).
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0).with_mods(shift));
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 300.0).with_mods(shift)).is_empty());
+    }
+
+    #[test]
+    fn anchor_point_shift_drag_honors_measurement_labels() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false);
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, vectorcraft_geom::PathData::single(sp), vectorcraft_doc::Appearance::default_art()))
+            .unwrap();
+        let s = Selection::default();
+        let p = paint();
+        let base = cx(&d, &s, &p);
+        let on = ToolContext { measurement_labels: true, ..base };
+        let off = ToolContext { measurement_labels: false, ..base };
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(&on, &PointerEvent::new(PointerKind::Down, 200.0, 300.0).with_mods(shift));
+        t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 230.0, 340.0));
+        let want = on.offset_label(30.0, 40.0);
+        assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
+        assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
     }
 }

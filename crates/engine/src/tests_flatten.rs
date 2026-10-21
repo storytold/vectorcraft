@@ -7,6 +7,7 @@ use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_render::{Rendered, Renderer};
 
+use super::tests_expand::{RANDOM_CASES, random_transforms};
 use super::tests_menucmds::{place_undecodable_png, warns_undecoded};
 use super::*;
 
@@ -408,6 +409,27 @@ fn outlined_type_keeps_its_gradient_on_the_outlines_its_transform_effect_moves()
         diffs.push(changed(&Renderer::new().render_region(&back, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true), &reference));
     }
     assert!(diffs.iter().all(|&d| d < 0.0002), "shares of the pixels that changed: {diffs:?}");
+}
+
+/// Random in a Transform effect takes its seed from the object's id. Each of [`random_transforms`]'
+/// objects at 50% opacity draws as the canvas drew it with its geometry effects baked, as Flatten
+/// Transparency bakes them first, and after Flatten Transparency, within the seams between its
+/// regions (the same objects without Random change 1.4% to 2.3% of the pixels).
+#[test]
+fn flattened_art_keeps_the_random_transforms_the_canvas_drew() {
+    let _settings = settings_lock();
+    let mut diffs = vec![];
+    for case in RANDOM_CASES {
+        let mut s = session();
+        let id = random_transforms(&mut s, case);
+        run(&mut s, "transparency.set", json!({"ids": [id.0], "opacity": 50}));
+        let before = picture(&s);
+        let baked = vectorcraft_render::effects::bake_document(&s.doc().unwrap().doc).unwrap();
+        let baked = Renderer::new().render_region(&baked, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true);
+        flatten(&mut s, json!({"ids": [id.0]}));
+        diffs.push((case, changed(&before, &baked), changed(&before, &picture(&s))));
+    }
+    assert!(diffs.iter().all(|&(_, baked, flat)| baked == 0.0 && flat < 0.03), "shares of the pixels that changed: {diffs:?}");
 }
 
 #[test]

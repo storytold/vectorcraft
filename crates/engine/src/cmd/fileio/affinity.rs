@@ -140,9 +140,9 @@ impl Builder {
                 id: i as u32 + 1,
                 name,
                 rect,
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
-                locked: false,
                 color: None,
             })
             .collect();

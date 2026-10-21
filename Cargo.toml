@@ -15,6 +15,9 @@ craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b77
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "d991bf6792f8ade99c51358bf3c1d902c8cd96b5" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "82a24b006eefa036b43c09a67fb9a3fbd17ffe63" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
+# Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
+# desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
+craft-window = { git = "https://github.com/storytold/craft-libs", rev = "1f805378d454dac48b5c214029d254055fdf961b", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -22,8 +25,9 @@ vectorcraft-doc = { path = "crates/doc" }
 vectorcraft-pathops = { path = "crates/pathops" }
 vectorcraft-brush = { path = "crates/brush" }
 vectorcraft-trace = { path = "crates/trace" }
-# Without its default `bundled-fonts`: the engine turns them on (its own default feature), so a
-# library crate never forces them on an embedder that supplies its fonts at run time.
+# Without its default `bundled-fonts`: a crate that wants the fonts asks for them (the apps and
+# vectorcraft-testkit through the engine's `bundled-fonts`), so a library crate never forces them on
+# an embedder that supplies its fonts at run time.
 vectorcraft-text = { path = "crates/text", default-features = false }
 vectorcraft-effects = { path = "crates/effects" }
 vectorcraft-three-d = { path = "crates/three-d" }
@@ -32,7 +36,9 @@ vectorcraft-svg = { path = "crates/svg" }
 vectorcraft-pdf = { path = "crates/pdf" }
 vectorcraft-format = { path = "crates/format" }
 vectorcraft-tools = { path = "crates/tools" }
-vectorcraft-engine = { path = "crates/engine" }
+# Without its default `bundled-fonts`, as vectorcraft-text: each crate that wants the fonts asks for
+# them, so an embedder can build without them (docs/development.md › Leaving out the bundled fonts).
+vectorcraft-engine = { path = "crates/engine", default-features = false }
 vectorcraft-ui-egui = { path = "crates/ui-egui" }
 vectorcraft-mcp = { path = "crates/mcp" }
 vectorcraft-testkit = { path = "crates/testkit" }

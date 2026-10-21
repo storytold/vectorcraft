@@ -262,6 +262,27 @@ fn point_commands_need_a_freeform_gradient() {
     assert!(s.execute("paint.freeform.addPoint", &json!({"at": [1, 1]})).is_err());
 }
 
+/// The point and line commands refuse a point, line or segment of 2^32 + k, where k names one that
+/// exists, and the points and the selected point stay as they were. A 32-bit build read the number
+/// as k.
+#[test]
+fn point_commands_refuse_an_index_past_u32() {
+    let (mut s, id) = freeform_rect();
+    run(&mut s, "paint.freeform.addLine", json!({"points": [0, 1]}));
+    let (before, selected) = (points(&s, id), s.selected_freeform_point());
+    let past = |k: u64| (1u64 << 32) + k;
+    for (cmd, p) in [
+        ("paint.freeform.setPoint", json!({"index": past(1), "color": "#000000"})),
+        ("paint.freeform.deletePoint", json!({"index": past(1)})),
+        ("paint.freeform.selectPoint", json!({"index": past(1)})),
+        ("paint.freeform.splitLine", json!({"line": past(0), "segment": 0})),
+        ("paint.freeform.splitLine", json!({"line": 0, "segment": past(0)})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+        assert_eq!((points(&s, id), s.selected_freeform_point()), (before.clone(), selected), "{cmd} {p}");
+    }
+}
+
 #[test]
 fn selection_follows_the_object_and_the_proxy() {
     let (mut s, id) = freeform_rect();

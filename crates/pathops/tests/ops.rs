@@ -295,6 +295,20 @@ fn outline_stroke_of_line() {
 }
 
 #[test]
+fn outline_stroke_of_straight_line_with_round_caps_is_compact() {
+    let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false));
+    let o = outline_stroke(&l, 10.0, Cap::Round, Join::Round, 4.0);
+    assert!(close(ar(&o), 100.0 * 10.0 + PI * 5.0 * 5.0, 1e-3), "{}", ar(&o));
+    let anchors = o.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert!(anchors <= 8, "round-cap expand should stay compact, got {anchors} anchors");
+    let dense: Vec<Point> = (0..=20).map(|i| Point::new(i as f64 * 5.0, 50.0)).collect();
+    let dense_path = PathData::single(SubPath::polyline(&dense, false));
+    let dense_o = outline_stroke(&dense_path, 10.0, Cap::Round, Join::Round, 4.0);
+    let dense_anchors = dense_o.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
+}
+
+#[test]
 fn outline_stroke_of_square_is_ring() {
     let o = outline_stroke(&rect(0.0, 0.0, 10.0, 10.0), 2.0, Cap::Butt, Join::Miter, 10.0);
     assert_eq!(o.subpaths.len(), 2);

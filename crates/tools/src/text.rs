@@ -325,7 +325,8 @@ pub const PORT_RISE_PX: f64 = 12.0;
 const PORT_HALF_PX: f64 = 4.5;
 
 /// Centre of the out port of `t`: on the right side of an area type frame just above its
-/// bottom-right corner ([`PORT_RISE_PX`]), at the end of the path for type on a path.
+/// bottom-right corner ([`PORT_RISE_PX`]), and for type on a path just past its end bracket, where
+/// its text stops, clear of the bracket, which drags.
 fn out_port(t: &TextObject, cx: &ToolContext) -> Option<Point> {
     match &t.kind {
         TextKind::Area { frame } => {
@@ -335,7 +336,17 @@ fn out_port(t: &TextObject, cx: &ToolContext) -> Option<Point> {
             let len = up.hypot();
             Some(if len > 1e-9 && len.is_finite() { corner + up * (cx.tol(PORT_RISE_PX).min(len / 2.0) / len) } else { corner })
         }
-        TextKind::OnPath { path, .. } => path.to_bezpath().segments().last().map(|s| t.xf * vectorcraft_geom::ParamCurve::end(&s)),
+        TextKind::OnPath { path, .. } => {
+            let arc = vectorcraft_geom::ArcPath::new(path);
+            let (_, end) = t.kind.path_span()?;
+            if arc.is_empty() {
+                return None;
+            }
+            let (p, dir) = arc.at(end * arc.len());
+            let (at, ahead) = (t.xf * p, t.xf * (p + dir) - t.xf * p);
+            let len = ahead.hypot();
+            Some(if len > 1e-9 && len.is_finite() { at + ahead * (cx.tol(PORT_RISE_PX) / len) } else { at })
+        }
         TextKind::Point => None,
     }
 }
@@ -352,15 +363,16 @@ fn overflow_port(t: &TextObject, cx: &ToolContext, o: &mut Vec<Overlay>) {
     o.push(Overlay::Line { a: Point::new(m.x, m.y - k), b: Point::new(m.x, m.y + k), color: red, dashed: false });
 }
 
-/// The selected area type whose red out port is under `p` (only text that overflows shows one):
-/// a click there loads the Selection tool with its text, to thread into another frame.
+/// The selected area type or type on a path whose red out port is under `p` (only text that
+/// overflows shows one): a click there loads the Selection tool with its text, to thread into
+/// another frame.
 pub(crate) fn out_port_at(cx: &ToolContext, p: Point) -> Option<NodeId> {
     let h = cx.tol(PORT_HALF_PX + 1.0);
     let near = |t: &TextObject| out_port(t, cx).is_some_and(|c| (c.x - p.x).abs() <= h && (c.y - p.y).abs() <= h);
     cx.selection.objects.iter().copied().find(|id| {
         cx.doc
             .node(*id)
-            .filter(|n| crate::select::is_area_type(n))
+            .filter(|n| crate::select::is_threadable(n))
             .and_then(|_| TypeTool::text(cx, *id))
             .is_some_and(|t| near(t) && vectorcraft_text::layout(FontDb::global(), t).overflow)
     })
@@ -791,6 +803,18 @@ impl Tool for TypeTool {
     /// `commitTyping` (the caller commits the engine interaction).
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
+            // Transient selection transferred between Type and Eyedropper; never a saved setting.
+            "textSelection" => {
+                if let (Some(id), Some(a), Some(b)) = (
+                    v.get("editing").and_then(Value::as_u64),
+                    v.get("anchor").or_else(|| v.get("start")).and_then(Value::as_u64),
+                    v.get("caret").or_else(|| v.get("end")).and_then(Value::as_u64),
+                ) && let (Ok(a), Ok(b)) = (usize::try_from(a), usize::try_from(b))
+                {
+                    self.start_editing(NodeId(id), b);
+                    self.anchor = a;
+                }
+            }
             "prevTool" | "previousTool" => {
                 self.prev_tool = v.as_str().map(String::from);
             }
@@ -826,7 +850,11 @@ impl Tool for TypeTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let (Some((_, s)), Some(d)) = (self.press, self.drag) {
-            o.push(Overlay::Marquee(Rect::from_points(s, d)));
+            let r = Rect::from_points(s, d);
+            o.push(Overlay::Marquee(r));
+            if cx.measurement_labels {
+                o.push(Overlay::Measure { p: d, text: cx.size_label(r.width(), r.height()) });
+            }
         }
         // Overflow markers on selected text.
         for id in &cx.selection.objects {

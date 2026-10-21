@@ -260,21 +260,3 @@ fn saved_selections_from_a_file_are_tidied() {
     v["document"]["saved_selections"] = json!([{"name": 5, "objects": "x"}]);
     assert!(load(&serde_json::to_vec(&v).unwrap()).is_err());
 }
-
-#[test]
-fn artboard_lock_and_colour_roundtrip_and_older_files_default() {
-    let mut d = Document::new(100.0, 100.0);
-    d.artboards[0].locked = true;
-    d.artboards[0].color = Some(vectorcraft_doc::color::Color::rgb8(0x33, 0x66, 0x99));
-    check_native_roundtrip(&d).unwrap();
-    let back = load(&save(&d, false)).unwrap();
-    assert!(back.artboards[0].locked);
-    assert_eq!(back.artboards[0].color, d.artboards[0].color);
-    // A file written before the fields existed (or without them set) opens unlocked and uncoloured.
-    let plain = Document::new(100.0, 100.0);
-    let mut v: Value = serde_json::from_slice(&save(&plain, false)).unwrap();
-    assert!(v["document"]["artboards"][0].get("locked").is_none(), "defaults are not written");
-    v["document"]["artboards"][0].as_object_mut().unwrap().remove("color");
-    let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
-    assert!(!old.artboards[0].locked && old.artboards[0].color.is_none());
-}

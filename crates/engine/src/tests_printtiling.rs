@@ -144,6 +144,8 @@ fn tiles_start_at_the_tile_origin_and_cover_the_art() {
     // Bad input is refused.
     assert!(s.execute("print.tiling.set", &json!({})).is_err());
     assert!(s.execute("print.tiling.set", &json!({"origin": [1, 2], "artboard": 7})).is_err());
+    // A 32-bit build read 2^32 as artboard 0.
+    assert!(s.execute("print.tiling.set", &json!({"origin": [1, 2], "artboard": 1u64 << 32})).is_err());
     assert!(s.execute("print.tiling.set", &json!({"origin": [1e9, 2]})).is_err());
 }
 

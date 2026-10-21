@@ -160,6 +160,8 @@ fn destination(set: &PdfSettings, mode: ColorMode, source: &Cms) -> Result<Optio
     let name = o.destination.trim();
     let fallback = if cmyk_only { crate::pdfx::cmyk_destination(set, source) } else { String::new() };
     let name = match (name.is_empty(), mode) {
+        // Document CMYK: the CMYK profile in effect, in an RGB document too (#2950).
+        (false, _) if name.eq_ignore_ascii_case(crate::DOCUMENT_CMYK) => source.settings().cmyk.as_str(),
         (false, _) => name,
         (true, _) if cmyk_only => fallback.as_str(),
         (true, ColorMode::Cmyk) => source.settings().cmyk.as_str(),

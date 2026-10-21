@@ -66,11 +66,16 @@ pub struct HitOptions {
     /// Guide objects (paths made into guides) are not hittable: View › Guides › Lock Guides is
     /// on or the guides are hidden.
     pub skip_guides: bool,
+    /// The selection tools: a clip group's clipping path is hit on its outline, within the
+    /// tolerance, before the art it clips, so that the mask can be reached where the art covers
+    /// its edge. Off for the tools that act on what is drawn (sampling, type, gradients…);
+    /// [`hit_test_visible`] never does it.
+    pub clip_outlines: bool,
 }
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, scope: None }
+        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: false, scope: None }
     }
 }
 
@@ -134,6 +139,11 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
             return objects_at_repeated(doc, p, opt, scope);
         }
     }
+    // The objects on a locked artboard can't be selected, as `hit_test_skipping` passes over them.
+    let locks = doc.locked_artboards();
+    if !locks.is_empty() {
+        tops.retain(|id| !doc.node(*id).is_some_and(|n| locks.holds(n)));
+    }
     tops
 }
 
@@ -143,8 +153,16 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
 /// measured by their art ([`Node::geometric_bounds_with`]).
 fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, tops: &mut Vec<NodeId>, seen: &mut HashSet<NodeId>) -> bool {
     let Some(children) = layer.children() else { return true };
-    if layer.clips() && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
-        return true;
+    if layer.clips()
+        && let Some(clip) = children.first()
+    {
+        // As the hit test does: the clipping mask's outline first, then only inside the mask.
+        if clip_outline_hit(layer, clip, p, opt, symbols, true).is_some() && seen.insert(clip.id) {
+            tops.push(clip.id);
+        }
+        if !clip_contains(clip, p) {
+            return true;
+        }
     }
     let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
     for (i, c) in children.iter().enumerate().rev() {
@@ -267,14 +285,24 @@ fn locked_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> boo
     }
 }
 
-/// [`hit_test`] passing over the nodes `skip` names (and their contents). Symbol instances are
-/// measured by their art ([`Node::geometric_bounds_with`]).
+/// [`hit_test`] passing over the nodes `skip` names (and their contents), and with
+/// `editable_only` over the objects of layers and sublayers on a locked artboard, and over all of
+/// an isolated group on one ([`crate::LockedArtboards::holds`]). Symbol instances are measured by their art
+/// ([`Node::geometric_bounds_with`]).
 fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, editable_only: bool) -> Option<Hit> {
     let finish = |mut h: Hit| {
         h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
         h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
         h
     };
+    let locks = doc.locked_artboards();
+    let on_locked = |id: NodeId| {
+        editable_only
+            && !locks.is_empty()
+            && doc.parent_of(id).and_then(|l| doc.node(l)).is_some_and(Node::is_layer)
+            && doc.node(id).is_some_and(|n| locks.holds(n))
+    };
+    let skip = &|id| skip(id) || on_locked(id);
     let symbols = doc.symbol_boxes();
     // Isolation mode: only what is inside the isolated container hits. The art around it is
     // locked, and clicks pass through it (#833).
@@ -283,6 +311,10 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
+        // Isolated before its artboard was locked: nothing in it hits.
+        if locks.holds_id(scope) {
+            return None;
+        }
         if isolated.is_container() {
             return hit_children(isolated, p, opt, &symbols, skip, &mut chain, editable_only).map(finish);
         }
@@ -363,6 +395,31 @@ fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
     parent.extras().shaper.is_some() && (i == 0) != source_of(parent, scope)
 }
 
+/// A press on the outline of clipping path `clip` (a path or a compound path; type clips by its
+/// glyphs, which this crate cannot outline), within the tolerance.
+fn clip_outline(clip: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
+    let bp = match &clip.kind {
+        NodeKind::Path { path, .. } => path.to_bezpath(),
+        NodeKind::Compound { .. } => clip.stroke_path()?,
+        _ => return None,
+    };
+    stroke_contains(&bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
+}
+
+/// For the selection tools ([`HitOptions::clip_outlines`]), a press on the outline of `clip`, the
+/// clipping path of `parent` (a clip group or a layer with a clipping mask), within the tolerance:
+/// it is hit before the art it clips. There Direct Selection takes its segments, and the
+/// Selection tool the clip group. The reference app reshapes a clipping path with Direct Selection
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-clipping-masks.html>);
+/// without this, art drawn over the path's edge is hit first and its segments can't be dragged.
+/// The clipping path must be one a click may hit ([`may_hit`]: visible, editable, within reach).
+fn clip_outline_hit(parent: &Node, clip: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editable_only: bool) -> Option<HitKind> {
+    if !opt.clip_outlines || !editable_only || !may_hit(parent, 0, clip, p, opt, symbols, editable_only) {
+        return None;
+    }
+    clip_outline(clip, p, opt)
+}
+
 fn hit_children(
     parent: &Node,
     p: Point,
@@ -373,12 +430,17 @@ fn hit_children(
     editable_only: bool,
 ) -> Option<Hit> {
     let children = parent.children()?;
-    // A clip group (or a layer with a clipping mask) only hits inside its clipping path.
     if parent.clips()
         && let Some(clip) = children.first()
-        && !clip_contains(clip, p)
     {
-        return None;
+        if let Some(kind) = clip_outline_hit(parent, clip, p, opt, symbols, editable_only).filter(|_| !skip(clip.id)) {
+            chain.push(clip.id);
+            return Some(Hit { leaf: clip.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 });
+        }
+        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it.
+        if !clip_contains(clip, p) {
+            return None;
+        }
     }
     for i in hit_order(parent, children, p) {
         let Some(c) = children.get(i) else { continue };
@@ -460,10 +522,18 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
-        // An image is hit within its frame, and where its own fills and strokes paint
-        // ([`image_paint`]) except in outline mode.
-        NodeKind::Image(_) => {
-            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+        // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
+        // #3291), and where its own fills and strokes paint ([`image_paint`]) except in outline
+        // mode.
+        NodeKind::Image(im) => {
+            if opt.path_only {
+                use vectorcraft_geom::kurbo::Shape;
+                let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
+                frame.apply_affine(im.xf);
+                if stroke_contains(&frame, 0.0, opt.tol, p) {
+                    return Some(HitKind::Outline);
+                }
+            } else if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);
             }
             if opt.outline {
@@ -533,10 +603,11 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
     parts.iter().filter(|(_, bp, _)| fill_contains(bp, *rule, p)).min_by(|a, b| size(&a.2).total_cmp(&size(&b.2))).map(|(id, ..)| *id)
 }
 
-/// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect. Symbol
-/// instances are measured by their art ([`Node::geometric_bounds_with`]). The art of a clip group
-/// or of a layer with a clipping mask counts only when the marquee meets the region its clipping
-/// path clips to, and then only within that region's bounds.
+/// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect, leaving
+/// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
+/// by their art ([`Node::geometric_bounds_with`]). The art of a clip group or of a layer with a
+/// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
+/// only within that region's bounds.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
@@ -615,8 +686,9 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
         }
     }
     let symbols = doc.symbol_boxes();
+    let locks = doc.locked_artboards();
     for (t, r) in tops {
-        if !t.visible || t.locked {
+        if !t.visible || t.locked || locks.holds_id(t.id) {
             continue;
         }
         if leaves {
@@ -949,6 +1021,81 @@ mod tests {
         }
     }
 
+    /// A rectangle (40, 40)–(140, 140) clipping a filled 200 × 200 square drawn over its edges, in a
+    /// clip group (or, `layer`, as the first layer's clipping mask): the group (or the layer), the
+    /// clipping path and the art.
+    fn masked_square(layer: bool) -> (Document, NodeId, NodeId, NodeId) {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = Node::path(clip, shapes::rectangle(Rect::new(40.0, 40.0, 140.0, 140.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut path.kind {
+            *clipping = true;
+        }
+        let picture = Node::path(art, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default_art());
+        if layer {
+            d.insert(Some(l), 0, path).unwrap();
+            d.insert(Some(l), 1, picture).unwrap();
+            d.node_mut(l).unwrap().set_clips(true);
+            (d, l, clip, art)
+        } else {
+            d.insert(Some(l), 0, Node::new(g, NodeKind::Group { children: vec![Arc::new(path), Arc::new(picture)], clip: true })).unwrap();
+            (d, g, clip, art)
+        }
+    }
+
+    const SELECTING: HitOptions =
+        HitOptions { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: true, scope: None };
+
+    /// For the selection tools a clip group's clipping path is hit on its outline, within the
+    /// tolerance, before the art it clips and just outside it too; inside, the art is hit.
+    #[test]
+    fn a_clipping_path_is_hit_on_its_outline_before_its_art() {
+        let (d, g, clip, art) = masked_square(false);
+        for (x, y) in [(140.0, 90.0), (141.5, 90.0), (138.5, 90.0), (90.0, 40.0)] {
+            let h = hit_test(&d, Point::new(x, y), SELECTING).unwrap();
+            assert_eq!((h.leaf, h.kind, h.top_object(None)), (clip, HitKind::Outline, g), "at {x}, {y}");
+        }
+        let h = hit_test(&d, Point::new(90.0, 90.0), SELECTING).unwrap();
+        assert_eq!((h.leaf, h.top_object(None)), (art, g));
+        // Beyond the tolerance outside it, the clipped art is not there to hit.
+        assert!(hit_test(&d, Point::new(150.0, 90.0), SELECTING).is_none());
+    }
+
+    /// Without `clip_outlines` (the tools that act on what is drawn) and for read-only sampling
+    /// (the eyedropper), the art is hit on the mask's edge, as before: the clipping path paints
+    /// nothing there.
+    #[test]
+    fn only_the_selection_tools_hit_a_clipping_path_on_its_outline() {
+        let (d, _, clip, art) = masked_square(false);
+        let p = Point::new(138.5, 90.0);
+        assert_eq!(hit_test(&d, p, HitOptions::default()).map(|h| h.leaf), Some(art));
+        assert_eq!(hit_test_visible(&d, p, HitOptions::default()).map(|h| h.leaf), Some(art));
+        assert_eq!(hit_test_visible(&d, p, SELECTING).map(|h| h.leaf), Some(art));
+        assert_eq!(hit_test(&d, p, SELECTING).map(|h| h.leaf), Some(clip));
+        // A hidden or locked clipping path is passed over.
+        for change in [|n: &mut Node| n.visible = false, |n: &mut Node| n.locked = true] {
+            let mut d = d.clone();
+            change(d.node_mut(clip).unwrap());
+            assert_ne!(hit_test(&d, p, SELECTING).map(|h| h.leaf), Some(clip));
+        }
+    }
+
+    /// A layer's clipping mask is hit on its outline too, and Select Behind lists what the
+    /// repeated hit test finds: the mask on and just outside its edge, then the art inside it;
+    /// well inside, the art alone (the mask paints nothing there).
+    #[test]
+    fn select_behind_takes_a_layer_masks_outline_first() {
+        let (d, _, clip, art) = masked_square(true);
+        for (x, want) in [(140.0, vec![clip]), (141.5, vec![clip]), (138.5, vec![clip, art]), (90.0, vec![art])] {
+            let p = Point::new(x, 90.0);
+            assert_eq!(objects_at(&d, p, SELECTING, None), want, "x = {x}");
+            assert_eq!(objects_at_repeated(&d, p, SELECTING, None), want, "x = {x}");
+        }
+        // Without clip_outlines, as before.
+        assert_eq!(objects_at(&d, Point::new(138.5, 90.0), HitOptions::default(), None), vec![art, clip]);
+    }
+
     /// Art in a sublayer is an object of its own: a click or a marquee takes it, not the
     /// sublayer; hidden, locked and template sublayers block both.
     #[test]
@@ -1014,6 +1161,28 @@ mod tests {
             assert!(hit_test(&d, inside, path_only).is_none(), "path only: the fill of {id:?} doesn't hit");
             assert_eq!(hit_test(&d, edge, path_only).map(|h| h.leaf), Some(id), "path only: the outline does");
         }
+    }
+
+    /// #3291: with Object Selection by Path Only, a placed image is picked on its frame's edge, so
+    /// a path under it can be picked through it.
+    #[test]
+    fn path_only_picks_paths_through_images() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let (path, image) = (d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 0, Node::path(path, shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)), Appearance::default_art())).unwrap();
+        // 100×50 pixels, scaled to 100×100 and moved to (10, 10): over the whole path.
+        let xf = vectorcraft_geom::Affine::translate((10.0, 10.0)) * vectorcraft_geom::Affine::scale_non_uniform(1.0, 2.0);
+        let im = crate::ImageObject { key: "k".into(), width: 100, height: 50, xf, link: None, placement: Default::default() };
+        d.insert(Some(l), 1, Node::new(image, NodeKind::Image(Box::new(im)))).unwrap();
+        let path_only = HitOptions { path_only: true, ..Default::default() };
+        let hit = |p: Point, opt| hit_test(&d, p, opt).map(|h| h.leaf);
+        let (path_edge, inside, image_edge) = (Point::new(20.5, 40.0), Point::new(80.0, 80.0), Point::new(80.0, 109.5));
+        assert_eq!(hit(path_edge, HitOptions::default()), Some(image), "the image covers the path");
+        assert_eq!(hit(inside, HitOptions::default()), Some(image));
+        assert_eq!(hit(path_edge, path_only), Some(path), "path only: the path through the image");
+        assert_eq!(hit(inside, path_only), None, "path only: not inside the image");
+        assert_eq!(hit(image_edge, path_only), Some(image), "path only: the image's frame");
     }
 
     /// Type Object Selection by Path Only: point type is picked on its baseline, area type on its
@@ -1243,9 +1412,16 @@ world",
             let mut d = Document::new(120.0, 120.0);
             let layer = d.layers[0].id;
             fill(&mut d, layer, 0, &mut next);
+            // A clipping mask on the layer, or on a sublayer, now and then.
+            let sublayers: Vec<NodeId> = d.layers[0].children().into_iter().flatten().filter(|n| n.is_layer()).map(|n| n.id).collect();
+            for id in std::iter::once(layer).chain(sublayers) {
+                if next(3) == 0 {
+                    d.node_mut(id).unwrap().set_clips(true);
+                }
+            }
             for _ in 0..12 {
                 let p = Point::new(f64::from(next(120)), f64::from(next(120)));
-                let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, ..Default::default() };
+                let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, clip_outlines: next(2) == 0, ..Default::default() };
                 assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None), "round {round}, {p:?}, {opt:?}");
             }
         }

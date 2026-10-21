@@ -1,13 +1,15 @@
-//! Effect › Sketch (Chalk & Charcoal, Chrome, Halftone Pattern, Note Paper, Plaster and Reticulation; Graphic Pen lives in
+//! Effect › Sketch (Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Halftone Pattern, Note Paper, Photocopy, Plaster,
+//! Reticulation, Stamp, Torn Edges and Water Paper; Graphic Pen lives in
 //! [`super::brushstrokes`]). Original filters built from public behaviour documentation:
 //! <https://helpx.adobe.com/illustrator/using/summary-effects.html> (Sketch effects redraw in
-//! black and white) and the public Photoshop Elements Artistic filters guide. Visual
+//! black and white; Water Paper flows colours on damp fibrous paper) and the public Photoshop Elements Artistic filters guide. Visual
 //! approximations, not proprietary reproductions.
 
 use std::f64::consts::{FRAC_1_SQRT_2, TAU};
 
-use vectorcraft_geom::Vec2;
+use vectorcraft_geom::{Point, Vec2};
 
+use super::distort::displace;
 use super::edges::sobel;
 use super::pixelate::{Place, cell, rand, value_noise};
 use super::texture::{Light, Tones, luma, premultiply, smooth_noise, straight};
@@ -15,6 +17,8 @@ use super::{PixelSpace, blur_plane, pick};
 
 const SALT_CHALK: u64 = 216;
 const SALT_CHROME: u64 = 0xC40_4D45;
+const SALT_TORN: u64 = 0x746f726e5f6564;
+const SALT_WATER: u64 = 208;
 const EDGE_SOFT: f64 = 0.8;
 const TONE_SOFT: f64 = 1.0;
 /// Light from the top left (document axes, y down), as on polished relief surfaces.
@@ -355,5 +359,124 @@ pub(super) fn reticulation(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
         let grain = 0.55 * coarse + 0.45 * fine;
         let ink = if tone + (grain - 0.5) * spread > 0.5 { 1.0 } else { 0.0 };
         *p = premultiply([(1.0 - ink) as f32; 3], f32::from(p[3]) / 255.0);
+    });
+}
+
+/// Torn Edges: the object in high-contrast black and white with ragged edges. `image_balance`
+/// (0..50) shifts whether midtones fall to ink or paper; `smoothness` (0..15) softens tones and
+/// the fraying; `contrast` (0..20) hardens the split. Coverage is kept.
+pub(super) fn torn_edges(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, image_balance: f64, smoothness: f64, contrast: f64) {
+    if !(image_balance.is_finite() && smoothness.is_finite() && contrast.is_finite()) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    if w == 0 || h == 0 || w.checked_mul(h) != Some(px.len()) {
+        return;
+    }
+    let mut tone: Vec<f32> = px.iter().map(|p| luma(straight(*p)) * f32::from(p[3]) / 255.0).collect();
+    let cover: Vec<f32> = px.iter().map(|p| f32::from(p[3]) / 255.0).collect();
+    let sigma = (0.12 * smoothness.clamp(0.0, 15.0)) / place.px.max(1e-9);
+    if sigma > 0.0 {
+        blur_plane(&mut tone, w, h, sigma);
+    }
+    let mut edges: Vec<f32> = sobel(&tone, w, h).into_iter().zip(sobel(&cover, w, h)).map(|(t, c)| t.max(c)).collect();
+    let edge_soft = (0.08 * smoothness.clamp(0.0, 15.0)) / place.px.max(1e-9);
+    if edge_soft > 0.0 {
+        blur_plane(&mut edges, w, h, edge_soft);
+    }
+    let peak = edges.iter().copied().fold(0.0f32, f32::max);
+    let balance = image_balance.clamp(0.0, 50.0);
+    // Lower balance favours ink (darker result); higher balance favours paper.
+    let balance_tone = 0.25 + balance / 50.0 * 0.75;
+    let steep = 4.0 + contrast.clamp(0.0, 20.0) * 0.45;
+    let hard = contrast.clamp(0.0, 20.0) >= 18.0;
+    let fray = 0.25 + 0.05 * smoothness.clamp(0.0, 15.0);
+    place.each(px, |x, y, p| {
+        let a = f32::from(p[3]) / 255.0;
+        if a <= 0.0 {
+            *p = [0; 4];
+            return;
+        }
+        let i = y * w + x;
+        let t = tone.get(i).copied().unwrap_or(0.0);
+        let e = if peak > 1e-6 { edges.get(i).copied().unwrap_or(0.0) / peak } else { 0.0 };
+        let noise = smooth_noise(SALT_TORN, place.at(x, y), 2.5 + 0.3 * smoothness) as f32;
+        let local = (1.0 - balance_tone) as f32 + e * fray as f32 * noise;
+        let mut ink = 1.0 / (1.0 + (steep as f32 * (t - local)).exp());
+        if hard {
+            ink = if ink > 0.5 { 1.0 } else { 0.0 };
+        }
+        let paper = 1.0 - ink.clamp(0.0, 1.0);
+        *p = premultiply([paper, paper, paper], a);
+    });
+}
+
+/// How far Water Paper's blotchy displacement can shift content (document units).
+pub(super) fn water_paper_shift(fiber_length: f64) -> f64 {
+    0.12 * fiber_length.clamp(3.0, 50.0)
+}
+
+/// Water Paper: colours flow on damp fibrous paper. `fiber_length` (3..50) sets the scale of the
+/// fibers and daubs; `brightness` and `contrast` (0..100) adjust the washed result. Ranges and
+/// defaults are documented in [`crate::effect_catalog`] (unverified; helpx lists the controls only).
+pub(super) fn water_paper(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, fiber_length: f64, brightness: f64, contrast: f64) {
+    if !(fiber_length.is_finite() && brightness.is_finite() && contrast.is_finite()) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let fiber = fiber_length.clamp(3.0, 50.0);
+    let bright = (brightness / 100.0).clamp(0.0, 1.0);
+    let cont = (contrast / 100.0).clamp(0.0, 1.0);
+    let shift = water_paper_shift(fiber);
+    let wave = fiber * 0.4;
+    displace(px, w, h, &place, shift, |q| {
+        let a = 0.65 * smooth_noise(SALT_WATER, q, wave) + 0.35 * smooth_noise(SALT_WATER + 3, q, wave * 1.7);
+        let b = 0.65 * smooth_noise(SALT_WATER + 1, q, wave * 1.1) + 0.35 * smooth_noise(SALT_WATER + 4, q, wave * 0.85);
+        Vec2::new(a, b) * shift
+    });
+    let flow = (0.06 * fiber).max(0.35) / place.px.max(1e-9);
+    let mut planes: [Vec<f32>; 3] = std::array::from_fn(|ch| px.iter().map(|p| straight(*p)[ch] * f32::from(p[3]) / 255.0).collect());
+    for plane in &mut planes {
+        blur_plane(plane, w, h, flow);
+    }
+    for (i, p) in px.iter_mut().enumerate() {
+        if p[3] == 0 {
+            continue;
+        }
+        let a = f32::from(p[3]) / 255.0;
+        if a <= 0.0 {
+            continue;
+        }
+        let rgb = {
+            let mut rgb = [0.0f32; 3];
+            let mut ok = true;
+            for ch in 0..3 {
+                let Some(v) = planes[ch].get(i) else {
+                    ok = false;
+                    break;
+                };
+                rgb[ch] = (*v / a).clamp(0.0, 1.0);
+            }
+            if !ok {
+                continue;
+            }
+            rgb
+        };
+        *p = premultiply(rgb, a);
+    }
+    let lift = (bright - 0.5) * 0.35;
+    let gain = 0.35 + 0.65 * cont;
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let along = smooth_noise(SALT_WATER + 5, q, fiber * 0.25);
+        let across = smooth_noise(SALT_WATER + 6, Point::new(q.y, q.x), fiber * 0.22);
+        let fiber_tex = (0.5 * (along + across) + 0.5).clamp(0.0, 1.0);
+        let paper = (0.82 + 0.18 * fiber_tex) as f32;
+        let mut rgb = straight(*p).map(|v| ((v + lift as f32 - 0.5) * gain as f32 + 0.5).clamp(0.0, 1.0));
+        rgb = rgb.map(|v| (v * paper).clamp(0.0, 1.0));
+        *p = premultiply(rgb, f32::from(p[3]) / 255.0);
     });
 }

@@ -14,8 +14,8 @@
 //!   `%AI5_ArtSize` and an empty `%AI3_TemplateBox` at its centre, which puts the ruler origin at
 //!   its bottom-left corner (§2.2), `%AI5_NumLayers`.
 //! - Setup (§3): `n Bn`, then each gradient: `%AI5_BeginGradient: (name)`, `(name) type n Bd`,
-//!   `[`, its stops last first (`colorSpec colorStyle midPoint rampPoint %_Bs`), `BD`,
-//!   `%AI5_EndGradient`.
+//!   `[`, its stops (`colorSpec colorStyle midPoint rampPoint %_Bs`), listed from the last for a
+//!   linear gradient and listed from the first for a radial one, `BD`, `%AI5_EndGradient`.
 //! - Layers (§9): `%AI5_BeginLayer`, `visible preview enabled printing dimmed 0 colorIndex r g b
 //!   Lb`, `(name) Ln`, the art, `LB`, `%AI5_EndLayer--`.
 //! - Groups `u` … `U`, clipping groups `q` … `Q` with the clipping path painted `h W n` (§5.6),
@@ -338,12 +338,20 @@ end
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
-/// last first (`colorSpec colorStyle midPoint rampPoint %_Bs`), `BD`, `%AI5_EndGradient`.
+/// (`colorSpec colorStyle midPoint rampPoint %_Bs`, each with its midpoint to the next stop), `BD`,
+/// `%AI5_EndGradient`. A linear gradient's stops are listed from the last to the first (§1.4.3). A
+/// radial gradient's stops are listed from the first to the last, as in §3.5.2's radial
+/// definition (10, then 100).
 fn gradient_def(s: &mut String, w: &Writer, name: &str, g: &Gradient) {
     let name = latin_string(name);
-    let kind = if g.kind == GradientKind::Radial { 1 } else { 0 };
+    let radial = g.kind == GradientKind::Radial;
+    let kind = if radial { 1 } else { 0 };
     let _ = writeln!(s, "%AI5_BeginGradient: {name}\n{name} {kind} {} Bd\n[", g.stops.len());
-    for stop in g.stops.iter().rev() {
+    let mut stops: Vec<_> = g.stops.iter().collect();
+    if !radial {
+        stops.reverse();
+    }
+    for stop in stops {
         let paint = Paint::Solid { color: stop.color, swatch: stop.swatch.clone(), tint: stop.tint };
         match w.ink(&paint) {
             Ink::Gray(v) => {
@@ -1137,6 +1145,12 @@ impl<'a> Writer<'a> {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
+        // Area type that Shrink Text to Fit scales down is written in the styles it draws in.
+        let fitted = matches!((&t.kind, t.area.fit), (TextKind::Area { .. }, vectorcraft_doc::AreaFit::ShrinkText { .. }))
+            .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale)
+            .filter(|f| *f != 1.0)
+            .map(|f| vectorcraft_text::scaled(t, f));
+        let t = fitted.as_ref().unwrap_or(t);
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),

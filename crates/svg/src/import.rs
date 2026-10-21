@@ -332,9 +332,9 @@ fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<Vec<vectorc
             id: i as u32 + 1,
             name: p.attribute((INKSCAPE, "label")).filter(|l| !l.trim().is_empty()).map_or_else(|| format!("Artboard {}", i + 1), str::to_string),
             rect: r,
+            locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
-            locked: false,
             color: None,
         })
         .collect();
