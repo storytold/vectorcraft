@@ -410,16 +410,17 @@ fn with_save_extension(path: &str, f: &Format, mode: SaveMode) -> String {
 
 /// [`with_save_extension`] for a save panel that reports the file type picked in it (`picked`,
 /// that type's extension; the XDG portal's panel on Linux and the BSDs), which then takes `f`'s
-/// place. A path that still ends in the extension of the name the panel suggested (`suggested`)
-/// gets the picked type's extension instead. Without a picked type, or with one the panel did not
+/// place. A path that still ends in the extension of the name the panel suggested (`suggested`),
+/// in any letter case, gets the picked type's extension instead, unless that extension is one of
+/// the picked type's; such a path stays as typed. Without a picked type, or with one the panel did not
 /// offer, [`with_save_extension`] with `f`.
 fn with_picked_type(path: &str, suggested: &str, picked: Option<&str>, f: &Format, mode: SaveMode) -> String {
     let formats = if mode == SaveMode::Template { TEMPLATE_FORMATS } else { SAVE_FORMATS };
     let Some(g) = picked.and_then(fileio::format).filter(|g| formats.contains(&g.id)) else {
         return with_save_extension(path, f, mode);
     };
-    let has = std::path::Path::new(path).extension();
-    if has.is_some() && has == std::path::Path::new(suggested).extension() {
+    let has = fileio::extension(path);
+    if !has.is_empty() && has == fileio::extension(suggested) && !g.extensions.contains(&has.as_str()) {
         return std::path::Path::new(path).with_extension(g.extensions[0]).to_string_lossy().into_owned();
     }
     with_save_extension(path, g, mode)

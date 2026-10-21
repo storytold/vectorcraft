@@ -876,6 +876,7 @@
 	Differences from {preset}:	Khác biệt so với {preset}:
 	Diffuse Glow	Ánh sáng khuếch tán
 	Diffuse Glow…	Ánh sáng khuếch tán…
+	Character Direction	Hướng ký tự
 	Digits	Chữ số
 	Dim Copies to:	Làm mờ bản sao đến:
 	Dim Images to:	Làm mờ ảnh đến:
@@ -4972,6 +4973,12 @@ theme	Appearance	Giao diện
 	Water Paper	Giấy ướt
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Chậm lúc đầu
+	Ease Out	Chậm lúc cuối
+	Ease In Out	Chậm lúc đầu và cuối
+	Ease Out In	Chậm lúc cuối và đầu
+	Ramp:	Cường độ:
+	Shift:	Dịch chuyển:
 	Fresco…	Bích họa…
 	Fresco	Bích họa
 	Lock Artboards	Khóa các bảng vẽ

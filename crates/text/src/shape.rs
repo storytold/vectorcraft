@@ -433,9 +433,10 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
-/// character style's name, leading, baseline shift, rotation, Character Alignment, the kerning
-/// (each glyph takes its run's, see [`shape_segment`]) and the tracking, as long as the tracking
-/// keeps or drops standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
+/// character style's name, leading, baseline shift, rotation, Character Alignment, Character
+/// Direction (text is shaped apart where its bidi level changes), the kerning (each glyph takes its
+/// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
+/// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     // Every field is named, so that a new attribute has to be sorted into one group or the other.
     let CharStyle {
@@ -469,6 +470,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         position,
         small_caps,
         char_align: _,
+        char_direction: _,
         proportional_metrics,
         tate_chu_yoko,
         digits,

@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod brush_fx;
+mod changed;
 pub mod encode;
 mod freeform;
 mod fx;
@@ -35,6 +36,7 @@ use ink::Ink;
 use lru::FrameCache;
 
 pub use brush_fx::instance_art;
+pub use changed::{Changed, changed, view_pixels};
 pub use effects::stroke::width_outline;
 pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, set_image_cache_budget};
 pub use live::expand_live;
@@ -101,7 +103,7 @@ pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
 }
 
 /// Rendering options.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RenderOptions {
     /// Outline (wireframe) view: 1 px black paths, no paint.
     pub outline: bool,
@@ -444,8 +446,6 @@ pub struct Renderer {
     text_fonts: u64,
     /// Clip regions per clipping path (see [`Self::clip_of`]).
     clips: FrameCache<usize, ClipEntry>,
-    /// Context reused when rendering single-threaded (`threads == 0`).
-    ctx_st: Option<RenderContext>,
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
@@ -476,7 +476,10 @@ pub struct Renderer {
     stamp: u64,
     /// Opacity folded into paint alpha for the leaf being drawn (avoids a compositing layer).
     alpha: f32,
-    ctx: Option<RenderContext>,
+    /// The contexts kept for the next frames, with the threads they draw on, the last used last: a
+    /// frame of the size of one reuses it instead of making a context and its threads. Two are
+    /// kept, so a view's frames and the parts of them drawn again ([`changed`]) each keep theirs.
+    contexts: Vec<(u16, RenderContext)>,
     resources: Resources,
     /// Statistics of the last frame.
     pub stats: FrameStats,
@@ -613,7 +616,6 @@ impl Renderer {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
             text_fonts: 0,
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
-            ctx_st: None,
             threads: default_threads(),
             geom: PtrMap::default(),
             symbols: vec![],
@@ -625,7 +627,7 @@ impl Renderer {
             fx_geom: PtrMap::default(),
             stamp: 0,
             alpha: 1.0,
-            ctx: None,
+            contexts: Vec::new(),
             resources: Resources::new(),
             stats: FrameStats::default(),
             brushes: Default::default(),
@@ -761,13 +763,13 @@ impl Renderer {
     /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
     fn draw_frame(&mut self, f: &Frame, w: u16, h: u16) -> Vec<u8> {
         let (threads, opts) = (self.threads, f.opts);
-        let slot = if threads == 0 { self.ctx_st.take() } else { self.ctx.take() };
-        let mut ctx = match slot {
-            Some(mut c) if c.width() == w && c.height() == h => {
+        let kept = self.contexts.iter().position(|(t, c)| *t == threads && c.width() == w && c.height() == h);
+        let mut ctx = match kept.map(|i| self.contexts.remove(i)) {
+            Some((_, mut c)) => {
                 c.reset();
                 c
             }
-            _ => RenderContext::new_with(w, h, vello_cpu::RenderSettings { num_threads: threads, ..Default::default() }),
+            None => RenderContext::new_with(w, h, vello_cpu::RenderSettings { num_threads: threads, ..Default::default() }),
         };
         // `reset` keeps the threshold of the previous render: set it every time.
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
@@ -800,10 +802,9 @@ impl Renderer {
             self.draw_page(&mut ctx, f);
         }
         let pm = self.finish(&mut ctx, self.raster);
-        if threads == 0 {
-            self.ctx_st = Some(ctx);
-        } else {
-            self.ctx = Some(ctx);
+        self.contexts.push((threads, ctx));
+        if self.contexts.len() > 2 {
+            self.contexts.remove(0);
         }
         pm.data_as_u8_slice().to_vec()
     }
@@ -2559,6 +2560,8 @@ mod tests_adjust;
 mod tests_alternate;
 #[cfg(test)]
 mod tests_blend;
+#[cfg(test)]
+mod tests_changed;
 #[cfg(test)]
 mod tests_charstroke;
 #[cfg(test)]

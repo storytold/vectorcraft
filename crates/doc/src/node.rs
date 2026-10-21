@@ -1301,10 +1301,8 @@ impl Node {
                 self.projected(Some(b)).map(|b| b.inflate(o, o))
             }
             NodeKind::Text(t) => {
-                // The characters' strokes paint around the glyphs, scaled with the type.
-                let k = Scaling::factor(t.xf).unwrap_or(1.0);
-                let chars = t.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k;
-                let o = self.appearance.outset().max(chars);
+                // The characters' strokes paint around the glyphs.
+                let o = self.appearance.outset().max(t.char_stroke_outset());
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             // An image is measured by its frame, without its own fills and strokes.

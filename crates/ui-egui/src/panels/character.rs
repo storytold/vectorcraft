@@ -712,6 +712,24 @@ fn style_toggle(ui: &mut Ui, g: Glyph, tip: &str, on: bool) -> bool {
     resp.clicked()
 }
 
+/// The Character Direction submenu: Default, Left to Right and Right to Left set the characters the
+/// panel acts on ([`char_cmd`]) as the bidi algorithm sets them, or left to right or right to left
+/// inside their paragraph. The direction those characters share is checked, and none is checked
+/// when they differ.
+fn char_direction_items(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use vectorcraft_doc::ParaDirection;
+    let direction = shared(app, |s| s.char_direction);
+    for (label, d, key) in [
+        (tl!("Default"), None, "default"),
+        (tl!("Left to Right"), Some(ParaDirection::LeftToRight), "leftToRight"),
+        (tl!("Right to Left"), Some(ParaDirection::RightToLeft), "rightToLeft"),
+    ] {
+        if menu_item(ui, label, true, direction == Some(d)) {
+            format(app, json!({"charDirection": key}));
+        }
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = text_style(app);
     let has = st.is_some();
@@ -795,6 +813,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        ui.add_enabled_ui(has, |ui| {
+            ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
+        });
         ui.separator();
     }
     // No Break: the selected characters stay on one line.
@@ -847,8 +868,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off and the Default digits, whether
-/// or not Show East Asian Options and Show Indic Options are on.
+/// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
+/// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
+/// are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -857,7 +879,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
         json!({
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
-            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "digits": d.digits
+            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "charDirection": "default",
+            "digits": d.digits
         }),
     );
 }
@@ -1292,6 +1315,36 @@ mod tests {
         assert!(shown(&mut app));
     }
 
+    /// Character Direction is in the panel menu with the Middle Eastern (Indic) options, beside
+    /// Digits. Its submenu checks the direction the characters the panel acts on share: the
+    /// selected type's, or the range the Type tool has selected. It checks no item when they differ.
+    #[test]
+    fn character_direction_checks_the_direction_of_the_selection() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "שלום 21 10 2026"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let shown = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu).contains("Character Direction");
+        assert!(!shown(&mut app));
+        app.session.prefs.show_indic_options = true;
+        assert!(shown(&mut app));
+        let checked = |app: &mut VectorcraftApp| {
+            let text = crate::tests_labels::painted_text(app, char_direction_items);
+            text.lines().filter_map(|l| l.strip_prefix("✓ ")).map(str::to_string).collect::<Vec<_>>()
+        };
+        assert_eq!(checked(&mut app), ["Default"]);
+        app.run("text.setRangeStyle", json!({"id": id, "start": 9, "end": 19, "charDirection": "leftToRight"})).unwrap();
+        // The object's characters differ: nothing is checked.
+        assert!(checked(&mut app).is_empty());
+        // The Type tool's selection: the date, then the Hebrew word.
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 9, "end": 19}));
+        assert_eq!(checked(&mut app), ["Left to Right"]);
+        app.session.set_tool_option("select", &json!({"start": 0, "end": 8}));
+        assert_eq!(checked(&mut app), ["Default"]);
+    }
+
     /// No Break is in the panel menu, and choosing it marks the selected characters.
     #[test]
     fn no_break_menu_item_toggles_the_selected_characters() {
@@ -1321,8 +1374,8 @@ mod tests {
 
     /// Reset Panel sets every character attribute the panel shows, except the font family, style
     /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
-    /// Metrics, Tate-chu-yoko, No Break and Digits included), in the selected type and in the text
-    /// the Type tool has selected while it edits.
+    /// Metrics, Tate-chu-yoko, No Break, Character Direction and Digits included), in the selected
+    /// type and in the text the Type tool has selected while it edits.
     #[test]
     fn reset_panel_resets_every_attribute_but_the_font() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1350,6 +1403,7 @@ mod tests {
                 s.proportional_metrics != d.proportional_metrics,
                 s.tate_chu_yoko != d.tate_chu_yoko,
                 s.no_break != d.no_break,
+                s.char_direction != d.char_direction,
                 s.digits != d.digits,
             ]
         };
@@ -1359,16 +1413,17 @@ mod tests {
                 json!({
                     "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                     "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
-                    "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "noBreak": true, "digits": "hindi"
+                    "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "noBreak": true,
+                    "charDirection": "rightToLeft", "digits": "hindi"
                 }),
             )
             .unwrap();
         };
         let plain = runs(&app)[0].1.clone();
-        assert_eq!(differs(&plain, &CharStyle::default()), [false; 17]);
+        assert_eq!(differs(&plain, &CharStyle::default()), [false; 18]);
         custom(&mut app);
         let styled = runs(&app)[0].1.clone();
-        assert_eq!(differs(&styled, &CharStyle::default()), [true; 17]);
+        assert_eq!(differs(&styled, &CharStyle::default()), [true; 18]);
         app.run("select.set", json!({"ids": [id]})).unwrap();
         reset_panel(&mut app);
         assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

@@ -1,8 +1,9 @@
 //! Direction, source-cluster and editing regressions; no RTL font assets required.
 use super::*;
 use kurbo::{Affine, BezPath, Point, Rect, Shape};
+use std::ops::Range;
 use std::sync::Arc;
-use vectorcraft_doc::{CharStyle, TextKind, TextRun};
+use vectorcraft_doc::{CharStyle, ParaDirection, TextKind, TextRun};
 
 fn text_layout(s: &str) -> TextLayout {
     layout(FontDb::global(), &TextObject::point(Point::ZERO, s, CharStyle::default()))
@@ -86,6 +87,40 @@ fn mixed_text_preserves_latin_and_number_order() {
     let visible: String = l.glyphs.iter().filter_map(|g| s.get(g.byte..)?.chars().next()).collect();
     assert_eq!(visible, "Rust 123 םולש");
     assert_eq!(s, "שלום Rust 123", "layout must not rewrite source text");
+}
+
+/// The characters of `s` in the order a layout of it draws them, left to right, with the bytes
+/// `set` given Character Direction `d`.
+fn drawn_with_direction(s: &str, set: Range<usize>, d: Option<ParaDirection>) -> String {
+    let mut t = TextObject::point(Point::ZERO, s, CharStyle::default());
+    edit::style_range(&mut t.runs, set.start, set.end, |st| st.char_direction = d);
+    let l = layout(FontDb::global(), &t);
+    let mut glyphs: Vec<_> = l.glyphs.iter().collect();
+    glyphs.sort_by(|a, b| a.origin.x.total_cmp(&b.origin.x));
+    glyphs.iter().filter_map(|g| s.get(g.byte..)?.chars().next()).collect()
+}
+
+/// Character Direction Left to Right keeps a date written with spaces in its own order inside a
+/// right-to-left paragraph, where the bidi algorithm alone sets its numbers right to left.
+#[test]
+fn left_to_right_characters_keep_a_date_in_order_in_right_to_left_text() {
+    let s = "שלום 21 10 2026";
+    let date = s.find('2').unwrap_or_default()..s.len();
+    assert_eq!(drawn_with_direction(s, date.clone(), None), "2026 10 21 םולש");
+    assert_eq!(drawn_with_direction(s, date, Some(ParaDirection::LeftToRight)), "21 10 2026 םולש");
+}
+
+/// Character Direction Right to Left sets a Hebrew word and the exclamation mark after it right to
+/// left inside a left-to-right paragraph, where the bidi algorithm alone leaves the mark after the
+/// word in the paragraph's direction.
+#[test]
+fn right_to_left_characters_set_a_word_and_its_mark_right_to_left_in_left_to_right_text() {
+    let s = "abc שלום! def";
+    let word = s.find('ש').unwrap_or_default()..s.find('!').map_or(0, |i| i + 1);
+    assert_eq!(drawn_with_direction(s, word.clone(), None), "abc םולש! def");
+    assert_eq!(drawn_with_direction(s, word.clone(), Some(ParaDirection::RightToLeft)), "abc !םולש def");
+    // Left to Right on the same characters of a left-to-right paragraph draws them as without it.
+    assert_eq!(drawn_with_direction(s, word, Some(ParaDirection::LeftToRight)), "abc םולש! def");
 }
 
 #[test]

@@ -2360,6 +2360,7 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
 	Hindi	Hindi
@@ -4958,6 +4959,12 @@ effect	Soft	Weich
 	Water Paper	Feuchtes Papier
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Langsam starten
+	Ease Out	Langsam enden
+	Ease In Out	Langsam starten und enden
+	Ease Out In	Langsam enden und starten
+	Ramp:	Stärke:
+	Shift:	Verschiebung:
 	Fresco…	Fresko…
 	Fresco	Fresko
 	Lock Artboards	Zeichenflächen sperren

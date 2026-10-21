@@ -2421,6 +2421,7 @@ mark-style	Japanese	Японский
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
 	Proportional Metrics	Пропорциональные метрики
+	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
 	Hindi	Хинди
@@ -4988,6 +4989,12 @@ lighting	Light	Свет
 	Water Paper	Мокрая бумага
 	Ruby…	Руби…
 	Ruby	Руби
+	Ease In	Плавное начало
+	Ease Out	Плавное окончание
+	Ease In Out	Плавное начало и окончание
+	Ease Out In	Плавное окончание и начало
+	Ramp:	Сила:
+	Shift:	Сдвиг:
 	Fresco…	Фреска…
 	Fresco	Фреска
 	Lock Artboards	Заблокировать монтажные области

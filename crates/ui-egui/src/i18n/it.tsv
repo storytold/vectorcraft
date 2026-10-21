@@ -2425,6 +2425,7 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	Character Direction	Direzione caratteri
 	Digits	Cifre
 	Arabic	Arabe
 	Hindi	Hindi
@@ -4992,6 +4993,12 @@ lighting	Light	Luce
 	Water Paper	Carta bagnata
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Inizio graduale
+	Ease Out	Fine graduale
+	Ease In Out	Inizio e fine graduali
+	Ease Out In	Fine e inizio graduali
+	Ramp:	Intensità:
+	Shift:	Spostamento:
 	Fresco…	Affresco…
 	Fresco	Affresco
 	Lock Artboards	Blocca tavole da disegno

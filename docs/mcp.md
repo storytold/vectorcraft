@@ -4144,6 +4144,25 @@ explicitly, `{}` for none. Each command is one undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"fontAxes":{"wght":650,"wdth":87.5}}}}
 ```
 
+## Character Direction
+
+`text.setFormat {charDirection: "default"|"leftToRight"|"rightToLeft"}` (the selected type, or `ids`) and
+`text.setRangeStyle {id, start, end, charDirection}` (a range) set the direction of the characters inside their
+paragraph, as the Character panel menu's Character Direction does with the Middle Eastern (Indic) options shown. The bidi
+algorithm (UAX #9) resolves each stretch of characters with a direction as an embedding in that direction, as if an LRE
+or RLE stood before it and a PDF after it: `leftToRight` keeps a date written with spaces, such as `21 10 2026`, in its
+order inside a right-to-left paragraph, and `rightToLeft` sets a Hebrew or Arabic word and the punctuation after it right
+to left inside a left-to-right paragraph. Characters keep their own strong direction inside an embedding: Latin letters
+set Right to Left still read left to right. `default` leaves the characters to the bidi algorithm. The paragraph's own
+direction is unchanged. SVG export writes type with a character drawn right to left, or with a run set Right to Left,
+as outlines; live SVG text writes `direction="ltr"` and `unicode-bidi="embed"` on each run set Left to Right. Character
+Direction is Default until set and is saved only when set, and character styles captured from type carry it. Each
+command is one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":9,"end":19,"charDirection":"leftToRight"}}}
+```
+
 ## Digits
 
 `text.setFormat {digits: "default"|"arabic"|"hindi"|"farsi"}` (the selected type, or `ids`) and `text.setRangeStyle {id,

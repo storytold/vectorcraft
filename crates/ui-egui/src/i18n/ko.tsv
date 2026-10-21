@@ -35,6 +35,7 @@
 	ICF Top/Right	ICF 위/오른쪽
 	ICF Bottom/Left	ICF 아래/왼쪽
 	Proportional Metrics	비례 메트릭
+	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
 	Hindi	힌디어
@@ -4955,6 +4956,12 @@ lighting	Light	광원
 	Water Paper	물 종이
 	Ruby…	루비…
 	Ruby	루비
+	Ease In	서서히 시작
+	Ease Out	서서히 종료
+	Ease In Out	서서히 시작 및 종료
+	Ease Out In	서서히 종료 및 시작
+	Ramp:	강도:
+	Shift:	이동:
 	Fresco…	프레스코…
 	Fresco	프레스코
 	Lock Artboards	아트보드 잠그기

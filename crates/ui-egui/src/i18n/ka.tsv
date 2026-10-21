@@ -1227,6 +1227,7 @@ lighting	Light	სინათლე
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
+	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
 	Hindi	ჰინდი
@@ -5287,6 +5288,12 @@ imageTrace	Outline	კონტური
 	 selects several, or draws one inside an artboard)	 რამდენიმეს მონიშნავს ან ახალს სამუშაო დაფის შიგნით ხატავს)
 	Ruby…	რუბი…
 	Ruby	რუბი
+	Ease In	ნელი დასაწყისი
+	Ease Out	ნელი დასასრული
+	Ease In Out	ნელი დასაწყისი და დასასრული
+	Ease Out In	ნელი დასასრული და დასაწყისი
+	Ramp:	სიძლიერე:
+	Shift:	წანაცვლება:
 	Fresco…	ფრესკა…
 	Fresco	ფრესკა
 	Lock Artboards	სამუშაო დაფების ჩაკეტვა

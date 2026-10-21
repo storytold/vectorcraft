@@ -1308,6 +1308,7 @@ lighting	Light	Światło
 	Leading	Interlinia
 	No Break	Bez podziału
 	Proportional Metrics	Metryka proporcjonalna
+	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
 	Hindi	Hindi
@@ -5229,6 +5230,12 @@ mark-style	Japanese	Japońskie
 	Water Paper	Mokry papier
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Łagodny początek
+	Ease Out	Łagodny koniec
+	Ease In Out	Łagodny początek i koniec
+	Ease Out In	Łagodny koniec i początek
+	Ramp:	Siła:
+	Shift:	Przesunięcie:
 	Fresco…	Fresk…
 	Fresco	Fresk
 	Lock Artboards	Zablokuj obszary kompozycji

@@ -2342,6 +2342,7 @@
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
 	Hindi	Хинди
@@ -5334,6 +5335,12 @@ theme	Appearance	Външен вид
 	Water Paper	Мокра хартия
 	Ruby…	Руби…
 	Ruby	Руби
+	Ease In	Плавно начало
+	Ease Out	Плавен край
+	Ease In Out	Плавно начало и край
+	Ease Out In	Плавен край и начало
+	Ramp:	Рампа:
+	Shift:	Изместване:
 	Fresco…	Фреска…
 	Fresco	Фреска
 	Lock Artboards	Заключване на работни области

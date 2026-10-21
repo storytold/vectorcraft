@@ -22,6 +22,9 @@ pub struct Job {
 
 pub struct Done {
     pub key: CacheKey,
+    /// The document rendered, and the options it was rendered with.
+    pub doc: Arc<Document>,
+    pub opts: RenderOptions,
     pub img: Rendered,
     pub ms: f64,
     /// [`vectorcraft_render::FrameStats::moved`] of the frame.
@@ -53,7 +56,8 @@ impl Worker {
                     }
                     let t0 = crate::now_ms();
                     let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
-                    if done_tx.send(Done { key: job.key, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err() {
+                    if done_tx.send(Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err()
+                    {
                         break;
                     }
                     ctx.request_repaint();

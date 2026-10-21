@@ -982,6 +982,7 @@
 	Diffuse Glow	Szórt ragyogás
 	Diffuse Glow…	Szórt ragyogás…
 	Diffusion	Diffúziós
+	Character Direction	Karakterirány
 	Digits	Számjegyek
 	Dim Copies to:	Másolatok halványítása:
 	Dim Images to:	Képek halványítása:
@@ -5363,6 +5364,12 @@ imageTrace	Outline	Körvonal
 	Water Paper	Nedves papír
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Lassú kezdés
+	Ease Out	Lassú befejezés
+	Ease In Out	Lassú kezdés és befejezés
+	Ease Out In	Lassú befejezés és kezdés
+	Ramp:	Erősség:
+	Shift:	Eltolás:
 	Fresco…	Freskó…
 	Fresco	Freskó
 	Lock Artboards	Rajztáblák zárolása

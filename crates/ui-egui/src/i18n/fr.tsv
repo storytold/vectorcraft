@@ -2391,6 +2391,7 @@
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
 	Hindi	Hindi
@@ -5376,6 +5377,12 @@ theme	Appearance	Apparence
 	Water Paper	Papier humide
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Accélération progressive
+	Ease Out	Décélération progressive
+	Ease In Out	Accélération et décélération
+	Ease Out In	Décélération et accélération
+	Ramp:	Intensité :
+	Shift:	Décalage :
 	Fresco…	Fresque…
 	Fresco	Fresque
 	Lock Artboards	Verrouiller les plans de travail

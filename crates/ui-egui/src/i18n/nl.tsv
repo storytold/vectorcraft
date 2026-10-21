@@ -1326,6 +1326,7 @@ lighting	Light	Licht
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
+	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
 	Hindi	Hindi
@@ -5392,6 +5393,12 @@ swatch	Bright Violet	Felviolet
 	Water Paper	Nat papier
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Langzaam beginnen
+	Ease Out	Langzaam eindigen
+	Ease In Out	Langzaam beginnen en eindigen
+	Ease Out In	Langzaam eindigen en beginnen
+	Ramp:	Sterkte:
+	Shift:	Verschuiving:
 	Fresco…	Fresco…
 	Fresco	Fresco
 	Lock Artboards	Tekengebieden vergrendelen

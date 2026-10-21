@@ -161,6 +161,25 @@ fn the_file_type_picked_in_the_save_dialog_decides_the_format() {
     }
 }
 
+/// The suggested name's extension typed in another case still gets the picked type's
+/// (`Untitled-1.VECTORCRAFT` with .ai picked is saved as `Untitled-1.ai`), and the picked type's
+/// own extension typed in another case stays as typed (`a.AI` with .ai picked).
+#[test]
+fn the_suggested_names_extension_in_another_case_gets_the_picked_types() {
+    for (cmd, answer, expected) in [
+        ("file.save", &["/art/Untitled-1.VECTORCRAFT", "ai"][..], "/art/Untitled-1.ai"),
+        ("file.save", &["/art/Untitled-1.VectorCraft", "svg"], "/art/Untitled-1.svg"),
+        ("file.saveAsTemplate", &["/art/Untitled-1.VCTemplate", "ait"], "/art/Untitled-1.ait"),
+    ] {
+        let (mut app, shown, written) = portal_app();
+        assert_eq!(saved_from(&mut app, &shown, &written, cmd, answer), expected, "{cmd} {answer:?}");
+    }
+    // A document saved as .ai suggests `a.ai`.
+    let (mut app, shown, written) = portal_app();
+    app.run("file.saveAs", json!({"path": "/art/a.ai", "options": {}})).unwrap();
+    assert_eq!(saved_from(&mut app, &shown, &written, "file.saveAs", &["/art/a.AI", "ai"]), "/art/a.AI");
+}
+
 /// A name typed with the extension of a format the save does not write has it replaced, with or
 /// without a picked type: `card.ait` and `card.png` are saved as `card.vectorcraft`, not
 /// `card.ait.vectorcraft`. An extension that names no format stays part of the name.

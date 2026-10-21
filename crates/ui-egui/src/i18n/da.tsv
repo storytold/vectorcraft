@@ -1312,6 +1312,7 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
 	Hindi	Hindi
@@ -5350,6 +5351,12 @@ swatch	Bright Violet	Kraftig violet
 	Water Paper	Vådt papir
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Langsom start
+	Ease Out	Langsom slutning
+	Ease In Out	Langsom start og slutning
+	Ease Out In	Langsom slutning og start
+	Ramp:	Styrke:
+	Shift:	Forskydning:
 	Fresco…	Fresko…
 	Fresco	Fresko
 	Lock Artboards	Lås tegneflader

@@ -1369,6 +1369,7 @@ lighting	Light	Valo
 	Leading	Riviväli
 	No Break	Ei katkoa
 	Proportional Metrics	Suhteelliset metriikat
+	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
 	Hindi	Hindi
@@ -5408,6 +5409,12 @@ swatch	Bright Violet	Kirkas violetti
 	Water Paper	Märkä paperi
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Hidas alku
+	Ease Out	Hidas loppu
+	Ease In Out	Hidas alku ja loppu
+	Ease Out In	Hidas loppu ja alku
+	Ramp:	Voimakkuus:
+	Shift:	Siirtymä:
 	Fresco…	Fresko…
 	Fresco	Fresko
 	Lock Artboards	Lukitse piirtoalustat

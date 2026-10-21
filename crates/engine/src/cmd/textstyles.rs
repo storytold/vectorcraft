@@ -155,6 +155,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("position", json!(v.position)),
         ("small_caps", json!(v.small_caps)),
         ("charAlign", json!(v.char_align)),
+        ("charDirection", json!(v.char_direction)),
         ("proportionalMetrics", json!(v.proportional_metrics)),
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("noBreak", json!(v.no_break)),

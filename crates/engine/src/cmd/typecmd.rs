@@ -1599,6 +1599,47 @@ mod area_tests {
         }
     }
 
+    /// Character Direction (Character panel menu, Middle Eastern options): a character attribute
+    /// that `text.setFormat` and `text.setRangeStyle` set in one undo step each, saved only when
+    /// set and kept by a native save.
+    #[test]
+    fn character_direction_is_a_character_attribute_saved_only_when_set() {
+        use vectorcraft_doc::ParaDirection;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "שלום 21 10 2026"})).unwrap()["id"].as_u64().unwrap();
+        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.clone(),
+            _ => panic!("text"),
+        };
+        let set = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.char_direction)).collect::<Vec<_>>();
+        assert_eq!(runs(&s)[0].style.char_direction, None);
+        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("charDirection").is_none());
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        for (key, want) in [("rightToLeft", Some(ParaDirection::RightToLeft)), ("leftToRight", Some(ParaDirection::LeftToRight)), ("default", None)] {
+            s.execute("text.setFormat", &json!({"charDirection": key})).unwrap();
+            assert!(runs(&s).iter().all(|r| r.style.char_direction == want));
+            let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+            assert_eq!(saved.get("charDirection").and_then(|v| v.as_str()), want.is_some().then_some(key));
+        }
+        let err = s.execute("text.setFormat", &json!({"charDirection": "up"})).unwrap_err().to_string();
+        assert!(err.contains("`charDirection` must be"), "{err}");
+        // Characters selected with the Type tool: only the range takes it (שלום and the space are 9 bytes).
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 19, "charDirection": "leftToRight"})).unwrap();
+        assert_eq!(set(&s), [("שלום ".to_string(), None), ("21 10 2026".to_string(), Some(ParaDirection::LeftToRight))]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.char_direction.is_none()));
+        s.execute("edit.redo", &json!({})).unwrap();
+        // Saved and reopened as it was.
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+        let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.char_direction)).collect();
+        assert_eq!(reopened, set(&s));
+        // A character style captured from the characters carries it, Default included.
+        assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["charDirection"], "leftToRight");
+        assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("charDirection"), Some(&serde_json::Value::Null));
+    }
+
     /// Proportional Metrics (#966): a character attribute, saved only when on.
     #[test]
     fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {

@@ -3172,6 +3172,7 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
 	Hindi	印地數字
@@ -5011,6 +5012,12 @@ lighting	Light	光源
 	Water Paper	水彩畫紙
 	Ruby…	注音…
 	Ruby	注音
+	Ease In	緩入
+	Ease Out	緩出
+	Ease In Out	緩入緩出
+	Ease Out In	緩出緩入
+	Ramp:	強度：
+	Shift:	偏移：
 	Fresco…	壁畫…
 	Fresco	壁畫
 	Lock Artboards	鎖定工作區域

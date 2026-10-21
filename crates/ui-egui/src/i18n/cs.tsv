@@ -1394,6 +1394,7 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
 	Hindi	Hindské
@@ -5377,6 +5378,12 @@ mark-style	Japanese	Japonské
 	Water Paper	Mokrý papír
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Pozvolný začátek
+	Ease Out	Pozvolný konec
+	Ease In Out	Pozvolný začátek a konec
+	Ease Out In	Pozvolný konec a začátek
+	Ramp:	Síla:
+	Shift:	Posun:
 	Fresco…	Freska…
 	Fresco	Freska
 	Lock Artboards	Zamknout pracovní plochy

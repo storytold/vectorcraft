@@ -39,6 +39,7 @@
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
 	Proportional Metrics	プロポーショナルメトリクス
+	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
 	Hindi	ヒンディー数字
@@ -5039,6 +5040,12 @@ lighting	Light	ライト
 	Yonroku-ban	四六判
 	Ruby…	ルビ…
 	Ruby	ルビ
+	Ease In	イーズイン
+	Ease Out	イーズアウト
+	Ease In Out	イーズインアウト
+	Ease Out In	イーズアウトイン
+	Ramp:	強さ:
+	Shift:	シフト:
 	Fresco…	フレスコ…
 	Fresco	フレスコ
 	Lock Artboards	アートボードをロック

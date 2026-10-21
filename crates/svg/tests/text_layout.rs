@@ -125,6 +125,43 @@ fn proportional_metrics_write_palt() {
     assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
 }
 
+/// Character Direction: live text writes each run set Left to Right as a bidi embedding
+/// (`direction` and `unicode-bidi`). Type with a run set Right to Left is written as outlines.
+#[test]
+fn character_direction_is_written_on_its_runs() {
+    use vectorcraft_doc::ParaDirection;
+    let ltr = CharStyle { char_direction: Some(ParaDirection::LeftToRight), ..style(12.0) };
+    let d = area_doc(vec![run("Due ", style(12.0)), run("21 10 2026", ltr.clone()), run(" ok", style(12.0))], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 3, "{svg}");
+    assert!(!tags[0].contains("direction") && !tags[2].contains("direction"), "{svg}");
+    assert!(tags[1].contains(" direction=\"ltr\" unicode-bidi=\"embed\""), "{}", tags[1]);
+    // Type on a path: on the run's `<tspan>` in the `<textPath>` too.
+    let mut on_path = TextObject::point(Point::ZERO, "", style(12.0));
+    on_path.runs = vec![run("Due ", style(12.0)), run("21 10 2026", ltr)];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(on_path)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert!(svg.contains("<textPath") && tags.len() == 2, "{svg}");
+    assert!(!tags[0].contains("direction") && tags[1].contains(" direction=\"ltr\" unicode-bidi=\"embed\""), "{svg}");
+    // A run set Right to Left is written as outlines, also when its characters are drawn left to
+    // right (digits inside an embedding stay left to right).
+    let rtl = CharStyle { char_direction: Some(ParaDirection::RightToLeft), ..style(12.0) };
+    for date in ["21 10 2026", "2026"] {
+        let d = area_doc(vec![run("Due ", style(12.0)), run(date, rtl.clone())], 280.0, Justify::Left);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<text"), "{date}: {svg}");
+    }
+}
+
 /// Digits are written as drawn: the style's numeral system, not the digits that were typed (as
 /// All Caps writes capitals).
 #[test]

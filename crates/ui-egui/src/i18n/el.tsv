@@ -1738,6 +1738,7 @@
 	Proof Colors	Χρώματα δοκιμίου
 	Proof Setup	Ρύθμιση δοκιμίου
 	Properties	Ιδιότητες
+	Character Direction	Κατεύθυνση χαρακτήρων
 	Digits	Ψηφία
 	Punctuation	Στίξη
 	Puppet Warp	Παραμόρφωση με σημεία ελέγχου
@@ -5329,6 +5330,12 @@ effect	Points	Σημεία
 	Water Paper	Βρεγμένο χαρτί
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Ομαλή αρχή
+	Ease Out	Ομαλό τέλος
+	Ease In Out	Ομαλή αρχή και τέλος
+	Ease Out In	Ομαλό τέλος και αρχή
+	Ramp:	Ένταση:
+	Shift:	Μετατόπιση:
 	Fresco…	Νωπογραφία…
 	Fresco	Νωπογραφία
 	Lock Artboards	Κλείδωμα πινάκων σχεδίασης

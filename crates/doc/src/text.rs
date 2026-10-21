@@ -104,6 +104,12 @@ pub struct CharStyle {
     /// their line line up with it.
     #[serde(default, rename = "charAlign", skip_serializing_if = "crate::skip::is_default")]
     pub char_align: CharAlign,
+    /// Character Direction (Character panel menu, Middle Eastern options): these characters are
+    /// set left to right or right to left inside their paragraph, each stretch of them a Unicode
+    /// bidi embedding (UAX #9 LRE or RLE); None = Default, the direction the bidi algorithm gives
+    /// them.
+    #[serde(default, rename = "charDirection", skip_serializing_if = "Option::is_none")]
+    pub char_direction: Option<ParaDirection>,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
     /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
     /// its proportional heights, `vpal`.
@@ -297,6 +303,7 @@ impl Default for CharStyle {
             stroke_align: StrokeAlign::Center,
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
+            char_direction: None,
             proportional_metrics: false,
             tate_chu_yoko: false,
             small_caps: None,
@@ -862,7 +869,8 @@ impl From<ParaStyleFile> for ParaStyle {
     }
 }
 
-/// A paragraph's base direction ([`ParaStyle::direction`]).
+/// A paragraph's base direction ([`ParaStyle::direction`]), or the direction characters are set
+/// in ([`CharStyle::char_direction`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ParaDirection {
@@ -1702,6 +1710,12 @@ impl TextObject {
             TextKind::Point => Some(self.xf.transform_rect_bbox(self.cached_bounds.unwrap_or_else(|| self.estimate_bounds()))),
         }
     }
+    /// How far the characters' strokes paint past their glyphs, in document space: they scale
+    /// with the type.
+    pub fn char_stroke_outset(&self) -> f64 {
+        let k = crate::node::Scaling::factor(self.xf).unwrap_or(1.0);
+        self.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k
+    }
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
     }
@@ -1905,6 +1919,22 @@ impl crate::Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Character Direction is saved only when set, and styles written before it existed read as
+    /// Default.
+    #[test]
+    fn character_direction_is_saved_only_when_set() {
+        let st = CharStyle::default();
+        assert_eq!(st.char_direction, None);
+        assert!(serde_json::to_value(&st).unwrap().get("charDirection").is_none());
+        for (d, key) in [(ParaDirection::LeftToRight, "leftToRight"), (ParaDirection::RightToLeft, "rightToLeft")] {
+            let set = CharStyle { char_direction: Some(d), ..CharStyle::default() };
+            assert_eq!(serde_json::to_value(&set).unwrap()["charDirection"], key);
+            assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&set).unwrap()).unwrap(), set);
+        }
+        let old = serde_json::to_value(&st).unwrap();
+        assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().char_direction, None);
+    }
 
     /// Ruby saves with the type and a file saved before it (no `ruby` key) reads with none.
     #[test]

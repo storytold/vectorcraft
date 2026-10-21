@@ -1976,6 +1976,7 @@
 	Proof Setup	Configuração de Prova
 	Properties	Propriedades
 	Proportional Metrics	Métrica Proporcional
+	Character Direction	Direção de Caracteres
 	Digits	Dígitos
 	Arabic	Arábicos
 	Hindi	Hindi
@@ -5294,6 +5295,12 @@ mark-style	Japanese	Japonesas
 	Water Paper	Papel molhado
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Ease In	Entrada suave
+	Ease Out	Saída suave
+	Ease In Out	Entrada e saída suaves
+	Ease Out In	Saída e entrada suaves
+	Ramp:	Intensidade:
+	Shift:	Deslocamento:
 	Fresco…	Afresco…
 	Fresco	Afresco
 	Lock Artboards	Bloquear Mesas de Trabalho

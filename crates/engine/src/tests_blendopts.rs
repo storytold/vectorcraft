@@ -153,3 +153,79 @@ fn start_points_round_trip_and_old_blends_load() {
     assert!(old.starts.is_empty() && old.start(0).is_none());
     assert!(serde_json::to_value(&old).unwrap().get("starts").is_none());
 }
+
+#[test]
+fn easing_is_set_validated_saved_and_old_blends_are_even() {
+    let mut s = session();
+    assert!(s.execute("object.blend.options", &json!({"ramp": 50})).is_err());
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "easingType": "easeIn", "ramp": 40})).unwrap());
+    assert_eq!(spec(&s, g).1.ease.ramp, 0.4);
+    sel(&mut s, &[g]);
+    for kind in ["easeIn", "easeOut", "easeInOut", "easeOutIn"] {
+        s.execute("object.blend.options", &json!({"easingType": kind, "colorShift": -50})).unwrap();
+        let info = s.execute("object.blend.info", &json!({})).unwrap();
+        assert_eq!((&info["easingType"], &info["ramp"], &info["colorShift"]), (&json!(kind), &json!(40.0), &json!(-50.0)));
+    }
+    let before = spec(&s, g).1;
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in [json!({"ramp": 101}), json!({"ramp": -1}), json!({"colorShift": "x"}), json!({"colorShift": 1e308}), json!({"easingType": "unknown"})]
+    {
+        assert!(s.execute("object.blend.options", &bad).is_err(), "{bad}");
+        assert_eq!(spec(&s, g).1, before);
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    }
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert_eq!(&back.layers, &d.layers);
+    s.execute("object.blend.options", &json!({"ramp": 0})).unwrap();
+    let zero = spec(&s, g).1;
+    let back: BlendSpec = serde_json::from_value(serde_json::to_value(&zero).unwrap()).unwrap();
+    assert_eq!(back.ease, zero.ease, "a chosen Type survives at Ramp 0");
+    let old: BlendSpec = serde_json::from_value(json!({"spacing": {"steps": 4}})).unwrap();
+    assert!(old.ease.is_linear() && old.color_shift == 0.0);
+    let v = serde_json::to_value(&old).unwrap();
+    assert!(v.get("ease").is_none() && v.get("colorShift").is_none());
+}
+
+#[test]
+fn a_document_with_bad_blend_easing_numbers_opens_clamped_while_commands_refuse() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "easingType": "easeOut", "ramp": 40, "colorShift": -50})).unwrap());
+    let text = String::from_utf8(vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let blend_of = |doc: &vectorcraft_doc::Document| match doc.node(g).unwrap().kind.clone() {
+        NodeKind::Blend { spec, .. } => *spec,
+        _ => panic!("not a blend"),
+    };
+    for (ramp, shift, want) in [("12.5", "-9000.0", (1.0, -100.0)), ("-3.0", "250.0", (0.0, 100.0)), ("null", "\"NaN\"", (0.0, 0.0))] {
+        let t = text.replacen("\"ramp\":0.4", &format!("\"ramp\":{ramp}"), 1).replacen("\"colorShift\":-50.0", &format!("\"colorShift\":{shift}"), 1);
+        assert!(t != text && t.contains("\"ramp\":") && t.contains(shift), "the saved blend carries ramp and colorShift");
+        let doc = vectorcraft_format::load(t.as_bytes()).expect("one bad blend number must not fail the document");
+        let spec = blend_of(&doc);
+        assert_eq!((spec.ease.ramp, spec.color_shift), want, "{ramp} / {shift}");
+    }
+    // The commands still refuse the same values and leave the blend alone.
+    sel(&mut s, &[g]);
+    let before = spec(&s, g).1;
+    for bad in [json!({"ramp": 1250}), json!({"ramp": -3}), json!({"colorShift": 250}), json!({"colorShift": "NaN"}), json!({"colorShift": 1e308})] {
+        assert!(s.execute("object.blend.options", &bad).is_err(), "{bad}");
+        assert_eq!(spec(&s, g).1, before);
+    }
+}
+
+#[test]
+fn native_blend_easing_values_clamp_and_non_finite_become_default() {
+    for (bad, ramp, shift) in [
+        (json!({"ease": {"ramp": 1e308}}), 1.0, 0.0),
+        (json!({"ease": {"ramp": -0.1}}), 0.0, 0.0),
+        (json!({"colorShift": 101}), 0.0, 100.0),
+        (json!({"colorShift": -101}), 0.0, -100.0),
+        (json!({"ease": {"ramp": null}, "colorShift": "NaN"}), 0.0, 0.0),
+    ] {
+        let spec: BlendSpec = serde_json::from_value(bad.clone()).unwrap_or_else(|e| panic!("{bad}: {e}"));
+        assert_eq!((spec.ease.ramp, spec.color_shift), (ramp, shift), "{bad}");
+    }
+}
