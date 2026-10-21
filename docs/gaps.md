@@ -267,8 +267,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Missing (asked for by users, from earlier versions):** radial gradients in Image Trace's
   Gradients option, which traces linear ones only (draft #1849). Inside the estimate below.
 - **Missing:** gradient dither and perceptual blending, gradient presets (30.0); tangent and perpendicular
-  snapping and the consolidated snapping options (30.0); artboard locking, artboard colors in exports and print, and managing
-  artboards from the canvas (30.0); the Blend panel with ease in/out and separate colour acceleration (30.7);
+  snapping and the consolidated snapping options (30.0); artboard colors in exports and print, and managing
+  artboards from the canvas other than locking and unlocking them from the Artboard tool's right-click menu (30.0); the Blend panel with ease in/out and separate colour acceleration (30.7);
   the Dimension tool (28.x).
 - **Evidence:** Adobe's 30.0 and 30.7 release announcements, see
   [target-app-parity.md](target-app-parity.md#how-this-was-measured-2026-10-10).
