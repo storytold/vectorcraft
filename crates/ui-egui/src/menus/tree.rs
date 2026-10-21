@@ -622,6 +622,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 sub("Workspace", crate::workspaces::menu_items()),
+                c("Share…", "cloud.share"),
                 Sep,
                 c("Control", "window.control"),
                 c("Contextual Task Bar", "window.taskBar"),

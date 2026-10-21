@@ -88,7 +88,8 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             if crate::cloud::shares(app) {
                 // Progressive hiding, like Discord: the Share split button is suppressed when the
                 // right panel is too narrow to also keep a usable workspace switcher.  The account
-                // badge stays reachable at all widths; Window → Share still reaches sharing.
+                // badge stays reachable at all widths; Window → Share… still reaches sharing when the
+                // chrome button is hidden.
                 // Threshold: 8 pt gap + ~72 pt split button + item-spacing + 8 pt before workspace
                 // + item-spacing + 64 pt minimum workspace switcher ≈ 164 pt remaining after who().
                 let room_after_who = ui.available_width();

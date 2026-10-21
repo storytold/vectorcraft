@@ -167,6 +167,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::cloud::link(app);
             Ok(crate::cloud::status(app))
         }
+        "cloud.share" => crate::cloud::open_share(app).map(|_| crate::cloud::status(app)),
         // Opens something already listed, by handle or by name. The listing is what the user can
         // see, which keeps a scripted open and a clicked one on the same footing.
         "cloud.openFile" => {

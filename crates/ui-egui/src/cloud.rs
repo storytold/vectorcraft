@@ -27,7 +27,7 @@ pub use craft_ui::cloud::{
     Account, Busy, CloudApp, CloudBackend, CloudFiles, Conflict, CopyFormat, Destination, DocumentKind, Event, Fault, Folder, Job, Link, Origin,
     Post, Source, UNAVAILABLE, available, browse, can_converse, conflict_modal, destination_name, has_target, link, load_shared, open_entry,
     open_page, origin, parent_of, prefers_cloud, progress, pump, reload_active, save, save_as, save_page, share_button, shares, sign_in, sign_out,
-    start, who, work_together,
+    start, submit, who, work_together,
 };
 use egui::{Color32, FontFamily, Painter, Rect, Ui};
 use serde_json::{Value as Json, json};
@@ -307,6 +307,47 @@ impl CloudApp for VectorcraftApp {
             bold: FontFamily::Name(FONT_UI_SEMIBOLD.into()),
         }
     }
+}
+
+/// Window menu and control channel: open the Share dialog for the active drawing.
+pub fn open_share(app: &mut VectorcraftApp) -> Result<Json, String> {
+    if !available(app) {
+        return Err(UNAVAILABLE.to_owned());
+    }
+    if !app.share.available() {
+        return Err("sharing is not available from this service".to_owned());
+    }
+    let Some(uid) = app.session.active().map(|d| d.uid) else {
+        return Err("no drawing open".to_owned());
+    };
+    let (id, title) = match origin(app) {
+        Some(origin) => (origin.entry.id.clone(), origin.entry.name.clone()),
+        None => (String::new(), app.title(uid)),
+    };
+    app.share.open(id, title);
+    Ok(json!({"share": true}))
+}
+
+/// Save As for the document Share opened on, not whichever tab is active when the request lands.
+pub(crate) fn share_save_as(app: &mut VectorcraftApp, uid: u64, folder: &str, name: &str) -> Result<Json, String> {
+    let name = drawing_name(name);
+    if name.is_empty() {
+        return Err("type a file name".to_owned());
+    }
+    if !app.session.documents().iter().any(|d| d.uid == uid) {
+        return Err("no drawing open".to_owned());
+    }
+    if app.cloud().busy.is_some() {
+        return Err("a cloud transfer is already running".to_owned());
+    }
+    let bytes = app.encode(uid, Destination::new(&name))?;
+    let size = bytes.len();
+    let answer = json!({"saving": name.clone(), "folder": folder, "bytes": size});
+    let cloud = app.cloud_mut();
+    cloud.status = None;
+    cloud.busy = Some(Busy::Saving { name: name.clone(), bytes: size });
+    submit(app, Job::Create { uid, folder: folder.to_owned(), name, bytes });
+    Ok(answer)
 }
 
 #[cfg(test)]

@@ -157,6 +157,12 @@ pub struct VectorcraftApp {
     /// Share, the same dialog every Craft app offers. It opens no socket; the host connects the
     /// half that reaches the service.
     pub share: craft_ui::share::ShareDialog,
+    /// Document uid Share was opened for (active tab can change before a cloud save finishes).
+    pub(crate) sharing_doc_uid: Option<u64>,
+    pub(crate) sharing_save_uid: Option<u64>,
+    pub(crate) sharing_save_epoch: Option<u64>,
+    pub(crate) share_open_epoch: u64,
+    pub(crate) share_was_open: bool,
     /// Who else is in the open document, drawn beside the account badge. Nothing is drawn while a
     /// person works alone.
     pub presence: craft_ui::presence::PresenceBar,

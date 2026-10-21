@@ -47,6 +47,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("cloud.browse", "Browse a Cloud Folder", "", "{path?} list cloud folder `path` (empty: the top of your own storage) → {folder}"),
     ("cloud.shared", "List Cloud Shares", "", "{} list what other people shared with you, where the provider offers it"),
     ("cloud.link", "Connect Cloud Storage", "", "{} link a storage account, which the user finishes in their browser → the cloud state"),
+    ("cloud.share", "Share…", "", "{} open the Share dialog for the open drawing"),
     (
         "cloud.save",
         "Save to the Cloud",

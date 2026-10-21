@@ -99,6 +99,11 @@ impl VectorcraftApp {
             cloud_sent: cloud::Sent::new(),
             cloud_urls: std::cell::RefCell::new(Vec::new()),
             share: craft_ui::share::ShareDialog::new(),
+            sharing_doc_uid: None,
+            sharing_save_uid: None,
+            sharing_save_epoch: None,
+            share_open_epoch: 0,
+            share_was_open: false,
             // Initials alone: the app bar has room for a row of them beside the account, and a
             // name each would crowd out the controls next to it.
             presence: craft_ui::presence::PresenceBar::new().badges_only(),
@@ -589,19 +594,42 @@ impl VectorcraftApp {
 /// its own progress, until one of these arrives. A drawing that has never been in the cloud has no
 /// handle to share, which is the one case this exists for.
 fn share_save(app: &mut VectorcraftApp) {
+    let open = app.share.is_open();
+    if open && !app.share_was_open {
+        app.share_open_epoch = app.share_open_epoch.wrapping_add(1);
+        app.sharing_doc_uid = app.session.active().map(|d| d.uid);
+    }
+    if !open && app.share_was_open {
+        app.sharing_doc_uid = None;
+    }
+    app.share_was_open = open;
+
     if let Some(request) = app.share.take_save_request() {
-        // One destination today. `request.destination` names which, and is carried through so a
-        // second provider needs no change here.
         let _ = request.destination;
-        match cloud::save_as(app, "/", &request.name) {
-            Ok(_) => app.cloud.sharing_save = true,
+        let Some(uid) = app.sharing_doc_uid else {
+            app.share.save_failed("no drawing open".to_owned());
+            return;
+        };
+        match cloud::share_save_as(app, uid, "/", &request.name) {
+            Ok(_) => {
+                app.cloud.sharing_save = true;
+                app.sharing_save_uid = Some(uid);
+                app.sharing_save_epoch = Some(app.share_open_epoch);
+            }
             Err(reason) => app.share.save_failed(reason),
         }
     }
-    // The worker reports by clearing `busy`. A new origin means it landed.
     if app.cloud.sharing_save && app.cloud.busy.is_none() {
         app.cloud.sharing_save = false;
-        match cloud::origin(app) {
+        let Some(uid) = app.sharing_save_uid.take() else {
+            return;
+        };
+        let epoch = app.sharing_save_epoch.take();
+        let deliver = epoch.is_some_and(|epoch| app.share.is_open() && epoch == app.share_open_epoch);
+        if !deliver {
+            return;
+        }
+        match app.cloud.origins.get(&uid) {
             Some(origin) => {
                 let (id, name) = (origin.entry.id.clone(), origin.entry.name.clone());
                 app.share.saved(id, name);
