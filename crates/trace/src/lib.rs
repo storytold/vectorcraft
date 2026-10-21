@@ -40,7 +40,8 @@
 //! parts become stroked outlines.
 //!
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
-//! *overlapping* (stacked: each layer also covers every layer above it, so no hairline gaps).
+//! *overlapping* (stacked: each layer also covers the layers above it within the areas that hold
+//! its own color, so no hairline gaps).
 #![forbid(unsafe_code)]
 
 mod centerline;
@@ -234,7 +235,8 @@ pub enum Method {
     /// Each colour traced on its own; neighbouring shapes share their edge.
     #[default]
     Abutting,
-    /// Stacked: every layer extends under the layers above it.
+    /// Stacked: every layer extends under the layers above it, within the areas that hold its own
+    /// color.
     Overlapping,
 }
 
@@ -603,10 +605,11 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     order.sort_by(|a, b| counts[*b].cmp(&counts[*a]).then(a.cmp(b)));
     if params.method == Method::Overlapping {
         // Stacked layers go by lightness instead, from the largest colour's end of the scale: each
-        // layer reaches under all those above it, so where two colours meet, every layer between
-        // them in the stack ends on that same edge and shows through its anti-aliasing. Neighbours
-        // in a picture are mostly neighbours in tone, and in this order they are neighbours in the
-        // stack too (by area, an unrelated colour's edge would shine through as a hairline).
+        // layer reaches under those above it in the areas that hold its own color, so where two
+        // colours meet, every layer between them in the stack that has a pixel in that area ends
+        // on that same edge and shows through its anti-aliasing. Neighbours in a picture are
+        // mostly neighbours in tone, and in this order they are neighbours in the stack too (by
+        // area, an unrelated colour's edge would shine through as a hairline).
         let light = |i: usize| q.palette.get(i).map_or(0, |c| u32::from(c[0]) * 299 + u32::from(c[1]) * 587 + u32::from(c[2]) * 114);
         let first = order.first().copied();
         order.sort_by(|a, b| light(*a).cmp(&light(*b)).then(a.cmp(b)));
@@ -639,6 +642,8 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
     // of its components, the stack that fills them, its edges): as many layers at a time as fit
     // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
+    // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
+    // freed before the trace starts.)
     let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
     let at_a_time = ((512 << 20) / (largest * 10)).max(1);
     for (paths, &(_, ci)) in parallel_map_at_most(at_a_time, &layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
@@ -959,6 +964,23 @@ impl Layers<'_> {
         for y in y0..y1 {
             let row = self.q.labels.get(y * w + x0..y * w + x1)?;
             mask.extend(row.iter().enumerate().map(|(k, &l)| l != TRANSPARENT && !thin.get(y * w + x0 + k).copied().unwrap_or(false) && part(l)));
+        }
+        // Overlapping: a part of the mask with no pixel of this color holds only colors above it,
+        // whose own layers fill it, and is left out. The layer reaches under the colors above it
+        // only within the areas that hold its own color.
+        if overlapping {
+            let (comp, sizes) = contour::label(&mask, bw, bh);
+            let mut own = vec![false; sizes.len()];
+            for (k, &c) in comp.iter().enumerate() {
+                if self.q.labels.get((y0 + k / bw) * w + x0 + k % bw).is_some_and(|&l| l as usize == ci)
+                    && let Some(o) = own.get_mut(c as usize)
+                {
+                    *o = true;
+                }
+            }
+            for (m, &c) in mask.iter_mut().zip(&comp) {
+                *m = *m && own.get(c as usize).copied().unwrap_or(false);
+            }
         }
         // Without Fills, areas are outlined with a 1 px stroke.
         let area_stroke = (params.strokes && !params.fills).then_some(1.0);
