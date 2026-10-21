@@ -3914,6 +3914,7 @@ mark-style	Japanese	Japán
 	Tile Type:	Csempézés módja:
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
+	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok

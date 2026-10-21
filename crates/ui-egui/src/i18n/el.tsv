@@ -3570,6 +3570,7 @@ theme	Appearance	Εμφάνιση
 	Tile Type:	Τύπος πλακιδίου:
 	tile {number}	πλακίδιο {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Τα πλακίδια αριθμούνται πρώτα οριζόντια και έπειτα κατακόρυφα· αφήστε κενό το εύρος για όλα τα πλακίδια.
+	Copies per Sheet (as many as fit, in a grid)	Αντίγραφα ανά φύλλο (όσα χωρούν, σε πλέγμα)
 	Tip extends past the end point	Η αιχμή προεξέχει από το τελικό σημείο
 	Tip on the end point	Η αιχμή βρίσκεται στο τελικό σημείο
 	Title Case	Κεφαλαίο σε κάθε λέξη

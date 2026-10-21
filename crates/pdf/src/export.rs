@@ -121,6 +121,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
             view,
             window: None,
             place: Affine::IDENTITY,
+            copies: &[],
             area: r,
             // Art reaches as far as the bleed: the marks lie outside it.
             clip: m != r,
@@ -253,6 +254,9 @@ pub(crate) struct Sheet<'a> {
     pub window: Option<Rect>,
     /// Document space → drawing space.
     pub place: Affine,
+    /// Copies on the page: each one's move in drawing space from where [`Self::place`] puts the
+    /// art. The art and the marks are drawn once per copy. Empty: one copy, not moved.
+    pub copies: &'a [Vec2],
     /// The art drawn, in document space (the bleed box): what lies outside it is left out.
     pub area: Rect,
     /// Clip the art to [`Self::area`].
@@ -331,22 +335,17 @@ impl Writer {
         if sheet.negative {
             cover(&mut s, paper, 255, 1.0);
         }
+        // `moves` holds each copy's move in drawing space; without copies, it holds one zero move.
+        let moves = if sheet.copies.is_empty() { &[Vec2::ZERO][..] } else { sheet.copies };
+        let place_at = |m: Vec2| if m == Vec2::ZERO { sheet.place } else { Affine::translate(m) * sheet.place };
         // A page whose art or marks would be placed beyond [`MAX_COORD`] is left blank.
-        let fits = writable(&s, sheet.view, Rect::ZERO) && writable(&s, sheet.view * sheet.place, Rect::ZERO);
+        let fits = writable(&s, sheet.view, Rect::ZERO) && moves.iter().all(|m| writable(&s, sheet.view * place_at(*m), Rect::ZERO));
         s.push_transform(&xf(sheet.view));
         let window = sheet.window.and_then(|r| to_path(&s, &r.to_path(0.1)));
         if let Some(clip) = &window {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
         }
-        let placed = sheet.place != Affine::IDENTITY;
-        if placed {
-            s.push_transform(&xf(sheet.place));
-        }
         let r = sheet.area;
-        let clip = sheet.clip.then(|| to_path(&s, &r.to_path(0.1))).flatten();
-        if let Some(clip) = &clip {
-            s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
-        }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
         // writer has no page group attributes; a flat PDF 1.3 file has none). In CMYK, transparency
         // at the top of a page is put in a group of its own, whose blending space `cmyk_blending`
@@ -355,33 +354,54 @@ impl Writer {
         let doc = ex.doc;
         let page_group = fits && !self.pdf13 && (doc.page_isolate || doc.page_knockout);
         let cmyk_page_group = fits && self.cmyk && !page_group && ex.shows_transparency();
-        if page_group || (cmyk_page_group && !Node::children_blend(&doc.layers, &mut |c| c.blends_through())) {
-            s.push_isolated();
-        } else if cmyk_page_group {
-            let all = constant_mask(&mut s, r, 1.0);
-            s.push_mask(all);
-        }
-        if fits {
-            ex.children(&mut s, &doc.layers, r);
-        }
-        if page_group || cmyk_page_group {
-            s.pop();
-        }
-        if clip.is_some() {
-            s.pop();
-        }
-        if placed {
-            s.pop();
+        for m in moves {
+            let place = place_at(*m);
+            let placed = place != Affine::IDENTITY;
+            if placed {
+                s.push_transform(&xf(place));
+            }
+            let clip = sheet.clip.then(|| to_path(&s, &r.to_path(0.1))).flatten();
+            if let Some(clip) = &clip {
+                s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
+            }
+            if page_group || (cmyk_page_group && !Node::children_blend(&doc.layers, &mut |c| c.blends_through())) {
+                s.push_isolated();
+            } else if cmyk_page_group {
+                let all = constant_mask(&mut s, r, 1.0);
+                s.push_mask(all);
+            }
+            if fits {
+                ex.children(&mut s, &doc.layers, r);
+            }
+            if page_group || cmyk_page_group {
+                s.pop();
+            }
+            if clip.is_some() {
+                s.pop();
+            }
+            if placed {
+                s.pop();
+            }
         }
         if fits && let Some(art) = sheet.marks {
             // The drawing space the page shows (the marks' area).
             let shown = sheet.view.inverse().transform_rect_bbox(paper);
+            let shown = sheet.window.map_or(shown, |r| r.intersect(shown));
             let knockout = std::mem::replace(&mut ex.knockout, false);
             // Marks keep their inks: they aren't converted to the destination. The page
             // information is drawn as glyph shapes, like the other marks, not as text.
             let convert = std::mem::replace(&mut ex.convert, false);
             let outline = std::mem::replace(&mut ex.outline_text, true);
-            ex.node(&mut s, art, sheet.window.map_or(shown, |r| r.intersect(shown)), true);
+            for m in moves {
+                let moved = *m != Vec2::ZERO;
+                if moved {
+                    s.push_transform(&xf(Affine::translate(*m)));
+                }
+                ex.node(&mut s, art, shown - *m, true);
+                if moved {
+                    s.pop();
+                }
+            }
             (ex.knockout, ex.convert, ex.outline_text) = (knockout, convert, outline);
         }
         if window.is_some() {

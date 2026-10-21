@@ -3281,6 +3281,8 @@ mark-style	Japanese	Giapponese
 	Tile Type:	Tipo di tassello:
 	tile {number}	riquadro {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	I riquadri sono numerati da sinistra a destra, poi dall'alto in basso; lascia vuoto l'intervallo per stamparli tutti.
+	Copies per Sheet (as many as fit, in a grid)	Copie per foglio (quante ne entrano, in griglia)
+	Gutter:	Spazio intermedio:
 	Tint	Tinta
 	Tip extends past the end point	La punta si estende oltre il punto finale
 	Tip on the end point	Punta sul punto finale

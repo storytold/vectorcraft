@@ -3214,6 +3214,8 @@ effect	Points	Punkte
 	Tile Type:	Kacheltyp:
 	tile {number}	Kachel {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Kacheln werden erst quer, dann nach unten nummeriert; ein leerer Bereich steht für alle Kacheln.
+	Copies per Sheet (as many as fit, in a grid)	Kopien pro Blatt (so viele wie passen, im Raster)
+	Gutter:	Zwischenraum:
 	Tint	Tonwert
 	Tip extends past the end point	Spitze ragt über den Endpunkt hinaus
 	Tip on the end point	Spitze auf dem Endpunkt

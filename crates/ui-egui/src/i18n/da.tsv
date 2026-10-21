@@ -2276,6 +2276,7 @@ lighting	Light	Lys
 	Tile Range:	Fliseinterval:
 	tile {number}	flise {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fliser nummereres på tværs og derefter nedad; lad intervallet stå tomt for alle fliser.
+	Copies per Sheet (as many as fit, in a grid)	Kopier pr. ark (så mange der er plads til, i et gitter)
 	Transverse (the page a quarter turn on the paper)	På tværs (siden drejes en kvart omgang på papiret)
 	Unprintable margin:	Ikke-udskrivbar margen:
 	{pages} in all, {count} per copy	{pages} i alt, {count} pr. kopi

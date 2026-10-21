@@ -6,7 +6,9 @@
 //!   to each artboard's), transverse, which layers print (template layers never do), the
 //!   placement on the imageable area (or where the Print Tiling tool put the pages,
 //!   [`TileOrigin`]), and the scale: none, fit, custom, or tiles of the paper or of its imageable
-//!   area, overlapping, a range of them.
+//!   area, overlapping, a range of them. Without tiles, copies per sheet repeats the artboard
+//!   (with its bleed and marks) across then down the imageable area, as many times as fit,
+//!   `gutter` apart, and places the grid as it places one copy.
 //! - Marks and bleed as PDF export draws them ([`crate::MarkSettings`], [`crate::BleedSettings`]),
 //!   around the artboard on the paper, at the paper's scale.
 //! - Output: composite, or separations, one page per ink that prints ([`print_inks`]) in the
@@ -33,14 +35,14 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use kurbo::{Affine, Rect};
+use kurbo::{Affine, Rect, Vec2};
 use serde::Serialize;
 use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_doc::marks::PrinterMarks;
 use vectorcraft_doc::overprint::{clear_overprints, darken_overprints};
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
-pub use layout::{MAX_TILES, TileGrid};
+pub use layout::{MAX_COPIES_PER_SHEET, MAX_TILES, TileGrid};
 pub use plates::print_inks;
 pub use settings::*;
 pub use tiling::{TilingPage, tiling};
@@ -101,8 +103,13 @@ pub struct PageSummary {
     /// The part of the document this page prints (`[x0, y0, x1, y1]`, document space): the
     /// artboard with its bleed, or what of it a tile shows.
     pub area: [f64; 4],
-    /// The artboard (trim box) on the page, `[x0, y0, x1, y1]`.
+    /// The artboard (trim box) on the page, `[x0, y0, x1, y1]`; with copies per sheet, the box
+    /// around every copy's.
     pub trim: [f64; 4],
+    /// With copies per sheet, each copy's artboard on the page, `[x0, y0, x1, y1]`, across then
+    /// down (the first is where `transform` puts it).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub copies: Vec<[f64; 4]>,
 }
 
 /// What a job prints, without printing it.
@@ -283,6 +290,7 @@ pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfE
                 transform: (l.view * l.place).as_coeffs(),
                 area: [l.area.x0, l.area.y0, l.area.x1, l.area.y1],
                 trim: [l.page_trim.x0, l.page_trim.y0, l.page_trim.x1, l.page_trim.y1],
+                copies: l.copies.iter().map(|m| l.view.transform_rect_bbox(l.trim + *m)).map(|r| [r.x0, r.y0, r.x1, r.y1]).collect(),
             })
         })
         .collect();
@@ -303,6 +311,10 @@ pub struct PlannedSheet {
     pub window: Option<Rect>,
     /// Document space → drawing space.
     pub place: Affine,
+    /// With copies per sheet, each copy's move in drawing space from where [`Self::place`] puts
+    /// the art, across then down (the first is zero): the art and the marks are drawn once per
+    /// copy. Empty: one copy.
+    pub copies: Vec<Vec2>,
     /// The art drawn, in document space (the bleed box): what lies outside it is left out.
     pub area: Rect,
     /// Printer's marks, in drawing space (separated for the sheet's ink).
@@ -325,6 +337,7 @@ impl PlannedSheet {
             view: self.view,
             window: self.window,
             place: self.place,
+            copies: &self.copies,
             area: self.area,
             clip: true,
             marks: self.marks.as_ref(),
@@ -378,6 +391,7 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
                 view: l.view,
                 window: l.window,
                 place: l.place,
+                copies: l.copies.clone(),
                 area: l.area,
                 marks: art,
                 negative: set.output.image == PrintImage::Negative,

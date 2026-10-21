@@ -3614,6 +3614,8 @@ mark-style	Japanese	Kiểu Nhật
 	Tile Type:	Loại ô:
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
+	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
+	Gutter:	Khoảng cách:
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng

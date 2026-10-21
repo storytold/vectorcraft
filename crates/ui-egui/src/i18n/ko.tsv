@@ -2980,6 +2980,8 @@ mark-style	Japanese	일본식
 	Tile Range:	타일 범위:
 	Tile Type:	타일 유형:
 	Tiles are numbered across, then down; leave the range empty for every tile.	타일은 가로로 먼저, 이어서 세로로 번호가 매겨집니다. 모든 타일을 지정하려면 범위를 비워 두십시오.
+	Copies per Sheet (as many as fit, in a grid)	용지당 여러 매 (들어가는 만큼 격자로 배치)
+	Gutter:	간격:
 	Toggle Fill/Stroke Focus	칠/선 포커스 전환
 	Toggle Selection	선택 전환
 	Toggle single/double column	한 줄/두 줄 전환

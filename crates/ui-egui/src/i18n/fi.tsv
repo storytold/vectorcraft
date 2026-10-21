@@ -2421,6 +2421,7 @@ lighting	Light	Valo
 	Tile Range:	Ruutualue:
 	tile {number}	ruutu {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ruudut numeroidaan vaakasuunnassa ja sitten alaspäin; jätä alue tyhjäksi, niin kaikki ruudut tulostetaan.
+	Copies per Sheet (as many as fit, in a grid)	Kopioita arkille (niin monta kuin mahtuu, ruudukkoon)
 	Transverse (the page a quarter turn on the paper)	Poikittainen (sivu neljänneskierroksen käännettynä paperilla)
 	Unprintable margin:	Tulostumaton reunus:
 	{pages} in all, {count} per copy	{pages} yhteensä, {count} kopiota kohden

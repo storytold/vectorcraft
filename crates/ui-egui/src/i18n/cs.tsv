@@ -2466,6 +2466,7 @@ lighting	Light	Světlo
 	Tile Range:	Rozsah dlaždic:
 	tile {number}	dlaždice {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Dlaždice se číslují po řádcích, pak dolů; prázdný rozsah znamená všechny dlaždice.
+	Copies per Sheet (as many as fit, in a grid)	Kopie na list (kolik se vejde, v mřížce)
 	Transverse (the page a quarter turn on the paper)	Napříč (stránka otočená na papíře o čtvrt otáčky)
 	Unprintable margin:	Netisknutelný okraj:
 	{pages} in all, {count} per copy	celkem {pages}, na kopii {count}

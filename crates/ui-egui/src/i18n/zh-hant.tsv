@@ -4001,6 +4001,8 @@ font-script	Japanese	漢字
 	Tile Type:	拼貼類型：
 	tile {number}	拼貼 {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼貼先由左至右再由上至下編號；範圍留空表示全部拼貼。
+	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
+	Gutter:	間距：
 	Tint	色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點

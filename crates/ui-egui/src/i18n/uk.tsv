@@ -3274,6 +3274,8 @@ effect	Points	Точки
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруються зліва направо, потім униз; Залишіть діапазон порожнім для всіх плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
+	Gutter:	Проміжок:
 	Tint	Відтінок
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
