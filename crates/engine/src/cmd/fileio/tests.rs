@@ -450,7 +450,7 @@ fn formats_query_lists_readers_writers_and_options() {
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 

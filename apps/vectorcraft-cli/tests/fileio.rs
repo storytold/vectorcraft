@@ -85,6 +85,38 @@ fn images_open_at_their_pixel_size() {
 }
 
 #[test]
+fn raster_exports_use_document_resolution_unless_overridden() {
+    let source = tmp("resolution.vectorcraft");
+    ok(&["run", "--cmd", "file.new", "--params", r#"{"width":72,"height":36,"rasterEffectsPpi":300}"#, "--export", &source]);
+    for (flags, width, height) in [(vec![], 300u32, 150u32), (vec!["--scale", "1"], 72, 36), (vec!["--ppi", "150", "--scale", "2"], 150, 75)] {
+        for mode in ["run", "convert"] {
+            for format in ["png", "psd"] {
+                let path = tmp(&format!("resolution-{mode}-{width}.{format}"));
+                let mut args = if mode == "run" { vec!["run", "--in", &source, "--export", &path] } else { vec!["convert", &source, &path] };
+                args.extend_from_slice(&flags);
+                ok(&args);
+                let bytes = std::fs::read(&path).unwrap();
+                let dimensions = if format == "png" { &bytes[16..24] } else { &bytes[14..22] };
+                let expected =
+                    if format == "png" { [width.to_be_bytes(), height.to_be_bytes()] } else { [height.to_be_bytes(), width.to_be_bytes()] };
+                assert_eq!(dimensions, expected.concat(), "{args:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn raster_export_rejects_invalid_ppi() {
+    for ppi in ["0", "-150", "NaN", "inf", "high"] {
+        for args in [vec!["run", "--export", "unused.png", "--ppi", ppi], vec!["convert", "unused.svg", "unused.png", "--ppi", ppi]] {
+            let out = Command::new(BIN).args(&args).output().unwrap();
+            assert!(!out.status.success(), "{args:?}");
+            assert!(String::from_utf8_lossy(&out.stderr).contains("positive finite number"), "{args:?}: {out:?}");
+        }
+    }
+}
+
+#[test]
 fn help_lists_readable_formats() {
     let out = ok(&["--help"]);
     assert!(out.contains("Readable formats: .vectorcraft") && out.contains(".ait") && out.contains(".webp"), "{out}");

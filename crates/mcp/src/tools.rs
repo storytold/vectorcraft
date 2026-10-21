@@ -368,7 +368,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 json!({
                     "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
                     "path": string("Destination file (omit to get dataBase64)"),
-                    "scale": num("Raster pixels per point (default 1)"),
+                    "scale": num("Raster pixels per point (without scale or options.ppi, uses the document's raster effects resolution; options.ppi wins)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
                     "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG, SVGZ and EPS: one file each; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},

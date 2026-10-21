@@ -573,6 +573,11 @@ SVG writes one file per artboard of a `range`); `useArtboards: false` exports th
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way.
 
+Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
+point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
+`convert` follow the same rule and accept `--ppi N` (which wins over `--scale N`). Documents without a
+saved higher resolution still use 72 ppi; use `--ppi 300` for print output from those documents.
+
 Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file), `background`
 (`transparent`, `white`, `black` or `"#rrggbb"`), `antiAlias` (`none`, `art`, `type`: text snapped to pixels) and,
 for PNG, `interlaced`.
