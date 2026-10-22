@@ -1,7 +1,7 @@
 //! Illustrator's Pathfinder panel and Shape Builder regions, over an ordered stack of shapes
 //! (index 0 = back-most, last = front-most).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use kurbo::{BezPath, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Shape as _};
 use linesweeper::topology::ContourIdx;
@@ -359,29 +359,61 @@ impl FaceMerger {
 
     /// The union of `faces`.
     pub fn merge(&self, faces: &[&Region]) -> PathData {
-        self.exact(faces).or_else(|| self.planar(faces)).filter(|p| !p.is_empty()).unwrap_or_else(|| merge_regions(faces))
+        self.merge_with(faces, None)
+    }
+
+    /// What is left of input `shape` when `merged` merge on their own: the union of `faces`, as
+    /// [`merge`](Self::merge) gives it, except that a sliver goes in only when `shape` covers it
+    /// and the merge of `merged` does not take it in.
+    pub fn merge_rest(&self, shape: usize, faces: &[&Region], merged: &[&Region]) -> PathData {
+        self.merge_with(faces, Some((shape, merged)))
+    }
+
+    fn merge_with(&self, faces: &[&Region], rest: Option<(usize, &[&Region])>) -> PathData {
+        self.exact(faces, rest).or_else(|| self.planar(faces, rest)).filter(|p| !p.is_empty()).unwrap_or_else(|| merge_regions(faces))
     }
 
     /// `faces` merged in the planar map of the shapes: each face found again by a point inside
     /// it, and the result checked to cover what they cover.
-    fn planar(&self, faces: &[&Region]) -> Option<PathData> {
+    fn planar(&self, faces: &[&Region], rest: Option<(usize, &[&Region])>) -> Option<PathData> {
         let (shapes, map) = self.lines.as_ref()?;
-        let map = map.get_or_init(|| crate::planar::map(shapes)).as_ref()?;
+        let map = map.get_or_init(|| crate::planar::map(shapes, true)).as_ref()?;
         let inside: Vec<Point> = faces.iter().map(|r| crate::planar::interior_point(&r.path)).collect::<Option<_>>()?;
-        let merged = map.merge(&inside)?;
+        let rest = rest.map(|(shape, merged)| crate::planar::Rest {
+            shape,
+            merged: merged.iter().filter_map(|r| crate::planar::interior_point(&r.path)).collect(),
+            cover: cover(merged, shapes.len()),
+        });
+        let merged = map.merge(&inside, &cover(faces, shapes.len()), rest.as_ref())?;
         // A face not found as itself (two points in one face of the map) shows in the area.
         let want: f64 = faces.iter().map(|r| crate::area(&r.path, FillRule::NonZero)).sum();
         let outlines: f64 = faces.iter().map(|r| r.path.to_bezpath().perimeter(1e-6)).sum();
         ((crate::area(&merged, FillRule::NonZero) - want).abs() <= 1e-9 * want.max(1.0) + crate::DEFAULT_PRECISION * outlines).then_some(merged)
     }
 
-    fn exact(&self, faces: &[&Region]) -> Option<PathData> {
+    fn exact(&self, faces: &[&Region], rest: Option<(usize, &[&Region])>) -> Option<PathData> {
         // A gap no shape covers is no face of the arrangement: it merges in the planar map.
         if faces.iter().any(|r| r.sources.is_empty()) {
             return None;
         }
         let arr = self.arr.as_ref()?;
-        // Each face by its coverage and a point inside it.
+        let mut raw = self.contours_of(arr, faces)?;
+        // The faces merged on their own and their corners.
+        let rest = rest.map(|(shape, merged)| {
+            let merged: Vec<&Region> = merged.iter().copied().filter(|r| !r.sources.is_empty()).collect();
+            let corners = self
+                .contours_of(arr, &merged)
+                .map(|c| c.elements().iter().filter_map(|el| el.end_point()).map(vertex_key).collect())
+                .unwrap_or_default();
+            Rest { shape, merged, corners }
+        });
+        add_slivers(arr, faces, rest.as_ref(), &mut raw);
+        unite_faces(&raw, &arr.tidy, &self.snap)
+    }
+
+    /// The contours of the faces of `arr` that are `faces`, each found by its coverage and a point
+    /// inside it.
+    fn contours_of(&self, arr: &Arrangement, faces: &[&Region]) -> Option<BezPath> {
         let mut picks: Vec<(Vec<bool>, Point)> = Vec::with_capacity(faces.len());
         for r in faces {
             let mut mask = vec![false; self.shapes];
@@ -408,7 +440,86 @@ impl FaceMerger {
                 }
             }
         }
-        unite_faces(&raw, &arr.tidy, &self.snap)
+        Some(raw)
+    }
+}
+
+/// What is left of input `shape` when the faces `merged` merge on their own, and the corners of
+/// those faces ([`add_slivers`]).
+struct Rest<'a> {
+    shape: usize,
+    merged: Vec<&'a Region>,
+    corners: HashSet<(u64, u64)>,
+}
+
+/// For each of `shapes` inputs, whether it covers one of `faces`.
+pub(crate) fn cover(faces: &[&Region], shapes: usize) -> Vec<bool> {
+    let mut cover = vec![false; shapes];
+    for &i in faces.iter().flat_map(|r| &r.sources) {
+        if let Some(c) = cover.get_mut(i) {
+            *c = true;
+        }
+    }
+    cover
+}
+
+/// Adds to `raw` the faces of `arr` that [`regions`] drops as slivers ([`is_sliver`]) when they lie
+/// next to a face with the coverage of one of `faces` and only shapes that cover `faces` cover
+/// them, such as the overlap of two shapes that overlap by less than the precision. Without them,
+/// merging the faces on both sides of a sliver leaves a hairline gap between them. A sliver that
+/// touches none of `faces` stays a contour of its own, which [`unite_faces`] drops.
+///
+/// With `rest`, the merge is what is left of an input when other faces merge on their own: a
+/// sliver goes in only when that input covers it, and not when it has an edge along one of those
+/// faces and only shapes that cover them cover it, as it goes to their merge.
+///
+/// [`is_sliver`]: crate::boolean::is_sliver
+fn add_slivers(arr: &Arrangement, faces: &[&Region], rest: Option<&Rest>, raw: &mut BezPath) {
+    let top = &arr.top;
+    let shapes = arr.rules.len();
+    let cover = cover(faces, shapes);
+    let merged_cover = rest.map(|r| self::cover(&r.merged, shapes)).unwrap_or_default();
+    let picked: HashSet<&[usize]> = faces.iter().map(|r| r.sources.as_slice()).collect();
+    let beside: HashSet<&[usize]> = rest.iter().flat_map(|r| r.merged.iter().map(|f| f.sources.as_slice())).collect();
+    let coverage = |w: &Multi| arr.covered(w).collect::<Vec<_>>();
+    let is_picked = |w: &Multi| picked.contains(coverage(w).as_slice());
+    let within = |w: &Multi, c: &[bool]| arr.covered(w).next().is_some() && arr.covered(w).all(|i| c.get(i) == Some(&true));
+    let ours = |w: &Multi| rest.is_none_or(|r| arr.covered(w).any(|i| i == r.shape));
+    // The coverage of each face next to a picked one, if only shapes of `faces` cover it, and the
+    // ends of the edges along faces of `rest` that would go to their merge.
+    let mut next_to: Vec<Vec<bool>> = Vec::new();
+    let mut taken: HashSet<(u64, u64)> = HashSet::new();
+    for s in top.segment_indices() {
+        let h = s.first_half();
+        let (a, b) = (top.winding_clockwise(h), top.winding_counter_clockwise(h));
+        for (w, other) in [(a, b), (b, a)] {
+            if within(w, &cover) && ours(w) && !is_picked(w) && is_picked(other) {
+                let mask = arr.mask(w);
+                if !next_to.contains(&mask) {
+                    next_to.push(mask);
+                }
+            }
+            if let Some(r) = rest
+                && within(w, &merged_cover)
+                && beside.contains(coverage(other).as_slice())
+            {
+                let ends = [h, h.other_half()].map(|e| vertex_key(top.point(e).to_kurbo()));
+                if ends.iter().all(|k| r.corners.contains(k)) {
+                    taken.extend(ends);
+                }
+            }
+        }
+    }
+    let along_merged = |path: &BezPath| path.elements().iter().any(|el| el.end_point().is_some_and(|p| taken.contains(&vertex_key(p))));
+    for mask in next_to {
+        let c = arr.contours(|k| k == mask.as_slice());
+        for group in c.grouped() {
+            if contours_to_path(&c, group.iter().copied(), &arr.tidy).is_empty() && !group.iter().any(|&i| along_merged(&c[i].path)) {
+                for i in group {
+                    raw.extend(c[i].path.iter());
+                }
+            }
+        }
     }
 }
 

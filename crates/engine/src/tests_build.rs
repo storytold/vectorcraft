@@ -116,6 +116,143 @@ fn shape_builder_drag_merges_a_narrow_overlap_when_far_art_is_selected() {
 }
 
 #[test]
+fn shape_builder_drag_merges_across_an_overlap_thinner_than_the_precision() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 199.999, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[150, 150], [250, 150]]})).unwrap();
+    let out = ids(&r);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(outline(&node(&s, out[0])).0.subpaths.len(), 1, "no hairline gap at the 0.001 pt overlap");
+    assert!((area(&s, out[0]) - 19999.9).abs() < 1.0, "{}", area(&s, out[0]));
+    // A click on one side leaves the sliver to the other square, which stays whole.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[150, 150]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 9999.9).abs() < 1e-3, "{}", area(&s, merged));
+    let out = ids(&r);
+    assert_eq!(out.len(), 2, "{out:?}");
+    let rest = out.iter().copied().find(|i| *i != merged).unwrap();
+    assert!((area(&s, rest) - 10000.0).abs() < 1e-6, "{}", area(&s, rest));
+}
+
+#[test]
+fn shape_builder_drag_merges_across_an_overlap_thinner_than_the_precision_with_a_line_selected() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 199.999, 100.0, 100.0, 100.0);
+    let l = line(&mut s, (400.0, 400.0), (450.0, 450.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0, l.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[150, 150], [250, 150]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert_eq!(ids(&r).len(), 2, "the merged shape and the line: {r}");
+    assert_eq!(outline(&node(&s, merged)).0.subpaths.len(), 1, "no hairline gap at the 0.001 pt overlap");
+    assert!((area(&s, merged) - 19999.9).abs() < 1.0, "{}", area(&s, merged));
+}
+
+#[test]
+fn shape_builder_click_beside_a_sliver_leaves_it_to_one_shape() {
+    let mut s = session();
+    // Two lines 0.005 pt apart cut a square; the strip between them is a sliver.
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let l1 = line(&mut s, (150.0, 50.0), (150.0, 250.0));
+    let l2 = line(&mut s, (150.005, 50.0), (150.005, 250.0));
+    s.execute("select.set", &json!({"ids": [a.0, l1.0, l2.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[120, 150]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    let rest: Vec<NodeId> = ids(&r).into_iter().filter(|i| *i != merged && outline(&node(&s, *i)).0.subpaths.iter().all(|sp| sp.closed)).collect();
+    assert_eq!(rest.len(), 1, "{r}");
+    let total = area(&s, merged) + area(&s, rest[0]);
+    assert!((total - 10000.0).abs() < 0.1, "the merged shape and the rest overlap: {} + {}", area(&s, merged), area(&s, rest[0]));
+}
+
+#[test]
+fn shape_builder_click_beside_a_sliver_of_closed_shapes_leaves_it_to_one_shape() {
+    let mut s = session();
+    // Two squares over a third leave a strip of it 0.005 pt wide between them.
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 100.0, 100.0, 49.9975, 100.0);
+    let c = rect(&mut s, 150.0025, 100.0, 49.9975, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[125, 150]]})).unwrap();
+    let out = ids(&r);
+    assert_eq!(out.len(), 3, "the merged shape, the rest of the back square and the right square: {r}");
+    let total: f64 = out.iter().map(|i| area(&s, *i)).sum();
+    assert!((total - 14999.75).abs() < 0.1, "the merged shape and the rest overlap: {total}");
+}
+
+#[test]
+fn shape_builder_click_keeps_a_sliver_the_merge_leaves_out_in_the_rest() {
+    // Also with a line selected, which merges in the planar map.
+    for with_line in [false, true] {
+        let mut s = session();
+        // B overlaps A and C by 0.005 pt more than C does: the strip of A and B between them is a
+        // sliver next to the region of A alone, which a click merges without it.
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let b = rect(&mut s, 49.995, 0.0, 50.005, 100.0);
+        let c = rect(&mut s, 50.0, 0.0, 50.0, 100.0);
+        let mut sel = vec![a.0, b.0, c.0];
+        if with_line {
+            sel.push(line(&mut s, (400.0, 400.0), (450.0, 450.0)).0);
+        }
+        s.execute("select.set", &json!({ "ids": sel })).unwrap();
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]]})).unwrap();
+        let merged = NodeId(r["merged"].as_u64().unwrap());
+        assert!((area(&s, merged) - 4999.5).abs() < 0.1, "{}", area(&s, merged));
+        let out = ids(&r);
+        assert_eq!(out.len(), sel.len() + 1, "{r}");
+        // What is left of A, B and C: 5,000.5, 5,000.5 and 5,000.
+        let total: f64 = out.iter().map(|i| area(&s, *i)).sum();
+        assert!((total - 20000.5).abs() < 0.1, "what is left of the back square lost the strip: {total} ({with_line})");
+    }
+}
+
+#[test]
+fn shape_builder_click_keeps_a_sliver_away_from_the_merge_in_the_rest() {
+    let mut s = session();
+    // Three squares over a fourth leave two strips of it 0.005 pt wide; a click merges the left
+    // square's region, next to the first strip only.
+    let a = rect(&mut s, 100.0, 100.0, 150.0, 100.0);
+    let b = rect(&mut s, 100.0, 100.0, 49.9975, 100.0);
+    let c = rect(&mut s, 150.0025, 100.0, 49.995, 100.0);
+    let e = rect(&mut s, 200.0025, 100.0, 49.9975, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0, e.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[125, 150]]})).unwrap();
+    let out = ids(&r);
+    assert_eq!(out.len(), 4, "{r}");
+    let rest = out.iter().copied().find(|i| area(&s, *i) > 9000.0).unwrap();
+    assert_eq!(outline(&node(&s, rest)).0.subpaths.len(), 1, "no hairline gap at the second strip");
+    let total: f64 = out.iter().map(|i| area(&s, *i)).sum();
+    assert!((total - 24999.25).abs() < 0.1, "{total}");
+}
+
+#[test]
+fn shape_builder_click_keeps_a_sliver_away_from_the_merge_in_the_rest_with_a_compound_path() {
+    let mut s = session();
+    // The same with the three squares in one compound path, whose three regions have one coverage.
+    let a = rect(&mut s, 100.0, 100.0, 150.0, 100.0);
+    let b = rect(&mut s, 100.0, 100.0, 49.9975, 100.0);
+    let c = rect(&mut s, 150.0025, 100.0, 49.995, 100.0);
+    let e = rect(&mut s, 200.0025, 100.0, 49.9975, 100.0);
+    s.execute("select.set", &json!({"ids": [b.0, c.0, e.0]})).unwrap();
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, compound.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[125, 150]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 5000.25).abs() < 0.1, "{}", area(&s, merged));
+    let out = ids(&r);
+    assert_eq!(out.len(), 3, "{r}");
+    // What is left of the back square holds the second strip; what is left of the compound path
+    // keeps the gap it had there.
+    let mut rest: Vec<(usize, f64)> =
+        out.iter().copied().filter(|i| *i != merged).map(|i| (outline(&node(&s, i)).0.subpaths.len(), area(&s, i))).collect();
+    rest.sort_by_key(|r| r.0);
+    assert_eq!(rest.iter().map(|r| r.0).collect::<Vec<_>>(), [1, 2], "{rest:?}");
+    assert!((rest[0].1 - 9999.75).abs() < 0.1 && (rest[1].1 - 9999.25).abs() < 0.1, "{rest:?}");
+}
+
+#[test]
 fn shape_builder_click_splits_out_one_region() {
     let mut s = session();
     two(&mut s);
