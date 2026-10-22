@@ -325,6 +325,9 @@ pub fn open_share(app: &mut VectorcraftApp) -> Result<Json, String> {
         None => (String::new(), app.title(uid)),
     };
     app.share.open(id, title);
+    app.share_open_epoch = app.share_open_epoch.wrapping_add(1);
+    app.sharing_doc_uid = Some(uid);
+    app.share_was_open = true;
     Ok(json!({"share": true}))
 }
 
