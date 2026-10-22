@@ -3722,6 +3722,7 @@ effect	Regular	ჩვეულებრივი
 @msg	a page tree node has no kids	გვერდების ხის კვანძს შვილობილები არ აქვს
 @msg	a page's placement is not finite	გვერდის განლაგება სასრული არ არის
 @msg	a preset named `{_1}` exists	პრესეტი სახელით `{_1}` არსებობს
+@msg	a swatch or color group named `{n}` exists	ფერის ნიმუში ან ფერების ჯგუფი სახელით `{n}` არსებობს
 @msg	a slice size must be a positive number of points	ნაჭრის ზომა წერტილების დადებითი რიცხვი უნდა იყოს
 @msg	a stream runs past the end	ნაკადი ბოლოს სცილდება
 @msg	a stream's length is wrong	ნაკადის სიგრძე არასწორია
@@ -5217,6 +5218,8 @@ imageTrace	Outline	კონტური
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის
 	Cancel Export	ექსპორტირების გაუქმება
+@plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
+@msg	Export cancelled	ექსპორტირება გაუქმდა
 	Clear History	ისტორიის გასუფთავება
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
 	Artboard {n} of {total}	სამუშაო დაფა {n} / {total}
@@ -5328,3 +5331,7 @@ axis	Y Axis	Y ღერძი
 	Packaged {n} file(s) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
 	Packaged {n} file(s) {note}	შეფუთულია ფაილი ({n}) {note}
 	{count} file(s) in {folder}. Show the package folder?	ფაილები: {count}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
+	Create PDF layers from top-level layers	PDF-ის ფენების შექმნა ზედა დონის ფენებიდან
+@msg	this kind of brush has no options dialog yet	ამ ტიპის ფუნჯს პარამეტრების დიალოგი ჯერ არ აქვს
+	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	გადმოათრიეთ აქ გრაფიკა, ფერები და ტექსტის სტილები, რომ სხვა დოკუმენტებშიც გამოიყენოთ. ბიბლიოთეკები ამ კომპიუტერზე ინახება — ანგარიში არ არის საჭირო.
+	Choose a filter	ფილტრის არჩევა
