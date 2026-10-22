@@ -394,7 +394,7 @@ fn the_arrow_keys_step_the_focused_ring_or_square() {
 }
 
 /// Screen readers find the ring as a slider from 0 to 360 that their actions move, and the square
-/// with both of its components.
+/// with both of its components, whose actions move its saturation as → and ← do.
 #[test]
 fn screen_readers_read_and_move_the_ring_and_the_square() {
     let mut h = harness(app(json!([0.6, 0.3, 0.3])));
@@ -412,10 +412,26 @@ fn screen_readers_read_and_move_the_ring_and_the_square() {
     h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
     h.run_steps(1);
     assert!(near(hsb(&fill(h.state())), [200.0, 0.5, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
+    let square = h.get_by_label("Saturation and brightness");
+    let node = square.accesskit_node();
+    assert_eq!((node.min_numeric_value(), node.max_numeric_value(), node.numeric_value_step()), (Some(0.0), Some(100.0), Some(1.0)));
+    assert!([Action::Increment, Action::Decrement, Action::SetValue].iter().all(|a| node.data().supports_action(*a)));
+    assert!(node.numeric_value().is_some_and(|v| (v - 50.0).abs() < 1e-3), "{:?}", node.numeric_value());
+    let (target_node, target_tree) = node.locate();
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::Increment, data: None }));
+    h.run_steps(1);
+    assert!(near(hsb(&fill(h.state())), [200.0, 0.51, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
+    let data = Some(ActionData::NumericValue(20.0));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    h.run_steps(1);
+    assert!(near(hsb(&fill(h.state())), [200.0, 0.2, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::Decrement, data: None }));
+    h.run_steps(1);
+    assert!(near(hsb(&fill(h.state())), [200.0, 0.19, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
 }
 
 /// The Color Picker's color field is the same widget: a press focuses it, the arrows step the
-/// components it shows, and screen readers read its name and both components.
+/// components it shows, and screen readers read its name and both components and step the first.
 #[test]
 fn the_color_pickers_field_takes_the_arrow_keys() {
     let mut app = app(json!([0.6, 0.3, 0.3]));
@@ -445,5 +461,10 @@ fn the_color_pickers_field_takes_the_arrow_keys() {
     key(&mut h, egui::Key::ArrowDown, Modifiers::SHIFT);
     let after = picked(&h);
     assert!(near(after, [before[0], before[1] + 0.01, before[2] - 0.1], [1e-3, 1e-4, 1e-4]), "{before:?} → {after:?}");
+    let (target_node, target_tree) = h.get_by_label("Color field").accesskit_node().locate();
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::Increment, data: None }));
+    h.run_steps(1);
+    let stepped = picked(&h);
+    assert!(near(stepped, [after[0], after[1] + 0.01, after[2]], [1e-3, 1e-4, 1e-4]), "{after:?} → {stepped:?}");
     assert!(h.state().ui.dialog.is_some(), "the dialog stays open");
 }

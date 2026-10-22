@@ -375,8 +375,10 @@ fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
 /// the color at a point (0..1 each, y down) and, when `marked`, a ring marks `pos`. A press gives
 /// it the keyboard focus. While it has the focus, → and ← move `pos` across by one unit of
 /// `axes[0]` and ↑ and ↓ move it up and down by one unit of `axes[1]`, marked or not. Screen
-/// readers read `name` and, when `marked`, both components. Returns the clicked or dragged point,
-/// or the point the keys moved to, and the phase.
+/// readers read `name` and, when `marked`, both components. They read it as a slider over
+/// `axes[0]`'s units (0 when not `marked`), which their increment and decrement actions move as →
+/// and ← do and their set-value action sets, as for a [`hue_ring`]. Returns the clicked or dragged
+/// point, or the point the keys or actions moved to, and the phase.
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
@@ -386,6 +388,7 @@ pub fn color_field(
     marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
 ) -> (Option<(f32, f32)>, Live) {
+    use egui::accesskit::{Action, ActionData};
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
@@ -407,17 +410,34 @@ pub fn color_field(
             &[("name1", axes[0].name), ("value1", &value(x, &axes[0])), ("name2", axes[1].name), ("value2", &value(1.0 - y, &axes[1]))],
         )
     });
-    resp.widget_info(|| egui::WidgetInfo {
-        current_text_value: text.clone(),
-        ..egui::WidgetInfo::labeled(egui::WidgetType::Slider, ui.is_enabled(), name)
+    let shown = if marked { f64::from(x.clamp(0.0, 1.0) * axes[0].units) } else { 0.0 };
+    resp.widget_info(|| egui::WidgetInfo { current_text_value: text.clone(), ..egui::WidgetInfo::slider(ui.is_enabled(), shown, name) });
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(f64::from(axes[0].units));
+        node.set_numeric_value_step(1.0);
+        for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+            node.add_action(action);
+        }
     });
     let (dx, dy) = arrow_steps(ui, resp.id, true, true);
+    let (steps, set) = ui.input(|i| {
+        let steps =
+            i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
+        let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v as f32),
+            _ => None,
+        });
+        (steps, set)
+    });
     if let Some((p, phase)) = pointer_phase(&resp) {
         let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
         return (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase);
     }
-    if dx != 0.0 || dy != 0.0 {
-        let moved = ((x + dx / axes[0].units).clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+    let across = set.map_or(x + (dx + steps) / axes[0].units, |v| v / axes[0].units);
+    // Without a marker there is no color yet, so a set value applies even when it equals `x`.
+    if across != x || dy != 0.0 || (set.is_some() && !marked) {
+        let moved = (across.clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
         return (Some(moved), Live::Released);
     }
     (None, Live::Idle)
