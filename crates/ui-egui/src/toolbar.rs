@@ -327,7 +327,8 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser and Shape Builder tools' are
-/// their Tool Options.
+/// their Tool Options. Pressing Enter with a tool does the same, for every tool it can (see
+/// [`crate::shortcuts::handle`]).
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "dimension" => crate::dialogs::dimension::open(app),
