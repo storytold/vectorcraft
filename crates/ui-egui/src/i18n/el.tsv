@@ -5371,3 +5371,6 @@ axis	Y Axis	Άξονας Y
 	Packaged {n} file(s) in {folder}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
 	Packaged {n} file(s) {note}	Συσκευάστηκαν {n} αρχεία {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} αρχεία στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;
+	DWG Import Options	Επιλογές εισαγωγής DWG
+	Place DWG	Τοποθέτηση DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	μη υποστηριζόμενη έκδοση DWG: ανοίξτε ένα DWG αποθηκευμένο ως R13–2018 ή εξαγάγετε ASCII DXF από την εφαρμογή CAD

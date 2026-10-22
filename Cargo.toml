@@ -11,6 +11,10 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
+# Clean-room DWG decoding and its bounded format-neutral bridge (MIT OR Apache-2.0).
+cadkit-core = "=0.3.5"
+cadkit-dwg = "=0.3.5"
+cadkit-dxf = "=0.3.5"
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "d991bf6792f8ade99c51358bf3c1d902c8cd96b5" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "82a24b006eefa036b43c09a67fb9a3fbd17ffe63" }

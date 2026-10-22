@@ -5405,3 +5405,6 @@ axis	Y Axis	Y tengely
 	Packaged {n} file(s) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}
 	Packaged {n} file(s) {note}	Becsomagolt fájlok: {n} {note}
 	{count} file(s) in {folder}. Show the package folder?	Fájlok: {count}, mappa: {folder}. Megnyitod a csomag mappáját?
+	DWG Import Options	DWG-importálás beállításai
+	Place DWG	DWG elhelyezése
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	nem támogatott DWG-verzió: nyisson meg egy R13–2018 formátumban mentett DWG-fájlt, vagy exportáljon ASCII DXF-fájlt a CAD-alkalmazásból

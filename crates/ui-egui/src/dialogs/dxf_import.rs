@@ -22,7 +22,15 @@ use crate::{VectorcraftApp, io, widgets};
 pub const KIND: &str = "dxfImport";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| if d.str("mode") == "place" { tl!("Place DXF") } else { tl!("DXF Import Options") }.into(),
+    heading: |d| {
+        match (d.str("format").as_str(), d.str("mode").as_str()) {
+            ("dwg", "place") => tl!("Place DWG"),
+            ("dwg", _) => tl!("DWG Import Options"),
+            (_, "place") => tl!("Place DXF"),
+            _ => tl!("DXF Import Options"),
+        }
+        .into()
+    },
     body,
     confirm,
     min_width: 560.0,
@@ -35,16 +43,16 @@ const PREVIEW: f32 = 170.0;
 const REMEMBERED: [&str; 4] = ["fit", "scaleLineweights", "center", "mergeLayers"];
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when they
-/// are a DXF drawing; false when they aren't (or can't be read: the loader then says why).
+/// are a DXF or DWG drawing; false when they aren't (or can't be read: the loader then says why).
 pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, place: Option<&Value>) -> bool {
-    if fileio::detect(name, bytes).is_none_or(|f| f.id != "dxf") {
-        return false;
-    }
-    let Ok(info) = vectorcraft_cad::info(bytes) else { return false };
+    let Some(format) = fileio::detect(name, bytes).filter(|f| matches!(f.id, "dxf" | "dwg")) else { return false };
+    let info = if format.id == "dwg" { vectorcraft_cad::dwg::info(bytes) } else { vectorcraft_cad::info(bytes) };
+    let Ok(info) = info else { return false };
     app.ui.dialog_file = Some(DialogFile::new(bytes.to_vec()));
     let mut fields = json!({
         "mode": if place.is_some() { "place" } else { "open" },
         "name": name,
+        "format": format.id,
         "layouts": info.layouts,
         "layout": info.layouts.first().map_or("Model", String::as_str),
         "units": info.units,
@@ -73,14 +81,14 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     true
 }
 
-/// `file.place` with params `p` asks first (true) when they name a `.dxf` drawing and no `dxf`
+/// `file.place` with params `p` asks first (true) when they name a `.dxf` or `.dwg` drawing and no `dxf`
 /// options.
 pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     let named = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::extension);
-    if p.get("dxf").is_some() || named.as_deref() != Some("dxf") {
+    if p.get("dxf").is_some() || !matches!(named.as_deref(), Some("dxf" | "dwg")) {
         return false;
     }
-    let Some((name, bytes, path)) = place_source(app, p, |ext| ext == "dxf") else { return false };
+    let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "dxf" | "dwg")) else { return false };
     offer(app, &name, &bytes, path, Some(p))
 }
 
@@ -134,7 +142,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             show_preview(ui, preview(app, ui.ctx(), d).as_ref(), PREVIEW);
             ui.add_space(6.0);
-            widgets::dim_label(ui, &format!("DXF {} · {}", d.str("version"), d.str("units")));
+            let format = if d.str("format") == "dwg" { "DWG" } else { "DXF" };
+            widgets::dim_label(ui, &format!("{format} {} · {}", d.str("version"), d.str("units")));
         });
         ui.add_space(14.0);
         ui.vertical(|ui| {
@@ -166,7 +175,11 @@ fn preview(app: &mut VectorcraftApp, ctx: &egui::Context, d: &Dialog) -> Option<
     let key = egui::Id::new(("dxf-preview", file.token, layout.as_str()));
     let o = vectorcraft_cad::ImportOptions { layout: Some(layout.clone()), fit: true, ..Default::default() };
     // A layout that can't be read shows an empty preview (and isn't read again).
-    preview_texture(app, ctx, key, "dxf-preview", PREVIEW, || vectorcraft_cad::import(&file.bytes, &o).ok().map(|r| r.document))
+    preview_texture(app, ctx, key, "dxf-preview", PREVIEW, || {
+        let imported =
+            if d.str("format") == "dwg" { vectorcraft_cad::dwg::import(&file.bytes, &o) } else { vectorcraft_cad::import(&file.bytes, &o) };
+        imported.ok().map(|r| r.document)
+    })
 }
 
 #[cfg(test)]
@@ -291,5 +304,23 @@ mod tests {
         p["dxf"] = json!({});
         crate::place::run(&mut app, &p).unwrap();
         assert!(app.ui.dialog.is_none());
+    }
+
+    #[test]
+    fn dwg_dialog_opens_and_places_editable_art() {
+        let bytes = include_bytes!("../../../cad/tests/fixtures/dwg/drawing-2018.dwg");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        io::open_bytes(&mut app, "drawing.dwg", bytes, None).unwrap();
+        assert!(frame(&mut app).contains("DWG Import Options"));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("version"), "2018");
+        set(&mut app, "mergeLayers", json!(true));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.layers.len(), 1);
+        let p = json!({"name": "drawing.dwg", "dataBase64": vectorcraft_format::base64_encode(bytes)});
+        crate::place::run(&mut app, &p).unwrap();
+        assert!(frame(&mut app).contains("Place DWG"));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1);
     }
 }

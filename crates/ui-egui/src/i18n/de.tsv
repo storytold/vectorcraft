@@ -5001,3 +5001,6 @@ axis	Y Axis	Y-Achse
 	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
 	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} Datei(en) in {folder}. Paketordner anzeigen?
+	DWG Import Options	DWG-Importoptionen
+	Place DWG	DWG platzieren
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	nicht unterstützte DWG-Version: Öffnen Sie eine als R13–2018 gespeicherte DWG-Datei oder exportieren Sie ASCII-DXF aus der CAD-Anwendung

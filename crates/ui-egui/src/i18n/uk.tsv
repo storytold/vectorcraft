@@ -5015,3 +5015,6 @@ axis	Y Axis	Вісь Y
 	Packaged {n} file(s) in {folder}	Упаковано файли: {n} {folder}
 	Packaged {n} file(s) {note}	Упаковано файли: {n} {note}
 	{count} file(s) in {folder}. Show the package folder?	файлів: {count} {folder}. Показати папку пакета?
+	DWG Import Options	Параметри імпорту DWG
+	Place DWG	Розмістити DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	непідтримувана версія DWG: відкрийте DWG, збережений у форматі R13–2018, або експортуйте ASCII DXF із програми САПР

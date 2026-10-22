@@ -5015,3 +5015,6 @@ axis	Y Axis	Trục Y
 	Packaged {n} file(s) in {folder}	Đã đóng gói {n} tệp trong {folder}
 	Packaged {n} file(s) {note}	Đã đóng gói {n} tệp {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} tệp trong {folder}. Hiện thư mục gói?
+	DWG Import Options	Tùy chọn nhập DWG
+	Place DWG	Đặt DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	phiên bản DWG không được hỗ trợ: mở DWG được lưu ở định dạng R13–2018 hoặc xuất ASCII DXF từ ứng dụng CAD

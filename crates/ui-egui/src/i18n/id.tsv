@@ -5391,3 +5391,6 @@ axis	Y Axis	Sumbu Y
 	Packaged {n} file(s) in {folder}	Berhasil mengemas {n} file di {folder}
 	Packaged {n} file(s) {note}	Berhasil mengemas {n} file {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} file dalam {folder}. Tampilkan folder paket?
+	DWG Import Options	Opsi impor DWG
+	Place DWG	Tempatkan DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	versi DWG tidak didukung: buka DWG yang disimpan sebagai R13–2018, atau ekspor ASCII DXF dari aplikasi CAD

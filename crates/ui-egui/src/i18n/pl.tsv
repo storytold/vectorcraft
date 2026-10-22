@@ -5271,3 +5271,6 @@ axis	Y Axis	Oś Y
 	Packaged {n} file(s) in {folder}	Spakowane pliki: {n} w {folder}
 	Packaged {n} file(s) {note}	Spakowane pliki: {n} {note}
 	{count} file(s) in {folder}. Show the package folder?	Pliki: {count} w {folder}. Pokazać folder pakietu?
+	DWG Import Options	Opcje importu DWG
+	Place DWG	Umieść DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	nieobsługiwana wersja DWG: otwórz plik DWG zapisany jako R13–2018 lub wyeksportuj ASCII DXF z aplikacji CAD

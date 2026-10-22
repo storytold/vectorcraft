@@ -5450,3 +5450,6 @@ axis	Y Axis	Y-akseli
 	Packaged {n} file(s) in {folder}	Paketoitiin {n} tiedosto(a) kansioon {folder}
 	Packaged {n} file(s) {note}	Paketoitiin {n} tiedosto(a) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} tiedosto(a) kansiossa {folder}. Näytetäänkö pakettikansio?
+	DWG Import Options	DWG-tuonnin asetukset
+	Place DWG	Sijoita DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	DWG-versiota ei tueta: avaa R13–2018-muodossa tallennettu DWG tai vie ASCII DXF CAD-sovelluksesta

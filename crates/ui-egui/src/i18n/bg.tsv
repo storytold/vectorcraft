@@ -5375,3 +5375,6 @@ axis	Y Axis	Y ос
 	Packaged {n} file(s) in {folder}	Пакетирани са {n} файла в {folder}
 	Packaged {n} file(s) {note}	Пакетирани са {n} файла {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} файл(а) в {folder}. Показване на папката на пакета?
+	DWG Import Options	Опции за импортиране на DWG
+	Place DWG	Вмъкване на DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	неподдържана версия на DWG: отворете DWG, записан като R13–2018, или експортирайте ASCII DXF от CAD приложението

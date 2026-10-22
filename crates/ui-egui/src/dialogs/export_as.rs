@@ -22,7 +22,7 @@ pub(super) const SPEC: DialogSpec =
 /// The built-in formats Export As writes (the native format and `.ai` are Save As's).
 static BUILT_IN: LazyLock<Vec<&'static Format>> =
     LazyLock::new(|| fileio::FORMATS.iter().filter(|f| f.write && !matches!(f.id, "vectorcraft" | "ai")).collect());
-/// Formats listed after them that can't be written (`fileio::unsupported` ids), greyed out.
+/// Formats listed after them that can't be written (read-only format ids), greyed out.
 const UNAVAILABLE: [(&str, &str); 1] = [("dwg", "DWG (use DXF)")];
 
 /// The formats Export As writes: the built-in ones, then those of the installed exporter plug-ins.
@@ -39,7 +39,7 @@ fn from_plugin(f: &Format) -> bool {
 fn unavailable(d: &Dialog) -> Option<(&'static str, &'static str)> {
     let id = d.str("format");
     let (_, label) = UNAVAILABLE.iter().find(|u| u.0 == id)?;
-    Some((label, fileio::unsupported(&id)?.hint))
+    Some((label, fileio::dxf::DWG_EXPORT_HINT))
 }
 
 /// Open the dialog on `format` (an id or extension, default PNG); `p` may preset `useArtboards`

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "DXF Info",
         [],
         None,
-        "{path} or {name?, dataBase64} what a DXF drawing holds → {version (2018, R12…), units (its drawing unit: Millimeters, Inches, Unitless…), layouts: [\"Model\", paper layouts…], layers: [name…], unit, scale (the default ratio: 1 unit = scale drawing units, the drawing at 1:1)}; a binary DXF or a DWG answers an error saying to save it as ASCII DXF",
+        "{path} or {name?, dataBase64} what a DXF or DWG drawing holds → {version (2018, R12…), units (its drawing unit: Millimeters, Inches, Unitless…), layouts: [\"Model\", paper layouts…], layers: [name…], unit, scale (the default ratio: 1 unit = scale drawing units, the drawing at 1:1)}; DWG R13–2018 is supported; binary DXF and older DWG versions suggest ASCII DXF",
         always,
         dxf_info
     )]
@@ -80,7 +80,7 @@ const INFO: &str = "document.dxfInfo";
 
 fn dxf_info(_: &mut Session, p: &Value) -> Result<Value> {
     let bytes = source(p, INFO)?.bytes;
-    let i = vectorcraft_cad::info(&bytes).map_err(err)?;
+    let i = if vectorcraft_cad::dwg::is_dwg(&bytes) { vectorcraft_cad::dwg::info(&bytes) } else { vectorcraft_cad::info(&bytes) }.map_err(err)?;
     Ok(json!({
         "version": i.version,
         "units": i.units,

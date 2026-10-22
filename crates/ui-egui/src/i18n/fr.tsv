@@ -5418,3 +5418,6 @@ axis	Y Axis	Axe Y
 	Packaged {n} file(s) in {folder}	{n} fichier(s) assemblé(s) dans {folder}
 	Packaged {n} file(s) {note}	{n} fichier(s) assemblé(s) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} fichier(s) dans {folder}. Afficher le dossier de l’assemblage ?
+	DWG Import Options	Options d’importation DWG
+	Place DWG	Importer un fichier DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	version DWG non prise en charge : ouvrez un DWG enregistré au format R13–2018 ou exportez un DXF ASCII depuis l’application de CAO

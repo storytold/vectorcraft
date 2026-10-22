@@ -4998,3 +4998,6 @@ axis	Y Axis	Y축
 	Packaged {n} file(s) in {folder}	{folder}에 파일 {n}개를 패키지했습니다
 	Packaged {n} file(s) {note}	파일 {n}개를 패키지했습니다 {note}
 	{count} file(s) in {folder}. Show the package folder?	{folder}에 파일 {count}개. 패키지 폴더를 표시하시겠습니까?
+	DWG Import Options	DWG 가져오기 옵션
+	Place DWG	DWG 가져오기
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	지원하지 않는 DWG 버전입니다. R13–2018 형식으로 저장한 DWG를 열거나 CAD 앱에서 ASCII DXF로 내보내세요

@@ -3,12 +3,15 @@ name = "vectorcraft-cad"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12 to 2018)"
+description = "VectorCraft CAD interchange: ASCII DXF reading/writing and DWG import"
 
 [lints]
 workspace = true
 
 [dependencies]
+cadkit-core.workspace = true
+cadkit-dwg.workspace = true
+cadkit-dxf.workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

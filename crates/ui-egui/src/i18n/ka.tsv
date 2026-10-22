@@ -5328,3 +5328,6 @@ axis	Y Axis	Y ღერძი
 	Packaged {n} file(s) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
 	Packaged {n} file(s) {note}	შეფუთულია ფაილი ({n}) {note}
 	{count} file(s) in {folder}. Show the package folder?	ფაილები: {count}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
+	DWG Import Options	DWG-ის იმპორტის პარამეტრები
+	Place DWG	DWG-ის განთავსება
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	DWG-ის ვერსია არ არის მხარდაჭერილი: გახსენით R13–2018 ფორმატში შენახული DWG ან CAD აპლიკაციიდან გაიტანეთ ASCII DXF

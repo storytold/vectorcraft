@@ -5383,3 +5383,6 @@ axis	Y Axis	Y ekseni
 	Packaged {n} file(s) in {folder}	{folder} biçiminde paketlenmiş {n} dosyası/dosyaları
 	Packaged {n} file(s) {note}	Paketlenmiş {n} dosyası/dosyaları {note}
 	{count} file(s) in {folder}. Show the package folder?	{folder} içindeki {count} dosyası/dosyaları. Paket klasörü gösterilsin mi?
+	DWG Import Options	DWG İçe Aktarma Seçenekleri
+	Place DWG	DWG'yi yerleştir
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	desteklenmeyen DWG sürümü: R13–2018 olarak kaydedilmiş bir DWG açın veya CAD uygulamasından ASCII DXF dışa aktarın

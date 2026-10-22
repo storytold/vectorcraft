@@ -95,6 +95,12 @@
       <key>LSHandlerRank</key><string>Alternate</string>
     </dict>
     <dict>
+      <key>CFBundleTypeName</key><string>DWG</string>
+      <key>CFBundleTypeExtensions</key><array><string>dwg</string></array>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+    </dict>
+    <dict>
       <key>CFBundleTypeName</key><string>DXF</string>
       <key>CFBundleTypeExtensions</key><array><string>dxf</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>

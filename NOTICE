@@ -24,6 +24,10 @@ Rust dependencies (vello_cpu, kurbo, peniko, skrifa, harfrust, usvg, linesweeper
 fetched through crates.io under their own permissive licenses (mostly MIT and/or Apache-2.0; also
 BSD, ISC, Zlib, BSL-1.0 and Unicode-3.0).
 
+DWG reading uses cadkit-core, cadkit-dwg and cadkit-dxf 0.3.5 (TNYCL, MIT OR Apache-2.0),
+fetched from crates.io. The small original DWG test drawings are MIT OR Apache-2.0;
+they were generated with acadrust 0.6.6 (MPL-2.0), which is not shipped or linked by VectorCraft.
+
 JPEG export uses the jpeg-encoder crate (MIT OR Apache-2.0, and the IJG License): this software is
 based in part on the work of the Independent JPEG Group.
 

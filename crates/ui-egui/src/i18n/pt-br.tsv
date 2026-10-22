@@ -5336,3 +5336,6 @@ axis	Y Axis	Eixo Y
 	Packaged {n} file(s) in {folder}	{n} arquivo(s) empacotado(s) em {folder}
 	Packaged {n} file(s) {note}	{n} arquivo(s) empacotado(s) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} arquivo(s) em {folder}. Mostrar a pasta do pacote?
+	DWG Import Options	Opções de Importação DWG
+	Place DWG	Colocar DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	versão DWG não compatível: abra um DWG salvo como R13–2018 ou exporte ASCII DXF do aplicativo CAD

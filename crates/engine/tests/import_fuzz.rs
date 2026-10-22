@@ -4046,3 +4046,40 @@ fn ai_cut_inside_an_array_or_dictionary_opens_without_panicking() {
         survive("ai cut inside an array or dictionary", || vectorcraft_engine::cmd::fileio::load("saved.ai", &b).ok().map(|l| l.doc)).unwrap();
     }
 }
+
+// DWG containers and compressed sections use explicit byte/object/vertex budgets.
+fn survive_dwg(bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive("DWG", || {
+        let mut session = vectorcraft_engine::Session::new();
+        let p = json!({"name": "input.dwg", "dataBase64": vectorcraft_format::base64_encode(bytes), "dxf": {"fit": true}});
+        let _ = no_panic(session.execute("document.dxfInfo", &p));
+        no_panic(session.execute("document.open", &p)).ok()?;
+        let _ = no_panic(session.execute("file.place", &p));
+        Some((*session.doc().ok()?.doc).clone())
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn dwg_random_headers_never_panic(version in 0usize..8, tail in prop::collection::vec(any::<u8>(), 0..1024)) {
+        let magic = [b"AC1012", b"AC1014", b"AC1015", b"AC1018", b"AC1021", b"AC1024", b"AC1027", b"AC1032"][version];
+        let mut bytes = magic.to_vec();
+        bytes.extend(tail);
+        survive_dwg(&bytes)?;
+    }
+
+    #[test]
+    fn dwg_mutated_original_drawings_never_panic(modern in any::<bool>(), cut in any::<usize>(), flip in any::<usize>(), value in any::<u8>()) {
+        let sample: &[u8] = if modern {
+            include_bytes!("../../cad/tests/fixtures/dwg/drawing-2018.dwg")
+        } else {
+            include_bytes!("../../cad/tests/fixtures/dwg/drawing-2000.dwg")
+        };
+        let mut bytes = sample.to_vec();
+        bytes[flip % sample.len()] ^= value;
+        if cut % 2 == 0 { bytes.truncate(cut % sample.len()); }
+        survive_dwg(&bytes)?;
+    }
+}

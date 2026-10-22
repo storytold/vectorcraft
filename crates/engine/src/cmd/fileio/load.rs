@@ -88,6 +88,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
         // .ai and .ait files are PDF inside; the extension keeps the template meaning.
         return by_name.filter(|f| matches!(f.id, "ai" | "ait")).or_else(|| format("pdf"));
     }
+    if vectorcraft_cad::dwg::is_dwg(bytes) {
+        return format("dwg");
+    }
     if vectorcraft_cad::is_dxf(bytes) {
         return format("dxf");
     }
@@ -291,6 +294,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 }
                 Err(e) => Err(e),
             })?
+        }
+        "dwg" => {
+            let r = vectorcraft_cad::dwg::import(bytes, &opts.dxf).map_err(err)?;
+            (r.document, r.warnings, false)
         }
         "dxf" => {
             let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;

@@ -5434,3 +5434,6 @@ axis	Y Axis	Y-as
 	Packaged {n} file(s) in {folder}	{n} bestand(en) verpakt in {folder}
 	Packaged {n} file(s) {note}	{n} bestand(en) verpakt {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} bestand(en) in {folder}. De pakketmap openen?
+	DWG Import Options	DWG-importopties
+	Place DWG	DWG plaatsen
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	niet-ondersteunde DWG-versie: open een DWG opgeslagen als R13–2018 of exporteer ASCII DXF vanuit de CAD-app

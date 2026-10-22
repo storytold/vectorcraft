@@ -5375,3 +5375,6 @@ axis	Y Axis	Y-axel
 	Packaged {n} file(s) in {folder}	Paketerade {n} fil(er) i {folder}
 	Packaged {n} file(s) {note}	Paketerade {n} fil(er) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} fil(er) i {folder}. Visa paketmappen?
+	DWG Import Options	Importalternativ för DWG
+	Place DWG	Placera DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	DWG-versionen stöds inte: öppna en DWG sparad som R13–2018 eller exportera ASCII DXF från CAD-programmet

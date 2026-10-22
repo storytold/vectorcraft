@@ -5419,3 +5419,6 @@ axis	Y Axis	osa Y
 	Packaged {n} file(s) in {folder}	Zabaleno souborů: {n} do {folder}
 	Packaged {n} file(s) {note}	Zabaleno souborů: {n} {note}
 	{count} file(s) in {folder}. Show the package folder?	Souborů: {count} v {folder}. Zobrazit složku balíčku?
+	DWG Import Options	Možnosti importu DWG
+	Place DWG	Umístit DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	nepodporovaná verze DWG: otevřete DWG uložený jako R13–2018 nebo z aplikace CAD exportujte ASCII DXF

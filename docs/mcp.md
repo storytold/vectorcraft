@@ -3265,16 +3265,15 @@ raster effects, clipping) comes back in `warnings`. In R13 and later, an image t
 no linked file, and `warnings` carries "an image couldn't be decoded and is missing from the picture" once for all such
 images.
 
-DWG can't be written (no openly licensed writer exists): `document.formats` lists it under `unsupported` with that
-hint, and exporting to it answers with the hint to export DXF. PICT files are not supported either and say so when
-opened.
+DWG can be read but not written: `document.formats` lists it under `readable`, and exporting to it answers with
+the hint to export DXF. PICT files are not supported and say so when opened.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/plan.dxf","version":"2013","unit":"mm","scale":10,"preserve":"editability"}}}
 {"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
 ```
 
-## DXF import
+## DXF and DWG import
 
 `document.open` reads ASCII DXF drawings of any version (by content or the `.dxf` extension), and `file.place`
 places one as a group. Both take `dxf: {layout, unit, scale, fit, fitTo, scaleLineweights, center, mergeLayers}`
@@ -3290,7 +3289,11 @@ hatches filled, pattern hatches as their boundaries), text and multiline text po
 (one per look when their art takes colour "by block"), anonymous blocks such as dimensions groups. Indexed colours
 (7 is black on paper), true colour, lineweights (`scaleLineweights` scales them with the art), linetypes and
 transparency resolve through layers and blocks. What is left out (viewports, images, meshes, unknown entities) is
-listed in `warnings`. Binary DXF and DWG files answer an error saying to save them as ASCII DXF.
+listed in `warnings`. Binary DXF files answer an error saying to save them as ASCII DXF.
+
+DWG R13–2018 drawings use the same commands and `dxf` options. `document.dxfInfo` reports the source DWG
+version, units, layouts and layers. Decoding and conversion losses are included in `warnings`; unsupported
+DWG versions suggest ASCII DXF. See [DWG import limits and validation](file-format-parity.md#dwg-import).
 
 ```json
 {"name":"run_command","arguments":{"command":"document.dxfInfo","params":{"path":"/tmp/plan.dxf"}}}

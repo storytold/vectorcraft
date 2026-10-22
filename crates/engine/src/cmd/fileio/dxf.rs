@@ -70,6 +70,9 @@ pub(super) const OPTIONS: &[FormatOption] = &[
     FormatOption { name: "selectedOnly", ty: "boolean", default: "false", description: "only the selected objects, in their layers" },
 ];
 
+/// DWG imports are editable, but export still uses DXF.
+pub const DWG_EXPORT_HINT: &str = "DWG export is not available: export DXF instead, which CAD apps open";
+
 /// A format that can be neither opened nor written, and what to use instead.
 #[derive(Clone, Copy, Debug)]
 pub struct Unsupported {
@@ -80,14 +83,8 @@ pub struct Unsupported {
     pub hint: &'static str,
 }
 
-/// Formats people ask for that VectorCraft doesn't read or write. Append-only.
+/// Formats people ask for that VectorCraft does not yet read or write.
 pub const UNSUPPORTED: &[Unsupported] = &[
-    Unsupported {
-        id: "dwg",
-        label: "DWG",
-        extensions: &["dwg"],
-        hint: "DWG is not available (no openly licensed writer exists): export DXF instead, which CAD apps open",
-    },
     Unsupported {
         id: "pict",
         label: "PICT",

@@ -5035,3 +5035,6 @@ axis	Y Axis	Asse Y
 	Packaged {n} file(s) in {folder}	Pacchetto creato con {n} file in {folder}
 	Packaged {n} file(s) {note}	Pacchetto creato con {n} file {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} file in {folder}. Vuoi mostrare la cartella del pacchetto?
+	DWG Import Options	Opzioni di importazione DWG
+	Place DWG	Inserisci DWG
+@msg	unsupported DWG version: open a DWG saved as R13–2018, or export ASCII DXF from the CAD app	versione DWG non supportata: aprire un DWG salvato come R13–2018 oppure esportare un DXF ASCII dall’applicazione CAD
