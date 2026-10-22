@@ -13,7 +13,8 @@
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
-//! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
+//! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel` (setting a field the
+//!   dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`])
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?}`: render an artboard headlessly (`artboard`: its
@@ -394,6 +395,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.dialog.set" => match app.ui.dialog.as_mut() {
             Some(d) => {
                 let Some(f) = s("field") else { return err("missing `field`") };
+                if !crate::dialogs::accepts_field(d, f) {
+                    let names = crate::dialogs::field_names(d).join(", ");
+                    return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
+                }
                 d.fields.insert(f.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
                 ok(serde_json::to_value(&*d).unwrap_or_default())
             }
@@ -529,6 +534,7 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::{ControlRequest, Outcome, handle};
+    use crate::state::Dialog;
     use crate::{Services, VectorcraftApp};
 
     fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
@@ -712,5 +718,90 @@ mod tests {
         };
         assert_eq!(click(&mut app), Some(b), "a click on a selected object makes it the key");
         assert_eq!(click(&mut app), Some(Value::Null), "a click on the key again lets it go");
+    }
+
+    /// `ui.dialog.set` of a field the open dialog does not have is an error that lists its fields,
+    /// and the dialog stays as it was. Fields a dialog may not hold yet are still set: `discard`
+    /// with a discard button, `preview` with a live preview, `__` fields and the spec's `inputs`.
+    #[test]
+    fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        let fields = json!({"index": 0, "uid": 1, "name": "Untitled-1", "then": "close"});
+        app.ui.dialog = Some(Dialog::new(crate::unsaved::KIND, fields.clone()));
+        let r = input_request(&mut app, "ui.dialog.set", json!({"field": "discrad", "value": true}));
+        assert_eq!(r["ok"], false, "{r}");
+        assert_eq!(r["error"], "the `saveChanges` dialog has no field `discrad`; its fields: discard, index, name, then, uid");
+        assert_eq!(app.ui.dialog.as_ref().map(|d| Value::Object(d.fields.clone())), Some(fields));
+        for field in ["name", "discard", "__note"] {
+            let r = input_request(&mut app, "ui.dialog.set", json!({"field": field, "value": true}));
+            assert_eq!(r["ok"], true, "{field}: {r}");
+        }
+        // Move opens without Copy, which its checkbox adds once clicked; Scale's options and the
+        // reference point belong to the other transform dialogs.
+        let set = |app: &mut VectorcraftApp, kind: &str, fields: Value, cases: &[(&str, bool)]| {
+            app.ui.dialog = Some(Dialog::new(kind, fields));
+            for (field, ok) in cases {
+                let r = input_request(app, "ui.dialog.set", json!({"field": field, "value": true}));
+                assert_eq!(r["ok"], *ok, "{kind} {field}: {r}");
+            }
+        };
+        let moved =
+            [("copy", true), ("preview", true), ("distance", true), ("discard", false), ("copies", false), ("corners", false), ("origin", false)];
+        set(&mut app, "move", json!({"dx": "0 pt", "dy": "0 pt"}), &moved);
+        set(
+            &mut app,
+            "scale",
+            json!({"sx": 100, "sy": 100, "uniform": true}),
+            &[("corners", true), ("strokes", true), ("origin", true), ("distance", false)],
+        );
+        set(&mut app, "rotate", json!({"angle": 0}), &[("origin", true), ("objects", true), ("corners", false)]);
+        set(&mut app, "rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}), &[("radius", true), ("sides", false)]);
+        set(&mut app, "ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}), &[("radius", false)]);
+        // Corners that differ in kind and radius open without either.
+        let mixed = json!({"id": 1, "corners": [0, 1, 2, 3], "relativeRadii": false});
+        set(&mut app, vectorcraft_tools::corners::DIALOG, mixed, &[("kind", true), ("radius", true), ("radii", false)]);
+        set(&mut app, "saveForOffice", json!({"ppi": 150, "transparent": false, "artboard": 0}), &[("path", true)]);
+        set(&mut app, "brushOptions", json!({"name": "Dots"}), &[("tips", true), ("tip", false)]);
+        set(&mut app, "justification", json!({"wordDesired": 100}), &[("wordMin", true), ("singleWord", true), ("wordMid", false)]);
+        set(&mut app, "hyphenation", json!({"hyphenate": true}), &[("afterFirst", true), ("hyphenationZone", true), ("afterfirst", false)]);
+        set(&mut app, "effectGallery", json!({"stack": []}), &[("browseEffect", true), ("browseParams", true), ("browse", false)]);
+        // A new artboard's dialog opens without a background color or display marks.
+        let new_board = json!({"new": true, "name": "Artboard 2", "x": 0, "y": 0, "width": 10, "height": 10});
+        let marks = [
+            ("color", true),
+            ("showCenterMark", true),
+            ("showCrossHairs", true),
+            ("showVideoSafeAreas", true),
+            ("videoRulerPixelAspectRatio", true),
+            ("showCenterMarks", false),
+        ];
+        set(&mut app, "artboardOptions", new_board, &marks);
+        // Glass and Texturizer take the texture Load Texture… reads; other effects don't.
+        set(&mut app, "effect", json!({"__effect": "distort.glass"}), &[("textureImage", true)]);
+        set(&mut app, "effect", json!({"__effect": "blur.gaussian"}), &[("textureImage", false)]);
+        // The generic dialog takes every parameter of its command.
+        set(&mut app, "command", json!({"__command": "shape.rectangle", "x": 0, "y": 0}), &[("width", true), ("widht", false)]);
+        // Transparency Flattener Presets holds the selected preset's options before its first frame.
+        crate::dialogs::flattener_presets::open(&mut app, None);
+        let r = input_request(&mut app, "ui.dialog.set", json!({"field": "textToOutlines", "value": true}));
+        assert_eq!(r["ok"], true, "{r}");
+        // Edit Selection takes `deleted<i>` for each of its rows only.
+        app.run("file.new", json!({})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        for name in ["A", "B"] {
+            app.run("select.save", json!({ "name": name })).unwrap();
+        }
+        crate::dialogs::edit_selection::open(&mut app).unwrap();
+        for (field, ok) in [("deleted1", true), ("deleted", false), ("deletedx", false), ("deleted01", false), ("deleted2", false)] {
+            let r = input_request(&mut app, "ui.dialog.set", json!({"field": field, "value": true}));
+            assert_eq!(r["ok"], ok, "{field}: {r}");
+        }
+        let r = input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}));
+        assert_eq!(
+            r["error"],
+            "the `editSelection` dialog has no field `name`; its fields: count, deleted0, deleted1, name0, name1, orig0, orig1, selected"
+        );
+        app.ui.dialog = None;
+        assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}))["error"], "no dialog open");
     }
 }

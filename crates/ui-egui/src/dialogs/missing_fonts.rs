@@ -37,6 +37,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     discard: Some("Find Fonts"),
     min_width: 440.0,
     max_width: Some(540.0),
+    inputs: |_| &["searchFolder"],
     ..DialogSpec::FORM
 };
 

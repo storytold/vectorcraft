@@ -27,7 +27,8 @@ use crate::{VectorcraftApp, io, widgets};
 /// Dialog kind.
 pub const KIND: &str = "saveOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 380.0, ok_enabled: Some(can_save), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading, body, confirm, min_width: 380.0, ok_enabled: Some(can_save), inputs: |_| &["all", "boards"], ..DialogSpec::FORM };
 
 /// OK saves a legacy `.ai` file only with an artboard checked.
 fn can_save(app: &VectorcraftApp, d: &Dialog) -> bool {

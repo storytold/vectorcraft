@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
     min_width: PREVIEW_W + GAP + SIDE_W,
+    inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
 };
 

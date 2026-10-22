@@ -23,7 +23,15 @@ use crate::panels::properties::ArtboardSizeChoice;
 use crate::panels::transform::{artboard_rect, reference_index, reference_locator};
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Artboard Options").into(), body, confirm, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Artboard Options").into(),
+    body,
+    confirm,
+    // A new artboard's dialog opens without these; its swatch, checkboxes and Video Ruler Pixel
+    // Aspect Ratio field add them.
+    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT],
+    ..DialogSpec::FORM
+};
 
 /// Where the fields put the artboard: `x` and `y` are its top-left corner in document points, as
 /// `artboard.setProps` and `artboard.new` take them.

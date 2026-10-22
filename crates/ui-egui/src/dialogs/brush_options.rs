@@ -30,7 +30,7 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Brush Options.
 pub const KIND: &str = "brushOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm: ok, min_width: 440.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm: ok, min_width: 440.0, inputs: |_| &["tips"], ..DialogSpec::FORM };
 
 /// The field of a Brush Options dialog that New Brush opened.
 const CREATE: &str = "__create";

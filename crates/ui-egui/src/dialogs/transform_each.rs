@@ -21,8 +21,15 @@ pub const KIND: &str = "transformEach";
 
 const CMD: &str = "object.transformEach";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Transform Each").into(), body, confirm, preview: true, min_width: 360.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Transform Each").into(),
+    body,
+    confirm,
+    preview: true,
+    min_width: 360.0,
+    inputs: |_| &["objects", "patterns", "corners", "strokes"],
+    ..DialogSpec::FORM
+};
 
 /// The fields a fresh dialog starts with.
 pub fn fields() -> Value {

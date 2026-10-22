@@ -19,6 +19,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("OK"),
     min_width: 380.0,
     max_width: Some(560.0),
+    inputs: |_| &["path", "showCode"],
     ..DialogSpec::FORM
 };
 

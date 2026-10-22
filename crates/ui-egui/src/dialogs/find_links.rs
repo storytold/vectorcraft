@@ -39,6 +39,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("Relink"),
     min_width: 440.0,
     max_width: Some(560.0),
+    inputs: |_| &["searchFolder"],
     ..DialogSpec::FORM
 };
 

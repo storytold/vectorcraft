@@ -19,8 +19,15 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         false
     },
     confirm,
+    passes: takes,
     ..DialogSpec::FORM
 };
+
+/// Does the dialog's command take parameter `key` (its params description names it)?
+fn takes(d: &Dialog, key: &str) -> bool {
+    let id = d.str("__command");
+    vectorcraft_engine::find_command(&id).is_some_and(|c| vectorcraft_engine::check_keys(&id, c.params, &serde_json::json!({ key: null })).is_ok())
+}
 
 /// The parameters of the commands this dialog edits that are distances.
 fn lengths(command: &str) -> &'static [&'static str] {
