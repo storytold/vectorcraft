@@ -103,7 +103,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let color = tgt.color();
     let cms = cms::active();
     // With None, a pattern or a "?" proxy the wheel shows the last solid color without markers,
-    // and a click applies the picked color.
+    // and a click, an arrow key or a screen reader's action applies the picked color.
     let hsb = match (color, pstate::<Option<(Owner, [f32; 3])>>(ui.ctx(), MEMORY)) {
         (Some(c), Some((owner, hsb))) if owner == Owner::of(app, &tgt, c) => hsb,
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
@@ -116,15 +116,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             super::proxy(app, ui, 40.0);
         });
         let size = ui.available_width().min(MAX_WHEEL);
-        let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, marked.then_some(hsb[0]));
+        let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, hsb[0], marked);
         let square = widgets::ring_square(ring.rect);
         let mut field_ui = ui.new_child(UiBuilder::new().id_salt("color-wheel-square").max_rect(square));
         let axes =
             [FieldAxis { name: tl!("Saturation"), units: 100.0, suffix: "%" }, FieldAxis { name: tl!("Brightness"), units: 100.0, suffix: "%" }];
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
-        let pos = marked.then_some((hsb[1], 1.0 - hsb[2]));
         let name = tl!("Saturation and brightness");
-        let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), pos, &at);
+        let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
         if let Some((h, phase)) = ring.hue {
             pick = Some(([h, hsb[1], hsb[2]], phase));
         }

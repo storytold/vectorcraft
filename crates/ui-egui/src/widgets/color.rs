@@ -372,17 +372,18 @@ fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
 }
 
 /// A 2D color field (the Color Picker's, the Color Wheel panel's square): `color_at(x, y)` gives
-/// the color at a point (0..1 each, y down) and a ring marks `pos` (no ring for `None`). A press
-/// gives it the keyboard focus. While it has the focus, → and ← move the point across by one unit
-/// of `axes[0]` and ↑ and ↓ move it up and down by one unit of `axes[1]`. Screen readers read
-/// `name` and both components. Returns the clicked or dragged point, or the point the keys moved
-/// to, and the phase.
+/// the color at a point (0..1 each, y down) and, when `marked`, a ring marks `pos`. A press gives
+/// it the keyboard focus. While it has the focus, → and ← move `pos` across by one unit of
+/// `axes[0]` and ↑ and ↓ move it up and down by one unit of `axes[1]`, marked or not. Screen
+/// readers read `name` and, when `marked`, both components. Returns the clicked or dragged point,
+/// or the point the keys moved to, and the phase.
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
     (name, axes): (&str, [FieldAxis<'_>; 2]),
     size: Vec2,
-    pos: Option<(f32, f32)>,
+    pos: (f32, f32),
+    marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
 ) -> (Option<(f32, f32)>, Live) {
     let t = Tokens::get(ui.ctx());
@@ -393,13 +394,14 @@ pub fn color_field(
     painter.add(color_mesh(rect, (32, 32), color_at));
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     focus_outline(ui, &resp, rect);
-    if let Some((x, y)) = pos {
+    let (x, y) = pos;
+    if marked {
         let c = pos2(rect.left() + x.clamp(0.0, 1.0) * rect.width(), rect.top() + y.clamp(0.0, 1.0) * rect.height());
         painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
         painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
     }
     let value = |v: f32, a: &FieldAxis| format!("{}{}", (v.clamp(0.0, 1.0) * a.units).round(), a.suffix);
-    let text = pos.map(|(x, y)| {
+    let text = marked.then(|| {
         crate::i18n::fmt(
             tl!("{name1} {value1}, {name2} {value2}"),
             &[("name1", axes[0].name), ("value1", &value(x, &axes[0])), ("name2", axes[1].name), ("value2", &value(1.0 - y, &axes[1]))],
@@ -414,13 +416,11 @@ pub fn color_field(
         let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
         return (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase);
     }
-    match pos {
-        Some((x, y)) if dx != 0.0 || dy != 0.0 => {
-            let moved = ((x + dx / axes[0].units).clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
-            (Some(moved), Live::Released)
-        }
-        _ => (None, Live::Idle),
+    if dx != 0.0 || dy != 0.0 {
+        let moved = ((x + dx / axes[0].units).clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+        return (Some(moved), Live::Released);
     }
+    (None, Live::Idle)
 }
 
 /// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
@@ -743,14 +743,15 @@ pub struct RingResponse {
 }
 
 /// A hue ring `size` across: a band of hues drawn [`RING_MARGIN`] inside its rect, the hue
-/// increasing counterclockwise from 3 o'clock as on [`harmony_wheel`], with a marker at `hue` (none
-/// for `None`). A press on the band, or up to [`RING_MARGIN`] outside it, picks the hue under the
+/// increasing counterclockwise from 3 o'clock as on [`harmony_wheel`], with a marker at `hue` when
+/// `marked`. A press on the band, or up to [`RING_MARGIN`] outside it, picks the hue under the
 /// pointer (with Shift, in 45° steps) and gives the ring the keyboard focus. A press inside the
 /// band's inner edge comes back as `inner`, and a press in the rect's corners does nothing. The part
-/// a press starts on keeps the whole drag. While the ring has the focus, → and ↑ raise the hue by
-/// 1° and ← and ↓ lower it ([`STEPS`]), and 360° wraps to 0°. Screen readers read it as a slider
-/// named `name` from 0 to 360, which their increment, decrement and set-value actions move.
-pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hue: Option<f32>) -> RingResponse {
+/// a press starts on keeps the whole drag. While the ring has the focus, → and ↑ raise `hue` by
+/// 1° and ← and ↓ lower it ([`STEPS`]), marked or not, and 360° wraps to 0°. Screen readers read it
+/// as a slider named `name` from 0 to 360 (0 when not `marked`), which their increment, decrement
+/// and set-value actions move.
+pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hue: f32, marked: bool) -> RingResponse {
     use egui::accesskit::{Action, ActionData};
     const SEG: u32 = 72;
     let t = Tokens::get(ui.ctx());
@@ -778,12 +779,12 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
     if ui.memory(|m| m.has_focus(resp.id)) {
         painter.circle_stroke(c, outer + 2.0, Stroke::new(1.0, t.accent));
     }
-    if let Some(h) = hue {
-        let m = wheel_pos(c, (inner + outer) / 2.0, h, 1.0);
+    if marked {
+        let m = wheel_pos(c, (inner + outer) / 2.0, hue, 1.0);
         painter.circle_stroke(m, RING_WIDTH / 2.0 - 1.0, Stroke::new(1.5, Color32::WHITE));
         painter.circle_stroke(m, RING_WIDTH / 2.0, Stroke::new(1.0, Color32::BLACK));
     }
-    resp.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), f64::from(hue.unwrap_or(0.0)), name));
+    resp.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), if marked { f64::from(hue) } else { 0.0 }, name));
     ui.ctx().accesskit_node_builder(resp.id, |node| {
         node.set_min_numeric_value(0.0);
         node.set_max_numeric_value(360.0);
@@ -839,9 +840,10 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
             RingPart::Inner => out.inner = Some((p, phase)),
             RingPart::Corner => {}
         }
-    } else if let Some(h) = hue {
-        let new = set.unwrap_or(h + steps);
-        if new != h {
+    } else {
+        let new = set.unwrap_or(hue + steps);
+        // Without a marker there is no color yet, so a set value applies even when it equals `hue`.
+        if new != hue || (set.is_some() && !marked) {
             out.hue = Some((new.rem_euclid(360.0), Live::Released));
         }
     }

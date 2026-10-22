@@ -236,6 +236,32 @@ fn with_a_none_fill_the_wheel_has_no_marker_and_a_click_sets_the_fill() {
     assert!(near(hsb(&c), [hsb(&h.state().session.last_solid)[0], 0.5, 0.5], [0.5, 0.01, 0.01]), "{:?}", hsb(&c));
 }
 
+/// With None the ring and the square still take a screen reader's actions and the arrow keys. They
+/// start from the last solid color the wheel shows, and the result sets the fill.
+#[test]
+fn with_a_none_fill_screen_readers_and_the_arrow_keys_set_the_fill() {
+    let mut app = app(json!("#ff0000"));
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    let mut h = harness(app);
+    let last = hsb(&h.state().session.last_solid);
+    let (target_node, target_tree) = h.get_by_label("Hue ring").accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(200.0));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    h.run_steps(1);
+    assert!(near(hsb(&fill(h.state())), [200.0, last[1], last[2]], [0.5, 2e-3, 2e-3]), "{:?}", hsb(&fill(h.state())));
+    // A click focuses the square; with the fill set to None again the arrows still step it.
+    let sq = rect_of(&h, "Saturation and brightness");
+    click(&mut h, in_square(sq, 0.5, 0.5), Modifiers::NONE);
+    h.state_mut().run("paint.setFill", json!({"none": true})).unwrap();
+    h.run_steps(1);
+    assert_eq!(h.get_by_label("Saturation and brightness").value(), None, "no marker");
+    let last = hsb(&h.state().session.last_solid);
+    key(&mut h, egui::Key::ArrowLeft, Modifiers::NONE);
+    key(&mut h, egui::Key::ArrowDown, Modifiers::NONE);
+    let after = hsb(&fill(h.state()));
+    assert!(near(after, [last[0], last[1] - 0.01, last[2] - 0.01], [0.5, 2e-3, 2e-3]), "{last:?} → {after:?}");
+}
+
 /// The hue stays while the square passes through a gray: a drag to the left edge (white, whose own
 /// hue is 0°) and back ends at the color a click at its end gives, for an RGB and for a CMYK fill
 /// (whose stored color differs from the picked RGB), and an RGB green is green again.

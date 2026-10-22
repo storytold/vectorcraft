@@ -385,7 +385,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                             let (z, x, y) = field_pos(channel, &p);
                             let at = |x: f32, y: f32| c32(&field_pick(channel, z, x, y).snapped(web).color);
                             if let (Some((x, y)), _) =
-                                widgets::color_field(ui, "cp-field", (tl!("Color field"), channel.field_axes()), vec2(side, side), Some((x, y)), &at)
+                                widgets::color_field(ui, "cp-field", (tl!("Color field"), channel.field_axes()), vec2(side, side), (x, y), true, &at)
                             {
                                 pick = Some(field_pick(channel, z, x, y));
                             }
