@@ -207,6 +207,7 @@ tools, never checked side by side) isn't captured row by row.
 | Add a visible stroke after drawing with inherited None/zero-width paint | done | Paint and Swap Fill/Stroke restore the existing 1 pt default; positive widths and painted zero widths stay as set; Undo/Redo and targeted appearance items tested (`stroke_visibility.rs`, #1253) |
 | Double-click a stroked segment to create a width point in Width Point Edit | done | Finite-arithmetic follow-up: engine regressions and full CI passed; [Validation evidence](target-app-parity.md#evidence-what-ships-today-by-area). Command and pointer regressions cover opening, sampled widths, adjoining adjustment on/off through checkbox/OK, compound paths, Cancel/Delete and Undo/Redo; dialog layout reviewed. [Validation evidence](target-app-parity.md#evidence-what-ships-today-by-area) |
 | Shift-double-click a width point enables adjoining adjustment in Width Point Edit | done | Tool dispatch, plain double-click control, neighboring widths, Undo/Redo and Cancel in `dialogs/width_point.rs` |
+| Width tool: Alt frees one side mid-drag and a plain drag keeps the side ratio | done | Alt works at any time in the drag: the side under the pointer follows it while the other holds the width it had when Alt went down, and letting Alt go evens the point again; a plain drag scales both sides together, keeping their ratio. Pointer regressions in `distort/width.rs` |
 | Alt-drag duplicates (objects, artboards with their art) | done | |
 | Document Setup → Edit Artboards applies valid settings, closes the dialog and activates the Artboard tool | done | Pointer-click tests cover successful handoff, invalid settings, OK, Cancel and Undo in `dialogs/document_setup.rs`. |
 | Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture | done | Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests_distortkeys.rs`. |
@@ -334,6 +335,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-23 | minor | Width tool: Alt frees one side at any point in a drag and letting it go evens the point again; a plain drag scales both sides together, keeping their ratio, including through a crossing of the path (`distort/width.rs` pointer regressions); score unchanged (estimated) |
 | 2026-10-23 | minor | Preferences › General › Constrain Angle: arrow keys, Shift drags and new rectangles, ellipses, grids, type, polygons, stars and size-dialog shapes follow it (#394). Scores and estimates unchanged. |
 | 2026-10-22 | minor | Pen, Anchor Point and Direct Selection drags: the preview gets every pointer position, including where it re-enters the window and the move in the release's frame (#834); score unchanged (estimated) |
 | 2026-10-23 | minor | Guides: a path moved by a press on its stroke or beside its edge, and a straight segment Direct Selection drags, snap by the nearest point of the path, landing exactly on a ruler guide (#3701); scores and estimates unchanged. |
