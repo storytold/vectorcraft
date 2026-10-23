@@ -5501,3 +5501,5 @@ axis	Y Axis	Άξονας Y
 	Rectangular Grid Tool Options	Επιλογές εργαλείου ορθογώνιου πλέγματος
 	Polar Grid Tool Options	Επιλογές εργαλείου πολικού πλέγματος
 	Fill Line	Γέμισμα γραμμής
+# Live-effect overlays (plug-in effects)
+@msg	`overlay`: {why}	`overlay`: {why}

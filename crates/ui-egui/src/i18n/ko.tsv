@@ -5128,3 +5128,5 @@ axis	Y Axis	Y축
 	Rectangular Grid Tool Options	사각형 격자 도구 옵션
 	Polar Grid Tool Options	극좌표 격자 도구 옵션
 	Fill Line	선 채우기
+# Live-effect overlays (plug-in effects)
+@msg	`overlay`: {why}	`overlay`: {why}

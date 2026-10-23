@@ -39,6 +39,7 @@ use lru::FrameCache;
 pub use brush_fx::instance_art;
 pub use changed::{Changed, changed, view_pixels};
 pub use effects::stroke::width_outline;
+pub use fx::{plugin_effect_objects, plugin_overlays};
 pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, set_image_cache_budget};
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
@@ -1090,9 +1091,7 @@ impl Renderer {
 
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
-        let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
-            || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) {
+        if left_out(f.opts, a) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {
@@ -1222,21 +1221,16 @@ impl Renderer {
         } else if !n.is_container() {
             return;
         }
-        // Layer Options on screen: a layer whose Preview is off draws in outline, and Dim Images
-        // fades its images, a template's too (exports and thumbnails, which leave templates out,
-        // ignore both).
-        if let NodeKind::Layer { preview, dim_images, template, .. } = &n.kind
+        // Layer Options on screen: a layer whose Preview is off draws in outline, a template layer
+        // in Preview ([`layer_outline`]), and Dim Images fades its images, a template's too
+        // (exports and thumbnails, which leave templates out, ignore them all).
+        if let NodeKind::Layer { dim_images, .. } = &n.kind
             && f.opts.dim_templates
             && !f.opts.skip_templates
         {
-            // A template layer stays in Preview while the view is in Outline (and whatever its own
-            // Preview option says): its picture is there to be traced (#1486).
-            if *template && f.opts.outline {
-                let opts = RenderOptions { outline: false, ..f.opts.clone() };
-                return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
-            }
-            if !preview && !template && !f.opts.outline {
-                let opts = RenderOptions { outline: true, ..f.opts.clone() };
+            let outline = layer_outline(f.opts, n, f.opts.outline);
+            if outline != f.opts.outline {
+                let opts = RenderOptions { outline, ..f.opts.clone() };
                 return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
             }
             if let Some(p) = *dim_images {
@@ -2449,6 +2443,27 @@ fn holds_plugin_effect(n: &Node) -> bool {
     holds
 }
 
+/// Whether drawing with `opts` leaves `a` out, wherever it is: hidden, one of `opts.hidden`, or a
+/// template layer or guide that `opts` leaves out.
+pub(crate) fn left_out(opts: &RenderOptions, a: &Node) -> bool {
+    let view_item = (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
+        || (opts.skip_templates || opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
+    !a.visible || view_item || opts.hidden.contains(&a.id)
+}
+
+/// Whether drawing with `opts` draws `n`'s contents in outline, within art drawn in outline when
+/// `outline` is set. On screen (`opts.dim_templates`), a template layer's contents draw in Preview
+/// even in Outline view, whatever its own Preview option says, as its picture is there to be traced
+/// (#1486), and those of a layer whose Preview is off in outline.
+pub(crate) fn layer_outline(opts: &RenderOptions, n: &Node, outline: bool) -> bool {
+    let screen = opts.dim_templates && !opts.skip_templates;
+    match n.kind {
+        NodeKind::Layer { template: true, .. } if screen => false,
+        NodeKind::Layer { preview: false, .. } if screen => true,
+        _ => outline,
+    }
+}
+
 /// A symbol instance's stain ([`vectorcraft_brush::stain`]) as bits for a cache key: its color
 /// model, the color's components and the amount (all 0 without a stain).
 fn stain_bits(stain: Option<(vectorcraft_color::Color, f32)>) -> [u32; 6] {
@@ -2822,6 +2837,8 @@ mod tests_layeropts;
 mod tests_memory;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_overlays;
 #[cfg(test)]
 mod tests_placed_document;
 #[cfg(test)]

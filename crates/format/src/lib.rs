@@ -673,48 +673,8 @@ pub fn sniff(bytes: &[u8]) -> bool {
     s.trim_start().starts_with('{') && (s.contains("\"vectorcraft\"") || s.contains("\"drawcraft\""))
 }
 
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-pub fn base64_encode(data: &[u8]) -> String {
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
-        out.push(B64[(n >> 18) as usize & 63] as char);
-        out.push(B64[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { B64[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { B64[n as usize & 63] as char } else { '=' });
-    }
-    out
-}
-
-pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
-    let val = |c: u8| B64.iter().position(|&b| b == c).map(|p| p as u32);
-    let clean: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    if !clean.len().is_multiple_of(4) {
-        return None;
-    }
-    let mut out = Vec::with_capacity(clean.len() / 4 * 3);
-    for c in clean.chunks(4) {
-        let mut n = 0u32;
-        let mut pad = 0;
-        for &b in c {
-            n <<= 6;
-            if b == b'=' {
-                pad += 1;
-            } else {
-                n |= val(b)?;
-            }
-        }
-        out.push((n >> 16) as u8);
-        if pad < 2 {
-            out.push((n >> 8) as u8);
-        }
-        if pad < 1 {
-            out.push(n as u8);
-        }
-    }
-    Some(out)
-}
+/// Base64 as JSON carries binary data (`vectorcraft_doc::base64`, which every layer shares).
+pub use vectorcraft_doc::base64::{decode as base64_decode, encode as base64_encode};
 
 #[cfg(test)]
 mod tests {

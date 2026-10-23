@@ -580,6 +580,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+    // What live-effect plug-ins show besides their geometry, over the art of the frame shown, where
+    // it drew their effects.
+    if app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc) {
+        plugin_effect_overlay(app, &painter, &xf);
+    }
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
@@ -2660,6 +2665,26 @@ fn live_paint_gap_overlays(app: &mut VectorcraftApp) -> Vec<Overlay> {
         }
     };
     gaps.to_vec()
+}
+
+/// What live-effect plug-ins show besides their geometry, for the frame shown
+/// ([`crate::plugin_overlays`]): lines drawn here only, over the art, and never exported, printed
+/// or hit-tested. At most [`OVERLAY_MAX_ANCHORS`] points are drawn, in stacking order, as for
+/// selection outlines.
+fn plugin_effect_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some((doc, opts)) = &app.canvas.shown else { return };
+    let overlays = crate::plugin_overlays::PluginOverlays::of_frame(app.canvas.plugin_overlays.take(), doc, opts, OVERLAY_MAX_ANCHORS);
+    let mut left = OVERLAY_MAX_ANCHORS;
+    for line in overlays.lines() {
+        let Some(rest) = left.checked_sub(line.points.len()) else { break };
+        left = rest;
+        let [r, g, b, a] = line.color;
+        // Points scale with the zoom, as strokes do; 0 is one pixel at any zoom.
+        let width = if line.width > 0.0 { (f64::from(line.width) * xf.zoom).max(1.0) as f32 } else { 1.0 };
+        let points = line.points.iter().map(|q| xf.to_screen(Point::new(f64::from(q[0]), f64::from(q[1])))).collect();
+        p.add(Shape::line(points, Stroke::new(width, Color32::from_rgba_unmultiplied(r, g, b, a))));
+    }
+    app.canvas.plugin_overlays = Some(overlays);
 }
 
 /// Simplify's Show Original Path: the paths its preview ran on, as they were before it, in a band

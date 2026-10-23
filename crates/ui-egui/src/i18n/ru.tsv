@@ -5161,3 +5161,5 @@ axis	Y Axis	Ось Y
 	Rectangular Grid Tool Options	Параметры инструмента «Прямоугольная сетка»
 	Polar Grid Tool Options	Параметры инструмента «Полярная сетка»
 	Fill Line	Заливка отрезка
+# Live-effect overlays (plug-in effects)
+@msg	`overlay`: {why}	`overlay`: {why}

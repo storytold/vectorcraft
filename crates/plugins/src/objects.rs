@@ -412,7 +412,7 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<OutObject>> {
 }
 
 /// The objects of output `v`, or its decline.
-fn decode_objects(v: &Value) -> Result<Vec<OutObject>> {
+pub(crate) fn decode_objects(v: &Value) -> Result<Vec<OutObject>> {
     if let Some(e) = declined(v) {
         return Err(e);
     }

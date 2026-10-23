@@ -296,3 +296,47 @@ fn folder_loading_skips_heavy_filters() {
     assert!(registry::get("test.folder.heavy").is_none());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// A live effect may show an overlay with its geometry or instead of it (the geometry then stays as
+/// it was). It comes from the same run, which `effect::cached` finds once the effect was drawn and
+/// never makes; a bad one fails the run, and `last_error` says why.
+#[test]
+fn a_live_effect_shows_an_overlay_with_or_instead_of_its_geometry() {
+    use vectorcraft_geom::{FillRule, PathData, Point, SubPath};
+    use vectorcraft_plugins::effect::{self, Paints};
+    use vectorcraft_plugins::overlay::{FORMAT, Line, Overlay};
+    let overlay = Overlay { lines: vec![Line { color: [0, 128, 255, 255], width: 0.5, points: vec![[0.0, 0.0], [20.0, 20.0]] }] };
+    let shown = json!({"format": FORMAT, "data": vectorcraft_doc::base64::encode(&overlay.encode())});
+    let poly = |pts: &[(f64, f64)]| PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), true));
+    let (square, triangle) = (poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), poly(&[(0.0, 0.0), (30.0, 0.0), (15.0, 20.0)]));
+    let install = |id: &str, output: Value| {
+        registry::install_bytes(&build(&tpl::returning(&tpl::manifest(id, "effect", "{}"), &output.to_string()))).unwrap();
+    };
+    let b = square.bounds().unwrap();
+    let cached = |id: &str| effect::cached(id, &json!({}), &square, b, FillRule::NonZero, Paints::default());
+    let run = |id: &str| {
+        let geometry = effect::apply(id, &json!({}), &square, b, FillRule::NonZero, Paints::default());
+        (geometry.and_then(|g| g.bounds()), cached(id).and_then(|r| r.overlay))
+    };
+    install("test.overlay.only", json!({"overlay": shown}));
+    assert!(cached("test.overlay.only").is_none(), "not run yet, and looking doesn't run it");
+    assert!(cached("test.overlay.only").is_none());
+    let before = effect::cache_generation();
+    assert_eq!(run("test.overlay.only"), (square.bounds(), Some(std::sync::Arc::new(overlay.clone()))), "an overlay alone keeps the geometry");
+    assert!(effect::cache_generation() > before, "a new result in the cache");
+    // A plug-in that isn't installed draws the geometry as it is, and shows nothing.
+    let missing = cached("test.overlay.missing").unwrap();
+    assert_eq!((missing.path, missing.overlay), (square.clone(), None));
+    install("test.overlay.both", json!({"objects": [{"path": triangle}], "overlay": shown}));
+    assert_eq!(run("test.overlay.both"), (triangle.bounds(), Some(std::sync::Arc::new(overlay))));
+    install("test.overlay.none", json!({"objects": [{"path": triangle}]}));
+    assert_eq!(run("test.overlay.none"), (triangle.bounds(), None));
+    // Three bytes: the data ends before its first line's count does.
+    install("test.overlay.bad", json!({"overlay": {"format": FORMAT, "data": "AAAA"}}));
+    assert_eq!(run("test.overlay.bad"), (None, None), "the run fails: the caller keeps the geometry");
+    let why = effect::last_error("test.overlay.bad").unwrap_or_default();
+    assert!(why.contains("`overlay`"), "{why}");
+    for id in ["test.overlay.only", "test.overlay.both", "test.overlay.none", "test.overlay.bad"] {
+        registry::remove(id);
+    }
+}

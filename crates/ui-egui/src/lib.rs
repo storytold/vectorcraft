@@ -46,6 +46,7 @@ pub mod panels;
 pub mod picks;
 pub mod place;
 pub mod placing;
+pub mod plugin_overlays;
 pub mod plugin_runs;
 pub mod prefs_dialog;
 pub mod print;
@@ -119,6 +120,8 @@ mod tests_pdfoutput;
 mod tests_picks;
 #[cfg(test)]
 mod tests_place;
+#[cfg(test)]
+mod tests_plugin_overlays;
 #[cfg(test)]
 mod tests_plugin_runs;
 #[cfg(test)]
@@ -358,6 +361,8 @@ pub struct CanvasCache {
     pub worker_started: bool,
     /// The slices as laid out for (document uid, revision): the canvas draws them every frame.
     pub slices: Option<SliceCache>,
+    /// What live-effect plug-ins show besides geometry, for the frame shown ([`plugin_overlays`]).
+    pub plugin_overlays: Option<plugin_overlays::PluginOverlays>,
     /// The print tiling's pages for (document uid, revision) (View → Show Print Tiling).
     pub print_tiling: Option<PrintTilingCache>,
     /// The gap lines View → Show Live Paint Gaps draws for (document uid, revision).
@@ -616,6 +621,7 @@ impl VectorcraftApp {
                 worker: None,
                 worker_started: false,
                 slices: None,
+                plugin_overlays: None,
                 print_tiling: None,
                 live_paint_gaps: None,
                 hidden_chars: Default::default(),

@@ -5184,3 +5184,5 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	矩形格線工具選項
 	Polar Grid Tool Options	極座標格點工具選項
 	Fill Line	填色線段
+# Live-effect overlays (plug-in effects)
+@msg	`overlay`: {why}	`overlay`：{why}

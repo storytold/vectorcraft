@@ -5548,3 +5548,5 @@ axis	Y Axis	Axe Y
 	Rectangular Grid Tool Options	Options de l’outil Grille rectangulaire
 	Polar Grid Tool Options	Options de l’outil Grille à coordonnées polaires
 	Fill Line	Remplir le trait
+# Live-effect overlays (plug-in effects)
+@msg	`overlay`: {why}	`overlay` : {why}
