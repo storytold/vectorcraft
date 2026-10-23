@@ -543,7 +543,6 @@ impl VectorcraftApp {
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
         crate::doc_windows::show(self, &ctx);
-        panels::library_panel::show_window(self, &ctx);
         self.share.show(&ctx);
         // A share of a drawing that has never been saved. The dialog asked; only this side can
         // encode one, so it answers.
