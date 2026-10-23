@@ -155,6 +155,10 @@ display_name = "Don Omondi"
 [people.alpha-rock]
 display_name = "Aditya Sisodiya"
 
+[people.MajedAlaejem]
+real_name = "Majed Alaejem"
+sync_github_name = true
+
 [people.Ronfo2013]
 real_name = "Angelo Bernardini"
 display_name = "Angelo Bernardini"

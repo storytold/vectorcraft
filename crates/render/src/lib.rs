@@ -316,6 +316,7 @@ fn downsample(src: &[u8], w: usize, h: usize, k: usize) -> Vec<u8> {
 }
 
 /// A rendered image (premultiplied RGBA8, row-major).
+#[derive(Clone)]
 pub struct Rendered {
     pub width: u32,
     pub height: u32,

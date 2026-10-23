@@ -933,7 +933,7 @@ impl Tool for TypeTool {
             o.push(Overlay::Line { a: t.xf * p, b: t.xf * q, color: [0, 0, 0], dashed: false });
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
-                o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
+                o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [0, 0, 0, 0] });
             }
         }
         Self::overflow_marker(&t, &lay, cx, &mut o);

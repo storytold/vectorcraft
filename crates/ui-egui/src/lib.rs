@@ -371,6 +371,10 @@ pub struct CanvasCache {
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
+    /// The last rendered document artwork, kept for inverted highlights.
+    pub last_img: Option<vectorcraft_render::Rendered>,
+    /// Reusable texture for drawing inverted highlights (text selection).
+    pub invert_texture: Option<egui::TextureHandle>,
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
@@ -613,6 +617,8 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 content_bounds: None,
                 cursors: Default::default(),
+                last_img: None,
+                invert_texture: None,
                 view_moved: None,
                 hover_cursor: None,
             },

@@ -405,6 +405,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && done.key.doc == key.doc
     {
         upload(app, ui.ctx(), &done.img, done.key.pixel.is_some());
+        app.canvas.last_img = Some(done.img);
         app.canvas.key = Some(done.key);
         app.canvas.shown = Some((done.doc, done.opts));
         app.perf.render_ms = done.ms;
@@ -503,6 +504,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let t0 = now_ms();
                 let img = app.canvas.renderer.render(&doc, w, h, view, &opts);
                 upload(app, ui.ctx(), &img, pixel.is_some());
+                app.canvas.last_img = Some(img);
                 app.canvas.key = Some(key.clone());
                 app.canvas.shown = Some((doc.clone(), opts.clone()));
                 app.perf.render_ms = now_ms() - t0;
@@ -641,6 +643,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             hidden_chars_overlay(app, &painter, &xf);
         }
     }
+    draw_inverting_highlights(app, ui.ctx(), &painter, &xf, rect, &overlays);
     draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
     if !revolve_edit {
         shaper_widget_overlay(app, &painter, &xf);
@@ -3105,8 +3108,10 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
                 );
             }
             Overlay::Highlight { quad, color } => {
-                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
-                p.add(Shape::convex_polygon(quad.iter().map(|q| xf.to_screen(*q)).collect(), c, Stroke::NONE));
+                if *color != [0, 0, 0, 0] {
+                    let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+                    p.add(Shape::convex_polygon(quad.iter().map(|q| xf.to_screen(*q)).collect(), c, Stroke::NONE));
+                }
             }
             Overlay::Measure { p: pt, text } => {
                 let sp = xf.to_screen(*pt) + vec2(14.0, 14.0);
@@ -3132,6 +3137,183 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
             }
         }
     }
+}
+
+/// Invert the background colors and text glyphs under text selection highlights.
+fn draw_inverting_highlights(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    painter: &egui::Painter,
+    xf: &Xf,
+    rect: egui::Rect,
+    overlays: &[Overlay],
+) {
+    let quads: Vec<[Point; 4]> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Highlight { quad, color: [0, 0, 0, 0] } => Some(*quad),
+            _ => None,
+        })
+        .collect();
+
+    if quads.is_empty() {
+        return;
+    }
+
+    let Some(img) = &app.canvas.last_img else {
+        for q in &quads {
+            painter.add(Shape::convex_polygon(
+                q.iter().map(|p| xf.to_screen(*p)).collect(),
+                Color32::from_black_alpha(200),
+                Stroke::NONE,
+            ));
+        }
+        return;
+    };
+
+    let key = app.canvas.key.as_ref();
+    let ppp = key.map_or_else(|| ctx.pixels_per_point(), |k| if k.ppp > 0.0 { k.ppp } else { 1.0 });
+    let (zoom, center, rot_rad) = if let Some(k) = key {
+        (k.zoom, Point::new(k.cx, k.cy), k.rot.to_radians())
+    } else {
+        let v = app.view().cloned().unwrap_or_default();
+        (v.zoom, v.center, v.rotation.to_radians())
+    };
+
+    let doc_to_pixel = match key.and_then(|k| k.pixel) {
+        Some([x0, y0, _, _]) => Affine::translate((-x0 as f64, -y0 as f64)),
+        None => {
+            Affine::translate((img.width as f64 / 2.0, img.height as f64 / 2.0))
+                * Affine::rotate(rot_rad)
+                * Affine::scale(zoom * ppp as f64)
+                * Affine::translate(-center.to_vec2())
+        }
+    };
+
+    let pixel_quads: Vec<[Point; 4]> = quads.iter().map(|q| q.map(|p| doc_to_pixel * p)).collect();
+
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for q in &pixel_quads {
+        for p in q {
+            min_x = min_x.min(p.x);
+            max_x = max_x.max(p.x);
+            min_y = min_y.min(p.y);
+            max_y = max_y.max(p.y);
+        }
+    }
+
+    let min_ix = (min_x.floor() as i32).max(0);
+    let max_ix = (max_x.ceil() as i32).min(img.width as i32);
+    let min_iy = (min_y.floor() as i32).max(0);
+    let max_iy = (max_y.ceil() as i32).min(img.height as i32);
+
+    if max_ix <= min_ix || max_iy <= min_iy {
+        return;
+    }
+
+    let pw = (max_ix - min_ix) as usize;
+    let ph = (max_iy - min_iy) as usize;
+    if pw > 8192 || ph > 8192 {
+        for q in &quads {
+            painter.add(Shape::convex_polygon(
+                q.iter().map(|p| xf.to_screen(*p)).collect(),
+                Color32::from_black_alpha(200),
+                Stroke::NONE,
+            ));
+        }
+        return;
+    }
+
+    let mut patch = vec![0u8; pw * ph * 4];
+    for y in 0..ph {
+        let iy = min_iy as usize + y;
+        let py = iy as f64 + 0.5;
+        for x in 0..pw {
+            let ix = min_ix as usize + x;
+            let px = ix as f64 + 0.5;
+            let pt = Point::new(px, py);
+
+            if pixel_quads.iter().any(|q| point_in_convex_quad(pt, q)) {
+                let src_idx = (iy * img.width as usize + ix) * 4;
+                if let Some(src) = img.pixels.get(src_idx..src_idx + 4) {
+                    let r = src[0] as u32;
+                    let g = src[1] as u32;
+                    let b = src[2] as u32;
+                    let a = src[3] as u32;
+
+                    // Composite over paper white (255, 255, 255)
+                    let eff_r = (r + (255 - a)).min(255) as u8;
+                    let eff_g = (g + (255 - a)).min(255) as u8;
+                    let eff_b = (b + (255 - a)).min(255) as u8;
+
+                    // Invert RGB: white -> black, black -> white, color -> inverted color
+                    let inv_r = 255 - eff_r;
+                    let inv_g = 255 - eff_g;
+                    let inv_b = 255 - eff_b;
+
+                    let dst_idx = (y * pw + x) * 4;
+                    if let Some(dst) = patch.get_mut(dst_idx..dst_idx + 4) {
+                        dst[0] = inv_r;
+                        dst[1] = inv_g;
+                        dst[2] = inv_b;
+                        dst[3] = 255;
+                    }
+                }
+            }
+        }
+    }
+
+    let color_img = egui::ColorImage::from_rgba_unmultiplied([pw, ph], &patch);
+    match &mut app.canvas.invert_texture {
+        Some(tex) => tex.set(color_img, egui::TextureOptions::NEAREST),
+        None => app.canvas.invert_texture = Some(ctx.load_texture("text-selection-invert", color_img, egui::TextureOptions::NEAREST)),
+    }
+
+    if let Some(tex) = &app.canvas.invert_texture {
+        let old_rect = egui::Rect::from_center_size(rect.center(), vec2(img.width as f32 / ppp, img.height as f32 / ppp));
+        let old = Xf { rect: old_rect, zoom, center, rot: rot_rad };
+        let q = [old_rect.left_top(), old_rect.right_top(), old_rect.right_bottom(), old_rect.left_bottom()].map(|c| xf.to_screen(old.to_doc(c)));
+
+        let u0 = min_ix as f32 / img.width as f32;
+        let u1 = max_ix as f32 / img.width as f32;
+        let v0 = min_iy as f32 / img.height as f32;
+        let v1 = max_iy as f32 / img.height as f32;
+
+        let lerp = |a: Pos2, b: Pos2, t: f32| pos2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        let bilerp = |u: f32, v: f32| {
+            let top = lerp(q[0], q[1], u);
+            let bot = lerp(q[3], q[2], u);
+            lerp(top, bot, v)
+        };
+        let patch_quad = [bilerp(u0, v0), bilerp(u1, v0), bilerp(u1, v1), bilerp(u0, v1)];
+        textured_quad(painter, tex.id(), &patch_quad, (1.0, 1.0));
+    }
+}
+
+fn point_in_convex_quad(pt: Point, q: &[Point; 4]) -> bool {
+    let mut sign = 0;
+    for i in 0..4 {
+        let p1 = q[i];
+        let p2 = q[(i + 1) % 4];
+        let cross = (p2.x - p1.x) * (pt.y - p1.y) - (p2.y - p1.y) * (pt.x - p1.x);
+        if cross.abs() > 1e-9 {
+            if cross > 0.0 {
+                if sign < 0 {
+                    return false;
+                }
+                sign = 1;
+            } else {
+                if sign > 0 {
+                    return false;
+                }
+                sign = -1;
+            }
+        }
+    }
+    true
 }
 
 /// The Home screen (`app.home`; with no document open, unless its preference is off).
