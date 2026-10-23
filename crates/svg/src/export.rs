@@ -1067,7 +1067,128 @@ impl Writer<'_> {
             }
         }
     }
+}
 
+/// An upright rectangle or a full axis-aligned ellipse, in the same user space `path_d` writes.
+fn primitive_tag(path: &PathData, xf: Affine, mut num: impl FnMut(f64) -> String) -> Option<String> {
+    let [_, b, c, _, _, _] = xf.as_coeffs();
+    if b.abs() > 1e-6 || c.abs() > 1e-6 {
+        return None;
+    }
+    let map = |p: Point| xf * p;
+    if let Some(bounds) = upright_rect(path) {
+        let (p0, p1) = (map(Point::new(bounds.x0, bounds.y0)), map(Point::new(bounds.x1, bounds.y1)));
+        let (x, y) = (p0.x.min(p1.x), p0.y.min(p1.y));
+        return Some(format!(
+            "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"",
+            num(x),
+            num(y),
+            num((p1.x - p0.x).abs()),
+            num((p1.y - p0.y).abs())
+        ));
+    }
+    let (cx, cy, rx, ry) = axis_ellipse(path)?;
+    let c = map(Point::new(cx, cy));
+    let [a, b, c0, d, _, _] = xf.as_coeffs();
+    let rx = (a * rx).hypot(b * rx);
+    let ry = (c0 * ry).hypot(d * ry);
+    if (rx - ry).abs() <= 1e-3 * rx.max(ry).max(1.0) {
+        Some(format!("circle cx=\"{}\" cy=\"{}\" r=\"{}\"", num(c.x), num(c.y), num((rx + ry) / 2.0)))
+    } else {
+        Some(format!("ellipse cx=\"{}\" cy=\"{}\" rx=\"{}\" ry=\"{}\"", num(c.x), num(c.y), num(rx), num(ry)))
+    }
+}
+
+fn upright_rect(path: &PathData) -> Option<Rect> {
+    let ([sp], Some(b)) = (path.subpaths.as_slice(), path.bounds()) else { return None };
+    if !sp.closed || sp.anchors.len() != 4 || b.width() <= 0.0 || b.height() <= 0.0 {
+        return None;
+    }
+    if (0..4).any(|i| !sp.segment_is_line(i)) {
+        return None;
+    }
+    let pts: [Point; 4] = std::array::from_fn(|i| sp.anchors[i].p);
+    // Four distinct corners. A repeated corner (a triangle stored as four anchors) is not a rect.
+    for i in 0..4 {
+        for j in (i + 1)..4 {
+            if pts[i].distance(pts[j]) <= 1e-3 {
+                return None;
+            }
+        }
+    }
+    let on = |a: f64, b: f64| (a - b).abs() <= 1e-3;
+    let mut horizontal = [false; 4];
+    for i in 0..4 {
+        let (a, c) = (pts[i], pts[(i + 1) % 4]);
+        let h = on(a.y, c.y) && !on(a.x, c.x);
+        let v = on(a.x, c.x) && !on(a.y, c.y);
+        if h == v {
+            // Diagonal, or a zero-length edge. A bowtie's crossing edges fail here.
+            return None;
+        }
+        horizontal[i] = h;
+    }
+    // Edges alternate horizontal and vertical, so the outline is the bounds, not a zigzag.
+    if (0..4).any(|i| horizontal[i] == horizontal[(i + 1) % 4]) {
+        return None;
+    }
+    let corner = |p: Point| (on(p.x, b.x0) || on(p.x, b.x1)) && (on(p.y, b.y0) || on(p.y, b.y1));
+    pts.iter().all(|p| corner(*p)).then_some(b)
+}
+
+/// A closed four-cubic ellipse whose anchors sit on the cardinal points.
+fn axis_ellipse(path: &PathData) -> Option<(f64, f64, f64, f64)> {
+    let [sp] = path.subpaths.as_slice() else { return None };
+    if !sp.closed || sp.anchors.len() != 4 || (0..4).any(|i| sp.segment_is_line(i)) {
+        return None;
+    }
+    let b = path.bounds()?;
+    let (cx, cy, rx, ry) = (b.center().x, b.center().y, b.width() / 2.0, b.height() / 2.0);
+    if rx < 1e-6 || ry < 1e-6 {
+        return None;
+    }
+    let card = [Point::new(cx + rx, cy), Point::new(cx, cy + ry), Point::new(cx - rx, cy), Point::new(cx, cy - ry)];
+    // Tight against the radii. A fixed 0.75 pt floor turned a 1 pt circle with bad handles into a circle.
+    let tol = 1e-3 * rx.max(ry);
+    let mut used = [false; 4];
+    let mut order = [0usize; 4];
+    for (i, a) in sp.anchors.iter().enumerate() {
+        let j = card.iter().position(|c| c.distance(a.p) <= tol)?;
+        if used[j] {
+            return None;
+        }
+        used[j] = true;
+        order[i] = j;
+    }
+    let k = vectorcraft_geom::shapes::KAPPA;
+    for i in 0..4 {
+        let step = (order[(i + 1) % 4] as i32 - order[i] as i32).rem_euclid(4);
+        if step != 1 && step != 3 {
+            return None;
+        }
+        let a = &sp.anchors[i];
+        let toward = |to: usize| {
+            let (ox, oy) = match (order[i], to) {
+                (0, 1) => (0.0, k * ry),
+                (0, 3) => (0.0, -k * ry),
+                (2, 3) => (0.0, -k * ry),
+                (2, 1) => (0.0, k * ry),
+                (1, 2) => (-k * rx, 0.0),
+                (1, 0) => (k * rx, 0.0),
+                (3, 0) => (k * rx, 0.0),
+                (3, 2) => (-k * rx, 0.0),
+                _ => (f64::NAN, f64::NAN),
+            };
+            Point::new(card[order[i]].x + ox, card[order[i]].y + oy)
+        };
+        if a.h_out.distance(toward(order[(i + 1) % 4])) > tol || a.h_in.distance(toward(order[(i + 3) % 4])) > tol {
+            return None;
+        }
+    }
+    Some((cx, cy, rx, ry))
+}
+
+impl Writer<'_> {
     /// Paint a shape (`d`) with a node's appearance stack. `paths` is the same shape in document
     /// space, for strokes that aren't plain (it may be empty when all are).
     fn shape(&mut self, n: &Node, d: &str, paths: &[&PathData], rule: FillRule, bounds: Option<Rect>) {
@@ -1118,6 +1239,14 @@ impl Writer<'_> {
             }
             p.extend(css::transparency(n));
             let a = self.attrs(&p);
+            let dashed = items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.is_some()));
+            if !dashed
+                && paths.len() == 1
+                && let Some(tag) = primitive_tag(paths[0], self.xf, |n| self.num(n))
+            {
+                self.line(&format!("<{tag}{id}{a}/>"));
+                return;
+            }
             self.line(&format!("<path{id} d=\"{d}\"{a}/>"));
             return;
         }
