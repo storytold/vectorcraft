@@ -12,9 +12,12 @@ repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d", default-features = false, features = ["interpret", "write"] }
-craft-print = { git = "https://github.com/storytold/craft-libs", rev = "d991bf6792f8ade99c51358bf3c1d902c8cd96b5" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "82a24b006eefa036b43c09a67fb9a3fbd17ffe63" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
+# Shared print backends and registry (spooler, WS-Print, IPP, tracked jobs): craft-libs#116 until it merges;
+# then pin an immutable revision. vectorcraft-print enables the `wsd` and `ipp` backends on every
+# non-wasm target (it has no feature to turn them off). craft-ui's `printing::network` destination is #112.
+craft-print = { git = "https://github.com/storytold/craft-libs", rev = "refs/pull/116/head", default-features = false }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "refs/pull/112/head", features = ["serde"] }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
 craft-window = { git = "https://github.com/storytold/craft-libs", rev = "1f805378d454dac48b5c214029d254055fdf961b", features = ["egui"] }
@@ -35,6 +38,7 @@ vectorcraft-render = { path = "crates/render" }
 vectorcraft-svg = { path = "crates/svg" }
 vectorcraft-pdf = { path = "crates/pdf" }
 vectorcraft-format = { path = "crates/format" }
+vectorcraft-print = { path = "crates/print" }
 vectorcraft-tools = { path = "crates/tools" }
 # Without its default `bundled-fonts`, as vectorcraft-text: each crate that wants the fonts asks for
 # them, so an embedder can build without them (docs/development.md › Leaving out the bundled fonts).

@@ -38,6 +38,9 @@ pub mod icons;
 pub mod io;
 pub mod menus;
 pub mod native_menu;
+// Network printing: not on the web (no sockets) nor in the Windows 7 build (no craft-print).
+#[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+mod network_glue;
 pub mod opening;
 pub mod palette;
 mod panel_docking;
@@ -497,6 +500,9 @@ pub struct VectorcraftApp {
     pub graphics_adapter: Option<String>,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
+    /// File → Print ▸ Network printer: the address, the query and the job in flight (not on the web: no sockets).
+    #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+    pub(crate) print_net: network_glue::NetTasks,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
     /// (SVG without a `system_clipboard`) while the internal clipboard is empty. It enables the
     /// Paste menu items.
@@ -643,6 +649,8 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             graphics_adapter: None,
             place: Default::default(),
+            #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+            print_net: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
@@ -1351,6 +1359,8 @@ impl VectorcraftApp {
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
+        #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+        self.poll_network(ctx);
         plugin_runs::poll(self);
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]

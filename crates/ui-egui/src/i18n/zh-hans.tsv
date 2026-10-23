@@ -5230,6 +5230,60 @@ lighting	Light	光源
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
 # Select by Color (select.color)
 	Select by Color	按颜色选择
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	网络打印机的份数在上方它的部分中设置
+	A setting isn't valid	某项设置无效
+	Accepted by {printer}	{printer} 已接收
+	Asking the printer…	正在询问打印机…
+	Canceling…	正在取消…
+	Couldn't reach the printer	无法连接到打印机
+	Flip on long edge	沿长边翻转
+	Flip on short edge	沿短边翻转
+	Held by the printer	打印机已暂扣
+	I confirm sending this document to this printer	我确认将此文档发送到这台打印机
+	Not confirmed by the printer	打印机未确认
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	只接受此网络内的 IP 地址（私有、链路本地或环回地址），不接受主机名。
+	Photo	照片
+	Printed with errors	打印完成，但有错误
+	Printed with warnings	打印完成，但有警告
+	Printer address:	打印机地址：
+	Printer orientation:	打印机方向：
+	Printer status: {state}	打印机状态：{state}
+	Query printer	查询打印机
+	Query the printer first to see what it supports.	请先查询打印机，了解它支持哪些功能。
+	Reasons: {reasons}	原因：{reasons}
+	Reverse landscape	反向横向
+	Reverse portrait	反向纵向
+	Sending to {printer}…	正在发送到 {printer}…
+	Sent to {printer}	已发送到 {printer}
+	Sent. The printer can't say whether it printed.	已发送。打印机无法说明是否已打印。
+	Sheets printed: {done} of {total}	已打印纸张：{done} / {total}
+	Sheets printed: {n}	已打印纸张：{n}
+	Still printing; the job continues on the printer	仍在打印；作业将在打印机上继续
+	The document couldn't be prepared	无法准备文档
+	The job was canceled	作业已取消
+	The print job stopped unexpectedly	打印作业意外停止
+	The printer accepts none of the formats this document can be sent in	打印机不接受此文档可以发送的任何格式
+	The printer address was refused	打印机地址被拒绝
+	The printer doesn't support this setting	打印机不支持此设置
+	The printer is printing it	打印机正在打印
+	The printer may have received the document. Check the printer before sending again.	打印机可能已收到文档。重新发送前请检查打印机。
+	The printer no longer lists the job; it most likely finished	打印机不再列出该作业；很可能已完成
+	The printer paused the job; it needs attention	打印机已暂停该作业；需要处理
+	The printer refused the request	打印机拒绝了该请求
+	The printer stopped the job	打印机已停止该作业
+	The printer's reply couldn't be understood	无法理解打印机的回复
+	This printer does not take a copies setting.	这台打印机不支持份数设置。
+	This printer does not take a quality setting.	这台打印机不支持质量设置。
+	This printer does not take a resolution setting.	这台打印机不支持分辨率设置。
+	This printer does not take an orientation setting.	这台打印机不支持方向设置。
+	This printer only prints in grayscale.	这台打印机只能以灰度打印。
+	This printer only prints one-sided.	这台打印机只能单面打印。
+	Tick the confirmation box to send this document to this printer.	请勾选确认框，以将此文档发送到这台打印机。
+	Two-sided:	双面：
+	Waiting in the printer's queue	正在打印机队列中等待
+	Network Printer…	网络打印机…
+	{printer} (default)	{printer}（默认）
 	Move Anchor Point	移动锚点
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文档 {n} 个画板中的 1 个：文件重新打开时只有一个。打开“保留编辑功能”可全部保留。
 	Chalk & Charcoal…	粉笔和炭笔…

@@ -26,6 +26,11 @@ pub struct PrintJob<'a> {
     /// The job's name in the print queue.
     pub title: &'a str,
     pub pdf: &'a [u8],
+    /// The pages are gray already (the PDF was composed so); also ask the queue for monochrome.
+    pub grayscale: bool,
+    /// The person picked the paper: the queue must have it. `false`: the pages are the document's
+    /// own size (an artboard, a custom size), so the job goes on the queue's own paper, shrunk to fit.
+    pub paper_chosen: bool,
 }
 
 /// Submission callable from the desktop background worker.
@@ -96,6 +101,7 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let pdf = data.as_ref().and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or("the print job has no data")?;
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let printer = s("printer").filter(|n| !n.is_empty());
+    let (grayscale, paper_chosen) = job_hints(app, p);
     let service = app.services.print.as_mut().ok_or("no print service")?;
     if let Some(submit) = service.shared_print() {
         let pending_printer = printer.clone();
@@ -105,7 +111,8 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             format!("Printing {title}"),
             None,
             move |_| {
-                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf }).map(|note| json!({ "note": note, "printer": printer }))
+                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, grayscale, paper_chosen })
+                    .map(|note| json!({ "note": note, "printer": printer }))
             },
             move |app, result| {
                 let receipt = result?;
@@ -126,9 +133,140 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         return Ok(v);
     }
-    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf })?;
+    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, grayscale, paper_chosen })?;
     app.status(done);
     v["printer"] = json!(printer);
     v["printed"] = json!(true);
     Ok(v)
+}
+
+/// What a local-queue job asks of the driver, beside the PDF: `(grayscale, paper chosen)`. Gray is
+/// the Grayscale of the settings `file.print` resolves (the print preset `preset` names, else the
+/// document's, with `settings` over them; composite output); the paper is chosen when the caller says so
+/// (`paperChosen`, the dialog) or names a standard paper in `settings.media`. A Custom size, or no
+/// paper named, is the document's own page size, which the queue may not list.
+fn job_hints(app: &mut VectorcraftApp, p: &Value) -> (bool, bool) {
+    let settings = p.get("settings").filter(|v| v.is_object()).cloned().unwrap_or_else(|| json!({}));
+    // The same `preset` and `settings` as `file.print` gets, so the hint is about the job printed.
+    let mut query = json!({ "settings": settings });
+    if let Some(preset) = p.get("preset").filter(|v| !v.is_null()) {
+        query["preset"] = preset.clone();
+    }
+    let merged = app.session.execute("print.preview", &query).ok().map(|v| v["settings"].clone());
+    let gray = merged.as_ref().is_some_and(|m| m["color"]["grayscale"] == true && m["output"]["mode"] != "separations");
+    let named = |v: &Value| v["media"].as_str().is_some_and(|m| m != "custom");
+    let chosen = p.get("paperChosen").and_then(Value::as_bool).unwrap_or_else(|| named(&settings));
+    (gray, chosen)
+}
+
+/// `settings` with Grayscale `gray` (what a network job prints: [`crate::network_glue::NetTasks::network_grayscale`]).
+#[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+pub(crate) fn with_grayscale(settings: &Value, gray: bool) -> Value {
+    let mut out = settings.clone();
+    if let Some(o) = out.as_object_mut() {
+        let color = o.entry("color").or_insert_with(|| json!({}));
+        if let Some(c) = color.as_object_mut() {
+            c.insert("grayscale".into(), json!(gray));
+        }
+    }
+    out
+}
+
+/// `file.print` for the Print dialog's Network printer destination: compose the print-ready PDF
+/// from `settings` (over the document's) and hand it to the queried printer, off the UI thread. The
+/// person's confirmation, the query and the address are craft-ui's rules (`Draft::block`), and a job
+/// that cannot start says why. The dialog stays open to show the job; the result of the job is
+/// shown there, or as a notice when the dialog is closed.
+///
+/// Copies are the network section's: a printer whose listed copies range covers them makes them
+/// itself (the PDF is one copy); any other (no range listed, or a smaller one) gets them in the PDF
+/// and is asked for one copy, so the sheets are what was asked for.
+///
+/// Grayscale: the network section's Color setting when one is picked, else the dialog's (or the
+/// preset's) Grayscale; a gray job is a gray PDF and asks the printer for monochrome.
+///
+/// `paper_chosen`: the person picked the paper (the dialog says so), so it is sent as the media.
+#[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+pub fn run_network(app: &mut VectorcraftApp, settings: &Value, paper_chosen: bool) -> Result<Value, String> {
+    use craft_ui::printing::network::Block;
+    let sheets_ok =
+        app.session.execute("print.preview", &json!({ "settings": settings })).is_ok_and(|v| v["sheets"].as_array().is_some_and(|s| !s.is_empty()));
+    let draft = &app.print_net.state.draft;
+    let address_ok = crate::network_glue::validate(&draft.normalized_url()).is_ok();
+    if let Some(block) = draft.block(address_ok, sheets_ok, crate::network_glue::FORMATS) {
+        let labels = crate::network_glue::labels();
+        return Err(match block {
+            Block::Address => labels.address_note,
+            Block::NotQueried => labels.query_first,
+            Block::Format => labels.no_common_format,
+            Block::NoPages => tl!("Nothing to print"),
+            // The box's own label is no reason: say what to do.
+            Block::Unconfirmed => tl!("Tick the confirmation box to send this document to this printer."),
+            Block::Busy => labels.sending,
+        }
+        .replace("{printer}", "…"));
+    }
+    let by_printer = app.print_net.printer_makes_copies();
+    let copies = if by_printer { 1 } else { app.print_net.state.draft.copies.max(1) };
+    // A printer told to print Grayscale may still print colour, so the PDF itself is gray too.
+    let gray = app.print_net.network_grayscale(crate::dialogs::print::prints_gray(settings));
+    if gray && app.print_net.state.draft.color.is_none() {
+        // The dialog's (or the preset's) Grayscale, with no Color picked: the printer is asked for it too.
+        app.print_net.state.draft.color = Some(craft_ui::printing::network::ColorMode::Monochrome);
+    }
+    let mut q = json!({ "settings": with_grayscale(settings, gray) });
+    q["settings"]["copies"] = json!(copies);
+    let mut v = app.session.execute("file.print", &q).map_err(|e| e.to_string())?;
+    let data = v.as_object_mut().and_then(|o| o.remove("dataBase64"));
+    let pdf = data.as_ref().and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or("the print job has no data")?;
+    let title = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let pages = v["pages"].as_u64().map_or(0, |n| n as usize);
+    // The paper goes to the printer only when the person chose it; otherwise `media` is the document's
+    // own default (Letter) and the printer's own paper stands, as for a local queue.
+    let paper = paper_chosen.then(|| settings["media"].as_str().and_then(crate::network_glue::media_for_paper)).flatten();
+    if !app.print_net.send(None, &title, pdf, pages, paper, by_printer) {
+        return Err(tl!("Couldn't reach the printer").into());
+    }
+    v["printed"] = json!(false);
+    v["network"] = json!(true);
+    Ok(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::job_hints;
+    use crate::VectorcraftApp;
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    fn app_with_gray_preset() -> VectorcraftApp {
+        let mut session = Session::new();
+        session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        session.execute("print.presets.save", &json!({"name": "Mono", "settings": {"color": {"grayscale": true}}})).unwrap();
+        VectorcraftApp::new(session, Default::default())
+    }
+
+    /// The hint reads the preset `file.print` will resolve, not only the document's settings.
+    #[test]
+    fn a_grayscale_preset_makes_the_job_gray() {
+        let mut app = app_with_gray_preset();
+        assert_eq!(job_hints(&mut app, &json!({"preset": "Mono"})), (true, false));
+        assert!(job_hints(&mut app, &json!({"preset": "mono"})).0, "any case, as the engine takes it");
+        assert!(!job_hints(&mut app, &json!({})).0, "no preset: the document's settings, which are in colour");
+        assert!(!job_hints(&mut app, &json!({"preset": null})).0);
+        assert!(job_hints(&mut app, &json!({"settings": {"color": {"grayscale": true}}})).0, "explicit settings still apply");
+        assert!(!job_hints(&mut app, &json!({"preset": "Mono", "settings": {"color": {"grayscale": false}}})).0, "settings stand over the preset's");
+    }
+
+    /// Without a preset or explicit media the queue's own paper stands, though the merged media is Letter.
+    #[test]
+    fn no_preset_and_no_media_does_not_choose_the_paper() {
+        let mut app = app_with_gray_preset();
+        assert_eq!(job_hints(&mut app, &json!({})), (false, false));
+        assert!(!job_hints(&mut app, &json!({"preset": "Mono"})).1, "a preset's saved Letter is not a choice");
+        assert!(!job_hints(&mut app, &json!({"settings": {"media": "custom"}})).1);
+        assert!(job_hints(&mut app, &json!({"settings": {"media": "a4"}})).1, "named media is a choice");
+        assert!(job_hints(&mut app, &json!({"paperChosen": true})).1, "so is the dialog saying so");
+        assert!(!job_hints(&mut app, &json!({"paperChosen": false, "settings": {"media": "a4"}})).1);
+    }
 }

@@ -8,7 +8,8 @@ and omits the native AccessKit accessibility adapter. Printer discovery supports
 PowerShell version included with Windows 7, and printer setup opens Control Panel.
 Printing retains the PDF viewer's Print/PrintTo verb on this build: Windows 7 has no
 Windows.Data.Pdf renderer. The win7 target excludes `craft-print` from its dependency
-tree; normal desktop builds use the shared spooler. The `windows7` feature and dedicated win7 target must be selected together; the
+tree; normal desktop builds use the shared spooler. For the same reason this build has no
+Print › Network Printer… destination (WS-Print and IPP, which come through `craft-print`). The `windows7` feature and dedicated win7 target must be selected together; the
 existing compile-time guards reject mixing this feature with the ordinary Windows target.
 The normal desktop and web builds retain their existing defaults. A vendor graphics driver providing **OpenGL 3.3 or newer**
 is required; the Windows built-in generic display driver is insufficient. GPU selection

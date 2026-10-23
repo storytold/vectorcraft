@@ -5308,6 +5308,60 @@ mark-style	Japanese	Japonesas
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	as variáveis e os conjuntos de dados do arquivo não foram lidos (variáveis: {variables}, conjuntos de dados: {data_sets}): o painel Variáveis não os lista
 # Select by Color (select.color)
 	Select by Color	Selecionar por Cor
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	As cópias de uma impressora de rede são definidas na seção dela acima
+	A setting isn't valid	Uma configuração não é válida
+	Accepted by {printer}	Aceito por {printer}
+	Asking the printer…	Consultando a impressora…
+	Canceling…	Cancelando…
+	Couldn't reach the printer	Não foi possível alcançar a impressora
+	Flip on long edge	Virar na borda longa
+	Flip on short edge	Virar na borda curta
+	Held by the printer	Retido pela impressora
+	I confirm sending this document to this printer	Confirmo o envio deste documento para esta impressora
+	Not confirmed by the printer	Não confirmado pela impressora
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Somente endereços IP desta rede são aceitos (privados, de link local ou de loopback), não nomes de host.
+	Photo	Foto
+	Printed with errors	Impresso com erros
+	Printed with warnings	Impresso com avisos
+	Printer address:	Endereço da impressora:
+	Printer orientation:	Orientação da impressora:
+	Printer status: {state}	Status da impressora: {state}
+	Query printer	Consultar impressora
+	Query the printer first to see what it supports.	Consulte a impressora primeiro para ver o que ela aceita.
+	Reasons: {reasons}	Motivos: {reasons}
+	Reverse landscape	Paisagem invertida
+	Reverse portrait	Retrato invertido
+	Sending to {printer}…	Enviando para {printer}…
+	Sent to {printer}	Enviado para {printer}
+	Sent. The printer can't say whether it printed.	Enviado. A impressora não sabe dizer se imprimiu.
+	Sheets printed: {done} of {total}	Folhas impressas: {done} de {total}
+	Sheets printed: {n}	Folhas impressas: {n}
+	Still printing; the job continues on the printer	Ainda imprimindo; o trabalho continua na impressora
+	The document couldn't be prepared	Não foi possível preparar o documento
+	The job was canceled	O trabalho foi cancelado
+	The print job stopped unexpectedly	O trabalho de impressão parou inesperadamente
+	The printer accepts none of the formats this document can be sent in	A impressora não aceita nenhum dos formatos em que este documento pode ser enviado
+	The printer address was refused	O endereço da impressora foi recusado
+	The printer doesn't support this setting	A impressora não aceita esta configuração
+	The printer is printing it	A impressora está imprimindo
+	The printer may have received the document. Check the printer before sending again.	A impressora pode ter recebido o documento. Verifique a impressora antes de enviar de novo.
+	The printer no longer lists the job; it most likely finished	A impressora não lista mais o trabalho; provavelmente terminou
+	The printer paused the job; it needs attention	A impressora pausou o trabalho; ele precisa de atenção
+	The printer refused the request	A impressora recusou a solicitação
+	The printer stopped the job	A impressora interrompeu o trabalho
+	The printer's reply couldn't be understood	Não foi possível entender a resposta da impressora
+	This printer does not take a copies setting.	Esta impressora não aceita configuração de cópias.
+	This printer does not take a quality setting.	Esta impressora não aceita configuração de qualidade.
+	This printer does not take a resolution setting.	Esta impressora não aceita configuração de resolução.
+	This printer does not take an orientation setting.	Esta impressora não aceita configuração de orientação.
+	This printer only prints in grayscale.	Esta impressora só imprime em escala de cinza.
+	This printer only prints one-sided.	Esta impressora só imprime em um lado.
+	Tick the confirmation box to send this document to this printer.	Marque a caixa de confirmação para enviar este documento para esta impressora.
+	Two-sided:	Frente e verso:
+	Waiting in the printer's queue	Aguardando na fila da impressora
+	Network Printer…	Impressora de rede…
+	{printer} (default)	{printer} (padrão)
 	Move Anchor Point	Mover Ponto de Ancoragem
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantém 1 das {n} mesas de trabalho do documento: o arquivo reabre com uma. Ative Preservar Capacidades de Edição para manter todas.
 	Chalk & Charcoal…	Giz e carvão…

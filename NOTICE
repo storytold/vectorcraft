@@ -93,6 +93,15 @@ Assets already bundled through Hayro's default features retain their licences:
   Adobe and contributor names do not endorse or promote this product.
 Per-file hashes and sources are recorded in ASSETS.md.
 
+Windows printing
+
+VectorCraft's Windows builds print through craft-print (storytold/craft-libs), which uses winprint
+(https://github.com/ArcticLampyrid/winprint.rs; storytold's fork https://github.com/storytold/winprint.rs keeps its
+licence unchanged), BSD-3-Clause, Copyright (c) 2021 - 2024, alampy.com. The licence text is retained in
+licenses/winprint/LICENSE-BSD-3-Clause.txt: redistributions in source or binary form must reproduce that notice,
+the conditions and the disclaimer, and the names of the copyright holder and contributors may not be used to
+endorse products derived from it without written permission.
+
 Linux Wayland window decorations
 -------------------------------
 sctk-adwaita 0.10.1 (https://github.com/PolyMeilex/sctk-adwaita,

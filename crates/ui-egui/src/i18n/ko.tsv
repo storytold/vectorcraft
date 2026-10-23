@@ -4969,6 +4969,60 @@ lighting	Light	광원
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
 # Select by Color (select.color)
 	Select by Color	색상별 선택
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	네트워크 프린터의 매수는 위의 프린터 섹션에서 설정합니다
+	A setting isn't valid	올바르지 않은 설정이 있습니다
+	Accepted by {printer}	{printer}에서 접수했습니다
+	Asking the printer…	프린터에 문의하는 중…
+	Canceling…	취소하는 중…
+	Couldn't reach the printer	프린터에 연결할 수 없습니다
+	Flip on long edge	긴 가장자리로 넘기기
+	Flip on short edge	짧은 가장자리로 넘기기
+	Held by the printer	프린터가 보류 중입니다
+	I confirm sending this document to this printer	이 문서를 이 프린터로 보내는 것을 확인합니다
+	Not confirmed by the printer	프린터가 확인하지 않았습니다
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	이 네트워크의 IP 주소(사설, 링크 로컬 또는 루프백)만 허용되며 호스트 이름은 허용되지 않습니다.
+	Photo	사진
+	Printed with errors	오류와 함께 인쇄되었습니다
+	Printed with warnings	경고와 함께 인쇄되었습니다
+	Printer address:	프린터 주소:
+	Printer orientation:	프린터 방향:
+	Printer status: {state}	프린터 상태: {state}
+	Query printer	프린터 조회
+	Query the printer first to see what it supports.	먼저 프린터를 조회하여 지원하는 기능을 확인하세요.
+	Reasons: {reasons}	사유: {reasons}
+	Reverse landscape	가로(반대 방향)
+	Reverse portrait	세로(반대 방향)
+	Sending to {printer}…	{printer}(으)로 보내는 중…
+	Sent to {printer}	{printer}(으)로 보냈습니다
+	Sent. The printer can't say whether it printed.	보냈습니다. 프린터가 인쇄 여부를 알려 줄 수 없습니다.
+	Sheets printed: {done} of {total}	인쇄된 용지: {done}/{total}
+	Sheets printed: {n}	인쇄된 용지: {n}
+	Still printing; the job continues on the printer	아직 인쇄 중입니다. 작업은 프린터에서 계속됩니다
+	The document couldn't be prepared	문서를 준비할 수 없습니다
+	The job was canceled	작업이 취소되었습니다
+	The print job stopped unexpectedly	인쇄 작업이 예기치 않게 중지되었습니다
+	The printer accepts none of the formats this document can be sent in	프린터가 이 문서를 보낼 수 있는 어떤 형식도 받지 않습니다
+	The printer address was refused	프린터 주소가 거부되었습니다
+	The printer doesn't support this setting	프린터가 이 설정을 지원하지 않습니다
+	The printer is printing it	프린터가 인쇄하고 있습니다
+	The printer may have received the document. Check the printer before sending again.	프린터가 문서를 받았을 수 있습니다. 다시 보내기 전에 프린터를 확인하세요.
+	The printer no longer lists the job; it most likely finished	프린터가 더 이상 작업을 표시하지 않습니다. 이미 끝났을 가능성이 큽니다
+	The printer paused the job; it needs attention	프린터가 작업을 일시 중지했습니다. 확인이 필요합니다
+	The printer refused the request	프린터가 요청을 거부했습니다
+	The printer stopped the job	프린터가 작업을 중지했습니다
+	The printer's reply couldn't be understood	프린터의 응답을 이해할 수 없습니다
+	This printer does not take a copies setting.	이 프린터는 매수 설정을 지원하지 않습니다.
+	This printer does not take a quality setting.	이 프린터는 품질 설정을 지원하지 않습니다.
+	This printer does not take a resolution setting.	이 프린터는 해상도 설정을 지원하지 않습니다.
+	This printer does not take an orientation setting.	이 프린터는 방향 설정을 지원하지 않습니다.
+	This printer only prints in grayscale.	이 프린터는 그레이스케일로만 인쇄합니다.
+	This printer only prints one-sided.	이 프린터는 단면 인쇄만 지원합니다.
+	Tick the confirmation box to send this document to this printer.	이 문서를 이 프린터로 보내려면 확인란을 선택하세요.
+	Two-sided:	양면:
+	Waiting in the printer's queue	프린터 대기열에서 기다리는 중
+	Network Printer…	네트워크 프린터…
+	{printer} (default)	{printer} (기본)
 	Move Anchor Point	앵커 포인트 이동
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label}은(는) 문서의 아트보드 {n}개 중 1개만 유지하며 파일은 아트보드 하나로 다시 열립니다. 모두 유지하려면 편집 기능 보존을 켜십시오.
 	Chalk & Charcoal…	분필과 목탄…

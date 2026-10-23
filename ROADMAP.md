@@ -143,6 +143,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
+| 2026-10-18 | Print › Network Printer… sends the print-ready PDF (or PWG raster the app renders) to a WS-Print or IPP printer by its IP address, after a query and the person's confirmation. Copies go in the PDF unless the printer's listed range covers them; a Grayscale preset or dialog setting prints gray. Not on the web or in the Windows 7 build. Tested against in-process fakes only. Scores unchanged. |
 | 2026-10-21 | 3D lighting: four original lighting presets shared by Revolve, Extrude & Bevel, Inflate and Rotate, with command access and manual Custom settings; scores and estimates unchanged. |
 | 2026-10-21 | Print: the Print dialog's Media list has the Japanese papers — JIS B4 (257 × 364 mm), JIS B5 (182 × 257 mm) and JIS B6 next to the ISO B4/B5 (which keep their ISO 216 dimensions for settings saved before them), はがき 100 × 148 mm, 往復はがき 148 × 200 mm, 封筒 長形3号 120 × 235 mm / 長形4号 90 × 225 mm / 角形2号 240 × 332 mm / 角形3号 216 × 277 mm and 四六判 127 × 188 mm. A paper is named by its JSON id or its dialog label, any case and spacing (`B5 (JIS)` or `b5jis`), and every added size prints as its own PDF page size. Headline numbers unchanged. |
 | 2026-10-18 | Inch rulers divide the inch in half, not in ten. Zooming in stepped an inch ruler through 0.2, 0.1 and 0.05 of an inch, marks an inch ruler does not carry; below an inch the steps are binary fractions now, 1/2 down to 1/16, with the unlabelled ticks between them binary too (down to 1/128, so the 32nds, 64ths and 128ths appear as the report expects), while the metric units, points, pixels and picas keep their tenths. A label carries the decimals its step needs, so a sixteenth reads 0.0625 rather than the rounded 0.06, with trailing zeros dropped (#2827). Headline numbers unchanged. |
@@ -197,6 +198,7 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-18 | minor | Progress log row for Print › Network Printer… (WS-Print and IPP); headline numbers unchanged. |
 | 2026-10-23 | minor | Progress log row for OpenType SVG colour fonts; headline numbers unchanged. |
 | 2026-10-23 | minor | Progress log row for COLR colour fonts; headline numbers unchanged. |
 | 2026-10-22 | minor | G2: the Effect Gallery shipped (#2883): Effect › Effect Gallery… browses the Artistic, Brush Strokes, Distort, Sketch, Stylize and Texture filters, edits each filter's settings, builds an ordered stack (add, reorder, hide, remove) with a live canvas preview, and OK applies it as separate appearance effects in one undo step; remaining: filter thumbnails and a preview area inside the dialog; G2 estimate 4–6 → 1–2 h; Raster effects 82% → 85% (power-user view 49% → 52%), estimated, a modest move because the named missing dialog landed without thumbnails or an in-dialog preview. |

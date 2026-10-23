@@ -5377,6 +5377,60 @@ imageTrace	Outline	Körvonal
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	a fájl változói és adatkészletei nem lettek beolvasva (változók: {variables}, adatkészletek: {data_sets}): a Változók panel nem listázza őket
 # Select by Color (select.color)
 	Select by Color	Kijelölés szín szerint
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	A hálózati nyomtató példányszáma a fenti szakaszában állítható be
+	A setting isn't valid	Egy beállítás érvénytelen
+	Accepted by {printer}	{printer} elfogadta
+	Asking the printer…	A nyomtató lekérdezése…
+	Canceling…	Megszakítás…
+	Couldn't reach the printer	A nyomtató nem érhető el
+	Flip on long edge	Forgatás a hosszú élen
+	Flip on short edge	Forgatás a rövid élen
+	Held by the printer	A nyomtató visszatartja
+	I confirm sending this document to this printer	Megerősítem, hogy elküldöm ezt a dokumentumot erre a nyomtatóra
+	Not confirmed by the printer	A nyomtató nem erősítette meg
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Csak ennek a hálózatnak az IP-címei fogadhatók el (privát, link-local vagy loopback), gépnevek nem.
+	Photo	Fotó
+	Printed with errors	Hibákkal nyomtatva
+	Printed with warnings	Figyelmeztetésekkel nyomtatva
+	Printer address:	A nyomtató címe:
+	Printer orientation:	A nyomtató tájolása:
+	Printer status: {state}	A nyomtató állapota: {state}
+	Query printer	Nyomtató lekérdezése
+	Query the printer first to see what it supports.	Először kérdezze le a nyomtatót, hogy lássa, mit támogat.
+	Reasons: {reasons}	Okok: {reasons}
+	Reverse landscape	Fordított fekvő
+	Reverse portrait	Fordított álló
+	Sending to {printer}…	Küldés ide: {printer}…
+	Sent to {printer}	Elküldve ide: {printer}
+	Sent. The printer can't say whether it printed.	Elküldve. A nyomtató nem tudja megmondani, hogy kinyomtatta-e.
+	Sheets printed: {done} of {total}	Kinyomtatott lapok: {done} / {total}
+	Sheets printed: {n}	Kinyomtatott lapok: {n}
+	Still printing; the job continues on the printer	Még nyomtat; a feladat a nyomtatón folytatódik
+	The document couldn't be prepared	A dokumentumot nem sikerült előkészíteni
+	The job was canceled	A feladat megszakadt
+	The print job stopped unexpectedly	A nyomtatási feladat váratlanul leállt
+	The printer accepts none of the formats this document can be sent in	A nyomtató egyik olyan formátumot sem fogadja el, amelyben ez a dokumentum elküldhető
+	The printer address was refused	A nyomtató címét elutasították
+	The printer doesn't support this setting	A nyomtató nem támogatja ezt a beállítást
+	The printer is printing it	A nyomtató éppen nyomtatja
+	The printer may have received the document. Check the printer before sending again.	A nyomtató lehet, hogy megkapta a dokumentumot. Újraküldés előtt ellenőrizze a nyomtatót.
+	The printer no longer lists the job; it most likely finished	A nyomtató már nem sorolja fel a feladatot; valószínűleg elkészült
+	The printer paused the job; it needs attention	A nyomtató szüneteltette a feladatot; figyelmet igényel
+	The printer refused the request	A nyomtató elutasította a kérést
+	The printer stopped the job	A nyomtató leállította a feladatot
+	The printer's reply couldn't be understood	A nyomtató válaszát nem sikerült megérteni
+	This printer does not take a copies setting.	Ez a nyomtató nem támogatja a példányszám beállítását.
+	This printer does not take a quality setting.	Ez a nyomtató nem támogatja a minőség beállítását.
+	This printer does not take a resolution setting.	Ez a nyomtató nem támogatja a felbontás beállítását.
+	This printer does not take an orientation setting.	Ez a nyomtató nem támogatja a tájolás beállítását.
+	This printer only prints in grayscale.	Ez a nyomtató csak szürkeárnyalatosan nyomtat.
+	This printer only prints one-sided.	Ez a nyomtató csak egyoldalasan nyomtat.
+	Tick the confirmation box to send this document to this printer.	Jelölje be a megerősítő négyzetet, hogy elküldje ezt a dokumentumot erre a nyomtatóra.
+	Two-sided:	Kétoldalas:
+	Waiting in the printer's queue	Várakozik a nyomtató sorában
+	Network Printer…	Hálózati nyomtató…
+	{printer} (default)	{printer} (alapértelmezett)
 	Move Anchor Point	Horgonypont áthelyezése
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	A(z) {label} a dokumentum {n} rajztáblájából 1-et tart meg: a fájl eggyel nyílik meg újra. Kapcsolja be a Szerkeszthetőség megtartása beállítást, hogy mind megmaradjon.
 	Chalk & Charcoal…	Kréta és szén…

@@ -5347,6 +5347,60 @@ theme	Appearance	Utseende
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	En nätverksskrivares kopior anges i dess avsnitt ovan
+	A setting isn't valid	En inställning är inte giltig
+	Accepted by {printer}	Godtagen av {printer}
+	Asking the printer…	Frågar skrivaren…
+	Canceling…	Avbryter…
+	Couldn't reach the printer	Det gick inte att nå skrivaren
+	Flip on long edge	Vänd på långsidan
+	Flip on short edge	Vänd på kortsidan
+	Held by the printer	Hållen av skrivaren
+	I confirm sending this document to this printer	Jag bekräftar att dokumentet skickas till den här skrivaren
+	Network Printer…	Nätverksskrivare…
+	Not confirmed by the printer	Inte bekräftat av skrivaren
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Endast IP-adresser i det här nätverket godtas (privata, länklokala eller loopback), inte värdnamn.
+	Photo	Foto
+	Printed with errors	Utskriven med fel
+	Printed with warnings	Utskriven med varningar
+	Printer address:	Skrivaradress:
+	Printer orientation:	Skrivarens orientering:
+	Printer status: {state}	Skrivarstatus: {state}
+	Query printer	Fråga skrivaren
+	Query the printer first to see what it supports.	Fråga skrivaren först för att se vad den stöder.
+	Reasons: {reasons}	Orsaker: {reasons}
+	Reverse landscape	Omvänt liggande
+	Reverse portrait	Omvänt stående
+	Sending to {printer}…	Skickar till {printer}…
+	Sent to {printer}	Skickat till {printer}
+	Sent. The printer can't say whether it printed.	Skickat. Skrivaren kan inte säga om den skrev ut.
+	Sheets printed: {done} of {total}	Utskrivna ark: {done} av {total}
+	Sheets printed: {n}	Utskrivna ark: {n}
+	Still printing; the job continues on the printer	Skriver fortfarande ut; jobbet fortsätter på skrivaren
+	The document couldn't be prepared	Dokumentet kunde inte förberedas
+	The job was canceled	Jobbet avbröts
+	The print job stopped unexpectedly	Utskriftsjobbet stoppades oväntat
+	The printer accepts none of the formats this document can be sent in	Skrivaren accepterar inget av de format som dokumentet kan skickas i
+	The printer address was refused	Skrivaradressen nekades
+	The printer doesn't support this setting	Skrivaren stöder inte den här inställningen
+	The printer is printing it	Skrivaren skriver ut det
+	The printer may have received the document. Check the printer before sending again.	Skrivaren kan ha tagit emot dokumentet. Kontrollera skrivaren innan du skickar igen.
+	The printer no longer lists the job; it most likely finished	Skrivaren listar inte längre jobbet; det är troligen klart
+	The printer paused the job; it needs attention	Skrivaren pausade jobbet; det behöver uppmärksamhet
+	The printer refused the request	Skrivaren avvisade begäran
+	The printer stopped the job	Skrivaren stoppade jobbet
+	The printer's reply couldn't be understood	Skrivarens svar kunde inte tolkas
+	This printer does not take a copies setting.	Den här skrivaren tar ingen inställning för antal kopior.
+	This printer does not take a quality setting.	Den här skrivaren tar ingen kvalitetsinställning.
+	This printer does not take a resolution setting.	Den här skrivaren tar ingen upplösningsinställning.
+	This printer does not take an orientation setting.	Den här skrivaren tar ingen orienteringsinställning.
+	This printer only prints in grayscale.	Den här skrivaren skriver bara ut i gråskala.
+	This printer only prints one-sided.	Den här skrivaren skriver bara ut ensidigt.
+	Tick the confirmation box to send this document to this printer.	Markera bekräftelserutan för att skicka dokumentet till den här skrivaren.
+	Two-sided:	Dubbelsidigt:
+	Waiting in the printer's queue	Väntar i skrivarens kö
+	{printer} (default)	{printer} (standard)
 	Move Anchor Point	Flytta ankarpunkt
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behåller 1 av dokumentets {n} ritytor: filen öppnas igen med en. Slå på Bevara redigeringsmöjligheter för att behålla alla.
 	Chalk & Charcoal…	Krita och kol…

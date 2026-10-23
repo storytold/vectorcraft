@@ -63,6 +63,8 @@ pub const TABLE: &[(&str, Class)] = &[
     ("plugins", Class::Layer(2)),
     ("affinity", Class::Standalone),
     ("scriptcheck", Class::Standalone),
+    // Network printing (WS-Print, IPP) and the PDF to PWG raster converter: reads PDF, draws with the renderer.
+    ("print", Class::Layer(4)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

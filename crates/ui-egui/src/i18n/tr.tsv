@@ -5423,3 +5423,56 @@ axis	Y Axis	Y ekseni
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+	A network printer's copies are set in its section above	Ağ yazıcısının kopya sayısı yukarıdaki bölümünde ayarlanır
+	A setting isn't valid	Bir ayar geçerli değil
+	Accepted by {printer}	{printer} kabul etti
+	Asking the printer…	Yazıcıya soruluyor…
+	Canceling…	İptal ediliyor…
+	Couldn't reach the printer	Yazıcıya ulaşılamadı
+	Flip on long edge	Uzun kenardan çevir
+	Flip on short edge	Kısa kenardan çevir
+	Held by the printer	Yazıcıda bekletiliyor
+	I confirm sending this document to this printer	Bu belgenin bu yazıcıya gönderilmesini onaylıyorum
+	Network Printer…	Ağ yazıcısı…
+	Not confirmed by the printer	Yazıcı onaylamadı
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Yalnızca bu ağdaki IP adresleri (özel, bağlantı yerel veya geri döngü) kabul edilir, ana bilgisayar adları kabul edilmez.
+	Photo	Fotoğraf
+	Printed with errors	Hatalarla yazdırıldı
+	Printed with warnings	Uyarılarla yazdırıldı
+	Printer address:	Yazıcı adresi:
+	Printer orientation:	Yazıcı yönü:
+	Printer status: {state}	Yazıcı durumu: {state}
+	Query printer	Yazıcıyı sorgula
+	Query the printer first to see what it supports.	Neleri desteklediğini görmek için önce yazıcıyı sorgulayın.
+	Reasons: {reasons}	Nedenler: {reasons}
+	Reverse landscape	Ters yatay
+	Reverse portrait	Ters dikey
+	Sending to {printer}…	{printer} yazıcısına gönderiliyor…
+	Sent to {printer}	{printer} yazıcısına gönderildi
+	Sent. The printer can't say whether it printed.	Gönderildi. Yazıcı yazdırıp yazdırmadığını bildiremiyor.
+	Sheets printed: {done} of {total}	Yazdırılan sayfa: {done} / {total}
+	Sheets printed: {n}	Yazdırılan sayfa: {n}
+	Still printing; the job continues on the printer	Hâlâ yazdırılıyor; iş yazıcıda sürüyor
+	The document couldn't be prepared	Belge hazırlanamadı
+	The job was canceled	İş iptal edildi
+	The print job stopped unexpectedly	Yazdırma işi beklenmedik şekilde durdu
+	The printer accepts none of the formats this document can be sent in	Yazıcı, bu belgenin gönderilebileceği biçimlerden hiçbirini kabul etmiyor
+	The printer address was refused	Yazıcı adresi reddedildi
+	The printer doesn't support this setting	Yazıcı bu ayarı desteklemiyor
+	The printer is printing it	Yazıcı bunu yazdırıyor
+	The printer may have received the document. Check the printer before sending again.	Yazıcı belgeyi almış olabilir. Yeniden göndermeden önce yazıcıyı kontrol edin.
+	The printer no longer lists the job; it most likely finished	Yazıcı artık işi listelemiyor; büyük olasılıkla tamamlandı
+	The printer paused the job; it needs attention	Yazıcı işi duraklattı; ilgilenilmesi gerekiyor
+	The printer refused the request	Yazıcı isteği reddetti
+	The printer stopped the job	Yazıcı işi durdurdu
+	The printer's reply couldn't be understood	Yazıcının yanıtı anlaşılamadı
+	This printer does not take a copies setting.	Bu yazıcı kopya sayısı ayarını kabul etmiyor.
+	This printer does not take a quality setting.	Bu yazıcı kalite ayarını kabul etmiyor.
+	This printer does not take a resolution setting.	Bu yazıcı çözünürlük ayarını kabul etmiyor.
+	This printer does not take an orientation setting.	Bu yazıcı yön ayarını kabul etmiyor.
+	This printer only prints in grayscale.	Bu yazıcı yalnızca gri tonlamalı yazdırır.
+	This printer only prints one-sided.	Bu yazıcı yalnızca tek yüze yazdırır.
+	Tick the confirmation box to send this document to this printer.	Bu belgeyi bu yazıcıya göndermek için onay kutusunu işaretleyin.
+	Two-sided:	Çift yüzlü:
+	Waiting in the printer's queue	Yazıcının kuyruğunda bekliyor
+	{printer} (default)	{printer} (varsayılan)

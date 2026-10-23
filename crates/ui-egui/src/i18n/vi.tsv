@@ -4986,6 +4986,60 @@ theme	Appearance	Giao diện
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Số bản in của máy in mạng được đặt trong phần của máy in ở trên
+	A setting isn't valid	Một thiết lập không hợp lệ
+	Accepted by {printer}	{printer} đã nhận
+	Asking the printer…	Đang hỏi máy in…
+	Canceling…	Đang hủy…
+	Couldn't reach the printer	Không thể kết nối với máy in
+	Flip on long edge	Lật theo cạnh dài
+	Flip on short edge	Lật theo cạnh ngắn
+	Held by the printer	Máy in đang giữ lại
+	I confirm sending this document to this printer	Tôi xác nhận gửi tài liệu này đến máy in này
+	Not confirmed by the printer	Máy in chưa xác nhận
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Chỉ chấp nhận địa chỉ IP trong mạng này (riêng tư, link-local hoặc loopback), không chấp nhận tên máy chủ.
+	Photo	Ảnh
+	Printed with errors	Đã in có lỗi
+	Printed with warnings	Đã in có cảnh báo
+	Printer address:	Địa chỉ máy in:
+	Printer orientation:	Hướng giấy của máy in:
+	Printer status: {state}	Trạng thái máy in: {state}
+	Query printer	Truy vấn máy in
+	Query the printer first to see what it supports.	Hãy truy vấn máy in trước để xem máy in hỗ trợ gì.
+	Reasons: {reasons}	Lý do: {reasons}
+	Reverse landscape	Ngang đảo ngược
+	Reverse portrait	Dọc đảo ngược
+	Sending to {printer}…	Đang gửi đến {printer}…
+	Sent to {printer}	Đã gửi đến {printer}
+	Sent. The printer can't say whether it printed.	Đã gửi. Máy in không cho biết đã in hay chưa.
+	Sheets printed: {done} of {total}	Số tờ đã in: {done}/{total}
+	Sheets printed: {n}	Số tờ đã in: {n}
+	Still printing; the job continues on the printer	Vẫn đang in; công việc tiếp tục trên máy in
+	The document couldn't be prepared	Không thể chuẩn bị tài liệu
+	The job was canceled	Công việc đã bị hủy
+	The print job stopped unexpectedly	Công việc in đã dừng bất ngờ
+	The printer accepts none of the formats this document can be sent in	Máy in không chấp nhận định dạng nào mà tài liệu này có thể được gửi
+	The printer address was refused	Địa chỉ máy in đã bị từ chối
+	The printer doesn't support this setting	Máy in không hỗ trợ thiết lập này
+	The printer is printing it	Máy in đang in tài liệu
+	The printer may have received the document. Check the printer before sending again.	Máy in có thể đã nhận tài liệu. Hãy kiểm tra máy in trước khi gửi lại.
+	The printer no longer lists the job; it most likely finished	Máy in không còn liệt kê công việc; nhiều khả năng đã hoàn tất
+	The printer paused the job; it needs attention	Máy in đã tạm dừng công việc; cần được chú ý
+	The printer refused the request	Máy in đã từ chối yêu cầu
+	The printer stopped the job	Máy in đã dừng công việc
+	The printer's reply couldn't be understood	Không thể hiểu phản hồi của máy in
+	This printer does not take a copies setting.	Máy in này không hỗ trợ thiết lập số bản sao.
+	This printer does not take a quality setting.	Máy in này không hỗ trợ thiết lập chất lượng.
+	This printer does not take a resolution setting.	Máy in này không hỗ trợ thiết lập độ phân giải.
+	This printer does not take an orientation setting.	Máy in này không hỗ trợ thiết lập hướng giấy.
+	This printer only prints in grayscale.	Máy in này chỉ in thang xám.
+	This printer only prints one-sided.	Máy in này chỉ in một mặt.
+	Tick the confirmation box to send this document to this printer.	Hãy đánh dấu ô xác nhận để gửi tài liệu này đến máy in này.
+	Two-sided:	In hai mặt:
+	Waiting in the printer's queue	Đang chờ trong hàng đợi của máy in
+	Network Printer…	Máy in mạng…
+	{printer} (default)	{printer} (mặc định)
 	Move Anchor Point	Di chuyển điểm neo
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} chỉ giữ 1 trong {n} bảng vẽ của tài liệu: tệp sẽ mở lại với một bảng vẽ. Bật Bảo lưu khả năng chỉnh sửa để giữ tất cả.
 	Chalk & Charcoal…	Phấn và than…

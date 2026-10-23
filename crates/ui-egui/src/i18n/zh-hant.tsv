@@ -5025,6 +5025,60 @@ lighting	Light	光源
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	網路印表機的份數在上方它的區段中設定
+	A setting isn't valid	某項設定無效
+	Accepted by {printer}	{printer} 已接收
+	Asking the printer…	正在詢問印表機…
+	Canceling…	正在取消…
+	Couldn't reach the printer	無法連線到印表機
+	Flip on long edge	沿長邊翻轉
+	Flip on short edge	沿短邊翻轉
+	Held by the printer	印表機已保留
+	I confirm sending this document to this printer	我確認將此文件傳送到這台印表機
+	Not confirmed by the printer	印表機未確認
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	只接受此網路內的 IP 位址（私人、連結本機或迴路位址），不接受主機名稱。
+	Photo	相片
+	Printed with errors	列印完成，但有錯誤
+	Printed with warnings	列印完成，但有警告
+	Printer address:	印表機位址：
+	Printer orientation:	印表機方向：
+	Printer status: {state}	印表機狀態：{state}
+	Query printer	查詢印表機
+	Query the printer first to see what it supports.	請先查詢印表機，瞭解它支援哪些功能。
+	Reasons: {reasons}	原因：{reasons}
+	Reverse landscape	反向橫向
+	Reverse portrait	反向直向
+	Sending to {printer}…	正在傳送到 {printer}…
+	Sent to {printer}	已傳送到 {printer}
+	Sent. The printer can't say whether it printed.	已傳送。印表機無法說明是否已列印。
+	Sheets printed: {done} of {total}	已列印紙張：{done} / {total}
+	Sheets printed: {n}	已列印紙張：{n}
+	Still printing; the job continues on the printer	仍在列印；工作將在印表機上繼續
+	The document couldn't be prepared	無法準備文件
+	The job was canceled	工作已取消
+	The print job stopped unexpectedly	列印工作意外停止
+	The printer accepts none of the formats this document can be sent in	印表機不接受此文件可以傳送的任何格式
+	The printer address was refused	印表機位址被拒絕
+	The printer doesn't support this setting	印表機不支援此設定
+	The printer is printing it	印表機正在列印
+	The printer may have received the document. Check the printer before sending again.	印表機可能已收到文件。重新傳送前請檢查印表機。
+	The printer no longer lists the job; it most likely finished	印表機不再列出該工作；很可能已完成
+	The printer paused the job; it needs attention	印表機已暫停該工作；需要處理
+	The printer refused the request	印表機拒絕了該要求
+	The printer stopped the job	印表機已停止該工作
+	The printer's reply couldn't be understood	無法理解印表機的回覆
+	This printer does not take a copies setting.	這台印表機不支援份數設定。
+	This printer does not take a quality setting.	這台印表機不支援品質設定。
+	This printer does not take a resolution setting.	這台印表機不支援解析度設定。
+	This printer does not take an orientation setting.	這台印表機不支援方向設定。
+	This printer only prints in grayscale.	這台印表機只能以灰階列印。
+	This printer only prints one-sided.	這台印表機只能單面列印。
+	Tick the confirmation box to send this document to this printer.	請勾選確認方塊，以將此文件傳送到這台印表機。
+	Two-sided:	雙面：
+	Waiting in the printer's queue	正在印表機佇列中等候
+	Network Printer…	網路印表機…
+	{printer} (default)	{printer}（預設）
 	Move Anchor Point	移動錨點
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文件 {n} 個工作區域中的 1 個：檔案重新開啟時只有一個。開啟「保留編輯功能」可全部保留。
 	Chalk & Charcoal…	粉筆和炭筆…

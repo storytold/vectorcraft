@@ -5383,6 +5383,60 @@ swatch	Bright Violet	Felviolet
 	Select artwork to apply effects	Selecteer grafiek om effecten toe te passen
 # Select by Color (select.color)
 	Select by Color	Selecteren op kleur
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	De kopieën voor een netwerkprinter stelt u hierboven in de sectie van de printer in
+	A setting isn't valid	Een instelling is ongeldig
+	Accepted by {printer}	Geaccepteerd door {printer}
+	Asking the printer…	De printer wordt gevraagd…
+	Canceling…	Annuleren…
+	Couldn't reach the printer	De printer was niet te bereiken
+	Flip on long edge	Omdraaien aan de lange kant
+	Flip on short edge	Omdraaien aan de korte kant
+	Held by the printer	Vastgehouden door de printer
+	I confirm sending this document to this printer	Ik bevestig dat dit document naar deze printer wordt verzonden
+	Network Printer…	Netwerkprinter…
+	Not confirmed by the printer	Niet bevestigd door de printer
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Alleen IP-adressen in dit netwerk worden geaccepteerd (privé, link-local of loopback), geen hostnamen.
+	Photo	Foto
+	Printed with errors	Afgedrukt met fouten
+	Printed with warnings	Afgedrukt met waarschuwingen
+	Printer address:	Printeradres:
+	Printer orientation:	Afdrukstand van de printer:
+	Printer status: {state}	Printerstatus: {state}
+	Query printer	Vraag de printer
+	Query the printer first to see what it supports.	Vraag eerst de printer wat deze ondersteunt.
+	Reasons: {reasons}	Redenen: {reasons}
+	Reverse landscape	Omgekeerd liggend
+	Reverse portrait	Omgekeerd staand
+	Sending to {printer}…	Verzenden naar {printer}…
+	Sent to {printer}	Verzonden naar {printer}
+	Sent. The printer can't say whether it printed.	Verzonden. De printer kan niet zeggen of er is afgedrukt.
+	Sheets printed: {done} of {total}	Afgedrukte vellen: {done} van {total}
+	Sheets printed: {n}	Afgedrukte vellen: {n}
+	Still printing; the job continues on the printer	Wordt nog afgedrukt; de taak gaat verder op de printer
+	The document couldn't be prepared	Het document kon niet worden voorbereid
+	The job was canceled	De taak is geannuleerd
+	The print job stopped unexpectedly	De afdruktaak is onverwacht gestopt
+	The printer accepts none of the formats this document can be sent in	De printer accepteert geen van de indelingen waarin dit document kan worden verzonden
+	The printer address was refused	Het printeradres is geweigerd
+	The printer doesn't support this setting	De printer ondersteunt deze instelling niet
+	The printer is printing it	De printer drukt het af
+	The printer may have received the document. Check the printer before sending again.	De printer heeft het document mogelijk ontvangen. Controleer de printer voordat u opnieuw verzendt.
+	The printer no longer lists the job; it most likely finished	De printer toont de taak niet meer; waarschijnlijk is die klaar
+	The printer paused the job; it needs attention	De printer heeft de taak onderbroken; er is aandacht nodig
+	The printer refused the request	De printer heeft het verzoek geweigerd
+	The printer stopped the job	De printer heeft de taak gestopt
+	The printer's reply couldn't be understood	Het antwoord van de printer kon niet worden begrepen
+	This printer does not take a copies setting.	Deze printer kent geen instelling voor het aantal kopieën.
+	This printer does not take a quality setting.	Deze printer kent geen kwaliteitsinstelling.
+	This printer does not take a resolution setting.	Deze printer kent geen resolutie-instelling.
+	This printer does not take an orientation setting.	Deze printer kent geen instelling voor de afdrukstand.
+	This printer only prints in grayscale.	Deze printer drukt alleen in grijstinten af.
+	This printer only prints one-sided.	Deze printer drukt alleen enkelzijdig af.
+	Tick the confirmation box to send this document to this printer.	Vink het bevestigingsvakje aan om dit document naar deze printer te verzenden.
+	Two-sided:	Dubbelzijdig:
+	Waiting in the printer's queue	Wacht in de wachtrij van de printer
+	{printer} (default)	{printer} (standaard)
 	Smudge Stick…	Uitsmeerstift…
 	Smudge Stick	Uitsmeerstift
 	Sponge…	Spons…

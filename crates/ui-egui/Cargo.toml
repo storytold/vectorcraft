@@ -46,10 +46,19 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
+# Network printing (WS-Print, IPP): no sockets on the web, and not in the experimental Windows 7
+# build, which keeps craft-print out of its tree (docs/windows7.md).
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))'.dependencies]
+vectorcraft-print = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
 # MIT OR Apache-2.0 and already in the build through eframe.
 web-time = "1"
+
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))'.dev-dependencies]
+# The in-process fake WS-Print printer for the network print tests (`craft_print::wsd::testing`).
+craft-print = { workspace = true, features = ["wsd", "testing"] }
 
 # The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
 # user owns it (src/dialogs/save_for_web.rs). Already in Cargo.lock (tempfile), so this adds no

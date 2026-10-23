@@ -1,6 +1,6 @@
 # Hardware parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** patch (web pen buttons/modifiers preserved, touch-only input left to eframe, session-only palm rejection; tool cursors painted into the window on Wayland, #1652, not run on Linux; borderless title-bar window on Windows, #1758, awaiting confirmation; a window surface larger than 8192 px keeps working, #1459 in part; Linux Display Server preference opens the window through XWayland, #1151) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-18 · **Change:** minor (printers on the network by address, WS-Print and IPP, not in the Windows 7 build; earlier: web pen buttons/modifiers preserved, touch-only input left to eframe, session-only palm rejection; tool cursors painted into the window on Wayland, #1652, not run on Linux; borderless title-bar window on Windows, #1758, awaiting confirmation; a window surface larger than 8192 px keeps working, #1459 in part; Linux Display Server preference opens the window through XWayland, #1151) · **Target:** Adobe Illustrator 2026 (30.x)
 
 What hardware Illustrator uses, per platform, against VectorCraft. Illustrator's side is from its public
 documentation (GPU Performance, touch workspace, pen pressure pages); ours from the code
@@ -28,11 +28,13 @@ on huge documents. Pen input is pressure-only and Windows-first.
 | Multiple monitors: panels and document windows on another screen | yes | no (one OS window) | no | no | — | missing: 6–10 h (with multiple windows, gap G7) |
 | Display colour profile (proof and display through the monitor's ICC) | yes | no | no | no | — | missing: 3–5 h |
 | 3D GPU rendering (Materials, ray tracing) | yes | — | — | — | — | blocked on 3D (gap G3) |
+| Printers on the network by address (WS-Print, IPP), without a system queue | no (the system's print dialog) | Print › Network Printer…: the printer at an IP address on this network is queried for what it lists, then sent the print-ready PDF (or PWG raster the app renders) after the person ticks the confirmation | same; not in the Windows 7 build ([windows7.md](windows7.md)) | same | no (no sockets) | beyond Illustrator; tested against in-process WS-Print fakes only, never a real printer; raster pages are held in memory (no cap yet, gap G8) |
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-18 | minor | Row for printers on the network (Print › Network Printer…, WS-Print and IPP): copies go in the PDF unless the printer's listed range covers them, a Grayscale preset or dialog setting prints gray, gray raster uses Rec. 709 weights; not in the Windows 7 build. Tested against in-process fakes only; score unchanged (estimated) |
 | 2026-10-15 | patch | Web review: preserve pen buttons and modifiers; leave fingers to eframe before the first pen contact; remove persistent pen policy. Canvas regression tests cover intermediate moves and long-touch cancellation on native and web input. Physical-device QA pending. |
 | 2026-10-14 | minor | Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed); On Windows the custom title bar's window stays truly borderless, so the pointer lines up with what is drawn on systems where the hidden caption offset it (#1791, #1758; awaiting the reporter's confirmation); neither is confirmed on the hardware that reported it, so nothing is marked done |
 | 2026-10-13 | minor | Web: the shell reads pen and finger Pointer Events itself (pen pressure with coalesced events, Apple Pencil hover, palm rejection: after a pen contact fingers only navigate until reload; long press opens the context menu); score unchanged (estimated) |

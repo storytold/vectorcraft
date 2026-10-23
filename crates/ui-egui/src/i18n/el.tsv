@@ -5343,6 +5343,60 @@ effect	Points	Σημεία
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Τα αντίγραφα ενός εκτυπωτή δικτύου ορίζονται στην ενότητά του παραπάνω
+	A setting isn't valid	Μια ρύθμιση δεν είναι έγκυρη
+	Accepted by {printer}	Αποδεκτό από τον εκτυπωτή {printer}
+	Asking the printer…	Ερώτηση στον εκτυπωτή…
+	Canceling…	Ακύρωση…
+	Couldn't reach the printer	Δεν ήταν δυνατή η επικοινωνία με τον εκτυπωτή
+	Flip on long edge	Αναστροφή στη μεγάλη πλευρά
+	Flip on short edge	Αναστροφή στη μικρή πλευρά
+	Held by the printer	Σε αναμονή από τον εκτυπωτή
+	I confirm sending this document to this printer	Επιβεβαιώνω την αποστολή αυτού του εγγράφου σε αυτόν τον εκτυπωτή
+	Network Printer…	Εκτυπωτής δικτύου…
+	Not confirmed by the printer	Δεν επιβεβαιώθηκε από τον εκτυπωτή
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Γίνονται δεκτές μόνο διευθύνσεις IP αυτού του δικτύου (ιδιωτικές, τοπικού συνδέσμου ή loopback), όχι ονόματα υπολογιστών.
+	Photo	Φωτογραφία
+	Printed with errors	Εκτυπώθηκε με σφάλματα
+	Printed with warnings	Εκτυπώθηκε με προειδοποιήσεις
+	Printer address:	Διεύθυνση εκτυπωτή:
+	Printer orientation:	Προσανατολισμός εκτυπωτή:
+	Printer status: {state}	Κατάσταση εκτυπωτή: {state}
+	Query printer	Ερώτηση στον εκτυπωτή
+	Query the printer first to see what it supports.	Ρωτήστε πρώτα τον εκτυπωτή για να δείτε τι υποστηρίζει.
+	Reasons: {reasons}	Λόγοι: {reasons}
+	Reverse landscape	Αντίστροφα οριζόντια
+	Reverse portrait	Αντίστροφα κατακόρυφα
+	Sending to {printer}…	Αποστολή στον εκτυπωτή {printer}…
+	Sent to {printer}	Στάλθηκε στον εκτυπωτή {printer}
+	Sent. The printer can't say whether it printed.	Στάλθηκε. Ο εκτυπωτής δεν μπορεί να πει αν εκτύπωσε.
+	Sheets printed: {done} of {total}	Φύλλα που εκτυπώθηκαν: {done} από {total}
+	Sheets printed: {n}	Φύλλα που εκτυπώθηκαν: {n}
+	Still printing; the job continues on the printer	Εκτυπώνεται ακόμη· η εργασία συνεχίζεται στον εκτυπωτή
+	The document couldn't be prepared	Δεν ήταν δυνατή η προετοιμασία του εγγράφου
+	The job was canceled	Η εργασία ακυρώθηκε
+	The print job stopped unexpectedly	Η εργασία εκτύπωσης σταμάτησε απροσδόκητα
+	The printer accepts none of the formats this document can be sent in	Ο εκτυπωτής δεν δέχεται κανέναν από τους τύπους με τους οποίους μπορεί να σταλεί αυτό το έγγραφο
+	The printer address was refused	Η διεύθυνση του εκτυπωτή απορρίφθηκε
+	The printer doesn't support this setting	Ο εκτυπωτής δεν υποστηρίζει αυτή τη ρύθμιση
+	The printer is printing it	Ο εκτυπωτής το εκτυπώνει
+	The printer may have received the document. Check the printer before sending again.	Ο εκτυπωτής ίσως έλαβε το έγγραφο. Ελέγξτε τον εκτυπωτή πριν το στείλετε ξανά.
+	The printer no longer lists the job; it most likely finished	Ο εκτυπωτής δεν εμφανίζει πλέον την εργασία· πιθανότατα ολοκληρώθηκε
+	The printer paused the job; it needs attention	Ο εκτυπωτής διέκοψε την εργασία· χρειάζεται προσοχή
+	The printer refused the request	Ο εκτυπωτής απέρριψε το αίτημα
+	The printer stopped the job	Ο εκτυπωτής σταμάτησε την εργασία
+	The printer's reply couldn't be understood	Η απάντηση του εκτυπωτή δεν έγινε κατανοητή
+	This printer does not take a copies setting.	Αυτός ο εκτυπωτής δεν δέχεται ρύθμιση αντιγράφων.
+	This printer does not take a quality setting.	Αυτός ο εκτυπωτής δεν δέχεται ρύθμιση ποιότητας.
+	This printer does not take a resolution setting.	Αυτός ο εκτυπωτής δεν δέχεται ρύθμιση ανάλυσης.
+	This printer does not take an orientation setting.	Αυτός ο εκτυπωτής δεν δέχεται ρύθμιση προσανατολισμού.
+	This printer only prints in grayscale.	Αυτός ο εκτυπωτής εκτυπώνει μόνο σε κλίμακα του γκρι.
+	This printer only prints one-sided.	Αυτός ο εκτυπωτής εκτυπώνει μόνο μονής όψης.
+	Tick the confirmation box to send this document to this printer.	Επιλέξτε το πλαίσιο επιβεβαίωσης για να στείλετε αυτό το έγγραφο σε αυτόν τον εκτυπωτή.
+	Two-sided:	Διπλής όψης:
+	Waiting in the printer's queue	Σε αναμονή στην ουρά του εκτυπωτή
+	{printer} (default)	{printer} (προεπιλογή)
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	Το {label} διατηρεί 1 από τους {n} πίνακες σχεδίασης του εγγράφου: το αρχείο ανοίγει ξανά με μία. Ενεργοποιήστε τη Διατήρηση δυνατοτήτων επεξεργασίας για να τους κρατήσετε όλους.
 	Chalk & Charcoal…	Κιμωλία και κάρβουνο…

@@ -5340,6 +5340,60 @@ swatch	Bright Violet	Violet cerah
 	Select artwork to apply effects	Pilih grafis untuk menerapkan efek
 # Select by Color (select.color)
 	Select by Color	Pilih berdasarkan warna
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Salinan printer jaringan diatur di bagiannya di atas
+	A setting isn't valid	Sebuah pengaturan tidak valid
+	Accepted by {printer}	Diterima oleh {printer}
+	Asking the printer…	Menanyakan ke printer…
+	Canceling…	Membatalkan…
+	Couldn't reach the printer	Printer tidak dapat dijangkau
+	Flip on long edge	Balik pada sisi panjang
+	Flip on short edge	Balik pada sisi pendek
+	Held by the printer	Ditahan oleh printer
+	I confirm sending this document to this printer	Saya mengonfirmasi pengiriman dokumen ini ke printer ini
+	Network Printer…	Printer jaringan…
+	Not confirmed by the printer	Tidak dikonfirmasi oleh printer
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Hanya alamat IP di jaringan ini yang diterima (privat, link-local, atau loopback), bukan nama host.
+	Photo	Foto
+	Printed with errors	Dicetak dengan kesalahan
+	Printed with warnings	Dicetak dengan peringatan
+	Printer address:	Alamat printer:
+	Printer orientation:	Orientasi printer:
+	Printer status: {state}	Status printer: {state}
+	Query printer	Tanyakan ke printer
+	Query the printer first to see what it supports.	Tanyakan dulu ke printer untuk melihat apa yang didukungnya.
+	Reasons: {reasons}	Alasan: {reasons}
+	Reverse landscape	Lanskap terbalik
+	Reverse portrait	Potret terbalik
+	Sending to {printer}…	Mengirim ke {printer}…
+	Sent to {printer}	Terkirim ke {printer}
+	Sent. The printer can't say whether it printed.	Terkirim. Printer tidak dapat memastikan apakah sudah tercetak.
+	Sheets printed: {done} of {total}	Lembar tercetak: {done} dari {total}
+	Sheets printed: {n}	Lembar tercetak: {n}
+	Still printing; the job continues on the printer	Masih mencetak; pekerjaan berlanjut di printer
+	The document couldn't be prepared	Dokumen tidak dapat disiapkan
+	The job was canceled	Pekerjaan dibatalkan
+	The print job stopped unexpectedly	Pekerjaan cetak berhenti tiba-tiba
+	The printer accepts none of the formats this document can be sent in	Printer tidak menerima satu pun format yang dapat digunakan untuk mengirim dokumen ini
+	The printer address was refused	Alamat printer ditolak
+	The printer doesn't support this setting	Printer tidak mendukung pengaturan ini
+	The printer is printing it	Printer sedang mencetaknya
+	The printer may have received the document. Check the printer before sending again.	Printer mungkin sudah menerima dokumen. Periksa printer sebelum mengirim lagi.
+	The printer no longer lists the job; it most likely finished	Printer tidak lagi menampilkan pekerjaan itu; kemungkinan besar sudah selesai
+	The printer paused the job; it needs attention	Printer menjeda pekerjaan; perlu perhatian
+	The printer refused the request	Printer menolak permintaan
+	The printer stopped the job	Printer menghentikan pekerjaan
+	The printer's reply couldn't be understood	Jawaban printer tidak dapat dipahami
+	This printer does not take a copies setting.	Printer ini tidak memiliki pengaturan jumlah salinan.
+	This printer does not take a quality setting.	Printer ini tidak memiliki pengaturan kualitas.
+	This printer does not take a resolution setting.	Printer ini tidak memiliki pengaturan resolusi.
+	This printer does not take an orientation setting.	Printer ini tidak memiliki pengaturan orientasi.
+	This printer only prints in grayscale.	Printer ini hanya mencetak dalam skala abu-abu.
+	This printer only prints one-sided.	Printer ini hanya mencetak satu sisi.
+	Tick the confirmation box to send this document to this printer.	Centang kotak konfirmasi untuk mengirim dokumen ini ke printer ini.
+	Two-sided:	Dua sisi:
+	Waiting in the printer's queue	Menunggu di antrean printer
+	{printer} (default)	{printer} (default)
 	Smudge Stick…	Tongkat olesan…
 	Smudge Stick	Tongkat olesan
 	Sponge…	Spons…

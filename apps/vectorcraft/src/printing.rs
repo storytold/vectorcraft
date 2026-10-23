@@ -38,10 +38,21 @@ mod system {
         craft_print::printers().into_iter().map(|p| Printer { name: p.name, default: p.default }).collect()
     }
     pub fn print(job: &PrintJob) -> Result<String, String> {
-        // Copies, layout, marks and colour management are already in the PDF. Preserve its
-        // physical sheet size and the queue's duplex default without printing copies twice.
-        let settings = craft_print::Job { printer: job.printer.map(str::to_string), title: job.title.into(), ..Default::default() };
-        craft_print::submit(job.pdf, &settings).map(|note| if note.is_empty() { note } else { format!(" ({note})") }).map_err(|e| e.to_string())
+        craft_print::submit(job.pdf, &queue_job(job)).map(|note| if note.is_empty() { note } else { format!(" ({note})") }).map_err(|e| e.to_string())
+    }
+    /// The queue job for `job`. Copies, layout, marks, colour management and gray are already in
+    /// the PDF, and the queue's duplex default stays. A paper the person chose is demanded exactly
+    /// (a queue without it refuses); otherwise the pages are the document's own size (an artboard,
+    /// a custom size), which a queue may not list: the job goes on the queue's default paper, shrunk
+    /// to fit. Grayscale is also asked of the driver, which may ignore it: the PDF is gray itself.
+    pub fn queue_job(job: &PrintJob) -> craft_print::Job {
+        craft_print::Job {
+            printer: job.printer.map(str::to_string),
+            title: job.title.into(),
+            grayscale: job.grayscale,
+            scaling: if job.paper_chosen { craft_print::Scaling::Exact } else { craft_print::Scaling::ShrinkToFit },
+            ..Default::default()
+        }
     }
     #[cfg(windows)]
     pub(crate) fn setup_command(printer: Option<&str>, default_printer: Option<&str>) -> Command {
@@ -125,5 +136,28 @@ mod tests {
         assert_eq!(cmd.get_program(), "explorer");
         let args: Vec<&OsStr> = cmd.get_args().collect();
         assert_eq!(args, ["ms-settings:printers"]);
+    }
+}
+
+#[cfg(all(test, not(all(windows, any(feature = "windows7", target_vendor = "win7")))))]
+mod queue_tests {
+    use super::system::queue_job;
+    use super::*;
+
+    fn job(grayscale: bool, paper_chosen: bool) -> PrintJob<'static> {
+        PrintJob { printer: Some("Office"), title: "Doc", pdf: b"%PDF", grayscale, paper_chosen }
+    }
+
+    #[test]
+    fn a_document_sized_job_goes_on_the_queues_own_paper_shrunk_to_fit() {
+        let q = queue_job(&job(false, false));
+        assert_eq!((q.scaling, q.grayscale, q.printer.as_deref(), q.copies), (craft_print::Scaling::ShrinkToFit, false, Some("Office"), 1));
+        assert!(q.options.is_empty(), "no paper or other driver option is sent");
+    }
+
+    #[test]
+    fn a_chosen_paper_is_demanded_exactly_and_grayscale_asks_for_monochrome() {
+        let q = queue_job(&job(true, true));
+        assert_eq!((q.scaling, q.grayscale), (craft_print::Scaling::Exact, true));
     }
 }

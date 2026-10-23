@@ -5345,6 +5345,60 @@ theme	Appearance	Външен вид
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Копията за мрежов принтер се задават в неговия раздел по-горе
+	A setting isn't valid	Настройката не е валидна
+	Accepted by {printer}	Приета от {printer}
+	Asking the printer…	Питане на принтера…
+	Canceling…	Отмяна…
+	Couldn't reach the printer	Принтерът не може да бъде достигнат
+	Flip on long edge	Обръщане по дългия ръб
+	Flip on short edge	Обръщане по късия ръб
+	Held by the printer	Задържана от принтера
+	I confirm sending this document to this printer	Потвърждавам изпращането на този документ към този принтер
+	Network Printer…	Мрежов принтер…
+	Not confirmed by the printer	Не е потвърдено от принтера
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Приемат се само IP адреси от тази мрежа (частни, link-local или loopback), не имена на хостове.
+	Photo	Снимка
+	Printed with errors	Отпечатано с грешки
+	Printed with warnings	Отпечатано с предупреждения
+	Printer address:	Адрес на принтера:
+	Printer orientation:	Ориентация на принтера:
+	Printer status: {state}	Състояние на принтера: {state}
+	Query printer	Попитай принтера
+	Query the printer first to see what it supports.	Първо попитайте принтера, за да видите какво поддържа.
+	Reasons: {reasons}	Причини: {reasons}
+	Reverse landscape	Обърнат пейзаж
+	Reverse portrait	Обърнат портрет
+	Sending to {printer}…	Изпращане към {printer}…
+	Sent to {printer}	Изпратено към {printer}
+	Sent. The printer can't say whether it printed.	Изпратено. Принтерът не може да каже дали е отпечатал.
+	Sheets printed: {done} of {total}	Отпечатани листове: {done} от {total}
+	Sheets printed: {n}	Отпечатани листове: {n}
+	Still printing; the job continues on the printer	Все още се печата; заданието продължава на принтера
+	The document couldn't be prepared	Документът не можа да бъде подготвен
+	The job was canceled	Заданието беше отменено
+	The print job stopped unexpectedly	Заданието за печат спря неочаквано
+	The printer accepts none of the formats this document can be sent in	Принтерът не приема нито един от форматите, в които може да се изпрати този документ
+	The printer address was refused	Адресът на принтера беше отхвърлен
+	The printer doesn't support this setting	Принтерът не поддържа тази настройка
+	The printer is printing it	Принтерът го отпечатва
+	The printer may have received the document. Check the printer before sending again.	Принтерът може да е получил документа. Проверете принтера, преди да изпратите отново.
+	The printer no longer lists the job; it most likely finished	Принтерът вече не показва заданието; най-вероятно е приключило
+	The printer paused the job; it needs attention	Принтерът постави заданието на пауза; изисква внимание
+	The printer refused the request	Принтерът отхвърли заявката
+	The printer stopped the job	Принтерът спря заданието
+	The printer's reply couldn't be understood	Отговорът на принтера не можа да бъде разбран
+	This printer does not take a copies setting.	Този принтер не поддържа настройка за брой копия.
+	This printer does not take a quality setting.	Този принтер не поддържа настройка за качество.
+	This printer does not take a resolution setting.	Този принтер не поддържа настройка за резолюция.
+	This printer does not take an orientation setting.	Този принтер не поддържа настройка за ориентация.
+	This printer only prints in grayscale.	Този принтер печата само в нюанси на сивото.
+	This printer only prints one-sided.	Този принтер печата само едностранно.
+	Tick the confirmation box to send this document to this printer.	Отметете полето за потвърждение, за да изпратите този документ към този принтер.
+	Two-sided:	Двустранно:
+	Waiting in the printer's queue	Чака в опашката на принтера
+	{printer} (default)	{printer} (по подразбиране)
 	Move Anchor Point	Преместване на опорна точка
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} запазва 1 от {n} работни области на документа: файлът се отваря отново с един. Включете „Запазване на възможностите за редактиране“, за да запазите всички.
 	Chalk & Charcoal…	Креда и въглен…
