@@ -1014,6 +1014,12 @@ pub(crate) fn is_area_type(n: &vectorcraft_doc::Node) -> bool {
         && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
 }
 
+/// Is `n` type on a path outside perspective (Direct Selection drags its path's anchors)?
+pub(crate) fn is_path_type(n: &vectorcraft_doc::Node) -> bool {
+    n.extras().perspective.is_none()
+        && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }))
+}
+
 /// Can `n` be a frame of a thread: area type or type on a path, outside perspective?
 pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
     n.extras().perspective.is_none() && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if !matches!(t.kind, vectorcraft_doc::TextKind::Point))

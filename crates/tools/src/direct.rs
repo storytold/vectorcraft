@@ -23,7 +23,8 @@
 //! with it) and, once a point is clicked, its handles; and the points of selected gradient meshes
 //! and mesh envelopes and their handles ([`MeshEdit`]; a solid fill colour recolours a gradient
 //! mesh's point last clicked). Dragging a corner or an edge of area
-//! type's frame reshapes the type area (`text.reshapeArea`): the text reflows at its size.
+//! type's frame reshapes the type area (`text.reshapeArea`): the text reflows at its size; dragging
+//! an anchor of type on a path's path reshapes the path (`text.reshapePath`): the text reflows along it.
 //! Dragging the brackets of selected type on a path moves or flips it ([`crate::pathtype`]).
 //!
 //! A press on the stroke of a path that isn't selected as a whole selects that segment's two anchors
@@ -43,7 +44,7 @@ use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::MeshEdit;
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
-use crate::select::{MoveSnap, hold_point, is_area_type, matrix_json, release_guide_at};
+use crate::select::{MoveSnap, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Debug)]
@@ -120,7 +121,8 @@ enum State {
     },
     /// Dragging a mesh point or handle ([`MeshEdit`]).
     Mesh,
-    /// Dragging anchors of area type's frame (a corner, or the two ends of an edge).
+    /// Dragging anchors of area type's frame (a corner, or the two ends of an edge), or an anchor
+    /// of type on a path's path.
     TypeArea {
         id: NodeId,
         anchors: Vec<AnchorRef>,
@@ -274,11 +276,12 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
     }
 }
 
-/// The anchors Direct Selection edits on `n`, in document space: a path's, or area type's frame.
+/// The anchors Direct Selection edits on `n`, in document space: a path's, area type's frame or
+/// type on a path's path.
 fn editable_path(n: &Node) -> Option<Cow<'_, PathData>> {
     match &n.kind {
         NodeKind::Path { path, .. } => Some(Cow::Borrowed(path)),
-        NodeKind::Text(t) => t.area_frame().map(Cow::Owned),
+        NodeKind::Text(t) => t.area_frame().or_else(|| t.type_path()).map(Cow::Owned),
         _ => None,
     }
 }
@@ -303,7 +306,7 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
 /// [`hovered_anchor`] marks it. In normal viewmode, an opaque fill in front occludes unselected
 /// objects behind it (#3405).
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, Point)> {
-    let mut owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    let mut owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n) || is_path_type(n));
     owners.sort_by_key(|id| !cx.selection.contains(*id));
 
     // 1. Check selected objects first. Selected objects are NEVER occluded (#1508).
@@ -348,6 +351,13 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
         let pd = cx.doc.node(id).and_then(editable_path)?;
         nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
     })
+}
+
+/// Is `p` within a press's reach of an anchor of type on a path's path? The anchor wins over a
+/// bracket standing on it (the end bracket on the last anchor, #3980); the bracket's stem above it
+/// still drags the bracket.
+fn over_path_type_anchor(cx: &ToolContext, p: Point) -> bool {
+    hit_anchor(cx, p, cx.point_tol()).is_some_and(|(id, ..)| cx.doc.node(id).is_some_and(is_path_type))
 }
 
 /// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is).
@@ -548,7 +558,9 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Corner(c);
                     return vec![];
                 }
-                if let Some(b) = BracketDrag::hit(cx, ev) {
+                if !over_path_type_anchor(cx, p)
+                    && let Some(b) = BracketDrag::hit(cx, ev)
+                {
                     self.state = State::Bracket(b);
                     return vec![];
                 }
@@ -576,7 +588,7 @@ impl Tool for DirectSelectionTool {
                     return if cx.selection.contains(id) { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                 }
                 if let Some((id, si, ai, grab)) = hit_anchor(cx, p, point) {
-                    if cx.doc.node(id).is_some_and(is_area_type) {
+                    if cx.doc.node(id).is_some_and(|n| is_area_type(n) || is_path_type(n)) {
                         return self.press_type_area(cx, id, vec![(si, ai)], p, ev.mods.shift);
                     }
                     // Alt picks the whole path (and Alt-drag copies it), as on a segment.
@@ -744,14 +756,16 @@ impl Tool for DirectSelectionTool {
             }
             (PointerKind::Drag, State::TypeArea { id, anchors, start, began }) => {
                 let mut out = vec![];
+                let on_path = cx.doc.node(id).is_some_and(is_path_type);
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
-                    out.push(Action::Begin("Reshape Type Area".into()));
+                    out.push(Action::Begin(if on_path { "Reshape Type Path" } else { "Reshape Type Area" }.into()));
                 }
                 let d = move_delta(start, p, ev.mods.shift, cx.constrain_angle);
-                out.push(Action::Preview("text.reshapeArea".into(), json!({"id": id.0, "anchors": anchors_json(&anchors), "dx": d.x, "dy": d.y})));
+                let cmd = if on_path { "text.reshapePath" } else { "text.reshapeArea" };
+                out.push(Action::Preview(cmd.into(), json!({"id": id.0, "anchors": anchors_json(&anchors), "dx": d.x, "dy": d.y})));
                 self.state = State::TypeArea { id, anchors, start, began: true };
                 out
             }
@@ -926,7 +940,7 @@ impl Tool for DirectSelectionTool {
         if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p, true)) {
             return Cursor::CornerRadius;
         }
-        if !self.group && (matches!(self.state, State::Bracket(_)) || over_bracket(cx, p)) {
+        if !self.group && (matches!(self.state, State::Bracket(_)) || over_bracket(cx, p) && !over_path_type_anchor(cx, p)) {
             return Cursor::PathBracket;
         }
         let rest = if self.group { Cursor::GroupSelection } else { Cursor::ArrowHollow };
@@ -1020,11 +1034,12 @@ fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
     })
 }
 
-/// The frame anchors of the selected area type, which Direct Selection drags.
+/// The frame anchors of the selected area type and the path anchors of the selected type on a
+/// path, which Direct Selection drags.
 fn frame_overlays(cx: &ToolContext) -> Vec<Overlay> {
     let mut out = vec![];
     for id in &cx.selection.objects {
-        let Some(frame) = cx.doc.node(*id).filter(|n| is_area_type(n)).and_then(editable_path) else { continue };
+        let Some(frame) = cx.doc.node(*id).filter(|n| is_area_type(n) || is_path_type(n)).and_then(editable_path) else { continue };
         let color = cx.doc.layer_color(*id);
         out.extend(frame.anchors().map(|(_, _, a)| Overlay::Anchor { p: a.p, color, filled: false, size: 5.0 }));
     }
@@ -1032,8 +1047,8 @@ fn frame_overlays(cx: &ToolContext) -> Vec<Overlay> {
 }
 
 impl DirectSelectionTool {
-    /// Press on area type's frame anchors (a corner, or an edge's two ends): select the text and
-    /// get ready to drag them.
+    /// Press on area type's frame anchors (a corner, or an edge's two ends) or an anchor of type
+    /// on a path's path: select the text and get ready to drag them.
     fn press_type_area(&mut self, cx: &ToolContext, id: NodeId, anchors: Vec<AnchorRef>, p: Point, shift: bool) -> Vec<Action> {
         self.state = State::TypeArea { id, anchors, start: p, began: false };
         if cx.selection.contains(id) {
@@ -1333,6 +1348,38 @@ mod tests {
         assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 300.0, 340.0)).is_empty());
         // The selected frame's corners show.
         assert_eq!(t.overlays(&cx2).iter().filter(|o| matches!(o, Overlay::Anchor { filled: false, .. })).count(), 4);
+    }
+
+    /// #3980: type on a path shows its path's anchors and a drag of one reshapes the path, the last
+    /// one too although the end bracket stands on it; the bracket's stem above it drags the bracket.
+    #[test]
+    fn dragging_an_anchor_of_type_on_a_path_reshapes_its_path() {
+        let (d, text) = doc_with_path_type();
+        let p = paint();
+        let s = Selection::default();
+        let cx1 = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(
+            t.pointer(&cx1, &PointerEvent::new(PointerKind::Down, 101.0, 301.0)),
+            vec![Action::Exec("select.set".into(), json!({"ids": [text.0]}))]
+        );
+        let a = t.pointer(&cx1, &PointerEvent::new(PointerKind::Drag, 121.0, 261.0));
+        assert_eq!(a[0], Action::Begin("Reshape Type Path".into()));
+        assert_eq!(a[1], Action::Preview("text.reshapePath".into(), json!({"id": text.0, "anchors": [[0, 0]], "dx": 20.0, "dy": -40.0})));
+        assert_eq!(t.pointer(&cx1, &PointerEvent::new(PointerKind::Up, 121.0, 261.0)), vec![Action::Commit]);
+        let mut s = Selection::default();
+        s.add(text);
+        let cx2 = cx(&d, &s, &p);
+        let anchors: Vec<Point> =
+            t.overlays(&cx2).iter().filter_map(|o| if let Overlay::Anchor { p, filled: false, .. } = o { Some(*p) } else { None }).collect();
+        assert_eq!(anchors, vec![Point::new(100.0, 300.0), Point::new(400.0, 300.0)]);
+        assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 400.0, 300.0)).is_empty());
+        let a = t.pointer(&cx2, &PointerEvent::new(PointerKind::Drag, 400.0, 260.0));
+        assert_eq!(a.last(), Some(&Action::Preview("text.reshapePath".into(), json!({"id": text.0, "anchors": [[0, 1]], "dx": 0.0, "dy": -40.0}))));
+        t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 400.0, 260.0));
+        t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 400.0, 290.0));
+        let a = t.pointer(&cx2, &PointerEvent::new(PointerKind::Drag, 340.0, 290.0));
+        assert!(matches!(a.last(), Some(Action::Preview(c, _)) if c == "type.pathOptions"), "{a:?}");
     }
 
     #[test]

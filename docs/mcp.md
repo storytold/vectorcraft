@@ -4120,6 +4120,9 @@ text at its size, through its thread too. `text.reshapeArea {id, anchors: [[subp
 frame anchors with their handles (Direct Selection dragging a corner, or an edge's two ends), and
 `text.areaOptions {width?, height?}` sizes the area from its top-left corner (the query returns both). Each is one
 undo step. Object › Transform › Scale, the Scale tool and the Transform panel still scale the type.
+`text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
+(Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
+text reflows along it.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}

@@ -252,3 +252,28 @@ fn dragging_the_start_and_end_brackets_sets_where_the_type_runs() {
     let r = ink(&s, id);
     assert!(r.x0 > 199.0 && r.x1 < 401.0, "between the brackets: {r:?}");
 }
+
+/// #3980: Direct Selection drags an anchor of type on a path's path, in document space through
+/// the type's transform; the brackets keep their fractions of the path and the type reflows.
+#[test]
+fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
+    let mut s = session();
+    let id = path_type(&mut s, "M100 300 L300 300 L500 300", [100.0, 310.0], "Reflowing type");
+    s.execute("type.pathOptions", &json!({"start": 0.0, "end": 0.75})).unwrap();
+    // A quarter turn, so a document-space move isn't the path's own.
+    s.execute("object.transform", &json!({"ids": [id.0], "matrix": [0, 1, -1, 0, 600, 0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let path = |s: &Session| text(s, id).type_path().unwrap();
+    let (first, middle) = (path(&s).subpaths[0].anchors[0].p, path(&s).subpaths[0].anchors[1].p);
+    let (glyphs, n) = (origins(&s, id), undo_len(&s));
+    drag(&mut s, "directSelection", middle, middle + vectorcraft_geom::Vec2::new(40.0, 0.0), Mods::default());
+    let after = path(&s);
+    let moved = after.subpaths[0].anchors[1].p;
+    assert!(near(moved.x, middle.x + 40.0) && near(moved.y, middle.y), "{middle:?} → {moved:?}");
+    assert_eq!(after.subpaths[0].anchors[0].p, first, "the other anchors stay");
+    assert_eq!(brackets(&s, id), (0.0, Some(0.75)));
+    assert_ne!(origins(&s, id), glyphs, "the type reflows along the reshaped path");
+    assert_eq!((undo_len(&s), last_step(&s).as_str()), (n + 1, "Reshape Type Path"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
+}

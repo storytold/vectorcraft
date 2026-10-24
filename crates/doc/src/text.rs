@@ -1524,6 +1524,14 @@ impl TextKind {
     }
 }
 
+/// Move anchors `refs` of `path`, in text space, by `d` in document space (`to_text`: the
+/// document → text map). False when an anchor doesn't exist.
+fn move_anchors(path: &mut PathData, to_text: Affine, refs: &[(usize, usize)], d: Vec2) -> bool {
+    // A distance: only the linear part of the document → text map applies.
+    let local = to_text * d.to_point() - to_text * Point::ZERO;
+    refs.iter().all(|&(si, ai)| path.anchor_mut(si, ai).map(|a| a.translate(local)).is_some())
+}
+
 /// `x` as a fraction of a path's length (0..1; 0 when not finite).
 fn fraction(x: f64) -> f64 {
     if x.is_finite() { x.clamp(0.0, 1.0) } else { 0.0 }
@@ -2008,21 +2016,28 @@ impl TextObject {
     /// their handles (a Direct Selection drag of a frame corner or edge). False, changing
     /// nothing, when an anchor doesn't exist, or as [`Self::transform_area`].
     pub fn move_area_anchors(&mut self, refs: &[(usize, usize)], d: Vec2) -> bool {
-        self.reshape_area(|frame, to_text| {
-            // A distance: only the linear part of the document → text map applies.
-            let local = to_text * d.to_point() - to_text * Point::ZERO;
-            refs.iter().all(|&(si, ai)| frame.anchor_mut(si, ai).map(|a| a.translate(local)).is_some())
-        })
+        self.reshape_area(|frame, to_text| move_anchors(frame, to_text, refs, d))
+    }
+    /// Move anchors `refs` (subpath, anchor) of type on a path's path by `d` in document space,
+    /// with their handles (a Direct Selection drag of an anchor); the brackets keep their
+    /// fractions of the path. False, changing nothing, for other type, when an anchor doesn't
+    /// exist, a degenerate `xf` or a path that would not be finite.
+    pub fn move_path_anchors(&mut self, refs: &[(usize, usize)], d: Vec2) -> bool {
+        matches!(self.kind, TextKind::OnPath { .. }) && self.reshape_local(|path, to_text| move_anchors(path, to_text, refs, d))
     }
     /// Edit a copy of the area frame with `f` (given the document → text space map) and keep it
     /// when `f` succeeds and the result is finite.
     fn reshape_area(&mut self, f: impl FnOnce(&mut PathData, Affine) -> bool) -> bool {
+        matches!(self.kind, TextKind::Area { .. }) && self.reshape_local(f)
+    }
+    /// [`Self::reshape_area`] for the area frame or type on a path's path.
+    fn reshape_local(&mut self, f: impl FnOnce(&mut PathData, Affine) -> bool) -> bool {
         let det = self.xf.determinant();
         if !det.is_finite() || det.abs() < 1e-12 {
             return false;
         }
         let to_text = self.xf.inverse();
-        let TextKind::Area { frame } = &mut self.kind else { return false };
+        let (TextKind::Area { frame } | TextKind::OnPath { path: frame, .. }) = &mut self.kind else { return false };
         let mut next = frame.clone();
         if !f(&mut next, to_text) || !next.anchors().all(|(_, _, a)| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()) {
             return false;

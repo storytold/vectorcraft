@@ -98,6 +98,15 @@ pub fn specs() -> Vec<CommandSpec> {
             reshape_area
         ),
         cmd!(
+            "text.reshapePath",
+            "Reshape Type Path",
+            [],
+            None,
+            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path)",
+            has_doc,
+            reshape_path
+        ),
+        cmd!(
             "text.fitHeadline",
             "Fit Headline",
             ["Type"],
@@ -1061,6 +1070,37 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
         if !reshape_area_with(t, |t| t.move_area_anchors(&refs, d)) {
             return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
         }
+        Ok(())
+    })?;
+    ok()
+}
+
+fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.reshapePath";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
+    refs.sort_unstable();
+    refs.dedup();
+    if refs.is_empty() {
+        return Err(bad(C, "missing anchors [[subpath, anchor]…]"));
+    }
+    let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
+    let node = s.doc()?.doc.node(id);
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
+    }
+    s.edit("Reshape Type Path", |doc, _| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.move_path_anchors(&refs, d) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
+        }
+        refresh_bounds(t);
         Ok(())
     })?;
     ok()
