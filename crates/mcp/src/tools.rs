@@ -290,7 +290,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "set_paint",
             "Set paint",
-            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art.",
+            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed.",
             obj(
                 json!({
                     "fill": paint_schema("Fill"),
@@ -590,15 +590,20 @@ fn paint_steps(a: &Args) -> Result<(Vec<Step<'static>>, Map<String, Value>), Str
     Ok((steps, applied))
 }
 
-fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<Value, String> {
+/// Sets the paint `a` gives on `ids` (default: the selection) and as the default for new art.
+/// Returns the paint applied and the most objects one of its edits painted (the `objects` of the
+/// `paint.setFill`, `paint.setStroke` and `stroke.set` replies).
+fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<(Value, u64), String> {
     let (steps, applied) = paint_steps(a)?;
+    let mut objects = 0;
     for (cmd, mut p) in steps {
         if let Some(ids) = &ids {
             p["ids"] = ids.clone();
         }
-        exec(b, cmd, p)?;
+        let r = exec(b, cmd, p)?;
+        objects = objects.max(r.get("objects").and_then(Value::as_u64).unwrap_or(0));
     }
-    Ok(Value::Object(applied))
+    Ok((Value::Object(applied), objects))
 }
 
 /// Checks `draw_path` / `draw_shape`'s `dash`, `cap`, `join`, `opacity`, `name` and `effects`
@@ -1063,8 +1068,14 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if !["fill", "stroke", "strokeWidth"].iter().any(|k| a.contains_key(*k)) {
                 return Err("give at least one of `fill`, `stroke`, `strokeWidth`".into());
             }
-            let ids = a.get("ids").cloned();
-            j(json!({"applied": apply_paint(b, a, ids)?}))
+            let (applied, objects) = apply_paint(b, a, a.get("ids").cloned())?;
+            let mut reply = json!({"applied": applied, "objects": objects});
+            if objects == 0 {
+                reply["note"] = json!(
+                    "no object was painted (nothing selected, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                );
+            }
+            j(reply)
         }
         "press_key" => {
             let mut p = json!({"key": req_str(a, "key")?});

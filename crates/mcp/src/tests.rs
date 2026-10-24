@@ -449,6 +449,63 @@ fn inspect_document_reports_the_paint_of_type() {
     assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#0000ff"), Some("#00ff00"), Some(3.0)), "{t}");
 }
 
+/// set_paint says how many objects it painted, and says so when it only set the paint for new art.
+#[test]
+fn set_paint_reports_how_many_objects_it_painted() {
+    let mut s = server();
+    let r = call(&mut s, 2, "draw_shape", json!({"shape": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10, "fill": "#ffffff"}));
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].clone();
+    let fill = |s: &mut Server, n: u64| {
+        let v: Value = serde_json::from_str(&text_of(&call(s, n, "inspect_document", json!({})))).unwrap();
+        v["layers"][0]["children"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap()["fill"].clone()
+    };
+    let paint = |s: &mut Server, n: u64, args: Value| {
+        let r = call(s, n, "set_paint", args);
+        assert_eq!(r["isError"], false, "{r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()
+    };
+
+    // Nothing selected and no ids: only the paint for new art changes.
+    let r = call(&mut s, 3, "run_command", json!({"command": "select.set", "params": {"ids": []}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let v = paint(&mut s, 4, json!({"fill": "#ff0000"}));
+    assert_eq!(v["applied"], json!({"fill": "#ff0000"}), "{v}");
+    assert_eq!(v["objects"], 0, "{v}");
+    assert!(v["note"].as_str().is_some_and(|n| n.contains("new art")), "{v}");
+    assert_eq!(fill(&mut s, 5), "#ffffff");
+
+    // The ids given, counted once each.
+    let v = paint(&mut s, 6, json!({"fill": "#00ff00", "ids": [id, id]}));
+    assert_eq!(v["objects"], 1, "{v}");
+    assert!(v.get("note").is_none(), "{v}");
+    assert_eq!(fill(&mut s, 7), "#00ff00");
+
+    // The selection.
+    let r = call(&mut s, 8, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let v = paint(&mut s, 9, json!({"fill": "#0000ff"}));
+    assert_eq!(v["objects"], 1, "{v}");
+    assert!(v.get("note").is_none(), "{v}");
+    assert_eq!(fill(&mut s, 10), "#0000ff");
+
+    // Empty `ids` paint no object: only the paint for new art changes.
+    let v = paint(&mut s, 11, json!({"strokeWidth": 3, "ids": []}));
+    assert_eq!(v["objects"], 0, "{v}");
+    assert!(v["note"].as_str().is_some_and(|n| n.contains("new art")), "{v}");
+
+    // A selected group counts the objects inside it.
+    let r = call(&mut s, 12, "draw_shape", json!({"shape": "ellipse", "x": 20, "y": 0, "width": 10, "height": 10}));
+    assert_eq!(r["isError"], false, "{r}");
+    for (n, command) in [(13, "select.all"), (14, "object.group")] {
+        let r = call(&mut s, n, "run_command", json!({"command": command}));
+        assert_eq!(r["isError"], false, "{r}");
+    }
+    let v = paint(&mut s, 15, json!({"stroke": "#000000"}));
+    assert_eq!(v["objects"], 2, "{v}");
+    let v = paint(&mut s, 16, json!({"strokeWidth": 2}));
+    assert_eq!(v["objects"], 2, "{v}");
+}
+
 /// #1003: type made on or in a path takes add_text's `color` too, over the current fill.
 #[test]
 fn add_text_on_or_in_a_path_takes_its_color() {
