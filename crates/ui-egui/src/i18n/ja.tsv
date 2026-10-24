@@ -981,7 +981,6 @@ font-technology	Variable	バリアブル
 	Browser	ブラウザー
 	Brush Affects:	ブラシの影響:
 	Brush Definition	ブラシの定義
-	Brush Libraries (on the roadmap)	ブラシライブラリ (今後対応予定)
 	Brush Options…	ブラシオプション…
 	Built-in presets are read-only: New… starts an editable copy.	組み込みのプリセットは読み取り専用です。「新規…」で編集可能なコピーを作成できます。
 	Built-in presets don't change: New makes a copy you can edit.	組み込みのプリセットは変更できません。「新規」で編集可能なコピーを作成します。
@@ -5224,3 +5223,31 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	長方形グリッドツールオプション
 	Polar Grid Tool Options	同心円グリッドツールオプション
 	Fill Line	線を塗りつぶす
+	Add to Brushes	ブラシに追加
+	Brush Library	ブラシライブラリ
+	Save Brush Library	ブラシライブラリを保存
+	Save Brushes…	ブラシを保存…
+	Open Brush Library	ブラシライブラリを開く
+	Selected Brushes Only	選択したブラシのみ
+	Brush Libraries Menu	ブラシライブラリメニュー
+	User Brush Library 1	ユーザーブラシライブラリ 1
+	User Brush Library 2	ユーザーブラシライブラリ 2
+	User Brush Library 3	ユーザーブラシライブラリ 3
+	User Brush Library 4	ユーザーブラシライブラリ 4
+	User Brush Library 5	ユーザーブラシライブラリ 5
+	User Brush Library 6	ユーザーブラシライブラリ 6
+	User Brush Library 7	ユーザーブラシライブラリ 7
+	User Brush Library 8	ユーザーブラシライブラリ 8
+	User Brush Library 9	ユーザーブラシライブラリ 9
+	User Brush Library 10	ユーザーブラシライブラリ 10
+	Art Ribbons	アートリボン
+	Calligraphic Nibs	カリグラフィペン先
+	Pattern Borders	パターンボーダー
+	Scatter Shapes	散布シェイプ
+	Save Brush Library…	ブラシライブラリを保存…
+@msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
+@msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)
+@msg	no brush `{n}`	ブラシ `{n}` がありません
+@msg	no brush `{n}` in `{_1}`	`{_1}` にブラシ `{n}` がありません
+@msg	no brush library `{key}` (see brush.libraries)	ブラシライブラリ `{key}` がありません (brush.libraries を参照)
+@msg	the document has no brushes to save	ドキュメントに保存するブラシがありません

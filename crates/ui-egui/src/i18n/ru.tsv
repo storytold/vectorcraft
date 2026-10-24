@@ -340,7 +340,6 @@ font-technology	Variable	Вариативные
 	Brush Affects:	Кисть влияет на:
 	Brush Definition	Определение кисти
 	Brush Libraries	Библиотеки кистей
-	Brush Libraries (on the roadmap)	Библиотеки кистей (в плане развития)
 	Brush Options…	Параметры кисти…
 	Brush Strokes	Мазки кисти
 	Brushes	Кисти
@@ -5158,3 +5157,31 @@ axis	Y Axis	Ось Y
 	Rectangular Grid Tool Options	Параметры инструмента «Прямоугольная сетка»
 	Polar Grid Tool Options	Параметры инструмента «Полярная сетка»
 	Fill Line	Заливка отрезка
+	Add to Brushes	Добавить в кисти
+	Brush Library	Библиотека кистей
+	Save Brush Library	Сохранить библиотеку кистей
+	Save Brushes…	Сохранить кисти…
+	Open Brush Library	Открыть библиотеку кистей
+	Selected Brushes Only	Только выбранные кисти
+	Brush Libraries Menu	Меню «Библиотеки кистей»
+	User Brush Library 1	Пользовательская библиотека кистей 1
+	User Brush Library 2	Пользовательская библиотека кистей 2
+	User Brush Library 3	Пользовательская библиотека кистей 3
+	User Brush Library 4	Пользовательская библиотека кистей 4
+	User Brush Library 5	Пользовательская библиотека кистей 5
+	User Brush Library 6	Пользовательская библиотека кистей 6
+	User Brush Library 7	Пользовательская библиотека кистей 7
+	User Brush Library 8	Пользовательская библиотека кистей 8
+	User Brush Library 9	Пользовательская библиотека кистей 9
+	User Brush Library 10	Пользовательская библиотека кистей 10
+	Art Ribbons	Художественные ленты
+	Calligraphic Nibs	Каллиграфические перья
+	Pattern Borders	Узорные каймы
+	Scatter Shapes	Рассеянные фигуры
+	Save Brush Library…	Сохранить библиотеку кистей…
+@msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
+@msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
+@msg	no brush `{n}`	нет кисти `{n}`
+@msg	no brush `{n}` in `{_1}`	нет кисти `{n}` в `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	нет библиотеки кистей `{key}` (см. brush.libraries)
+@msg	the document has no brushes to save	в документе нет кистей для сохранения

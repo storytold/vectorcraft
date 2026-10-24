@@ -1217,7 +1217,6 @@ lighting	Light	სინათლე
 	URL:	URL:
 	Use Even-Odd Fill Rule	ლუწ-კენტის შევსების წესის გამოყენება
 	Use Non-Zero Winding Fill Rule	არანულოვანი შემოვლის შევსების წესის გამოყენება
-	Brush Libraries (on the roadmap)	ფუნჯების ბიბლიოთეკები (სამომავლო გეგმაშია)
 	List View	სიის ხედი
 	New Art Brush from Selection	ახალი მხატვრული ფუნჯი მონიშნულიდან
 	New Bristle Brush	ახალი ჯაგრის ფუნჯი
@@ -5462,3 +5461,31 @@ axis	Y Axis	Y ღერძი
 	Rectangular Grid Tool Options	მართკუთხა ბადის ხელსაწყოს პარამეტრები
 	Polar Grid Tool Options	პოლარული ბადის ხელსაწყოს პარამეტრები
 	Fill Line	ხაზის შევსება
+	Add to Brushes	ფუნჯებში დამატება
+	Brush Library	ფუნჯების ბიბლიოთეკა
+	Save Brush Library	ფუნჯების ბიბლიოთეკის შენახვა
+	Save Brushes…	ფუნჯების შენახვა…
+	Open Brush Library	ფუნჯების ბიბლიოთეკის გახსნა
+	Selected Brushes Only	მხოლოდ მონიშნული ფუნჯები
+	Brush Libraries Menu	ფუნჯების ბიბლიოთეკების მენიუ
+	User Brush Library 1	მომხმარებლის ფუნჯების ბიბლიოთეკა 1
+	User Brush Library 2	მომხმარებლის ფუნჯების ბიბლიოთეკა 2
+	User Brush Library 3	მომხმარებლის ფუნჯების ბიბლიოთეკა 3
+	User Brush Library 4	მომხმარებლის ფუნჯების ბიბლიოთეკა 4
+	User Brush Library 5	მომხმარებლის ფუნჯების ბიბლიოთეკა 5
+	User Brush Library 6	მომხმარებლის ფუნჯების ბიბლიოთეკა 6
+	User Brush Library 7	მომხმარებლის ფუნჯების ბიბლიოთეკა 7
+	User Brush Library 8	მომხმარებლის ფუნჯების ბიბლიოთეკა 8
+	User Brush Library 9	მომხმარებლის ფუნჯების ბიბლიოთეკა 9
+	User Brush Library 10	მომხმარებლის ფუნჯების ბიბლიოთეკა 10
+	Art Ribbons	ნახატის ლენტები
+	Calligraphic Nibs	კალიგრაფიული წვერები
+	Pattern Borders	პატერნის ბორდიურები
+	Scatter Shapes	გაბნეული ფიგურები
+	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
+@msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
+@msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
+@msg	no brush `{n}`	ფუნჯი `{n}` არ არის
+@msg	no brush `{n}` in `{_1}`	`{_1}`-ში ფუნჯი `{n}` არ არის
+@msg	no brush library `{key}` (see brush.libraries)	ფუნჯების ბიბლიოთეკა `{key}` არ არის (იხ. brush.libraries)
+@msg	the document has no brushes to save	დოკუმენტში შესანახი ფუნჯები არ არის

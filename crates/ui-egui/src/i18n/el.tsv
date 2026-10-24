@@ -320,7 +320,6 @@ font-technology	Variable	Μεταβλητές
 	Brush Affects:	Το πινέλο επηρεάζει:
 	Brush Definition	Ορισμός πινέλου
 	Brush Libraries	Βιβλιοθήκες πινέλων
-	Brush Libraries (on the roadmap)	Βιβλιοθήκες πινέλων (στον σχεδιασμό)
 	Brush Options…	Επιλογές πινέλου…
 	Brush Strokes	Πινελιές
 	Brushes	Πινέλα
@@ -5498,3 +5497,31 @@ axis	Y Axis	Άξονας Y
 	Rectangular Grid Tool Options	Επιλογές εργαλείου ορθογώνιου πλέγματος
 	Polar Grid Tool Options	Επιλογές εργαλείου πολικού πλέγματος
 	Fill Line	Γέμισμα γραμμής
+	Add to Brushes	Προσθήκη στα πινέλα
+	Brush Library	Βιβλιοθήκη πινέλων
+	Save Brush Library	Αποθήκευση βιβλιοθήκης πινέλων
+	Save Brushes…	Αποθήκευση πινέλων…
+	Open Brush Library	Άνοιγμα βιβλιοθήκης πινέλων
+	Selected Brushes Only	Μόνο επιλεγμένα πινέλα
+	Brush Libraries Menu	Μενού βιβλιοθηκών πινέλων
+	User Brush Library 1	Βιβλιοθήκη πινέλων χρήστη 1
+	User Brush Library 2	Βιβλιοθήκη πινέλων χρήστη 2
+	User Brush Library 3	Βιβλιοθήκη πινέλων χρήστη 3
+	User Brush Library 4	Βιβλιοθήκη πινέλων χρήστη 4
+	User Brush Library 5	Βιβλιοθήκη πινέλων χρήστη 5
+	User Brush Library 6	Βιβλιοθήκη πινέλων χρήστη 6
+	User Brush Library 7	Βιβλιοθήκη πινέλων χρήστη 7
+	User Brush Library 8	Βιβλιοθήκη πινέλων χρήστη 8
+	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
+	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
+	Art Ribbons	Γραφικές κορδέλες
+	Calligraphic Nibs	Καλλιγραφικές πένες
+	Pattern Borders	Περιθώρια μοτίβου
+	Scatter Shapes	Σχήματα διασποράς
+	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
+@msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
+@msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
+@msg	no brush `{n}`	δεν υπάρχει πινέλο `{n}`
+@msg	no brush `{n}` in `{_1}`	δεν υπάρχει πινέλο `{n}` στη `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	δεν υπάρχει βιβλιοθήκη πινέλων `{key}` (δείτε brush.libraries)
+@msg	the document has no brushes to save	το έγγραφο δεν έχει πινέλα για αποθήκευση

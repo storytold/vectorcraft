@@ -2,7 +2,7 @@
 //!
 //! Objects refer to resources by name (image blobs, symbols, patterns, swatches, character and
 //! paragraph styles, brushes) and to graphic styles by id. Copy follows those references, also
-//! through the symbols, patterns and styles it finds, and keeps what they lead to.
+//! through the symbols, patterns, styles and brush art it finds, and keeps what they lead to.
 //!
 //! Pasting matches each resource by name: an identical one in the document is used, a missing one
 //! is added, and a different one of the same name is added under a free name, which the pasted
@@ -13,6 +13,7 @@
 //! the document's Spot Colors option says. Pasting back into the document the objects came from
 //! uses its resources as they are now.
 
+use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -147,10 +148,28 @@ struct Defs<'a> {
     styles: &'a [GraphicStyle],
     char_styles: &'a [TextStyleDef],
     para_styles: &'a [TextStyleDef],
+    brushes: Brushes<'a>,
+}
+
+/// The brushes references lead to: a document's library, read the first time a brush is used
+/// (`vectorcraft_brush::library` parses it), or the clipboard's own.
+enum Brushes<'a> {
+    Lazy(&'a Document, &'a OnceCell<Vec<Brush>>),
+    Ready(&'a [Brush]),
+}
+
+impl<'a> Brushes<'a> {
+    fn get(&self) -> &'a [Brush] {
+        match *self {
+            Brushes::Lazy(d, cell) => cell.get_or_init(|| vectorcraft_brush::library(d)),
+            Brushes::Ready(list) => list,
+        }
+    }
 }
 
 impl<'a> Defs<'a> {
-    fn of(d: &'a Document) -> Self {
+    /// `d`'s definitions; `brushes` holds its brush library once a brush is used.
+    fn of(d: &'a Document, brushes: &'a OnceCell<Vec<Brush>>) -> Self {
         Self {
             swatches: d.swatches_iter().collect(),
             symbols: &d.symbols,
@@ -158,6 +177,7 @@ impl<'a> Defs<'a> {
             styles: &d.graphic_styles,
             char_styles: &d.char_styles,
             para_styles: &d.para_styles,
+            brushes: Brushes::Lazy(d, brushes),
         }
     }
 }
@@ -224,6 +244,8 @@ impl Used {
             Res::Pattern => todo.extend(defs.patterns.iter().filter(|p| p.name == name).flat_map(|p| p.art.iter().map(|a| Source::Node(a)))),
             Res::CharStyle => todo.extend(defs.char_styles.iter().filter(|s| s.name == name).map(|s| Source::Attrs(&s.attrs))),
             Res::ParaStyle => todo.extend(defs.para_styles.iter().filter(|s| s.name == name).map(|s| Source::Attrs(&s.attrs))),
+            // A scatter or art brush's art, a pattern brush's tiles.
+            Res::Brush => todo.extend(defs.brushes.get().iter().filter(|b| b.name == name).flat_map(|b| b.art().into_iter().map(Source::Node))),
             _ => {}
         }
     }
@@ -469,6 +491,26 @@ fn same_art(r: &Relink, ours: &[Arc<Node>], theirs: &[Arc<Node>]) -> bool {
     ours.len() == theirs.len() && ours.iter().zip(theirs).all(|(a, b)| relinked(&unlinked, a) == relinked(r, b))
 }
 
+/// Is `ours` (a document brush) brush `theirs` (a pasted one) once the art of that is relinked by
+/// `r`? Graphic style links don't count, as in [`same_art`].
+fn same_brush(r: &Relink, ours: &Brush, theirs: &Brush) -> bool {
+    let relinked = |r: &Relink, b: &Brush| {
+        let mut b = b.clone();
+        b.art_mut().into_iter().for_each(|a| r.node(a));
+        b
+    };
+    relinked(&Relink::default(), ours) == relinked(r, theirs)
+}
+
+/// Does brush `b`'s art show symbols or patterns?
+fn shows_definitions(b: &Brush) -> bool {
+    let mut found = false;
+    for a in b.art() {
+        node_refs(a, &mut |r| found |= matches!(r, Ref::Name(Res::Symbol | Res::Pattern, _)));
+    }
+    found
+}
+
 /// What pasting did to the document's resources (part of the paste result).
 #[derive(Debug, Default)]
 pub(crate) struct Imported {
@@ -501,11 +543,13 @@ impl Imported {
 impl Clipboard {
     /// `nodes` (from `src`) and the resources of `src` they use.
     pub(crate) fn gather(src: &Document, nodes: Vec<Node>) -> Self {
-        let used = Used::of(&Defs::of(src), &nodes);
+        let library = OnceCell::new();
+        let used = Used::of(&Defs::of(src, &library), &nodes);
         let pick = |r: Res, list: &[TextStyleDef]| list.iter().filter(|s| used.has(r, &s.name)).cloned().collect::<Vec<_>>();
-        let brushes = match used.names.get(&Res::Brush) {
-            Some(names) => vectorcraft_brush::library(src).into_iter().filter(|b| names.contains(&b.name)).collect(),
-            None => vec![],
+        // Read when a brush was used.
+        let brushes = match (used.names.get(&Res::Brush), library.get()) {
+            (Some(names), Some(library)) => library.iter().filter(|b| names.contains(&b.name)).cloned().collect(),
+            _ => vec![],
         };
         Self {
             images: src.images.iter().filter(|(k, _)| used.has(Res::Image, k)).map(|(k, b)| (k.clone(), b.clone())).collect(),
@@ -530,6 +574,7 @@ impl Clipboard {
             styles: &self.graphic_styles,
             char_styles: &self.char_styles,
             para_styles: &self.para_styles,
+            brushes: Brushes::Ready(&self.brushes),
         };
         Used::of(&defs, &self.nodes)
     }
@@ -549,8 +594,10 @@ impl Clipboard {
         let used = self.used();
         let mut out = Imported::default();
         self.import_images(d, &used, same_doc, &mut out);
-        self.import_brushes(d, &used, same_doc, &mut out);
         self.import_swatches(d, &used, choices, same_doc, &mut out);
+        // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
+        // they may brush; the others once those are in.
+        let mut added_brushes = self.import_brushes(d, &used, same_doc, false, &mut out);
         // Character and paragraph styles (their colours relinked first).
         for (r, mine, theirs) in [(Res::CharStyle, &self.char_styles, &mut d.char_styles), (Res::ParaStyle, &self.para_styles, &mut d.para_styles)] {
             for def in mine.iter().filter(|s| used.has(r, &s.name)) {
@@ -583,6 +630,7 @@ impl Clipboard {
             added_patterns.extend(p.new_name(&def.name));
             out.placed(Res::Pattern, &def.name, &p);
         }
+        added_brushes.extend(self.import_brushes(d, &used, same_doc, true, &mut out));
         self.import_graphic_styles(d, &used, same_doc, &mut out);
         for s in d.symbols.iter_mut().filter(|s| added_symbols.contains(&s.name)) {
             out.relink.node(Arc::make_mut(&mut s.art));
@@ -591,6 +639,13 @@ impl Clipboard {
             for a in &mut p.art {
                 out.relink.node(Arc::make_mut(a));
             }
+        }
+        if !added_brushes.is_empty() {
+            let mut lib = vectorcraft_brush::library(d);
+            for b in lib.iter_mut().filter(|b| added_brushes.contains(&b.name)) {
+                b.art_mut().into_iter().for_each(|a| out.relink.node(a));
+            }
+            vectorcraft_brush::store(d, &lib);
         }
         out
     }
@@ -607,20 +662,26 @@ impl Clipboard {
         }
     }
 
-    fn import_brushes(&self, d: &mut Document, used: &Used, same_doc: bool, out: &mut Imported) {
-        let brushes: Vec<&Brush> = self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name)).collect();
+    /// The brushes whose art shows symbols or patterns (`late`), or the others: each one the
+    /// document has (its art compared once relinked) is used, the others are added. → the names of
+    /// those added, whose art is relinked at the end.
+    fn import_brushes(&self, d: &mut Document, used: &Used, same_doc: bool, late: bool, out: &mut Imported) -> Vec<String> {
+        let brushes: Vec<&Brush> = self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name) && shows_definitions(b) == late).collect();
         if brushes.is_empty() {
-            return;
+            return vec![];
         }
         let mut lib = vectorcraft_brush::library(d);
-        let before = lib.len();
+        let mut added = vec![];
         for b in brushes {
-            let p = place(&mut lib, b, same_doc, PartialEq::eq);
+            let r = &out.relink;
+            let p = place(&mut lib, b, same_doc, |ours, theirs| same_brush(r, ours, theirs));
+            added.extend(p.new_name(&b.name));
             out.placed(Res::Brush, &b.name, &p);
         }
-        if lib.len() != before {
+        if !added.is_empty() {
             vectorcraft_brush::store(d, &lib);
         }
+        added
     }
 
     /// Global and spot colours (a name conflict merges or adds as `choices` say), then the tint

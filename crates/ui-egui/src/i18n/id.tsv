@@ -1302,7 +1302,6 @@ lighting	Light	Cahaya
 	URL:	URL:
 	Use Even-Odd Fill Rule	Gunakan aturan isian genap-ganjil
 	Use Non-Zero Winding Fill Rule	Gunakan aturan isian lilitan tak nol
-	Brush Libraries (on the roadmap)	Pustaka kuas (masih dalam roadmap)
 	List View	Tampilan daftar
 	New Art Brush from Selection	Kuas seni baru dari seleksi
 	New Bristle Brush	Kuas bristle baru
@@ -5492,3 +5491,25 @@ axis	Y Axis	Sumbu Y
 	Rectangular Grid Tool Options	Opsi alat kisi persegi panjang
 	Polar Grid Tool Options	Opsi alat kisi polar
 	Fill Line	Isi garis
+	Add to Brushes	Tambahkan ke kuas
+	Brush Library	Pustaka kuas
+	Save Brush Library	Simpan pustaka kuas
+	Save Brushes…	Simpan kuas…
+	Open Brush Library	Buka pustaka kuas
+	Selected Brushes Only	Hanya kuas terpilih
+	Brush Libraries Menu	Menu pustaka kuas
+	User Brush Library 1	Pustaka kuas pengguna 1
+	User Brush Library 2	Pustaka kuas pengguna 2
+	User Brush Library 3	Pustaka kuas pengguna 3
+	User Brush Library 4	Pustaka kuas pengguna 4
+	User Brush Library 5	Pustaka kuas pengguna 5
+	User Brush Library 6	Pustaka kuas pengguna 6
+	User Brush Library 7	Pustaka kuas pengguna 7
+	User Brush Library 8	Pustaka kuas pengguna 8
+	User Brush Library 9	Pustaka kuas pengguna 9
+	User Brush Library 10	Pustaka kuas pengguna 10
+	Art Ribbons	Pita seni
+	Calligraphic Nibs	Pena kaligrafi
+	Pattern Borders	Bingkai pola
+	Scatter Shapes	Bentuk sebar
+	Save Brush Library…	Simpan pustaka kuas…

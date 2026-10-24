@@ -1298,7 +1298,6 @@ lighting	Light	Światło
 	URL:	URL:
 	Use Even-Odd Fill Rule	Użyj reguły wypełniania parzysty-nieparzysty
 	Use Non-Zero Winding Fill Rule	Użyj reguły wypełniania niezerowego
-	Brush Libraries (on the roadmap)	Biblioteki pędzli (w planach)
 	List View	Widok listy
 	New Art Brush from Selection	Nowy pędzel artystyczny z zaznaczenia
 	New Bristle Brush	Nowy pędzel włosiankowy
@@ -5398,3 +5397,31 @@ axis	Y Axis	Oś Y
 	Rectangular Grid Tool Options	Opcje narzędzia Siatka prostokątna
 	Polar Grid Tool Options	Opcje narzędzia Siatka biegunowa
 	Fill Line	Wypełnij odcinek
+	Add to Brushes	Dodaj do pędzli
+	Brush Library	Biblioteka pędzli
+	Save Brush Library	Zapisz bibliotekę pędzli
+	Save Brushes…	Zapisz pędzle…
+	Open Brush Library	Otwórz bibliotekę pędzli
+	Selected Brushes Only	Tylko zaznaczone pędzle
+	Brush Libraries Menu	Menu bibliotek pędzli
+	User Brush Library 1	Biblioteka pędzli użytkownika 1
+	User Brush Library 2	Biblioteka pędzli użytkownika 2
+	User Brush Library 3	Biblioteka pędzli użytkownika 3
+	User Brush Library 4	Biblioteka pędzli użytkownika 4
+	User Brush Library 5	Biblioteka pędzli użytkownika 5
+	User Brush Library 6	Biblioteka pędzli użytkownika 6
+	User Brush Library 7	Biblioteka pędzli użytkownika 7
+	User Brush Library 8	Biblioteka pędzli użytkownika 8
+	User Brush Library 9	Biblioteka pędzli użytkownika 9
+	User Brush Library 10	Biblioteka pędzli użytkownika 10
+	Art Ribbons	Wstęgi artystyczne
+	Calligraphic Nibs	Stalówki kaligraficzne
+	Pattern Borders	Obramowania wzorków
+	Scatter Shapes	Kształty rozproszone
+	Save Brush Library…	Zapisz bibliotekę pędzli…
+@msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
+@msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
+@msg	no brush `{n}`	brak pędzla `{n}`
+@msg	no brush `{n}` in `{_1}`	brak pędzla `{n}` w `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	brak biblioteki pędzli `{key}` (zobacz brush.libraries)
+@msg	the document has no brushes to save	dokument nie ma pędzli do zapisania

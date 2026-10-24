@@ -477,7 +477,6 @@ font-technology	Variable	Változó
 	Brush Art	Ecsetgrafika
 	Brush Definition	Ecsetdefiníció
 	Brush Libraries	Ecsetkönyvtárak
-	Brush Libraries (on the roadmap)	Ecsetkönyvtárak (tervezett funkció)
 	Brush Options…	Ecset beállításai…
 	Brush Scale Options	Ecsetméretezési beállítások
 	Brush Strokes	Ecsetvonások
@@ -5532,3 +5531,31 @@ axis	Y Axis	Y tengely
 	Rectangular Grid Tool Options	Téglalaprács beállításai
 	Polar Grid Tool Options	Polárrács beállításai
 	Fill Line	Szakasz kitöltése
+	Add to Brushes	Hozzáadás az ecsetekhez
+	Brush Library	Ecsetkönyvtár
+	Save Brush Library	Ecsetkönyvtár mentése
+	Save Brushes…	Ecsetek mentése…
+	Open Brush Library	Ecsetkönyvtár megnyitása
+	Selected Brushes Only	Csak a kijelölt ecsetek
+	Brush Libraries Menu	Ecsetkönyvtárak menü
+	User Brush Library 1	Felhasználói ecsetkönyvtár 1
+	User Brush Library 2	Felhasználói ecsetkönyvtár 2
+	User Brush Library 3	Felhasználói ecsetkönyvtár 3
+	User Brush Library 4	Felhasználói ecsetkönyvtár 4
+	User Brush Library 5	Felhasználói ecsetkönyvtár 5
+	User Brush Library 6	Felhasználói ecsetkönyvtár 6
+	User Brush Library 7	Felhasználói ecsetkönyvtár 7
+	User Brush Library 8	Felhasználói ecsetkönyvtár 8
+	User Brush Library 9	Felhasználói ecsetkönyvtár 9
+	User Brush Library 10	Felhasználói ecsetkönyvtár 10
+	Art Ribbons	Grafikus szalagok
+	Calligraphic Nibs	Kalligrafikus tollhegyek
+	Pattern Borders	Mintázatszegélyek
+	Scatter Shapes	Szórt alakzatok
+	Save Brush Library…	Ecsetkönyvtár mentése…
+@msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
+@msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
+@msg	no brush `{n}`	nincs `{n}` ecset
+@msg	no brush `{n}` in `{_1}`	nincs `{n}` ecset itt: `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nincs `{key}` ecsetkönyvtár (lásd: brush.libraries)
+@msg	the document has no brushes to save	a dokumentumban nincs menthető ecset

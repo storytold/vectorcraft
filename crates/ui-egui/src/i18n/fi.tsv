@@ -1359,7 +1359,6 @@ lighting	Light	Valo
 	URL:	URL:
 	Use Even-Odd Fill Rule	Käytä parillinen-pariton-täyttösääntöä
 	Use Non-Zero Winding Fill Rule	Käytä nollasta poikkeavan kierrosluvun täyttösääntöä
-	Brush Libraries (on the roadmap)	Sivellinkirjastot (suunnitteilla)
 	List View	Luettelonäkymä
 	New Art Brush from Selection	Uusi taidesivellin valinnasta
 	New Bristle Brush	Uusi harjassivellin
@@ -5577,3 +5576,31 @@ axis	Y Axis	Y-akseli
 	Rectangular Grid Tool Options	Suorakulmaisen ruudukon työkalun asetukset
 	Polar Grid Tool Options	Napakoordinaattiruudukon työkalun asetukset
 	Fill Line	Täytä viiva
+	Add to Brushes	Lisää siveltimiin
+	Brush Library	Sivellinkirjasto
+	Save Brush Library	Tallenna sivellinkirjasto
+	Save Brushes…	Tallenna siveltimet…
+	Open Brush Library	Avaa sivellinkirjasto
+	Selected Brushes Only	Vain valitut siveltimet
+	Brush Libraries Menu	Sivellinkirjastojen valikko
+	User Brush Library 1	Käyttäjän sivellinkirjasto 1
+	User Brush Library 2	Käyttäjän sivellinkirjasto 2
+	User Brush Library 3	Käyttäjän sivellinkirjasto 3
+	User Brush Library 4	Käyttäjän sivellinkirjasto 4
+	User Brush Library 5	Käyttäjän sivellinkirjasto 5
+	User Brush Library 6	Käyttäjän sivellinkirjasto 6
+	User Brush Library 7	Käyttäjän sivellinkirjasto 7
+	User Brush Library 8	Käyttäjän sivellinkirjasto 8
+	User Brush Library 9	Käyttäjän sivellinkirjasto 9
+	User Brush Library 10	Käyttäjän sivellinkirjasto 10
+	Art Ribbons	Kuvitusnauhat
+	Calligraphic Nibs	Kalligrafiakärjet
+	Pattern Borders	Kuvioreunukset
+	Scatter Shapes	Sirontamuodot
+	Save Brush Library…	Tallenna sivellinkirjasto…
+@msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
+@msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)
+@msg	no brush `{n}`	ei sivellintä `{n}`
+@msg	no brush `{n}` in `{_1}`	ei sivellintä `{n}` kohteessa `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	ei sivellinkirjastoa `{key}` (katso brush.libraries)
+@msg	the document has no brushes to save	dokumentissa ei ole tallennettavia siveltimiä

@@ -342,7 +342,6 @@ font-technology	Variable	Variables
 	Brush Affects:	El pincel afecta a:
 	Brush Definition	Definición del pincel
 	Brush Libraries	Bibliotecas de pinceles
-	Brush Libraries (on the roadmap)	Bibliotecas de pinceles (en la hoja de ruta)
 	Brush Options…	Opciones de pincel…
 	Brush Strokes	Trazos de pincel
 	Brushes	Pinceles
@@ -5488,3 +5487,31 @@ axis	Y Axis	Eje Y
 	Rectangular Grid Tool Options	Opciones de la herramienta Cuadrícula rectangular
 	Polar Grid Tool Options	Opciones de la herramienta Cuadrícula polar
 	Fill Line	Rellenar línea
+	Add to Brushes	Agregar a pinceles
+	Brush Library	Biblioteca de pinceles
+	Save Brush Library	Guardar biblioteca de pinceles
+	Save Brushes…	Guardar pinceles…
+	Open Brush Library	Abrir biblioteca de pinceles
+	Selected Brushes Only	Solo pinceles seleccionados
+	Brush Libraries Menu	Menú Bibliotecas de pinceles
+	User Brush Library 1	Biblioteca de pinceles del usuario 1
+	User Brush Library 2	Biblioteca de pinceles del usuario 2
+	User Brush Library 3	Biblioteca de pinceles del usuario 3
+	User Brush Library 4	Biblioteca de pinceles del usuario 4
+	User Brush Library 5	Biblioteca de pinceles del usuario 5
+	User Brush Library 6	Biblioteca de pinceles del usuario 6
+	User Brush Library 7	Biblioteca de pinceles del usuario 7
+	User Brush Library 8	Biblioteca de pinceles del usuario 8
+	User Brush Library 9	Biblioteca de pinceles del usuario 9
+	User Brush Library 10	Biblioteca de pinceles del usuario 10
+	Art Ribbons	Cintas de ilustración
+	Calligraphic Nibs	Plumillas caligráficas
+	Pattern Borders	Bordes de motivo
+	Scatter Shapes	Formas de dispersión
+	Save Brush Library…	Guardar biblioteca de pinceles…
+@msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
+@msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
+@msg	no brush `{n}`	no hay ningún pincel `{n}`
+@msg	no brush `{n}` in `{_1}`	no hay ningún pincel `{n}` en `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	no hay ninguna biblioteca de pinceles `{key}` (consulte brush.libraries)
+@msg	the document has no brushes to save	el documento no tiene pinceles para guardar

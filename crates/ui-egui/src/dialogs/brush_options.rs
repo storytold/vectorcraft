@@ -241,18 +241,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(10.0);
     match d.str("__type").as_str() {
         "bristle" => bristle_body(app, ui, d),
-        "calligraphic" => calligraphic_body(ui, d),
+        "calligraphic" => calligraphic_body(app, ui, d),
         _ => brush_art_options::body(app, ui, d),
     }
     false
 }
 
-fn calligraphic_body(ui: &mut egui::Ui, d: &mut Dialog) {
+fn calligraphic_body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let c = calligraphic(d);
     ui.horizontal(|ui| {
         nib_preview(ui, &c, vec2(NIB_W, 84.0));
         ui.add_space(8.0);
-        stroke_preview(ui, "calligraphic", serde_json::to_value(&c).unwrap_or_default(), vec2(STROKE_W - NIB_W - 8.0, 84.0));
+        stroke_preview(app, ui, "calligraphic", serde_json::to_value(&c).unwrap_or_default(), vec2(STROKE_W - NIB_W - 8.0, 84.0));
     });
     ui.add_space(12.0);
     egui::Grid::new("brush-options-calli").num_columns(5).spacing([8.0, 8.0]).show(ui, |ui| {
@@ -290,11 +290,12 @@ fn bristle_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     ui.add_space(8.0);
     let p = params(d);
-    stroke_preview(ui, "bristle", p, vec2(STROKE_W, 64.0));
+    stroke_preview(app, ui, "bristle", p, vec2(STROKE_W, 64.0));
 }
 
-/// A stroke painted with the brush the fields describe (type `ty`, definition fields `def`).
-pub(super) fn stroke_preview(ui: &mut egui::Ui, ty: &str, def: Value, size: egui::Vec2) {
+/// A stroke painted with the brush the fields describe (type `ty`, definition fields `def`), with
+/// the active document's resources (the patterns, symbols… its art uses).
+pub(super) fn stroke_preview(app: &VectorcraftApp, ui: &mut egui::Ui, ty: &str, def: Value, size: egui::Vec2) {
     let mut def = match def {
         Value::Object(o) => o,
         _ => Map::new(),
@@ -302,7 +303,8 @@ pub(super) fn stroke_preview(ui: &mut egui::Ui, ty: &str, def: Value, size: egui
     def.insert("name".into(), json!("preview"));
     def.insert("type".into(), json!(ty));
     let (r, _) = ui.allocate_exact_size(size, Sense::hover());
-    crate::panels::brushes::chip(ui, r, &Value::Object(def));
+    let doc = app.session.active().map_or_else(|| std::sync::Arc::new(vectorcraft_doc::Document::new(1.0, 1.0)), |st| st.doc.clone());
+    crate::panels::brushes::chip(ui, r, &doc, &Value::Object(def));
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, Tokens::get(ui.ctx()).input_border), egui::StrokeKind::Inside);
 }
 

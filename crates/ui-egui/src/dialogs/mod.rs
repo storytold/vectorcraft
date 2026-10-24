@@ -83,6 +83,7 @@ mod recovery;
 mod revolve;
 pub(crate) mod revolve_gizmo;
 pub mod saturate;
+pub mod save_brush_library;
 mod save_changes;
 pub mod save_for_web;
 pub(crate) mod save_options;
@@ -287,6 +288,7 @@ registry! {
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     SaveSymbolLibrary: [save_symbol_library::KIND] => save_symbol_library::SPEC,
+    SaveBrushLibrary: [save_brush_library::KIND] => save_brush_library::SPEC,
     Expand: [expand::KIND] => expand::SPEC,
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
     TransformEach: [transform_each::KIND] => transform_each::SPEC,

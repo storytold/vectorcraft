@@ -291,7 +291,6 @@
 	Brush Affects:	画笔影响：
 	Brush Definition	画笔定义
 	Brush Libraries	画笔库
-	Brush Libraries (on the roadmap)	画笔库 (规划中)
 	Brush Options…	画笔选项…
 	Brush Strokes	画笔描边
 	Brushes	画笔
@@ -5385,3 +5384,31 @@ axis	Y Axis	Y 轴
 	Rectangular Grid Tool Options	矩形网格工具选项
 	Polar Grid Tool Options	极坐标网格工具选项
 	Fill Line	填充线段
+	Add to Brushes	添加到画笔
+	Brush Library	画笔库
+	Save Brush Library	保存画笔库
+	Save Brushes…	保存画笔…
+	Open Brush Library	打开画笔库
+	Selected Brushes Only	仅限选择的画笔
+	Brush Libraries Menu	画笔库菜单
+	User Brush Library 1	用户画笔库 1
+	User Brush Library 2	用户画笔库 2
+	User Brush Library 3	用户画笔库 3
+	User Brush Library 4	用户画笔库 4
+	User Brush Library 5	用户画笔库 5
+	User Brush Library 6	用户画笔库 6
+	User Brush Library 7	用户画笔库 7
+	User Brush Library 8	用户画笔库 8
+	User Brush Library 9	用户画笔库 9
+	User Brush Library 10	用户画笔库 10
+	Art Ribbons	艺术丝带
+	Calligraphic Nibs	书法笔尖
+	Pattern Borders	图案边框
+	Scatter Shapes	散布形状
+	Save Brush Library…	保存画笔库…
+@msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
+@msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
+@msg	no brush `{n}`	没有画笔 `{n}`
+@msg	no brush `{n}` in `{_1}`	`{_1}` 中没有画笔 `{n}`
+@msg	no brush library `{key}` (see brush.libraries)	没有画笔库 `{key}`（请参阅 brush.libraries）
+@msg	the document has no brushes to save	文档中没有可保存的画笔

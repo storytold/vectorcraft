@@ -342,7 +342,6 @@ font-technology	Variable	Variabili
 	Brush Affects:	Il pennello influisce su:
 	Brush Definition	Definizione pennello
 	Brush Libraries	Librerie pennelli
-	Brush Libraries (on the roadmap)	Librerie pennelli (in programma)
 	Brush Options…	Opzioni pennello…
 	Brush Strokes	Pennellate
 	Brushes	Pennelli
@@ -5162,3 +5161,31 @@ axis	Y Axis	Asse Y
 	Rectangular Grid Tool Options	Opzioni strumento Griglia rettangolare
 	Polar Grid Tool Options	Opzioni strumento Griglia polare
 	Fill Line	Riempi linea
+	Add to Brushes	Aggiungi ai pennelli
+	Brush Library	Libreria pennelli
+	Save Brush Library	Salva libreria pennelli
+	Save Brushes…	Salva pennelli…
+	Open Brush Library	Apri libreria pennelli
+	Selected Brushes Only	Solo pennelli selezionati
+	Brush Libraries Menu	Menu Librerie pennelli
+	User Brush Library 1	Libreria pennelli utente 1
+	User Brush Library 2	Libreria pennelli utente 2
+	User Brush Library 3	Libreria pennelli utente 3
+	User Brush Library 4	Libreria pennelli utente 4
+	User Brush Library 5	Libreria pennelli utente 5
+	User Brush Library 6	Libreria pennelli utente 6
+	User Brush Library 7	Libreria pennelli utente 7
+	User Brush Library 8	Libreria pennelli utente 8
+	User Brush Library 9	Libreria pennelli utente 9
+	User Brush Library 10	Libreria pennelli utente 10
+	Art Ribbons	Nastri grafici
+	Calligraphic Nibs	Pennini calligrafici
+	Pattern Borders	Bordi a motivo
+	Scatter Shapes	Forme a dispersione
+	Save Brush Library…	Salva libreria pennelli…
+@msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
+@msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
+@msg	no brush `{n}`	nessun pennello `{n}`
+@msg	no brush `{n}` in `{_1}`	nessun pennello `{n}` in `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nessuna libreria pennelli `{key}` (vedi brush.libraries)
+@msg	the document has no brushes to save	il documento non ha pennelli da salvare

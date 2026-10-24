@@ -1402,6 +1402,8 @@ pub struct Session {
     pub style_libraries: cmd::stylelib::Libraries,
     /// User Defined and loaded symbol libraries (Window → Symbol Libraries); not saved.
     pub symbol_libraries: cmd::symbollib::Libraries,
+    /// User Defined and loaded brush libraries (Window → Brush Libraries); not saved.
+    pub brush_libraries: cmd::brushlib::Libraries,
     /// The Libraries panel's libraries of graphics, colours and text styles (`library.*`).
     pub libraries: cmd::library::Libraries,
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
@@ -1553,6 +1555,7 @@ impl Session {
             freeform_point: None,
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),
+            brush_libraries: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
             profile_dir: None,
@@ -2471,6 +2474,8 @@ mod tests_blendfidelity;
 mod tests_blendopts;
 #[cfg(test)]
 mod tests_blendspine;
+#[cfg(test)]
+mod tests_brushlib;
 #[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]

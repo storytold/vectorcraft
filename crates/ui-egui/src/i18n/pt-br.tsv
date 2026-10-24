@@ -312,7 +312,6 @@
 	Brush Affects:	Pincel Afeta:
 	Brush Definition	Definição do Pincel
 	Brush Libraries	Bibliotecas de Pincéis
-	Brush Libraries (on the roadmap)	Bibliotecas de Pincéis (no roadmap)
 	Brush Options…	Opções de Pincel…
 	Brush Strokes	Traços de Pincel
 	Brushes	Pincéis
@@ -5463,3 +5462,31 @@ axis	Y Axis	Eixo Y
 	Rectangular Grid Tool Options	Opções da Ferramenta Grade Retangular
 	Polar Grid Tool Options	Opções da Ferramenta Grade Polar
 	Fill Line	Preencher linha
+	Add to Brushes	Adicionar aos Pincéis
+	Brush Library	Biblioteca de Pincéis
+	Save Brush Library	Salvar Biblioteca de Pincéis
+	Save Brushes…	Salvar Pincéis…
+	Open Brush Library	Abrir Biblioteca de Pincéis
+	Selected Brushes Only	Somente Pincéis Selecionados
+	Brush Libraries Menu	Menu de Bibliotecas de Pincéis
+	User Brush Library 1	Biblioteca de Pincéis do Usuário 1
+	User Brush Library 2	Biblioteca de Pincéis do Usuário 2
+	User Brush Library 3	Biblioteca de Pincéis do Usuário 3
+	User Brush Library 4	Biblioteca de Pincéis do Usuário 4
+	User Brush Library 5	Biblioteca de Pincéis do Usuário 5
+	User Brush Library 6	Biblioteca de Pincéis do Usuário 6
+	User Brush Library 7	Biblioteca de Pincéis do Usuário 7
+	User Brush Library 8	Biblioteca de Pincéis do Usuário 8
+	User Brush Library 9	Biblioteca de Pincéis do Usuário 9
+	User Brush Library 10	Biblioteca de Pincéis do Usuário 10
+	Art Ribbons	Fitas de Arte
+	Calligraphic Nibs	Penas Caligráficas
+	Pattern Borders	Bordas de Padrão
+	Scatter Shapes	Formas de Dispersão
+	Save Brush Library…	Salvar Biblioteca de Pincéis…
+@msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
+@msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
+@msg	no brush `{n}`	nenhum pincel `{n}`
+@msg	no brush `{n}` in `{_1}`	nenhum pincel `{n}` em `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nenhuma biblioteca de pincéis `{key}` (consulte brush.libraries)
+@msg	the document has no brushes to save	o documento não tem pincéis para salvar

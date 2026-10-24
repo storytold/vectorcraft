@@ -331,7 +331,6 @@ font-technology	Variable	Variabla
 	Brush Affects:	Penseln påverkar:
 	Brush Definition	Penseldefinition
 	Brush Libraries	Penselbibliotek
-	Brush Libraries (on the roadmap)	Penselbibliotek (planeras)
 	Brush Options…	Penselalternativ…
 	Brush Strokes	Penseldrag
 	Brushes	Penslar
@@ -5502,3 +5501,31 @@ axis	Y Axis	Y-axel
 	Rectangular Grid Tool Options	Alternativ för verktyget för rektangulärt rutnät
 	Polar Grid Tool Options	Alternativ för verktyget för polärt rutnät
 	Fill Line	Fyll linje
+	Add to Brushes	Lägg till i penslar
+	Brush Library	Penselbibliotek
+	Save Brush Library	Spara penselbibliotek
+	Save Brushes…	Spara penslar…
+	Open Brush Library	Öppna penselbibliotek
+	Selected Brushes Only	Endast markerade penslar
+	Brush Libraries Menu	Meny för penselbibliotek
+	User Brush Library 1	Användarbibliotek för penslar 1
+	User Brush Library 2	Användarbibliotek för penslar 2
+	User Brush Library 3	Användarbibliotek för penslar 3
+	User Brush Library 4	Användarbibliotek för penslar 4
+	User Brush Library 5	Användarbibliotek för penslar 5
+	User Brush Library 6	Användarbibliotek för penslar 6
+	User Brush Library 7	Användarbibliotek för penslar 7
+	User Brush Library 8	Användarbibliotek för penslar 8
+	User Brush Library 9	Användarbibliotek för penslar 9
+	User Brush Library 10	Användarbibliotek för penslar 10
+	Art Ribbons	Konstband
+	Calligraphic Nibs	Kalligrafiska pennspetsar
+	Pattern Borders	Mönsterbårder
+	Scatter Shapes	Spridningsformer
+	Save Brush Library…	Spara penselbibliotek…
+@msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
+@msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)
+@msg	no brush `{n}`	ingen pensel `{n}`
+@msg	no brush `{n}` in `{_1}`	ingen pensel `{n}` i `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	inget penselbibliotek `{key}` (se brush.libraries)
+@msg	the document has no brushes to save	dokumentet har inga penslar att spara

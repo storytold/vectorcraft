@@ -1033,13 +1033,15 @@ fn main() -> std::process::ExitCode {
                 }
                 // Linux may not map the window before the first frames, so a saved maximize is retried then (#3635).
                 let pending_maximize = cfg!(target_os = "linux") && app.ui.window.as_ref().is_some_and(|g| g.maximized);
-                // User Defined swatch, graphic style and symbol libraries live next to the preferences.
+                // User Defined swatch, graphic style, symbol and brush libraries live next to the preferences.
                 let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
                 app.session.swatch_libraries.set_user_dir(swatches);
                 let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
                 app.session.style_libraries.set_user_dir(styles);
                 let symbols = prefs_path().and_then(|p| Some(p.parent()?.join("Symbols").to_string_lossy().to_string()));
                 app.session.symbol_libraries.set_user_dir(symbols);
+                let brushes = prefs_path().and_then(|p| Some(p.parent()?.join("Brushes").to_string_lossy().to_string()));
+                app.session.brush_libraries.set_user_dir(brushes);
                 // With the User Defined libraries listed, the persistent library panels reopen.
                 vectorcraft_ui_egui::panels::library_panel::restore(&mut app);
                 // So do the Libraries panel's libraries; runs without preferences (agents' test

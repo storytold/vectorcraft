@@ -2424,6 +2424,12 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
         widgets::PanelDrag::Brush { name, .. } => {
             ("brush.apply", json!({"name": name, "ids": [vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]}))
         }
+        // A brush from a brush library panel: added to the document's Brushes and applied to the
+        // path it lands on, in one step.
+        widgets::PanelDrag::LibraryBrush { library, name } => (
+            "brush.addFromLibrary",
+            json!({"library": library, "name": name, "apply": true, "ids": [vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]}),
+        ),
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
         widgets::PanelDrag::Art(_)
@@ -8089,6 +8095,36 @@ mod tests {
         // On it: the path's stroke takes the brush.
         drop(&mut app, Point::new(200.0, 150.0));
         assert_eq!(brush(&app).as_deref(), Some("Arrow"));
+    }
+
+    #[test]
+    fn a_library_brush_dropped_on_a_path_is_added_and_applied_in_one_step() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id =
+            app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let drop = |app: &mut VectorcraftApp, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::LibraryBrush { library: "scatter-shapes".into(), name: "Sparkles".into() });
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+        };
+        let undo = app.session.active().unwrap().history.undo.len();
+        // Off the path: nothing.
+        drop(&mut app, Point::new(200.0, 250.0));
+        assert!(vectorcraft_brush::find(&app.session.active().unwrap().doc, "Sparkles").is_none());
+        // On it: added, with the symbol it scatters, and applied, as one step.
+        drop(&mut app, Point::new(200.0, 150.0));
+        let st = app.session.active().unwrap();
+        assert!(vectorcraft_brush::find(&st.doc, "Sparkles").is_some() && st.doc.symbols.iter().any(|s| s.name == "Sparkle"), "{}", app.ui.status);
+        let n = st.doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        assert_eq!(n.appearance.stroke().and_then(|s| s.brush.clone()).as_deref(), Some("Sparkles"));
+        assert_eq!(st.history.undo.len(), undo + 1);
+        assert_eq!(st.history.undo.last().unwrap().label, "Add to Brushes");
     }
 
     #[test]

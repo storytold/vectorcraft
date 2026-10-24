@@ -343,7 +343,6 @@ font-technology	Variable	Variables
 	Brush Affects:	Le pinceau affecte :
 	Brush Definition	Définition de la forme
 	Brush Libraries	Bibliothèques de formes
-	Brush Libraries (on the roadmap)	Bibliothèques de formes (prévu dans la feuille de route)
 	Brush Options…	Options de forme…
 	Brush Strokes	Contours de forme
 	Brushes	Formes
@@ -5545,3 +5544,31 @@ axis	Y Axis	Axe Y
 	Rectangular Grid Tool Options	Options de l’outil Grille rectangulaire
 	Polar Grid Tool Options	Options de l’outil Grille à coordonnées polaires
 	Fill Line	Remplir le trait
+	Add to Brushes	Ajouter aux formes
+	Brush Library	Bibliothèque de formes
+	Save Brush Library	Enregistrer la bibliothèque de formes
+	Save Brushes…	Enregistrer les formes…
+	Open Brush Library	Ouvrir une bibliothèque de formes
+	Selected Brushes Only	Formes sélectionnées uniquement
+	Brush Libraries Menu	Menu Bibliothèques de formes
+	User Brush Library 1	Bibliothèque de formes utilisateur 1
+	User Brush Library 2	Bibliothèque de formes utilisateur 2
+	User Brush Library 3	Bibliothèque de formes utilisateur 3
+	User Brush Library 4	Bibliothèque de formes utilisateur 4
+	User Brush Library 5	Bibliothèque de formes utilisateur 5
+	User Brush Library 6	Bibliothèque de formes utilisateur 6
+	User Brush Library 7	Bibliothèque de formes utilisateur 7
+	User Brush Library 8	Bibliothèque de formes utilisateur 8
+	User Brush Library 9	Bibliothèque de formes utilisateur 9
+	User Brush Library 10	Bibliothèque de formes utilisateur 10
+	Art Ribbons	Rubans d'illustration
+	Calligraphic Nibs	Plumes calligraphiques
+	Pattern Borders	Bordures de motif
+	Scatter Shapes	Formes de dispersion
+	Save Brush Library…	Enregistrer la bibliothèque de formes…
+@msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
+@msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
+@msg	no brush `{n}`	aucune forme `{n}`
+@msg	no brush `{n}` in `{_1}`	aucune forme `{n}` dans `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	aucune bibliothèque de formes `{key}` (voir brush.libraries)
+@msg	the document has no brushes to save	le document n'a aucune forme à enregistrer

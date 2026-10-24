@@ -336,7 +336,6 @@ font-technology	Variable	Варіативні
 	Brush Affects:	Пензель впливає на:
 	Brush Definition	Визначення пензля
 	Brush Libraries	Бібліотеки пензлів
-	Brush Libraries (on the roadmap)	Бібліотеки пензлів (у плані розвитку)
 	Brush Options…	Параметри пензля…
 	Brush Strokes	Мазки пензля
 	Brushes	Пензлі
@@ -5142,3 +5141,31 @@ axis	Y Axis	Вісь Y
 	Rectangular Grid Tool Options	Параметри інструменту «Прямокутна сітка»
 	Polar Grid Tool Options	Параметри інструменту «Полярна сітка»
 	Fill Line	Заливка відрізка
+	Add to Brushes	Додати до пензлів
+	Brush Library	Бібліотека пензлів
+	Save Brush Library	Зберегти бібліотеку пензлів
+	Save Brushes…	Зберегти пензлі…
+	Open Brush Library	Відкрити бібліотеку пензлів
+	Selected Brushes Only	Тільки вибрані пензлі
+	Brush Libraries Menu	Меню "Бібліотеки пензлів"
+	User Brush Library 1	Користувацька бібліотека пензлів 1
+	User Brush Library 2	Користувацька бібліотека пензлів 2
+	User Brush Library 3	Користувацька бібліотека пензлів 3
+	User Brush Library 4	Користувацька бібліотека пензлів 4
+	User Brush Library 5	Користувацька бібліотека пензлів 5
+	User Brush Library 6	Користувацька бібліотека пензлів 6
+	User Brush Library 7	Користувацька бібліотека пензлів 7
+	User Brush Library 8	Користувацька бібліотека пензлів 8
+	User Brush Library 9	Користувацька бібліотека пензлів 9
+	User Brush Library 10	Користувацька бібліотека пензлів 10
+	Art Ribbons	Художні стрічки
+	Calligraphic Nibs	Каліграфічні пера
+	Pattern Borders	Візерункові облямівки
+	Scatter Shapes	Розсіяні фігури
+	Save Brush Library…	Зберегти бібліотеку пензлів…
+@msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
+@msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
+@msg	no brush `{n}`	немає пензля `{n}`
+@msg	no brush `{n}` in `{_1}`	немає пензля `{n}` у `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	немає бібліотеки пензлів `{key}` (див. brush.libraries)
+@msg	the document has no brushes to save	у документі немає пензлів для збереження

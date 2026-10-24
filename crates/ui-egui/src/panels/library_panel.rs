@@ -1,4 +1,4 @@
-//! Library panels: read-only views of one library each (swatch, graphic style and symbol
+//! Library panels: read-only views of one library each (swatch, graphic style, symbol and brush
 //! libraries; any kind of library implementing [`LibraryKind`]) with thumbnail and list views, a
 //! find field, the libraries menu and previous / next arrows. A plain click on an item adds it to
 //! the document and applies it; Shift and Cmd/Ctrl-clicks select items (and folders) for Add to ….
@@ -7,7 +7,7 @@
 //! As in Illustrator (<https://helpx.adobe.com/illustrator/using/using-creating-swatches.html>,
 //! "Swatch libraries"), each open library is a panel of its own, `library:<kind>:<library id>`
 //! ([`panel_id`]), that floats, tabs, docks and closes as any panel of the shared docking system:
-//! `window.swatchLibrary`, `window.graphicStyleLibrary` and `window.symbolLibrary` open one, or bring it forward when it is
+//! `window.swatchLibrary`, `window.graphicStyleLibrary`, `window.symbolLibrary` and `window.brushLibrary` open one, or bring it forward when it is
 //! open. `UiState::library_panels` keeps each one's view, Show Find Field and Persistent
 //! (`ui.libraryPanel`); a persistent panel reopens when the app starts ([`restore`]). A persistent
 //! panel whose library can't be found shows the library as missing, with its file and Locate
@@ -163,6 +163,7 @@ fn kind(kind: &str) -> Option<Kind> {
         kind_of::<super::swatches::SwatchLibraries>(),
         kind_of::<super::graphic_styles::GraphicStyleLibraries>(),
         kind_of::<super::symbols::SymbolLibraries>(),
+        kind_of::<super::brushes::BrushLibraries>(),
     ]
     .into_iter()
     .find(|k| k.kind == kind)
@@ -553,7 +554,7 @@ fn set(app: &mut VectorcraftApp, panel: &str, mut params: Value) {
 }
 
 /// Open-dialog filters for Other Library… / Locate Library… of library panels of kind `kind`
-/// (symbol libraries: any document).
+/// (symbol and brush libraries: any document).
 pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&'static str])> {
     match kind {
         super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_EXTS).collect(),

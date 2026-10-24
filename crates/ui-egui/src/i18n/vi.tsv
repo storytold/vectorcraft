@@ -395,7 +395,6 @@ font-technology	Variable	Biến thiên
 	Brush Art	Đối tượng của cọ
 	Brush Definition	Định nghĩa cọ
 	Brush Libraries	Thư viện cọ
-	Brush Libraries (on the roadmap)	Thư viện cọ (trong lộ trình)
 	Brush Options…	Tùy chọn cọ…
 	Brush Scale Options	Tùy chọn tỷ lệ cọ
 	Brush Strokes	Nét cọ
@@ -5142,3 +5141,31 @@ axis	Y Axis	Trục Y
 	Rectangular Grid Tool Options	Tùy chọn công cụ Lưới chữ nhật
 	Polar Grid Tool Options	Tùy chọn công cụ Lưới cực
 	Fill Line	Tô đoạn thẳng
+	Add to Brushes	Thêm vào cọ
+	Brush Library	Thư viện cọ
+	Save Brush Library	Lưu thư viện cọ
+	Save Brushes…	Lưu cọ…
+	Open Brush Library	Mở thư viện cọ
+	Selected Brushes Only	Chỉ cọ đã chọn
+	Brush Libraries Menu	Menu thư viện cọ
+	User Brush Library 1	Thư viện cọ người dùng 1
+	User Brush Library 2	Thư viện cọ người dùng 2
+	User Brush Library 3	Thư viện cọ người dùng 3
+	User Brush Library 4	Thư viện cọ người dùng 4
+	User Brush Library 5	Thư viện cọ người dùng 5
+	User Brush Library 6	Thư viện cọ người dùng 6
+	User Brush Library 7	Thư viện cọ người dùng 7
+	User Brush Library 8	Thư viện cọ người dùng 8
+	User Brush Library 9	Thư viện cọ người dùng 9
+	User Brush Library 10	Thư viện cọ người dùng 10
+	Art Ribbons	Dải băng nghệ thuật
+	Calligraphic Nibs	Ngòi bút thư pháp
+	Pattern Borders	Viền họa tiết
+	Scatter Shapes	Hình phân tán
+	Save Brush Library…	Lưu thư viện cọ…
+@msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
+@msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
+@msg	no brush `{n}`	không có cọ `{n}`
+@msg	no brush `{n}` in `{_1}`	không có cọ `{n}` trong `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	không có thư viện cọ `{key}` (xem brush.libraries)
+@msg	the document has no brushes to save	tài liệu không có cọ nào để lưu

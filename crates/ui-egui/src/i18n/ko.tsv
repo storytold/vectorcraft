@@ -976,7 +976,6 @@ font-technology	Variable	가변
 	Browser	브라우저
 	Brush Affects:	브러시 적용 대상:
 	Brush Definition	브러시 정의
-	Brush Libraries (on the roadmap)	브러시 라이브러리(개발 예정)
 	Brush Options…	브러시 옵션…
 	Built-in presets are read-only: New… starts an editable copy.	기본 제공 프리셋은 읽기 전용입니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.
 	Built-in presets don't change: New makes a copy you can edit.	기본 제공 프리셋은 변경되지 않습니다. 새로 만들기를 누르면 편집 가능한 복사본이 만들어집니다.
@@ -5125,3 +5124,31 @@ axis	Y Axis	Y축
 	Rectangular Grid Tool Options	사각형 격자 도구 옵션
 	Polar Grid Tool Options	극좌표 격자 도구 옵션
 	Fill Line	선 채우기
+	Add to Brushes	브러시에 추가
+	Brush Library	브러시 라이브러리
+	Save Brush Library	브러시 라이브러리 저장
+	Save Brushes…	브러시 저장…
+	Open Brush Library	브러시 라이브러리 열기
+	Selected Brushes Only	선택한 브러시만
+	Brush Libraries Menu	브러시 라이브러리 메뉴
+	User Brush Library 1	사용자 브러시 라이브러리 1
+	User Brush Library 2	사용자 브러시 라이브러리 2
+	User Brush Library 3	사용자 브러시 라이브러리 3
+	User Brush Library 4	사용자 브러시 라이브러리 4
+	User Brush Library 5	사용자 브러시 라이브러리 5
+	User Brush Library 6	사용자 브러시 라이브러리 6
+	User Brush Library 7	사용자 브러시 라이브러리 7
+	User Brush Library 8	사용자 브러시 라이브러리 8
+	User Brush Library 9	사용자 브러시 라이브러리 9
+	User Brush Library 10	사용자 브러시 라이브러리 10
+	Art Ribbons	아트 리본
+	Calligraphic Nibs	서예 펜촉
+	Pattern Borders	패턴 테두리
+	Scatter Shapes	흩뿌리기 모양
+	Save Brush Library…	브러시 라이브러리 저장…
+@msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
+@msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)
+@msg	no brush `{n}`	브러시 `{n}`이(가) 없습니다
+@msg	no brush `{n}` in `{_1}`	`{_1}`에 브러시 `{n}`이(가) 없습니다
+@msg	no brush library `{key}` (see brush.libraries)	브러시 라이브러리 `{key}`이(가) 없습니다(brush.libraries 참조)
+@msg	the document has no brushes to save	문서에 저장할 브러시가 없습니다

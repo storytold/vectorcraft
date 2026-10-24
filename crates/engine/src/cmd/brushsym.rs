@@ -249,7 +249,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
     Value::Array(ids.iter().map(|i| Value::from(i.0)).collect())
 }
 
-fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+pub(crate) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
         Some(mut v) => {
             // Explicit ids: only existing, non-layer objects, none inside another of them.
@@ -269,7 +269,7 @@ fn name_param<'a>(p: &'a Value, cmd: &str) -> Result<&'a str> {
 // ---------- brushes ----------
 
 /// Brushable nodes (paths and compound paths) under `ids`.
-fn brush_targets(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+pub(crate) fn brush_targets(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     let mut out = vec![];
     for id in ids {
         let Some(n) = d.node(*id) else { continue };
@@ -302,6 +302,27 @@ fn brush_selection_art(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "art": art.map(|n| serde_json::to_value(&n).unwrap_or_default()) }))
 }
 
+/// The stroke paint a brush gives paths without one: the current stroke colour, else black.
+pub(crate) fn stroke_paint(s: &Session) -> Paint {
+    if s.paint.stroke.is_none() { Paint::solid(Color::BLACK) } else { s.paint.stroke.clone() }
+}
+
+/// Paint paths `ids` of `d` with brush `name` (a path without a stroke takes `stroke`).
+pub(crate) fn apply_brush(d: &mut Document, ids: &[NodeId], name: &str, stroke: &Paint) {
+    for id in ids {
+        let Some(n) = d.node_mut(*id) else { continue };
+        if n.appearance.stroke().is_none_or(|st| st.paint.is_none()) {
+            n.appearance.set_stroke(stroke.clone());
+        }
+        if let Some(st) = n.appearance.stroke_mut() {
+            if st.width <= 0.0 {
+                st.width = 1.0;
+            }
+            st.brush = Some(name.to_string());
+        }
+    }
+}
+
 fn brush_apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "brush.apply";
     let name = name_param(p, C)?.to_string();
@@ -309,21 +330,10 @@ fn brush_apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("no brush named `{name}`")));
     }
     let ids = brush_targets(&s.doc()?.doc, &roots(s, p)?);
-    let stroke = if s.paint.stroke.is_none() { Paint::solid(Color::BLACK) } else { s.paint.stroke.clone() };
+    let stroke = stroke_paint(s);
     s.edit("Apply Brush", |d, _| {
         d.unknown.insert(brush::CURRENT_KEY.into(), json!(name));
-        for id in &ids {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if n.appearance.stroke().is_none_or(|st| st.paint.is_none()) {
-                n.appearance.set_stroke(stroke.clone());
-            }
-            if let Some(st) = n.appearance.stroke_mut() {
-                if st.width <= 0.0 {
-                    st.width = 1.0;
-                }
-                st.brush = Some(name.clone());
-            }
-        }
+        apply_brush(d, &ids, &name, &stroke);
         Ok(())
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))

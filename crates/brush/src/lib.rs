@@ -458,6 +458,18 @@ impl Brush {
         }
     }
 
+    /// [`Brush::art`], to change (relink the resources it uses).
+    pub fn art_mut(&mut self) -> Vec<&mut Node> {
+        match &mut self.kind {
+            BrushKind::Scatter(s) => vec![&mut s.art],
+            BrushKind::Art(a) => vec![&mut a.art],
+            BrushKind::Pattern(p) => std::iter::once(&mut p.side)
+                .chain([&mut p.outer_corner, &mut p.inner_corner, &mut p.start, &mut p.end].into_iter().flatten())
+                .collect(),
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+        }
+    }
+
     /// A brush definition from JSON (a stored library entry or a command's params), its values
     /// kept within their ranges ([`Brush::sanitize`]). A Hue Shift colorization without a `key`
     /// takes the color the art's fills and strokes use most (the first of [`art_colors`]), or

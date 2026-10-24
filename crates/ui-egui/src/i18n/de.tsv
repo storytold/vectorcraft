@@ -317,7 +317,6 @@ font-technology	Variable	Variabel
 	Brush Affects:	Pinsel wirkt auf:
 	Brush Definition	Pinseldefinition
 	Brush Libraries	Pinsel-Bibliotheken
-	Brush Libraries (on the roadmap)	Pinsel-Bibliotheken (geplant)
 	Brush Options…	Pinseloptionen…
 	Brush Strokes	Pinselstriche
 	Brushes	Pinsel
@@ -5128,3 +5127,31 @@ axis	Y Axis	Y-Achse
 	Rectangular Grid Tool Options	Optionen für das Rechteckiges-Raster-Werkzeug
 	Polar Grid Tool Options	Optionen für das Radiales-Raster-Werkzeug
 	Fill Line	Linie füllen
+	Add to Brushes	Zu Pinseln hinzufügen
+	Brush Library	Pinsel-Bibliothek
+	Save Brush Library	Pinsel-Bibliothek speichern
+	Save Brushes…	Pinsel speichern…
+	Open Brush Library	Pinsel-Bibliothek öffnen
+	Selected Brushes Only	Nur ausgewählte Pinsel
+	Brush Libraries Menu	Menü „Pinsel-Bibliotheken“
+	User Brush Library 1	Benutzer-Pinsel-Bibliothek 1
+	User Brush Library 2	Benutzer-Pinsel-Bibliothek 2
+	User Brush Library 3	Benutzer-Pinsel-Bibliothek 3
+	User Brush Library 4	Benutzer-Pinsel-Bibliothek 4
+	User Brush Library 5	Benutzer-Pinsel-Bibliothek 5
+	User Brush Library 6	Benutzer-Pinsel-Bibliothek 6
+	User Brush Library 7	Benutzer-Pinsel-Bibliothek 7
+	User Brush Library 8	Benutzer-Pinsel-Bibliothek 8
+	User Brush Library 9	Benutzer-Pinsel-Bibliothek 9
+	User Brush Library 10	Benutzer-Pinsel-Bibliothek 10
+	Art Ribbons	Bildbänder
+	Calligraphic Nibs	Kalligrafie-Federn
+	Pattern Borders	Musterbordüren
+	Scatter Shapes	Streuformen
+	Save Brush Library…	Pinsel-Bibliothek speichern…
+@msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
+@msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
+@msg	no brush `{n}`	kein Pinsel `{n}`
+@msg	no brush `{n}` in `{_1}`	kein Pinsel `{n}` in `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	keine Pinsel-Bibliothek `{key}` (siehe brush.libraries)
+@msg	the document has no brushes to save	das Dokument hat keine Pinsel zum Speichern

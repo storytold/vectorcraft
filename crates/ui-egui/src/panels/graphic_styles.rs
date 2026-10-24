@@ -355,6 +355,7 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         | PanelDrag::Symbol(_)
         | PanelDrag::LibrarySymbol { .. }
         | PanelDrag::Brush { .. }
+        | PanelDrag::LibraryBrush { .. }
         | PanelDrag::LibraryGraphic { .. }
         | PanelDrag::LibraryItem { .. }
         | PanelDrag::LibraryGroup { .. } => (None, None),

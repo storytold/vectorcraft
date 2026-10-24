@@ -1316,7 +1316,6 @@ lighting	Light	Licht
 	URL:	URL:
 	Use Even-Odd Fill Rule	Even-odd-vulregel gebruiken
 	Use Non-Zero Winding Fill Rule	Non-zero-winding-vulregel gebruiken
-	Brush Libraries (on the roadmap)	Penseelbibliotheken (op de roadmap)
 	List View	Lijstweergave
 	New Art Brush from Selection	Nieuw kunstpenseel uit selectie
 	New Bristle Brush	Nieuw borstelpenseel
@@ -5536,3 +5535,25 @@ axis	Y Axis	Y-as
 	Rectangular Grid Tool Options	Opties rechthoekig-rastergereedschap
 	Polar Grid Tool Options	Opties polair-rastergereedschap
 	Fill Line	Lijn vullen
+	Add to Brushes	Aan penselen toevoegen
+	Brush Library	Penseelbibliotheek
+	Save Brush Library	Penseelbibliotheek opslaan
+	Save Brushes…	Penselen opslaan…
+	Open Brush Library	Penseelbibliotheek openen
+	Selected Brushes Only	Alleen geselecteerde penselen
+	Brush Libraries Menu	Menu penseelbibliotheken
+	User Brush Library 1	Penseelbibliotheek van gebruiker 1
+	User Brush Library 2	Penseelbibliotheek van gebruiker 2
+	User Brush Library 3	Penseelbibliotheek van gebruiker 3
+	User Brush Library 4	Penseelbibliotheek van gebruiker 4
+	User Brush Library 5	Penseelbibliotheek van gebruiker 5
+	User Brush Library 6	Penseelbibliotheek van gebruiker 6
+	User Brush Library 7	Penseelbibliotheek van gebruiker 7
+	User Brush Library 8	Penseelbibliotheek van gebruiker 8
+	User Brush Library 9	Penseelbibliotheek van gebruiker 9
+	User Brush Library 10	Penseelbibliotheek van gebruiker 10
+	Art Ribbons	Illustratielinten
+	Calligraphic Nibs	Kalligrafische penpunten
+	Pattern Borders	Patroonranden
+	Scatter Shapes	Strooivormen
+	Save Brush Library…	Penseelbibliotheek opslaan…

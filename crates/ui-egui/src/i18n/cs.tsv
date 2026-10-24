@@ -1384,7 +1384,6 @@ lighting	Light	Světlo
 	URL:	URL:
 	Use Even-Odd Fill Rule	Použít pravidlo výplně sudá-lichá
 	Use Non-Zero Winding Fill Rule	Použít pravidlo výplně nenulového vinutí
-	Brush Libraries (on the roadmap)	Knihovny štětců (v plánu)
 	List View	Zobrazení seznamu
 	New Art Brush from Selection	Nový obrazový štětec z výběru
 	New Bristle Brush	Nový štětinový štětec
@@ -5546,3 +5545,31 @@ axis	Y Axis	osa Y
 	Rectangular Grid Tool Options	Možnosti nástroje Obdélníková mřížka
 	Polar Grid Tool Options	Možnosti nástroje Polární mřížka
 	Fill Line	Výplň úsečky
+	Add to Brushes	Přidat do štětců
+	Brush Library	Knihovna štětců
+	Save Brush Library	Uložit knihovnu štětců
+	Save Brushes…	Uložit štětce…
+	Open Brush Library	Otevřít knihovnu štětců
+	Selected Brushes Only	Pouze vybrané štětce
+	Brush Libraries Menu	Nabídka knihoven štětců
+	User Brush Library 1	Uživatelská knihovna štětců 1
+	User Brush Library 2	Uživatelská knihovna štětců 2
+	User Brush Library 3	Uživatelská knihovna štětců 3
+	User Brush Library 4	Uživatelská knihovna štětců 4
+	User Brush Library 5	Uživatelská knihovna štětců 5
+	User Brush Library 6	Uživatelská knihovna štětců 6
+	User Brush Library 7	Uživatelská knihovna štětců 7
+	User Brush Library 8	Uživatelská knihovna štětců 8
+	User Brush Library 9	Uživatelská knihovna štětců 9
+	User Brush Library 10	Uživatelská knihovna štětců 10
+	Art Ribbons	Obrazové stuhy
+	Calligraphic Nibs	Kaligrafická pera
+	Pattern Borders	Vzorkové okraje
+	Scatter Shapes	Rozptýlené tvary
+	Save Brush Library…	Uložit knihovnu štětců…
+@msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
+@msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
+@msg	no brush `{n}`	žádný štětec `{n}`
+@msg	no brush `{n}` in `{_1}`	žádný štětec `{n}` v `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	žádná knihovna štětců `{key}` (viz brush.libraries)
+@msg	the document has no brushes to save	dokument nemá žádné štětce k uložení

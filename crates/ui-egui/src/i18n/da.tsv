@@ -1302,7 +1302,6 @@ lighting	Light	Lys
 	URL:	URL:
 	Use Even-Odd Fill Rule	Brug fyldreglen lige-ulige
 	Use Non-Zero Winding Fill Rule	Brug fyldreglen ikke-nul-vikling
-	Brush Libraries (on the roadmap)	Penselbiblioteker (på vejkortet)
 	List View	Listevisning
 	New Art Brush from Selection	Ny kunstpensel fra markering
 	New Bristle Brush	Ny bustpensel
@@ -5492,3 +5491,25 @@ axis	Y Axis	Y-akse
 	Rectangular Grid Tool Options	Indstillinger for rektangulært gitterværktøj
 	Polar Grid Tool Options	Indstillinger for polært gitterværktøj
 	Fill Line	Udfyld linje
+	Add to Brushes	Føj til pensler
+	Brush Library	Penselbibliotek
+	Save Brush Library	Gem penselbibliotek
+	Save Brushes…	Gem pensler…
+	Open Brush Library	Åbn penselbibliotek
+	Selected Brushes Only	Kun valgte pensler
+	Brush Libraries Menu	Menu med penselbiblioteker
+	User Brush Library 1	Brugerpenselbibliotek 1
+	User Brush Library 2	Brugerpenselbibliotek 2
+	User Brush Library 3	Brugerpenselbibliotek 3
+	User Brush Library 4	Brugerpenselbibliotek 4
+	User Brush Library 5	Brugerpenselbibliotek 5
+	User Brush Library 6	Brugerpenselbibliotek 6
+	User Brush Library 7	Brugerpenselbibliotek 7
+	User Brush Library 8	Brugerpenselbibliotek 8
+	User Brush Library 9	Brugerpenselbibliotek 9
+	User Brush Library 10	Brugerpenselbibliotek 10
+	Art Ribbons	Kunstbånd
+	Calligraphic Nibs	Kalligrafiske penne
+	Pattern Borders	Mønsterborter
+	Scatter Shapes	Spredte former
+	Save Brush Library…	Gem penselbibliotek…

@@ -603,6 +603,8 @@ mod tests_asset_export;
 #[cfg(test)]
 mod tests_blend;
 #[cfg(test)]
+mod tests_brush_libraries;
+#[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]
 mod tests_css_properties;

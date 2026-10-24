@@ -211,7 +211,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     ui.add_space(10.0);
     // The brush as OK would make it, on a sample stroke.
     let ty = d.str("__type");
-    stroke_preview(ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
+    stroke_preview(app, ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
 }
 
 /// The brush definition as OK would make it: `__def` with the fields' params.
