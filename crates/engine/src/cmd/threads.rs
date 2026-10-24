@@ -1176,6 +1176,50 @@ mod tests {
         assert_eq!([a, b, c].map(|id| text(&s, id)), shown);
     }
 
+    /// Object › Rasterize on frames of threaded text takes them out of their thread with the text
+    /// they show, which the image draws, and the other frames keep the text they hold. Undo threads
+    /// the frames again. When the last frame is rasterized, the frame before it takes the text it
+    /// has no room for.
+    #[test]
+    fn rasterized_frames_leave_their_thread_with_their_text() {
+        for clip in [false, true] {
+            for out in [&[0][..], &[1], &[2], &[0, 2]] {
+                let case = format!("clippingMask {clip} {out:?}");
+                let (mut s, frames) = three_frames(&TEXT.repeat(4), 200.0);
+                let shown = frames.map(|id| text(&s, id));
+                assert_eq!(shown.concat(), TEXT.repeat(4));
+                let ids: Vec<u64> = out.iter().map(|k| frames[*k]).collect();
+                s.execute("select.set", &json!({"ids": ids})).unwrap();
+                s.execute("object.rasterize", &json!({"ppi": 36, "clippingMask": clip})).unwrap();
+                let rest: Vec<u64> = frames.iter().copied().filter(|id| !ids.contains(id)).collect();
+                for id in &ids {
+                    assert!(!is_frame(&s, *id), "{case}: frame {id} is rasterized");
+                }
+                for (id, before) in frames.iter().zip(&shown).filter(|(id, _)| rest.contains(id)) {
+                    assert_eq!(text(&s, *id), *before, "{case}: frame {id} keeps its text");
+                }
+                assert_eq!(threads(&s), if rest.len() >= 2 { vec![rest] } else { vec![] }, "{case}");
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(threads(&s), [frames], "{case}: undo");
+                assert_eq!(frames.map(|id| text(&s, id)), shown, "{case}: undo");
+            }
+        }
+        let (mut s, [a, b, c]) = three_frames(&TEXT.repeat(12), 100.0);
+        let shown = [a, b, c].map(|id| text(&s, id));
+        let laid = {
+            let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(c)) else { panic!("not area type") };
+            vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t)
+        };
+        assert!(laid.overflow, "the last frame has more text than it shows");
+        let end = laid.lines.last().map_or(0, |l| l.end);
+        let hidden = shown[2][end..].trim_start_matches(' ');
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        s.execute("object.rasterize", &json!({"ppi": 36})).unwrap();
+        assert_eq!(text(&s, a), shown[0]);
+        assert_eq!(text(&s, b), format!("{}{hidden}", shown[1]), "the frame before it keeps its text and takes the rest");
+        assert_eq!(threads(&s), [[a, b]]);
+    }
+
     /// Frame `id`'s first line: whether its first paragraph continues from the frame before, where
     /// its text starts from the frame's left edge, and how many list markers it starts with.
     fn first_line(s: &Session, id: u64) -> (bool, f64, usize) {

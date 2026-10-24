@@ -3267,7 +3267,9 @@ images, symbol instances, live objects, and those in opacity masks, symbols and 
 go in an image under the untouched vector art, other effects replace the object with its image, and a path whose
 fills or strokes carry effects is written as one piece per fill and stroke, so only the affected ones become images.
 When an image in the art can't be decoded, `object.rasterize` and `object.cropImage` (without `trim`) make their image
-without it, and their results carry the `warning` that Flatten Transparency gives.
+without it, and their results carry the `warning` that Flatten Transparency gives. `object.rasterize` takes each frame
+of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
+Threading text from the in and out ports), and the other frames keep the text they hold.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
