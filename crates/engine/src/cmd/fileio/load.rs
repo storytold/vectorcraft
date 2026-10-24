@@ -236,6 +236,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
     })?;
     let title = file_name(name);
+    let stem = super::file_stem(name);
+    let mut imported_title: Option<String> = None;
     let mut converted = false;
     let mut preview_only = false;
     let mut editing_data = false;
@@ -256,6 +258,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
+            imported_title = vectorcraft_svg::document_title(&text);
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
             // Relative links are found in the SVG's folder (when `name` is a path).
             let folder = std::path::Path::new(name).parent().map(|f| f.to_string_lossy()).filter(|f| !f.is_empty()).map(|f| absolute_path(&f));
@@ -314,6 +317,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         && !restored
         && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
     {
+        if imported_title.is_none() {
+            imported_title = info.title.clone();
+        }
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }
     // Threaded type read from a file flows through its frames (the threaded type of a restored
@@ -327,10 +333,15 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
-    // Imports are named after the file; a native document keeps its own title (the tab shows the
-    // file name once it has a path).
-    if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
-        doc.title = title;
+    // Imports take the file's own title when it has one; else the file name without its extension.
+    // A native document keeps its own title (the tab shows the file name once it has a path).
+    let fallback = imported_title.filter(|t| !t.trim().is_empty()).unwrap_or(stem);
+    if matches!(format.id, "vectorcraft" | "template") || restored {
+        if doc.title.is_empty() {
+            doc.title = fallback;
+        }
+    } else {
+        doc.title = fallback;
     }
     warnings.extend(doc.images.values().filter_map(|b| too_large_note(&b.bytes)));
     Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })

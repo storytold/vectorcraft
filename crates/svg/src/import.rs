@@ -41,6 +41,30 @@ fn parse(svg: &str) -> Result<roxmltree::Document<'_>, SvgError> {
         .map_err(|e| SvgError::Parse(e.to_string()))
 }
 
+/// The document title an SVG file gives: its root `<title>`, else Dublin Core `dc:title` in
+/// `<metadata>`.
+pub fn document_title(svg: &str) -> Option<String> {
+    let xml = match parse(svg) {
+        Ok(xml) => xml,
+        Err(_) => return None,
+    };
+    let root = xml.root_element();
+    for child in root.children() {
+        if child.has_tag_name("title") {
+            let t = child.text().map(str::trim).filter(|t| !t.is_empty())?;
+            return Some(t.to_string());
+        }
+    }
+    let meta = root.children().find(|n| n.has_tag_name("metadata"))?;
+    for node in meta.descendants() {
+        if node.has_tag_name(("http://purl.org/dc/elements/1.1/", "title")) {
+            let t = node.text().map(str::trim).filter(|t| !t.is_empty())?;
+            return Some(t.to_string());
+        }
+    }
+    None
+}
+
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
 pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by

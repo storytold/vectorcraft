@@ -129,6 +129,16 @@ fn linked_images_are_written_next_to_the_svg() {
 }
 
 #[test]
+fn import_uses_the_svg_title_or_the_file_stem() {
+    let mut s = Session::new();
+    let svg = r#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><title>Access paths</title></svg>"#;
+    s.execute("document.open", &json!({"name": "box.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.title, "Access paths");
+    let plain = r#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"></svg>"#;
+    s.execute("document.open", &json!({"name": "sketch.svg", "dataBase64": vectorcraft_format::base64_encode(plain.as_bytes())})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.title, "sketch");
+}
+
 fn preserve_editing_reopens_the_native_document() {
     let mut s = session(2);
     s.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
@@ -138,7 +148,7 @@ fn preserve_editing_reopens_the_native_document() {
     let doc = &s.doc().unwrap().doc;
     assert_eq!(doc.artboards.len(), 2, "both artboards came back");
     assert_eq!(doc.artboards[1].name, "Back");
-    assert_eq!(doc.title, "both.svg");
+    assert_eq!(doc.title, "Untitled-1", "preserved editing keeps the native document title");
     // Without it the SVG is imported (one artboard).
     let text = svg(&mut s, json!({}));
     s.execute("document.open", &json!({"name": "plain.svg", "dataBase64": vectorcraft_format::base64_encode(text.as_bytes())})).unwrap();

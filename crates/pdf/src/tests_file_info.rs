@@ -58,6 +58,7 @@ fn the_information_dictionary_gives_file_info() {
     assert_eq!(
         f,
         FileInfo {
+            title: Some("Ignored title".into()),
             author: Some("Grace Hopper".into()),
             description: Some("Cata log".into()),
             keywords: Some(vec!["navy".into(), "compilers".into(), "cobol".into()]),
@@ -90,6 +91,7 @@ fn the_xmp_packet_gives_file_info() {
     assert_eq!(
         f,
         FileInfo {
+            title: None,
             author: Some("Ada Lovelace, Charles Babbage".into()),
             description: Some("A poster\nfor the fair".into()),
             keywords: Some(vec!["fair".into(), "print".into()]),
@@ -118,6 +120,13 @@ fn the_xmp_packet_gives_file_info() {
     );
     let f = file_info(&pdf(None, Some(&packet(&body))), None).unwrap();
     assert_eq!((f.author.as_deref(), f.created), (Some("Ada Lovelace, Grace Hopper"), Some(1_791_158_400)));
+}
+
+#[test]
+fn the_xmp_packet_title_wins_over_the_information_dictionary() {
+    let body = description("", "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Poster</rdf:li></rdf:Alt></dc:title>");
+    let f = file_info(&pdf(Some(INFO), Some(&packet(&body))), None).unwrap();
+    assert_eq!(f.title.as_deref(), Some("Poster"));
 }
 
 #[test]

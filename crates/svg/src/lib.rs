@@ -529,6 +529,11 @@ fn declared_latin1(bytes: &[u8]) -> bool {
     matches!(name, "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "latin-1" | "l1")
 }
 
+/// The document title in an SVG file ([`import::document_title`]).
+pub fn document_title(svg: &str) -> Option<String> {
+    import::document_title(svg)
+}
+
 /// Import an SVG document.
 pub fn import(svg: &str) -> Result<Document, SvgError> {
     import_with_report(svg).map(|(d, _)| d)
