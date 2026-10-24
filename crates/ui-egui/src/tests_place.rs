@@ -565,7 +565,7 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
         assert!(has(&bar, s), "{s}");
     }
     let props = properties_frame(&mut app, 260.0);
-    assert!(has(&props, "Release") && has(&props, "View:"));
+    assert!(has(&props, "Release") && has(&props, "View:") && has(&props, "Image Trace Settings"));
     // Another view redraws it without tracing again.
     let traced = app.session.active().unwrap().selection.objects.clone();
     click_control(&mut app, &ctx, at(&bar, "Tracing Result"));

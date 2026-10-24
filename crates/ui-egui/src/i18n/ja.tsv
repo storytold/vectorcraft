@@ -279,6 +279,7 @@ font-technology	Variable	バリアブル
 	Select Fills	塗りを選択
 	Select Strokes	線を選択
 	Image Trace	画像トレース
+	Image Trace Settings	画像トレースの設定
 	Image Tracing	画像トレースオブジェクト
 	Tracing Presets	トレースプリセット
 	Text Wrap	テキストの回り込み

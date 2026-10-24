@@ -1520,6 +1520,7 @@ font-technology	Variable	Variables
 	Image Map:	Image cliquable :
 	Image Size	Taille de l’image
 	Image Trace	Vectorisation de l’image
+	Image Trace Settings	Réglages de vectorisation de l’image
 	Image Tracing	Objet de vectorisation de l’image
 	Tracing Presets	Paramètres prédéfinis de vectorisation
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image

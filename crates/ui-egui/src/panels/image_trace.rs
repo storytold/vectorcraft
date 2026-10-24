@@ -919,8 +919,7 @@ mod tests {
         for _ in 0..2 {
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::properties::show(&mut app, ui));
             let texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
-            // The first Image Trace text is the section heading, the last is the button.
-            at = texts.iter().rev().find(|(t, _)| t == "Image Trace").map(|(_, r)| r.center());
+            at = texts.iter().find(|(t, _)| t == "Image Trace Settings").map(|(_, r)| r.center());
             out.textures_delta.clear();
         }
         let at = at.unwrap();
