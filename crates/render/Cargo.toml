@@ -17,13 +17,13 @@ vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vello_cpu = { workspace = true }
 # Filter types (Gaussian blur, drop shadow) are not re-exported by vello_cpu 0.2.
-vello_common = { version = "0.2", default-features = false }
+vello_common = { version = "0.3", default-features = false }
 image = { workspace = true }
 flate2 = { workspace = true }
 jpeg-encoder = { workspace = true }
 gif = { workspace = true }
 # TIFF LZW compression (MIT OR Apache-2.0; already used by the image crate's TIFF reader).
-weezl = "0.1"
+weezl = "0.2"
 log = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

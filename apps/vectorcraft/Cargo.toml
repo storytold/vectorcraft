@@ -59,7 +59,7 @@ windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_U
 [target.'cfg(target_os = "macos")'.dependencies]
 # The macOS menu bar (src/mac_menu.rs): Tauri's menu crate, AppKit menus behind a safe API (no GTK
 # with default features off). Pinned exactly: review the diff before bumping.
-muda = { version = "=0.21.1", default-features = false }
+muda = { version = "=0.21.2", default-features = false }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "NSApplication", "NSButton", "NSColor", "NSColorSampler", "NSColorSpace", "NSControl", "NSMenu", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSTextField", "NSTextInputContext", "NSView", "NSWindow"] }
 # Files opened from Finder and the Dock (src/open_documents.rs), pasted bitmaps (src/clipboard.rs) and the control channel's App Nap activity (src/control_server.rs); both already come with winit, muda and rfd.
@@ -83,7 +83,7 @@ winit = { version = "0.30", default-features = false, features = ["wayland-csd-a
 # A drawing tablet's pen pressure under X11 and XWayland (src/tablet.rs): XInput2 raw events on a
 # second X connection, x11rb's pure-Rust `RustConnection`. MIT OR Apache-2.0, already in the build
 # through winit with the `xinput` feature.
-x11rb = { version = "0.13", default-features = false, features = ["xinput"] }
+x11rb = { version = "0.14", default-features = false, features = ["xinput"] }
 
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one. Both are already in the build through winit.
@@ -98,7 +98,7 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 # systems where rfd shows the portal's dialog. MIT, already in the build through accesskit. Pinned
 # exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-zbus = "=5.19.0"
+zbus = "=6.0.0"
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
@@ -108,4 +108,4 @@ winresource = "0.1"
 # Bound socket buffers in real loopback transport deadline regressions.
 socket2 = { workspace = true }
 # src/portal_save.rs's tests build and read the portal's D-Bus values on every system.
-zbus = "=5.19.0"
+zbus = "=6.0.0"

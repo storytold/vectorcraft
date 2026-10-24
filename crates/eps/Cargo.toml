@@ -36,4 +36,4 @@ memchr = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # Tests: a Group 4 encoder and the T.4 run codes, to write CCITT test images.
-fax = "0.2"
+fax = "0.3"
