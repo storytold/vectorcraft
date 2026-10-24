@@ -94,25 +94,32 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     ui.horizontal(|ui| {
         reference_locator(ui, refi);
         ui.add_space(4.0);
-        egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            widgets::dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-x", Some(rp.x - origin.x), units, 80.0) {
-                set(app, Some(v + origin.x), None, None, None);
-            }
-            widgets::dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
-                set(app, None, None, Some(v), None);
-            }
-            ui.end_row();
-            widgets::dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field(ui, "xfp-ab-y", Some(rp.y - origin.y), units, 80.0) {
-                set(app, None, Some(v + origin.y), None, None);
-            }
-            widgets::dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
-                set(app, None, None, None, Some(v));
-            }
-            ui.end_row();
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            egui::Grid::new("xfp-ab-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                widgets::dim_label(ui, "X:");
+                if let Some(v) = widgets::num_field(ui, "xfp-ab-x", Some(rp.x - origin.x), units, 80.0) {
+                    set(app, Some(v + origin.x), None, None, None);
+                }
+                ui.end_row();
+                widgets::dim_label(ui, "Y:");
+                if let Some(v) = widgets::num_field(ui, "xfp-ab-y", Some(rp.y - origin.y), units, 80.0) {
+                    set(app, None, Some(v + origin.y), None, None);
+                }
+                ui.end_row();
+            });
+            egui::Grid::new("xfp-ab-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                widgets::dim_label(ui, "W:");
+                if let Some(v) = widgets::size_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
+                    set(app, None, None, Some(v), None);
+                }
+                ui.end_row();
+                widgets::dim_label(ui, "H:");
+                if let Some(v) = widgets::size_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
+                    set(app, None, None, None, Some(v));
+                }
+                ui.end_row();
+            });
         });
         constrain_link(app, ui);
     });
@@ -182,25 +189,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space(4.0);
         ui.add_enabled_ui(has, |ui| {
-            egui::Grid::new("xfp-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-                widgets::dim_label(ui, "X:");
-                if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x - origin.x), units, 80.0) {
-                    app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
-                }
-                widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::size_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
-                    app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
-                }
-                ui.end_row();
-                widgets::dim_label(ui, "Y:");
-                if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y - origin.y), units, 80.0) {
-                    app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
-                }
-                widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::size_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
-                    app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
-                }
-                ui.end_row();
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                egui::Grid::new("xfp-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                    widgets::dim_label(ui, "X:");
+                    if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x - origin.x), units, 80.0) {
+                        app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
+                    }
+                    ui.end_row();
+                    widgets::dim_label(ui, "Y:");
+                    if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y - origin.y), units, 80.0) {
+                        app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
+                    }
+                    ui.end_row();
+                });
+                egui::Grid::new("xfp-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                    widgets::dim_label(ui, "W:");
+                    if let Some(v) = widgets::size_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
+                        app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
+                    }
+                    ui.end_row();
+                    widgets::dim_label(ui, "H:");
+                    if let Some(v) = widgets::size_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
+                        app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
+                    }
+                    ui.end_row();
+                });
             });
         });
         constrain_link(app, ui);
@@ -615,6 +629,60 @@ mod tests {
         assert_eq!(artboard_rect(r, 0, None, None, Some(600.0), None, true), Rect::new(0.0, 0.0, 600.0, 400.0));
         // Bottom-right: a new Y puts the bottom edge there.
         assert_eq!(artboard_rect(r, 8, None, Some(500.0), None, None, false), Rect::new(0.0, 300.0, 300.0, 500.0));
+    }
+
+    /// Where each Tab stop of `draw` is on screen, in the order Tab visits them.
+    fn tab_stops(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<egui::Rect> {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, tab: bool| {
+            time += 0.05;
+            let events = if tab {
+                vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }]
+            } else {
+                vec![]
+            };
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0)));
+            let raw = egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
+            out.textures_delta.clear();
+        };
+        // The grids lay themselves out on their second frame.
+        frame(app, false);
+        frame(app, false);
+        let mut stops = vec![];
+        for _ in 0..20 {
+            frame(app, true);
+            frame(app, false);
+            if let Some(r) = ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)) {
+                stops.push(r.rect);
+            }
+        }
+        stops
+    }
+
+    /// #3953: Tab goes X, Y, W, H (down the first column, then down the second), while the fields
+    /// stay where they were: X and W on the first row, Y and H on the second.
+    #[test]
+    fn tab_goes_x_y_w_h() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+        check_xywh_order("Transform", &mut app, show, 0);
+        check_xywh_order("Properties", &mut app, crate::panels::properties::transform_section, 0);
+        app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+        check_xywh_order("Artboard", &mut app, show, 0);
+        // The Properties panel starts with the artboard's name field.
+        check_xywh_order("Edit Artboards", &mut app, crate::panels::properties::show, 1);
+    }
+
+    fn check_xywh_order(name: &str, app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), skip: usize) {
+        // The number fields are the wide stops; the reference point's and the scrub labels' are small.
+        let fields: Vec<egui::Rect> = tab_stops(app, draw).into_iter().filter(|r| r.width() > 50.0).skip(skip).take(4).collect();
+        let [x, y, w, h] = fields[..] else { panic!("{name}: four fields expected, got {fields:?}") };
+        assert!(x.min.x == y.min.x && w.min.x == h.min.x && x.max.x < w.min.x, "{name}: columns {fields:?}");
+        assert!(x.min.y == w.min.y && y.min.y == h.min.y && x.max.y < y.min.y, "{name}: rows {fields:?}");
     }
 
     #[test]
