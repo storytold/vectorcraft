@@ -1804,7 +1804,7 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
-    match bounds_transform(s, p, selected_roots(s)?, 0.0)? {
+    match bounds_transform(s, p, selected_roots_to_transform(s)?, 0.0)? {
         Bounds::Anchors(ids, b) => set_anchor_bounds(s, p, ids, b),
         Bounds::Objects(ids, xf) => apply_transform(s, "Transform", ids, xf, p, false),
     }
