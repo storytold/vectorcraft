@@ -5383,6 +5383,35 @@ effect	Points	Σημεία
 	Plaster	Γύψος
 	Note Paper…	Χαρτί σημειώσεων…
 	Note Paper	Χαρτί σημειώσεων
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Εισαγωγή Typst
+	Edit Typst	Επεξεργασία Typst
+	Typst Info	Πληροφορίες Typst
+	Preamble:	Προοίμιο:
+	Enable Typst	Ενεργοποίηση Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Εκτελεί το πρόγραμμα typst, το οποίο κατεβάζει τα πακέτα @preview που εισάγει η σήμανση.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Το Typst είναι απενεργοποιημένο: ενεργοποιήστε την επιλογή Ενεργοποίηση Typst στις Προτιμήσεις › Κείμενο
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	ο αυτοματισμός δεν μπορεί να ενεργοποιήσει την επιλογή Ενεργοποίηση Typst: ενεργοποιήστε την στις Προτιμήσεις › Κείμενο
+@msg	Typst needs the desktop app: the web app can't run the typst program	Το Typst χρειάζεται την εφαρμογή υπολογιστή: η εφαρμογή ιστού δεν μπορεί να εκτελέσει το πρόγραμμα typst
+@msg	Typst took longer than {_1} seconds	Το Typst χρειάστηκε περισσότερο από {_1} δευτερόλεπτα
+@msg	Typst's SVG is larger than {_1} MB	Το SVG του Typst είναι μεγαλύτερο από {_1} MB
+@msg	Typst's SVG: {e}	SVG του Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	δεν ήταν δυνατή η αναμονή για το `{program}`: {e}
+@msg	select a Typst object	επιλέξτε ένα αντικείμενο Typst
+@msg	select one Typst object	επιλέξτε μόνο ένα αντικείμενο Typst
+@msg	the page is empty	η σελίδα είναι κενή
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Το Typst δεν είναι εγκατεστημένο: το `{program}` δεν βρέθηκε (εγκαταστήστε το από το typst.app ή ορίστε το VECTORCRAFT_TYPST στη διαδρομή του)
+@msg	couldn't run `{program}`: {e}	δεν ήταν δυνατή η εκτέλεση του `{program}`: {e}
+@msg	at lies outside the canvas	το at βρίσκεται εκτός καμβά
+@msg	fontSize must be a number from 1 to 1296 (pt)	το fontSize πρέπει να είναι αριθμός από 1 έως 1296 (pt)
+@msg	missing string `source`	λείπει η συμβολοσειρά `source`
+@msg	not a Typst object	δεν είναι αντικείμενο Typst
+@msg	object {_1} is not a Typst object	το αντικείμενο {_1} δεν είναι αντικείμενο Typst
+@msg	the Typst source is empty	ο πηγαίος κώδικας Typst είναι κενός
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	ο πηγαίος κώδικας Typst είναι μεγαλύτερος από {MAX_TYPST_SOURCE} byte
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	το {key} είναι μεγαλύτερο από {MAX_TYPST_SOURCE} byte
+@msg	{key} must be a string, not {v}	το {key} πρέπει να είναι συμβολοσειρά, όχι {v}
 	Water Paper…	Βρεγμένο χαρτί…
 	Water Paper	Βρεγμένο χαρτί
 	Ruby…	Ruby…

@@ -5025,6 +5025,35 @@ theme	Appearance	Giao diện
 	Plaster	Thạch cao
 	Note Paper…	Giấy ghi chú…
 	Note Paper	Giấy ghi chú
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Chèn Typst
+	Edit Typst	Sửa Typst
+	Typst Info	Thông tin Typst
+	Preamble:	Phần mở đầu:
+	Enable Typst	Bật Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Chạy chương trình typst, chương trình này tải xuống các gói @preview mà mã đánh dấu nhập.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst đang tắt: hãy bật Bật Typst trong Tùy chọn › Chữ
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	tự động hóa không thể bật Bật Typst: hãy bật trong Tùy chọn › Chữ
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst cần ứng dụng máy tính: ứng dụng web không thể chạy chương trình typst
+@msg	Typst took longer than {_1} seconds	Typst mất hơn {_1} giây
+@msg	Typst's SVG is larger than {_1} MB	SVG của Typst lớn hơn {_1} MB
+@msg	Typst's SVG: {e}	SVG của Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	không thể chờ `{program}`: {e}
+@msg	select a Typst object	hãy chọn một đối tượng Typst
+@msg	select one Typst object	chỉ chọn một đối tượng Typst
+@msg	the page is empty	trang trống
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst chưa được cài đặt: không tìm thấy `{program}` (hãy cài đặt từ typst.app hoặc đặt VECTORCRAFT_TYPST thành đường dẫn của nó)
+@msg	couldn't run `{program}`: {e}	không thể chạy `{program}`: {e}
+@msg	at lies outside the canvas	at nằm ngoài vùng vẽ
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize phải là số từ 1 đến 1296 (pt)
+@msg	missing string `source`	thiếu chuỗi `source`
+@msg	not a Typst object	không phải đối tượng Typst
+@msg	object {_1} is not a Typst object	đối tượng {_1} không phải đối tượng Typst
+@msg	the Typst source is empty	mã nguồn Typst trống
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	mã nguồn Typst dài hơn {MAX_TYPST_SOURCE} byte
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} dài hơn {MAX_TYPST_SOURCE} byte
+@msg	{key} must be a string, not {v}	{key} phải là một chuỗi, không phải {v}
 	Water Paper…	Giấy ướt…
 	Water Paper	Giấy ướt
 	Ruby…	Ruby…

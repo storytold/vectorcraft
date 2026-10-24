@@ -1006,7 +1006,7 @@ fn expanded_instance(d: &mut Document, inst: &Node) -> Option<Node> {
     Some(art)
 }
 
-fn break_links(d: &mut Document, ids: &[NodeId]) -> Result<Vec<NodeId>> {
+pub(crate) fn break_links(d: &mut Document, ids: &[NodeId]) -> Result<Vec<NodeId>> {
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };

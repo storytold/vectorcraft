@@ -5401,6 +5401,16 @@ swatch	Bright Violet	Kraftig violet
 	Plaster	Gips
 	Note Paper…	Notatpapir…
 	Note Paper	Notatpapir
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Indsæt Typst
+	Edit Typst	Rediger Typst
+	Typst Info	Typst-oplysninger
+	Preamble:	Præambel:
+	Enable Typst	Aktivér Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Kører programmet typst, som henter de @preview-pakker, opmærkningen importerer.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst er slået fra: slå Aktivér Typst til under Præferencer › Tekst
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automatisering kan ikke slå Aktivér Typst til: slå det til under Præferencer › Tekst
 	Water Paper…	Vådt papir…
 	Water Paper	Vådt papir
 	Ruby…	Ruby…

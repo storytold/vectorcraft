@@ -5045,6 +5045,35 @@ lighting	Light	Luce
 	Plaster	Gesso
 	Note Paper…	Carta da lettere…
 	Note Paper	Carta da lettere
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Inserisci Typst
+	Edit Typst	Modifica Typst
+	Typst Info	Informazioni Typst
+	Preamble:	Preambolo:
+	Enable Typst	Abilita Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Esegue il programma typst, che scarica i pacchetti @preview importati dal markup.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst è disattivato: attiva Abilita Typst in Preferenze › Testo
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	l’automazione non può attivare Abilita Typst: attivalo in Preferenze › Testo
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst richiede l'app desktop: l'app web non può eseguire il programma typst
+@msg	Typst took longer than {_1} seconds	Typst ha impiegato più di {_1} secondi
+@msg	Typst's SVG is larger than {_1} MB	L'SVG di Typst supera {_1} MB
+@msg	Typst's SVG: {e}	SVG di Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	impossibile attendere `{program}`: {e}
+@msg	select a Typst object	seleziona un oggetto Typst
+@msg	select one Typst object	seleziona un solo oggetto Typst
+@msg	the page is empty	la pagina è vuota
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst non è installato: `{program}` non trovato (installalo da typst.app o imposta VECTORCRAFT_TYPST sul suo percorso)
+@msg	couldn't run `{program}`: {e}	impossibile eseguire `{program}`: {e}
+@msg	at lies outside the canvas	at è fuori dall'area di disegno
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize deve essere un numero da 1 a 1296 (pt)
+@msg	missing string `source`	manca la stringa `source`
+@msg	not a Typst object	non è un oggetto Typst
+@msg	object {_1} is not a Typst object	l'oggetto {_1} non è un oggetto Typst
+@msg	the Typst source is empty	il sorgente Typst è vuoto
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	il sorgente Typst supera {MAX_TYPST_SOURCE} byte
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} supera {MAX_TYPST_SOURCE} byte
+@msg	{key} must be a string, not {v}	{key} deve essere una stringa, non {v}
 	Water Paper…	Carta bagnata…
 	Water Paper	Carta bagnata
 	Ruby…	Ruby…

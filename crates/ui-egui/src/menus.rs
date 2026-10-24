@@ -1203,6 +1203,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
     ),
     (
+        "ui.typst",
+        "Typst…",
+        "",
+        "{} open Type › Typst… (dialog `typst`: source, preamble, fontSize (pt)) on the selected Typst object's source, else to insert new Typst markup: OK runs type.typst.edit or type.typst.insert, and on a Typst error the dialog stays open showing it (field __error)",
+    ),
+    (
         "ui.livePaintGapOptions",
         "Gap Options…",
         "",
@@ -1934,6 +1940,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
+        "ui.typst" => crate::dialogs::typst::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
         _ => return None,
     };
@@ -3009,6 +3016,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
                 c("Insert Inline Symbol", "text.insertInline"),
+                c("Typst…", "ui.typst"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
                 sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),

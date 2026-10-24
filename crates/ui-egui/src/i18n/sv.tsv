@@ -5387,6 +5387,35 @@ theme	Appearance	Utseende
 	Plaster	Gips
 	Note Paper…	Anteckningspapper…
 	Note Paper	Anteckningspapper
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Infoga Typst
+	Edit Typst	Redigera Typst
+	Typst Info	Typst-information
+	Preamble:	Preambel:
+	Enable Typst	Aktivera Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Kör programmet typst, som hämtar de @preview-paket som märkspråket importerar.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst är avstängt: slå på Aktivera Typst under Inställningar › Typ
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automatisering kan inte slå på Aktivera Typst: slå på det under Inställningar › Typ
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst kräver skrivbordsappen: webbappen kan inte köra programmet typst
+@msg	Typst took longer than {_1} seconds	Typst tog längre tid än {_1} sekunder
+@msg	Typst's SVG is larger than {_1} MB	Typsts SVG är större än {_1} MB
+@msg	Typst's SVG: {e}	Typsts SVG: {e}
+@msg	couldn't wait for `{program}`: {e}	kunde inte vänta på `{program}`: {e}
+@msg	select a Typst object	markera ett Typst-objekt
+@msg	select one Typst object	markera bara ett Typst-objekt
+@msg	the page is empty	sidan är tom
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst är inte installerat: `{program}` hittades inte (installera det från typst.app eller ange dess sökväg i VECTORCRAFT_TYPST)
+@msg	couldn't run `{program}`: {e}	kunde inte köra `{program}`: {e}
+@msg	at lies outside the canvas	at ligger utanför arbetsytan
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize måste vara ett tal från 1 till 1296 (pt)
+@msg	missing string `source`	strängen `source` saknas
+@msg	not a Typst object	inte ett Typst-objekt
+@msg	object {_1} is not a Typst object	objekt {_1} är inte ett Typst-objekt
+@msg	the Typst source is empty	Typst-källan är tom
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst-källan är längre än {MAX_TYPST_SOURCE} byte
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} är längre än {MAX_TYPST_SOURCE} byte
+@msg	{key} must be a string, not {v}	{key} måste vara en sträng, inte {v}
 	Water Paper…	Vått papper…
 	Water Paper	Vått papper
 	Ruby…	Ruby…

@@ -5417,6 +5417,35 @@ imageTrace	Outline	Körvonal
 	Plaster	Gipsz
 	Note Paper…	Jegyzetpapír…
 	Note Paper	Jegyzetpapír
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst beszúrása
+	Edit Typst	Typst szerkesztése
+	Typst Info	Typst-információ
+	Preamble:	Preambulum:
+	Enable Typst	Typst engedélyezése
+	Runs the typst program, which downloads the @preview packages the markup imports.	Futtatja a typst programot, amely letölti a jelölés által importált @preview csomagokat.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	A Typst ki van kapcsolva: kapcsolja be a Typst engedélyezése beállítást itt: Beállítások › Szöveg
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	az automatizálás nem kapcsolhatja be a Typst engedélyezése beállítást: kapcsolja be itt: Beállítások › Szöveg
+@msg	Typst needs the desktop app: the web app can't run the typst program	A Typsthez az asztali alkalmazás kell: a webes alkalmazás nem tudja futtatni a typst programot
+@msg	Typst took longer than {_1} seconds	A Typst {_1} másodpercnél tovább futott
+@msg	Typst's SVG is larger than {_1} MB	A Typst SVG-je nagyobb, mint {_1} MB
+@msg	Typst's SVG: {e}	A Typst SVG-je: {e}
+@msg	couldn't wait for `{program}`: {e}	nem sikerült megvárni a(z) `{program}` programot: {e}
+@msg	select a Typst object	jelöljön ki egy Typst-objektumot
+@msg	select one Typst object	csak egy Typst-objektumot jelöljön ki
+@msg	the page is empty	az oldal üres
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	A Typst nincs telepítve: a(z) `{program}` nem található (telepítse a typst.app oldalról, vagy állítsa a VECTORCRAFT_TYPST változót az elérési útjára)
+@msg	couldn't run `{program}`: {e}	nem sikerült futtatni a(z) `{program}` programot: {e}
+@msg	at lies outside the canvas	az at a vásznon kívül esik
+@msg	fontSize must be a number from 1 to 1296 (pt)	a fontSize 1 és 1296 (pt) közötti szám lehet
+@msg	missing string `source`	hiányzik a `source` szöveg
+@msg	not a Typst object	nem Typst-objektum
+@msg	object {_1} is not a Typst object	az objektum nem Typst-objektum: {_1}
+@msg	the Typst source is empty	a Typst-forrás üres
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	a Typst-forrás hosszabb {MAX_TYPST_SOURCE} bájtnál
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	a(z) {key} hosszabb {MAX_TYPST_SOURCE} bájtnál
+@msg	{key} must be a string, not {v}	{key}: szöveg kell, ez nem az: {v}
 	Water Paper…	Nedves papír…
 	Water Paper	Nedves papír
 	Ruby…	Ruby…

@@ -5430,6 +5430,35 @@ theme	Appearance	Apparence
 	Plaster	Plâtre
 	Note Paper…	Papier gaufré…
 	Note Paper	Papier gaufré
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Insérer du Typst
+	Edit Typst	Modifier le Typst
+	Typst Info	Informations Typst
+	Preamble:	Préambule :
+	Enable Typst	Activer Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Exécute le programme typst, qui télécharge les paquets @preview importés par le balisage.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst est désactivé : cochez Activer Typst dans Préférences › Texte
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	l’automatisation ne peut pas cocher Activer Typst : cochez-le dans Préférences › Texte
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst nécessite l’application de bureau : l’application web ne peut pas exécuter le programme typst
+@msg	Typst took longer than {_1} seconds	Typst a pris plus de {_1} secondes
+@msg	Typst's SVG is larger than {_1} MB	Le SVG de Typst dépasse {_1} Mo
+@msg	Typst's SVG: {e}	SVG de Typst : {e}
+@msg	couldn't wait for `{program}`: {e}	impossible d’attendre `{program}` : {e}
+@msg	select a Typst object	sélectionnez un objet Typst
+@msg	select one Typst object	sélectionnez un seul objet Typst
+@msg	the page is empty	la page est vide
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst n’est pas installé : `{program}` est introuvable (installez-le depuis typst.app ou définissez VECTORCRAFT_TYPST sur son chemin)
+@msg	couldn't run `{program}`: {e}	impossible d’exécuter `{program}` : {e}
+@msg	at lies outside the canvas	at est hors de la zone de travail
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize doit être un nombre compris entre 1 et 1296 (pt)
+@msg	missing string `source`	chaîne `source` manquante
+@msg	not a Typst object	ce n’est pas un objet Typst
+@msg	object {_1} is not a Typst object	l’objet {_1} n’est pas un objet Typst
+@msg	the Typst source is empty	la source Typst est vide
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	la source Typst dépasse {MAX_TYPST_SOURCE} octets
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} dépasse {MAX_TYPST_SOURCE} octets
+@msg	{key} must be a string, not {v}	{key} doit être une chaîne, pas {v}
 	Water Paper…	Papier humide…
 	Water Paper	Papier humide
 	Ruby…	Ruby…

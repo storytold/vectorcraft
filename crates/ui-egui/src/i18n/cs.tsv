@@ -5431,6 +5431,35 @@ mark-style	Japanese	Japonské
 	Plaster	Sádra
 	Note Paper…	Dopisní papír…
 	Note Paper	Dopisní papír
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Vložit Typst
+	Edit Typst	Upravit Typst
+	Typst Info	Informace o Typst
+	Preamble:	Preambule:
+	Enable Typst	Povolit Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Spouští program typst, který stahuje balíčky @preview importované značkováním.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst je vypnutý: zapněte Povolit Typst v Předvolby › Text
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automatizace nemůže zapnout Povolit Typst: zapněte ho v Předvolby › Text
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst potřebuje desktopovou aplikaci: webová aplikace nemůže spustit program typst
+@msg	Typst took longer than {_1} seconds	Typst trval déle než {_1} sekund
+@msg	Typst's SVG is larger than {_1} MB	SVG z Typstu je větší než {_1} MB
+@msg	Typst's SVG: {e}	SVG z Typstu: {e}
+@msg	couldn't wait for `{program}`: {e}	nelze počkat na `{program}`: {e}
+@msg	select a Typst object	vyberte objekt Typst
+@msg	select one Typst object	vyberte jeden objekt Typst
+@msg	the page is empty	stránka je prázdná
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst není nainstalován: `{program}` nebyl nalezen (nainstalujte jej z typst.app nebo nastavte VECTORCRAFT_TYPST na jeho cestu)
+@msg	couldn't run `{program}`: {e}	nelze spustit `{program}`: {e}
+@msg	at lies outside the canvas	at leží mimo plátno
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize musí být číslo od 1 do 1296 (pt)
+@msg	missing string `source`	chybí řetězec `source`
+@msg	not a Typst object	nejde o objekt Typst
+@msg	object {_1} is not a Typst object	objekt {_1} není objekt Typst
+@msg	the Typst source is empty	zdroj Typst je prázdný
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	zdroj Typst je delší než {MAX_TYPST_SOURCE} bajtů
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} je delší než {MAX_TYPST_SOURCE} bajtů
+@msg	{key} must be a string, not {v}	{key} musí být řetězec, ne {v}
 	Water Paper…	Mokrý papír…
 	Water Paper	Mokrý papír
 	Ruby…	Ruby…

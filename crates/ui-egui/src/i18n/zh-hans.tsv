@@ -5269,6 +5269,35 @@ lighting	Light	光源
 	Plaster	塑料效果
 	Note Paper…	便条纸…
 	Note Paper	便条纸
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	插入 Typst
+	Edit Typst	编辑 Typst
+	Typst Info	Typst 信息
+	Preamble:	导言区：
+	Enable Typst	启用 Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	运行 typst 程序，它会下载标记导入的 @preview 包。
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst 已关闭：请在 首选项 › 文字 中开启“启用 Typst”
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	自动化无法开启“启用 Typst”：请在 首选项 › 文字 中开启
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst 需要桌面应用：网页应用无法运行 typst 程序
+@msg	Typst took longer than {_1} seconds	Typst 运行超过 {_1} 秒
+@msg	Typst's SVG is larger than {_1} MB	Typst 的 SVG 大于 {_1} MB
+@msg	Typst's SVG: {e}	Typst 的 SVG：{e}
+@msg	couldn't wait for `{program}`: {e}	无法等待 `{program}`：{e}
+@msg	select a Typst object	请选择一个 Typst 对象
+@msg	select one Typst object	请只选择一个 Typst 对象
+@msg	the page is empty	页面为空
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	未安装 Typst：找不到 `{program}`（请从 typst.app 安装，或将 VECTORCRAFT_TYPST 设为其路径）
+@msg	couldn't run `{program}`: {e}	无法运行 `{program}`：{e}
+@msg	at lies outside the canvas	at 在画布之外
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize 必须是 1 到 1296 (pt) 之间的数字
+@msg	missing string `source`	缺少字符串 `source`
+@msg	not a Typst object	不是 Typst 对象
+@msg	object {_1} is not a Typst object	对象 {_1} 不是 Typst 对象
+@msg	the Typst source is empty	Typst 源码为空
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst 源码超过 {MAX_TYPST_SOURCE} 字节
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} 超过 {MAX_TYPST_SOURCE} 字节
+@msg	{key} must be a string, not {v}	{key} 必须是字符串，而不是 {v}
 	Water Paper…	水彩画纸…
 	Water Paper	水彩画纸
 	Ruby…	注音…

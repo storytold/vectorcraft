@@ -5283,6 +5283,35 @@ mark-style	Japanese	Japońskie
 	Plaster	Gips
 	Note Paper…	Papier listowy…
 	Note Paper	Papier listowy
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Wstaw Typst
+	Edit Typst	Edytuj Typst
+	Typst Info	Informacje o Typst
+	Preamble:	Preambuła:
+	Enable Typst	Włącz Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Uruchamia program typst, który pobiera pakiety @preview importowane przez znaczniki.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst jest wyłączony: zaznacz Włącz Typst w Preferencje › Tekst
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automatyzacja nie może włączyć opcji Włącz Typst: włącz ją w Preferencje › Tekst
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst wymaga aplikacji komputerowej: aplikacja internetowa nie może uruchomić programu typst
+@msg	Typst took longer than {_1} seconds	Typst działał dłużej niż {_1} s
+@msg	Typst's SVG is larger than {_1} MB	SVG z Typsta jest większy niż {_1} MB
+@msg	Typst's SVG: {e}	SVG z Typsta: {e}
+@msg	couldn't wait for `{program}`: {e}	nie można zaczekać na `{program}`: {e}
+@msg	select a Typst object	zaznacz obiekt Typst
+@msg	select one Typst object	zaznacz tylko jeden obiekt Typst
+@msg	the page is empty	strona jest pusta
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst nie jest zainstalowany: nie znaleziono `{program}` (zainstaluj go z typst.app lub ustaw VECTORCRAFT_TYPST na jego ścieżkę)
+@msg	couldn't run `{program}`: {e}	nie można uruchomić `{program}`: {e}
+@msg	at lies outside the canvas	at leży poza płótnem
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize musi być liczbą od 1 do 1296 (pt)
+@msg	missing string `source`	brak ciągu znaków `source`
+@msg	not a Typst object	to nie jest obiekt Typst
+@msg	object {_1} is not a Typst object	obiekt {_1} nie jest obiektem Typst
+@msg	the Typst source is empty	źródło Typst jest puste
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	źródło Typst jest dłuższe niż {MAX_TYPST_SOURCE} bajtów
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} jest dłuższy niż {MAX_TYPST_SOURCE} bajtów
+@msg	{key} must be a string, not {v}	{key} musi być ciągiem znaków, nie {v}
 	Water Paper…	Mokry papier…
 	Water Paper	Mokry papier
 	Ruby…	Ruby…

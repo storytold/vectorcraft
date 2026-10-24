@@ -5444,6 +5444,16 @@ swatch	Bright Violet	Felviolet
 	Plaster	Gips
 	Note Paper…	Notitiepapier…
 	Note Paper	Notitiepapier
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst invoegen
+	Edit Typst	Typst bewerken
+	Typst Info	Typst-informatie
+	Preamble:	Preambule:
+	Enable Typst	Typst inschakelen
+	Runs the typst program, which downloads the @preview packages the markup imports.	Voert het programma typst uit, dat de @preview-pakketten downloadt die de opmaak importeert.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst staat uit: schakel Typst inschakelen in bij Voorkeuren › Type
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automatisering kan Typst inschakelen niet aanzetten: zet het aan bij Voorkeuren › Type
 	Water Paper…	Nat papier…
 	Water Paper	Nat papier
 	Ruby…	Ruby…

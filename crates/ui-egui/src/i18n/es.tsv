@@ -5373,6 +5373,35 @@ mark-style	Japanese	Japonesas
 	Plaster	Yeso
 	Note Paper…	Papel con relieve…
 	Note Paper	Papel con relieve
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Insertar Typst
+	Edit Typst	Editar Typst
+	Typst Info	Información de Typst
+	Preamble:	Preámbulo:
+	Enable Typst	Activar Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Ejecuta el programa typst, que descarga los paquetes @preview que importa el marcado.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst está desactivado: active Activar Typst en Preferencias › Texto
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	la automatización no puede activar Activar Typst: actívelo en Preferencias › Texto
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst necesita la aplicación de escritorio: la aplicación web no puede ejecutar el programa typst
+@msg	Typst took longer than {_1} seconds	Typst tardó más de {_1} segundos
+@msg	Typst's SVG is larger than {_1} MB	El SVG de Typst ocupa más de {_1} MB
+@msg	Typst's SVG: {e}	SVG de Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	no se pudo esperar a `{program}`: {e}
+@msg	select a Typst object	selecciona un objeto Typst
+@msg	select one Typst object	selecciona un solo objeto Typst
+@msg	the page is empty	la página está vacía
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst no está instalado: no se encontró `{program}` (instálalo desde typst.app o define VECTORCRAFT_TYPST con su ruta)
+@msg	couldn't run `{program}`: {e}	no se pudo ejecutar `{program}`: {e}
+@msg	at lies outside the canvas	at está fuera del lienzo
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize debe ser un número de 1 a 1296 (pt)
+@msg	missing string `source`	falta el texto `source`
+@msg	not a Typst object	no es un objeto Typst
+@msg	object {_1} is not a Typst object	el objeto {_1} no es un objeto Typst
+@msg	the Typst source is empty	el código Typst está vacío
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	el código Typst supera los {MAX_TYPST_SOURCE} bytes
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} supera los {MAX_TYPST_SOURCE} bytes
+@msg	{key} must be a string, not {v}	{key} debe ser un texto, no {v}
 	Water Paper…	Papel mojado…
 	Water Paper	Papel mojado
 	Ruby…	Ruby…

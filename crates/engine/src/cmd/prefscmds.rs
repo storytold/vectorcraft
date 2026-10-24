@@ -195,6 +195,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
+    p!("enableTypst", "Type", "Options", "Enable Typst", bool),
     // Units
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
     p!("unitsStroke", "Units", "", "Stroke", choice(UNITS)),
@@ -503,6 +504,17 @@ impl Prefs {
         refused
     }
 
+    /// Keep Enable Typst off in `next` while automation is confined ([`crate::file_access`]): it
+    /// lets markup run the `typst` program, which reads files and downloads packages on its own.
+    /// → why it was refused.
+    fn keep_typst_off(&self, next: &mut Prefs) -> Option<String> {
+        if crate::file_access::current().is_none() || self.enable_typst || !next.enable_typst {
+            return None;
+        }
+        next.enable_typst = false;
+        Some("automation can't turn on Enable Typst: turn it on in Preferences › Type".into())
+    }
+
     /// Values of one category (`None` = all) reset to defaults.
     pub fn reset(&mut self, category: Option<&str>) {
         let d = Prefs::default().to_json();
@@ -533,6 +545,9 @@ impl Session {
         // However they are set (a dialog driven by automation too), the folders stay inside the
         // automation roots in force: a refused one keeps its value.
         for e in self.prefs.keep_folders(&mut p) {
+            log::warn!("{e}");
+        }
+        if let Some(e) = self.prefs.keep_typst_off(&mut p) {
             log::warn!("{e}");
         }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
@@ -617,6 +632,9 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad("prefs.set", e))?;
     if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
+        return Err(EngineError::Other(e));
+    }
+    if let Some(e) = s.prefs.keep_typst_off(&mut next) {
         return Err(EngineError::Other(e));
     }
     s.apply_prefs(next);

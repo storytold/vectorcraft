@@ -5085,6 +5085,35 @@ lighting	Light	ライト
 	Plaster	石膏
 	Note Paper…	ノート用紙…
 	Note Paper	ノート用紙
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst を挿入
+	Edit Typst	Typst を編集
+	Typst Info	Typst 情報
+	Preamble:	プリアンブル:
+	Enable Typst	Typst を有効にする
+	Runs the typst program, which downloads the @preview packages the markup imports.	typst プログラムを実行します。マークアップが読み込む @preview パッケージはダウンロードされます。
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst はオフです：環境設定 › 書式 で「Typst を有効にする」をオンにしてください
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	自動操作では「Typst を有効にする」をオンにできません：環境設定 › 書式 でオンにしてください
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst にはデスクトップアプリが必要です: Web アプリでは typst プログラムを実行できません
+@msg	Typst took longer than {_1} seconds	Typst の処理が {_1} 秒を超えました
+@msg	Typst's SVG is larger than {_1} MB	Typst の SVG が {_1} MB を超えています
+@msg	Typst's SVG: {e}	Typst の SVG: {e}
+@msg	couldn't wait for `{program}`: {e}	`{program}` の終了を待てませんでした: {e}
+@msg	select a Typst object	Typst オブジェクトを選択してください
+@msg	select one Typst object	Typst オブジェクトを 1 つだけ選択してください
+@msg	the page is empty	ページが空です
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst がインストールされていません: `{program}` が見つかりません (typst.app からインストールするか、VECTORCRAFT_TYPST にパスを設定してください)
+@msg	couldn't run `{program}`: {e}	`{program}` を実行できませんでした: {e}
+@msg	at lies outside the canvas	at がカンバスの外にあります
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize は 1 から 1296 (pt) までの数値にしてください
+@msg	missing string `source`	文字列 `source` が指定されていません
+@msg	not a Typst object	Typst オブジェクトではありません
+@msg	object {_1} is not a Typst object	オブジェクト {_1} は Typst オブジェクトではありません
+@msg	the Typst source is empty	Typst のソースが空です
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst のソースが {MAX_TYPST_SOURCE} バイトを超えています
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} が {MAX_TYPST_SOURCE} バイトを超えています
+@msg	{key} must be a string, not {v}	{key} は文字列にしてください ({v} は指定できません)
 	Water Paper…	ぬれた紙…
 	Water Paper	ぬれた紙
 	Japanese Postcard	はがき

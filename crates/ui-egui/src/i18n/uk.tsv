@@ -5025,6 +5025,35 @@ lighting	Light	Світло
 	Plaster	Гіпс
 	Note Paper…	Поштовий папір…
 	Note Paper	Поштовий папір
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Вставити Typst
+	Edit Typst	Редагувати Typst
+	Typst Info	Відомості про Typst
+	Preamble:	Преамбула:
+	Enable Typst	Увімкнути Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Запускає програму typst, яка завантажує пакети @preview, що їх імпортує розмітка.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst вимкнено: увімкніть «Увімкнути Typst» у Налаштування › Текст
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	автоматизація не може ввімкнути «Увімкнути Typst»: увімкніть його в Налаштування › Текст
+@msg	Typst needs the desktop app: the web app can't run the typst program	Для Typst потрібна настільна програма: вебпрограма не може запустити програму typst
+@msg	Typst took longer than {_1} seconds	Typst працював довше за {_1} с
+@msg	Typst's SVG is larger than {_1} MB	SVG від Typst більший за {_1} МБ
+@msg	Typst's SVG: {e}	SVG від Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	не вдалося дочекатися `{program}`: {e}
+@msg	select a Typst object	виділіть об’єкт Typst
+@msg	select one Typst object	виділіть лише один об’єкт Typst
+@msg	the page is empty	сторінка порожня
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst не встановлено: `{program}` не знайдено (установіть його з typst.app або вкажіть шлях до нього у VECTORCRAFT_TYPST)
+@msg	couldn't run `{program}`: {e}	не вдалося запустити `{program}`: {e}
+@msg	at lies outside the canvas	at розташовано поза полотном
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize має бути числом від 1 до 1296 (пт)
+@msg	missing string `source`	відсутній рядок `source`
+@msg	not a Typst object	це не об’єкт Typst
+@msg	object {_1} is not a Typst object	об’єкт {_1} не є об’єктом Typst
+@msg	the Typst source is empty	вихідний текст Typst порожній
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	вихідний текст Typst довший за {MAX_TYPST_SOURCE} байт
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} довший за {MAX_TYPST_SOURCE} байт
+@msg	{key} must be a string, not {v}	{key} має бути рядком, а не {v}
 	Water Paper…	Мокрий папір…
 	Water Paper	Мокрий папір
 	Ruby…	Рубі…

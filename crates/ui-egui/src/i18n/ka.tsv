@@ -5332,6 +5332,35 @@ imageTrace	Outline	კონტური
 	Plaster	თაბაშირი
 	Note Paper…	ჩანაწერების ქაღალდი…
 	Note Paper	ჩანაწერების ქაღალდი
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst-ის ჩასმა
+	Edit Typst	Typst-ის რედაქტირება
+	Typst Info	Typst-ის ინფორმაცია
+	Preamble:	პრეამბულა:
+	Enable Typst	Typst-ის ჩართვა
+	Runs the typst program, which downloads the @preview packages the markup imports.	უშვებს პროგრამას typst, რომელიც ჩამოტვირთავს მარკირების მიერ იმპორტირებულ @preview პაკეტებს.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst გამორთულია: ჩართეთ „Typst-ის ჩართვა“ აქ: პარამეტრები › ტექსტი
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	ავტომატიზაციას არ შეუძლია „Typst-ის ჩართვა“-ს ჩართვა: ჩართეთ აქ: პარამეტრები › ტექსტი
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst-ს დესკტოპის აპი სჭირდება: ვებ-აპს typst პროგრამის გაშვება არ შეუძლია
+@msg	Typst took longer than {_1} seconds	Typst-მა {_1} წამზე მეტი დრო მოითხოვა
+@msg	Typst's SVG is larger than {_1} MB	Typst-ის SVG {_1} MB-ზე დიდია
+@msg	Typst's SVG: {e}	Typst-ის SVG: {e}
+@msg	couldn't wait for `{program}`: {e}	`{program}`-ის მოლოდინი ვერ მოხერხდა: {e}
+@msg	select a Typst object	მონიშნეთ Typst-ის ობიექტი
+@msg	select one Typst object	მონიშნეთ მხოლოდ ერთი Typst-ის ობიექტი
+@msg	the page is empty	გვერდი ცარიელია
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst არ არის დაყენებული: `{program}` ვერ მოიძებნა (დააყენეთ typst.app-დან ან VECTORCRAFT_TYPST-ში მიუთითეთ მისი მისამართი)
+@msg	couldn't run `{program}`: {e}	`{program}`-ის გაშვება ვერ მოხერხდა: {e}
+@msg	at lies outside the canvas	at ტილოს გარეთაა
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize უნდა იყოს რიცხვი 1-დან 1296-მდე (pt)
+@msg	missing string `source`	აკლია სტრიქონი `source`
+@msg	not a Typst object	Typst-ობიექტი არ არის
+@msg	object {_1} is not a Typst object	ობიექტი {_1} Typst-ობიექტი არ არის
+@msg	the Typst source is empty	Typst-ის წყარო ცარიელია
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst-ის წყარო {MAX_TYPST_SOURCE} ბაიტზე გრძელია
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} {MAX_TYPST_SOURCE} ბაიტზე გრძელია
+@msg	{key} must be a string, not {v}	{key} უნდა იყოს სტრიქონი და არა {v}
 	Water Paper…	სველი ქაღალდი…
 	Water Paper	სველი ქაღალდი
 

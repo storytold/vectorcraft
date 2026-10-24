@@ -5401,6 +5401,16 @@ swatch	Bright Violet	Violet cerah
 	Plaster	Plester
 	Note Paper…	Kertas Catatan…
 	Note Paper	Kertas Catatan
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Sisipkan Typst
+	Edit Typst	Edit Typst
+	Typst Info	Info Typst
+	Preamble:	Preambul:
+	Enable Typst	Aktifkan Typst
+	Runs the typst program, which downloads the @preview packages the markup imports.	Menjalankan program typst, yang mengunduh paket @preview yang diimpor markup.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst nonaktif: aktifkan Aktifkan Typst di Preferensi › Teks
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	otomatisasi tidak dapat mengaktifkan Aktifkan Typst: aktifkan di Preferensi › Teks
 	Water Paper…	Kertas Basah…
 	Water Paper	Kertas Basah
 	Ruby…	Ruby…

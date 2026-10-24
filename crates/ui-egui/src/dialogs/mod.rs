@@ -109,6 +109,7 @@ pub mod tile_edge_color;
 mod tools;
 pub(crate) mod transform;
 pub mod transform_each;
+pub mod typst;
 pub mod variables;
 mod warp_effect;
 pub mod width_point;
@@ -348,6 +349,7 @@ registry! {
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
+    Typst: [typst::KIND] => typst::SPEC,
     LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     NewBrush: [new_brush::KIND] => new_brush::SPEC,

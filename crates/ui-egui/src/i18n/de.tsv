@@ -5011,6 +5011,35 @@ effect	Soft	Weich
 	Plaster	Gipsabdruck
 	Note Paper…	Prägepapier…
 	Note Paper	Prägepapier
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst einfügen
+	Edit Typst	Typst bearbeiten
+	Typst Info	Typst-Informationen
+	Preamble:	Präambel:
+	Enable Typst	Typst aktivieren
+	Runs the typst program, which downloads the @preview packages the markup imports.	Führt das Programm typst aus, das die vom Markup importierten @preview-Pakete herunterlädt.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst ist aus: Aktivieren Sie „Typst aktivieren“ unter Voreinstellungen › Text
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	Automatisierung kann „Typst aktivieren“ nicht einschalten: Schalten Sie es unter Voreinstellungen › Text ein
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst benötigt die Desktop-App: Die Web-App kann das Programm typst nicht ausführen
+@msg	Typst took longer than {_1} seconds	Typst hat länger als {_1} Sekunden gebraucht
+@msg	Typst's SVG is larger than {_1} MB	Das SVG von Typst ist größer als {_1} MB
+@msg	Typst's SVG: {e}	SVG von Typst: {e}
+@msg	couldn't wait for `{program}`: {e}	Warten auf `{program}` nicht möglich: {e}
+@msg	select a Typst object	Wählen Sie ein Typst-Objekt aus
+@msg	select one Typst object	Wählen Sie genau ein Typst-Objekt aus
+@msg	the page is empty	Die Seite ist leer
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst ist nicht installiert: `{program}` wurde nicht gefunden (installieren Sie es von typst.app oder setzen Sie VECTORCRAFT_TYPST auf seinen Pfad)
+@msg	couldn't run `{program}`: {e}	`{program}` konnte nicht ausgeführt werden: {e}
+@msg	at lies outside the canvas	at liegt außerhalb der Arbeitsfläche
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize muss eine Zahl von 1 bis 1296 (pt) sein
+@msg	missing string `source`	Zeichenfolge `source` fehlt
+@msg	not a Typst object	kein Typst-Objekt
+@msg	object {_1} is not a Typst object	Objekt {_1} ist kein Typst-Objekt
+@msg	the Typst source is empty	der Typst-Quelltext ist leer
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	der Typst-Quelltext ist länger als {MAX_TYPST_SOURCE} Bytes
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} ist länger als {MAX_TYPST_SOURCE} Bytes
+@msg	{key} must be a string, not {v}	{key} muss eine Zeichenfolge sein, nicht {v}
 	Water Paper…	Feuchtes Papier…
 	Water Paper	Feuchtes Papier
 	Ruby…	Ruby…

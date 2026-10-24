@@ -5008,6 +5008,35 @@ lighting	Light	광원
 	Plaster	석고
 	Note Paper…	메모지…
 	Note Paper	메모지
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Typst 삽입
+	Edit Typst	Typst 편집
+	Typst Info	Typst 정보
+	Preamble:	프리앰블:
+	Enable Typst	Typst 사용
+	Runs the typst program, which downloads the @preview packages the markup imports.	typst 프로그램을 실행하며, 마크업이 가져오는 @preview 패키지를 다운로드합니다.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst가 꺼져 있습니다. 환경 설정 › 문자에서 Typst 사용을 켜십시오
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	자동화로는 Typst 사용을 켤 수 없습니다. 환경 설정 › 문자에서 켜십시오
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst에는 데스크톱 앱이 필요합니다: 웹 앱은 typst 프로그램을 실행할 수 없습니다
+@msg	Typst took longer than {_1} seconds	Typst가 {_1}초 넘게 걸렸습니다
+@msg	Typst's SVG is larger than {_1} MB	Typst의 SVG가 {_1}MB보다 큽니다
+@msg	Typst's SVG: {e}	Typst의 SVG: {e}
+@msg	couldn't wait for `{program}`: {e}	`{program}`을(를) 기다릴 수 없습니다: {e}
+@msg	select a Typst object	Typst 개체를 선택하십시오
+@msg	select one Typst object	Typst 개체를 하나만 선택하십시오
+@msg	the page is empty	페이지가 비어 있습니다
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst가 설치되어 있지 않습니다: `{program}`을(를) 찾을 수 없습니다(typst.app에서 설치하거나 VECTORCRAFT_TYPST에 경로를 설정하십시오)
+@msg	couldn't run `{program}`: {e}	`{program}`을(를) 실행할 수 없습니다: {e}
+@msg	at lies outside the canvas	at이(가) 캔버스 밖에 있습니다
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize는 1에서 1296 (pt) 사이의 숫자여야 합니다
+@msg	missing string `source`	문자열 `source`가 없습니다
+@msg	not a Typst object	Typst 개체가 아닙니다
+@msg	object {_1} is not a Typst object	개체 {_1}은(는) Typst 개체가 아닙니다
+@msg	the Typst source is empty	Typst 소스가 비어 있습니다
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst 소스가 {MAX_TYPST_SOURCE}바이트보다 깁니다
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key}이(가) {MAX_TYPST_SOURCE}바이트보다 깁니다
+@msg	{key} must be a string, not {v}	{key}은(는) 문자열이어야 합니다: {v}
 	Water Paper…	물 종이…
 	Water Paper	물 종이
 	Ruby…	루비…

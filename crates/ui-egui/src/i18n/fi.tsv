@@ -5462,6 +5462,35 @@ swatch	Bright Violet	Kirkas violetti
 	Plaster	Kipsi
 	Note Paper…	Kirjepaperi…
 	Note Paper	Kirjepaperi
+	Typst…	Typst…
+	Typst	Typst
+	Insert Typst	Lisää Typst
+	Edit Typst	Muokkaa Typstia
+	Typst Info	Typst-tiedot
+	Preamble:	Johdanto:
+	Enable Typst	Ota Typst käyttöön
+	Runs the typst program, which downloads the @preview packages the markup imports.	Suorittaa typst-ohjelman, joka lataa merkintäkielen tuomat @preview-paketit.
+@msg	Typst is off: turn on Enable Typst in Preferences › Type	Typst ei ole käytössä: valitse Ota Typst käyttöön kohdassa Asetukset › Teksti
+@msg	automation can't turn on Enable Typst: turn it on in Preferences › Type	automaatio ei voi ottaa Typstia käyttöön: valitse Ota Typst käyttöön kohdassa Asetukset › Teksti
+@msg	Typst needs the desktop app: the web app can't run the typst program	Typst tarvitsee työpöytäsovelluksen: verkkosovellus ei voi suorittaa typst-ohjelmaa
+@msg	Typst took longer than {_1} seconds	Typst kesti yli {_1} sekuntia
+@msg	Typst's SVG is larger than {_1} MB	Typstin SVG on yli {_1} Mt
+@msg	Typst's SVG: {e}	Typstin SVG: {e}
+@msg	couldn't wait for `{program}`: {e}	ohjelmaa `{program}` ei voitu odottaa: {e}
+@msg	select a Typst object	valitse Typst-objekti
+@msg	select one Typst object	valitse vain yksi Typst-objekti
+@msg	the page is empty	sivu on tyhjä
+@msg	Typst isn't installed: `{program}` wasn't found (install it from typst.app, or set VECTORCRAFT_TYPST to its path)	Typst ei ole asennettu: ohjelmaa `{program}` ei löytynyt (asenna se osoitteesta typst.app tai aseta VECTORCRAFT_TYPST sen poluksi)
+@msg	couldn't run `{program}`: {e}	ohjelmaa `{program}` ei voitu suorittaa: {e}
+@msg	at lies outside the canvas	at on kankaan ulkopuolella
+@msg	fontSize must be a number from 1 to 1296 (pt)	fontSize on oltava luku väliltä 1–1296 (pt)
+@msg	missing string `source`	merkkijono `source` puuttuu
+@msg	not a Typst object	ei Typst-objekti
+@msg	object {_1} is not a Typst object	objekti {_1} ei ole Typst-objekti
+@msg	the Typst source is empty	Typst-lähde on tyhjä
+@msg	the Typst source is longer than {MAX_TYPST_SOURCE} bytes	Typst-lähde on pidempi kuin {MAX_TYPST_SOURCE} tavua
+@msg	{key} is longer than {MAX_TYPST_SOURCE} bytes	{key} on pidempi kuin {MAX_TYPST_SOURCE} tavua
+@msg	{key} must be a string, not {v}	{key} on oltava merkkijono, ei {v}
 	Water Paper…	Märkä paperi…
 	Water Paper	Märkä paperi
 	Ruby…	Ruby…
