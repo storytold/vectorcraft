@@ -866,7 +866,20 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         "onPath" | "path" => true,
         o => return Err(bad(C, format!("mode must be area|onPath, got {o}"))),
     };
-    let node = s.doc()?.doc.node(pid).cloned().ok_or(EngineError::NoNode(pid))?;
+    let host = s.doc()?.doc.node(pid).cloned().ok_or(EngineError::NoNode(pid))?;
+    // Type on a path on a compound path (a river from a GIS export is one, made of its pieces)
+    // goes on the piece nearest `at`; the rest of the compound stays.
+    let (compound, node) = match &host.kind {
+        NodeKind::Compound { children, .. } if on_path => {
+            let mut pieces = children.iter().filter(|c| matches!(&c.kind, NodeKind::Path { path, .. } if !path.is_empty()));
+            let piece = match point_param(p, "at") {
+                Some(at) => pieces.min_by(|a, b| distance_to(a, at).total_cmp(&distance_to(b, at))),
+                None => pieces.next(),
+            };
+            (Some(pid), piece.map(|c| (**c).clone()).ok_or_else(|| bad(C, "the compound path has no path to put type on"))?)
+        }
+        _ => (None, host.clone()),
+    };
     let NodeKind::Path { path, .. } = &node.kind else { return Err(bad(C, "`path` must be a path object")) };
     if path.is_empty() {
         return Err(bad(C, "the path is empty"));
@@ -916,18 +929,35 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let id = s.edit(if on_path { "Type on a Path" } else { "Area Type" }, |d, sel| {
         let (par, idx, _) = d.position(pid).ok_or(EngineError::NoNode(pid))?;
-        d.remove(pid)?;
+        d.remove(node.id)?;
+        // The type goes where the path was; a piece of a compound's goes just above the compound,
+        // which goes too once it has no pieces left.
+        let idx = match compound {
+            Some(c) if d.node(c).is_some_and(|n| matches!(&n.kind, NodeKind::Compound { children, .. } if children.is_empty())) => {
+                d.remove(c)?;
+                idx
+            }
+            Some(_) => idx + 1,
+            None => idx,
+        };
         let id = d.alloc_id();
         let mut n = Node::new(id, NodeKind::Text(Box::new(t)));
         n.appearance = Appearance::default().into();
-        n.opacity = node.opacity;
-        n.name = node.name.clone();
+        n.opacity = host.opacity;
+        n.name = host.name.clone();
         d.insert(par, idx, n)?;
         sel.set([id]);
         Ok(id)
     })?;
     let made = super::typecmd::with_bounds(s, Some(id), json!({"id": id.0}));
     Ok(super::typecmd::with_overflow(s, &[id], made))
+}
+
+/// How far `p` is from the outline of `n` (a path object; infinite for anything else).
+fn distance_to(n: &Node, p: vectorcraft_geom::Point) -> f64 {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    let NodeKind::Path { path, .. } = &n.kind else { return f64::INFINITY };
+    path.to_bezpath().segments().map(|seg| seg.nearest(p, 1e-3).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
 }
 
 /// What `type.step` changes.

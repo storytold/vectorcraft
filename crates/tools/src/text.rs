@@ -248,11 +248,13 @@ impl TypeTool {
         self.caret = r.end;
     }
 
-    /// Path under `p` for the Area Type / Type on a Path tools.
+    /// Path under `p` for the Area Type / Type on a Path tools. Type on a Path also takes a compound
+    /// path: `text.createInPath` puts the type on its piece nearest the click.
     fn path_at(cx: &ToolContext, p: Point, closed: bool) -> Option<NodeId> {
         let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..Default::default() })?;
         match &cx.doc.node(h.leaf)?.kind {
             NodeKind::Path { path, .. } if !closed || path.is_closed() => Some(h.leaf),
+            NodeKind::Compound { .. } if !closed => Some(h.leaf),
             _ => None,
         }
     }
