@@ -4088,6 +4088,7 @@ axis	Both	Her İkisi
 @msg	tool shortcuts must be a single key (optionally with Shift)	araç kısayolları tek tuş olmalıdır (isteğe bağlı olarak Shift ile)
 @msg	truncated	kesik
 @msg	unknown command `{0}`	bilinmeyen komut `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	bilinmeyen komut `{0}`; `{1}` mi demek istediniz?
 @msg	unknown effect `{id}`	bilinmeyen etki `{id}`
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)

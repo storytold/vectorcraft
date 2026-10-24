@@ -45,6 +45,9 @@ pub use vectorcraft_tools as tools;
 pub enum EngineError {
     #[error("unknown command `{0}`")]
     UnknownCommand(String),
+    /// An unknown command id, with the command id it most likely misspells.
+    #[error("unknown command `{0}`; did you mean `{1}`?")]
+    UnknownCommandNear(String, String),
     #[error("command `{0}` is not available right now: {1}")]
     Disabled(String, String),
     #[error("invalid parameters for `{cmd}`: {msg}")]
@@ -1785,7 +1788,7 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
-        let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
+        let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // The crate's own tests are the audit of the params descriptions (#1442): a key a test
         // passes that its command's description doesn't name fails the test.
         #[cfg(test)]

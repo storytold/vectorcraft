@@ -1901,6 +1901,7 @@ file-filter	Templates	範本
 @msg	objects can't be nested more than 32 deep	物件的巢狀層級不能超過 32 層
 @msg	the SVG's elements are nested more than {0} deep	SVG 的元素巢狀超過 {0} 層
 @msg	unknown command `{0}`	未知的指令 `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	未知的指令 `{0}`；您是指 `{1}` 嗎？
 @msg	`{what}` closes nothing	`{what}` 沒有可結束的內容
 @msg	`{what}` closes something it didn't open	`{what}` 結束了並非由它開始的內容
 @msg	a path has too many points	有一條路徑的點過多

@@ -4324,6 +4324,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	værktøjsgenveje skal være en enkelt tast (eventuelt med Skift)
 @msg	truncated	afkortet
 @msg	unknown command `{0}`	ukendt kommando `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	ukendt kommando `{0}`; mente du `{1}`?
 @msg	unknown effect `{id}`	ukendt effekt `{id}`
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})

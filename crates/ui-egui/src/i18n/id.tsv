@@ -4324,6 +4324,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	pintasan alat harus satu tombol (opsional dengan Shift)
 @msg	truncated	terpotong
 @msg	unknown command `{0}`	perintah `{0}` tidak dikenal
+@msg	unknown command `{0}`; did you mean `{1}`?	perintah `{0}` tidak dikenal; apakah maksud Anda `{1}`?
 @msg	unknown effect `{id}`	efek `{id}` tidak dikenal
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})

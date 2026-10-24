@@ -4367,6 +4367,7 @@ axis	Both	Entrambi
 @msg	tool shortcuts must be a single key (optionally with Shift)	le scelte rapide degli strumenti devono essere un singolo tasto (eventualmente con Shift)
 @msg	truncated	troncato
 @msg	unknown command `{0}`	comando sconosciuto `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	comando sconosciuto `{0}`; forse intendevate `{1}`?
 @msg	unknown effect `{id}`	effetto sconosciuto `{id}`
 @msg	unknown format	formato sconosciuto
 @msg	unknown format `{f}` (Save writes {_1})	formato sconosciuto `{f}` (Salva scrive {_1})

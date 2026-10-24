@@ -4224,6 +4224,7 @@ axis	Both	И двете
 @msg	tool shortcuts must be a single key (optionally with Shift)	клавишните комбинации за инструменти трябва да са един клавиш (по избор със Shift)
 @msg	truncated	съкратено
 @msg	unknown command `{0}`	непозната команда `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	непозната команда `{0}`; имахте ли предвид `{1}`?
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})

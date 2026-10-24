@@ -4300,6 +4300,7 @@ theme	Appearance	Εμφάνιση
 @msg	tool shortcuts must be a single key (optionally with Shift)	οι συντομεύσεις εργαλείων πρέπει να περιλαμβάνουν ένα πλήκτρο (προαιρετικά με Shift)
 @msg	truncated	περικομμένο
 @msg	unknown command `{0}`	άγνωστη εντολή `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	άγνωστη εντολή `{0}`· μήπως εννοείτε `{1}`;
 @msg	unknown effect `{id}`	άγνωστο εφέ `{id}`
 @msg	unknown format	άγνωστη μορφή
 @msg	unknown format `{f}` (Save writes {_1})	άγνωστη μορφή `{f}` (η Αποθήκευση υποστηρίζει {_1})

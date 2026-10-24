@@ -4252,6 +4252,7 @@ theme	Appearance	Erscheinungsbild
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
 @msg	unknown command `{0}`	unbekannter Befehl `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	unbekannter Befehl `{0}`; meinten Sie `{1}`?
 @msg	unknown effect `{id}`	unbekannter Effekt `{id}`
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})

@@ -4190,6 +4190,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	objects can't be nested more than 32 deep	オブジェクトは 32 階層より深く入れ子にできません
 @msg	the SVG's elements are nested more than {0} deep	SVG の要素が {0} 階層より深く入れ子になっています
 @msg	unknown command `{0}`	`{0}` は不明なコマンドです
+@msg	unknown command `{0}`; did you mean `{1}`?	`{0}` は不明なコマンドです。`{1}` のことですか?
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
 @msg	a path has too many points	ポイントが多すぎるパスがあります

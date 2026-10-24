@@ -4336,6 +4336,7 @@ imageTrace	Outline	Contour
 @msg	tool shortcuts must be a single key (optionally with Shift)	gereedschapsneltoetsen moeten uit één toets bestaan (eventueel met Shift)
 @msg	truncated	afgekapt
 @msg	unknown command `{0}`	onbekende opdracht `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	onbekende opdracht `{0}`; bedoelde je `{1}`?
 @msg	unknown effect `{id}`	onbekend effect `{id}`
 @msg	unknown format	onbekende indeling
 @msg	unknown format `{f}` (Save writes {_1})	onbekende indeling `{f}` (Opslaan schrijft {_1})

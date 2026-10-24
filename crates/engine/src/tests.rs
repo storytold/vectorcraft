@@ -91,6 +91,42 @@ fn unknown_and_disabled() {
 }
 
 #[test]
+fn unknown_command_names_the_nearest_id() {
+    let mut s = session();
+    for typo in ["select.al", "Select.All", "selcet.all"] {
+        let e = s.execute(typo, &json!({})).unwrap_err();
+        assert!(matches!(&e, EngineError::UnknownCommandNear(id, near) if id == typo && near == "select.all"), "{typo}: {e:?}");
+        assert_eq!(e.to_string(), format!("unknown command `{typo}`; did you mean `select.all`?"));
+    }
+    let e = s.execute("nope", &json!({})).unwrap_err();
+    assert!(matches!(&e, EngineError::UnknownCommand(id) if id == "nope"), "{e:?}");
+    assert_eq!(e.to_string(), "unknown command `nope`");
+    let e = s.execute("command.batch", &json!({"commands": [{"command": "select.al", "params": {}}]})).unwrap_err();
+    assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
+}
+
+#[test]
+fn a_long_unknown_command_id_is_answered_at_once() {
+    let mut s = session();
+    let long = "x".repeat(200_000);
+    let start = std::time::Instant::now();
+    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
+    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
+    assert!(e.to_string().contains("the command takes:"), "{e}");
+    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn action_batch_names_the_nearest_command_id() {
+    let mut s = session();
+    let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+}
+
+#[test]
 fn group_ungroup() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);

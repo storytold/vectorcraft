@@ -4324,6 +4324,7 @@ axis	Both	Les deux
 @msg	tool shortcuts must be a single key (optionally with Shift)	les raccourcis d’outils doivent être une seule touche (éventuellement avec Maj)
 @msg	truncated	tronqué
 @msg	unknown command `{0}`	commande inconnue `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	commande inconnue `{0}` ; vouliez-vous dire `{1}` ?
 @msg	unknown effect `{id}`	effet inconnu `{id}`
 @msg	unknown format	format inconnu
 @msg	unknown format `{f}` (Save writes {_1})	format inconnu `{f}` (Enregistrer écrit {_1})

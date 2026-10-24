@@ -1030,6 +1030,14 @@ of the format they write (one object can carry several formats' options). A comm
 (`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
 journal recorded by an older version replays as it did, except for an effect `color` that the effect can't read.
 
+An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
+one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
+
+```json
+{"id": "select.al"}
+→ unknown command `select.al`; did you mean `select.all`?
+```
+
 These Object menu commands refuse a string or another value that is not a number with
 `` `scaleH` must be a number, not "50" ``, naming the key, and change nothing: `scaleH`, `scaleV`, `moveH`, `moveV`
 and `rotate` in `object.transformEach`; `ppi` in `object.rasterize`; `width`, `height`, `spacingX` and `spacingY` in

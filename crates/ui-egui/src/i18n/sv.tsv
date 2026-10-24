@@ -4236,6 +4236,7 @@ axis	Both	Båda
 @msg	tool shortcuts must be a single key (optionally with Shift)	kortkommandon för verktyg måste vara en enda tangent (eventuellt med Shift)
 @msg	truncated	avkortad
 @msg	unknown command `{0}`	okänt kommando `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	okänt kommando `{0}`; menade du `{1}`?
 @msg	unknown effect `{id}`	okänd effekt `{id}`
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})

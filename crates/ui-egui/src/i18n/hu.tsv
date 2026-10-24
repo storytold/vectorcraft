@@ -5075,6 +5075,7 @@ imageTrace	Outline	Körvonal
 @msg	truncated	csonka
 @msg	Unembedded to {_1}	Beágyazás megszüntetve, ide: {_1}
 @msg	unknown command `{0}`	ismeretlen parancs: `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	ismeretlen parancs: `{0}`; erre gondolt: `{1}`?
 @msg	unknown effect `{id}`	ismeretlen effektus: `{id}`
 @msg	unknown format	ismeretlen formátum
 @msg	unknown format `{f}` (Save writes {_1})	ismeretlen formátum: `{f}` (a Mentés ezeket írja: {_1})

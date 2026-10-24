@@ -20,7 +20,7 @@
 
 use serde_json::Value;
 
-use super::{bad, find_command};
+use super::{bad, command_specs, find_command};
 use crate::Result;
 
 /// What a params description says about the keys of the params object.
@@ -208,8 +208,12 @@ fn distance(a: &str, b: &str) -> usize {
 
 /// The key of `keys` a misspelt `key` most likely meant: the nearest one, when it is near.
 fn nearest<'a>(key: &str, keys: &[&'a str]) -> Option<&'a str> {
-    let near = keys.iter().map(|k| (distance(key, k), *k)).min()?;
-    (near.0 <= (key.chars().count() / 3).max(1)).then_some(near.1)
+    let len = key.chars().count();
+    let most = (len / 3).max(1);
+    // A key whose length differs by more than `most` is more than `most` edits away and isn't
+    // measured.
+    let near = keys.iter().filter(|k| k.chars().count().abs_diff(len) <= most).map(|k| (distance(key, k), *k)).min()?;
+    (near.0 <= most).then_some(near.1)
 }
 
 /// `params` has only keys the description `doc` of command `id` names, or the parameter error
@@ -478,6 +482,21 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The command id a misspelled `id`, which names no command, most likely meant: the nearest one,
+/// when it is near (as [`check_keys`] matches a misspelled key).
+pub(crate) fn nearest_command(id: &str) -> Option<&'static str> {
+    let ids: Vec<&'static str> = command_specs().iter().map(|c| c.id).collect();
+    nearest(id, &ids)
+}
+
+/// The error for `id`, which names no command: with the nearest command id, when one is near.
+pub(crate) fn unknown_command(id: &str) -> crate::EngineError {
+    match nearest_command(id) {
+        Some(near) => crate::EngineError::UnknownCommandNear(id.to_string(), near.to_string()),
+        None => crate::EngineError::UnknownCommand(id.to_string()),
+    }
 }
 
 impl crate::Session {

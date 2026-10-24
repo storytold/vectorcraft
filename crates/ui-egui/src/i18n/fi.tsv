@@ -4536,6 +4536,7 @@ imageTrace	Outline	Ääriviiva
 @msg	tool shortcuts must be a single key (optionally with Shift)	työkalujen pikanäppäinten on oltava yksittäinen näppäin (valinnaisesti Vaihto-näppäimen kanssa)
 @msg	truncated	katkaistu
 @msg	unknown command `{0}`	tuntematon komento `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	tuntematon komento `{0}`; tarkoititko `{1}`?
 @msg	unknown effect `{id}`	tuntematon tehoste `{id}`
 @msg	unknown format	tuntematon muoto
 @msg	unknown format `{f}` (Save writes {_1})	tuntematon muoto `{f}` (Tallenna kirjoittaa muotoja {_1})

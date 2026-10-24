@@ -4363,6 +4363,7 @@ axis	Both	Оба
 @msg	tool shortcuts must be a single key (optionally with Shift)	сочетания инструментов должны быть одной клавишей (необязательно с Shift)
 @msg	truncated	усечено
 @msg	unknown command `{0}`	неизвестная команда `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	неизвестная команда `{0}`; возможно, имелась в виду `{1}`?
 @msg	unknown effect `{id}`	неизвестный эффект `{id}`
 @msg	unknown format	неизвестный формат
 @msg	unknown format `{f}` (Save writes {_1})	неизвестный формат `{f}` (сохранение записывает {_1})

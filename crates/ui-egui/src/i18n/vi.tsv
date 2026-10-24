@@ -4730,6 +4730,7 @@ theme	Appearance	Giao diện
 @msg	truncated	bị cắt ngắn
 @msg	Unembedded to {_1}	Đã bỏ nhúng vào {_1}
 @msg	unknown command `{0}`	lệnh không xác định `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	lệnh không xác định `{0}`; ý bạn là `{1}`?
 @msg	unknown effect `{id}`	hiệu ứng không xác định `{id}`
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})

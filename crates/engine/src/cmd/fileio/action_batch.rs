@@ -56,7 +56,13 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "batches cannot nest"));
         }
         if find_command(id).is_none() {
-            return Err(bad(C, format!("commands[{i}]: unknown command `{id}`")));
+            return Err(bad(
+                C,
+                match super::super::params::nearest_command(id) {
+                    Some(near) => format!("commands[{i}]: unknown command `{id}`; did you mean `{near}`?"),
+                    None => format!("commands[{i}]: unknown command `{id}`"),
+                },
+            ));
         }
     }
     let source = str_param(p, "source").unwrap_or("folder");
