@@ -632,7 +632,12 @@ impl RepeatSpec {
     /// Where the instances go, counting toward the budget the Repeats in the art of the symbols
     /// of `doc` that instances in the source show (none without a document).
     pub fn transforms(&self, doc: Option<&Document>) -> Vec<Affine> {
-        let mut v = repeat_transforms(&self.kind, self.source_bounds());
+        self.transforms_from(doc, self.source_bounds())
+    }
+    /// [`Self::transforms`] with the source's bounds (as [`Self::source_bounds`] measures them)
+    /// already at hand: measuring them again, at every level of nested Repeats, doubles the work.
+    fn transforms_from(&self, doc: Option<&Document>, bounds: Option<Rect>) -> Vec<Affine> {
+        let mut v = repeat_transforms(&self.kind, bounds);
         // Each instance draws the Repeats in the source again, so nested ones multiply (a 500 × 500
         // grid of one is 62.5 billion instances): keep the first that fit the budget.
         v.truncate(self.kept(NestedCount::new(doc).nodes(&self.source)));
@@ -681,7 +686,9 @@ impl RepeatSpec {
     /// The bounds of all instances of a source measuring `source`, each placed by its transform
     /// ([`Self::transforms`] for `doc`).
     pub(crate) fn copies_bounds(&self, source: Rect, doc: Option<&Document>) -> Option<Rect> {
-        self.transforms(doc).into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(source))))
+        // Without a document the source's bounds are the ones `source` is: not measured twice.
+        let transforms = if doc.is_none() { self.transforms_from(None, Some(source)) } else { self.transforms(doc) };
+        transforms.into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(source))))
     }
     /// Apply a document transform (source + arrangement parameters).
     pub fn transform(&mut self, a: Affine, scaling: impl Into<crate::node::Scaling>) {

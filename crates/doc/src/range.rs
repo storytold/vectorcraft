@@ -17,6 +17,7 @@ pub fn parse_range(s: &str, count: usize) -> Result<Vec<usize>, String> {
             .ok_or_else(|| format!("range `{s}`: `{t}` is not a number from 1 to {count}"))
     };
     let mut out = vec![];
+    let mut seen = std::collections::HashSet::new();
     for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
         let (a, b) = match part.replace('\u{2013}', "-").split_once('-') {
             Some((a, b)) if a.trim().is_empty() && b.trim().is_empty() => return Err(format!("range `{s}`: `{part}` names no number")),
@@ -30,7 +31,7 @@ pub fn parse_range(s: &str, count: usize) -> Result<Vec<usize>, String> {
             return Err(format!("range `{s}`: `{part}` runs backwards"));
         }
         for i in a - 1..b {
-            if !out.contains(&i) {
+            if seen.insert(i) {
                 out.push(i);
             }
         }
