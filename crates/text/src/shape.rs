@@ -277,7 +277,8 @@ pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
     }
 }
 
-pub(crate) fn is_cjk(c: char) -> bool {
+/// Whether a character is treated as East Asian for composition (CJK and related scripts).
+pub fn is_cjk(c: char) -> bool {
     matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
 }
 

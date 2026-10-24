@@ -82,6 +82,62 @@ impl PartialEq for Metric {
     }
 }
 
+fn text_runs_have_cjk(t: &vectorcraft_doc::TextObject) -> bool {
+    t.runs.iter().any(|r| r.text.chars().any(vectorcraft_text::is_cjk))
+}
+
+fn runs_range_has_cjk(runs: &[vectorcraft_doc::TextRun], a: usize, b: usize) -> bool {
+    if b <= a {
+        return false;
+    }
+    let mut end = 0;
+    for r in runs {
+        let start = end;
+        end += r.text.len();
+        if start < b && end > a {
+            let from = a.saturating_sub(start);
+            let to = (b - start).min(r.text.len());
+            if r.text.get(from..to).is_some_and(|s| s.chars().any(vectorcraft_text::is_cjk)) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Whether the scoped text is East Asian (Preferences › Units › East Asian Type).
+pub(crate) fn uses_east_asian_type(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => Some(t),
+        _ => None,
+    };
+    if let Some((id, a, b)) = text_editing(app) {
+        let Some(t) = text(id) else { return false };
+        return runs_range_has_cjk(&t.runs, a, b);
+    }
+    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        let mut found = false;
+        n.walk(&mut |c| {
+            if !found
+                && let NodeKind::Text(t) = &c.kind
+                && text_runs_have_cjk(t)
+            {
+                found = true;
+            }
+        });
+        if found {
+            return true;
+        }
+    }
+    false
+}
+
+/// Units › Type, or East Asian Type when [`uses_east_asian_type`] is true.
+pub(crate) fn type_display_unit(app: &VectorcraftApp) -> vectorcraft_doc::Unit {
+    app.session.type_unit_for(uses_east_asian_type(app))
+}
+
 /// `f` of each character style in the selection, with its text object and the paragraph the
 /// characters are in (a run that spans paragraphs counts once for each).
 fn shared_styles<T: PartialEq>(
@@ -499,9 +555,9 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// shown). The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
-    let unit = app.session.type_unit();
+    let unit = type_display_unit(app);
     egui::Grid::new(id).num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        cell(ui, "T", tl!("Font Size"), |ui| size_field(app, ui, "ch-size", fw));
+        cell(ui, "T", tl!("Font Size"), |ui| size_field(app, ui, "ch-size", fw, unit));
         cell(ui, "A↕", tl!("Leading"), |ui| {
             let leading = shared_leading(app);
             let auto = shared(app, |s| s.leading.is_none()) == Some(true);
@@ -554,9 +610,9 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
 
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
 /// picked from the presets, in the type unit, blank where the selected text's sizes differ.
-pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
+pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32, unit: vectorcraft_doc::Unit) {
     let size = shared_effective(app, |s| s.size);
-    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+    if let Some(v) = widgets::spin_field(ui, id, size, unit, width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
     }
 }
@@ -656,7 +712,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         show(app, ui);
     });
     font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
-    size_field(app, ui, "cb-font-size", 96.0);
+    size_field(app, ui, "cb-font-size", 96.0, type_display_unit(app));
     ui.add_space(4.0);
     ui.separator();
 }

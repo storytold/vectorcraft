@@ -64,6 +64,12 @@ impl Session {
         self.unit(Measure::Type)
     }
 
+    /// The unit type sizes and leading show in: [`Self::type_unit`] or, when
+    /// [`Prefs::show_east_asian_options`] is on and `east_asian` is true, Units ▸ East Asian Type.
+    pub fn type_unit_for(&self, east_asian: bool) -> Unit {
+        if east_asian && self.prefs.show_east_asian_options { pref_unit(&self.prefs.units_asian_type) } else { self.type_unit() }
+    }
+
     /// Preferences ▸ Units ▸ General: the units new documents start in.
     pub fn default_units(&self) -> Unit {
         pref_unit(&self.prefs.units_general)

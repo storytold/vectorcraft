@@ -84,6 +84,16 @@ fn stroke_and_type_units_are_preferences() {
 }
 
 #[test]
+fn east_asian_type_unit_follows_its_preference() {
+    let mut s = session();
+    s.execute("prefs.set", &json!({"values": {"unitsType": "points", "unitsAsianType": "millimeters", "showEastAsianOptions": true}})).unwrap();
+    assert_eq!(s.type_unit_for(false), Unit::Points);
+    assert_eq!(s.type_unit_for(true), Unit::Millimeters);
+    s.execute("prefs.set", &json!({"key": "showEastAsianOptions", "value": false})).unwrap();
+    assert_eq!(s.type_unit_for(true), Unit::Points);
+}
+
+#[test]
 fn length_preferences_take_typed_units_and_say_what_they_follow() {
     let mut s = session();
     s.execute("prefs.set", &json!({"values": {"keyboardIncrement": "1 mm", "gridlineEvery": "1 in", "typeSizeIncrement": 3}})).unwrap();

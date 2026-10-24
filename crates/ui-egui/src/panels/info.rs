@@ -84,12 +84,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // The size in document points, as the Character panel shows it (#1034); a collapsed
         // transform has none, so the stored size stands.
         let st = tx.effective_char_style(&raw).unwrap_or(raw);
+        let east_asian = tx.runs.iter().any(|r| r.text.chars().any(vectorcraft_text::is_cjk));
         mono(ui, format!("{} {}", st.font_family, st.font_style));
         mono(
             ui,
             crate::i18n::fmt(
                 tl!("Size: {size}  Tracking: {tracking}"),
-                &[("size", &app.session.type_unit().format(st.size)), ("tracking", &format!("{:.0}", st.tracking))],
+                &[("size", &app.session.type_unit_for(east_asian).format(st.size)), ("tracking", &format!("{:.0}", st.tracking))],
             ),
         );
     }

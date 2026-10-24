@@ -39,7 +39,7 @@ fn undo_len(app: &VectorcraftApp) -> usize {
 fn size_combo(at: &Cell<egui::Pos2>) -> impl FnMut(&mut VectorcraftApp, &mut Ui) + '_ {
     |app, ui| {
         at.set(ui.max_rect().min);
-        ui.horizontal(|ui| character::size_field(app, ui, "size", 120.0));
+        ui.horizontal(|ui| character::size_field(app, ui, "size", 120.0, app.session.type_unit()));
     }
 }
 

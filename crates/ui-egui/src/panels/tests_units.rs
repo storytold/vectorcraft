@@ -88,6 +88,20 @@ fn type_sizes_follow_units_type() {
 }
 
 #[test]
+fn east_asian_type_unit_applies_to_cjk_text() {
+    let mut app = app_with_rect();
+    let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "你好", "size": 24}))["id"].clone();
+    run(&mut app, "select.set", json!({ "ids": [id] }));
+    app.run("prefs.set", json!({"values": {"unitsType": "points", "unitsAsianType": "millimeters", "showEastAsianOptions": true}})).unwrap();
+    let t = texts(&mut app, character::show);
+    assert!(shows(&t, &Unit::Millimeters.format(24.0)), "CJK uses East Asian Type: {t:?}");
+    let id2 = run(&mut app, "text.create", json!({"x": 10, "y": 200, "text": "Hi", "size": 24}))["id"].clone();
+    run(&mut app, "select.set", json!({ "ids": [id2] }));
+    let t = texts(&mut app, character::show);
+    assert!(shows(&t, "24 pt"), "Latin keeps Units Type: {t:?}");
+}
+
+#[test]
 fn the_preferences_dialog_shows_the_documents_units() {
     let mut app = app_with_rect();
     run(&mut app, "document.setUnits", json!({"units": "Millimeters"}));
