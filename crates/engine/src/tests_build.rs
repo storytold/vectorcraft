@@ -1026,6 +1026,29 @@ fn shape_builder_erase_drag_into_regions_deletes_them_not_the_edges_it_crosses()
     assert_eq!(node(&s, out[0]).appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
 }
 
+#[test]
+fn shape_builder_erase_drag_deletes_an_overlap_narrower_than_twice_the_tolerance() {
+    let mut s = session();
+    // A 1.5 pt overlap: every point of it is within the 2 pt tolerance of its edges.
+    two_at(&mut s, 98.5);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 50], [150, 50]], "erase": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["edges"].as_u64()), (Some(3), Some(0)), "{r}");
+    assert_eq!(layer_children(&s), 0, "no strip is left");
+}
+
+#[test]
+fn shape_builder_erase_click_or_drag_from_inside_a_narrow_overlap_deletes_it() {
+    for points in [json!([[99.2, 50]]), json!([[99.2, 50], [150, 50]]), json!([[95, 10], [103.5, 60]])] {
+        let mut s = session();
+        two_at(&mut s, 98.5);
+        let r = s.execute("shapeBuilder.merge", &json!({"points": points, "erase": true})).unwrap();
+        assert_eq!(r["edges"].as_u64(), Some(0), "{points}: {r}");
+        let d = &s.doc().unwrap().doc;
+        let left: Vec<f64> = d.children(d.default_layer()).unwrap().iter().filter_map(|c| c.geometric_bounds()).map(|b| b.width()).collect();
+        assert!(left.iter().all(|w| *w > 2.0), "{points}: no strip is left: {left:?}");
+    }
+}
+
 /// In Merge Mode, Clicking Stroke Splits the Path: a click on a lone rectangle's top side, 1 pt
 /// outside it, splits the rectangle into that side and the rest. Without the option, the same click
 /// is refused as outside every region and leaves the rectangle as it was.
