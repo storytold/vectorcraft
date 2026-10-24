@@ -49,6 +49,15 @@ pages before sending it to a printer. When printing that PDF, keep its page size
 than applying another fit-to-page reduction. For a sewing pattern, measure a known length on a
 printed sheet before printing the full job.
 
+## Custom paper sizes
+
+In **Media**, **Custom** sends the width and height to the printer as a custom paper, not as a
+named form. On Windows, VectorCraft uses the printer driver's own custom-media PrintTicket; the
+driver must offer a custom size that covers the page, and the loaded paper or roll must be at least
+that wide. If it cannot, the job stops with an error instead of cropping or silently turning the
+artwork. A custom size does not remove a printer's unprintable edges or its maximum roll width; set
+**Unprintable margin** and choose a roll that can hold the page.
+
 ## Choose a tiling mode
 
 | Scaling | How it divides the drawing | When to use it |
