@@ -1,10 +1,10 @@
 //! Shape Builder (`shapeBuilder.*`), Live Paint (`livePaint.*`) and Image Trace (`imageTrace.*`).
 //!
 //! **Live Paint groups** need no special node kind: a Live Paint group is a plain group whose name
-//! starts with "Live Paint". Its first child is a hidden group named "Live Paint Sources" holding
-//! the original paths (the planar map's inputs, used by Release, Merge and re-computation); then
-//! come the faces (paths named "Face", fill only) and the edges (open paths named "Edge", stroke
-//! only). See `vectorcraft_tools::builder` for the shared helpers.
+//! starts with "Live Paint" and that holds a group named "Live Paint Sources". That group is its
+//! first child, hidden, and holds the original paths (the planar map's inputs, used by Release,
+//! Merge and re-computation); then come the faces (paths named "Face", fill only) and the edges
+//! (open paths named "Edge", stroke only). See `vectorcraft_tools::builder` for the shared helpers.
 //!
 //! **Image Trace** makes a group named "Image Trace" holding the source image (hidden, bottom)
 //! and the traced filled paths above it, mapped with the image's transform. Expand drops the

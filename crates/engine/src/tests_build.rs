@@ -2199,6 +2199,42 @@ fn shape_builder_keeps_the_edges_of_an_unfilled_live_paint_group() {
     assert!((stroked_length(&s, &out) - 700.0).abs() < 1.0, "{}", stroked_length(&s, &out));
 }
 
+/// A plain group whose name starts with "Live Paint" is not a Live Paint group: the Shape Builder
+/// takes its paths, and a merge elsewhere keeps them.
+#[test]
+fn shape_builder_takes_the_paths_of_a_plain_group_named_live_paint() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    set_fill(&mut s, a, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        d.node_mut(g).unwrap().name = Some("Live Painting".into());
+        Ok(())
+    })
+    .unwrap();
+    let c = rect(&mut s, 160.0, 20.0, 100.0, 20.0);
+    set_fill(&mut s, c, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, c.0]})).unwrap();
+    let map = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    assert_eq!(map["regions"].as_array().unwrap().len(), 2, "{map}");
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[200, 30]]})).unwrap();
+    let out = ids(&r);
+    assert!(out.iter().any(|i| (area(&s, *i) - 10000.0).abs() < 1.0), "the group's rectangle is kept: {r}");
+    // A stroke of the group's rectangle splits as a plain path's does.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[-1, 50]], "splitStroke": true})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().len(), 2, "{r}");
+    // Make Live Paint takes the group as a source rather than as a Live Paint group to merge into.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let r = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!(r["faces"], 1, "{r}");
+    let made = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(vectorcraft_tools::builder::sources(&made).unwrap().children().unwrap().iter().any(|c| c.id == g));
+}
+
 // ---------- Image Trace ----------
 
 /// A 100×100 image with a black disc (r = 30 px), placed at (50, 50) scaled ×2.
