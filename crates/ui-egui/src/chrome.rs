@@ -482,6 +482,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
+    let mut close_all = false;
     let mut hovering_art = false;
     for (i, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
         if x + w > strip.left() + room && Some(i) != active {
@@ -505,7 +506,11 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
         hovering_art |= crate::document_drag::hover_tab(app, &resp, i, xr.expand(3.0));
         if xresp.clicked() {
-            close = Some(i);
+            if ui.input(|input| input.modifiers.shift) {
+                close_all = true;
+            } else {
+                close = Some(i);
+            }
         } else if resp.clicked() {
             activate = Some(i);
         }
@@ -528,7 +533,11 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    if let Some(i) = close {
+    if close_all {
+        if let Err(e) = crate::unsaved::close_all(app, "closeAll") {
+            app.status(e);
+        }
+    } else if let Some(i) = close {
         if let Err(e) = crate::unsaved::close(app, i) {
             app.status(e);
         }
@@ -1563,6 +1572,43 @@ mod tests {
         frame(&mut app, vec![press(false)]);
         assert_eq!(app.session.documents().len(), 1, "the × closed the first document");
         assert!(super::CLOSE_BEFORE_TITLE == cfg!(target_os = "macos"));
+    }
+
+    /// #3900: Shift-clicking any document tab's close box uses Close All; a plain click keeps
+    /// closing only that tab (covered by `a_tabs_close_box_sits_where_the_platform_puts_it`).
+    #[test]
+    fn shift_clicking_a_tabs_close_box_closes_all_documents() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        for _ in 0..3 {
+            app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 200.0));
+        let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
+            out.textures_delta.clear();
+            let mut titles = vec![];
+            for c in &out.shapes {
+                if let egui::Shape::Text(t) = &c.shape
+                    && t.visual_bounding_rect().width() > 30.0
+                {
+                    titles.push(t.visual_bounding_rect());
+                }
+            }
+            titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            titles
+        };
+        let titles = frame(&mut app, vec![]);
+        assert_eq!(titles.len(), 3);
+        let first = titles[0];
+        let x = if super::CLOSE_BEFORE_TITLE { first.left() - 16.0 } else { first.right() + 20.0 };
+        let at = egui::pos2(x, first.center().y);
+        let shift = egui::Modifiers { shift: true, ..Default::default() };
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: shift };
+        frame(&mut app, vec![egui::Event::PointerMoved(at), egui::Event::ModifiersChanged(shift), press(true)]);
+        frame(&mut app, vec![press(false)]);
+        assert!(app.session.documents().is_empty(), "Shift+click on a tab × must run Close All");
     }
 
     /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
