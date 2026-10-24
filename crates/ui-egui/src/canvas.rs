@@ -277,6 +277,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // that does not draw the overlay drops them, for example with the option off, with the edges
     // hidden, on the Home screen or with no document open.
     let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
+    // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
+    // drawn, so a later press elsewhere does not show the source image.
+    if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
+        app.ui.trace_hold_source = None;
+    }
     // A document that opened, closed or became active since Home was chosen replaces it.
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
@@ -419,8 +424,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
-        // The Image Trace panel's eye button, only while a pointer button is down.
-        trace_source: app.ui.trace_hold_source.clone().filter(|_| ui.input(|i| i.pointer.any_down())),
+        // The Image Trace panel's eye button, while it is held.
+        trace_source: app.ui.trace_hold_source.clone(),
     };
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
@@ -4311,6 +4316,29 @@ mod tests {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
+    }
+
+    /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
+    /// panel stopped drawing while the button was held, so a later press on the canvas does not
+    /// show the source image.
+    #[test]
+    fn a_release_ends_the_image_trace_hold_without_the_panel() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let made = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        let id = vectorcraft_doc::NodeId(made["id"].as_u64().unwrap());
+        let ctx = egui::Context::default();
+        let at = pos2(400.0, 300.0);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), press(true)]);
+        app.ui.trace_hold_source = Some(std::sync::Arc::new(vec![id]));
+        frame(&mut app, &ctx, vec![]);
+        assert!(app.ui.trace_hold_source.is_some(), "held while the button is down");
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.ui.trace_hold_source, None, "the release ends the hold");
+        frame(&mut app, &ctx, vec![press(true)]);
+        assert_eq!(app.ui.trace_hold_source, None, "a later press does not show the source image");
+        frame(&mut app, &ctx, vec![press(false)]);
     }
 
     /// The baseline marker of selected point type runs under the line, wherever its alignment

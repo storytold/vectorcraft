@@ -92,15 +92,28 @@ pub(crate) fn is_trace(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
-/// The active document and the first selected object.
-fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
-    Some((app.session.active()?.uid, first_selected(app)?.id))
+/// The object Trace acts on: the first selected image or Image Trace object in paint order, as
+/// `imageTrace.make` takes it, else the first selected object.
+fn target_node(app: &VectorcraftApp) -> Option<Node> {
+    let st = app.session.active()?;
+    let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
+    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable).cloned()).or_else(|| first_selected(app))
 }
 
-/// What the selection is: an Image Trace object (with its stored settings), a plain image, or neither.
+/// The active document and the object Trace acts on.
+fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
+    Some((app.session.active()?.uid, target_node(app)?.id))
+}
+
+/// What Trace acts on: an Image Trace object (with its stored settings), a plain image, or neither.
 fn target(app: &VectorcraftApp) -> (bool, bool, Option<Value>) {
-    let Some(n) = first_selected(app) else { return (false, false, None) };
+    let Some(n) = target_node(app) else { return (false, false, None) };
     (is_trace(&n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
+}
+
+/// Whether any selected object is an Image Trace object, wherever it is in the selection.
+fn any_trace(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)))
 }
 
 /// The one selected Image Trace object's preset ("Custom" once its settings were changed) and view.
@@ -281,6 +294,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
     }
     let (is_trace, is_image, stored) = target(app);
+    let any_trace = any_trace(app);
     let object = target_key(app);
     if let Some(t) = stored.filter(|t| *t != st.synced || object != st.object) {
         // A change of the object's view alone (here or in the Control bar) keeps the settings that
@@ -317,16 +331,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let eye = 24.0;
         if let Some(v) = view_dropdown(ui, st.view, (ui.available_width() - eye - ui.spacing().item_spacing.x).min(170.0)) {
             st.view = v;
-            if is_trace {
+            if any_trace {
                 set_view(app, v);
             }
         }
         let held = app.ui.trace_hold_source.is_some();
-        let r = widgets::icon_button_enabled(ui, "eye", tl!("Press and hold to view the source image"), held, is_trace, eye);
+        let r = widgets::icon_button_enabled(ui, "eye", tl!("Press and hold to view the source image"), held, any_trace, eye);
         if cfg!(test) {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("trace-hold-source"), r.rect));
         }
-        hold_source(app, ui.ctx(), is_trace && r.is_pointer_button_down_on());
+        hold_source(app, ui.ctx(), any_trace && r.is_pointer_button_down_on());
     });
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Mode:"));
@@ -501,7 +515,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if r.on_disabled_hover_text(tl!("Select an image to trace")).clicked() {
             trace(app, &mut st);
         }
-        if ui.add_enabled_ui(is_trace, |ui| widgets::flat_button(ui, tl!("Expand"), 80.0)).inner.clicked() {
+        if ui.add_enabled_ui(any_trace, |ui| widgets::flat_button(ui, tl!("Expand"), 80.0)).inner.clicked() {
             app.run("imageTrace.expand", json!({})).ok();
         }
     });
@@ -519,11 +533,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let (is_trace, _, _) = target(app);
-    if menu_item(ui, tl!("Release"), is_trace, false) {
+    let any_trace = any_trace(app);
+    if menu_item(ui, tl!("Release"), any_trace, false) {
         app.run("imageTrace.release", json!({})).ok();
     }
-    if menu_item(ui, tl!("Expand"), is_trace, false) {
+    if menu_item(ui, tl!("Expand"), any_trace, false) {
         app.run("imageTrace.expand", json!({})).ok();
     }
     ui.separator();
@@ -908,6 +922,97 @@ mod tests {
         frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
         assert_eq!(app.ui.trace_hold_source, None, "a plain image has no source image to show");
         frame(&mut app, &ctx, vec![press(false)]);
+    }
+
+    /// With another object first in the selection, the eye button and the panel menu's Release
+    /// act on the selected Image Trace object.
+    #[test]
+    fn the_trace_controls_work_when_another_object_is_selected_first() {
+        let mut app = traced_app();
+        let trace_id = first_selected(&app).unwrap().id;
+        let made = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap();
+        let rect = made["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
+        assert_eq!(first_selected(&app).unwrap().id.0, rect, "the rectangle comes first");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, vec![]);
+        let at = ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("trace-hold-source"))).unwrap().center();
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
+        assert_eq!(app.ui.trace_hold_source.as_deref(), Some(&vec![trace_id]), "the eye button shows the source image");
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.ui.trace_hold_source, None);
+
+        let menu_frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+        };
+        let texts = menu_frame(&mut app, vec![]);
+        let at = texts.iter().find(|(t, _)| t.trim() == "Release").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Release in {texts:?}"));
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        menu_frame(&mut app, vec![Event::PointerMoved(at), press(true)]);
+        menu_frame(&mut app, vec![press(false)]);
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(trace_id).is_none(), "Release puts the source image back");
+    }
+
+    /// With another object first in the selection, the panel's View menu and Expand act on the
+    /// selected Image Trace object.
+    #[test]
+    fn view_and_expand_work_when_another_object_is_selected_first() {
+        let mut app = traced_app();
+        let trace_id = first_selected(&app).unwrap().id;
+        let made = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap();
+        let rect = made["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click(&mut app, &ctx, "Tracing Result");
+        click(&mut app, &ctx, "Outlines");
+        let view = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(trace_id).unwrap().trace_view();
+        assert_eq!(view(&app), TraceView::Outlines, "the View menu sets the Image Trace object's view");
+        click(&mut app, &ctx, "Expand");
+        let st = app.session.active().unwrap();
+        assert!(!is_trace(st.doc.node(trace_id).unwrap()), "Expand keeps only the traced paths");
+    }
+
+    /// With another object first in the selection, Trace traces the selected image, the View
+    /// dropdown shows the selected Image Trace object's view, and Preview traces it again.
+    #[test]
+    fn trace_view_and_preview_work_when_another_object_is_selected_first() {
+        let mut app = traced_app();
+        app.run("imageTrace.release", json!({})).unwrap();
+        let image = first_selected(&app).unwrap().id;
+        let made = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap();
+        let rect = made["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [rect, image.0]})).unwrap();
+        assert_eq!(first_selected(&app).unwrap().id.0, rect, "the rectangle comes first");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click(&mut app, &ctx, "Trace");
+        let st = app.session.active().unwrap();
+        let trace_id = st.selection.objects.iter().copied().find(|id| st.doc.node(*id).is_some_and(is_trace));
+        let trace_id = trace_id.unwrap_or_else(|| panic!("Trace makes an Image Trace object: {}", app.ui.status));
+
+        // The panel last showed Tracing Result; the object is drawn as Outlines.
+        frame(&mut app, &ctx, vec![]);
+        app.run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
+        app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
+        let texts = frame(&mut app, &ctx, vec![]);
+        assert!(texts.iter().any(|(t, _)| t == "Outlines") && !texts.iter().any(|(t, _)| t == "Tracing Result"), "{texts:?}");
+
+        // Tracing again replaces the object, so look it up in the selection.
+        let strokes = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            let n = st.selection.objects.iter().find_map(|id| st.doc.node(*id).filter(|n| is_trace(n)));
+            n.and_then(|n| n.extras().trace.as_deref().cloned()).map(|t| t["params"]["strokes"].clone())
+        };
+        assert_eq!(strokes(&app), Some(json!(false)));
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(strokes(&app), Some(json!(true)), "Preview traces the object again");
     }
 
     #[test]
