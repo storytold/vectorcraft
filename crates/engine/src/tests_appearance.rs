@@ -131,6 +131,83 @@ fn active_item_targets_paint_and_proxies_and_clears_on_selection_change() {
 }
 
 #[test]
+fn clearing_the_top_fill_to_none_clears_lower_fills_too() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    let n = node(&s, id);
+    assert!(n.appearance.items.iter().filter(|i| i.is_fill()).all(|i| i.paint().is_none()));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    let n = node(&s, id);
+    assert!(!fill_paint(&n, 2).is_none());
+}
+
+fn paints_any_fill(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| i.visible() && i.is_fill() && !i.paint().is_none())
+}
+
+fn all_fills_cleared(n: &Node) -> bool {
+    !paints_any_fill(n) && n.appearance.items.iter().filter(|i| i.is_fill()).all(|i| i.paint().is_none())
+}
+
+/// Two painted fills and an unpainted stroke (#3400): clearing the top fill must hide every fill.
+fn two_fill_stack_with_none_stroke(s: &mut Session) -> NodeId {
+    let id = rect(s, 100.0);
+    run(s, "appearance.addFill", json!({}));
+    run(s, "paint.setStroke", json!({"none": true}));
+    run(s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(s, "appearance.setActiveItem", json!({"index": 0}));
+    run(s, "paint.setFill", json!({"color": "#0000ff"}));
+    run(s, "appearance.setActiveItem", json!({"index": null}));
+    id
+}
+
+fn top_fill_index(n: &Node) -> usize {
+    n.appearance.items.iter().enumerate().rev().find_map(|(i, it)| it.is_fill().then_some(i)).unwrap()
+}
+
+#[test]
+fn top_fill_none_matches_across_fill_proxy_swap_and_set_item() {
+    let mut s = session();
+    for (cmd, params) in [("paint.setFill", json!({"none": true})), ("paint.swap", json!({}))] {
+        let id = two_fill_stack_with_none_stroke(&mut s);
+        assert!(paints_any_fill(&node(&s, id)));
+        run(&mut s, cmd, params);
+        assert!(all_fills_cleared(&node(&s, id)), "{cmd}");
+        assert!(node(&s, id).appearance.fill_paint().is_none(), "{cmd} proxy");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(paints_any_fill(&node(&s, id)), "undo after {cmd}");
+    }
+    let id = two_fill_stack_with_none_stroke(&mut s);
+    let top = top_fill_index(&node(&s, id));
+    run(&mut s, "appearance.setItem", json!({"index": top, "none": true}));
+    assert!(all_fills_cleared(&node(&s, id)));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(paints_any_fill(&node(&s, id)));
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    let saved = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let back = vectorcraft_format::load(&saved).unwrap();
+    let n = back.node(id).unwrap();
+    assert!(all_fills_cleared(n));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    assert!(paints_any_fill(&node(&s, id)));
+}
+
+#[test]
+fn swap_with_none_stroke_clears_lower_fills_when_top_becomes_none() {
+    let mut s = session();
+    let id = two_fill_stack_with_none_stroke(&mut s);
+    run(&mut s, "paint.swap", json!({}));
+    let n = node(&s, id);
+    assert!(all_fills_cleared(&n));
+    assert!(!n.appearance.stroke_paint().is_none());
+}
+
+#[test]
 fn item_rows_follow_remove_and_move() {
     let mut s = session();
     let id = rect(&mut s, 100.0);

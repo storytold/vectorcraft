@@ -890,6 +890,22 @@ impl Appearance {
     pub fn set_paint_at(&mut self, index: Option<usize>, fill: bool, p: Paint) -> bool {
         if fill { self.set_fill_at(index, p) } else { self.set_stroke_at(index, p) }
     }
+    /// When the edited fill is the topmost one and its paint is cleared, clear every fill in the
+    /// stack so a lower fill from an imported appearance cannot show through.
+    pub fn clear_lower_fills_when_top_cleared(&mut self, index: Option<usize>, paint: &Paint) {
+        if !paint.is_none() {
+            return;
+        }
+        let top = self.items.iter().enumerate().rev().find_map(|(i, it)| it.is_fill().then_some(i));
+        let edited = self.item_of_kind(index, true).or_else(|| index.filter(|i| self.items.get(*i).is_some_and(|it| it.is_fill()))).or(top);
+        if top == edited {
+            for it in &mut self.items {
+                if let AppearanceItem::Fill(f) = it {
+                    f.paint = Paint::None;
+                }
+            }
+        }
+    }
     /// The effects of item `index`, or the object-level effects for `None`.
     pub fn effects_at(&self, index: Option<usize>) -> Option<&Vec<Effect>> {
         match index {

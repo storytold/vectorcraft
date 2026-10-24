@@ -504,6 +504,9 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
             let new_paint = keep_pattern_xf(&paint, p, n.appearance.paint_at(index, fill));
             let placed = place_paint(&new_paint, p, item_paint_bounds(n, index, fill));
             n.appearance.set_paint_at(index, fill, placed);
+            if fill {
+                n.appearance.clear_lower_fills_when_top_cleared(index, &paint);
+            }
             Ok(())
         },
         |d, changed| {
@@ -640,7 +643,8 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let f = n.appearance.fill_paint();
                 let st = n.appearance.stroke_paint();
-                n.appearance.set_fill(st);
+                n.appearance.set_fill(st.clone());
+                n.appearance.clear_lower_fills_when_top_cleared(None, &st);
                 restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }

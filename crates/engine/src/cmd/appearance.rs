@@ -571,28 +571,38 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
                 super::paint::restore_unpainted_stroke(&mut n.appearance, Some(idx), pa);
             }
             let bounds = n.geometric_bounds();
-            let Some(item) = n.appearance.items.get_mut(idx) else { continue };
-            let (pp, op, bl, vis, bounds) = match item {
-                AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible, bounds),
-                AppearanceItem::Stroke(st) => {
-                    if let Some(w) = p.get("weight").and_then(Value::as_f64) {
-                        st.width = w.max(0.0);
+            let is_fill = matches!(n.appearance.items.get(idx), Some(AppearanceItem::Fill(_)));
+            let fill_cleared = {
+                let Some(item) = n.appearance.items.get_mut(idx) else { continue };
+                let (pp, op, bl, vis, bounds) = match item {
+                    AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible, bounds),
+                    AppearanceItem::Stroke(st) => {
+                        if let Some(w) = p.get("weight").and_then(Value::as_f64) {
+                            st.width = w.max(0.0);
+                        }
+                        let bounds = bounds.map(|b| st.paint_bounds(b));
+                        (&mut st.paint, &mut st.opacity, &mut st.blend, &mut st.visible, bounds)
                     }
-                    let bounds = bounds.map(|b| st.paint_bounds(b));
-                    (&mut st.paint, &mut st.opacity, &mut st.blend, &mut st.visible, bounds)
+                };
+                let cleared = if let Some(pa) = &paint {
+                    *pp = super::gradient::place_paint(&super::paint::keep_pattern_xf(pa, p, Some(&*pp)), p, bounds);
+                    is_fill && pa.is_none()
+                } else {
+                    false
+                };
+                if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
+                    *op = percent(o);
                 }
+                if let Some(b) = blend {
+                    *bl = b;
+                }
+                if let Some(v) = p.get("visible").and_then(Value::as_bool) {
+                    *vis = v;
+                }
+                cleared
             };
-            if let Some(pa) = &paint {
-                *pp = super::gradient::place_paint(&super::paint::keep_pattern_xf(pa, p, Some(&*pp)), p, bounds);
-            }
-            if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-                *op = percent(o);
-            }
-            if let Some(b) = blend {
-                *bl = b;
-            }
-            if let Some(v) = p.get("visible").and_then(Value::as_bool) {
-                *vis = v;
+            if fill_cleared {
+                n.appearance.clear_lower_fills_when_top_cleared(Some(idx), &Paint::None);
             }
         }
         Ok(count_changed(d, &before, &ids))
