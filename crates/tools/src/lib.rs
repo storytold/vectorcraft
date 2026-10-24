@@ -860,6 +860,12 @@ pub trait Tool: Send {
     /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once it
     /// is done, the tool shows the highlight under the pointer where it last moved.
     fn poll(&mut self, _cx: &ToolContext, _wait: bool) {}
+    /// The Shape Builder's planar map of the selection, with the outline edges, and the gap it
+    /// closes, when the tool has one. `shapeBuilder.merge` uses it in place of a map of its own
+    /// when the map's inputs are the merge's inputs.
+    fn shape_builder_map(&self) -> Option<(std::sync::Arc<builder::BuilderMap>, f64)> {
+        None
+    }
 }
 
 /// Create a tool by id. Unknown or not-yet-implemented tools fall back to a no-op tool that keeps the id.

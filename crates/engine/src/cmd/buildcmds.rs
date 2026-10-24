@@ -287,9 +287,21 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         f => f,
     };
     let roots = root_ids(s, p)?;
+    let gap = gap_param(p);
+    // The map the Shape Builder tool already has, which a click or drag of it is made over.
+    let shared = s.tool.shape_builder_map().filter(|(_, g)| *g == gap);
     let label = if erase { "Shape Builder Delete" } else { "Shape Builder" };
     let (ids, merged, touched, split) = s.edit(label, |d, sel| {
-        let (map, leaves) = BuilderMap::with_gap(d, &roots, erase || split_tol.is_some(), open_filled_as_closed, gap_param(p));
+        let (shapes, leaves) = b::shape_builder_shapes(d, &roots, open_filled_as_closed);
+        let built;
+        let map = match &shared {
+            // The tool's map has the outline edges, which erasing and splitting need.
+            Some((m, _)) if m.shapes == shapes => m.as_ref(),
+            _ => {
+                built = BuilderMap::of_shapes(shapes, erase || split_tol.is_some(), gap);
+                &built
+            }
+        };
         let outlines = b::drawn_outlines(d, &leaves);
         let leaves: Vec<Node> = leaves.into_iter().cloned().collect();
         if map.shapes.is_empty() {

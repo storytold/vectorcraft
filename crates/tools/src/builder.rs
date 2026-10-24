@@ -240,7 +240,7 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], filled_faces: bool) -> (Ve
 /// they cross, and so do filled open paths without `open_filled_as_closed`. A Live Paint group
 /// contributes its filled faces as shapes and its stroked edges as open lines; its unfilled faces
 /// and its edges without a stroke are left out.
-fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
+pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
         if named(l, EDGE_NAME) && doc.parent_of(l.id).and_then(|p| doc.node(p)).is_some_and(is_live_paint) {
@@ -271,6 +271,17 @@ fn faces_of(regions: Vec<po::Region>) -> Vec<Face> {
             Some((r, bp, b))
         })
         .collect()
+}
+
+thread_local! {
+    /// The Shape Builder maps built on this thread ([`maps_built`]).
+    static MAPS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many Shape Builder maps ([`BuilderMap::of_shapes`]) this thread has built, for tests that
+/// count them.
+pub fn maps_built() -> usize {
+    MAPS_BUILT.with(std::cell::Cell::get)
 }
 
 /// The Shape Builder's planar map of a selection.
@@ -325,12 +336,13 @@ impl BuilderMap {
         (Self::of_shapes(shapes, with_edges, gap), leaves)
     }
 
-    /// The map of `shapes` (the inputs, back → front), with the outline edges only `with_edges`,
-    /// closing gaps up to `gap`.
-    fn of_shapes(shapes: Vec<po::Shape>, with_edges: bool, gap: f64) -> Self {
+    /// The map of `shapes` (the inputs, back → front, as [`shape_builder_shapes`] gives them), with
+    /// the outline edges only `with_edges`, closing gaps up to `gap`.
+    pub fn of_shapes(shapes: Vec<po::Shape>, with_edges: bool, gap: f64) -> Self {
         if shapes.is_empty() {
             return Self::default();
         }
+        MAPS_BUILT.with(|n| n.set(n.get() + 1));
         let arr = po::shape_builder_with_gap(&shapes, with_edges, gap);
         let bounded = |pieces: Vec<po::Shape>| {
             pieces
@@ -668,7 +680,8 @@ struct Pending {
 #[derive(Default)]
 struct RegionCache {
     key: Option<CacheKey>,
-    map: BuilderMap,
+    /// The map, which the Shape Builder's merge command takes too ([`Tool::shape_builder_map`]).
+    map: Arc<BuilderMap>,
     /// Live Paint faces (every path an edge, filled or not) rather than Shape Builder regions.
     live: bool,
     /// Gap Detection distance; changing tool options invalidates the cache.
@@ -738,7 +751,7 @@ impl RegionCache {
     }
 
     fn install(&mut self, key: CacheKey, map: BuilderMap, outlines: Vec<PathData>) {
-        self.map = map;
+        self.map = Arc::new(map);
         self.outlines = outlines;
         self.key = Some(key);
         #[cfg(test)]
@@ -1252,6 +1265,10 @@ impl Tool for ShapeBuilderTool {
                 break;
             }
         }
+    }
+
+    fn shape_builder_map(&self) -> Option<(Arc<BuilderMap>, f64)> {
+        self.cache.key.is_some().then(|| (Arc::clone(&self.cache.map), self.cache.gap))
     }
 
     /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch

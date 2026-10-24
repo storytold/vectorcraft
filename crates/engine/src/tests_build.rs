@@ -365,6 +365,32 @@ fn shape_builder_tool_drives_the_command() {
     assert_eq!(layer_children(&s), 1);
 }
 
+/// A click of the Shape Builder merges over the map the tool built for the hover, as does the
+/// command over the same inputs with the same gap; another gap needs a map of its own.
+#[test]
+fn shape_builder_merge_uses_the_map_the_tool_has() {
+    use vectorcraft_tools::builder::maps_built;
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 75.0, 50.0), v).unwrap();
+    let built = maps_built();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 75.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 75.0, 50.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert_eq!(layer_children(&s), 3, "the overlap and what is left of each square");
+    assert_eq!(maps_built(), built, "the click builds no map");
+    // Undone, the squares are the inputs the tool's map was built from.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[75, 50]]})).unwrap();
+    assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6);
+    assert_eq!(maps_built(), built, "the command over the same inputs builds no map");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("shapeBuilder.merge", &json!({"points": [[75, 50]], "gap": 3})).unwrap();
+    assert_eq!(maps_built(), built + 1, "another gap");
+}
+
 #[test]
 fn shape_builder_tool_merges_the_narrow_shape_it_highlights_in_a_wide_selection() {
     let mut s = session();
