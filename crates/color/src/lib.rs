@@ -381,6 +381,10 @@ impl Paint {
     pub fn solid(c: Color) -> Self {
         Paint::Solid { color: c, swatch: None, tint: 1.0 }
     }
+    /// Solid paint that exports to SVG/CSS as the `currentColor` keyword (previewed as black).
+    pub fn current_color() -> Self {
+        Paint::Solid { color: Color::BLACK, swatch: Some(swatch::CURRENT_COLOR.into()), tint: 1.0 }
+    }
     pub fn is_none(&self) -> bool {
         matches!(self, Paint::None)
     }
@@ -410,9 +414,14 @@ impl Paint {
     pub fn is_registration(&self) -> bool {
         matches!(self, Paint::Solid { swatch: Some(s), .. } if s == swatch::REGISTRATION)
     }
+    /// Is this paint the SVG/CSS `currentColor` keyword?
+    pub fn is_current_color(&self) -> bool {
+        matches!(self, Paint::Solid { swatch: Some(s), .. } if s == swatch::CURRENT_COLOR)
+    }
     pub fn label(&self) -> String {
         match self {
             Paint::None => "None".into(),
+            Paint::Solid { swatch: Some(n), .. } if n == swatch::CURRENT_COLOR => "currentColor".into(),
             Paint::Solid { color, swatch: Some(n), tint } if *tint < 1.0 => format!("{n} {}% ({})", tint_percent(*tint), color.to_hex()),
             Paint::Solid { color, swatch: Some(n), .. } => format!("{n} ({})", color.to_hex()),
             Paint::Solid { color, .. } => color.to_hex(),
@@ -578,6 +587,16 @@ mod tests {
         });
         let Paint::Gradient(g) = g else { panic!("a gradient") };
         assert!(g.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.5));
+    }
+
+    #[test]
+    fn current_color_paint_round_trips_as_a_linked_solid() {
+        let p = Paint::current_color();
+        assert!(p.is_current_color());
+        assert_eq!(p.label(), "currentColor");
+        let s = serde_json::to_string(&p).unwrap();
+        assert!(s.contains("currentColor"), "{s}");
+        assert!(serde_json::from_str::<Paint>(&s).unwrap().is_current_color());
     }
 
     #[test]

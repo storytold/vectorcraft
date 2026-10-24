@@ -444,6 +444,11 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
 /// A colour from `"#rrggbb"`, a colour key (`"cmyk 0 100 100 0"`, `"lab 55 60 40"`), `[r,g,b]` (0..1),
 /// `{"c":..,"m":..,"y":..,"k":..}` (percent when any component is above 1, else 0..1), `{"gray":..}` or `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about
 /// −128..127).
+/// True when `v` is the SVG/CSS `currentColor` paint keyword (case-insensitive).
+pub fn is_current_color_value(v: &Value) -> bool {
+    v.as_str().is_some_and(|s| s.eq_ignore_ascii_case("currentcolor"))
+}
+
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
         // A hex, or a colour key ("cmyk 0 100 100 0", as Recolor Artwork lists colours).

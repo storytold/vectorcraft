@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::swatch::REGISTRATION;
+use vectorcraft_color::swatch::{CURRENT_COLOR, REGISTRATION};
 use vectorcraft_color::{Color, Paint, Swatch, tint_percent};
 
 use crate::{AppearanceItem, Document, Node, NodeId, NodeKind};
@@ -25,7 +25,10 @@ impl Document {
     /// Swatch `name`, the built-in Registration swatch ([`vectorcraft_color::swatch::registration`])
     /// included.
     pub fn swatch(&self, name: &str) -> Option<&Swatch> {
-        self.swatches_iter().find(|s| s.name == name).or_else(|| (name == REGISTRATION).then(vectorcraft_color::swatch::registration))
+        self.swatches_iter()
+            .find(|s| s.name == name)
+            .or_else(|| (name == REGISTRATION).then(vectorcraft_color::swatch::registration))
+            .or_else(|| (name == CURRENT_COLOR).then(vectorcraft_color::swatch::current_color))
     }
     pub fn swatch_mut(&mut self, name: &str) -> Option<&mut Swatch> {
         self.swatches_iter_mut().find(|s| s.name == name)

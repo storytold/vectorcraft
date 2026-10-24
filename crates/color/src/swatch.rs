@@ -20,11 +20,20 @@ pub struct Swatch {
 /// The name of the built-in Registration swatch ([`registration`]).
 pub const REGISTRATION: &str = "[Registration]";
 
+/// The name of the built-in `currentColor` paint link (SVG/CSS keyword for themed icon strokes).
+pub const CURRENT_COLOR: &str = "currentColor";
+
 /// The built-in Registration swatch: a global colour of 100% of every ink that prints on every
 /// plate, process and spot (printer's marks). Every document has it; it can't be edited or deleted.
 pub fn registration() -> &'static Swatch {
     static S: std::sync::OnceLock<Swatch> = std::sync::OnceLock::new();
     S.get_or_init(|| Swatch { name: REGISTRATION.into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 1.0, 1.0)), global: true, spot: false })
+}
+
+/// Built-in link for paints that round-trip the SVG `currentColor` keyword.
+pub fn current_color() -> &'static Swatch {
+    static S: std::sync::OnceLock<Swatch> = std::sync::OnceLock::new();
+    S.get_or_init(|| Swatch { name: CURRENT_COLOR.into(), paint: Paint::current_color(), global: true, spot: false })
 }
 
 impl Swatch {
@@ -35,9 +44,9 @@ impl Swatch {
             _ => None,
         }
     }
-    /// None and Registration: built in, they can't be edited, moved or deleted.
+    /// None, Registration and `currentColor`: built in, they can't be edited, moved or deleted.
     pub fn is_reserved(&self) -> bool {
-        self.paint.is_none() || self.name == REGISTRATION
+        self.paint.is_none() || self.name == REGISTRATION || self.name == CURRENT_COLOR || self.paint.is_current_color()
     }
 }
 

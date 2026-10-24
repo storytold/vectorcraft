@@ -366,6 +366,9 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {
+        if is_current_color_value(c) {
+            return Ok(Some(Paint::current_color()));
+        }
         let c = color_value(c).ok_or_else(|| bad("paint", format!("bad color {c}")))?;
         return Ok(Some(Paint::solid(new_color(c))));
     }
@@ -765,4 +768,21 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     s.execute("object.setProps", &Value::Object(q))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Session;
+
+    #[test]
+    fn current_color_is_a_solid_stroke_paint() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 24, "height": 24, "units": "Pixels"})).unwrap();
+        let id = s.execute("shape.line", &json!({"x1": 4, "y1": 12, "x2": 20, "y2": 12})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [id], "none": true})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id], "color": "currentColor"})).unwrap();
+        let stroke = s.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance.stroke_paint();
+        assert!(stroke.is_current_color(), "{stroke:?}");
+    }
 }

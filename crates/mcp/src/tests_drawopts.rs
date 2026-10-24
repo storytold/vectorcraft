@@ -120,6 +120,19 @@ fn bad_options_draw_nothing() {
     }
 }
 
+#[test]
+fn draw_tools_accept_current_color_paint() {
+    let mut h = headless();
+    let (id, _) = draw(&mut h, "draw_path", json!({"d": "M4 12h16", "fill": "none", "stroke": "currentColor", "strokeWidth": 2}));
+    assert!(node(&h, id).appearance.stroke_paint().is_current_color());
+    let (id, _) = draw(
+        &mut h,
+        "draw_shape",
+        json!({"shape": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10, "fill": "currentColor", "stroke": "none"}),
+    );
+    assert!(node(&h, id).appearance.fill_paint().is_current_color());
+}
+
 /// The new arguments are in the tools' schemas, so `tools/call` accepts them (#713 refuses
 /// arguments a schema doesn't list).
 #[test]
@@ -147,8 +160,6 @@ fn a_bad_paint_draws_nothing() {
     let (before, undo, svg) =
         (objects(&h), h.session.doc().unwrap().history.undo.len(), vectorcraft_svg::export(&h.session.doc().unwrap().doc, &Default::default()));
     for bad in [
-        json!({"stroke": "currentColor"}),
-        json!({"fill": "currentColor"}),
         json!({"fill": "#550505", "stroke": "not-a-colour"}),
         json!({"fill": {"swatch": "No Such Swatch"}}),
         json!({"stroke": "#000000", "strokeWidth": "thick"}),
