@@ -205,6 +205,39 @@ fn the_first_file_is_the_file_the_export_writes_first() {
     }
 }
 
+/// A saved document's `<filename>`, Full Document file and ZIP are named after its file without the
+/// extension, as Save names it, whatever its File Info title says.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_saved_document_exports_under_its_file_name() {
+    let mut s = session(1);
+    s.execute("file.info", &json!({"title": "Logo: final version"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-screens-filename-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    s.execute("document.save", &json!({"path": dir.join("my-logo.vectorcraft").to_string_lossy()})).unwrap();
+    for (p, name) in [
+        (json!({"name": "<filename>__<name>", "formats": [{"format": "png"}]}), "my-logo__Artboard 1.png"),
+        (json!({"fullDocument": true, "formats": [{"format": "png"}]}), "my-logo.png"),
+    ] {
+        assert_eq!(names(&export(&mut s, p.clone())), [name], "{p}");
+        assert_eq!(super::screens::first_file(&s, &p).unwrap(), name, "{p}");
+    }
+    assert_eq!(export(&mut s, json!({"zip": true, "formats": [{"format": "svg"}]}))["name"], "my-logo.zip");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A document that has not been saved has no file: `<filename>` is its title.
+#[test]
+fn an_unsaved_document_exports_under_its_title() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 40, "height": 30, "name": "Poster"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 20})).unwrap();
+    s.execute("file.info", &json!({"title": "Spring poster"})).unwrap();
+    let p = json!({"name": "<filename>", "formats": [{"format": "png"}]});
+    assert_eq!(names(&export(&mut s, p.clone())), ["Spring-poster.png"]);
+    assert_eq!(super::screens::first_file(&s, &p).unwrap(), "Spring-poster.png");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn sub_folders_are_made_in_the_export_folder() {

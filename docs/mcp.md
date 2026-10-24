@@ -3628,8 +3628,9 @@ fallback font…), each note once; the export still writes or returns every file
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards
   (`assets`, `fullDocument` as before).
-- **Names:** `name` is a pattern for every file: `<filename>` (the document), `<name>` (the artboard, asset, layer
-  or object), `<index>`, `####` (a counter zero-padded to the run of `#`, from `counterStart`; `counterPer: "item"`
+- **Names:** `name` is a pattern for every file: `<filename>` (the document's file name without its extension, or
+  its title before it is saved; the Full Document file and the `.zip` use the same name), `<name>` (the artboard,
+  asset, layer or object), `<index>`, `####` (a counter zero-padded to the run of `#`, from `counterStart`; `counterPer: "item"`
   or `"file"`), `YYYYMMDD`, `YYYY-MM-DD`, `<date>`, `<time>`, `<format>`, `<scale>` and `<suffix>` (else the row's
   suffix ends the name; `date` sets the day the pattern uses). Different files it names alike get `-2`, `-3`….
 - **Folders:** `folders: "none" | "rows" | "format" | "item" | "itemFormat"` (all in one, a folder per row, per

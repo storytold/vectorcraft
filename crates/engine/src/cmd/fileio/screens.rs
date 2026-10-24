@@ -382,7 +382,7 @@ struct Naming {
 }
 
 impl Naming {
-    /// The naming of params `o` for a document titled `title`.
+    /// The naming of params `o` for a document named `title`: its file's path, or its title before it is saved.
     fn of(o: &ScreenParams, title: &str) -> Result<Self> {
         let folders = Folders::of(o)?;
         // A prefix names files, not folders.
@@ -669,7 +669,9 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
-    let naming = Naming::of(&o, &s.doc()?.doc.title)?;
+    // `<filename>`: the document's file, as Save names it, or its title before it is saved.
+    let st = s.doc()?;
+    let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
     let doc = s.doc()?.doc.clone();
@@ -846,13 +848,14 @@ pub fn first_file(s: &Session, p: &Value) -> Result<String> {
     let rows = rows_of(s, &p, o.preset.as_deref())?;
     o.one_source()?;
     let selection = o.selection_mode()?;
-    let doc = &s.doc()?.doc;
+    let st = s.doc()?;
+    let doc = &st.doc;
     let mut selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
     // A file per object: objects that draw nothing write no file.
     if selection == Some(true) {
         selected = selected.into_iter().find(|id| export_crop(doc, &[*id]).is_some()).into_iter().collect();
     }
-    let naming = Naming::of(&o, &doc.title)?;
+    let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&doc.title))?;
     let items = items(doc, &o, selection, &selected, &naming.filename, false, false)?;
     let (Some(item), Some(r)) = (items.first(), rows.first()) else { return Err(bad(C, "nothing to export")) };
     let (sub, file) = naming.file(item, 0, 0, r);
