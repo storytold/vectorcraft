@@ -273,15 +273,21 @@ fn pattern_tile_count_by_fit() {
 fn pattern_places_corner_tiles() {
     let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
     let out = stroke_pieces(&Document::new(1.0, 1.0), &pattern_brush(PatternFit::Stretch, true), &sq, &stroke(1.0));
-    let corners = out
-        .iter()
-        .filter(
-            |n| matches!(&n.kind, NodeKind::Path { path, .. } if path.subpaths[0].anchors.len() == 4 && n.geometric_bounds().unwrap().width() < 7.0),
-        )
-        .count();
-    assert_eq!(corners, 4);
+    // The corner tile is an ellipse and the side tile a rectangle, so a kept handle tells them
+    // apart. Anchor count no longer does: the side tiles keep their own four anchors now that a
+    // straight run is not flattened (#3926), where they used to arrive as many-anchor polylines.
+    let curved = |n: &Node| {
+        matches!(&n.kind, NodeKind::Path { path, .. }
+            if path.subpaths.iter().any(|s| s.anchors.iter().any(|a| a.h_in != a.p || a.h_out != a.p)))
+    };
+    let corners = out.iter().filter(|n| curved(n)).count();
+    assert_eq!(corners, 4, "the four corner ellipses, still curves");
     // Sides lose half a corner tile at each end: 94 pt per side → 9 tiles each.
     assert_eq!(out.len() - corners, 36);
+    for n in out.iter().filter(|n| !curved(n)) {
+        let NodeKind::Path { path, .. } = &n.kind else { continue };
+        assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
 }
 
 #[test]
@@ -722,19 +728,22 @@ fn pattern_output_is_capped_across_subpaths_not_only_per_run() {
     let a1 = anchors(&one);
     assert!(a1 < 2_000_000, "one track stays under the total budget: {a1}");
 
-    // Sixteen tracks would be sixteen times that without a total budget.
-    // Four tracks are 4 x 320,000 anchors, still inside the budget, so nothing is cut: the
-    // budget must not bite before the per-factor caps have actually multiplied past it.
-    let four = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(4), &stroke(1.0));
-    assert_eq!(four.len(), 4 * 20_000, "four tracks are under the budget and keep every piece");
-    assert_eq!(anchors(&four), 4 * a1);
+    // Two tracks are well inside the budget, so nothing is cut: it must not bite before the
+    // per-factor caps have actually multiplied past it.
+    let two = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(2), &stroke(1.0));
+    assert_eq!(two.len(), 2 * 20_000, "two tracks are under the budget and keep every piece");
+    assert_eq!(anchors(&two), 2 * a1);
 
-    // Sixteen would be 5,120,000 anchors. The budget is what stops it, not the per-run caps.
-    let many = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(16), &stroke(1.0));
+    // Enough tracks that the per-run caps alone would pass the budget. Derived from what one
+    // track costs rather than written down, because how many anchors a tile holds is not fixed:
+    // a tile on a straight run keeps its own anchors instead of being flattened (#3926), which
+    // moved this by a factor of four.
+    let tracks = 2_000_000 / a1 + 2;
+    let many = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(tracks), &stroke(1.0));
     let an = anchors(&many);
-    assert!(an <= 2_000_000, "sixteen subpaths must not exceed the budget: {an}");
-    assert!(an > anchors(&four), "but more is drawn than four tracks' worth: {an}");
-    assert!(many.len() < 16 * 20_000, "and fewer pieces than the per-run caps alone would allow: {}", many.len());
+    assert!(an <= 2_000_000, "{tracks} subpaths must not exceed the budget: {an}");
+    assert!(an > anchors(&two), "but more is drawn than two tracks' worth: {an}");
+    assert!(many.len() < tracks * 20_000, "and fewer pieces than the per-run caps alone would allow: {}", many.len());
 }
 
 /// The same for scatter, whose per-track guard is also 20,000 copies.
@@ -764,4 +773,55 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).
+fn anchors_and_curved(n: &Node) -> (usize, usize) {
+    let NodeKind::Path { path, .. } = &n.kind else { return (0, 0) };
+    let all: Vec<_> = path.subpaths.iter().flat_map(|s| s.anchors.iter()).collect();
+    (all.len(), all.iter().filter(|a| a.h_in != a.p || a.h_out != a.p).count())
+}
+
+/// #3926: a Pattern Brush on a straight path only moves, turns and scales its tile, so the
+/// tile's curves survive. They used to be flattened into chords by the bending code, which is
+/// visible in the stroke itself and leaves no handles after Expand Brush Strokes.
+#[test]
+fn a_pattern_tile_keeps_its_curves_on_a_straight_path() {
+    let circle =
+        Node::path(NodeId(0), shapes::ellipse(Rect::new(0.0, -20.0, 40.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let (tile_anchors, tile_curved) = anchors_and_curved(&circle);
+    assert_eq!((tile_anchors, tile_curved), (4, 4), "the tile is a 4-anchor smooth circle");
+
+    let brush = Brush {
+        name: "p".into(),
+        kind: BrushKind::Pattern(PatternBrush { side: circle, fit: PatternFit::Stretch, colorization: Colorization::None, ..Default::default() }),
+    };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &line(0.0, 0.0, 480.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty(), "the brush drew something");
+    for n in &out {
+        assert_eq!(anchors_and_curved(n), (4, 4), "each circle is still a 4-anchor curve, not a polygon");
+    }
+    // The ink is in the same place: a circle tile still covers the path it was laid along.
+    let b = bounds(&out);
+    assert!(near(b.width(), 480.0, 1.0), "the tiles still span the path: {}", b.width());
+    assert!(near(b.height(), 40.0, 1.0), "and still stand the tile's height: {}", b.height());
+}
+
+/// The other half of the same behaviour: where the path really does bend, the tile is still
+/// subdivided, because an affine cannot reproduce a bend. The fit is checked before it is used,
+/// so a bent run falls back to exactly what it did before.
+#[test]
+fn a_pattern_tile_on_a_bent_path_is_still_subdivided() {
+    let circle =
+        Node::path(NodeId(0), shapes::ellipse(Rect::new(0.0, -20.0, 40.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let brush = Brush {
+        name: "p".into(),
+        kind: BrushKind::Pattern(PatternBrush { side: circle, fit: PatternFit::Stretch, colorization: Colorization::None, ..Default::default() }),
+    };
+    // A circle to run along: every tile sits on a curving section.
+    let round = shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &round, &stroke(1.0));
+    assert!(!out.is_empty());
+    let bent = out.iter().filter(|n| anchors_and_curved(n).0 > 8).count();
+    assert!(bent > out.len() / 2, "tiles on a bend are still densified: {bent} of {}", out.len());
 }
