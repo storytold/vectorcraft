@@ -237,6 +237,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{number?: \"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\"|\"none\"} Type › Bullets and Numbering › Apply Numbers: the selected type's paragraphs (or those the Type tool's selection touches) become a numbered list in that number style (text.setFormat {number}); without it, a numbered list keeps its style and other paragraphs are numbered 1, 2, 3 (text.setFormat {list: \"number\"}); \"none\" turns the list off",
     ),
     (
+        "type.convertListToText",
+        "Convert to Text",
+        "",
+        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs (or of those the Type tool's selection touches) become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
+    ),
+    (
         "align.horizontalLeft",
         "Horizontal Align Left",
         "",
@@ -1423,6 +1429,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "type.applyBullets" => crate::panels::paragraph::apply_bullets(app, p),
         "type.applyNumbers" => crate::panels::paragraph::apply_numbers(app, p),
+        "type.convertListToText" => crate::panels::paragraph::convert_list_to_text(app),
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
@@ -2511,7 +2518,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
         "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
-        "type.applyBullets" | "type.applyNumbers" => crate::panels::character::text_style(app).is_some(),
+        "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
@@ -3008,7 +3015,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 cp("Smart Punctuation…", "type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
-                sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]),
+                sub(
+                    "Bullets and Numbering",
+                    vec![
+                        c("Apply Bullets", "type.applyBullets"),
+                        c("Apply Numbers", "type.applyNumbers"),
+                        c("Convert to Text", "type.convertListToText"),
+                    ],
+                ),
                 Sep,
                 c("Create Outlines", "type.createOutlines"),
                 c("Scale Text Attributes", "type.scaleTextAttributes"),

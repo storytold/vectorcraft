@@ -1610,6 +1610,316 @@ mod area_tests {
         assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
     }
 
+    /// The glyphs the layout of type `id` draws, each with its glyph, where it is drawn and the
+    /// transform it is drawn with (in thousandths), from the top line down and left to right.
+    fn drawn_glyphs(s: &Session, id: u64) -> Vec<(u32, i64, i64, [i64; 6])> {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let milli = |v: f64| (v * 1000.0).round() as i64;
+        let mut v: Vec<(u32, i64, i64, [i64; 6])> = lay
+            .glyphs
+            .iter()
+            .filter(|g| !g.outline.elements().is_empty())
+            .map(|g| (g.gid, milli(g.origin.x), milli(g.origin.y), g.xf.as_coeffs().map(milli)))
+            .collect();
+        v.sort_by_key(|&(_, x, y, _)| (y, x));
+        v
+    }
+
+    /// Type › Bullets and Numbering › Convert to Text: `text.convertListToText` writes each list
+    /// paragraph's marker before its text as characters in the marker's style, followed by a tab,
+    /// turns the list off, and gives the paragraph a plain left tab stop at the left indent where
+    /// the marker's tab went to it, so every glyph is drawn where it was: bullets in area type (a
+    /// wrapped item, an empty item, a right-aligned stop at the indent and a stop before it, both
+    /// with leaders), numbers narrower and wider than the hanging indent (one reaching a stop with
+    /// a leader past it), and point and vertical type. A paragraph with a tab of its own keeps its
+    /// stops past the indent. The characters can be styled and deleted, and one undo brings the
+    /// lists back.
+    #[test]
+    fn convert_to_text_writes_the_markers_where_they_were_drawn() {
+        use vectorcraft_doc::text::{Bullet, ParaList};
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (**t).clone(),
+            _ => panic!("text"),
+        };
+        let markers = |s: &Session, id: u64| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.len();
+        let tabs =
+            |s: &Session, id: u64, k: usize| text(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect::<Vec<_>>();
+        let long = "The quick brown fox jumps over the lazy dog and runs far away into the woods beyond the hill";
+        let id = s
+            .execute("text.create", &json!({"x": 10, "y": 10, "text": format!("One\n{long}\n\nFour\nFive"), "area": {"width": 200, "height": 400}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let (four, five) = (long.len() + 6, long.len() + 11);
+        s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet"})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "bullet": "square", "start": four, "end": four})).unwrap();
+        // A right-aligned stop with a leader at the fourth item's left indent, and a stop with a
+        // leader before the fifth item's: the bullets' tabs go to the indent and to that stop and
+        // draw no leader.
+        s.execute("text.tabs.set", &json!({"ids": [id], "start": four, "end": four, "stops": [{"position": 18, "align": "right", "leader": "."}]}))
+            .unwrap();
+        s.execute("text.tabs.set", &json!({"ids": [id], "start": five, "end": five, "stops": [{"position": 10, "leader": "."}]})).unwrap();
+        // The first character larger, raised and underlined: the bullet takes its size alone. The
+        // fourth item's first character is larger than the break before it.
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "size": 20, "baselineShift": 4, "underline": true})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": four, "end": four + 1, "size": 20})).unwrap();
+        let listed = text(&s, id);
+        let before = drawn_glyphs(&s, id);
+        assert_eq!(markers(&s, id), 4, "the empty item has no bullet");
+        let reply = s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        let inserted = |at: usize| json!({"id": id, "at": at, "length": 4});
+        assert_eq!(reply, json!({"ids": [id], "converted": 5, "inserted": [inserted(0), inserted(4), inserted(four), inserted(five)]}));
+        assert_eq!(drawn_glyphs(&s, id), before, "every glyph is drawn where it was");
+        let t = text(&s, id);
+        assert_eq!(t.plain_text(), format!("\u{2022}\tOne\n\u{2022}\t{long}\n\n\u{25AA}\tFour\n\u{2022}\tFive"));
+        assert!((0..5).all(|k| t.para_at(k).list.is_none()), "no paragraph is in a list");
+        assert_eq!(markers(&s, id), 0);
+        let left = vectorcraft_doc::TabAlign::Left;
+        let plain_stop = |position| vec![(position, left, String::new())];
+        assert_eq!(
+            (tabs(&s, id, 0), tabs(&s, id, 1), tabs(&s, id, 2), tabs(&s, id, 3), tabs(&s, id, 4)),
+            (plain_stop(18.0), plain_stop(18.0), vec![], plain_stop(18.0), plain_stop(10.0)),
+            "a plain left stop at the left indent (in place of the right-aligned one), none in the empty item, and the stop the \
+             fifth item's tab went to without its leader"
+        );
+        let bullet = &t.runs[0];
+        assert_eq!(
+            (bullet.text.as_str(), bullet.style.size, bullet.style.baseline_shift, bullet.style.underline),
+            ("\u{2022}\t", 20.0, 0.0, false),
+            "the bullet has the first character's size without its baseline shift and underline"
+        );
+        // The characters are text: they take a style and can be deleted.
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "size": 30})).unwrap();
+        assert_eq!(text(&s, id).runs[0].style.size, 30.0);
+        s.execute("text.editRange", &json!({"id": id, "start": 0, "end": 4, "insert": ""})).unwrap();
+        assert!(text(&s, id).plain_text().starts_with("One\n\u{2022}\t"));
+        for _ in 0..3 {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        let back = text(&s, id);
+        assert_eq!(back.para_at(3).list, Some(ParaList::bulleted(Bullet::Square)));
+        assert_eq!((back.runs, back.para, back.paras), (listed.runs, listed.para, listed.paras), "one undo step");
+        assert_eq!(drawn_glyphs(&s, id), before);
+        // Numbers 1 to 9 at 20 pt are narrower than the hanging indent, 10 is wider and takes the
+        // text to the next default stop, and 11 to its stop at 72 pt, whose leader the number's tab
+        // draws neither before nor after.
+        let items = (1..=11).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+        let id =
+            s.execute("text.create", &json!({"x": 300, "y": 10, "size": 20, "text": items, "area": {"width": 300, "height": 600}})).unwrap()["id"]
+                .as_u64()
+                .unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+        let eleven = 9 * 7 + 8;
+        s.execute("text.tabs.set", &json!({"ids": [id], "start": eleven, "end": eleven, "stops": [{"position": 72, "leader": "."}]})).unwrap();
+        let before = drawn_glyphs(&s, id);
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        assert_eq!(drawn_glyphs(&s, id), before, "numbers");
+        let expected = (1..=11).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n");
+        assert_eq!(text(&s, id).plain_text(), expected);
+        assert_eq!((tabs(&s, id, 0), tabs(&s, id, 9), tabs(&s, id, 10)), (plain_stop(18.0), vec![], plain_stop(72.0)));
+        // A paragraph with a tab of its own keeps its stops past the left indent, which that tab
+        // can reach.
+        let id = s.execute("text.create", &json!({"x": 10, "y": 650, "size": 30, "text": "Item\tvalue"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+        s.execute("text.tabs.set", &json!({"ids": [id], "stops": [{"position": 72, "leader": "."}, {"position": 200}]})).unwrap();
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        assert_eq!(text(&s, id).plain_text(), "1.\tItem\tvalue");
+        assert_eq!(tabs(&s, id, 0), [(72.0, left, ".".to_string()), (200.0, left, String::new())]);
+        // A 30 pt number's tab to a right-aligned stop aligns the whole paragraph there, trailing
+        // space included, and a converted tab aligns the rest of its line: a plain left stop where
+        // the number's tab ended keeps the text in place. A right-aligned stop before the left stop
+        // the number's tab reached, which the wrapped paragraph's width kept the number's tab from,
+        // would catch the converted tab, which measures only the first line: it goes. The lines are
+        // compared with the Single-line Composer, as a paragraph with a tab is broken line by line.
+        let right = vectorcraft_doc::TabAlign::Right;
+        for (text_in, width, stops, kept) in [
+            ("One ", 300, json!([{"position": 200, "align": "right"}]), vec![(200.0, right, String::new())]),
+            ("The quick brown fox jumps over the lazy dog", 230, json!([{"position": 100, "align": "right"}, {"position": 150}]), vec![]),
+        ] {
+            let id = s
+                .execute("text.create", &json!({"x": 10, "y": 600, "size": 30, "text": text_in, "area": {"width": width, "height": 300}}))
+                .unwrap()["id"]
+                .as_u64()
+                .unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "list": "number", "composer": "singleLine"})).unwrap();
+            s.execute("text.tabs.set", &json!({"ids": [id], "stops": stops})).unwrap();
+            let before = drawn_glyphs(&s, id);
+            s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+            assert_eq!(drawn_glyphs(&s, id), before, "{text_in:?}");
+            let after = tabs(&s, id, 0);
+            assert_eq!(
+                (after.first().map(|t| (t.1, t.2.as_str())), after.get(1..).map(<[_]>::to_vec)),
+                (Some((left, "")), Some(kept)),
+                "{text_in:?}"
+            );
+        }
+        // Overset items, which the layout leaves out, get the stop by the same rule: a 30 pt number is
+        // wider than the hanging indent, a 12 pt bullet is not.
+        for (size, list, text_after, stop) in
+            [(30, "number", "1.\tOne\n2.\tTwo", vec![]), (12, "bullet", "\u{2022}\tOne\n\u{2022}\tTwo", plain_stop(18.0))]
+        {
+            let id = s
+                .execute("text.create", &json!({"x": 10, "y": 500, "size": size, "text": "One\nTwo", "area": {"width": 200, "height": size + 10}}))
+                .unwrap()["id"]
+                .as_u64()
+                .unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "list": list})).unwrap();
+            assert_eq!(markers(&s, id), 1, "the second item is overset");
+            s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+            assert_eq!((text(&s, id).plain_text().as_str(), tabs(&s, id, 1)), (text_after, stop), "{size} pt");
+        }
+        // Point type and vertical type.
+        for vertical in [false, true] {
+            let id =
+                s.execute("text.create", &json!({"x": 400, "y": 700, "vertical": vertical, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+            let before = drawn_glyphs(&s, id);
+            s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+            assert_eq!(drawn_glyphs(&s, id), before, "vertical {vertical}");
+            assert_eq!(text(&s, id).plain_text(), "1.\tOne\n2.\tTwo");
+        }
+        // Type with no list paragraph: nothing to convert and no undo step.
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 700, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+        let steps = s.doc().unwrap().history.undo.len();
+        assert_eq!(s.execute("text.convertListToText", &json!({"ids": [plain]})).unwrap(), json!({"ids": [], "converted": 0, "inserted": []}));
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    }
+
+    /// A right-to-left list paragraph converted to text starts with the number, its period and a
+    /// tab, which are read first: the line draws its glyphs in the order it drew them with the
+    /// marker, the number at the right with its period at its left. Letters and roman numerals
+    /// would make the paragraph run left to right, so the paragraph gets the direction it ran in;
+    /// digits leave the direction unset.
+    #[test]
+    fn a_right_to_left_list_paragraph_converts_to_text_read_first() {
+        use vectorcraft_doc::ParaDirection;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        for (number, text, direction) in [
+            ("arabic", "1.\tשלום\n2.\tעולם", None),
+            ("upperLetters", "A.\tשלום\nB.\tעולם", Some(ParaDirection::RightToLeft)),
+            ("upperRoman", "I.\tשלום\nII.\tעולם", Some(ParaDirection::RightToLeft)),
+        ] {
+            let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "שלום\nעולם", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+                .as_u64()
+                .unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "number": number})).unwrap();
+            // `drawn_glyphs` lists the first line first, from left to right.
+            let order = |s: &Session| {
+                let glyphs = drawn_glyphs(s, id);
+                let top = glyphs.first().map_or(0, |g| g.2);
+                glyphs.into_iter().filter(|g| g.2 == top).map(|g| g.0).collect::<Vec<_>>()
+            };
+            let before = order(&s);
+            s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+            let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+            assert_eq!(t.plain_text(), text);
+            assert!(t.para_at(0).list.is_none() && t.para_at(1).list.is_none());
+            let directions = (t.para_at(0).direction, t.para_at(1).direction);
+            assert_eq!(order(&s), before, "{number}: the first line's glyphs from left to right");
+            assert_eq!(directions, (direction, direction), "{number}");
+        }
+    }
+
+    /// Convert to Text in threaded type writes the numbers the story counted through its frames,
+    /// and both frames draw every glyph where it was. A paragraph that continues into the next
+    /// frame gets its number once, where it starts, also when only the later frame is named, and
+    /// empty frames after a converted paragraph leave its list with it.
+    #[test]
+    fn threaded_numbers_convert_to_text_as_the_story_counted_them() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+        let plain = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        let numbers = |s: &Session, id: u64| {
+            let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+            vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+        };
+        let thread = |s: &mut Session, text: &str| {
+            let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+                .as_u64()
+                .unwrap();
+            let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+            s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+            s.execute("text.thread.create", &json!({})).unwrap();
+            s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+            (a, b)
+        };
+        // Whole paragraphs: the first frame ends with a paragraph break.
+        let (a, b) = thread(&mut s, &(1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n"));
+        let first = numbers(&s, a).len();
+        assert!((2..10).contains(&first) && plain(&s, a).ends_with('\n'), "both frames hold items: {first}");
+        let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+        let reply = s.execute("text.convertListToText", &json!({"ids": [a, b]})).unwrap();
+        assert_eq!(reply["converted"], 10, "each paragraph once");
+        assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames");
+        let story = (1..=10).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n");
+        assert_eq!(plain(&s, a) + &plain(&s, b), story);
+        assert!(plain(&s, b).starts_with(&format!("{n}.\tItem {n}", n = first + 1)));
+        // The empty part after the first frame's last break and the second frame's first item are
+        // one paragraph: a caret at the end of the first frame converts that item.
+        let (a, b) = thread(&mut s, &(1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n"));
+        let end = plain(&s, a).len();
+        let reply = s.execute("text.convertListToText", &json!({"ids": [a], "start": end, "end": end})).unwrap();
+        assert_eq!(reply["converted"], 1);
+        assert!(plain(&s, b).starts_with(&format!("{n}.\tItem {n}\nItem", n = first + 1)), "{}", plain(&s, b));
+        // A paragraph split between the frames, with only the second frame named.
+        let long = "The quick brown fox jumps over the lazy dog. ".repeat(4);
+        let (a, b) = thread(&mut s, &format!("One\nTwo\n{long}\nFour"));
+        assert!(!plain(&s, a).ends_with('\n'), "the third paragraph goes on in the second frame");
+        // A paragraph with a tab is broken line by line, so the lines are compared with the
+        // Single-line Composer, which breaks the listed paragraph the same way.
+        s.execute("text.setFormat", &json!({"ids": [a, b], "composer": "singleLine"})).unwrap();
+        let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+        s.execute("text.convertListToText", &json!({"ids": [b]})).unwrap();
+        assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames, with the paragraph split between them");
+        assert_eq!(plain(&s, a) + &plain(&s, b), format!("One\nTwo\n3.\t{long}\n4.\tFour"));
+        assert_eq!(numbers(&s, a), ["1.", "2."], "the paragraphs of the first frame alone stay in the list");
+        let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+        assert!(second.para_at(0).list.is_none(), "the third paragraph's part in the second frame leaves the list too");
+        // One item that fits in the first of three frames: the two empty frames after it leave the
+        // list too, so the re-flowed thread draws no number before the converted one.
+        let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Item", "area": {"width": 150, "height": 60}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+        let c = s.execute("shape.rectangle", &json!({"x": 400, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a, b, c], "list": "number"})).unwrap();
+        assert_eq!((plain(&s, b), plain(&s, c), numbers(&s, a)), (String::new(), String::new(), vec!["1.".to_string()]));
+        assert_eq!(s.execute("text.convertListToText", &json!({"ids": [a]})).unwrap()["converted"], 1);
+        assert_eq!(plain(&s, a), "1.\tItem");
+        assert_eq!(numbers(&s, a), Vec::<String>::new(), "no number drawn before the converted one");
+        for id in [a, b, c] {
+            let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+            assert!(t.para_at(0).list.is_none(), "frame {id} leaves the list");
+        }
+        // An overset 30 pt number, wider than the hanging indent, in a last frame that starts
+        // inside a paragraph: its tab goes to the next stop, so it gets no stop at the left indent.
+        let a = s
+            .execute("text.create", &json!({"x": 10, "y": 10, "size": 30, "text": format!("{long}\nTwo"), "area": {"width": 150, "height": 80}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 80})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+        let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+        assert!(second.first_para_continues && second.plain_text().ends_with("\nTwo"), "{:?}", second.plain_text());
+        assert_eq!(numbers(&s, b).len(), 0, "the second item is overset");
+        s.execute("text.convertListToText", &json!({"ids": [b]})).unwrap();
+        let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+        assert!(second.plain_text().ends_with("\n2.\tTwo"), "{:?}", second.plain_text());
+        assert!(second.para_at(1).tabs.is_empty(), "no stop at the left indent: {:?}", second.para_at(1).tabs);
+    }
+
     /// Type › Create Outlines makes a path of a list item's bullet as well as of its characters.
     #[test]
     fn create_outlines_makes_a_path_of_the_bullet() {
