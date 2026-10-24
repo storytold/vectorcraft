@@ -5494,6 +5494,9 @@ axis	Y Axis	Y-akseli
 	Packaged {n} file(s) in {folder}	Paketoitiin {n} tiedosto(a) kansioon {folder}
 	Packaged {n} file(s) {note}	Paketoitiin {n} tiedosto(a) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} tiedosto(a) kansiossa {folder}. Näytetäänkö pakettikansio?
+	Reading	Lukutapa
+	Overhang	Ylitys
+	applied	Käytetty
 	Clockwise	Myötäpäivään
 	Dither	Rasterointi
 	Fine noise hides banding in the gradient fill	Hieno kohina piilottaa raidat liukuväritäytöstä

@@ -5462,6 +5462,9 @@ axis	Y Axis	Axe Y
 	Packaged {n} file(s) in {folder}	{n} fichier(s) assemblé(s) dans {folder}
 	Packaged {n} file(s) {note}	{n} fichier(s) assemblé(s) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} fichier(s) dans {folder}. Afficher le dossier de l’assemblage ?
+	Reading	Lecture
+	Overhang	Dépassement
+	applied	Appliqué
 	Clockwise	Sens horaire
 	Dither	Simulation
 	Fine noise hides banding in the gradient fill	Un bruit fin masque les bandes du fond en dégradé

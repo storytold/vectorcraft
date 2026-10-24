@@ -5433,6 +5433,9 @@ axis	Y Axis	Sumbu Y
 	Packaged {n} file(s) in {folder}	Berhasil mengemas {n} file di {folder}
 	Packaged {n} file(s) {note}	Berhasil mengemas {n} file {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} file dalam {folder}. Tampilkan folder paket?
+	Reading	Bacaan
+	Overhang	Tonjolan
+	applied	Diterapkan
 	Clockwise	Searah jarum jam
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Derau halus menyembunyikan pita warna pada isian gradien

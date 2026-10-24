@@ -5449,6 +5449,9 @@ axis	Y Axis	Y tengely
 	Packaged {n} file(s) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}
 	Packaged {n} file(s) {note}	Becsomagolt fájlok: {n} {note}
 	{count} file(s) in {folder}. Show the package folder?	Fájlok: {count}, mappa: {folder}. Megnyitod a csomag mappáját?
+	Reading	Olvasat
+	Overhang	Túlnyúlás
+	applied	Alkalmazva
 	Clockwise	Óramutató járásával megegyező
 	Dither	Árnyalatkeverés
 	Fine noise hides banding in the gradient fill	A finom zaj elrejti a sávokat a színátmenetes kitöltésben

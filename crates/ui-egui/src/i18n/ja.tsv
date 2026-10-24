@@ -5140,6 +5140,9 @@ axis	Y Axis	Y 軸
 	Packaged {n} file(s) in {folder}	{n} 個のファイルを {folder} にパッケージしました
 	Packaged {n} file(s) {note}	{n} 個のファイルをパッケージしました {note}
 	{count} file(s) in {folder}. Show the package folder?	{folder} に {count} 個のファイル。パッケージフォルダーを表示しますか？
+	Reading	読み
+	Overhang	はみ出し
+	applied	適用済み
 	Clockwise	時計回り
 	Dither	ディザ
 	Fine noise hides banding in the gradient fill	細かいノイズでグラデーションの塗りの縞を目立たなくします

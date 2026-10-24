@@ -5302,6 +5302,9 @@ axis	Y Axis	Y 轴
 	Packaged {n} file(s) in {folder}	已将 {n} 个文件打包到 {folder}
 	Packaged {n} file(s) {note}	已打包 {n} 个文件 {note}
 	{count} file(s) in {folder}. Show the package folder?	{folder} 中有 {count} 个文件。要显示打包文件夹吗？
+	Reading	读音
+	Overhang	悬挂
+	applied	已应用
 	Clockwise	顺时针
 	Dither	仿色
 	Fine noise hides banding in the gradient fill	细微杂色可隐藏渐变填色中的色带
