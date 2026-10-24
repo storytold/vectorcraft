@@ -966,6 +966,16 @@ font-technology	Variable	Μεταβλητές
 	Delete Export Preset	Διαγραφή προκαθορισμένου εξαγωγής
 	Export Presets	Προκαθορισμένα εξαγωγής
 	Save Export Preset	Αποθήκευση προκαθορισμένου εξαγωγής
+	Export Export Presets	Εξαγωγή προκαθορισμένων εξαγωγής
+	Export Preset…	Εξαγωγή προκαθορισμένου…
+	Import Export Presets	Εισαγωγή προκαθορισμένων εξαγωγής
+	Import Preset…	Εισαγωγή προκαθορισμένου…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	Το `exportPreset` είναι το όνομα ενός προκαθορισμένου από το document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	δεν υπάρχει προκαθορισμένο εξαγωγής `{n}` (δείτε document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	δεν υπάρχουν αποθηκευμένα προκαθορισμένα εξαγωγής για εξαγωγή (δώστε τα ενσωματωμένα στο `names`)
+@msg	not an export presets file (format `{_1}`)	δεν είναι αρχείο προκαθορισμένων εξαγωγής (μορφή `{_1}`)
+@msg	not an export presets file: {e}	δεν είναι αρχείο προκαθορισμένων εξαγωγής: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Εξαγωγή επιπέδου
 	Export Selection	Εξαγωγή επιλογής
 	All in One Folder	Όλα σε έναν φάκελο
@@ -2431,6 +2441,7 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
 file-filter	Swatch libraries	Βιβλιοθήκες δειγμάτων χρωμάτων
 file-filter	Templates	Πρότυπα

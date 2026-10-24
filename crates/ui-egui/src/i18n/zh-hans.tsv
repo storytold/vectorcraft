@@ -957,6 +957,16 @@
 	Delete Export Preset	删除导出预设
 	Export Presets	导出预设
 	Save Export Preset	存储导出预设
+	Export Export Presets	导出导出预设
+	Export Preset…	导出预设…
+	Import Export Presets	导入导出预设
+	Import Preset…	导入预设…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` 是 document.exportPresets.list 中某个预设的名称
+@msg	no export preset `{n}` (see document.exportPresets.list)	没有导出预设 `{n}` (参见 document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	没有可导出的已保存导出预设 (内置预设请在 `names` 中指定)
+@msg	not an export presets file (format `{_1}`)	不是导出预设文件 (格式为 `{_1}`)
+@msg	not an export presets file: {e}	不是导出预设文件：{e}
+@msg	`{_1}`: {msg}	`{_1}`：{msg}
 	Export Layer	导出图层
 	Export Selection	导出选区
 	All in One Folder	全部放在一个文件夹
@@ -1125,6 +1135,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
 file-filter	VectorCraft Template	VectorCraft 模板

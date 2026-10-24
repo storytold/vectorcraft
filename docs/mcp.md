@@ -3637,7 +3637,17 @@ Batch exports (#1935):
 - **Formats:** rows may also be `eps`, `ai` and `vectorcraft` (a document of the item alone). A PDF row with
   `marks` (`{trim, registration, colorBars, pageInfo}`) and a suffix such as `-print` sits next to a plain PDF row.
 - **Presets:** `document.exportPresets.list` (built-in: Logo Package, Print-Ready PDF), `.save {name, settings}`
-  (kept with the preferences) and `.delete {name}`; `exportPreset: "<name>"` uses one under the call's own params.
+  (kept with the preferences; a saved name is replaced) and `.delete {name}`; `exportPreset: "<name>"` uses one under
+  the call's own params. `.export {names?, path?}` writes presets (every saved one, or the named ones, built-in ones too)
+  as a `.vcexportpresets` JSON file (without `path` it returns `data`), and `.import {path? | data? | dataBase64?,
+  replace?}` adds a file's presets (a name in use gets a number unless `replace`; a built-in name always gets one; a
+  name that already ends in a number gets the next free one, so `Web 2` comes in as `Web 3`; a file with settings
+  `.save` refuses, or with more than 1000 presets, adds none). Opening a `.vcexportpresets` file imports it.
+  `assets.settings.set {exportPreset}` applies a preset to the settings the Asset Export panel shares: its rows or
+  `preset`, its format settings, its prefix (none when it has none), its `folders` (Create Sub-folders is on for every
+  mode but `none`) and anti-aliasing. `assets.export` then sorts the files by those folders; a `subfolders` given to
+  either command goes over them. An export from the Export for Screens dialog saves its Folders choice the same way,
+  with Create Sub-folders on for every choice but All in One Folder.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForScreens","params":{"range":"1-3","name":"COMPANY-Logo-<filename>-####-YYYYMMDD","folders":"format","formats":[{"format":"svg"},{"format":"png"},{"format":"pdf"},{"format":"pdf","suffix":"-print","marks":{"trim":true,"registration":true,"colorBars":true,"pageInfo":true}}]}}}

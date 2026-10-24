@@ -4795,6 +4795,7 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	VectorCraft Template	VectorCraft-skabelon
@@ -5139,6 +5140,10 @@ swatch	Bright Violet	Kraftig violet
 	Delete Export Preset	Slet eksportforudindstilling
 	Export Presets	Eksportforudindstillinger
 	Save Export Preset	Gem eksportforudindstilling
+	Export Export Presets	Eksportér eksportforudindstillinger
+	Export Preset…	Eksportér forudindstilling…
+	Import Export Presets	Importér eksportforudindstillinger
+	Import Preset…	Importér forudindstilling…
 	Export Layer	Eksportér lag
 	Export Selection	Eksportér markering
 	All in One Folder	Alt i én mappe

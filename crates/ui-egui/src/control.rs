@@ -395,7 +395,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             Some(d) => {
                 let Some(f) = s("field") else { return err("missing `field`") };
                 d.fields.insert(f.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
-                ok(serde_json::to_value(&*d).unwrap_or_default())
+                if let Err(e) = crate::dialogs::field_set(app, f) {
+                    return err(e);
+                }
+                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
             }
             None => err("no dialog open"),
         },

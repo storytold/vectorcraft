@@ -218,6 +218,49 @@ fn the_rows_are_the_shared_export_settings() {
     assert_eq!(log[0].0, "Untitled-1.zip");
 }
 
+/// The panel's Export Preset row applies a preset to the shared settings, saves them as a preset,
+/// and lists presets imported while it is open.
+#[test]
+fn the_export_preset_row_applies_saves_and_lists_presets() {
+    let (mut app, _, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    assert!(has(&texts, "Export Preset:"));
+    // The first Custom is the preset dropdown (the format rows' preset dropdown follows it).
+    frame(&ctx, &mut app, click(at(&texts, "Custom")), false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Logo Package")), false);
+    let settings = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!(settings["formats"].as_array().map(Vec::len), Some(5), "{settings}");
+    let texts = frame(&ctx, &mut app, vec![], false);
+    assert!(has(&texts, "Logo Package"), "the dropdown shows the preset applied");
+    // Save: the shared settings under a name of their own.
+    let doc = app.session.active().unwrap().uid;
+    super::asset_export::preset(&mut app, &ctx, doc, crate::dialogs::ScreenPresetPick::Save("Mine".into()));
+    let mine = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Mine").expect("saved").clone();
+    assert_eq!(mine.settings["formats"], settings["formats"]);
+    // The preset's folders (a folder per format) are saved with it.
+    assert_eq!((mine.settings.get("folders"), mine.settings.get("subfolders")), (Some(&json!("format")), Some(&json!(true))), "{:?}", mine.settings);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    assert!(has(&texts, "Mine"), "the dropdown shows the preset saved");
+    // A preset file opened while the panel shows (the web's Import) is in its dropdown.
+    let data = app.run("document.exportPresets.export", json!({"names": ["Mine"]})).unwrap()["data"].as_str().unwrap().to_string();
+    crate::io::open_bytes(&mut app, "pack.vcexportpresets", data.as_bytes(), None).unwrap();
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Mine")), false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    assert!(has(&texts, "Mine 2"), "{:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>());
+    // A mobile preset with no sub-folders is saved again with no sub-folders.
+    app.run("document.exportPresets.save", json!({"name": "Flat", "settings": {"preset": "mobile", "folders": "none"}})).unwrap();
+    app.run("assets.settings.set", json!({"exportPreset": "Flat"})).unwrap();
+    super::asset_export::preset(&mut app, &ctx, doc, crate::dialogs::ScreenPresetPick::Save("Flat Again".into()));
+    let again = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Flat Again").expect("saved").clone();
+    assert_eq!((again.settings.get("preset"), again.settings.get("folders")), (Some(&json!("mobile")), Some(&json!("none"))), "{:?}", again.settings);
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_writes_into_the_picked_folder() {

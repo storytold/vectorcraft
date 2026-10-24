@@ -994,6 +994,16 @@ font-technology	Variable	Variabel
 	Delete Export Preset	Exportvorgabe löschen
 	Export Presets	Exportvorgaben
 	Save Export Preset	Exportvorgabe speichern
+	Export Export Presets	Exportvorgaben exportieren
+	Export Preset…	Vorgabe exportieren…
+	Import Export Presets	Exportvorgaben importieren
+	Import Preset…	Vorgabe importieren…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` ist der Name einer Vorgabe aus document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	keine Exportvorgabe `{n}` (siehe document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	keine gespeicherten Exportvorgaben zum Exportieren (integrierte in `names` angeben)
+@msg	not an export presets file (format `{_1}`)	keine Exportvorgabendatei (Format `{_1}`)
+@msg	not an export presets file: {e}	keine Exportvorgabendatei: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Ebene exportieren
 	Export Selection	Auswahl exportieren
 	All in One Folder	Alles in einem Ordner
@@ -1164,6 +1174,7 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
 file-filter	PDF-compatible .ai	PDF-kompatible .ai
 file-filter	VectorCraft Template	VectorCraft-Vorlage

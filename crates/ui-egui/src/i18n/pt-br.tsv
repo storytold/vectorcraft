@@ -900,6 +900,16 @@
 	Delete Export Preset	Excluir predefinição de exportação
 	Export Presets	Predefinições de exportação
 	Save Export Preset	Salvar predefinição de exportação
+	Export Export Presets	Exportar predefinições de exportação
+	Export Preset…	Exportar predefinição…
+	Import Export Presets	Importar predefinições de exportação
+	Import Preset…	Importar predefinição…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` é o nome de uma predefinição de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	nenhuma predefinição de exportação `{n}` (consulte document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	nenhuma predefinição de exportação salva para exportar (informe as integradas em `names`)
+@msg	not an export presets file (format `{_1}`)	não é um arquivo de predefinições de exportação (formato `{_1}`)
+@msg	not an export presets file: {e}	não é um arquivo de predefinições de exportação: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportar camada
 	Export Selection	Exportar seleção
 	All in One Folder	Tudo em uma pasta
@@ -5021,6 +5031,7 @@ file-filter	Swatch libraries	Bibliotecas de amostras
 file-filter	Flattener presets	Predefinidos de achatamento
 file-filter	PDF presets	Predefinidos de PDF
 file-filter	Print presets	Predefinidos de impressão
+file-filter	Export presets	Predefinições de exportação
 file-filter	SVG Compressed	SVG Compactado
 file-filter	PDF-compatible .ai	.ai compatível com PDF
 file-filter	VectorCraft Template	Modelo do VectorCraft

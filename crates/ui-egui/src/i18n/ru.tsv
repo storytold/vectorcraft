@@ -1015,6 +1015,16 @@ font-technology	Variable	Вариативные
 	Delete Export Preset	Удалить набор настроек экспорта
 	Export Presets	Наборы настроек экспорта
 	Save Export Preset	Сохранить набор настроек экспорта
+	Export Export Presets	Экспортировать наборы настроек экспорта
+	Export Preset…	Экспортировать набор…
+	Import Export Presets	Импортировать наборы настроек экспорта
+	Import Preset…	Импортировать набор…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` — имя набора из document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	нет набора настроек экспорта `{n}` (см. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	нет сохранённых наборов настроек экспорта для экспорта (встроенные укажите в `names`)
+@msg	not an export presets file (format `{_1}`)	не является файлом наборов настроек экспорта (формат `{_1}`)
+@msg	not an export presets file: {e}	не является файлом наборов настроек экспорта: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Экспортировать слой
 	Export Selection	Экспортировать выделение
 	All in One Folder	Всё в одну папку
@@ -1185,6 +1195,7 @@ file-filter	Swatch libraries	Библиотеки образцов
 file-filter	Flattener presets	Наборы объединения
 file-filter	PDF presets	Наборы PDF
 file-filter	Print presets	Наборы печати
+file-filter	Export presets	Наборы настроек экспорта
 file-filter	SVG Compressed	Сжатый SVG
 file-filter	PDF-compatible .ai	.ai, совместимый с PDF
 file-filter	VectorCraft Template	Шаблон VectorCraft

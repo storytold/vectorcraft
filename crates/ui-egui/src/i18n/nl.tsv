@@ -4807,6 +4807,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
 file-filter	VectorCraft Template	VectorCraft-sjabloon
@@ -5150,6 +5151,10 @@ swatch	Bright Violet	Felviolet
 	Delete Export Preset	Exportvoorinstelling verwijderen
 	Export Presets	Exportvoorinstellingen
 	Save Export Preset	Exportvoorinstelling opslaan
+	Export Export Presets	Exportvoorinstellingen exporteren
+	Export Preset…	Voorinstelling exporteren…
+	Import Export Presets	Exportvoorinstellingen importeren
+	Import Preset…	Voorinstelling importeren…
 	Export Layer	Laag exporteren
 	Export Selection	Selectie exporteren
 	All in One Folder	Alles in één map

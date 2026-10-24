@@ -994,6 +994,16 @@ font-technology	Variable	Değişken
 	Delete Export Preset	Dışa Aktarma Ön Ayarını Sil
 	Export Presets	Ön Ayarları Dışa Aktarma
 	Save Export Preset	Dışa Aktarma Ön Ayarını Kaydet
+	Export Export Presets	Dışa Aktarma Ön Ayarlarını Dışa Aktar
+	Export Preset…	Ön Ayarı Dışa Aktar…
+	Import Export Presets	Dışa Aktarma Ön Ayarlarını İçe Aktar
+	Import Preset…	Ön Ayarı İçe Aktar…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`, document.exportPresets.list içindeki bir ön ayarın adıdır
+@msg	no export preset `{n}` (see document.exportPresets.list)	`{n}` adında dışa aktarma ön ayarı yok (bkz. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	dışa aktarılacak kayıtlı dışa aktarma ön ayarı yok (yerleşik olanları `names` içinde belirtin)
+@msg	not an export presets file (format `{_1}`)	dışa aktarma ön ayarları dosyası değil (`{_1}` biçimi)
+@msg	not an export presets file: {e}	dışa aktarma ön ayarları dosyası değil: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Katmanı Dışa Aktar
 	Export Selection	Seçimi Dışa Aktar
 	All in One Folder	Hepsi Bir Klasörde
@@ -4919,6 +4929,7 @@ effect	Regular	Düzenli
 effect	Vertical	Dikey
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
 file-filter	PDF-compatible .ai	PDF ile uyumlu .ai

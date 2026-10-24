@@ -893,7 +893,9 @@ fn batch_naming_folders_layers_selection_and_presets() {
     set(&mut app, "tab", json!("layers"));
     set(&mut app, "layers", json!([layer]));
     set(&mut app, "name", json!(""));
+    // As `ui.dialog.set` sets it: Create Sub-folders goes off with All in One Folder.
     set(&mut app, "folders", json!("none"));
+    crate::dialogs::field_set(&mut app, "folders").unwrap();
     set(&mut app, "formats", json!([{"format": "png", "scale": "1x", "suffix": ""}]));
     let r = confirm(&mut app).unwrap();
     assert_eq!(r["files"][0], json!(format!("{folder}/Layer-1.png")));
@@ -933,5 +935,203 @@ fn batch_naming_folders_layers_selection_and_presets() {
     assert_eq!(saved["name"], "Client Pack");
     let list = export_for_screens::export_presets(&mut app);
     assert!(list.as_array().unwrap().iter().any(|p| p["name"] == "Client Pack" && p["builtIn"] == false));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Export Preset… writes the current preset to a file and Import Preset… adds the presets of a
+/// file to the dropdown, as does opening the file while the dialog is open (the web's Import).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_preset_and_import_preset_go_through_files() {
+    let dir = temp_folder("preset-files");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("pack.vcexportpresets").to_string_lossy().to_string();
+    let (saved_to, picked) = (file.clone(), file.clone());
+    let suggested = Rc::new(RefCell::new(vec![]));
+    let shown = suggested.clone();
+    let services = Services {
+        pick_save: Some(Box::new(move |pick: &crate::FilePick| {
+            shown.borrow_mut().push(pick.name.clone());
+            Some(saved_to.clone())
+        })),
+        pick_open: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+    app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}], "folders": "format"}})).unwrap();
+    open(&mut app);
+    let names = |app: &VectorcraftApp| -> Vec<String> {
+        field(app, "__exportPresets").as_array().unwrap().iter().filter_map(|p| p["name"].as_str().map(str::to_string)).collect()
+    };
+    assert_eq!(export_for_screens::export_preset(&mut app, "Pack").unwrap(), file);
+    // The save panel suggests the preset's name, not the document's.
+    assert_eq!(*suggested.borrow(), ["Pack.vcexportpresets"]);
+    app.run("document.exportPresets.delete", json!({"name": "Pack"})).unwrap();
+    frame(&mut app);
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF"]);
+    assert_eq!(export_for_screens::import_presets(&mut app).unwrap(), ["Pack"]);
+    assert_eq!(app.ui.status, "Imported export presets: Pack");
+    frame(&mut app);
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF", "Pack"]);
+    let pack = field(&app, "__exportPresets")[2].clone();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &pack);
+    assert_eq!((field(&app, "formats")[0]["format"].clone(), field(&app, "folders")), (json!("svg"), json!("format")));
+    // The file opened again: a second copy, numbered, in the open dialog's dropdown.
+    let bytes = std::fs::read(&file).unwrap();
+    crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();
+    frame(&mut app);
+    assert_eq!(kind(&app), Some(export_for_screens::KIND));
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF", "Pack", "Pack 2"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Export Preset… suggests the preset's name as a file name, as Export Library… does a library's.
+#[test]
+fn an_exported_preset_file_is_named_after_the_preset() {
+    let name = export_for_screens::preset_file_name;
+    assert_eq!(name("Logo Package 2"), "Logo Package 2.vcexportpresets");
+    assert_eq!(name("Print-Ready PDF"), "Print-Ready PDF.vcexportpresets");
+    assert_eq!(name("Web/App: v1.2"), "Web-App- v1-2.vcexportpresets");
+    assert_eq!(name("CON"), "CON-.vcexportpresets");
+}
+
+/// A preset saved with the mobile or density rows (as the Asset Export panel saves one) sets the
+/// dialog's rows to them.
+#[test]
+fn a_mobile_preset_sets_the_rows() {
+    let (mut app, _) = app(1, false);
+    app.run("document.exportPresets.save", json!({"name": "Phones", "settings": {"preset": "mobile", "subfolders": true}})).unwrap();
+    open(&mut app);
+    let phones = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Phones").cloned().unwrap();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &phones);
+    assert_eq!(field(&app, "formats"), json!(fileio::screen_preset_rows("mobile").unwrap()));
+    assert_eq!((field(&app, "preset"), field(&app, "folders")), (json!("mobile"), json!("rows")));
+}
+
+/// `ui.dialog.set` of `exportPreset` applies the preset it names, as a pick in the dropdown does, so
+/// the dialog holds the settings of the preset it names; a name that is no preset's leaves Custom.
+#[test]
+fn setting_the_export_preset_field_applies_the_preset() {
+    use crate::control::{ControlRequest, Outcome};
+    let (mut app, _) = app(1, false);
+    let ctx = egui::Context::default();
+    open(&mut app);
+    let set_preset = |app: &mut VectorcraftApp, name: &str| {
+        let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "exportPreset", "value": name}));
+        let Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+        r
+    };
+    let r = set_preset(&mut app, "Logo Package");
+    assert_eq!(r["ok"], true, "{r}");
+    let rows: Vec<Value> = field(&app, "formats").as_array().unwrap().iter().map(|r| r["format"].clone()).collect();
+    assert_eq!(rows, [json!("svg"), json!("png"), json!("png"), json!("pdf"), json!("pdf")]);
+    assert_eq!((field(&app, "folders"), field(&app, "name")), (json!("format"), json!("<filename>-<name>")));
+    assert_eq!(r["result"]["fields"]["folders"], "format", "{r}");
+    let r = set_preset(&mut app, "Never saved");
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(field(&app, "exportPreset"), "");
+    assert_eq!(field(&app, "folders"), "format");
+}
+
+/// Create Sub-folders (`subfolders`) is on for every Folders choice but All in One Folder, as an
+/// export preset sets it in the Asset Export panel's settings: after a preset, after `folders` is
+/// set, in the settings an export leaves, and when the dialog reopens. The Asset Export panel then
+/// sorts its files by the same folders.
+#[test]
+fn the_subfolders_field_follows_the_folders() {
+    use crate::control::{ControlRequest, Outcome};
+    let (mut app, _) = app(1, false);
+    let ctx = egui::Context::default();
+    let dir = temp_folder("subfolders");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let set_field = |app: &mut VectorcraftApp, k: &str, v: Value| {
+        let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": k, "value": v}));
+        let Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+        assert_eq!(r["ok"], true, "{r}");
+        r
+    };
+    open(&mut app);
+    let r = set_field(&mut app, "exportPreset", json!("Logo Package"));
+    let fields = &r["result"]["fields"];
+    assert_eq!((fields["folders"].clone(), fields["subfolders"].clone()), (json!("format"), json!(true)), "{r}");
+    for (folders, on) in [("none", false), ("item", true), ("rows", true), ("none", false), ("itemFormat", true)] {
+        set_field(&mut app, "folders", json!(folders));
+        assert_eq!(field(&app, "subfolders"), json!(on), "{folders}");
+    }
+    set_field(&mut app, "folders", json!("format"));
+    set_field(&mut app, "formats", json!([{"format": "png", "scale": "1x", "suffix": ""}]));
+    set_field(&mut app, "folder", json!(folder));
+    let r = confirm(&mut app).unwrap();
+    assert!(r["files"][0].as_str().unwrap().contains("/png/"), "{r}");
+    let saved = app.run("document.exportSettings", json!({})).unwrap()["settings"].clone();
+    assert_eq!((saved["folders"].clone(), saved["subfolders"].clone()), (json!("format"), json!(true)), "{saved}");
+    open(&mut app);
+    assert_eq!((field(&app, "folders"), field(&app, "subfolders")), (json!("format"), json!(true)));
+    app.ui.dialog = None;
+    app.run("select.all", json!({})).unwrap();
+    app.run("assets.add", json!({})).unwrap();
+    let r = app.run("assets.export", json!({"folder": folder})).unwrap();
+    assert!(r["files"][0].as_str().unwrap().contains("/png/"), "{r}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Import Preset… and Export Preset…, in the dialog and in the Asset Export panel, show their file
+/// dialogs off the UI thread (as sheets on macOS) and read or write the file when the dialog
+/// answers.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn preset_files_ask_off_the_ui_thread() {
+    use crate::panels::asset_export;
+    use crate::picks::PickRequest;
+    use export_for_screens::PresetPick;
+    let mut services = Services { dialogs_are_sheets: true, ..Default::default() };
+    let (shown, written) = crate::tests_picks::off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+    app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+    let dir = temp_folder("preset-sheets");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("pack.vcexportpresets");
+    std::fs::write(&file, app.run("document.exportPresets.export", json!({"names": ["Pack"]})).unwrap()["data"].as_str().unwrap()).unwrap();
+    let file = file.to_string_lossy().to_string();
+    let names = |app: &VectorcraftApp| app.session.prefs.screen_export_presets.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let poll = |app: &mut VectorcraftApp| crate::picks::poll(app, &egui::Context::default());
+    // The dialog's buttons, on the open dialog as the app draws it.
+    open(&mut app);
+    let pick = |app: &mut VectorcraftApp, pick: PresetPick| {
+        let mut d = app.ui.dialog.take().unwrap();
+        export_for_screens::preset_pick(app, &mut d, pick);
+        app.ui.dialog = Some(d);
+    };
+    pick(&mut app, PresetPick::Export("Pack".into()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(p)] if p.name == "Pack.vcexportpresets"), "{:?}", shown.requests());
+    assert!(written.borrow().is_empty() && app.ui.status.is_empty(), "{}", app.ui.status);
+    shown.answer(&["/presets/pack.vcexportpresets"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/presets/pack.vcexportpresets"], "{}", app.ui.status);
+    pick(&mut app, PresetPick::Import);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]), "{:?}", shown.requests());
+    assert_eq!(names(&app), ["Pack"]);
+    shown.answer(&[&file]);
+    poll(&mut app);
+    assert_eq!(names(&app), ["Pack", "Pack 2"], "{}", app.ui.status);
+    assert_eq!(kind(&app), Some(export_for_screens::KIND));
+    assert!(field(&app, "__exportPresets").as_array().unwrap().iter().any(|p| p["name"] == "Pack 2"), "the dropdown lists it");
+    // The panel's buttons.
+    app.ui.dialog = None;
+    let ctx = egui::Context::default();
+    let doc = app.session.active().unwrap().uid;
+    asset_export::preset(&mut app, &ctx, doc, PresetPick::Export("Pack 2".into()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(p)] if p.name == "Pack 2.vcexportpresets"), "{:?}", shown.requests());
+    shown.answer(&["/presets/pack-2.vcexportpresets"]);
+    poll(&mut app);
+    assert_eq!(written.borrow().last().map(String::as_str), Some("/presets/pack-2.vcexportpresets"), "{}", app.ui.status);
+    asset_export::preset(&mut app, &ctx, doc, PresetPick::Import);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]), "{:?}", shown.requests());
+    shown.answer(&[&file]);
+    poll(&mut app);
+    assert_eq!(names(&app), ["Pack", "Pack 2", "Pack 3"], "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(&dir);
 }

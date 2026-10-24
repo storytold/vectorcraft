@@ -122,8 +122,9 @@ pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES,
 pub use export_as::open as open_export_as;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options,
-    saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
+    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_row as screen_preset_row,
+    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
 pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
@@ -392,6 +393,19 @@ pub(crate) const PARENT: &str = "__parent";
 /// The dialog `d` was opened over, as it was.
 pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
     d.fields.get(PARENT).and_then(|v| serde::Deserialize::deserialize(v).ok())
+}
+
+/// `ui.dialog.set` changed `field` of the open dialog: a choice that sets other fields sets them as
+/// choosing it in the dialog does (Export for Screens' `exportPreset` and `folders`).
+pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str) -> Result<(), String> {
+    match app.ui.dialog.as_ref().map(|d| d.kind.as_str()) {
+        Some(export_for_screens::KIND) if field == "exportPreset" => export_for_screens::preset_set(app),
+        Some(export_for_screens::KIND) if field == "folders" => {
+            export_for_screens::folders_set(app);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was

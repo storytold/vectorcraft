@@ -1000,6 +1000,10 @@ font-technology	Variable	Променливи
 	Delete Export Preset	Изтриване на набор за експортиране
 	Export Presets	Набори за експортиране
 	Save Export Preset	Запазване на набор за експортиране
+	Export Export Presets	Експортиране на набори за експортиране
+	Export Preset…	Експортиране на набор…
+	Import Export Presets	Импортиране на набори за експортиране
+	Import Preset…	Импортиране на набор…
 	Export Layer	Експортиране на слой
 	Export Selection	Експортиране на избраното
 	All in One Folder	Всичко в една папка
@@ -5101,6 +5105,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
 file-filter	Templates	Шаблони

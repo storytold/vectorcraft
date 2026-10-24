@@ -2868,6 +2868,16 @@ lighting	Light	Světlo
 	Delete Export Preset	Odstranit přednastavení exportu
 	Export Presets	Přednastavení exportu
 	Save Export Preset	Uložit přednastavení exportu
+	Export Export Presets	Exportovat přednastavení exportu
+	Export Preset…	Exportovat přednastavení…
+	Import Export Presets	Importovat přednastavení exportu
+	Import Preset…	Importovat přednastavení…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` je název přednastavení z document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	přednastavení exportu `{n}` neexistuje (viz document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	žádná uložená přednastavení exportu k exportu (vestavěná uveďte v `names`)
+@msg	not an export presets file (format `{_1}`)	nejde o soubor přednastavení exportu (formát `{_1}`)
+@msg	not an export presets file: {e}	nejde o soubor přednastavení exportu: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportovat vrstvu
 	Export Selection	Exportovat výběr
 	All in One Folder	Vše v jedné složce
@@ -5152,6 +5162,7 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
 file-filter	PDF-compatible .ai	.ai kompatibilní s PDF
 file-filter	VectorCraft Template	Šablona VectorCraft

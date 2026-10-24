@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{ExportAsset, NodeId};
 
 use super::edit::{roots_of, selected_roots};
-use super::fileio::{SCREEN_SETTINGS_KEYS, check_screen_settings, export_crop, export_screens, store_screen_settings};
+use super::fileio::{SCREEN_SETTINGS_KEYS, check_screen_settings, export_crop, export_screens, store_screen_settings, with_screen_export_preset};
 use super::*;
 
 /// The longest asset name kept (characters).
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Asset Export Settings",
             [],
             None,
-            "{formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?, antiAlias?} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
+            "{exportPreset?: (a preset of document.exportPresets.list: its formats or preset, its format settings over the saved ones, its prefix (none when it has none), its folders (or subfolders: rows or none) with subfolders on for every folders but none, which assets.export then sorts by, and antiAlias; the other keys go over it, and a given subfolders drops the preset's folders), formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?, antiAlias?} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
             has_doc,
             settings_set
         ),
@@ -220,8 +220,21 @@ fn overlay(base: &mut Map<String, Value>, p: &Map<String, Value>) {
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.export";
     let mut q = shared_settings(s)?;
+    // The folders of a preset applied to the settings, while Create Sub-folders is on, and a
+    // stored `none` (which keeps mobile and density rows out of row folders); a `subfolders`
+    // given to the call goes over them.
+    if p.get("subfolders").is_none()
+        && let Some(f) = s.doc()?.doc.export_settings.get("folders").filter(|f| f.is_string())
+        && (q.get("subfolders").and_then(Value::as_bool) == Some(true) || f.as_str() == Some("none"))
+    {
+        q.insert("folders".into(), f.clone());
+    }
     if let Some(o) = p.as_object() {
         overlay(&mut q, o);
+    }
+    // Create Sub-folders turned off for the call keeps mobile and density rows in the folder too.
+    if p.get("subfolders").and_then(Value::as_bool) == Some(false) && p.get("folders").is_none() {
+        q.insert("folders".into(), json!("none"));
     }
     if !q.contains_key("assets") {
         let all: Vec<u64> = s.doc()?.doc.assets.iter().map(|a| a.id).collect();
@@ -236,11 +249,23 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
 fn settings_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.settings.set";
     let o = p.as_object().ok_or_else(|| bad(C, "give the settings to change, e.g. {\"formats\": [{\"format\": \"png\", \"scale\": \"2x\"}]}"))?;
-    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str())) {
+    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str()) && k.as_str() != "exportPreset") {
         return Err(bad(C, format!("`{k}` isn't an export setting: {}", SCREEN_SETTINGS_KEYS.join(", "))));
     }
     let mut settings = s.doc()?.doc.export_settings.clone();
-    overlay(&mut settings, o);
+    let mut given = o.clone();
+    if let Some(name) = given.remove("exportPreset") {
+        let name = name.as_str().ok_or_else(|| bad(C, "`exportPreset` is the name of a preset of document.exportPresets.list"))?;
+        with_screen_export_preset(s, C, &mut settings, name)?;
+    }
+    // Create Sub-folders set on its own is a folder per row, or none (stored, so that mobile and
+    // density rows stay out of row folders too).
+    match given.get("subfolders").map(|v| v.as_bool()) {
+        Some(Some(false)) => _ = settings.insert("folders".into(), json!("none")),
+        Some(_) => _ = settings.remove("folders"),
+        None => {}
+    }
+    overlay(&mut settings, &given);
     check_screen_settings(s, &Value::Object(settings.clone())).map_err(|e| of_cmd(C, e))?;
     store_screen_settings(s, settings)?;
     Ok(json!({ "settings": shared_settings(s)? }))

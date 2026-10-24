@@ -268,6 +268,85 @@ fn the_shared_settings_drive_the_export_and_arent_an_undo_step() {
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["formats"][0]["format"], "jpg");
 }
 
+/// An export preset sets the shared settings as the Asset Export panel applies one: its rows (or
+/// mobile/density), its format settings over the saved ones, its prefix and its sub-folders.
+#[test]
+fn an_export_preset_sets_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    run(
+        &mut s,
+        "assets.settings.set",
+        json!({"preset": "mobile", "prefix": "old_", "settings": {"png": {"background": "white"}, "jpg": {"quality": 30}}}),
+    );
+    let pack =
+        json!({"formats": [{"format": "png"}, {"format": "svg"}], "folders": "rows", "settings": {"png": {"antiAlias": "type"}}, "name": "x-<name>"});
+    run(&mut s, "document.exportPresets.save", json!({"name": "Pack", "settings": pack}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Pack"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert!(settings.get("preset").is_none() && settings.get("prefix").is_none(), "{settings}");
+    assert_eq!(settings["formats"], pack["formats"]);
+    assert_eq!(settings["subfolders"], true);
+    assert_eq!(settings["settings"], json!({"png": {"background": "white", "antiAlias": "type"}, "jpg": {"quality": 30}}));
+    let out = files(&run(&mut s, "assets.export", json!({})));
+    assert_eq!(out.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), ["1x/Asset-1.png", "SVG/Asset-1.svg"]);
+    // A built-in preset; the call's own keys go over it.
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Print-Ready PDF", "prefix": "p_"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert_eq!((settings["formats"][0]["format"].as_str(), settings["prefix"].as_str()), (Some("pdf"), Some("p_")));
+    for bad in [json!({"exportPreset": "Never saved"}), json!({"exportPreset": 3})] {
+        assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["prefix"], "p_");
+}
+
+#[test]
+fn an_export_preset_keeps_its_folders_in_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    let saved = [("None", json!({"folders": "none"})), ("Items", json!({"folders": "itemFormat"})), ("Panel", json!({"subfolders": true}))];
+    for (name, mut settings) in saved {
+        settings["formats"] = json!([{"format": "svg"}]);
+        run(&mut s, "document.exportPresets.save", json!({"name": name, "settings": settings}));
+    }
+    // (preset, the folders and Create Sub-folders it leaves): Logo Package sorts by format.
+    let want = [("Logo Package", "format", true), ("None", "none", false), ("Items", "itemFormat", true), ("Panel", "rows", true)];
+    for (preset, folders, sub) in want {
+        run(&mut s, "assets.settings.set", json!({"exportPreset": preset}));
+        let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+        assert_eq!((settings["folders"].as_str(), settings["subfolders"].as_bool()), (Some(folders), Some(sub)), "{preset}: {settings}");
+    }
+    // Asset export sorts the files as the preset does; Create Sub-folders given goes over it.
+    let paths = |s: &mut Session, p: Value| -> Vec<String> { files(&run(s, "assets.export", p)).into_iter().map(|f| f.0).collect() };
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Logo Package"}));
+    let out = paths(&mut s, json!({}));
+    assert_eq!(out.iter().filter(|f| f.starts_with("png/")).count(), 2, "{out:?}");
+    assert!(out.iter().all(|f| ["svg/", "png/", "pdf/"].iter().any(|d| f.starts_with(d))), "{out:?}");
+    assert!(paths(&mut s, json!({"subfolders": false})).iter().all(|f| !f.contains('/')));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Items"}));
+    assert!(paths(&mut s, json!({})).iter().all(|f| f.ends_with(".svg") && f.contains("/svg/")));
+    run(&mut s, "assets.settings.set", json!({"subfolders": true}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert!(settings.get("folders").is_none(), "{settings}");
+    assert_eq!(paths(&mut s, json!({})).iter().filter(|f| f.matches('/').count() == 1).count(), 1);
+    // A mobile preset saved with no sub-folders exports its rows into the folder itself.
+    run(&mut s, "document.exportPresets.save", json!({"name": "Flat Mobile", "settings": {"preset": "mobile", "folders": "none"}}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat Mobile"}));
+    let out = paths(&mut s, json!({}));
+    assert_eq!(out.len(), 3, "{out:?}");
+    assert!(out.iter().all(|f| !f.contains('/')), "{out:?}");
+    // Create Sub-folders turned off keeps mobile rows in the folder, set or given to the export.
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat Mobile", "subfolders": false}));
+    assert!(paths(&mut s, json!({})).iter().all(|f| !f.contains('/')));
+    run(&mut s, "assets.settings.set", json!({"subfolders": true}));
+    assert_eq!(paths(&mut s, json!({})).iter().filter(|f| f.starts_with("3x/")).count(), 1);
+    assert!(paths(&mut s, json!({"subfolders": false})).iter().all(|f| !f.contains('/')));
+    run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+    assert!(paths(&mut s, json!({})).iter().all(|f| !f.contains('/')));
+}
+
 #[test]
 fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let mut s = session();

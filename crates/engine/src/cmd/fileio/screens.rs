@@ -267,7 +267,7 @@ impl Row {
 
 /// The settings the Asset Export panel shares with the dialog: what is exported, not which art
 /// or where to.
-pub(crate) const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
+pub const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
 
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]
@@ -614,11 +614,25 @@ fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     Ok(Value::Object(merged))
 }
 
-pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
+/// The rows of `document.exportPresets.list`: the built-in presets, then `saved`, each
+/// `{name, builtIn, settings}`.
+pub fn preset_list(saved: &[ScreenExportPreset]) -> Value {
     let row = |p: &ScreenExportPreset, built_in: bool| json!({"name": p.name, "builtIn": built_in, "settings": p.settings});
-    let rows: Vec<Value> =
-        builtin_presets().iter().map(|p| row(p, true)).chain(s.prefs.screen_export_presets.iter().map(|p| row(p, false))).collect();
-    Ok(json!({ "presets": rows }))
+    Value::Array(builtin_presets().iter().map(|p| row(p, true)).chain(saved.iter().map(|p| row(p, false))).collect())
+}
+
+pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({ "presets": preset_list(&s.prefs.screen_export_presets) }))
+}
+
+/// The [`PRESET_KEYS`] of `given`, refused as an error of command `cmd` when an export would
+/// refuse them.
+fn preset_settings(s: &Session, cmd: &str, given: &Map<String, Value>) -> Result<Map<String, Value>> {
+    let settings: Map<String, Value> = given.iter().filter(|(k, _)| PRESET_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    // Refuse what an export would refuse, now rather than when the preset is used.
+    check_settings(s, &Value::Object(settings.clone())).map_err(|e| bad(cmd, e.to_string()))?;
+    Folders::of(&ScreenParams::of(&Value::Object(settings.clone()))?).map_err(|e| bad(cmd, e.to_string()))?;
+    Ok(settings)
 }
 
 pub(super) fn presets_save(s: &mut Session, p: &Value) -> Result<Value> {
@@ -628,10 +642,7 @@ pub(super) fn presets_save(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(SAVE, format!("`{name}` is a built-in preset: save under another name")));
     }
     let given = p.get("settings").and_then(Value::as_object).ok_or_else(|| bad(SAVE, "settings is an object of document.exportForScreens params"))?;
-    let settings: Map<String, Value> = given.iter().filter(|(k, _)| PRESET_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
-    // Refuse what an export would refuse, now rather than when the preset is used.
-    check_settings(s, &Value::Object(settings.clone())).map_err(|e| bad(SAVE, e.to_string()))?;
-    Folders::of(&ScreenParams::of(&Value::Object(settings.clone()))?).map_err(|e| bad(SAVE, e.to_string()))?;
+    let settings = preset_settings(s, SAVE, given)?;
     let preset = ScreenExportPreset { name: name.clone(), settings };
     let created = match s.prefs.screen_export_presets.iter_mut().find(|q| q.name == name) {
         Some(slot) => {
@@ -658,6 +669,144 @@ pub(super) fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(DELETE, format!("no saved export preset `{name}`")));
     }
     Ok(json!({ "deleted": name }))
+}
+
+/// What `document.exportPresets.export` writes and `document.exportPresets.import` reads.
+#[derive(Serialize, Deserialize)]
+struct PresetFile {
+    format: String,
+    #[serde(default)]
+    presets: Vec<ScreenExportPreset>,
+}
+
+/// The `format` of an export presets file, also its extension.
+pub const PRESET_FILE_FORMAT: &str = "vcexportpresets";
+
+/// The extensions of export presets files (opening one imports it).
+pub const PRESET_FILE_EXTS: &[&str] = &[PRESET_FILE_FORMAT];
+
+/// The most presets one file imports.
+const MAX_IMPORT: usize = 1000;
+
+pub(super) fn presets_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const EXPORT: &str = "document.exportPresets.export";
+    let presets = match p.get("names") {
+        Some(Value::Array(names)) => {
+            let find = |n: &Value| {
+                let n = n.as_str().ok_or_else(|| bad(EXPORT, "`names` lists preset names"))?;
+                find_preset(s, n).ok_or_else(|| bad(EXPORT, format!("no export preset `{n}` (see document.exportPresets.list)")))
+            };
+            names.iter().map(find).collect::<Result<Vec<_>>>()?
+        }
+        None | Some(Value::Null) => s.prefs.screen_export_presets.clone(),
+        Some(_) => return Err(bad(EXPORT, "`names` is a list of preset names")),
+    };
+    if presets.is_empty() {
+        return Err(bad(EXPORT, "no saved export presets to export (name built-in ones in `names`)"));
+    }
+    let count = presets.len();
+    let text = serde_json::to_string_pretty(&PresetFile { format: PRESET_FILE_FORMAT.into(), presets }).map_err(|e| bad(EXPORT, e.to_string()))?;
+    match str_param(p, "path") {
+        Some(path) => {
+            write_file(path, text.as_bytes())?;
+            Ok(json!({"path": path, "count": count}))
+        }
+        None => Ok(json!({"data": text, "count": count})),
+    }
+}
+
+pub(super) fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const IMPORT: &str = "document.exportPresets.import";
+    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::read_file(path)?,
+        (None, Some(text), _) => text.as_bytes().to_vec(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(IMPORT, "bad dataBase64"))?,
+        _ => return Err(bad(IMPORT, "give `path`, `data` or `dataBase64`")),
+    };
+    let file: PresetFile = serde_json::from_slice(&bytes).map_err(|e| bad(IMPORT, format!("not an export presets file: {e}")))?;
+    if file.format != PRESET_FILE_FORMAT {
+        return Err(bad(IMPORT, format!("not an export presets file (format `{}`)", file.format)));
+    }
+    if file.presets.len() > MAX_IMPORT {
+        return Err(bad(IMPORT, format!("more than {MAX_IMPORT} presets")));
+    }
+    // Settings a hand-edited file may carry are refused as document.exportPresets.save refuses
+    // them, before any preset is added.
+    let mut presets = vec![];
+    for q in file.presets {
+        let settings = preset_settings(s, IMPORT, &q.settings).map_err(|e| match e {
+            EngineError::BadParams { msg, .. } => bad(IMPORT, format!("`{}`: {msg}", q.name)),
+            e => e,
+        })?;
+        let name = Some(q.name.trim()).filter(|n| !n.is_empty()).unwrap_or("Export Preset").to_string();
+        presets.push((name, settings));
+    }
+    let replace = bool_or(p, "replace", false);
+    let saved = &mut s.prefs.screen_export_presets;
+    // A built-in name, or a saved one that stays, gets a number.
+    let mut taken: std::collections::HashSet<String> =
+        builtin_presets().into_iter().map(|b| b.name).chain(saved.iter().map(|q| q.name.clone())).collect();
+    let mut imported = vec![];
+    for (base, settings) in presets {
+        if replace && let Some(slot) = saved.iter_mut().find(|q| q.name == base) {
+            slot.settings = settings;
+            imported.push(base);
+            continue;
+        }
+        let name = super::import_name(&base, |n| taken.contains(n));
+        taken.insert(name.clone());
+        saved.push(ScreenExportPreset { name: name.clone(), settings });
+        imported.push(name);
+    }
+    Ok(json!({ "imported": imported }))
+}
+
+/// `settings` (a document's export settings) with export preset `name` applied as the Asset
+/// Export panel applies one: its formats (or mobile/density `preset`), its format settings over
+/// the ones there, its prefix (none when it has none), its folders (`folders`, or `subfolders`)
+/// with Create Sub-folders on for every mode but `none`, and its anti-aliasing.
+pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<String, Value>, name: &str) -> Result<()> {
+    let preset = find_preset(s, name).ok_or_else(|| bad(cmd, format!("no export preset `{name}` (see document.exportPresets.list)")))?.settings;
+    if let Some(formats) = preset.get("formats") {
+        settings.insert("formats".into(), formats.clone());
+        settings.remove("preset");
+    } else if let Some(p) = preset.get("preset") {
+        settings.insert("preset".into(), p.clone());
+        settings.remove("formats");
+    }
+    if let Some(given) = preset.get("settings").and_then(Value::as_object) {
+        let all = settings.entry("settings").or_insert_with(|| json!({}));
+        if !all.is_object() {
+            *all = json!({});
+        }
+        if let Some(all) = all.as_object_mut() {
+            for (id, o) in given {
+                match (all.get_mut(id).and_then(Value::as_object_mut), o.as_object()) {
+                    (Some(mine), Some(o)) => mine.extend(o.iter().map(|(k, v)| (k.clone(), v.clone()))),
+                    _ => _ = all.insert(id.clone(), o.clone()),
+                }
+            }
+        }
+    }
+    match preset.get("prefix") {
+        Some(prefix) => _ = settings.insert("prefix".into(), prefix.clone()),
+        None => _ = settings.remove("prefix"),
+    }
+    // Its `folders` (Export for Screens shows it), else its `subfolders` (a folder per row or
+    // none). Every mode but `none` sorts the files into sub-folders.
+    let folders = preset
+        .get("folders")
+        .and_then(Value::as_str)
+        .filter(|f| !f.is_empty())
+        .or_else(|| preset.get("subfolders").and_then(Value::as_bool).map(|b| if b { "rows" } else { "none" }));
+    if let Some(f) = folders {
+        settings.insert("folders".into(), json!(f));
+        settings.insert("subfolders".into(), json!(f != "none"));
+    }
+    if let Some(aa) = preset.get("antiAlias") {
+        settings.insert("antiAlias".into(), aa.clone());
+    }
+    Ok(())
 }
 
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF

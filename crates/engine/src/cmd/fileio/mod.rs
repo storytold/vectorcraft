@@ -79,12 +79,14 @@ pub use save::{
     templates_folder,
 };
 pub use screens::{
-    PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS, PRESETS as SCREEN_PRESETS, ScreenExport, ScreenExportPreset, ScreenSize,
-    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_rows as screen_preset_rows,
+    PRESET_FILE_EXTS as SCREEN_EXPORT_PRESET_EXTS, PRESET_FILE_FORMAT as SCREEN_EXPORT_PRESET_FORMAT, PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS,
+    PRESETS as SCREEN_PRESETS, SHARED_KEYS as SCREEN_SETTINGS_KEYS, ScreenExport, ScreenExportPreset, ScreenSize,
+    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_list as screen_export_preset_list,
+    preset_rows as screen_preset_rows,
 };
 pub(crate) use screens::{
-    SHARED_KEYS as SCREEN_SETTINGS_KEYS, check_settings as check_screen_settings, export as export_screens, safe_file_name,
-    store_settings as store_screen_settings,
+    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
+    with_export_preset as with_screen_export_preset,
 };
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
@@ -177,6 +179,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} delete a saved batch export preset (built-in ones stay) → {deleted}",
             always,
             screens::presets_delete
+        ),
+        cmd!(
+            query "document.exportPresets.import",
+            "Import Export Presets",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, replace?: false (replace saved presets of the same names; else the imported ones get a number)} add the presets of a .vcexportpresets file (as document.exportPresets.export writes) to the saved ones; a built-in name gets a number; a taken name that ends in a number gets the next free one (Web 2 comes in as Web 3); settings that document.exportPresets.save refuses, or more than 1000 presets, fail the whole file → {imported: [names]}",
+            always,
+            screens::presets_import
+        ),
+        cmd!(
+            query "document.exportPresets.export",
+            "Export Export Presets",
+            [],
+            None,
+            "{names?: [preset names, built-in ones too] (default: every saved preset), path?} write the presets as a .vcexportpresets file (JSON) → {path, count}; without path → {data: the file's text, count}",
+            always,
+            screens::presets_export
         ),
         cmd!(
             query "command.batch",
@@ -779,8 +799,8 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
 }
 
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF and print
-/// presets (imported), scripts (checked without running them) and plug-ins (installed).
+/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF, print
+/// and export presets (imported), scripts (checked without running them) and plug-ins (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All readable files", OPEN_EXTS))
         .chain(format_filters())
@@ -789,6 +809,7 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", super::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", super::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
         .chain(std::iter::once(("Shortcut sets", super::shortcutset::EXTS)))
         .chain(std::iter::once(("Scripts", super::scripts::EXTS)))
         .chain(std::iter::once(("Plug-ins", super::plugin::EXTS)))
@@ -866,6 +887,25 @@ pub fn extension(name: &str) -> String {
 /// A file name or path without its folder and extension (`/a/Poster.svg` → `Poster`).
 pub fn file_stem(name: &str) -> String {
     std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
+}
+
+/// The name an imported preset `base` takes: `base` if `taken` doesn't claim it, else for a name
+/// that ends in a space and a number ("Logo Package 2") the first free name with a higher number
+/// ("Logo Package 3"), and for any other name the first free "base 2", "base 3"… ([`unique_name`]).
+pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let numbered = base
+        .rsplit_once(' ')
+        .filter(|(stem, n)| !stem.trim().is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|(stem, n)| Some((stem, n.parse::<u64>().ok()?)));
+    match numbered {
+        Some((stem, n)) => {
+            (n.saturating_add(1)..=u64::MAX).map(|i| format!("{stem} {i}")).find(|c| !taken(c)).unwrap_or_else(|| unique_name(base, &taken))
+        }
+        None => unique_name(base, taken),
+    }
 }
 
 /// What a `format` export of `doc`, whose file is `path`, writes when it isn't `doc` itself: a
