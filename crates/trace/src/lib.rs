@@ -255,7 +255,9 @@ pub enum Palette {
     #[serde(alias = "Automatic")]
     Automatic,
     /// The most used colours of a swatch library ([`TraceParams::swatches`]), at most `colors` of
-    /// them, exactly as they are.
+    /// them, exactly as they are. Each pixel takes the library color nearest in lightness and
+    /// hue, with hue and chroma counted three times as much as lightness, so that neutral tones
+    /// stay off saturated colors.
     #[serde(alias = "library", alias = "Document Library")]
     DocumentLibrary,
 }
