@@ -85,6 +85,12 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         w.line(&format!("<g{a}>"));
         w.depth += 1;
     }
+    if let Some(i) = opts.artboard
+        && let Some(c) = doc.artboards.get(i).and_then(|a| a.color)
+    {
+        let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
+        w.line(&format!(r#"<rect width="{ww}" height="{hh}" fill="{}"/>"#, xml_escape(&c.to_hex())));
+    }
     w.children(&doc.layers);
     if page_group {
         w.depth -= 1;
