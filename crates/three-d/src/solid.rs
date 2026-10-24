@@ -349,27 +349,45 @@ fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec
             out.push(ring);
         }
     }
+    // Which rings hold which: each ring against the others, its edges walked only where its
+    // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges in all.
+    let too_complex = || String::from("The shape is too complex for a 3D effect");
+    let mut work = 0usize;
+    let mut within = |out: &[Vec<Point>], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
+        let p = out.get(i).and_then(|r| r.first()).copied().unwrap_or_default();
+        let mut held_by = vec![];
+        for (j, (o, b)) in out.iter().zip(bounds).enumerate() {
+            if j == i || !(b.x0 <= p.x && p.x <= b.x1 && b.y0 <= p.y && p.y <= b.y1) {
+                continue;
+            }
+            work = work.saturating_add(o.len());
+            if work > MAX_CONTAINMENT_EDGES {
+                return Err(too_complex());
+            }
+            if contains(o, p) {
+                held_by.push(j);
+            }
+        }
+        Ok(held_by)
+    };
+    let bounds_of = |out: &[Vec<Point>]| -> Vec<Rect> {
+        out.iter().map(|r| r.iter().map(|q| Rect::from_points(*q, *q)).reduce(|a, b| a.union(b)).unwrap_or_default()).collect()
+    };
     if rule == FillRule::NonZero {
         let turn = |r: &[Point]| if signed_area(r) > 0.0 { 1 } else { -1 };
+        let bounds = bounds_of(&out);
         let mut edge = Vec::with_capacity(out.len());
         for (i, r) in out.iter().enumerate() {
-            let p = r.first().copied().unwrap_or_default();
             // The winding number just outside the ring, and just inside it.
-            let outside: i32 = out.iter().enumerate().filter(|(j, o)| *j != i && contains(o, p)).map(|(_, o)| turn(o)).sum();
+            let outside: i32 = within(&out, &bounds, i)?.into_iter().filter_map(|j| out.get(j)).map(|o| turn(o)).sum();
             edge.push((outside != 0) != (outside + turn(r) != 0));
         }
         let mut edge = edge.into_iter();
         out.retain(|_| edge.next().unwrap_or(true));
     }
     // A ring inside an odd number of others is a hole.
-    let holes: Vec<bool> = out
-        .iter()
-        .enumerate()
-        .map(|(i, r)| {
-            let p = r.first().copied().unwrap_or_default();
-            out.iter().enumerate().filter(|(j, o)| *j != i && contains(o, p)).count() % 2 == 1
-        })
-        .collect();
+    let bounds = bounds_of(&out);
+    let holes: Vec<bool> = (0..out.len()).map(|i| within(&out, &bounds, i).map(|held| held.len() % 2 == 1)).collect::<Result<_, _>>()?;
     for (r, hole) in out.iter_mut().zip(holes) {
         if (signed_area(r) > 0.0) == hole {
             r.reverse();
@@ -377,6 +395,10 @@ fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec
     }
     Ok(out)
 }
+
+/// Most ring edges [`rings`] walks to tell which rings hold which: every ring is tested against
+/// the others, so many rings of many points each would otherwise take billions of steps.
+const MAX_CONTAINMENT_EDGES: usize = 50_000_000;
 
 fn signed_area(r: &[Point]) -> f64 {
     r.iter().zip(r.iter().cycle().skip(1)).take(r.len()).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>() / 2.0
@@ -1262,6 +1284,9 @@ fn cell_triangles(pieces: &[Vec<Point>]) -> Option<Vec<[Point; 3]>> {
     Some(triangles)
 }
 
+/// Most outline segments the booleans of one inflated object's mixed cells take together.
+const MAX_MATERIAL_SEGMENTS: usize = 4_000_000;
+
 /// The part of `outline` (its rings, each with its bounds) inside `cell`, as rings (holes running
 /// the other way). Only the rings whose bounds meet the cell's go into the boolean.
 fn material(outline: &[(Rect, vectorcraft_geom::SubPath)], cell: Rect) -> Option<Vec<Vec<Point>>> {
@@ -1390,6 +1415,10 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     let unit = cell / FINE as f64;
     let at = |qx: usize, qy: usize| Point::new(bounds.x0 + qx as f64 * unit, bounds.y0 + qy as f64 * unit);
     let base = |i: usize, j: usize| Rect::from_points(at(i * FINE, j * FINE), at((i + 1) * FINE, (j + 1) * FINE));
+    // Segments the booleans of mixed cells may take in all ([`MAX_MATERIAL_SEGMENTS`]): each one
+    // builds the topology of every outline ring near its cell, so a self-crossing outline cost its
+    // crossings again in every cell it spans. Past it, cells take their clipped pieces.
+    let material_left = std::cell::Cell::new(MAX_MATERIAL_SEGMENTS);
     // The shape's part of a rectangle, as rings.
     let cut = |r: Rect| -> Vec<Vec<Point>> {
         // A cell no edge crosses is wholly inside the shape or wholly outside it.
@@ -1404,7 +1433,18 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
         // Where a hole's piece cancels part of an outline's, that only holds flat: lifted onto
         // the surface the two no longer meet. Such a cell takes the shape's own part of it.
         let mixed = pieces.iter().any(|p| signed_area(p) < 0.0) && pieces.iter().any(|p| signed_area(p) > 0.0);
-        if mixed { material(&outline, r).unwrap_or(pieces) } else { pieces }
+        if !mixed {
+            return pieces;
+        }
+        let near: usize =
+            outline.iter().filter(|(b, _)| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1).map(|(_, sp)| sp.anchors.len()).sum();
+        match material_left.get().checked_sub(near) {
+            Some(left) => {
+                material_left.set(left);
+                material(&outline, r).unwrap_or(pieces)
+            }
+            None => pieces,
+        }
     };
     // How many times each cell is halved each way (0, 1 or 2), from how steeply it rises.
     let levels: Vec<u32> = (0..nx * ny)

@@ -32,22 +32,17 @@ const UNSHEAR: Affine = Affine::new([1.0, -1.0 / 32.0, 0.0, 1.0, 0.0, 0.0]);
 
 /// Boundary crossings per input, counted from the far west: slot `2i` counts input `i`'s
 /// segments running one way, slot `2i + 1` the other. An open path traced there and back adds one
-/// to each, so its edges never cancel out of the map.
-#[derive(Clone, Debug, Default)]
-struct Crossings(Vec<u32>);
+/// to each, so its edges never cancel out of the map. Only the slots that aren't 0 are kept, in
+/// order: the sweep keeps one of these for every edge, and a vector as long as the input's number
+/// (as this was) made disjoint shapes cost the square of their count in memory.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Crossings(Vec<(usize, u32)>);
 
 impl Crossings {
     fn get(&self, slot: usize) -> u32 {
-        self.0.get(slot).copied().unwrap_or(0)
+        self.0.binary_search_by_key(&slot, |(s, _)| *s).map_or(0, |i| self.0.get(i).map_or(0, |(_, c)| *c))
     }
 }
-
-impl PartialEq for Crossings {
-    fn eq(&self, other: &Self) -> bool {
-        (0..self.0.len().max(other.0.len())).all(|i| self.get(i) == other.get(i))
-    }
-}
-impl Eq for Crossings {}
 
 impl std::ops::Add for Crossings {
     type Output = Crossings;
@@ -59,33 +54,35 @@ impl std::ops::Add for Crossings {
 
 impl std::ops::AddAssign for Crossings {
     fn add_assign(&mut self, rhs: Self) {
-        if self.0.len() < rhs.0.len() {
-            self.0.resize(rhs.0.len(), 0);
+        if rhs.0.is_empty() {
+            return;
         }
-        for (a, b) in self.0.iter_mut().zip(rhs.0) {
-            *a = a.saturating_add(b);
+        let mut out = Vec::with_capacity(self.0.len() + rhs.0.len());
+        let (mut a, mut b) = (std::mem::take(&mut self.0).into_iter().peekable(), rhs.0.into_iter().peekable());
+        loop {
+            let next = match (a.peek(), b.peek()) {
+                (Some(x), Some(y)) if x.0 == y.0 => {
+                    let (x, y) = (a.next(), b.next());
+                    x.zip(y).map(|(x, y)| (x.0, x.1.saturating_add(y.1)))
+                }
+                (Some(x), Some(y)) if x.0 < y.0 => a.next(),
+                (Some(_), Some(_)) | (None, Some(_)) => b.next(),
+                (Some(_), None) => a.next(),
+                (None, None) => break,
+            };
+            out.extend(next.filter(|(_, c)| *c != 0));
         }
+        self.0 = out;
     }
 }
 
 impl WindingNumber for Crossings {
     type Tag = usize;
     fn single(tag: usize, positive: bool) -> Self {
-        let slot = 2 * tag + usize::from(!positive);
-        let mut v = vec![0; slot + 1];
-        if let Some(c) = v.get_mut(slot) {
-            *c = 1;
-        }
-        Crossings(v)
+        Crossings(vec![(2 * tag + usize::from(!positive), 1)])
     }
     fn of_tag(&self, tag: usize) -> Self {
-        let mut v = vec![0; 2 * tag + 2];
-        for slot in [2 * tag, 2 * tag + 1] {
-            if let Some(c) = v.get_mut(slot) {
-                *c = self.get(slot);
-            }
-        }
-        Crossings(v)
+        Crossings([2 * tag, 2 * tag + 1].into_iter().map(|slot| (slot, self.get(slot))).filter(|(_, c)| *c != 0).collect())
     }
 }
 
@@ -629,9 +626,10 @@ fn gap_from(tracks: &[Track], grid: &SegGrid, own: usize, e: Point, from: f64, m
     let o = tracks.get(own)?;
     let reach = GAP_DETOUR * max_gap;
     let mut best: Option<(f64, Point)> = None;
-    // `around` holds the segments a way of up to `reach` from `e` can cross, and `crossed` the
-    // crossings with each track.
-    let mut around: Option<Vec<(usize, usize)>> = None;
+    // `around` holds the segments a way of up to `reach` from `e` can cross, by track (grouped
+    // once: filtering the whole list again for each track near `e` made clusters of parallel
+    // paths cubic), and `crossed` the crossings with each track.
+    let mut around: Option<HashMap<usize, Vec<usize>>> = None;
     let mut crossed: HashMap<usize, Vec<(f64, f64)>> = HashMap::new();
     for (j, k) in grid.near(e, max_gap) {
         let Some(q) = tracks.get(j) else { continue };
@@ -650,8 +648,14 @@ fn gap_from(tracks: &[Track], grid: &SegGrid, own: usize, e: Point, from: f64, m
             o.along(from, at)
         } else {
             let xs = crossed.entry(j).or_insert_with(|| {
-                let segs = around.get_or_insert_with(|| grid.near(e, reach + max_gap));
-                crossings(o, from, reach, q, segs.iter().filter(|c| c.0 == j).map(|c| c.1))
+                let by_track = around.get_or_insert_with(|| {
+                    let mut by_track: HashMap<usize, Vec<usize>> = HashMap::new();
+                    for (t, k) in grid.near(e, reach + max_gap) {
+                        by_track.entry(t).or_default().push(k);
+                    }
+                    by_track
+                });
+                crossings(o, from, reach, q, by_track.get(&j).into_iter().flatten().copied())
             });
             xs.iter().map(|&(a, b)| o.along(from, a) + q.along(b, at)).fold(f64::INFINITY, f64::min)
         };
@@ -1040,6 +1044,9 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
         return None;
     }
     let eps = eps_for(inputs.iter().map(|p| &p.0)).ok()?;
+    if !crate::budget::sweep_fits(inputs.iter().map(|p| &p.0)) {
+        return None;
+    }
     snap_horizontals(&mut inputs.iter_mut().map(|p| &mut p.0).collect::<Vec<_>>(), eps);
     // The sweep can panic on rare near-degenerate input; that must never take the app down.
     let sweep =
@@ -1470,6 +1477,19 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
     use vectorcraft_geom::{Rect, shapes};
+
+    /// Sparse crossings add, compare and read like the dense counts they stand for.
+    #[test]
+    fn crossings_are_sparse_counts() {
+        let mut c = Crossings::single(7, true);
+        c += Crossings::single(2, false);
+        c += Crossings::single(7, true);
+        assert_eq!((c.get(14), c.get(5), c.get(15), c.get(0)), (2, 1, 0, 0));
+        assert_eq!(c.0.len(), 2, "only the slots that aren't 0");
+        assert_eq!(c.of_tag(7), Crossings(vec![(14, 2)]));
+        assert_eq!(Crossings::single(2, false) + Crossings::single(7, true) + Crossings::single(7, true), c);
+        assert_eq!(Crossings::default() + Crossings::default(), Crossings::default());
+    }
 
     fn line(a: (f64, f64), b: (f64, f64), key: u64) -> Shape {
         Shape::new(PathData::single(SubPath::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)), FillRule::NonZero, key)

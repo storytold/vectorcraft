@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod boolean;
+mod budget;
 mod edit;
 mod fit;
 mod offset;
@@ -36,4 +37,6 @@ pub enum PathOpsError {
     OpenPath,
     #[error("the shapes are too degenerate to combine")]
     Degenerate,
+    #[error("the shapes cross themselves and each other too often to combine")]
+    TooComplex,
 }
