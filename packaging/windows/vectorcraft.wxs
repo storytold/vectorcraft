@@ -118,6 +118,11 @@
           <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="VectorCraft"
               Description="VectorCraft vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
               Icon="VectorcraftIcon.ico" IconIndex="0" />
+          <ProgId Id="VectorCraft.vectorcraft" Description="VectorCraft document">
+            <Extension Id="vectorcraft" ContentType="application/x-vectorcraft">
+              <Verb Id="open" Command="Open" TargetFile="[#VectorcraftExe]" Argument="&quot;%1&quot;" />
+            </Extension>
+          </ProgId>
         </File>
 
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
