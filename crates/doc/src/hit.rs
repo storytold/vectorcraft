@@ -246,7 +246,7 @@ pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeI
 /// whole, and an unlocked layer, group, blend or envelope in Edit Contents is searched inside.
 fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, out: &mut Vec<NodeId>) {
     let Some(children) = parent.children() else { return };
-    if parent.clips() && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
+    if parent.clips() && !edits_inside(parent, opt.scope) && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
         return;
     }
     for i in hit_order(parent, children, p) {
@@ -420,6 +420,15 @@ fn clip_outline_hit(parent: &Node, clip: &Node, p: Point, opt: HitOptions, symbo
     clip_outline(clip, p, opt)
 }
 
+/// Does isolation mode (`scope`) edit what `parent` holds: is `parent` the isolated container, or
+/// the parent of the single object isolated? Then the selection tools hit the art that the
+/// clipping mask of `parent` hides, and the Unlock submenu lists it (#3748). The reference
+/// app's help says that the parts outside a clipping mask can still be edited
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-clipping-masks.html>).
+fn edits_inside(parent: &Node, scope: Option<NodeId>) -> bool {
+    scope.is_some_and(|s| s == parent.id || parent.children().is_some_and(|c| c.iter().any(|c| c.id == s)))
+}
+
 fn hit_children(
     parent: &Node,
     p: Point,
@@ -437,8 +446,10 @@ fn hit_children(
             chain.push(clip.id);
             return Some(Hit { leaf: clip.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 });
         }
-        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it.
-        if !clip_contains(clip, p) {
+        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it, except for
+        // the selection tools in isolation mode within it.
+        let edited = opt.clip_outlines && editable_only && edits_inside(parent, opt.scope);
+        if !edited && !clip_contains(clip, p) {
             return None;
         }
     }
@@ -607,21 +618,22 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
 /// by their art ([`Node::geometric_bounds_with`]). The art of a clip group or of a layer with a
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
-/// only within that region's bounds.
+/// only within that region's bounds. In isolation mode the clipping mask of the isolated container,
+/// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
+/// the selection tools' clicks.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
-        Some(s) => match (s.children(), marquee_in(s, r)) {
-            (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
-            (Some(_), None) => vec![],
+        Some(s) => match s.children() {
+            Some(c) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             // A single object isolated: only it.
-            (None, _) => doc
+            None => doc
                 .parent_of(s.id)
                 .and_then(|p| doc.node(p))
-                .and_then(|p| Some((p.children()?, marquee_in(p, r)?)))
+                .and_then(|p| p.children())
                 .into_iter()
-                .flat_map(|(c, r)| c.iter().filter(|c| c.id == s.id).map(move |c| (c, r)))
+                .flat_map(|c| c.iter().filter(|c| c.id == s.id).map(|c| (c, r)))
                 .collect(),
         },
         // The objects of the layers, looking through sublayers (hidden, locked and template ones
@@ -814,7 +826,9 @@ mod tests {
     /// #2345: a marquee touches a clip group only where its art shows. Over the clipped-away
     /// half alone it selects nothing, and around a rectangle drawn beside the group's mask it
     /// takes that rectangle alone; reaching into the mask takes the group. The same holds for
-    /// Group Selection's leaves and in isolation mode.
+    /// Group Selection's leaves. In isolation mode (#3748) the isolated group's own mask does not
+    /// limit the marquee, as it does not limit clicks: with the group or the art isolated, the
+    /// marquee takes the hidden art.
     #[test]
     fn a_marquee_leaves_a_clip_group_by_its_clipped_away_art() {
         let mut d = Document::new(300.0, 200.0);
@@ -829,8 +843,9 @@ mod tests {
         let hidden = Rect::new(150.0, -10.0, 210.0, 50.0);
         assert!(marquee(&d, hidden, None, false).is_empty());
         assert!(marquee(&d, hidden, None, true).is_empty());
-        assert!(marquee(&d, hidden, Some(g), false).is_empty());
-        assert!(marquee(&d, hidden, Some(art_id), false).is_empty());
+        assert_eq!(marquee(&d, hidden, Some(g), false), vec![art_id]);
+        assert_eq!(marquee(&d, hidden, Some(g), true), vec![art_id]);
+        assert_eq!(marquee(&d, hidden, Some(art_id), false), vec![art_id]);
         // This marquee surrounds the rectangle beside and crosses the hidden art's bottom edge.
         assert_eq!(marquee(&d, Rect::new(140.0, 70.0, 195.0, 140.0), None, false), vec![beside]);
         // This marquee crosses the shown half's top edge and goes on into the hidden half.
@@ -1094,6 +1109,32 @@ mod tests {
         }
         // Without clip_outlines, as before.
         assert_eq!(objects_at(&d, Point::new(138.5, 90.0), HitOptions::default(), None), vec![art, clip]);
+    }
+
+    /// #3748: in isolation mode the selection tools hit the art that the isolated clip group (or
+    /// the isolated layer with a clipping mask) hides outside its mask, and the art when it is the
+    /// single object isolated; the mask's outline is still hit first. Outside isolation mode, and
+    /// for the tools that act on what is drawn, the hidden art is not hit. The Unlock submenu
+    /// lists the hidden art when it is locked.
+    #[test]
+    fn isolation_reaches_the_art_a_clipping_mask_hides() {
+        let hidden = Point::new(170.0, 90.0);
+        for layer in [false, true] {
+            let (mut d, g, clip, art) = masked_square(layer);
+            let isolated = HitOptions { scope: Some(g), ..SELECTING };
+            assert!(hit_test(&d, hidden, SELECTING).is_none(), "layer {layer}: not isolated");
+            let h = hit_test(&d, hidden, isolated);
+            assert_eq!(h.map(|h| (h.leaf, h.top_object(Some(g)))), Some((art, art)), "layer {layer}");
+            assert_eq!(objects_at(&d, hidden, SELECTING, Some(g)), vec![art], "layer {layer}");
+            assert_eq!(hit_test(&d, Point::new(140.0, 90.0), isolated).map(|h| h.leaf), Some(clip), "layer {layer}: the outline first");
+            let one = HitOptions { scope: Some(art), ..SELECTING };
+            assert_eq!(hit_test(&d, hidden, one).map(|h| h.leaf), Some(art), "layer {layer}: the art isolated");
+            assert!(hit_test(&d, hidden, HitOptions { scope: Some(g), ..HitOptions::default() }).is_none(), "layer {layer}: drawn art only");
+            assert!(hit_test_visible(&d, hidden, isolated).is_none(), "layer {layer}: sampling");
+            d.node_mut(art).unwrap().locked = true;
+            assert_eq!(locked_objects_at(&d, hidden, HitOptions { scope: Some(g), ..HitOptions::default() }), vec![art], "layer {layer}");
+            assert!(locked_objects_at(&d, hidden, HitOptions::default()).is_empty(), "layer {layer}: not isolated");
+        }
     }
 
     /// Art in a sublayer is an object of its own: a click or a marquee takes it, not the

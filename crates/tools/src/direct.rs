@@ -1158,6 +1158,23 @@ mod tests {
         assert!(names(&a, art) && !names(&a, clip), "{a:?}");
     }
 
+    /// #3748: in isolation mode Direct Selection and Group Selection take the art that the
+    /// isolated clip group hides outside its mask; outside isolation mode a press there does not.
+    #[test]
+    fn isolation_lets_direct_selection_take_the_art_a_clip_group_hides() {
+        let (d, g, _, art) = doc_with_masked_square();
+        let (s, p) = (Selection::default(), paint());
+        let names =
+            |actions: &[Action]| actions.iter().any(|a| matches!(a, Action::Exec(_, v) if v["id"] == json!(art.0) || v["ids"] == json!([art.0])));
+        for group in [false, true] {
+            let isolated = ToolContext { isolation: Some(g), ..cx(&d, &s, &p) };
+            let a = DirectSelectionTool::new(group).pointer(&isolated, &PointerEvent::new(PointerKind::Down, 530.0, 450.0));
+            assert!(names(&a), "group {group}: {a:?}");
+            let a = DirectSelectionTool::new(group).pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 530.0, 450.0));
+            assert!(!names(&a), "group {group}, not isolated: {a:?}");
+        }
+    }
+
     /// A blend of two 20 pt squares centred on (110, 310) and (210, 310), selected.
     fn blend_doc() -> (vectorcraft_doc::Document, NodeId, NodeId) {
         let (mut d, _) = doc_with_rect();
