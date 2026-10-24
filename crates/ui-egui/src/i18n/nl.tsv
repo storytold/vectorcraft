@@ -2397,6 +2397,10 @@ lighting	Light	Licht
 	< 1 sec	< 1 sec
 	[Unnamed]	[Naamloos]
 	Amount:	Hoeveelheid:
+	Anti-aliasing Method	Anti-aliasingmethode
+	Sharp	Scherp
+	Crisp	Helder
+	Strong	Krachtig
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Tekenbord:
 	Color Table	Kleurentabel

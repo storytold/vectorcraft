@@ -2492,6 +2492,10 @@ lighting	Light	Światło
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez nazwy]
 	Amount:	Wartość:
+	Anti-aliasing Method	Metoda wygładzania
+	Sharp	Ostre
+	Crisp	Wyraźne
+	Strong	Mocne
 	Anti-aliasing:	Wygładzanie:
 	Artboard:	Obszar kompozycji:
 	Color Table	Tablica kolorów
@@ -3997,6 +4001,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Podziel na siatkę: zaznacz ścieżki wystarczająco duże dla siatki
 @msg	Targa files are RGB: colorModel rgb	Pliki Targa są w RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Oblewanie tekstem: zaznacz obiekt oblewany
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musi mieć wartość "none", "sharp", "crisp" lub "strong"
 @msg	`aspect` must be a number (%)	`aspect` musi być liczbą (%)
 @msg	`at` must be [x, y]	`at` musi mieć postać [x, y]
 @msg	`color` must be a colour	`color` musi być kolorem

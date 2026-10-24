@@ -177,6 +177,10 @@
 	Anti-Alias	Kenar Yumuşatma
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
+	Anti-aliasing Method	Kenar Yumuşatma Yöntemi
+	Sharp	Keskin
+	Crisp	Net
+	Strong	Güçlü
 	Anti-aliasing:	Kenar yumuşatma:
 	Any Kind	Her Türlü
 	Font Technology	Yazı Tipi Teknolojisi
@@ -3679,6 +3683,7 @@ axis	Both	Her İkisi
 @msg	Targa files are RGB: colorModel rgb	Targa dosyaları RGB'dir: colorModel rgb
 @msg	Text Wrap: select a wrap object	Metin Sarma: bir sarma nesnesi seçin
 @msg	This shortcut file is in a form VectorCraft can't read.	Bu kısayol dosyası VectorCraft'ın okuyamayacağı bir biçimdedir.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` "none", "sharp", "crisp" veya "strong" olmalıdır
 @msg	`aspect` must be a number (%)	"boyut" bir sayı olmalıdır (%)
 @msg	`at` must be [x, y]	`at` [x, y] olmalıdır
 @msg	`color` must be a colour	"renk" bir renk olmalıdır

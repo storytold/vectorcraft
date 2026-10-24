@@ -193,6 +193,10 @@
 	Anti-Alias	Lissage
 	Anti-alias Rasters	Lisser les images pixellisées
 	Anti-aliased Artwork	Illustration lissée
+	Anti-aliasing Method	Méthode de lissage
+	Sharp	Net
+	Crisp	Précis
+	Strong	Fort
 	Anti-aliasing:	Lissage :
 	Any Kind	Tout type
 	Font Technology	Technologie de police
@@ -3869,6 +3873,7 @@ axis	Both	Les deux
 @msg	Targa files are RGB: colorModel rgb	Les fichiers Targa sont en RVB : colorModel rgb
 @msg	Text Wrap: select a wrap object	Habillage de texte : sélectionnez un objet d’habillage
 @msg	This shortcut file is in a form VectorCraft can't read.	Ce fichier de raccourcis est dans un format que VectorCraft ne sait pas lire.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` doit être "none", "sharp", "crisp" ou "strong"
 @msg	`aspect` must be a number (%)	`aspect` doit être un nombre (%)
 @msg	`at` must be [x, y]	`at` doit être [x, y]
 @msg	`color` must be a colour	`color` doit être une couleur

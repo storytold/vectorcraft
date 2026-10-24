@@ -1,11 +1,12 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
-//! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles.
+//! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
+//! Superscript, Subscript, Underline and Strikethrough toggles.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -494,9 +495,10 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
-/// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
-/// shown). The Properties panel shows its first rows.
+/// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
+/// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
+/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown). The Properties
+/// panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -549,7 +551,59 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             }
         });
         ui.end_row();
+        // Anti-aliasing Method, under Character Rotation.
+        ui.label("");
+        cell(ui, "aa", tl!("Anti-aliasing Method"), |ui| anti_alias_method(app, ui, fw));
+        ui.end_row();
     });
+}
+
+/// The Anti-aliasing Method dropdown, `width` wide: how the edges of the type objects the panel acts
+/// on are drawn as pixels ([`set_anti_alias`]), blank where their methods differ.
+fn anti_alias_method(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
+    // The labels of [`TypeAntiAlias::ALL`], in its order.
+    let labels = [tl!("None"), tl!("Sharp"), tl!("Crisp"), tl!("Strong")];
+    let current = shared_anti_alias(app);
+    let shown = TypeAntiAlias::ALL.iter().zip(labels).find(|(m, _)| Some(**m) == current).map_or("", |(_, l)| l);
+    if let Some(m) = widgets::dropdown_names(ui, "ch-anti-alias", shown, &labels, width).and_then(|i| TypeAntiAlias::ALL.get(i)) {
+        set_anti_alias(app, *m);
+    }
+}
+
+/// The anti-aliasing method of the type objects the panel acts on: the one the Type tool edits,
+/// else the selected type (groups' included). `None` where they differ, or with no type.
+fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
+    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    match text_editing(app) {
+        Some((id, _, _)) => {
+            if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+                acc.add(t.anti_alias);
+            }
+        }
+        None => {
+            for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+                n.walk(&mut |c| {
+                    if let NodeKind::Text(t) = &c.kind {
+                        acc.add(t.anti_alias);
+                    }
+                });
+            }
+        }
+    }
+    acc.value()
+}
+
+/// Set the anti-aliasing method `m` of the type objects the panel acts on, and of every frame of
+/// their threads (`text.setFormat {antiAlias}`): the one the Type tool edits, whatever part of its
+/// text is selected, else the selected type.
+fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
+    let mut p = json!({"antiAlias": m.id()});
+    if let Some((id, _, _)) = text_editing(app) {
+        end_typing(app);
+        p["ids"] = json!([id.0]);
+    }
+    app.run("text.setFormat", p).ok();
 }
 
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
@@ -907,13 +961,20 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
     first_selected_text(app).is_none_or(|t| t.fractional_widths)
 }
 
-/// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
+/// Reset Panel, in one undo step: the type objects the panel acts on take the Sharp anti-aliasing
+/// method, and the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
 /// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
-/// are on.
+/// are on. Inside an undo group that is already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
+    // Typing in progress stays an undo step of its own.
+    end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
     format(
@@ -925,6 +986,12 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "digits": d.digits
         }),
     );
+    set_anti_alias(app, TypeAntiAlias::Sharp);
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]
@@ -1268,6 +1335,93 @@ mod tests {
             assert_eq!(scripts(&app, &id), [runs], "{item}");
             assert_eq!(checked(&mut app), shown, "{item}");
         }
+    }
+
+    /// The Anti-aliasing Method dropdown under Character Rotation shows the method of the selected
+    /// type, blank where the selected objects differ, and a pick sets it for the whole object, also
+    /// while the Type tool has part of its text selected. Reset Panel sets Sharp.
+    #[test]
+    fn the_anti_aliasing_method_dropdown_shows_and_sets_the_types_method() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        let method = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.anti_alias,
+            _ => panic!("text"),
+        };
+        let ctx = egui::Context::default();
+        let texts = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], show);
+        let shown = |app: &mut VectorcraftApp| {
+            texts(app).into_iter().map(|(t, _)| t).filter(|t| ["None", "Sharp", "Crisp", "Strong"].contains(&t.as_str())).collect::<Vec<_>>()
+        };
+        assert_eq!(shown(&mut app), ["Sharp"]);
+        // Open the dropdown and pick Crisp.
+        let at = text_rect(&texts(&mut app), "Sharp").center();
+        click(&ctx, &mut app, at, show);
+        let listed = texts(&mut app);
+        let crisp = text_rect(&listed, "Crisp").center();
+        click(&ctx, &mut app, crisp, show);
+        assert_eq!(method(&app, a), TypeAntiAlias::Crisp);
+        assert_eq!(shown(&mut app), ["Crisp"]);
+        // Another object with Sharp selected as well: blank.
+        let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert!(shown(&mut app).is_empty(), "the methods differ");
+        // The Type tool with two letters selected: the whole object takes the method.
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 3}));
+        assert!(text_editing(&app).is_some());
+        set_anti_alias(&mut app, TypeAntiAlias::Strong);
+        assert_eq!(method(&app, a), TypeAntiAlias::Strong);
+        assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+        // Reset Panel sets Sharp, with the characters' attributes, in one undo step.
+        range_style(&mut app, json!({"tracking": 50}));
+        let tracking = |app: &VectorcraftApp| shared(app, |s| s.tracking);
+        assert_eq!(tracking(&app), Some(50.0));
+        reset_panel(&mut app);
+        assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Sharp, Some(0.0)));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Strong, Some(50.0)), "one undo step");
+    }
+
+    /// Reset Panel closes only the undo group it opens: in an undo group that is already open,
+    /// the reset is part of that group's step, and an undo group open in another document stays
+    /// open, with that document's later edits part of its step.
+    #[test]
+    fn reset_panel_closes_only_its_own_undo_group() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "A"})).unwrap()["id"].clone();
+        let steps = |st: &vectorcraft_engine::DocState| (st.history.undo.len(), st.history.undo.last().map(|e| e.label.clone()));
+        // An undo group open in the same document (MCP `command_batch` with `atomic`).
+        app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+        app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+        reset_panel(&mut app);
+        assert!(app.session.active().unwrap().undo_group.is_some(), "the batch's undo group stays open");
+        app.run("text.setFormat", json!({"id": a, "antiAlias": "strong"})).unwrap();
+        app.run("edit.undoGroup.end", json!({})).unwrap();
+        let a_steps = steps(app.session.active().unwrap());
+        assert_eq!(a_steps.1, Some("Batch".to_string()), "the reset is part of the Batch step");
+        // An undo group open in another document.
+        app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+        app.run("text.setFormat", json!({"id": a, "antiAlias": "none"})).unwrap();
+        let a_steps = steps(app.session.active().unwrap());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        assert_eq!(app.session.active_index(), Some(1));
+        let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        let b_steps = steps(app.session.active().unwrap()).0;
+        reset_panel(&mut app);
+        assert_eq!(steps(app.session.active().unwrap()), (b_steps + 1, Some("Reset Panel".to_string())));
+        assert!(app.session.active().unwrap().undo_group.is_none());
+        assert!(app.session.documents()[0].undo_group.is_some(), "the other document's undo group stays open");
+        app.session.set_active(0);
+        app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+        app.run("edit.undoGroup.end", json!({})).unwrap();
+        assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
     }
 
     /// Character panel menu › System Layout is off for a new document, and a click turns whole-point

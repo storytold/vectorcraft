@@ -163,10 +163,43 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             }
         }
         if live.len() >= 2 {
+            if let Some(a) = anti_alias(before, doc, &live) {
+                give_anti_alias(doc, &live, a);
+            }
             kept.push(live);
         }
     }
     doc.text_threads = kept;
+}
+
+/// The anti-aliasing method that every frame of a thread with the frames `live` takes: that of the
+/// first frame whose method changed between `before` and `doc`, else the first frame's.
+fn anti_alias(before: &Document, doc: &Document, live: &[NodeId]) -> Option<vectorcraft_doc::text::TypeAntiAlias> {
+    let now = |id: &NodeId| text_of(doc, *id).map(|t| t.anti_alias);
+    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(t.anti_alias) != now(id)));
+    changed.or(live.first()).and_then(now)
+}
+
+/// Give each of the frames `live` that has another anti-aliasing method the method `a`.
+fn give_anti_alias(doc: &mut Document, live: &[NodeId], a: vectorcraft_doc::text::TypeAntiAlias) {
+    for id in live {
+        if text_of(doc, *id).is_some_and(|t| t.anti_alias != a)
+            && let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
+        {
+            t.anti_alias = a;
+        }
+    }
+}
+
+/// Give every frame of each thread the first frame's anti-aliasing method, without re-flowing the
+/// story: for a document restored from a file as it was saved.
+pub(crate) fn share_anti_alias(doc: &mut Document) {
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        if let Some(a) = anti_alias(doc, doc, &live) {
+            give_anti_alias(doc, &live, a);
+        }
+    }
 }
 
 /// The Optical Margin Alignment setting that every frame of a thread with the frames `live` takes:
@@ -898,6 +931,55 @@ mod tests {
         s.execute("type.opticalMarginAlignment", &json!({"ids": [a], "on": true})).unwrap();
         let c = new_id(s.execute("text.thread.add", &json!({"from": a, "at": [400, 10]})).unwrap());
         assert_eq!([a, b, c].map(|id| optical(&s, id).0), [true; 3]);
+    }
+
+    /// The anti-aliasing method (`text.setFormat {antiAlias}`) belongs to the whole thread and is
+    /// saved only when not Sharp: set in one frame, with or without a range, it is set in every
+    /// frame in one undo step, a frame threaded on takes the thread's method, and a file whose
+    /// frames of one thread differ opens with the first frame's method in all of them.
+    #[test]
+    fn the_anti_aliasing_method_is_set_for_every_frame_of_a_thread() {
+        use vectorcraft_doc::text::TypeAntiAlias::{self, Crisp, None as Hard, Sharp, Strong};
+        let method = |s: &Session, id: u64| text_of(&s.doc().unwrap().doc, NodeId(id)).map(|t| t.anti_alias);
+        let saved =
+            |s: &Session, id: u64| serde_json::to_value(text_of(&s.doc().unwrap().doc, NodeId(id)).unwrap()).unwrap().get("antiAlias").cloned();
+        let (mut s, a, b) = quoted_thread();
+        assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Sharp)));
+        assert_eq!(saved(&s, a), None, "Sharp is not saved");
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        let err = s.execute("text.setFormat", &json!({"antiAlias": "smooth"})).unwrap_err().to_string();
+        assert!(err.contains("`antiAlias` must be"), "{err}");
+        s.execute("text.setFormat", &json!({"antiAlias": "crisp"})).unwrap();
+        assert_eq!((method(&s, a), method(&s, b)), (Some(Crisp), Some(Crisp)), "the first frame takes it too");
+        assert_eq!(saved(&s, a), Some(json!("crisp")));
+        // A range of characters sets the whole thread as well.
+        s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 1, "antiAlias": "none"})).unwrap();
+        assert_eq!((method(&s, a), method(&s, b)), (Some(Hard), Some(Hard)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((method(&s, a), method(&s, b)), (Some(Crisp), Some(Crisp)), "one undo step");
+        // A frame threaded on from the last one takes the thread's method.
+        s.execute("text.setFormat", &json!({"ids": [b], "antiAlias": "strong"})).unwrap();
+        let c = new_id(s.execute("text.thread.add", &json!({"from": b, "at": [400, 10]})).unwrap());
+        assert_eq!([a, b, c].map(|id| method(&s, id)), [Some(Strong); 3]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        let first: [TypeAntiAlias; 2] = [Crisp, Hard];
+        for (one, name) in [(first, "old.vectorcraft"), ([Hard, Crisp], "old.vectorcraft"), (first, "old.eps"), ([Hard, Crisp], "old.eps")] {
+            for (id, m) in [(a, one[0]), (b, one[1])] {
+                let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+                t.anti_alias = m;
+            }
+            let bytes = if name.ends_with(".eps") {
+                let r = s.execute("document.exportEps", &json!({})).unwrap();
+                vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+            } else {
+                vectorcraft_format::save(&s.doc().unwrap().doc, false)
+            };
+            let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+            assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+            assert_eq!(threads(&s), [[a, b]], "{name}");
+            assert_eq!((method(&s, a), method(&s, b)), (Some(one[0]), Some(one[0])), "{name}, first frame {:?}", one[0]);
+        }
     }
 
     /// A file saved with the frames of one thread set differently opens with the first frame's

@@ -2383,6 +2383,10 @@ lighting	Light	Cahaya
 	< 1 sec	< 1 detik
 	[Unnamed]	[Tanpa nama]
 	Amount:	Jumlah:
+	Anti-aliasing Method	Metode anti-aliasing
+	Sharp	Tajam
+	Crisp	Jelas
+	Strong	Kuat
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Artboard:
 	Color Table	Tabel warna

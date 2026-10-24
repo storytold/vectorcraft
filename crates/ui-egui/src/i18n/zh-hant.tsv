@@ -150,6 +150,10 @@
 	Anti-Alias	消除鋸齒
 	Anti-alias Rasters	點陣影像消除鋸齒
 	Anti-aliased Artwork	消除鋸齒的圖稿
+	Anti-aliasing Method	消除鋸齒方法
+	Sharp	銳利
+	Crisp	清晰
+	Strong	強
 	Anti-aliasing:	消除鋸齒：
 	Any Kind	所有類型
 	Font Technology	字體技術
@@ -1745,6 +1749,7 @@ file-filter	Templates	範本
 @msg	no point {i} (the gradient has {_1})	沒有點 {i} (此漸層有 {_1} 個)
 @msg	no segment {segment} on line {line}	線條 {line} 上沒有線段 {segment}
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形狀模式 `{m}` (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` 必須是 "none"、"sharp"、"crisp" 或 "strong"
 @msg	`aspect` must be a number (%)	`aspect` 必須是數字 (%)
 @msg	`gradient` must be an object	`gradient` 必須是物件
 @msg	`mode` applies to freeform gradients	`mode` 只適用於任意形狀漸層

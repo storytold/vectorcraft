@@ -46,6 +46,8 @@ pub(crate) const FREEFORM_BUDGET: usize = 32 << 20;
 /// Dithered gradient grids, per thread (`dither::set_dithered_paint`): a grid is at most 4096²
 /// pixels, 64 MiB.
 pub(crate) const DITHER_BUDGET: usize = 64 << 20;
+/// Type drawn with an anti-aliasing method other than Sharp, as pixels (`Renderer::draw_type_edges`).
+pub(crate) const TYPE_EDGE_BUDGET: usize = 128 << 20;
 
 /// Frames an entry may go unused before [`FrameCache::sweep`] drops it.
 const AGE: u64 = 3;

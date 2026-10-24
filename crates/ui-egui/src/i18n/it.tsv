@@ -192,6 +192,10 @@
 	Anti-Alias	Anti-aliasing
 	Anti-alias Rasters	Anti-aliasing per immagini raster
 	Anti-aliased Artwork	Grafica con anti-aliasing
+	Anti-aliasing Method	Metodo di anti-aliasing
+	Sharp	Nitido
+	Crisp	Definito
+	Strong	Forte
 	Anti-aliasing:	Anti-aliasing:
 	Any Kind	Qualsiasi tipo
 	Font Technology	Tecnologia font
@@ -3912,6 +3916,7 @@ axis	Both	Entrambi
 @msg	Targa files are RGB: colorModel rgb	I file Targa sono RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Testo attorno: seleziona un oggetto di avvolgimento
 @msg	This shortcut file is in a form VectorCraft can't read.	Questo file di scelte rapide è in un formato che VectorCraft non può leggere.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` deve essere "none", "sharp", "crisp" o "strong"
 @msg	`aspect` must be a number (%)	`aspect` deve essere un numero (%)
 @msg	`at` must be [x, y]	`at` deve essere [x, y]
 @msg	`color` must be a colour	`color` deve essere un colore

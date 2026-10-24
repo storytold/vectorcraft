@@ -322,6 +322,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
+        // Each frame also takes its thread's first frame's anti-aliasing method, as `reflow` gives it.
+        crate::cmd::threads::share_anti_alias(&mut doc);
         crate::cmd::threads::share_optical_margin(&mut doc);
     }
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
