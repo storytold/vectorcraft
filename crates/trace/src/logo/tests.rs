@@ -365,6 +365,24 @@ fn too_many_outlines_are_refused_not_silently_truncated() {
 }
 
 #[test]
+fn holes_that_are_not_cut_do_not_count_towards_the_outline_limit() {
+    // A blue field with 625 holes, each filled with red, white or green: more holes than the limit, fewer of each fill.
+    const GREEN: [u8; 3] = [40, 170, 60];
+    let img = render(125, 125, 0.0, |x, y| {
+        let (cx, cy) = (x.rem_euclid(5.0), y.rem_euclid(5.0));
+        if (1.0..4.0).contains(&cx) && (1.0..4.0).contains(&cy) {
+            Some([RED, [255, 255, 255], GREEN][((x / 5.0) as usize + (y / 5.0) as usize) % 3])
+        } else {
+            Some(BLUE)
+        }
+    });
+    let res = trace_within(&img, &logo_params(), 1_000_000).expect("trace");
+    assert!(res.paths.iter().any(|p| near(p.color, BLUE, 3)), "the blue field is traced");
+    // Under Ignore White the holes are cut, so they count.
+    assert!(matches!(trace_within(&img, &TraceParams { ignore_white: true, ..logo_params() }, 1_000_000), Err(TraceError::TooComplex { .. })));
+}
+
+#[test]
 fn a_large_odd_sized_image_never_overshoots_its_edges() {
     // 1025 wide: the last working pixel is narrower than the others.
     let img = Raster::from_fn(1025, 20, |x, y| if x >= 600 && (2..18).contains(&y) { [RED[0], RED[1], RED[2], 255] } else { [0, 0, 0, 0] });
