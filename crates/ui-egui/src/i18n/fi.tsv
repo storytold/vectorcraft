@@ -4387,6 +4387,7 @@ imageTrace	Outline	Ääriviiva
 @msg	object {0} cannot have children	objektilla {0} ei voi olla alikohteita
 @msg	object {id} is not a path	objekti {id} ei ole polku
 @msg	object {id} is not a selected top-level object	objekti {id} ei ole valittu ylimmän tason objekti
+@msg	template layers and their objects can't be isolated	mallitasoja ja niiden objekteja ei voi eristää
 @msg	page size {w} × {h}	sivun koko {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	sivua {0} ei ole olemassa (PDF-tiedostossa on {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: sivua {n} ei ole olemassa (tiedostossa on 1)

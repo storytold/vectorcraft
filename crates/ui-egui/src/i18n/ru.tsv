@@ -4208,6 +4208,7 @@ axis	Both	Оба
 @msg	object {0} cannot have children	объект {0} не может иметь потомков
 @msg	object {id} is not a path	объект {id} не является контуром
 @msg	object {id} is not a selected top-level object	объект {id} не является выделенным объектом верхнего уровня
+@msg	template layers and their objects can't be isolated	слои шаблона и их объекты нельзя изолировать
 @msg	page size {w} × {h}	размер страницы {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	страница {0} не существует (в PDF {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: страница {n} не существует (в файле 1)

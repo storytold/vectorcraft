@@ -3978,6 +3978,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
 @msg	object {id} is not a selected top-level object	オブジェクト {id} は選択されている最上位のオブジェクトではありません
+@msg	template layers and their objects can't be isolated	テンプレートレイヤーとそのオブジェクトは分離できません
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	no history to clear	消去するヒストリーがありません

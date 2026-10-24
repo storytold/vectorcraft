@@ -4151,6 +4151,7 @@ theme	Appearance	Εμφάνιση
 @msg	object {0} cannot have children	το αντικείμενο {0} δεν μπορεί να έχει θυγατρικά στοιχεία
 @msg	object {id} is not a path	το αντικείμενο {id} δεν είναι διαδρομή
 @msg	object {id} is not a selected top-level object	το αντικείμενο {id} δεν είναι επιλεγμένο αντικείμενο ανώτατης βαθμίδας
+@msg	template layers and their objects can't be isolated	τα επίπεδα προτύπου και τα αντικείμενά τους δεν μπορούν να απομονωθούν
 @msg	page size {w} × {h}	μέγεθος σελίδας {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	η σελίδα {0} δεν υπάρχει (το PDF έχει {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: η σελίδα {n} δεν υπάρχει (το αρχείο έχει 1)

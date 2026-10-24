@@ -3910,6 +3910,7 @@ theme	Appearance	외관
 @msg	no such subpath	해당 하위 패스가 없습니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
 @msg	object {id} is not a selected top-level object	개체 {id}은(는) 선택된 최상위 개체가 아닙니다
+@msg	template layers and their objects can't be isolated	템플릿 레이어와 그 개체는 격리할 수 없습니다
 @msg	nothing to redo	다시 실행할 항목이 없습니다
 @msg	nothing to undo	실행 취소할 항목이 없습니다
 @msg	no history to clear	지울 히스토리가 없습니다

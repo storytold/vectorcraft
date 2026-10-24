@@ -233,7 +233,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enter Isolation Mode",
             [],
             None,
-            "{id?} isolate a group, a layer or a single object (default: the first selected object); type, a hidden or locked object, an object in a hidden or locked group or layer, and a guide path while Lock Guides is on are refused",
+            "{id?} isolate a group, a layer or a single object (default: the first selected object); type, a hidden or locked object, an object in a hidden or locked group or layer, a template layer, an object on a template layer, and a guide path while Lock Guides is on are refused",
             has_doc,
             isolate
         ),
@@ -1115,6 +1115,10 @@ fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let guides_locked = s.menu.guides_locked;
     let st = s.doc_mut()?;
+    // A template layer and the objects on one aren't isolated.
+    if st.doc.ancestry(id).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(Node::is_template))) {
+        return Err(bad("object.isolate", "template layers and their objects can't be isolated"));
+    }
     // Groups, layers and single objects (a path, a compound path, an image…); type isn't
     // isolated: a double-click on it edits its text.
     if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {

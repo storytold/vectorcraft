@@ -4012,6 +4012,7 @@ font-technology	Variable	ცვლადი
 @msg	stop {i} needs `offset`	გადასვლის წერტილს {i} სჭირდება `offset`
 @msg	stop {i} needs a valid `color`	გადასვლის წერტილს {i} სჭირდება სწორი `color`
 @msg	stop {i}: `{k}` must be a number	გადასვლის წერტილი {i}: `{k}` რიცხვი უნდა იყოს
+@msg	template layers and their objects can't be isolated	შაბლონის შრეების და მათი ობიექტების იზოლირება შეუძლებელია
 @msg	the EMF header is damaged	EMF-ის სათაური დაზიანებულია
 @msg	the PDF has no pages	PDF-ს გვერდები არ აქვს
 @msg	the PDF is no longer loaded	PDF აღარ არის ჩატვირთული

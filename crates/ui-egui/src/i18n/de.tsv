@@ -4097,6 +4097,7 @@ theme	Appearance	Erscheinungsbild
 @msg	object {0} cannot have children	Objekt {0} kann keine untergeordneten Objekte haben
 @msg	object {id} is not a path	Objekt {id} ist kein Pfad
 @msg	object {id} is not a selected top-level object	Objekt {id} ist kein ausgewähltes Objekt der obersten Stufe
+@msg	template layers and their objects can't be isolated	Vorlagenebenen und ihre Objekte können nicht isoliert werden
 @msg	page size {w} × {h}	Seitengröße {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	Seite {0} ist nicht vorhanden (die PDF-Datei hat {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: Seite {n} ist nicht vorhanden (die Datei hat 1)

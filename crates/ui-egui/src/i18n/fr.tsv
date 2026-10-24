@@ -4169,6 +4169,7 @@ axis	Both	Les deux
 @msg	object {0} cannot have children	l’objet {0} ne peut pas avoir d’enfants
 @msg	object {id} is not a path	l’objet {id} n’est pas un tracé
 @msg	object {id} is not a selected top-level object	l’objet {id} n’est pas un objet sélectionné de premier niveau
+@msg	template layers and their objects can't be isolated	les calques modèles et leurs objets ne peuvent pas être isolés
 @msg	page size {w} × {h}	format de page {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	la page {0} n’existe pas (le PDF en a {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail : la page {n} n’existe pas (le fichier en a 1)

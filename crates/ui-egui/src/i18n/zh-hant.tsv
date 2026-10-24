@@ -1698,6 +1698,7 @@ file-filter	Templates	範本
 @msg	no such subpath	沒有這個子路徑
 @msg	object {id} is not a path	物件 {id} 不是路徑
 @msg	object {id} is not a selected top-level object	物件 {id} 不是已選取的最上層物件
+@msg	template layers and their objects can't be isolated	無法隔離範本圖層及其物件
 @msg	nothing to redo	沒有可重做的動作
 @msg	nothing to undo	沒有可復原的動作
 @msg	no history to clear	沒有可清除的步驟記錄

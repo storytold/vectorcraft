@@ -4298,6 +4298,7 @@ imageTrace	Outline	Kontur
 @msg	object {0} cannot have children	obiekt {0} nie może mieć elementów podrzędnych
 @msg	object {id} is not a path	obiekt {id} nie jest ścieżką
 @msg	object {id} is not a selected top-level object	obiekt {id} nie jest zaznaczonym obiektem najwyższego poziomu
+@msg	template layers and their objects can't be isolated	warstw szablonu i ich obiektów nie można izolować
 @msg	page size {w} × {h}	rozmiar strony {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	strona {0} nie istnieje (PDF ma {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: strona {n} nie istnieje (plik ma 1)

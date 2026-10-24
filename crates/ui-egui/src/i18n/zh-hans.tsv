@@ -3715,6 +3715,7 @@ imageTrace	Outline	轮廓
 @msg	no such subpath	没有此子路径
 @msg	object {id} is not a path	对象 {id} 不是路径
 @msg	object {id} is not a selected top-level object	对象 {id} 不是选中的顶层对象
+@msg	template layers and their objects can't be isolated	无法隔离模板图层及其对象
 @msg	nothing to redo	没有可重做的操作
 @msg	nothing to undo	没有可撤销的操作
 @msg	no history to clear	没有可清除的历史记录

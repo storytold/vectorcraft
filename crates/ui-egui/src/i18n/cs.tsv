@@ -4474,6 +4474,7 @@ imageTrace	Outline	Obrys
 @msg	object {0} cannot have children	objekt {0} nemůže mít potomky
 @msg	object {id} is not a path	objekt {id} není cesta
 @msg	object {id} is not a selected top-level object	objekt {id} není vybraný objekt nejvyšší úrovně
+@msg	template layers and their objects can't be isolated	vrstvy šablony a jejich objekty nelze izolovat
 @msg	page size {w} × {h}	velikost stránky {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	stránka {0} neexistuje (PDF jich má {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: stránka {n} neexistuje (soubor má 1)

@@ -4640,6 +4640,7 @@ axis	Both	Ambos
 @msg	give horizontal or vertical	informe horizontal ou vertical
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	não é um conjunto de atalhos: o texto não começa com um nome com barra e uma chave de abertura
 @msg	object {id} is not a selected top-level object	o objeto {id} não é um objeto selecionado de nível superior
+@msg	template layers and their objects can't be isolated	camadas de modelo e seus objetos não podem ser isolados
 @msg	{path}: not a file	{path}: não é um arquivo
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	as imagens vinculadas mostram a visualização de baixa resolução salva no arquivo até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria

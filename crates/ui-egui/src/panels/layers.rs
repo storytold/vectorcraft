@@ -1579,6 +1579,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         [id] => doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })),
         _ => false,
     };
+    // Enter Isolation Mode is off for a hidden or locked layer or group, a template layer, and a
+    // layer or group inside one of these.
+    let isolable = one_container
+        && targets.first().is_some_and(|id| {
+            doc.is_editable(*id) && !doc.ancestry(*id).is_some_and(|a| a.iter().any(|i| doc.node(*i).is_some_and(Node::is_template)))
+        });
     let layers_in: Vec<&Node> = targets.iter().filter_map(|id| doc.node(*id)).filter(|n| n.is_layer()).collect();
     let template = layers_in.first().is_some_and(|l| l.is_template());
     // The top-level layers holding the rows, and the others.
@@ -1604,7 +1610,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(("Exit Isolation Mode", "object.exitIsolation", json!({}), true, false))
     } else {
         let id = targets.first().map(|i| i.0);
-        Some(("Enter Isolation Mode", "object.isolate", json!({ "id": id }), one_container, false))
+        Some(("Enter Isolation Mode", "object.isolate", json!({ "id": id }), isolable, false))
     });
     items.extend([
         None,
@@ -2809,6 +2815,66 @@ mod tests {
         ] {
             assert!(texts.iter().any(|(t, _)| t.trim() == label), "{label} missing from {texts:?}");
         }
+    }
+
+    /// ≡ › Enter Isolation Mode is off for a locked, hidden or template layer, a locked or hidden
+    /// group, and a group in a locked or template sublayer: clicking it runs no command and
+    /// isolation mode stays off. For a group that is none of these it isolates the group.
+    #[test]
+    fn enter_isolation_mode_is_off_for_hidden_locked_and_template_rows() {
+        // Each case locks, hides or makes a template of a row of `nested`, and returns the row to
+        // highlight.
+        type Case = (&'static str, fn(&mut VectorcraftApp, [NodeId; 6]) -> NodeId);
+        let cases: [Case; 7] = [
+            ("locked layer", |app, [layer, ..]| props(app, "layer.setProps", layer, json!({"locked": true}))),
+            ("hidden layer", |app, [layer, ..]| props(app, "layer.setProps", layer, json!({"visible": false}))),
+            ("template layer", |app, [layer, ..]| props(app, "layer.setProps", layer, json!({"template": true, "locked": false}))),
+            ("locked group", |app, [_, _, g, ..]| props(app, "object.setProps", g, json!({"locked": true}))),
+            ("hidden group", |app, [_, _, g, ..]| props(app, "object.setProps", g, json!({"visible": false}))),
+            ("group in a locked sublayer", |app, [_, sub, g, ..]| {
+                props(app, "layer.setProps", sub, json!({"locked": true}));
+                g
+            }),
+            ("group in a template sublayer", |app, [_, sub, g, ..]| {
+                props(app, "layer.setProps", sub, json!({"template": true, "locked": false}));
+                g
+            }),
+        ];
+        let mut wrong = vec![];
+        for (name, make) in cases {
+            let (mut app, ids) = nested();
+            let target = make(&mut app, ids);
+            let (commands, isolation) = choose_enter_isolation_mode(&mut app, target);
+            if (commands, isolation) != (0, None) {
+                wrong.push((name, commands, isolation));
+            }
+        }
+        assert!(wrong.is_empty(), "{wrong:#?}");
+        let (mut app, [_, _, g, ..]) = nested();
+        assert_eq!(choose_enter_isolation_mode(&mut app, g), (1, Some(g)), "a plain group is isolated");
+    }
+
+    /// Sets `p` on `id` with `cmd` and gives back `id`.
+    fn props(app: &mut VectorcraftApp, cmd: &str, id: NodeId, mut p: serde_json::Value) -> NodeId {
+        p["ids"] = json!([id.0]);
+        app.session.execute(cmd, &p).unwrap();
+        id
+    }
+
+    /// Highlights `row` alone and clicks ≡ › Enter Isolation Mode. Returns how many commands the
+    /// click ran and the isolated object after it.
+    fn choose_enter_isolation_mode(app: &mut VectorcraftApp, row: NodeId) -> (u64, Option<NodeId>) {
+        app.session.execute("layer.highlight", &json!({"ids": [row.0]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| super::super::tests_appearance::frame_events(&ctx, app, events, menu);
+        let texts = frame(app, vec![]);
+        let item = texts.iter().find(|(t, _)| t.trim() == "Enter Isolation Mode").map(|(_, r)| r.center()).expect("Enter Isolation Mode");
+        let commands = app.run_count;
+        for e in [egui::Event::PointerMoved(item), button(item, true), button(item, false)] {
+            frame(app, vec![e]);
+        }
+        (app.run_count.wrapping_sub(commands), app.session.active().unwrap().isolation)
     }
 
     /// ≡ › Save Selection lists the saved selections: choosing one recalls it, Update Selection

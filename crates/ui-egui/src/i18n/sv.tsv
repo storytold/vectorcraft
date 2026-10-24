@@ -4087,6 +4087,7 @@ axis	Both	Båda
 @msg	object {0} cannot have children	objekt {0} kan inte ha underordnade objekt
 @msg	object {id} is not a path	objekt {id} är inte en bana
 @msg	object {id} is not a selected top-level object	objekt {id} är inte ett markerat objekt på toppnivå
+@msg	template layers and their objects can't be isolated	malllager och deras objekt kan inte isoleras
 @msg	page size {w} × {h}	sidstorlek {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	sidan {0} finns inte (PDF-filen har {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: sidan {n} finns inte (filen har 1)
