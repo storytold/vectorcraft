@@ -9,6 +9,11 @@ use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind
 
 use crate::{EngineError, Prefs, Result, Session};
 
+/// The tool whose radius is General › Corner Radius.
+const ROUNDED_RECTANGLE: &str = "roundedRectangle";
+/// The largest Corner Radius the preference takes, points (its `prefs.list` spec).
+const MAX_CORNER_RADIUS: f64 = 1296.0;
+
 /// View state the tools need from the frontend.
 #[derive(Clone, Copy, Debug)]
 pub struct ViewInfo {
@@ -186,6 +191,10 @@ impl Session {
     pub(crate) fn make_tool(&self, id: &str) -> Box<dyn Tool> {
         let mut t = vectorcraft_tools::create(id);
         Self::restore_tool_settings(&self.prefs, t.as_mut());
+        // General › Corner Radius is the Rounded Rectangle tool's radius (#394).
+        if id == ROUNDED_RECTANGLE {
+            t.set_option("cornerRadius", &Value::from(self.prefs.corner_radius));
+        }
         t
     }
 
@@ -204,6 +213,14 @@ impl Session {
     /// Store the persistent options of `t` in `prefs` (so they are saved with them too).
     fn store_tool_settings(prefs: &mut Prefs, t: &dyn Tool) {
         let opts = t.options();
+        // The radius ↑ and ↓ set while drawing a rounded rectangle (or `tool.setOption`) is the
+        // Corner Radius preference from then on, as in the reference app
+        // (<https://helpx.adobe.com/illustrator/using/drawing-simple-lines-shapes.html>).
+        if t.id() == ROUNDED_RECTANGLE
+            && let Some(r) = opts.get("cornerRadius").and_then(Value::as_f64).filter(|r| r.is_finite())
+        {
+            prefs.corner_radius = r.clamp(0.0, MAX_CORNER_RADIUS);
+        }
         for (store, keys) in settings::stores(t.id()) {
             let saved = prefs.tool_settings.entry(store.to_string()).or_default();
             for k in keys {

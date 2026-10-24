@@ -540,7 +540,18 @@ impl Session {
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
+        let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
         self.prefs = p;
+        if corner_radius_changed {
+            // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
+            // made (active, or lent a selection tool for a drag) takes the new value.
+            let r = serde_json::Value::from(self.prefs.corner_radius);
+            for t in std::iter::once(&mut self.tool).chain(self.lender.as_mut()) {
+                if t.id() == "roundedRectangle" {
+                    t.set_option("cornerRadius", &r);
+                }
+            }
+        }
         if fonts_folder_changed {
             let folder = self.prefs.fonts_folder.trim();
             // A folder an automation caller chose is read without following its links out of it.
