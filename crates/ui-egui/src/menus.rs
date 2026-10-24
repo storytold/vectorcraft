@@ -955,6 +955,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.exportCdr",
+        "Export As CDR…",
+        "",
+        "{path?, version?, textToOutlines?, validate?, rasterizeEffects?} ask where to write a CorelDRAW file, then CorelDRAW Export Options (dialog `cdrOptions`); OK writes and validates it",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
@@ -1342,6 +1348,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "file.recentFiles" => Ok(json!(io::recent_files(app))),
         "file.place" => crate::place::run(app, p),
+        "file.exportCdr" => crate::dialogs::cdr_options::export_command(app, p),
         "file.place.queue" => crate::place::queue(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
@@ -2565,6 +2572,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
+        "file.exportCdr" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
@@ -2654,6 +2662,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Export As…", "file.exportAs"),
                         c("Export As SVG…", "file.export.svg"),
                         c("Export As PNG…", "file.export.png"),
+                        c("Export As CDR…", "file.exportCdr"),
                         c("Save for Web (Legacy)…", "file.saveForWeb"),
                     ],
                 ),

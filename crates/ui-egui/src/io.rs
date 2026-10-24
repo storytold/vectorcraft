@@ -63,6 +63,7 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
     // DXF drawing (DXF Import Options).
     if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
         || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
+        || crate::dialogs::cdr_import::offer(app, name, bytes, path.clone(), None)
     {
         return Ok(Value::Null);
     }
@@ -309,6 +310,7 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
         // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.
         if crate::dialogs::import_pdf::offer(app, path, &bytes, Some(path.to_string()), None)
             || crate::dialogs::dxf_import::offer(app, path, &bytes, Some(path.to_string()), None)
+            || crate::dialogs::cdr_import::offer(app, path, &bytes, Some(path.to_string()), None)
         {
             note_recent(app, path);
             return Ok(Value::Null);

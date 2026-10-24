@@ -123,3 +123,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+CorelDRAW (.cdr) reader and writer
+
+The tracedraw-cdr and tracedraw-core crates are fetched from
+https://github.com/igtoth/tracedraw at revision
+4fe0109e3fca04b697c8c55b09f4587e8c316ce7. Copyright (c) 2026 Ighor Toth and
+the TraceDraw contributors, licensed MIT OR Apache-2.0. They are a clean-room
+reader and writer of the CDR format (see their CLEANROOM.md); VectorCraft uses
+them through crates/cdr (vectorcraft-cdr) and copies none of their code.
+CorelDRAW is a trademark of its owner; no affiliation is implied.

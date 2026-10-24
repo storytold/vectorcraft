@@ -4163,6 +4163,47 @@ axis	Both	Ambos
 	Delete Light	Excluir luz
 3d	Light	Luz
 
+# CorelDRAW (.cdr) import and export.
+	Export As CDR…	Exportar Como CDR…
+	Import CorelDRAW	Importar CorelDRAW
+	CorelDRAW Import Options	Opções de Importação do CorelDRAW
+	CorelDRAW document read	Documento CorelDRAW lido
+	format version	versão do formato
+	page(s)	página(s)
+	object(s)	objeto(s)
+	This file can't be read:	Este arquivo não pode ser lido:
+	Scale and Structure	Escala e Estrutura
+	Preserve Original Document Scale	Preservar a Escala Original do Documento
+	The first page is scaled to fit the first artboard.	A primeira página é ajustada à primeira prancheta.
+	Preserve Layers and Groups	Preservar Camadas e Grupos
+	Keep Text Editable When Possible	Preservar Texto Editável Quando Possível
+	Convert Text to Outlines	Converter Texto em Contornos
+	Warn About Missing Fonts	Avisar sobre Fontes Ausentes
+	Compatibility	Compatibilidade
+	Report Unsupported Effects	Relatar Efeitos Não Suportados
+	Editable vectors are never turned into images. What can't be kept is listed in the import notes.	Vetores editáveis nunca viram imagens. O que não puder ser mantido é listado nos avisos da importação.
+	CorelDRAW Export Options	Opções de Exportação do CorelDRAW
+	verified	verificada
+	experimental	experimental
+	Target Version:	Versão de Destino:
+	Files of this version were verified to open in CorelDRAW. Older CorelDRAW releases can't open newer versions: pick the oldest one you need.	Arquivos desta versão foram verificados abrindo no CorelDRAW. Versões antigas do CorelDRAW não abrem versões mais novas: escolha a mais antiga de que você precisa.
+	Experimental: written with the layout of that version's sample files, but not verified to open in CorelDRAW.	Experimental: gravada com o layout dos arquivos de amostra dessa versão, mas sem verificação de abertura no CorelDRAW.
+	Keep Text Editable	Preservar Texto Editável
+	Area type, vertical type and type on a path are always written as outlines.	Texto de área, texto vertical e texto em caminho são sempre gravados como contornos.
+	Preserve Vector Paths	Preservar Caminhos Vetoriais
+	Rasterize Raster Effects (Shadows, Glows, Blurs)	Rasterizar Efeitos de Raster (Sombras, Brilhos, Desfoques)
+	Validate After Export	Validar Após Exportar
+	Without validation the written file isn't checked.	Sem validação, o arquivo gravado não é conferido.
+	Exporting to CorelDRAW…	Exportando para CorelDRAW…
+	CorelDRAW file exported and validated	Arquivo CorelDRAW exportado e validado
+	CorelDRAW file exported (not validated)	Arquivo CorelDRAW exportado (sem validação)
+	CorelDRAW Compatibility	Compatibilidade com CorelDRAW
+	CorelDRAW File Info	Informações do Arquivo CorelDRAW
+@msg	CDR version {_1}: choose from {_2} to {_3}	versão CDR {_1}: escolha de {_2} a {_3}
+@msg	cdr must be an object of CorelDRAW import options	cdr deve ser um objeto com opções de importação do CorelDRAW
+@msg	cdr scale must be a positive number up to 1000, not {s}	a escala de cdr deve ser um número positivo de até 1000, não {s}
+@msg	cdr: {e}	cdr: {e}
+
 # Completeness follow-up (#1914): remaining UI strings and messages.
 	Glowing Edges	Bordas Brilhantes
 	Edge Width	Largura da Borda

@@ -47,6 +47,11 @@ pub fn available() -> bool {
 /// own ([`fileio::read_for_open`]) → `{background: true, status}`, or the bytes back when no thread
 /// could start (the caller opens the file at once).
 pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Value, Vec<u8>> {
+    start_with(app, path, bytes, Value::Null)
+}
+
+/// [`start`] with the `document.open` params `params` (the `cdr` options, for one).
+pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: Value) -> Result<Value, Vec<u8>> {
     let (tx, done) = channel();
     let bytes = Arc::new(bytes);
     let (name, file) = (path.to_string(), bytes.clone());
@@ -59,7 +64,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
         let r = scope
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
-                    fileio::read_for_open(&name, &file, Some(name.clone()), &Value::Null, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                    fileio::read_for_open(&name, &file, Some(name.clone()), &params, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
                 })
             })
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));

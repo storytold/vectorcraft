@@ -544,6 +544,12 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The CorelDRAW Export Options chosen last (null: never used).
+    #[serde(default)]
+    pub cdr_options: Value,
+    /// The CorelDRAW Import Options chosen last (null: never used).
+    #[serde(default)]
+    pub cdr_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid
     /// and the document count when it opened. Choosing a tab, or a document opening, closing or
     /// becoming active, leaves it.
@@ -905,6 +911,8 @@ impl Default for UiState {
             simplify: Value::Null,
             move_options: Value::Null,
             dxf_import: Value::Null,
+            cdr_options: Value::Null,
+            cdr_import: Value::Null,
             home: None,
             trace_hold_source: None,
             layers_panel: Default::default(),

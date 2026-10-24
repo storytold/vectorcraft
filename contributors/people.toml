@@ -136,6 +136,9 @@ sync_github_name = true
 
 [people.MiQ71]
 real_name = "Mirko Kerezovic"
+
+[people.fabianobreis-arch]
+display_name = "FabianoBReis"
 sync_github_name = false
 
 [people.KaboomFox]
