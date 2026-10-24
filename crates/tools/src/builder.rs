@@ -23,7 +23,7 @@ use vectorcraft_pathops as po;
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
-/// Names starting with this mark a Live Paint group.
+/// Names starting with this mark a Live Paint group, together with its sources group ([`SOURCES_NAME`]).
 pub const LIVE_PAINT_PREFIX: &str = "Live Paint";
 /// Default name of a new Live Paint group.
 pub const LIVE_PAINT_NAME: &str = "Live Paint Group";
@@ -36,9 +36,12 @@ pub const EDGE_NAME: &str = "Edge";
 pub const HATCH: [u8; 3] = [0x80, 0x80, 0x80];
 pub const HIGHLIGHT_RED: [u8; 3] = [0xff, 0x2a, 0x2a];
 
-/// Is `n` a Live Paint group?
+/// Is `n` a Live Paint group: an unclipped group whose name starts with [`LIVE_PAINT_PREFIX`] and
+/// that holds a group named [`SOURCES_NAME`]? A plain group with such a name is not one.
 pub fn is_live_paint(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.name.as_deref().is_some_and(|s| s.starts_with(LIVE_PAINT_PREFIX))
+    matches!(n.kind, NodeKind::Group { clip: false, .. })
+        && n.name.as_deref().is_some_and(|s| s.starts_with(LIVE_PAINT_PREFIX))
+        && sources(n).is_some_and(|s| matches!(s.kind, NodeKind::Group { .. }))
 }
 
 /// Whether Live Paint can take `n` as it is: a Live Paint group, a path or compound path, or a
@@ -2099,6 +2102,14 @@ mod tests {
         assert!(h.elements().len() > 10);
     }
 
+    /// An empty hidden sources group for a Live Paint group made in a test.
+    fn empty_sources(d: &mut Document) -> Arc<Node> {
+        let mut g = Node::group(d.alloc_id(), vec![]);
+        g.name = Some(SOURCES_NAME.into());
+        g.visible = false;
+        Arc::new(g)
+    }
+
     fn live_group_doc() -> (Document, NodeId, NodeId, NodeId) {
         let mut d = Document::new(500.0, 500.0);
         let l = d.layers[0].id;
@@ -2112,7 +2123,7 @@ mod tests {
         let mut edge = Node::path(e, shapes::line(Point::new(50.0, 0.0), Point::new(50.0, 50.0)), Appearance::default());
         edge.name = Some(EDGE_NAME.into());
         let gid = d.alloc_id();
-        let mut g = Node::group(gid, vec![Arc::new(face1), Arc::new(face2), Arc::new(edge)]);
+        let mut g = Node::group(gid, vec![empty_sources(&mut d), Arc::new(face1), Arc::new(face2), Arc::new(edge)]);
         g.name = Some(LIVE_PAINT_NAME.into());
         d.insert(Some(l), 0, g).unwrap();
         (d, gid, f2, e)
@@ -2125,7 +2136,7 @@ mod tests {
         let mut face = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default());
         face.name = Some(FACE_NAME.into());
         let (a, b, c, e) = (Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1));
-        let mut kids = vec![Arc::new(face)];
+        let mut kids = vec![empty_sources(d), Arc::new(face)];
         let mut ids = [NodeId(0); 4];
         for (k, (from, to)) in [(e, a), (a, b), (b, c), (c, e)].into_iter().enumerate() {
             ids[k] = d.alloc_id();
