@@ -3,7 +3,8 @@
 //!
 //! Assign tab: Colors (Auto, or a count: similar colours merge into rows), Preserve White, Black and
 //! Grays, the rows (click to select, Shift or Cmd/Ctrl-click to add; a row's arrow excludes or
-//! includes it; the hex field edits its new colour), Merge and Separate, Randomize order or
+//! includes it; the hex field edits its new colour, and a double-click on it opens the Color Picker,
+//! whose OK sets it in the model it was picked in), Merge and Separate, Randomize order or
 //! saturation and brightness, Reset, the Method and Limit to Library (its folder button imports a
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
 //! spot colour, and joins the document's swatches). Edit tab: a hue and
@@ -57,6 +58,8 @@ const WHEEL: f32 = 220.0;
 const TABLE_H: f32 = 220.0;
 const TAB_H: f32 = 400.0;
 const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job", "Color Library"];
+/// The id of row `i`'s new colour chip, with `i`.
+const NEW_CHIP: &str = "recolor-new";
 
 /// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
 /// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
@@ -228,7 +231,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     ui.add_space(4.0);
     let mut rs = rows(d);
     let top = ui.cursor().top();
-    let changed = if d.str("tab") == "edit" { edit_tab(ui, d, &mut rs) } else { assign_tab(app, ui, d, &mut rs) };
+    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
     if d.str("tab") != "edit" {
         ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
     }
@@ -247,7 +250,21 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     if d.bool("__art") {
         form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d));
     }
+    if let Some(c) = pick.and_then(|i| Some((i, to_color(rows(d).get(i)?)?))) {
+        *d = super::color_picker::over_recolor(d, c.1, c.0);
+    }
     false
+}
+
+/// `d` with row `i`'s new colour set to `c` (the Color Picker's OK), snapped to Limit to Library.
+pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: Color) -> Dialog {
+    let mut rs = rows(&d);
+    if let Some(r) = rs.get_mut(i) {
+        r["to"] = key(&c);
+        snap(app, &d, &mut rs);
+        d.fields.insert("rows".into(), Value::Array(rs));
+    }
+    d
 }
 
 /// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only; or
@@ -292,8 +309,9 @@ fn chip(ui: &Ui, r: Rect, c: Color, dim: bool) {
     ui.painter().rect_stroke(r, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
 }
 
-/// The Assign tab. Returns true when the rows changed.
-fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> bool {
+/// The Assign tab. Returns true when the rows changed, and the row whose new colour was
+/// double-clicked.
+fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<usize>) {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let total: usize = rows.iter().map(|r| r["from"].as_array().map_or(0, Vec::len)).sum();
@@ -331,6 +349,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     });
     let mut sel = selection(d);
     let mut clicked: Option<usize> = None;
+    let mut pick: Option<usize> = None;
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("recolor-rows").max_height(TABLE_H).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -360,11 +379,15 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         row["exclude"] = json!(!off);
                         changed = true;
                     }
-                    let (nr, nresp) = ui.allocate_exact_size(vec2(46.0, 20.0), Sense::click());
+                    let (nr, _) = ui.allocate_exact_size(vec2(46.0, 20.0), Sense::hover());
+                    let nresp = ui.interact(nr, egui::Id::new((NEW_CHIP, i)), Sense::click());
                     let to = to_color(row).unwrap_or_default();
                     chip(ui, nr, to, off);
                     if nresp.clicked() {
                         clicked = Some(i);
+                    }
+                    if nresp.double_clicked() {
+                        pick = Some(i);
                     }
                     ui.add_space(6.0);
                     let hex = crate::panels::color::hex_digits(&to);
@@ -468,7 +491,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         });
         ui.end_row();
     });
-    changed
+    (changed, pick)
 }
 
 /// The arrow between a row's current and new colours: solid when the row is recoloured, a dashed
@@ -686,6 +709,119 @@ mod tests {
         let mut r = rows();
         apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
         assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"]], ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+    }
+
+    /// Runs one frame of the open dialog at `time` and returns row `i`'s new color chip, when the
+    /// Recolor Artwork dialog drew it.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>, i: usize) -> Option<Rect> {
+        let input = egui::RawInput { time: Some(time), events, ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        ctx.read_response(egui::Id::new((NEW_CHIP, i))).map(|r| r.rect)
+    }
+
+    /// Runs frames from `time` until the dialog stops moving (it centres itself as it measures its
+    /// size) and returns row `i`'s new color chip.
+    fn settled(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, i: usize) -> Option<Rect> {
+        let mut last = None;
+        for n in 0..10 {
+            let r = frame(app, ctx, time + f64::from(n) * 0.001, vec![], i);
+            if r.is_some() && r == last {
+                return r;
+            }
+            last = r;
+        }
+        last
+    }
+
+    /// Double-clicks row `i`'s new color chip, as drawn by the last frame at `rect`.
+    fn double_click(app: &mut VectorcraftApp, ctx: &egui::Context, rect: Rect, time: f64, i: usize) {
+        let pos = rect.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(app, ctx, time, vec![egui::Event::PointerMoved(pos), button(true)], i);
+        frame(app, ctx, time + 0.05, vec![button(false)], i);
+        frame(app, ctx, time + 0.1, vec![button(true)], i);
+        frame(app, ctx, time + 0.15, vec![button(false)], i);
+    }
+
+    /// Double-clicking a row's new color opens the Color Picker on that new color, over the dialog.
+    /// OK sets that row's new color, and only that row's, in the model it was picked in (a CMYK mix
+    /// stays that mix, not a hex value converted back), and the art previews it; a color picked as
+    /// RGB is CMYK in a CMYK document. Cancel leaves the rows and the preview as they were, and
+    /// nothing is committed until Recolor Artwork's own OK.
+    #[test]
+    fn double_clicking_a_new_color_picks_it_in_its_own_model() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100, "colorMode": "cmyk"})).unwrap();
+        let mut ids = vec![];
+        for (n, c) in [json!({"c": 0, "m": 100, "y": 100, "k": 0}), json!({"c": 100, "m": 0, "y": 0, "k": 0})].into_iter().enumerate() {
+            let id = app.run("shape.rectangle", json!({"x": 10 + 30 * n, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+            app.run("paint.setFill", json!({"ids": [id], "color": c})).unwrap();
+            app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+            ids.push(id.as_u64().unwrap());
+        }
+        app.run("select.all", json!({})).unwrap();
+        // New colors other than the current ones, so the picker can only start from the new one.
+        let assign = json!([{"c": 0, "m": 0, "y": 100, "k": 0}, {"c": 0, "m": 100, "y": 0, "k": 0}]);
+        app.run("ui.recolorDialog", json!({"colors": assign})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("method".into(), json!(Method::Exact.id()));
+        let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        // The previewed fill of the rectangle whose color row `row` recolors.
+        let fill = |app: &VectorcraftApp, row: &Value| {
+            let from = from_colors(row);
+            let doc = &app.session.doc().unwrap().doc;
+            let original = |id: u64| if id == ids[0] { Color::cmyk(0.0, 1.0, 1.0, 0.0) } else { Color::cmyk(1.0, 0.0, 0.0, 0.0) };
+            let id = *ids.iter().find(|id| from.contains(&original(**id))).expect("a rectangle for the row");
+            doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill().and_then(|f| f.paint.color())
+        };
+        let before = undo(&app);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let all = super::rows(app.ui.dialog.as_ref().unwrap());
+        assert_eq!(all.len(), 2);
+        let i = 1;
+        assert_ne!(all[i]["from"][0], all[i]["to"], "the row's new color isn't its current color");
+        let rect = settled(&mut app, &ctx, 0.01, i).expect("the row's new color is drawn");
+        let previewed = to_color(&all[i]);
+        assert_eq!(fill(&app, &all[i]), previewed, "the art previews the row's new color");
+
+        double_click(&mut app, &ctx, rect, 0.1, i);
+        frame(&mut app, &ctx, 0.3, vec![], i);
+        assert_eq!(fill(&app, &all[0]), to_color(&all[0]), "the picker previews nothing itself");
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.kind, "colorPicker", "a double-click opens the Color Picker");
+        assert_eq!(d.fields.get("color").and_then(color_value), previewed, "on the row's new color");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "Cancel comes back to Recolor Artwork");
+        assert_eq!(super::rows(app.ui.dialog.as_ref().unwrap()), all, "with the rows as they were");
+        frame(&mut app, &ctx, 0.5, vec![], i);
+        assert_eq!(fill(&app, &all[i]), previewed, "and the art previews them again");
+
+        let rect = settled(&mut app, &ctx, 1.0, i).unwrap();
+        double_click(&mut app, &ctx, rect, 1.1, i);
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.kind, "colorPicker");
+        // 100 50 0 0 is a mix the round trip through sRGB changes.
+        d.fields.insert("color".into(), json!({"c": 100, "m": 50, "y": 0, "k": 0}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.kind, KIND, "OK comes back to Recolor Artwork");
+        let rows = super::rows(d);
+        assert_eq!(rows[i]["to"], "cmyk 100 50 0 0", "the row keeps the CMYK mix picked");
+        assert_eq!(rows[0], all[0], "the other row stays");
+        assert!(app.session.in_interaction(), "the dialog still previews");
+        assert_eq!(undo(&app), before, "nothing is committed before Recolor Artwork's OK");
+        frame(&mut app, &ctx, 1.5, vec![], i);
+        assert_eq!(fill(&app, &rows[i]), Some(Color::cmyk(1.0, 0.5, 0.0, 0.0)), "the art previews the picked color");
+
+        let rect = settled(&mut app, &ctx, 2.0, i).unwrap();
+        double_click(&mut app, &ctx, rect, 2.1, i);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!([1.0, 0.0, 0.0]));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
+        assert!(to.as_str().is_some_and(|k| k.starts_with("cmyk ")), "a color picked as RGB is CMYK in a CMYK document: {to}");
     }
 
     /// In a CMYK document colors opened alone are saved as a new color group in their own model.

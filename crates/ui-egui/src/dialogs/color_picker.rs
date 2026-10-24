@@ -6,6 +6,8 @@
 //! undo step through `paint.setFill` / `paint.setStroke`, Cancel puts the art back.
 //! Opened for an artboard (Properties › Artboards › Fill), it shows the color on the artboard's
 //! paper live, and OK keeps it as one undo step through `artboard.setProps {index, color}`.
+//! Opened over Recolor Artwork (double-click a row's new color), its OK sets that row's new color
+//! and goes back to Recolor Artwork, whose preview the art keeps showing.
 //!
 //! Fields agents set with `ui.dialog.set`: `hex` (`"00FF00"`) or `color` (any colour the paint
 //! commands take), `channel` (`hue`, `saturation`, `brightness`, `red`, `green`, `blue`), `webOnly`
@@ -240,6 +242,24 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
+/// The field of a Color Picker opened over Recolor Artwork ([`over_recolor`]): the row whose new
+/// color it picks.
+const RECOLOR_ROW: &str = "__recolorRow";
+
+/// The Color Picker over the Recolor Artwork dialog `parent`, on `color`, the new color of row
+/// `row`: it previews nothing itself, its OK goes back to `parent` with the row's new color set
+/// ([`super::recolor::with_new_color`]) and its Cancel goes back to `parent` as it was.
+pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize) -> Dialog {
+    let mut d = Dialog::new(
+        KIND,
+        json!({"original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false, RECOLOR_ROW: row}),
+    );
+    d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
+    store(&mut d, &Picked::of(color));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
+    d
+}
+
 /// Stable action width in both modes, including translated labels.
 fn button_width(ui: &Ui) -> f32 {
     ["OK", "Cancel", "Color Swatches", "Color Models"].into_iter().fold(110.0_f32, |w, label| {
@@ -406,6 +426,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
 /// Opened for an artboard, the picker shows the color on that artboard's paper, with or without a
 /// selection.
 fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
+    // Over Recolor Artwork the art shows that dialog's preview, which this one must not replace.
+    if d.fields.contains_key(RECOLOR_ROW) {
+        return;
+    }
     let (cmd, params) = paint_command(app, d);
     let first = !app.session.in_interaction();
     let unchanged = d.fields.get(PREVIEWED) == Some(&params) || first && d.fields.get("original").and_then(color_value) == Some(picked(d).color);
@@ -430,15 +454,21 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
 /// The command that applies the picked colour to the proxy, and its params (as CMYK in a CMYK
 /// document). Opened for an artboard, the command sets that artboard's background color.
 fn paint_command(app: &VectorcraftApp, d: &Dialog) -> (&'static str, Value) {
-    let mut c = picked(d).color;
-    if matches!(c, Color::Rgb { .. }) && app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk) {
-        let [cy, m, y, k] = c.to_cmyk_managed(cms::active().settings().intent);
-        c = Color::cmyk(cy, m, y, k);
-    }
+    let c = in_document_model(app, picked(d).color);
     if let Some(i) = d.fields.get("artboard").and_then(Value::as_u64) {
         return ("artboard.setProps", json!({ "index": i, "color": color_json(&c) }));
     }
     (if d.bool("stroke") { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": color_json(&c) }))
+}
+
+/// The picked colour as the document takes it: an RGB colour is CMYK in a CMYK document; CMYK,
+/// grey and Lab colours stay as they are.
+fn in_document_model(app: &VectorcraftApp, c: Color) -> Color {
+    if matches!(c, Color::Rgb { .. }) && app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk) {
+        let [cy, m, y, k] = c.to_cmyk_managed(cms::active().settings().intent);
+        return Color::cmyk(cy, m, y, k);
+    }
+    c
 }
 
 /// The New (top) and Original (bottom) chips. Returns true when Original is clicked.
@@ -593,6 +623,12 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) ->
 /// OK with the starting color unchanged and nothing previewed closes the picker and leaves the
 /// artboard as it was: without a background color, or with its color in its own color model.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if let Some(row) = d.fields.get(RECOLOR_ROW).and_then(Value::as_u64) {
+        let parent = super::parent(d).ok_or("Recolor Artwork is no longer open")?;
+        let c = in_document_model(app, picked(d).color);
+        app.ui.dialog = Some(super::recolor::with_new_color(app, parent, usize::try_from(row).unwrap_or(usize::MAX), c));
+        return Ok(Value::Null);
+    }
     if d.bool("keep") && !app.session.in_interaction() && d.fields.get("original").and_then(color_value) == Some(picked(d).color) {
         app.ui.dialog = None;
         return Ok(Value::Null);
