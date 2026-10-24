@@ -698,6 +698,20 @@ fn mirror_repeat_reflects() {
 }
 
 #[test]
+fn mirror_repeat_axis_defaults_to_the_source_edge() {
+    // #1559: by default the mirror touches its source, with no gap between them.
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    let v = s.execute("object.repeat.mirror", &json!({})).unwrap();
+    let NodeKind::Repeat(spec) = node(&s, id_of(&v)).kind else { panic!() };
+    let RepeatKind::Mirror { center, .. } = spec.kind else { panic!() };
+    assert!((center.x - 10.0).abs() < 1e-9, "{center:?}");
+    let b = node(&s, id_of(&v)).geometric_bounds().unwrap();
+    assert!((b.x1 - 20.0).abs() < 1e-9 && b.x0.abs() < 1e-9, "{b:?}");
+}
+
+#[test]
 fn switching_repeat_kind_keeps_source() {
     let mut s = session();
     let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
