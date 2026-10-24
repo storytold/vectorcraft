@@ -8564,6 +8564,105 @@ mod tests {
         assert_eq!(plain(&app, id), "雅がくらくか");
     }
 
+    /// Starts editing new point type with the Type tool; returns its id.
+    fn start_typing(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        typing_frame(app, ctx, vec![]);
+        app.select_tool("type");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(100.0, 100.0));
+        let click =
+            |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        typing_frame(app, ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+        typing_frame(app, ctx, vec![click(at, false)]);
+        assert!(app.session.tool_wants_text());
+        app.session.active().unwrap().selection.objects[0].0
+    }
+
+    /// Returns a key press and its release.
+    fn tap(key: egui::Key) -> [egui::Event; 2] {
+        [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() })
+    }
+
+    /// Arrows, Home, End, Tab, Enter and clipboard events go to the Type tool in order with the text
+    /// of the same frame, and each Enter types a line break.
+    #[test]
+    fn the_type_tool_takes_text_and_editing_keys_in_the_order_they_came() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.placeholder_text = false;
+        let ctx = egui::Context::default();
+        let id = start_typing(&mut app, &ctx);
+        let text = |t: &str| egui::Event::Text(t.into());
+        typing_frame(&mut app, &ctx, vec![text("ax")]);
+        // ← moves the caret before the text that follows it goes in.
+        typing_frame(&mut app, &ctx, [tap(egui::Key::ArrowLeft).to_vec(), vec![text("b")]].concat());
+        assert_eq!(plain(&app, id), "abx");
+        // Home and End move the caret before the text that follows each goes in.
+        typing_frame(&mut app, &ctx, [tap(egui::Key::Home).to_vec(), vec![text("0")], tap(egui::Key::End).to_vec(), vec![text("9")]].concat());
+        assert_eq!(plain(&app, id), "0abx9");
+        // Tab and a paste go in between the texts around them.
+        let paste = egui::Event::Paste("p".into());
+        typing_frame(&mut app, &ctx, [vec![text("t")], tap(egui::Key::Tab).to_vec(), vec![text("u"), paste, text("q")]].concat());
+        assert_eq!(plain(&app, id), "0abx9t\tupq");
+        // Enter types its line break between the texts around it, once for each press.
+        typing_frame(&mut app, &ctx, [vec![text("1")], tap(egui::Key::Enter).to_vec(), tap(egui::Key::Enter).to_vec(), vec![text("2")]].concat());
+        assert_eq!(plain(&app, id), "0abx9t\tupq1\n\n2");
+        // A key that comes before a composition starts in the same frame still moves the caret.
+        typing_frame(&mut app, &ctx, [tap(egui::Key::Home).to_vec(), vec![preedit("k", 1)]].concat());
+        typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("k".into()))]);
+        assert_eq!(plain(&app, id), "0abx9t\tupq1\n\nk2");
+    }
+
+    /// In a frame that began composing, an editing key after the IME's commit applies before the text
+    /// that follows it; a key before the commit and an Enter after it stay the IME's.
+    #[test]
+    fn editing_keys_after_an_ime_commit_apply_in_the_same_frame() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.placeholder_text = false;
+        let ctx = egui::Context::default();
+        let id = start_typing(&mut app, &ctx);
+        let text = |t: &str| egui::Event::Text(t.into());
+        let commit = |t: &str| egui::Event::Ime(egui::ImeEvent::Commit(t.into()));
+        typing_frame(&mut app, &ctx, vec![text("ab")]);
+        typing_frame(&mut app, &ctx, vec![preedit("漢", 1)]);
+        typing_frame(&mut app, &ctx, [vec![preedit("", 0), commit("漢")], tap(egui::Key::ArrowLeft).to_vec(), vec![text("x")]].concat());
+        assert_eq!(plain(&app, id), "abx漢");
+        typing_frame(&mut app, &ctx, vec![preedit("字", 1)]);
+        let keys = [tap(egui::Key::ArrowLeft).to_vec(), vec![preedit("", 0), commit("字")], tap(egui::Key::Enter).to_vec()];
+        typing_frame(&mut app, &ctx, keys.concat());
+        assert_eq!(plain(&app, id), "abx字漢");
+    }
+
+    /// Cmd/Ctrl+Enter bound to a command runs the command and types no line break, also when a plain
+    /// Enter comes in the same frame. Unbound, it types a line break as Enter does.
+    #[test]
+    fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.placeholder_text = false;
+        let ctx = egui::Context::default();
+        let id = start_typing(&mut app, &ctx);
+        let cmd_enter = [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+        typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+        assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter");
+        app.ui.shortcut_overrides.insert("view.grid".into(), "Cmd+Enter".into());
+        crate::shortcut_editor::sync(&app.ui);
+        let grid = app.ui.view.grid;
+        typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+        let ran = (plain(&app, id), app.ui.view.grid);
+        typing_frame(&mut app, &ctx, [tap(egui::Key::Enter).to_vec(), cmd_enter.to_vec()].concat());
+        app.ui.shortcut_overrides.clear();
+        crate::shortcut_editor::sync(&app.ui);
+        assert_eq!((ran.0.as_str(), ran.1), ("a\n", !grid), "Cmd+Enter runs Show Grid only");
+        assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    }
+
     #[test]
     fn tool_drag_moved_without_pointer_delta() {
         let ctx = egui::Context::default();
