@@ -2808,13 +2808,33 @@ fn rotate_view_dial(p: &egui::Painter, c: Pos2, rotation: f64, t: &Tokens) {
     p.text(c + vec2(0.0, 8.0), egui::Align2::CENTER_TOP, format!("{rotation:.0}°"), egui::FontId::proportional(11.0), t.text);
 }
 
+/// Whether the Selection tool's bounding box should draw (Show Bounding Box on, whole objects selected).
+fn show_selection_bounding_box(
+    tool_id: &str,
+    transforming: bool,
+    scaling_bbox: bool,
+    real_time_drawing: bool,
+    show_bbox: bool,
+    has_selection: bool,
+) -> bool {
+    // Hide while moving/rotating (#712). During a bbox resize, show only when previews update the
+    // document (#3526); with Real-time Drawing off the box would lag the deferred outline (#394).
+    let hide_box = transforming && (!scaling_bbox || !real_time_drawing);
+    tool_id == "selection" && !hide_box && show_bbox && has_selection
+}
+
 fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
-    // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
-    let show_box = app.session.tool_id() == "selection"
-        && !app.session.tool_transforming()
-        && app.ui.view.bounding_box
-        && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
+    // a drag moves or rotates the selection (#712), but stays visible during a bounding-box resize (#3526).
+    let has_selection = app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
+    let show_box = show_selection_bounding_box(
+        app.session.tool_id(),
+        app.session.tool_transforming(),
+        app.session.tool_scaling_bbox(),
+        app.session.prefs.real_time_drawing,
+        app.ui.view.bounding_box,
+        has_selection,
+    );
     let bbox = if show_box { app.selection_box() } else { None };
     let st = app.session.active();
     let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
@@ -3844,6 +3864,14 @@ mod tests {
         assert_eq!(color_image(&img), egui);
         let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
         assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    }
+
+    #[test]
+    fn selection_bounding_box_stays_visible_during_a_resize_drag() {
+        assert!(show_selection_bounding_box("selection", true, true, true, true, true));
+        assert!(!show_selection_bounding_box("selection", true, true, false, true, true));
+        assert!(!show_selection_bounding_box("selection", true, false, true, true, true));
+        assert!(!show_selection_bounding_box("selection", true, true, false, false, true));
     }
 
     /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of

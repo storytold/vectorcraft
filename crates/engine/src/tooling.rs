@@ -466,6 +466,10 @@ impl Session {
         self.tool.transforming()
     }
 
+    pub fn tool_scaling_bbox(&self) -> bool {
+        self.tool.scaling_bbox()
+    }
+
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))

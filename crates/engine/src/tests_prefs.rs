@@ -1489,6 +1489,56 @@ fn real_time_drawing_off_skips_tool_previews_until_commit() {
     assert!(s.doc().unwrap().revision > rev, "on again: previews run while dragging");
 }
 
+/// A Selection-tool handle scale updates `transform_box` during the drag only when Real-time Drawing
+/// is on; a move drag is transforming but not scaling the bbox (#3526, #394).
+#[test]
+fn selection_bbox_scale_drag_follows_real_time_drawing_pref() {
+    use vectorcraft_tools::Mods;
+    use vectorcraft_tools::bbox::Handle;
+
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let v = ViewInfo::default();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+
+    let right_handle = |s: &Session| {
+        let b = s.transform_box(&[id]).unwrap();
+        b.to_doc() * Handle::Right.pos(b.rect)
+    };
+    let width = |s: &Session| s.transform_box(&[id]).unwrap().rect.width();
+
+    set_pref(&mut s, "realTimeDrawing", json!(true));
+    let right = right_handle(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, right.x, right.y).with_mods(Mods::default()), v).unwrap();
+    let rev = s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 150.0).with_mods(Mods::default()), v).unwrap();
+    assert!(s.tool_transforming() && s.tool_scaling_bbox());
+    assert!(s.doc().unwrap().revision > rev, "previews run while dragging");
+    assert!((width(&s) - 160.0).abs() < 1e-6, "box follows the drag");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 150.0).with_mods(Mods::default()), v).unwrap();
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let right = right_handle(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, right.x, right.y).with_mods(Mods::default()), v).unwrap();
+    let rev = s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 150.0).with_mods(Mods::default()), v).unwrap();
+    assert!(s.tool_transforming() && s.tool_scaling_bbox());
+    assert_eq!(s.doc().unwrap().revision, rev, "no preview steps");
+    assert!((width(&s) - 100.0).abs() < 1e-6, "document bounds stay until commit");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 150.0).with_mods(Mods::default()), v).unwrap();
+    assert!((width(&s) - 160.0).abs() < 1e-6, "commit applies the scale");
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(true));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(Mods::default()), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 150.0).with_mods(Mods::default()), v).unwrap();
+    assert!(s.tool_transforming() && !s.tool_scaling_bbox(), "moving hides the bbox overlay");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 150.0).with_mods(Mods::default()), v).unwrap();
+}
+
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
 #[test]
 fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {

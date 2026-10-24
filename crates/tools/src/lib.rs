@@ -790,6 +790,11 @@ pub trait Tool: Send {
     fn transforming(&self) -> bool {
         false
     }
+    /// Is the Selection tool scaling the selection from a bounding-box handle? The box stays visible
+    /// during the drag (#3526); moves and rotations still hide it (#712).
+    fn scaling_bbox(&self) -> bool {
+        false
+    }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
